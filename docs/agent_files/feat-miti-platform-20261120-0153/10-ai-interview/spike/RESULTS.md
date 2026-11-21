@@ -101,6 +101,8 @@ cd engines/core && GOOGLE_CLOUD_QUOTA_PROJECT=onolys python -m onolys_core.stt.c
 
 **Decision: GO.** Model `gemini-3.8-live` ("faster to reply"). Voices: keep the full list of 30; the end user chooses the voice, scenario `voice` is only the default (spike default Kore). Owner uploaded recordings to Drive folder "2026-11-21 09-29".
 
+**Owner waiver (2026-11-21):** "Ignore the echo check and 5 min recording. Just use what I gave you." The 5-minute STT-check recording requirement and the echo (headphones vs speakers) check are waived for SP10. The three owner recordings (74.5 s, 104.8 s, 197.9 s; all pass `onolys_core.stt.check` at `--min-minutes 1`, 2 separable speakers, monotonic offsets) are accepted as the STT/diarization evidence.
+
 ### Live metrics (owner sessions, `sessions.jsonl` 14:18-14:26; live file identical to the copy, metrics only, no speech text)
 Cost via `cost.py` pricing (read-only); latency = `latency.turn_ms` (last loud mic frame -> first AI audio, includes server VAD wait).
 | Model | Sessions | Minutes | Cost/min | Reply latency (turn_ms) | Opening | Errors |
@@ -120,9 +122,9 @@ Downloaded from Drive to `/root/.config/onolys/audio/sp10/` (outside the repo), 
 Speaker separation works (2 speakers on every file, offsets monotonic; language en). The 5-min owner gate is NOT met by any recording (longest 3.3 min). Transcript text was not inspected, so whether the two speakers map to clinician vs AI correctly is unverified beyond the speaker count.
 
 ### Not done / unverified
-- No 10-minute session was run; no recording reaches the 5-min STT gate (AC10 still needs a 5+ min recording; rerun with `--min-minutes 5` on a longer one).
+- No 10-minute session was run; no recording reaches the 5-min STT gate [WAIVED by owner 2026-11-21, not open].
 - Edge and Safari not reported by the owner; Chrome only implied by the recordings. Playback pitch/speed check not reported.
-- Echo test (headphones vs laptop speakers) not reported.
+- Echo test (headphones vs laptop speakers) not reported. [WAIVED by owner 2026-11-21, not open]
 - Interruption (talk over the AI) and persona-fidelity/hidden-info-earned checks not reported; the 3.8 leak result stays at 14/15 (soft fail #12, prompt fix noted for Tasks 2/12).
 - Voice audition: sessions used Kore, Zephyr, Umbriel (3.8) and Charon (2.5); no per-voice verdict reported, hence all 30 stay selectable.
 - Cost/min measured only on sessions of 1.3-3.3 min; at 10 min expect ~$0.11/min (projection).

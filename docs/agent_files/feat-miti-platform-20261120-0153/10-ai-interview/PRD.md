@@ -83,7 +83,7 @@ Module split: `voice/prompt.py` (R2), `voice/relay.py` (loop, clock, resumption)
 |---|---|
 | Persona too agreeable / leaks `hidden_info` | Spike kill question; prompt tuning; leak test list in spike |
 | Hosting WebSocket behaviour unproven | Not relied on: direct connection [verify with one staging test only if a same-origin path is ever wanted] |
-| Echo → STT diarization confusion | Headphone tip; AEC; optional mic gate; spike STT check |
+| Echo → STT diarization confusion | Headphone tip; AEC; optional mic gate; spike STT check [WAIVED by owner 2026-11-21: 5-min recording and echo check; spike recordings (75-198 s, 2 separable speakers) accepted] |
 | 24 kHz playback on 48 kHz hardware (pitch/glitch) | Explicit resample in worklet; manual Chrome/Edge/Safari test |
 | Public relay URL abuse/cost | ID token + Origin + max-instances + SP11 caps + 10 min clock |
 | Safari WebAudio/MediaRecorder codec (mp4 vs webm) | Pick supported `mimeType` at runtime; server already accepts mp4/m4a aliases |
@@ -112,5 +112,5 @@ All without real Gemini via the fixture adapter, unless marked LIVE.
 7. `POST /sessions {interview_id}`: rejects non-ended/foreign/already-linked; sets language, title, `interview_id`, draft change goal; `GET rating` returns the draft.
 8. Validate: 640 s interview audio → `interview_too_long`; 250 s → `short_interview` and no `short_recording`; plain upload behaviour unchanged (existing tests green).
 9. Web (MSW + fake relay): landing shows two cards + usage; picker → live page → End → upload → `/sessions/:id`; warn toast at 8 min; reconnect banner; discard path; CSP test passes with the relay host; `openapi.json` regenerated, client regenerated, CI clean.
-10. LIVE spike: owner completes a 10-min session on staging; persona stays in character; hidden info only when earned; recording passes `onolys_core.stt.check` with two separable speakers; cost/min recorded; Chrome/Edge/Safari mic and playback pitch checked.
+10. LIVE spike: owner completes a 10-min session on staging; persona stays in character; hidden info only when earned; recording passes `onolys_core.stt.check` with two separable speakers; cost/min recorded; Chrome/Edge/Safari mic and playback pitch checked. [WAIVED by owner 2026-11-21: 5-min recording and echo check; spike recordings (75-198 s, 2 separable speakers) accepted]
 11. LIVE staging: end-to-end interview → report; relay survives a forced network drop of 20 s; terraform plan shows voice SA has only `aiplatform.user` (+ Firestore), api SA unchanged.
