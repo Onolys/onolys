@@ -52,4 +52,29 @@ describe("fake auth service", () => {
     await s.signIn("a@b.co", "newpassword1");
     await expect(s.confirmPasswordReset(code, "again1234")).rejects.toMatchObject({ code: "auth/invalid-action-code" });
   });
+  it("verifyAndChangeEmail: check shows the new email without consuming; apply changes the account and signs the user out", async () => {
+    const s = createFakeAuthService();
+    s.signedInAs("a@b.co", { verified: true });
+    const code = s.issueActionCode("verifyAndChangeEmail", "a@b.co", { newEmail: "n@b.co" });
+    expect(await s.checkEmailChangeCode(code, "verifyAndChangeEmail")).toEqual({ email: "n@b.co", previousEmail: "a@b.co" });
+    expect(s.calls.emailChanges).toBe(0);
+    expect(await s.applyEmailChange(code)).toEqual({ signedIn: false });
+    expect(s.calls.emailChanges).toBe(1);
+    expect(await s.getToken()).toBeNull();
+    await expect(s.signIn("a@b.co", "password1")).rejects.toMatchObject({ code: "auth/invalid-credential" });
+    await s.signIn("n@b.co", "password1");
+    await expect(s.applyEmailChange(code)).rejects.toMatchObject({ code: "auth/invalid-action-code" });
+  });
+  it("recoverEmail: check returns the restored email; apply restores it; wrong kind and expired codes are rejected", async () => {
+    const s = createFakeAuthService();
+    await s.signUp("new@b.co", "password1");
+    await s.signOut();
+    const code = s.issueActionCode("recoverEmail", "new@b.co", { previousEmail: "old@b.co" });
+    await expect(s.checkEmailChangeCode(code, "verifyAndChangeEmail")).rejects.toMatchObject({ code: "auth/invalid-action-code" });
+    expect(await s.checkEmailChangeCode(code, "recoverEmail")).toEqual({ email: "old@b.co", previousEmail: "new@b.co" });
+    await s.applyEmailChange(code);
+    await s.signIn("old@b.co", "password1");
+    const old = s.issueActionCode("recoverEmail", "old@b.co", { previousEmail: "x@b.co", expired: true });
+    await expect(s.checkEmailChangeCode(old, "recoverEmail")).rejects.toMatchObject({ code: "auth/expired-action-code" });
+  });
 });

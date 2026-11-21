@@ -121,8 +121,117 @@ describe("/auth/action resetPassword", () => {
   });
 });
 
+describe("/auth/action verifyAndChangeEmail", () => {
+  it("shows the new email, applies only on click, then asks a signed-out user to log in with it", async () => {
+    const service = await svc();
+    const code = service.issueActionCode("verifyAndChangeEmail", "a@clinic.org", { newEmail: "b@clinic.org" });
+    renderApp(`/auth/action?mode=verifyAndChangeEmail&oobCode=${code}&apiKey=AQ.bad`, { service });
+    await h1("Confirm your new email");
+    expect(screen.getByText("b@clinic.org")).toBeInTheDocument();
+    expect(service.calls.emailChanges).toBe(0);
+    await userEvent.setup().click(screen.getByRole("button", { name: "Confirm new email" }));
+    await h1("Email updated");
+    expect(service.calls.emailChanges).toBe(1);
+    expect(screen.getByRole("status")).toHaveTextContent("b@clinic.org");
+    expect(screen.getByRole("status")).toHaveTextContent("Log in again with your new email");
+    expect(screen.getByRole("link", { name: "Log in" })).toHaveAttribute("href", "/login");
+    await service.signIn("b@clinic.org", "password1");
+  });
+
+  it("explains an invalid/expired code without offering to apply it", async () => {
+    const service = await svc();
+    const code = service.issueActionCode("verifyAndChangeEmail", "a@clinic.org", { newEmail: "b@clinic.org", expired: true });
+    renderApp(`/auth/action?mode=verifyAndChangeEmail&oobCode=${code}`, { service });
+    await h1("Link expired");
+    expect(screen.getByRole("alert")).toHaveTextContent("invalid, has expired, or was already used");
+    expect(screen.queryByRole("button", { name: "Confirm new email" })).toBeNull();
+    expect(service.calls.emailChanges).toBe(0);
+  });
+
+  it("shows an error when applying fails with an expired code", async () => {
+    const service = await svc();
+    const code = service.issueActionCode("verifyAndChangeEmail", "a@clinic.org", { newEmail: "b@clinic.org" });
+    renderApp(`/auth/action?mode=verifyAndChangeEmail&oobCode=${code}`, { service });
+    vi.spyOn(service, "applyEmailChange").mockRejectedValue({ code: "auth/expired-action-code" });
+    await userEvent.setup().click(await screen.findByRole("button", { name: "Confirm new email" }));
+    await h1("Link expired");
+  });
+
+  it("shows a generic error for other apply failures and keeps the button", async () => {
+    const service = await svc();
+    const code = service.issueActionCode("verifyAndChangeEmail", "a@clinic.org", { newEmail: "b@clinic.org" });
+    renderApp(`/auth/action?mode=verifyAndChangeEmail&oobCode=${code}`, { service });
+    vi.spyOn(service, "applyEmailChange").mockRejectedValue({ code: "auth/network-request-failed" });
+    await userEvent.setup().click(await screen.findByRole("button", { name: "Confirm new email" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Can't reach the server");
+    expect(screen.getByRole("button", { name: "Confirm new email" })).toBeInTheDocument();
+  });
+
+  it("when still signed in, offers Continue to the safe continueUrl", async () => {
+    const service = await svc();
+    const code = service.issueActionCode("verifyAndChangeEmail", "a@clinic.org", { newEmail: "b@clinic.org" });
+    vi.spyOn(service, "applyEmailChange").mockResolvedValue({ signedIn: true });
+    const cont = encodeURIComponent(`${window.location.origin}/login`);
+    const { router } = renderApp(`/auth/action?mode=verifyAndChangeEmail&oobCode=${code}&continueUrl=${cont}`, { service });
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: "Confirm new email" }));
+    await h1("Email updated");
+    await user.click(screen.getByRole("button", { name: "Continue" }));
+    await waitFor(() => expect(here(router)).toBe("/login"));
+  });
+});
+
+describe("/auth/action recoverEmail", () => {
+  it("shows the restored email, applies only on click, then suggests a password reset", async () => {
+    const service = await svc();
+    const code = service.issueActionCode("recoverEmail", "a@clinic.org", { previousEmail: "old@clinic.org" });
+    renderApp(`/auth/action?mode=recoverEmail&oobCode=${code}`, { service });
+    await h1("Restore your email");
+    expect(screen.getByText("old@clinic.org")).toBeInTheDocument();
+    expect(service.calls.emailChanges).toBe(0);
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: "Restore this email" }));
+    await h1("Email restored");
+    expect(service.calls.emailChanges).toBe(1);
+    expect(screen.getByRole("status")).toHaveTextContent("old@clinic.org");
+    expect(service.calls.resets).toEqual([]);
+    await user.click(screen.getByRole("button", { name: "Reset my password" }));
+    expect(await screen.findByText(/reset email sent/i)).toBeInTheDocument();
+    expect(service.calls.resets).toEqual(["old@clinic.org"]);
+    expect(screen.getByRole("link", { name: "Log in" })).toHaveAttribute("href", "/login");
+  });
+
+  it("explains an invalid/expired code", async () => {
+    renderApp("/auth/action?mode=recoverEmail&oobCode=bad");
+    await h1("Link expired");
+    expect(screen.getByRole("alert")).toHaveTextContent("invalid, has expired, or was already used");
+    expect(screen.queryByRole("button", { name: "Restore this email" })).toBeNull();
+  });
+
+  it("shows an error when the password reset email fails", async () => {
+    const service = await svc();
+    const code = service.issueActionCode("recoverEmail", "a@clinic.org", { previousEmail: "old@clinic.org" });
+    renderApp(`/auth/action?mode=recoverEmail&oobCode=${code}`, { service });
+    vi.spyOn(service, "sendPasswordReset").mockRejectedValue({ code: "auth/too-many-requests" });
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: "Restore this email" }));
+    await user.click(await screen.findByRole("button", { name: "Reset my password" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Too many attempts");
+  });
+});
+
+describe("/auth/action revertSecondFactorAddition", () => {
+  it("is treated as not valid (MFA is not used) and never applies a code", async () => {
+    const service = await svc();
+    renderApp("/auth/action?mode=revertSecondFactorAddition&oobCode=x", { service });
+    await h1("This link isn't valid");
+    expect(screen.getByText(/two-step verification isn't used/i)).toBeInTheDocument();
+    expect(service.calls.emailChanges).toBe(0);
+  });
+});
+
 describe("/auth/action other", () => {
-  it.each(["/auth/action", "/auth/action?mode=other&oobCode=x", "/auth/action?mode=verifyEmail", "/auth/action?mode=resetPassword"])(
+  it.each(["/auth/action", "/auth/action?mode=other&oobCode=x", "/auth/action?mode=verifyEmail", "/auth/action?mode=resetPassword", "/auth/action?mode=recoverEmail", "/auth/action?mode=verifyAndChangeEmail"])(
     "%s is not valid",
     async (path) => {
       renderApp(path);

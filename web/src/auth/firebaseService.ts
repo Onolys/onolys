@@ -3,6 +3,7 @@ import { initializeApp } from "firebase/app";
 import {
   GoogleAuthProvider,
   applyActionCode,
+  checkActionCode,
   confirmPasswordReset as fbConfirmPasswordReset,
   createUserWithEmailAndPassword,
   getAuth,
@@ -18,7 +19,12 @@ import {
   verifyPasswordResetCode as fbVerifyPasswordResetCode,
   type User,
 } from "firebase/auth";
-import { AuthError, type AuthService, type AuthUser } from "./types";
+import { AuthError, type AuthService, type AuthUser, type EmailChangeKind } from "./types";
+
+const OPERATION: Record<EmailChangeKind, string> = {
+  verifyAndChangeEmail: "VERIFY_AND_CHANGE_EMAIL",
+  recoverEmail: "RECOVER_EMAIL",
+};
 
 export interface FirebaseWebConfig {
   apiKey: string;
@@ -112,6 +118,25 @@ export function createFirebaseAuthService(config: FirebaseWebConfig): AuthServic
     },
     async confirmPasswordReset(oobCode, newPassword) {
       await fbConfirmPasswordReset(auth, oobCode, newPassword);
+    },
+    async checkEmailChangeCode(oobCode, kind) {
+      const info = await checkActionCode(auth, oobCode); // does not consume the code
+      const email = info.data.email;
+      if (info.operation !== OPERATION[kind] || !email) throw new AuthError("auth/invalid-action-code");
+      return { email, previousEmail: info.data.previousEmail ?? null };
+    },
+    async applyEmailChange(oobCode) {
+      await applyActionCode(auth, oobCode);
+      const user = auth.currentUser;
+      if (!user) return { signedIn: false };
+      try {
+        await reload(user);
+        await user.getIdToken(true);
+      } catch {
+        return { signedIn: false }; // the email change revoked this session's tokens
+      }
+      emit();
+      return { signedIn: true };
     },
     async getToken(forceRefresh = false) {
       const user = auth.currentUser;

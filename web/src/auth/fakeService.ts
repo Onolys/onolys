@@ -3,7 +3,9 @@
  * Tokens match SP04 `AUTH_MODE=fake` (`Bearer test:<uid>`). No persistence.
  */
 import { fakeToken } from "./fake";
-import { AuthError, type AuthService, type AuthUser } from "./types";
+import { AuthError, type AuthService, type AuthUser, type EmailChangeKind } from "./types";
+
+type CodeKind = "verifyEmail" | "resetPassword" | EmailChangeKind;
 
 interface Account {
   uid: string;
@@ -27,9 +29,17 @@ export interface FakeAuthService extends AuthService {
     resets: string[];
     emailVerifications: number;
     passwordResets: number;
+    emailChanges: number;
   };
-  /** Test shortcut: mint a one-time email action code for an existing account. */
-  issueActionCode(kind: "verifyEmail" | "resetPassword", email: string, opts?: { expired?: boolean }): string;
+  /**
+   * Test shortcut: mint a one-time email action code for an existing account (`email` = its current address).
+   * verifyAndChangeEmail takes `newEmail`; recoverEmail takes `previousEmail` (the address to restore).
+   */
+  issueActionCode(
+    kind: CodeKind,
+    email: string,
+    opts?: { expired?: boolean; newEmail?: string; previousEmail?: string },
+  ): string;
   /** Pretend the user clicked the email link (visible after the next refreshUser). */
   markVerified(email: string): void;
   /** Test shortcut: be signed in as this account right now. */
@@ -70,10 +80,11 @@ export function createFakeAuthService(options: FakeAuthOptions = {}): FakeAuthSe
     resets: [],
     emailVerifications: 0,
     passwordResets: 0,
+    emailChanges: 0,
   };
-  const codes = new Map<string, { kind: "verifyEmail" | "resetPassword"; email: string; expired: boolean }>();
+  const codes = new Map<string, { kind: CodeKind; email: string; expired: boolean; target?: string }>();
   let codeSeq = 0;
-  const takeCode = (code: string, kind: "verifyEmail" | "resetPassword", consume: boolean) => {
+  const takeCode = (code: string, kind: CodeKind, consume: boolean) => {
     const c = codes.get(code);
     if (!c || c.kind !== kind) throw new AuthError("auth/invalid-action-code");
     if (c.expired) throw new AuthError("auth/expired-action-code");
@@ -153,9 +164,34 @@ export function createFakeAuthService(options: FakeAuthOptions = {}): FakeAuthSe
       const a = accounts.get(c.email);
       if (a) a.password = newPassword;
     },
+    async checkEmailChangeCode(oobCode, kind) {
+      const c = takeCode(oobCode, kind, false);
+      const target = c.target ?? c.email;
+      return { email: target, previousEmail: c.email };
+    },
+    async applyEmailChange(oobCode) {
+      const c = codes.get(oobCode);
+      if (!c || (c.kind !== "verifyAndChangeEmail" && c.kind !== "recoverEmail")) throw new AuthError("auth/invalid-action-code");
+      takeCode(oobCode, c.kind, true);
+      const target = c.target ?? c.email;
+      const a = accounts.get(c.email);
+      if (!a) throw new AuthError("auth/invalid-action-code");
+      if (target !== c.email && accounts.has(target)) throw new AuthError("auth/email-already-in-use");
+      calls.emailChanges++;
+      accounts.delete(c.email);
+      accounts.set(target, { ...a, email: target });
+      // Changing the email revokes the account's tokens: whoever was signed in is signed out.
+      if (currentEmail === c.email) {
+        currentEmail = null;
+        seenVerified = false;
+        emit();
+      }
+      return { signedIn: false };
+    },
     issueActionCode(kind, email, opts = {}) {
       const code = `code_${++codeSeq}`;
-      codes.set(code, { kind, email: norm(email), expired: Boolean(opts.expired) });
+      const target = kind === "verifyAndChangeEmail" ? opts.newEmail : kind === "recoverEmail" ? opts.previousEmail : undefined;
+      codes.set(code, { kind, email: norm(email), expired: Boolean(opts.expired), target: target ? norm(target) : undefined });
       return code;
     },
     async getToken(forceRefresh) {

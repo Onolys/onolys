@@ -30,6 +30,9 @@ export function mapAuthError(code: string | undefined): MappedAuthError {
     case "auth/invalid-action-code":
     case "auth/expired-action-code":
       return { message: "This link is invalid, has expired, or was already used." };
+    case "auth/user-token-expired":
+    case "auth/requires-recent-login":
+      return { message: "Please log in again and retry." };
     case "auth/user-disabled":
       return { message: "This account has been disabled. Contact support." };
     default:
