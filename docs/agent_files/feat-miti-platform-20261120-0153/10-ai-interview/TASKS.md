@@ -18,10 +18,10 @@ External dependency (not SP10 work): **SP11 usage limits**, built before SP10 ex
 | 4 | Interview API + state + SP11 reserve/release seam | 2, 3, SP11 | done |
 | 5 | Voice relay service (auth, pump, clock, resumption, reconnect) | 2, 3, 4 | done |
 | 6 | Sweeper task + short-interview refund | 4, SP11 | done |
-| 7 | Session link (`interview_id`, draft rating) + validate rules | 4, SP11 | in-progress |
+| 7 | Session link (`interview_id`, draft rating) + validate rules | 4, SP11 | done |
 | 8 | Infra: `onolys-voice-{env}` Cloud Run service | 1 | done |
 | 9 | Web audio engine (worklet capture/playback, recording graph) | 1 | done |
-| 10 | Web CSP + MSW mocks + in-page fake relay | 4, 5, 9 | todo |
+| 10 | Web CSP + MSW mocks + in-page fake relay | 4, 5, 9 | done |
 | 11 | Web interview feature + landing cards | 7, 9, 10, SP11 | todo |
 | 12 | Staging end-to-end (LIVE) | 5, 6, 7, 8, 11 | todo |
 | 13 | Docs: public API, ADR, branch README | 1-12 | todo |
