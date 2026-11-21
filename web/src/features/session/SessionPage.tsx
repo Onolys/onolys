@@ -128,7 +128,7 @@ function SessionView({ id }: { id: string }) {
 
       {!doc || !timeline ? null : (
         <>
-          {view.phase === "fallback" ? (
+          {view.phase === "fallback" && view.exhausted ? (
             <p className="notice" role="alert">
               Live updates stopped. This is the latest we could load.{" "}
               <button type="button" className="link-button" onClick={() => window.location.reload()}>

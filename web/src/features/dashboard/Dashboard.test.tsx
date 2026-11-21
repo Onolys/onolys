@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import { describe, expect, it } from "vitest";
 import { mockBackend, server } from "../../mocks/server";
+import { DASHBOARD_POLL_MS, sessionsRefetchInterval } from "./chips";
 import { here, renderApp } from "../../test/renderApp";
 
 const UID = "u_rater_clinic_org";
@@ -162,5 +163,29 @@ describe("dashboard: empty state", () => {
     expect(main().getByRole("link", { name: "New session" })).toHaveAttribute("href", "/sessions/new");
     await user.click(main().getByRole("link", { name: "See a sample report" }));
     expect(here(router)).toBe("/sample-report");
+  });
+});
+
+describe("dashboard: freshness (W25, D8)", () => {
+  it("polls every 10 s only while a session is in progress", () => {
+    expect(sessionsRefetchInterval([{ status: "report_ready" }, { status: "running" }])).toBe(DASHBOARD_POLL_MS);
+    expect(DASHBOARD_POLL_MS).toBe(10_000);
+    expect(sessionsRefetchInterval([{ status: "report_ready" }, { status: "failed" }, { status: "awaiting_input" }])).toBe(false);
+    expect(sessionsRefetchInterval(undefined)).toBe(false);
+  });
+
+  it("keeps the loaded list and shows an inline error when Load more fails", async () => {
+    let calls = 0;
+    server.use(
+      http.get("*/v1/sessions", () => {
+        calls++;
+        if (calls === 1) return HttpResponse.json({ items: [item("a1", "report_ready")], next_cursor: "c2" });
+        return HttpResponse.json({ error: { code: "internal", message: "x" } }, { status: 500 });
+      }),
+    );
+    renderApp("/", { user: USER });
+    await userEvent.click(await screen.findByRole("button", { name: "Load more" }));
+    expect(await screen.findByRole("alert")).toBeInTheDocument();
+    expect(main().getByRole("link", { name: "Session a1" })).toBeInTheDocument();
   });
 });

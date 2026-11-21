@@ -25,7 +25,7 @@ export type Unsubscribe = () => void;
 export interface StatusListener {
   /**
    * `onStatus(null)` = the doc does not exist (deleted). `onError` = listener
-   * failure or permission-denied; the caller falls back to one `GET /sessions/{id}`.
+   * failure or permission-denied; the caller polls `GET /sessions/{id}` and resubscribes with backoff.
    */
   subscribe(
     sessionId: string,

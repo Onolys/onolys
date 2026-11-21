@@ -122,21 +122,18 @@ describe("session page: status listener", () => {
     expect(getCalls).toEqual([]);
   });
 
-  it("falls back to exactly one GET on a listener error and says live updates stopped", async () => {
+  it("on a listener error polls the detail and resubscribes; no stopped notice until retries run out", async () => {
     const sid = create();
     toAwaiting(sid);
     open(sid);
     await ready();
     act(() => mockEmitter.emitError(sid, new Error("permission-denied")));
-    expect(await screen.findByText(/live updates stopped/i)).toBeInTheDocument();
     await waitFor(() => expect(getCalls).toHaveLength(1));
     expect(screen.getByRole("status")).toHaveTextContent("Confirm who the clinician is");
-    // later changes do not arrive and do not trigger more requests
+    expect(screen.queryByText(/live updates stopped/i)).not.toBeInTheDocument();
+    // the listener resubscribes (1 s backoff) and live updates resume
     act(() => void mockBackend.confirmSpeaker(UID, sid, "spk_0"));
-    act(() => mockEmitter.emitError(sid, new Error("again")));
-    await new Promise((r) => setTimeout(r, 80));
-    expect(getCalls).toHaveLength(1);
-    expect(screen.getByRole("status")).toHaveTextContent("Confirm who the clinician is");
+    await waitFor(() => expect(screen.getByRole("status")).not.toHaveTextContent("Confirm who the clinician is"), { timeout: 3000 });
   });
 
   it("shows a friendly not-found card when the fallback GET is a 404", async () => {

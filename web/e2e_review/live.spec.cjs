@@ -4,7 +4,7 @@ const { shot, collect, FIX, signUpVerified, spa } = require("./helpers.cjs");
 
 test.describe("live-ish backend @live", () => {
   test("@live upload -> transcribe -> speaker -> rating -> report against the real api (stub adapters)", async ({ page }) => {
-    test.fail(true, "E22: local FakeBlobStore PUT is blocked by api CORS preflight (400), so the upload fails and the worker never runs; also shows W16 'Live updates stopped'");
+    test.fail(true, "E22: local FakeBlobStore PUT is blocked by api CORS preflight (400), so the upload fails and the worker never runs");
     const c = collect(page);
     await signUpVerified(page, `live-${Date.now()}@example.com`);
     await page.locator("header nav a", { hasText: "New session" }).click();

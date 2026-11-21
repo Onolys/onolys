@@ -19,3 +19,9 @@ export const STATUS_CHIP: Record<State, StatusChip> = {
   failed: { text: "Failed", tone: "failed" },
   deleting: { text: "Deleting", tone: "progress" },
 };
+
+/** Dashboard auto-refresh (D8): poll while any listed session is still moving. */
+export const DASHBOARD_POLL_MS = 10_000;
+export function sessionsRefetchInterval(items: { status: State }[] | undefined): number | false {
+  return items?.some((s) => STATUS_CHIP[s.status].tone === "progress") ? DASHBOARD_POLL_MS : false;
+}
