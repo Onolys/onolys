@@ -3,6 +3,7 @@ the same docs, like multiple Cloud Run instances. The per-uid in-process lock ca
 these, so only Firestore transactions keep the outcome correct. Needs the emulator."""
 
 import os
+import threading
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
@@ -50,8 +51,16 @@ def test_cross_instance_concurrent_claims_one_wins(repos):
         uid, sid, SessionDoc(uid=uid, created_at=now, updated_at=now),
         SessionStatusDoc(uid=uid, updated_at=now),
     )  # fmt: skip
+    for r in repos:  # warm each client's gRPC channel so the race is on the claim itself
+        r.get_session(uid, sid)
+    barrier = threading.Barrier(len(repos))
+
+    def claim(r):
+        barrier.wait(timeout=30)
+        return r.claim_step(uid, sid, "validate", now, LEASE).outcome
+
     with ThreadPoolExecutor(len(repos)) as ex:
-        outs = list(ex.map(lambda r: r.claim_step(uid, sid, "validate", now, LEASE).outcome, repos))
+        outs = list(ex.map(claim, repos))
     assert outs.count("claimed") == 1 and outs.count("busy") == len(repos) - 1
 
 
@@ -59,7 +68,12 @@ def test_cross_instance_concurrent_reservations_never_exceed_the_cap(repos):
     u = f"u-{uuid.uuid4().hex[:10]}"
     s = Settings(env="test", auth_mode="fake", eval_cap_day=1, max_active_runs=1000)
 
+    for r in repos:  # warm each client's gRPC channel
+        r.get_usage(u, "2026-11-20")
+    barrier = threading.Barrier(len(repos))
+
     def attempt(repo):
+        barrier.wait(timeout=30)
         try:
             caps.reserve_run(repo, s, u, NOON)
             return "ok"
