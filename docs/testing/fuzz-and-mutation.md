@@ -15,4 +15,4 @@ Added by the 2026-11-21 full-app review (`docs/agent_files/review-full-app-20261
 
 ## Mutation testing (manual, slow, not in CI)
 - api (mutmut 3): from `api/`: `uv run --package onolys-api --with mutmut mutmut run 'onolys_api.auth*' 'onolys_api.repo.limits*' 'onolys_api.jobs.run*'`, then `mutmut results`. Config is `[tool.mutmut]` in `api/pyproject.toml` (only the auth/limits/run tests are used; `repo/firestore.py` needs the emulator and is not scored). Afterwards delete `api/mutants/` and the folders mutmut copies into `api/` (`config`, `docs`, `engines`, `protocols`).
-- web (Stryker): from `web/`: `npx stryker run stryker.conf.json` (about 10 min; runs in a temp copy under `node_modules/.stryker-tmp`). Report in `web/reports/mutation/` (do not commit).
+- web (Stryker): from `web/`: `npx stryker run stryker.conf.json` (about 10 min; runs in a temp copy under `node_modules/.stryker-tmp` (`inPlace: false`)). Report in `web/reports/mutation/` (do not commit).

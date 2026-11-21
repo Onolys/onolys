@@ -67,7 +67,7 @@ markers = [
 "tests/**" = ["E501"]
 
 [tool.mutmut]
-# Mutation testing: see tests/MUTATION.md. Whole package is copied; mutants are selected by name glob on the CLI.
+# Mutation testing: see docs/testing/fuzz-and-mutation.md. Whole package is copied; mutants are selected by name glob on the CLI.
 source_paths = ["src/onolys_api/"]
 do_not_mutate = ["src/onolys_api/adapters/*", "src/onolys_api/voice/*", "src/onolys_api/routes/*", "src/onolys_api/static/*", "src/onolys_api/app.py", "src/onolys_api/audio.py", "src/onolys_api/config.py", "src/onolys_api/contracts.py", "src/onolys_api/docs.py", "src/onolys_api/errors.py", "src/onolys_api/factory.py", "src/onolys_api/logs.py", "src/onolys_api/openapi.py", "src/onolys_api/presets.py", "src/onolys_api/rating.py", "src/onolys_api/storage/*", "src/onolys_api/schemas/*", "src/onolys_api/repo/fake.py", "src/onolys_api/repo/large.py", "src/onolys_api/repo/models.py", "src/onolys_api/repo/base.py", "src/onolys_api/jobs/[!r]*.py", "src/onolys_api/jobs/r[!u]*.py"]
 pytest_add_cli_args = ["-m", "not live and not flaky", "-p", "no:cacheprovider"]
