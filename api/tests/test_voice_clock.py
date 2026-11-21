@@ -4,8 +4,9 @@ import time
 from datetime import UTC
 
 import pytest
-from onolys_api.voice.clock import ConnectedTimer, SystemClock
 from voice_helpers import ManualClock
+
+from onolys_api.voice.clock import ConnectedTimer, SystemClock
 
 pytestmark = pytest.mark.unit
 

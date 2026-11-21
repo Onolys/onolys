@@ -3,6 +3,7 @@
 import json
 
 import pytest
+
 from onolys_api import contracts
 
 pytestmark = pytest.mark.unit

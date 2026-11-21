@@ -3,6 +3,7 @@
 from unittest.mock import MagicMock
 
 import pytest
+
 from onolys_api import factory
 from onolys_api.config import Settings
 from onolys_api.repo.fake import FakeRepo

@@ -4,6 +4,7 @@ from unittest.mock import MagicMock
 
 import pytest
 from google.api_core.exceptions import NotFound
+
 from onolys_api.storage.base import BlobNotFoundError
 from onolys_api.storage.gcs import GcsBlobStore
 

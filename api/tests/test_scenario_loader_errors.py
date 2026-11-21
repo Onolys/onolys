@@ -5,8 +5,9 @@ import json
 from pathlib import Path
 
 import pytest
-from onolys_api.voice.scenarios import load_scenarios, public_view, scenarios_dir
 from onolys_core.errors import ConfigError
+
+from onolys_api.voice.scenarios import load_scenarios, public_view, scenarios_dir
 
 pytestmark = pytest.mark.unit
 VOICES = ["Kore", "Puck"]

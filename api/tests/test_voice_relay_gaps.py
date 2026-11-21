@@ -4,13 +4,14 @@ ownership check and serve, upstream stream end/reopen failure, junk client frame
 import asyncio
 import logging
 
-import onolys_api.voice.relay as relay
 import pytest
-from onolys_api.repo.base import NotFoundError
 from onolys_core.voice import AudioOut, Interrupted, TurnComplete
 from onolys_core.voice.fixture import FixtureVoice
 from test_voice_relay import TONE, Env, SeqVoice, connect, expect_close, ready
 from voice_helpers import serve
+
+import onolys_api.voice.relay as relay
+from onolys_api.repo.base import NotFoundError
 
 pytestmark = pytest.mark.unit
 NOT_LIVE = {"type": "error", "code": "interview_not_live"}
