@@ -926,6 +926,55 @@
         "title": "RunView",
         "type": "object"
       },
+      "ScenarioList": {
+        "properties": {
+          "scenarios": {
+            "items": {
+              "$ref": "#/components/schemas/ScenarioPublic"
+            },
+            "title": "Scenarios",
+            "type": "array"
+          }
+        },
+        "required": [
+          "scenarios"
+        ],
+        "title": "ScenarioList",
+        "type": "object"
+      },
+      "ScenarioPublic": {
+        "properties": {
+          "difficulty": {
+            "title": "Difficulty",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "language": {
+            "title": "Language",
+            "type": "string"
+          },
+          "summary": {
+            "title": "Summary",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "difficulty",
+          "summary",
+          "language"
+        ],
+        "title": "ScenarioPublic",
+        "type": "object"
+      },
       "SessionDetail": {
         "properties": {
           "created_at": {
@@ -1700,6 +1749,65 @@
         "summary": "One run: status, params, run_info",
         "tags": [
           "runs"
+        ]
+      }
+    },
+    "/v1/scenarios": {
+      "get": {
+        "operationId": "listScenarios",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScenarioList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "`unauthenticated`: missing, invalid or revoked credentials"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "`daily_cap_reached` (daily run cap or concurrent-run limit) or `rate_limited`"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "`internal_error`"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "summary": "Practice-client scenarios (public fields only)",
+        "tags": [
+          "interviews"
         ]
       }
     },

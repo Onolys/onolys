@@ -38,6 +38,7 @@ from onolys_api.routes import api_key as api_key_routes
 from onolys_api.routes import audio as audio_routes
 from onolys_api.routes import rating as rating_routes
 from onolys_api.routes import runs as run_routes
+from onolys_api.routes import scenarios as scenario_routes
 from onolys_api.routes import sessions as session_routes
 from onolys_api.routes import speakers as speaker_routes
 from onolys_api.routes import tasks as task_routes
@@ -45,6 +46,7 @@ from onolys_api.routes import usage as usage_routes
 from onolys_api.storage.base import BlobStore
 from onolys_api.storage.fake import FakeBlobStore
 from onolys_api.storage.fake_routes import make_fake_blob_router
+from onolys_api.voice.scenarios import load_scenarios
 
 log = logging.getLogger("onolys_api")
 _REQUEST_ID_OK = re.compile(r"^[A-Za-z0-9._-]{1,64}$")
@@ -233,6 +235,7 @@ def create_app(
     )
     app.state.settings = settings
     app.state.clock = lambda: datetime.now(UTC)  # tests replace it
+    app.state.scenarios = load_scenarios()  # fail at startup if any scenario is invalid
     load_rating_schema()  # fail at startup, loudly, if the canonical rating schema is missing
     app.state.blobs = blobs or build_blobs(settings)
     app.state.repo = repo or build_repo(settings, app.state.blobs)
@@ -325,6 +328,7 @@ def create_app(
     router.include_router(run_routes.router)
     router.include_router(run_routes.runs_router)
     router.include_router(usage_routes.router)
+    router.include_router(scenario_routes.router)
     app.include_router(router)
     app.include_router(make_docs_router())
 

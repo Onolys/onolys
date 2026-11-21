@@ -57,6 +57,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/scenarios": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Practice-client scenarios (public fields only) */
+        get: operations["listScenarios"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/sessions": {
         parameters: {
             query?: never;
@@ -655,6 +672,24 @@ export interface components {
             status: string;
             stt?: components["schemas"]["SttInfo"] | null;
         };
+        /** ScenarioList */
+        ScenarioList: {
+            /** Scenarios */
+            scenarios: components["schemas"]["ScenarioPublic"][];
+        };
+        /** ScenarioPublic */
+        ScenarioPublic: {
+            /** Difficulty */
+            difficulty: string;
+            /** Id */
+            id: string;
+            /** Language */
+            language: string;
+            /** Summary */
+            summary: string;
+            /** Title */
+            title: string;
+        };
         /** SessionDetail */
         SessionDetail: {
             /**
@@ -1026,6 +1061,53 @@ export interface operations {
             };
             /** @description `not_found`: no such resource for this user (never 403, so ids cannot be probed) */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description `daily_cap_reached` (daily run cap or concurrent-run limit) or `rate_limited` */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description `internal_error` */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    listScenarios: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScenarioList"];
+                };
+            };
+            /** @description `unauthenticated`: missing, invalid or revoked credentials */
+            401: {
                 headers: {
                     [name: string]: unknown;
                 };
