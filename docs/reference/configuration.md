@@ -32,7 +32,7 @@ Values here are the defaults. Tuning values (thresholds, caps, windows) are gues
 | `IAUDIT_LLM_RESPONSE_FORMAT` | `json_object` | `json_object` relies on the prompt for the schema and validates replies here. `json_schema` asks the provider for strict structured output; Haiku 5.5 often returns empty claims with it. |
 | `IAUDIT_FIXTURE_DIR` | `tests/fixtures/llm` | Recordings for `fixture` mode. |
 
-Thinking is kept low on Gemini (`reasoning_effort: low`) because Gemini 4 thinks by default and thinking tokens count against the small per-stage output caps. eaudit picks caching and thinking settings from the model id prefix: `gemini/` gets implicit caching plus low thinking, `anthropic/` gets ephemeral caching plus thinking disabled. To flip back to Claude: set `DEFAULT_PRESET=claude` for the worker (shared routes), or `IAUDIT_MODEL_CHEAP/MID/STRONG=anthropic/...` for standalone eaudit/eval.
+Thinking is kept low on Gemini (`reasoning_effort: low`) because Gemini 4 thinks by default and thinking tokens count against the small per-stage output caps. eaudit picks caching and thinking settings from the model id prefix: `gemini/` gets implicit caching plus low thinking, `anthropic/` gets ephemeral caching plus thinking disabled. To flip back to Claude: the worker and `onolys_evaluation` (shared core routes) need `DEFAULT_PRESET=claude` (or `preset=claude`). `IAUDIT_MODEL_CHEAP/MID/STRONG=anthropic/...` fully works only for standalone eaudit / `eaudit eval` (which pick provider defaults by prefix); on the shared routes it changes just the model id and keeps `GEMINI_API_KEY`, implicit caching and low `reasoning_effort`.
 
 ## Orchestration
 
