@@ -105,12 +105,17 @@ jobs:
         env:
           SHA: ${{ steps.sha.outputs.sha }}
         run: |
-          # Keep the matcher from the workflow's own ref: older shas (rollbacks) do not have it in their tree.
+          # Keep the matcher and the config guard from the workflow's own ref: older shas (rollbacks) do not have the matcher in
+          # their tree, and nothing from the target sha may run in this job (staging deployer credentials are loaded).
           cp scripts/ci/staging_ran_image.py "$RUNNER_TEMP/staging_ran_image.py"
+          cp scripts/ci/check_config.sh "$RUNNER_TEMP/check_config.sh"
           git fetch --no-tags --depth=1 origin "$SHA"
           git checkout --detach "$SHA"
-      - name: Config guard (source tree at this commit)
-        run: bash scripts/ci/check_config.sh
+      - name: Config guard (source tree at this commit; the script is the workflow ref's copy, run with an empty environment)
+        run: |
+          # The checked-out target tree is DATA only: it is read by the trusted copy, never executed. env -i drops the credential
+          # variables (GOOGLE_APPLICATION_CREDENTIALS, ...) and GITHUB_ENV/GITHUB_PATH, so it cannot touch them.
+          env -i PATH=/usr/bin:/bin HOME="$RUNNER_TEMP" ROOT="$GITHUB_WORKSPACE" bash "$RUNNER_TEMP/check_config.sh"
       - name: Resolve the sha tag to a digest and require that staging ran exactly that image at that commit
         id: digest
         env:
@@ -129,7 +134,7 @@ jobs:
             "https://${REGION}-docker.pkg.dev/v2/${PROJECT}/onolys/api/manifests/${digest}"
           for svc in onolys-api-staging onolys-worker-staging; do
             gcloud run revisions list --service "$svc" --region "$REGION" --project "$PROJECT" --format=json > "$RUNNER_TEMP/revisions.json"
-            python3 "$RUNNER_TEMP/staging_ran_image.py" --sha "$SHA" --digest "$digest" --index "$RUNNER_TEMP/index.json" --revisions "$RUNNER_TEMP/revisions.json" >/dev/null \
+            python3 -I "$RUNNER_TEMP/staging_ran_image.py" --sha "$SHA" --digest "$digest" --index "$RUNNER_TEMP/index.json" --revisions "$RUNNER_TEMP/revisions.json" >/dev/null \
               || { echo "digest ${digest} (commit ${SHA}) never ran on ${svc} with GIT_SHA=${SHA}; deploy it to staging first" >&2; exit 1; }
           done
           rm -f "$RUNNER_TEMP/index.json" "$RUNNER_TEMP/revisions.json"
@@ -143,7 +148,9 @@ jobs:
       - name: Config guard (inside the image, by digest)
         env:
           IMAGE: ${{ steps.digest.outputs.image }}
-        run: bash scripts/ci/check_config.sh --image "$IMAGE"
+        # Same rule as the source-tree guard: the workflow ref's copy (made before the checkout), never the target tree's script.
+        # HOME stays so docker finds the registry login written above; everything else (creds file vars, GITHUB_ENV) is dropped.
+        run: env -i PATH="$PATH" HOME="$HOME" ROOT="$GITHUB_WORKSPACE" bash "$RUNNER_TEMP/check_config.sh" --image "$IMAGE"
 
   deploy-api:
     needs: resolve
