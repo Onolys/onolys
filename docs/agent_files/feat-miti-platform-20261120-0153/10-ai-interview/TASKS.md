@@ -12,7 +12,7 @@ External dependency (not SP10 work): **SP11 usage limits**, built before SP10 ex
 
 | # | Task | Depends on | Status |
 |---|---|---|---|
-| 1 | R0 spike go/no-go gate | none (owner in the loop) | todo |
+| 1 | R0 spike go/no-go gate | none (owner in the loop) | in-progress |
 | 2 | Scenario schema, loader, `GET /scenarios`, persona prompt builder | 1 | todo |
 | 3 | Core voice adapter (`VoiceAdapter`, Gemini Live Vertex, fixture, config) | 1 | todo |
 | 4 | Interview API + state + SP11 reserve/release seam | 2, 3, SP11 | todo |
