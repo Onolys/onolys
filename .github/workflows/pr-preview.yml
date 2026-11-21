@@ -8,13 +8,18 @@ name: pr-preview
 # https://pr-<N>---<staging api host> directly (CORS allows the channel origin on this revision; the CSP is extended).
 # Fork PRs get no preview (no secrets, no WIF). Cleanup: pr-preview-cleanup.yml.
 #
-# Shared-service safety (this deploy edits the staging API service template, which the next staging deploy inherits):
-#  - env/flags this workflow overrides (SERVICE_MODE, ADAPTERS, GIT_SHA, CORS_ORIGINS, --no-cpu-throttling) are all
-#    re-specified by deploy-staging.yml (deploy-api inputs env_vars + flags), so nothing leaks into staging.
+# Shared-service safety (a preview deploy rewrites the staging API service template, see "restore" below):
+#  - Restore: right after the deploy, `pr_preview.sh restore-template` puts the service template back to the config of the revision
+#    that serves traffic (Cloud Run v2 PATCH, updateMask=template: traffic and the pr-<N> tag are untouched), so Terraform sees no
+#    drift and a later template-based revision never starts in preview mode. The step runs even if the deploy step failed after
+#    creating the revision; pr-preview-cleanup.yml runs it again (no-op when already matching).
+#  - env/flags this workflow overrides (SERVICE_MODE, ADAPTERS, GIT_SHA, CORS_ORIGINS, --no-cpu-throttling) are also all
+#    re-specified by deploy-staging.yml (deploy-api inputs env_vars + flags), a second line of defence.
 #  - --no-traffic: preview revisions never get traffic; deploy-staging moves 100% to its own, explicitly named revision.
 #  - No shared concurrency group with deploy-staging on purpose: GitHub cancels the older PENDING run of a group, so a
 #    queued staging deploy could be dropped by a preview. Races are safe instead: Cloud Run rejects a stale template
-#    update (the loser fails loudly; the deploy step below retries) and traffic is pinned by revision name, never "latest".
+#    update (the loser fails loudly; the deploy step below retries, the restore PATCH carries the service etag and retries) and
+#    traffic is pinned by revision name, never "latest".
 # Repo variables (same as deploy-staging.yml): WIF_PROVIDER, DEPLOYER_STAGING_SA, GCP_PROJECT / GCP_REGION (optional),
 #   STAGING_VITE_FIREBASE_API_KEY, STAGING_VITE_FIREBASE_AUTH_DOMAIN, STAGING_VITE_FIREBASE_APP_ID,
 #   STAGING_VITE_FIREBASE_STORAGE_BUCKET, STAGING_VITE_FIREBASE_MESSAGING_SENDER_ID, STAGING_VITE_CONTACT_EMAIL (optional)
@@ -170,6 +175,12 @@ jobs:
           actual="$(gcloud run services describe "$SERVICE" --project "$PROJECT" --region "$REGION" --format json \
             | jq -r --arg t "pr-${PR}" '.status.traffic[]? | select(.tag == $t) | .url')"
           [ "$actual" = "$EXPECTED_TAG_URL" ] || { echo "tag url mismatch: expected $EXPECTED_TAG_URL, service reports '$actual'" >&2; exit 1; }
+      - name: Restore the staging service template to the serving revision (previews must not change it)
+        if: ${{ always() && steps.run.outcome != 'skipped' }}
+        env:
+          GCP_PROJECT: ${{ env.PROJECT }}
+          GCP_REGION: ${{ env.REGION }}
+        run: bash scripts/ci/pr_preview.sh restore-template "$PR"
       - name: Smoke the tag URL (healthz sha, CORS preflight for the channel origin)
         env:
           API_URL: ${{ steps.api.outputs.url }}

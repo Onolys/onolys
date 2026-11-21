@@ -307,7 +307,7 @@ Command: `cd infra && terraform plan -var staging_alerts=true -var 'git_sha={sta
   - `module.staging...google_cloud_run_v2_service.api`: its template is currently the no-traffic PR-42 preview revision (`onolys-api-staging-pr-42-fc89744-14-1`: `SERVICE_MODE=combined`, `ADAPTERS=stub`, preview `CORS_ORIGINS`, `GIT_SHA=fc89744`, `cpu_idle=false`) while 100 % of traffic stays on `onolys-api-staging-096e3ed-34-1`. A preview deploy replaces the service template. Plan would reset it to the real template.
   - `module.staging...admin_backend[0]`: `GIT_SHA` is `205a03f`, plan sets `096e3ed` (admin deploys come from `deploy-admin.yml`, not `deploy-staging`).
   - Staging worker is not drifting (`GIT_SHA` already `096e3ed`).
-  - Follow-up (not done here): make the preview workflow deploy with `--no-traffic --tag` without replacing the service template, or accept and re-apply after each preview. No apply was run.
+  - Follow-up DONE (fix/ci-preview-and-prod-guard): `pr-preview.yml` now runs `scripts/ci/pr_preview.sh restore-template` right after the preview deploy (and `pr-preview-cleanup.yml` runs it again, no-op when already matching). It reads the revision that serves traffic and PATCHes the service `template` back to that revision's config (Cloud Run v2, `updateMask=template`, service etag; traffic and the `pr-<N>` tag are untouched), creating one 0 %-traffic revision `onolys-api-staging-pr-<N>-tpl-<epoch>` that cleanup / sweep delete like any preview revision. After a preview the staging template matches the main revision again (no drift, nothing inherits preview mode). The pr-42 drift above predates this fix; apply or the next staging deploy clears it.
 
 ### Open-until-measured items (Task 15)
 
