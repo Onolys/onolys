@@ -19,7 +19,7 @@ import {
   type Turn,
 } from "./fixtures";
 
-import { MOCK_DEFAULT_VOICE, MOCK_LIMITS, MOCK_SCENARIOS, MOCK_VOICES } from "./fixtures/scenarios";
+import { MOCK_CHANGE_GOALS, MOCK_DEFAULT_VOICE, MOCK_LIMITS, MOCK_SCENARIOS, MOCK_VOICES } from "./fixtures/scenarios";
 
 type S = components["schemas"];
 
@@ -118,6 +118,7 @@ interface SessionRec {
   holdFirstStart: boolean;
   uploadId: string | null;
   uploadType: string | null;
+  interview_id?: string;
   finals: Rating[];
   draft: { card: RatingCard; updated_at: string; seq: number } | null;
   runs: RunRec[];
@@ -146,7 +147,7 @@ export class MockBackend {
   private counters = new Map<string, number>();
   private idem = new Map<string, { hash: string; response: S["CreateSessionResponse"] }>();
   private apiKeys = new Map<string, { key_id: string; created: string }>();
-  private interviews = new Map<string, { uid: string; res: S["InterviewResponse"] }>();
+  private interviews = new Map<string, { uid: string; res: S["InterviewResponse"]; session_id?: string }>();
   private n = 0;
 
   constructor(opts: MockOptions) {
@@ -245,7 +246,7 @@ export class MockBackend {
   // ---- SP10 AI interviews --------------------------------------------------
 
   listScenarios(): S["ScenarioList"] {
-    return { scenarios: MOCK_SCENARIOS.map((s) => ({ ...s })) };
+    return { scenarios: MOCK_SCENARIOS.map((s) => ({ ...s })), voices: [...MOCK_VOICES], default_voice: MOCK_DEFAULT_VOICE };
   }
 
   /** Start an interview: validate, spend a cap slot (429 `interview_cap_reached`), return the relay URL. */
@@ -325,6 +326,12 @@ export class MockBackend {
     if (body.title != null && (typeof body.title !== "string" || body.title.length > 200))
       invalidParam("title is too long");
 
+    // SP10 link: an ended, unlinked interview of the caller; language and the draft change goal come from its scenario.
+    const linked = body.interview_id ? this.interviews.get(body.interview_id) : undefined;
+    if (body.interview_id) {
+      if (!linked || linked.uid !== uid) notFound();
+    }
+
     const idemKey = idempotencyKey ? `${uid}:${idempotencyKey}` : null;
     const hash = JSON.stringify(body);
     if (idemKey) {
@@ -335,14 +342,19 @@ export class MockBackend {
       }
     }
 
+    if (linked) {
+      if (linked.session_id) bad(409, "conflict", "Interview already linked to a session.");
+      if (linked.res.state !== "ended") bad(409, "invalid_state", "Interview is not ended.");
+    }
+
     const seq = this.n + 1;
     const id = this.id("s");
     const s: SessionRec = {
       id,
       uid,
       seq,
-      title: body.title ?? null,
-      language: body.language ?? "auto",
+      title: body.title ?? linked?.res.scenario.title ?? null,
+      language: linked ? linked.res.scenario.language : (body.language ?? "auto"),
       n_runs: body.n_runs ?? 1,
       preset: body.preset ?? "default",
       created_at: this.now().toISOString(),
@@ -363,6 +375,12 @@ export class MockBackend {
       reports: [],
     };
     s.holdFirstStart = this.titleIs(s, "cap-held");
+    if (linked && body.interview_id) {
+      s.interview_id = body.interview_id;
+      linked.session_id = id;
+      const goal = MOCK_CHANGE_GOALS[linked.res.scenario.id];
+      if (goal) s.draft = { card: { change_goal: goal } as RatingCard, updated_at: s.created_at, seq: seq };
+    }
     this.sessions.set(id, s);
     this.emit(s); // before returning, so a listener can attach at once
     const response = { session: { id, status: s.state } };
@@ -381,6 +399,7 @@ export class MockBackend {
       created_at: s.created_at,
       latest_report_version: s.reports.at(-1)?.version ?? null,
       error_code: s.error?.code ?? null,
+      interview_id: s.interview_id ?? null,
     }));
     const next = offset + limit;
     return next < all.length ? { items, next_cursor: String(next) } : { items };
@@ -402,6 +421,7 @@ export class MockBackend {
       language: s.language,
       n_runs: s.n_runs,
       preset: s.preset,
+      interview_id: s.interview_id ?? null,
       links: { self: `/v1/sessions/${s.id}` },
     };
     if (s.error) detail.error = { ...s.error };

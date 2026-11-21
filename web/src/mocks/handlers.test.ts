@@ -165,7 +165,9 @@ describe("MSW handlers over HTTP (fake auth)", () => {
 describe("MSW interview handlers (SP10)", () => {
   it("lists public scenarios only", async () => {
     const { client } = clientFor("u1");
-    const { scenarios } = unwrap(await client.GET("/scenarios"));
+    const { scenarios, voices, default_voice } = unwrap(await client.GET("/scenarios"));
+    expect(voices.length).toBeGreaterThan(1);
+    expect(voices).toContain(default_voice);
     expect(scenarios.length).toBeGreaterThan(0);
     for (const s of scenarios) expect(Object.keys(s).sort()).toEqual(["difficulty", "id", "language", "summary", "title"]);
   });

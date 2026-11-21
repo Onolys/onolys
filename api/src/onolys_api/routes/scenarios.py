@@ -3,7 +3,7 @@
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Request
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from onolys_api.auth.deps import AuthUser, current_user
 from onolys_api.errors import ErrorResponse
@@ -24,6 +24,8 @@ class ScenarioPublic(BaseModel):
 
 class ScenarioList(BaseModel):
     scenarios: list[ScenarioPublic]
+    voices: list[str] = Field(description="Every voice a practice interview may use (D16)")
+    default_voice: str = Field(description="The configured default voice, one of `voices`")
 
 
 @router.get(
@@ -32,5 +34,7 @@ class ScenarioList(BaseModel):
 )  # fmt: skip
 def list_scenarios(request: Request, user: User) -> ScenarioList:
     return ScenarioList(
-        scenarios=[ScenarioPublic(**public_view(s)) for s in request.app.state.scenarios.values()]
+        scenarios=[ScenarioPublic(**public_view(s)) for s in request.app.state.scenarios.values()],
+        voices=request.app.state.voices,
+        default_voice=request.app.state.default_voice,
     )

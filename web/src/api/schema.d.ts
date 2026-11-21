@@ -803,8 +803,18 @@ export interface components {
         };
         /** ScenarioList */
         ScenarioList: {
+            /**
+             * Default Voice
+             * @description The configured default voice, one of `voices`
+             */
+            default_voice: string;
             /** Scenarios */
             scenarios: components["schemas"]["ScenarioPublic"][];
+            /**
+             * Voices
+             * @description Every voice a practice interview may use (D16)
+             */
+            voices: string[];
         };
         /** ScenarioPublic */
         ScenarioPublic: {
@@ -889,6 +899,11 @@ export interface components {
             error_code?: string | null;
             /** Id */
             id: string;
+            /**
+             * Interview Id
+             * @description Set for sessions made from an AI interview
+             */
+            interview_id?: string | null;
             /** Latest Report Version */
             latest_report_version?: number | null;
             /**

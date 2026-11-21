@@ -7,7 +7,14 @@ export const MOCK_SCENARIOS: components["schemas"]["ScenarioPublic"][] = [
   { id: "sc_angry_relative", title: "Angry relative", difficulty: "hard", summary: "A relative upset about a delayed discharge.", language: "en" },
 ];
 
-/** The staging voice list (config/staging/voice_providers.yaml). The API does not expose it yet; Task 11 gap. */
+/** The change goal each scenario prefills on the linked session (server-side only in the real API). */
+export const MOCK_CHANGE_GOALS: Record<string, string> = {
+  sc_anxious_parent: "Keep the cough diary for a week",
+  sc_reluctant_patient: "Book the follow-up visit",
+  sc_angry_relative: "Agree a discharge plan",
+};
+
+/** The staging voice list (config/staging/voice_providers.yaml), as `GET /scenarios` returns it. */
 export const MOCK_VOICES = ["Zephyr", "Puck", "Charon", "Kore", "Fenrir", "Leda", "Orus", "Aoede", "Callirrhoe"];
 export const MOCK_DEFAULT_VOICE = "Kore";
 export const MOCK_LIMITS = { max_s: 600, warn_s: 480 };

@@ -85,6 +85,12 @@ async def test_get_scenarios_public_keys_only(client, sample):
     assert find_leaks(r.text, sample) == []
 
 
+async def test_get_scenarios_exposes_voices_and_default(client, app):
+    body = (await client.get("/v1/scenarios", headers=H)).json()
+    assert body["voices"] == app.state.voices and len(body["voices"]) > 1
+    assert body["default_voice"] in body["voices"]
+
+
 async def test_get_scenarios_requires_auth(client):
     r = await client.get("/v1/scenarios")
     assert r.status_code == 401

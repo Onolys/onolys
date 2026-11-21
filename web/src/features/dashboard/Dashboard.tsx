@@ -4,6 +4,7 @@ import { Link } from "react-router";
 import { unwrap } from "../../api/client";
 import { describeError, messageForCode } from "../../api/errors";
 import { useApiClient } from "../../auth/useApiClient";
+import { interviewCapText } from "../interview/capText";
 import { ErrorCard } from "../session/ErrorCard";
 import { UsageLeft } from "../usage/UsageLeft";
 import { blockingPeriod, evalCapCode, formatBlockingReset } from "../usage/usage";
@@ -27,6 +28,7 @@ export function Dashboard() {
   });
   const usage = useUsage();
   const blocking = blockingPeriod(usage.data, "eval");
+  const interviewBlocking = blockingPeriod(usage.data, "interview");
 
   const items = sessions.data?.pages.flatMap((p) => p.items) ?? [];
 
@@ -47,9 +49,6 @@ export function Dashboard() {
       <div className="empty-state">
         <p>Onolys rates a recorded session against the MITI and shows you where it agrees with your own rating, line by line.</p>
         <p>
-          <Link className="btn btn-primary" to="/sessions/new">
-            New session
-          </Link>{" "}
           <Link to="/sample-report">See a sample report</Link>
         </p>
       </div>
@@ -63,6 +62,11 @@ export function Dashboard() {
             return (
               <li key={s.id} className="session-row">
                 <Link to={`/sessions/${s.id}`}>{s.title ?? date(s.created_at)}</Link>{" "}
+                {s.interview_id ? (
+                  <>
+                    <span className="chip">AI interview</span>{" "}
+                  </>
+                ) : null}
                 <span className="chip" data-tone={chip.tone}>
                   {chip.text}
                 </span>{" "}
@@ -91,26 +95,50 @@ export function Dashboard() {
   return (
     <>
       <h1>Sessions</h1>
-      {usage.data ? (
-        <>
+      <div className="landing-cards">
+        <section className="landing-card" aria-labelledby="card-interview">
+          <h2 id="card-interview">Practise with an AI client</h2>
           <p className="form-note">
-            Ratings: <UsageLeft kind="eval" period="day" />, <UsageLeft kind="eval" period="month" />
+            A 10-minute role-play, then rated like any recording.
+            {usage.data ? (
+              <>
+                {" "}
+                <UsageLeft kind="interview" period="day" />, <UsageLeft kind="interview" period="month" />
+              </>
+            ) : null}
           </p>
+          {interviewBlocking ? (
+            <>
+              <button type="button" className="btn btn-primary" disabled>
+                Start AI Interview
+              </button>
+              <p className="notice">{interviewCapText(interviewBlocking)}</p>
+            </>
+          ) : (
+            <Link className="btn btn-primary" to="/interviews/new">
+              Start AI Interview
+            </Link>
+          )}
+        </section>
+        <section className="landing-card" aria-labelledby="card-upload">
+          <h2 id="card-upload">Rate a recording</h2>
           <p className="form-note">
-            Interviews: <UsageLeft kind="interview" period="day" />, <UsageLeft kind="interview" period="month" />
+            Bring a session you recorded.
+            {usage.data ? (
+              <>
+                {" "}
+                <UsageLeft kind="eval" period="day" />, <UsageLeft kind="eval" period="month" />
+              </>
+            ) : null}
           </p>
-        </>
-      ) : null}
-      {blocking ? (
-        <p className="notice">{messageForCode(evalCapCode(blocking), { resetsAt: formatBlockingReset(blocking) })}</p>
-      ) : null}
-      {items.length > 0 ? (
-        <p>
           <Link className="btn btn-primary" to="/sessions/new">
             New session
           </Link>
-        </p>
-      ) : null}
+          {blocking ? (
+            <p className="notice">{messageForCode(evalCapCode(blocking), { resetsAt: formatBlockingReset(blocking) })}</p>
+          ) : null}
+        </section>
+      </div>
       {body}
     </>
   );

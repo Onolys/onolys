@@ -75,6 +75,7 @@ class SessionListItem(BaseModel):
     created_at: datetime
     latest_report_version: int | None = None
     error_code: str | None = None
+    interview_id: str | None = Field(None, description="Set for sessions made from an AI interview")
 
 
 class SessionList(BaseModel):
@@ -271,6 +272,7 @@ def list_sessions(
             created_at=s.created_at,
             latest_report_version=s.latest_report_version,
             error_code=s.error.code if s.error else None,
+            interview_id=s.interview_id,
         )
         for s in sessions
         if s.state != "deleting"

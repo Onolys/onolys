@@ -67,6 +67,14 @@ async def test_links_ended_interview_and_prefills_everything(api, repo):
     assert g["final"] is None and g["draft"]["card"] == {"change_goal": GOAL}
 
 
+async def test_list_tags_interview_sessions(api, repo):
+    iid = interview(repo)
+    sid = (await link(api, iid)).json()["session"]["id"]
+    plain = (await api.post("/v1/sessions", headers=A, json={})).json()["session"]["id"]
+    items = {i["id"]: i for i in (await api.get("/v1/sessions", headers=A)).json()["items"]}
+    assert items[sid]["interview_id"] == iid and items[plain]["interview_id"] is None
+
+
 async def test_explicit_title_wins_over_default(api, repo):
     iid = interview(repo)
     sid = (await link(api, iid, title="My own")).json()["session"]["id"]

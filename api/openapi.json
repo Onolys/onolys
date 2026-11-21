@@ -1097,16 +1097,31 @@
       },
       "ScenarioList": {
         "properties": {
+          "default_voice": {
+            "description": "The configured default voice, one of `voices`",
+            "title": "Default Voice",
+            "type": "string"
+          },
           "scenarios": {
             "items": {
               "$ref": "#/components/schemas/ScenarioPublic"
             },
             "title": "Scenarios",
             "type": "array"
+          },
+          "voices": {
+            "description": "Every voice a practice interview may use (D16)",
+            "items": {
+              "type": "string"
+            },
+            "title": "Voices",
+            "type": "array"
           }
         },
         "required": [
-          "scenarios"
+          "scenarios",
+          "voices",
+          "default_voice"
         ],
         "title": "ScenarioList",
         "type": "object"
@@ -1347,6 +1362,18 @@
           "id": {
             "title": "Id",
             "type": "string"
+          },
+          "interview_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Set for sessions made from an AI interview",
+            "title": "Interview Id"
           },
           "latest_report_version": {
             "anyOf": [

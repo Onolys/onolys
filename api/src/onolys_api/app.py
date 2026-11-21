@@ -11,7 +11,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from onolys_core.errors import ConfigError
-from onolys_core.voice.select import allowed_voices
+from onolys_core.voice.select import allowed_voices, load_voice_config
 from pydantic import BaseModel
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
@@ -240,7 +240,9 @@ def create_app(
     )
     app.state.settings = settings
     app.state.clock = lambda: datetime.now(UTC)  # tests replace it
-    app.state.voices = allowed_voices()  # D16: what `POST /interviews {voice}` may name
+    voice_cfg = load_voice_config()
+    app.state.voices = allowed_voices(voice_cfg)  # D16: what `POST /interviews {voice}` may name
+    app.state.default_voice = voice_cfg["providers"][voice_cfg["default"]]["voice"]
     app.state.scenarios = load_scenarios(voices=app.state.voices)  # fail at startup if invalid
     load_rating_schema()  # fail at startup, loudly, if the canonical rating schema is missing
     voice_mode = settings.service_mode == "voice"
