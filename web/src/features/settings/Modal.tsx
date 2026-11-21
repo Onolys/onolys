@@ -14,7 +14,12 @@ export function Modal({
 }) {
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
+    const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     ref.current?.querySelector<HTMLElement>("button, input")?.focus();
+    // Give focus back to whatever opened the dialog (if it is still on the page).
+    return () => {
+      if (opener?.isConnected) opener.focus();
+    };
   }, []);
 
   const onKeyDown = (e: React.KeyboardEvent) => {

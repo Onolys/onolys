@@ -98,7 +98,6 @@ test.describe("main flow (mock backend)", () => {
   });
 
   test("W26/E19: Settings 'Copy' gives feedback and API key secret dialog restores focus", async ({ page, context }) => {
-    test.fail(true, "E19/W26: no 'Copied' feedback");
     await context.grantPermissions(["clipboard-read", "clipboard-write"]);
     await signUpVerified(page, "key@example.com");
     await page.locator("header nav a", { hasText: "Settings" }).click();
