@@ -207,10 +207,16 @@ jobs:
 
   api-coverage:
     needs: [changes, api-unit, api-emulator]
-    if: needs.changes.outputs.api == 'true'
+    # always(): a skipped/failed upstream job must not skip this gate (a skipped required check passes).
+    if: always() && needs.changes.outputs.api == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
+      - name: Require upstream jobs to have succeeded
+        run: |
+          echo "api-unit=${{ needs.api-unit.result }} api-emulator=${{ needs.api-emulator.result }}"
+          [ "${{ needs.api-unit.result }}" = "success" ] && [ "${{ needs.api-emulator.result }}" = "success" ] \
+            || { echo "::error::api-unit/api-emulator did not succeed; coverage gate cannot pass"; exit 1; }
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
         with:
@@ -265,6 +271,9 @@ jobs:
         run: npm install --prefix ~/.firebase-tools firebase-tools@${{ env.FIREBASE_TOOLS_VERSION }}
       - run: echo "$HOME/.firebase-tools/node_modules/.bin" >> "$GITHUB_PATH"
       - run: uv sync --frozen --package onolys-api
+      # Setup must fail loudly; only the pytest step below is allowed to fail.
+      - name: Verify firebase-tools is usable
+        run: firebase --version
       - name: pytest flaky (non-blocking)
         id: flaky_api
         continue-on-error: true

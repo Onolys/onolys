@@ -48,13 +48,10 @@ async def client(app):
         yield c
 
 
-# Firestore-emulator transaction contention ("Aborted: 409 Transaction lock timeout") makes these
-# firestore-backed params flaky. The in-memory ("fake") params are deterministic and stay blocking.
-FLAKY_FIRESTORE_TESTS = {
-    "test_concurrent_reservations_never_exceed_the_cap",
-    "test_concurrent_attempts_cannot_exceed_the_active_run_limit",
-    "test_two_concurrent_claims_one_wins",
-}
+# Test names (firestore param only) to run non-blocking because of emulator contention
+# ("Aborted: 409 Transaction lock timeout"). Currently none.
+FLAKY_FIRESTORE_TESTS: set[str] = set()  # same-doc txns are lock-serialized per instance; see
+# test_firestore_cross_instance.py for the blocking cross-instance races
 
 
 @pytest.hookimpl(tryfirst=True)
@@ -73,7 +70,11 @@ def pytest_collection_modifyitems(items):
 
 
 # Files that talk to the Firestore emulator without a [firestore] param.
-EMULATOR_FILES = {"test_auth_emulator.py", "test_firestore_emulator.py"}
+EMULATOR_FILES = {
+    "test_auth_emulator.py",
+    "test_firestore_emulator.py",
+    "test_firestore_cross_instance.py",
+}
 
 
 def _needs_emulator(item) -> bool:
@@ -85,27 +86,19 @@ def _needs_emulator(item) -> bool:
 
 
 # These files exercise HTTP/validation logic, not Firestore semantics (repo_contract covers
-# those). Their [firestore] twins only add emulator time, so keep a few smoke cases per file.
-FIRESTORE_SMOKE = {
-    "test_rating.py": {
-        "test_final_creates_revision_and_updates_session[firestore]",
-        "test_each_final_is_new_revision_latest_wins[firestore]",
-        "test_draft_overwritten_single_doc[firestore]",
-        "test_get_draft_only_when_newer_than_final[firestore]",
-        "test_other_user_gets_404[firestore]",
-    },
-    "test_error_map.py": {
-        "test_stubbed_engine_failure_maps_through_run_and_status_body[firestore-llm]"
-    },
-    "test_logging.py": {"test_failed_run_writes_one_line_with_all_required_keys[firestore]"},
-}
+# those). Their [firestore] twins only add emulator time, so only tests marked
+# `@pytest.mark.firestore_smoke` keep their [firestore] twin in these files.
+SMOKE_FILES = {"test_rating.py", "test_error_map.py", "test_logging.py"}
 
 
 def _trim_firestore_twins(items):
     kept, dropped = [], []
     for item in items:
-        smoke = FIRESTORE_SMOKE.get(item.path.name)
-        if smoke is not None and "[firestore" in item.name and item.name not in smoke:
+        if (
+            item.path.name in SMOKE_FILES
+            and "[firestore" in item.name
+            and item.get_closest_marker("firestore_smoke") is None
+        ):
             dropped.append(item)
         else:
             kept.append(item)

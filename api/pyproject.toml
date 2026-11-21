@@ -50,6 +50,7 @@ markers = [
   "integration: multiple components or local services, no paid/live providers",
   "live: calls real external providers (STT/LLM); excluded by default",
   "firestore: needs the Firestore emulator (auto-applied in conftest); CI runs it in the api-emulator job",
+  "firestore_smoke: keeps its [firestore] twin in test_rating/test_error_map/test_logging (conftest drops the rest)",
   "flaky: known-flaky test; excluded from the blocking run, run non-blocking in CI",
 ]
 
