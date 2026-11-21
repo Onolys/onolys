@@ -37,6 +37,8 @@ from onolys_api.repo.models import (
     ApiKeyDoc,
     Doc,
     IdempotencyDoc,
+    InterviewDoc,
+    InterviewState,
     RatingDoc,
     RatingDraftDoc,
     RecordingDoc,
@@ -599,6 +601,41 @@ class FakeRepo:
             )  # fmt: skip
             self._record_status(uid, sid)
             return "started"
+
+    # ---- interviews ----
+
+    def create_interview(self, uid: str, iid: str, doc: InterviewDoc) -> None:
+        if doc.uid != uid:
+            raise ValueError("document uid does not match the caller")
+        self._create(f"interviews/{iid}", doc.to_store())
+
+    def get_interview(self, uid: str, iid: str) -> InterviewDoc:
+        return self._load(InterviewDoc, iid, self._owned(f"interviews/{iid}", uid))
+
+    def list_open_interviews(self, uid: str) -> list[InterviewDoc]:
+        return [
+            self._load(InterviewDoc, p.removeprefix("interviews/"), copy.deepcopy(d))
+            for p, d in self._docs.items()
+            if p.startswith("interviews/") and d.get("uid") == uid
+            and d.get("state") in ("created", "live")
+        ]  # fmt: skip
+
+    def transition_interview(
+        self, uid: str, iid: str, from_states: tuple[InterviewState, ...],
+        to_state: InterviewState, fields: dict[str, Any] | None = None,
+    ) -> InterviewDoc | None:  # fmt: skip
+        with self._claim_lock:
+            d = self._owned(f"interviews/{iid}", uid)
+            if d.get("state") not in from_states:
+                return None
+            d = {**d, **(fields or {}), "state": to_state}
+            self._put(f"interviews/{iid}", d)
+            return self._load(InterviewDoc, iid, d)
+
+    def update_interview(self, uid: str, iid: str, fields: dict[str, Any]) -> None:
+        with self._claim_lock:
+            d = self._owned(f"interviews/{iid}", uid)
+            self._put(f"interviews/{iid}", {**d, **fields})
 
     def get_idempotency(self, uid: str, key: str) -> IdempotencyDoc | None:
         path = f"idempotency/{_idem_id(uid, key)}"

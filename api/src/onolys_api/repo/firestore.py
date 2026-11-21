@@ -45,6 +45,8 @@ from onolys_api.repo.models import (
     ApiKeyDoc,
     Doc,
     IdempotencyDoc,
+    InterviewDoc,
+    InterviewState,
     RatingDoc,
     RatingDraftDoc,
     RecordingDoc,
@@ -712,6 +714,51 @@ class FirestoreRepo:
                 if round_ == _TXN_ROUNDS - 1:
                     raise
                 time.sleep(random.uniform(0.01, 0.15))
+
+    # ---- interviews ----
+
+    def create_interview(self, uid: str, iid: str, doc: InterviewDoc) -> None:
+        if doc.uid != uid:
+            raise ValueError("document uid does not match the caller")
+        try:
+            self._top("interviews", iid).create(doc.to_store())
+        except AlreadyExists:
+            raise ConflictError() from None
+
+    def get_interview(self, uid: str, iid: str) -> InterviewDoc:
+        return _load(InterviewDoc, _owned(self._top("interviews", iid), uid))
+
+    def list_open_interviews(self, uid: str) -> list[InterviewDoc]:
+        q = _uid_query(self._client.collection("interviews"), uid).where(
+            filter=FieldFilter("state", "in", ["created", "live"])
+        )
+        return [_load(InterviewDoc, snap) for snap in q.stream()]
+
+    def transition_interview(
+        self, uid: str, iid: str, from_states: tuple[InterviewState, ...],
+        to_state: InterviewState, fields: dict[str, Any] | None = None,
+    ) -> InterviewDoc | None:  # fmt: skip
+        ref = self._top("interviews", iid)
+        _owned(ref, uid)
+
+        @firestore.transactional
+        def txn_fn(txn) -> dict | None:
+            data = ref.get(transaction=txn).to_dict() or {}
+            if data.get("uid") != uid:
+                raise NotFoundError()
+            if data.get("state") not in from_states:
+                return None
+            data = {**data, **(fields or {}), "state": to_state}
+            txn.set(ref, data)
+            return data
+
+        data = self._contended(txn_fn)
+        return None if data is None else InterviewDoc.model_validate({**data, "id": iid})
+
+    def update_interview(self, uid: str, iid: str, fields: dict[str, Any]) -> None:
+        ref = self._top("interviews", iid)
+        _owned(ref, uid)
+        ref.set(fields, merge=True)
 
     def get_idempotency(self, uid: str, key: str) -> IdempotencyDoc | None:
         ref = self._top("idempotency", _idem_id(uid, key))

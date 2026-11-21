@@ -24,6 +24,8 @@ BOB = {"Authorization": "Bearer test:bob"}
 # (method, path template) -> request json body (None = no body). Every op with a path param.
 ID_ROUTES: dict[tuple[str, str], dict | None] = {
     ("get", "/v1/runs/{run_id}"): None,
+    ("get", "/v1/interviews/{id}"): None,  # the real foreign-owner proof: test_interviews.py
+    ("post", "/v1/interviews/{id}/end"): {},
     ("get", "/v1/sessions/{id}"): None,
     ("delete", "/v1/sessions/{id}"): None,
     ("get", "/v1/sessions/{id}/audio"): None,

@@ -16,6 +16,8 @@ from onolys_api.repo.limits import Kind, LimitDefaults, ReserveUsageOutcome
 from onolys_api.repo.models import (
     ApiKeyDoc,
     IdempotencyDoc,
+    InterviewDoc,
+    InterviewState,
     RatingDoc,
     RatingDraftDoc,
     RecordingDoc,
@@ -182,6 +184,20 @@ class Repo(Protocol):
         code_version: str, start_progress: int, allowed_states: tuple[str, ...],
         n_runs: int | None, preset: str | None,
     ) -> StartOutcome: ...  # fmt: skip
+    # interviews (SP10 R5): uid-scoped `interviews/{id}`; foreign or missing -> NotFoundError.
+    def create_interview(self, uid: str, iid: str, doc: InterviewDoc) -> None: ...
+    def get_interview(self, uid: str, iid: str) -> InterviewDoc: ...
+    # the caller's interviews still in `created` or `live`
+    def list_open_interviews(self, uid: str) -> list[InterviewDoc]: ...
+    # ONE transaction: if the interview is in one of `from_states`, set `state=to_state` and
+    # `fields` (e.g. `ended_at`, `discarded`) and return the updated doc; otherwise write nothing
+    # and return None. Exactly one of several racing callers gets the doc (settle-once).
+    def transition_interview(
+        self, uid: str, iid: str, from_states: tuple[InterviewState, ...],
+        to_state: InterviewState, fields: dict[str, Any] | None = None,
+    ) -> InterviewDoc | None: ...  # fmt: skip
+    # plain field merge for the relay/uploader (`duration_s`, `state=live`, ...)
+    def update_interview(self, uid: str, iid: str, fields: dict[str, Any]) -> None: ...
     def get_idempotency(self, uid: str, key: str) -> IdempotencyDoc | None: ...
     def put_idempotency(self, uid: str, key: str, doc: IdempotencyDoc) -> bool: ...
     def delete_idempotency(self, uid: str, key: str) -> None: ...  # no-op if absent/foreign

@@ -11,6 +11,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from onolys_core.errors import ConfigError
+from onolys_core.voice.select import allowed_voices
 from pydantic import BaseModel
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
@@ -36,6 +37,7 @@ from onolys_api.rating import load_schema as load_rating_schema
 from onolys_api.repo.base import Repo
 from onolys_api.routes import api_key as api_key_routes
 from onolys_api.routes import audio as audio_routes
+from onolys_api.routes import interviews as interview_routes
 from onolys_api.routes import rating as rating_routes
 from onolys_api.routes import runs as run_routes
 from onolys_api.routes import scenarios as scenario_routes
@@ -235,7 +237,8 @@ def create_app(
     )
     app.state.settings = settings
     app.state.clock = lambda: datetime.now(UTC)  # tests replace it
-    app.state.scenarios = load_scenarios()  # fail at startup if any scenario is invalid
+    app.state.voices = allowed_voices()  # D16: what `POST /interviews {voice}` may name
+    app.state.scenarios = load_scenarios(voices=app.state.voices)  # fail at startup if invalid
     load_rating_schema()  # fail at startup, loudly, if the canonical rating schema is missing
     app.state.blobs = blobs or build_blobs(settings)
     app.state.repo = repo or build_repo(settings, app.state.blobs)
@@ -329,6 +332,7 @@ def create_app(
     router.include_router(run_routes.runs_router)
     router.include_router(usage_routes.router)
     router.include_router(scenario_routes.router)
+    router.include_router(interview_routes.router)
     app.include_router(router)
     app.include_router(make_docs_router())
 

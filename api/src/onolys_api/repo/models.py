@@ -20,6 +20,7 @@ SessionState = Literal[
     "failed",
     "deleting",
 ]
+InterviewState = Literal["created", "live", "ended", "abandoned", "uploaded"]
 RunStatus = Literal["pending", "running", "done", "failed"]
 StepStatus = Literal["pending", "running", "done", "failed"]
 
@@ -223,3 +224,18 @@ class IdempotencyDoc(Doc):
     body_hash: str
     response: dict[str, Any]
     created_at: datetime = Field(default_factory=utcnow)
+
+
+class InterviewDoc(Doc):
+    """`interviews/{id}` (SP10 R5). `state`: created -> live -> ended|abandoned -> uploaded.
+    `duration_s` and `live` are written by the voice relay; `reservation_date` is the UTC day key
+    of the SP11 reservation, used for its one refund."""
+
+    uid: str
+    scenario_id: str
+    voice: str
+    state: InterviewState = "created"
+    created_at: datetime = Field(default_factory=utcnow)
+    reservation_date: str
+    duration_s: float | None = None
+    ended_at: datetime | None = None

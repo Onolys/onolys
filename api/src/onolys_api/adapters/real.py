@@ -31,6 +31,9 @@ from onolys_core.stt import AudioRef, SttAdapter, SttParams
 from onolys_core.stt.fixture import FixtureStt
 from onolys_core.stt.google_chirp import GoogleChirp3
 from onolys_core.transcript import Transcript
+from onolys_core.voice import VoiceAdapter, VoiceParams, VoiceSession
+from onolys_core.voice.fixture import FixtureVoice
+from onolys_core.voice.gemini_live_vertex import GeminiLiveVertex
 from paudit.result import whole_second_span
 
 from onolys_api.adapters.base import EvaluationOutput, ProgressCb
@@ -72,6 +75,31 @@ class RealStt:
         except (ValueError, KeyError, TypeError):
             raise ConfigError("bad STT handle") from None
         return await self._adapter(provider).poll(inner)
+
+
+VoiceFactory = Callable[[], VoiceAdapter]
+
+# `provider` value of voice_providers.yaml -> core voice adapter factory.
+VOICE_REGISTRY: dict[str, VoiceFactory] = {
+    "gemini_live_vertex": GeminiLiveVertex,
+    "fixture": FixtureVoice,
+}
+
+
+class RealVoice:
+    """Implements `adapters.base.Voice`: a registry over the core voice adapters."""
+
+    def __init__(self, registry: Mapping[str, VoiceFactory] | None = None) -> None:
+        self._registry = dict(VOICE_REGISTRY if registry is None else registry)
+        self._cache: dict[str, VoiceAdapter] = {}
+
+    async def open(self, params: VoiceParams) -> VoiceSession:
+        if params.provider not in self._cache:
+            factory = self._registry.get(params.provider)
+            if factory is None:
+                raise ConfigError("unknown voice provider")
+            self._cache[params.provider] = factory()
+        return await self._cache[params.provider].open(params)
 
 
 PACK_REF = "miti@4.2.1"

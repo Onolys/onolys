@@ -209,6 +209,34 @@
         "title": "ConfirmSessionRef",
         "type": "object"
       },
+      "CreateInterviewRequest": {
+        "properties": {
+          "scenario_id": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Scenario Id",
+            "type": "string"
+          },
+          "voice": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "One of the configured voices; default: the scenario's",
+            "title": "Voice"
+          }
+        },
+        "required": [
+          "scenario_id"
+        ],
+        "title": "CreateInterviewRequest",
+        "type": "object"
+      },
       "CreateSessionRequest": {
         "properties": {
           "language": {
@@ -283,6 +311,18 @@
           "updated_at"
         ],
         "title": "DraftRating",
+        "type": "object"
+      },
+      "EndInterviewRequest": {
+        "properties": {
+          "discard": {
+            "default": false,
+            "description": "Throw the interview away (state `abandoned`)",
+            "title": "Discard",
+            "type": "boolean"
+          }
+        },
+        "title": "EndInterviewRequest",
         "type": "object"
       },
       "ErrorDetailModel": {
@@ -509,6 +549,80 @@
           "code_version"
         ],
         "title": "Healthz",
+        "type": "object"
+      },
+      "InterviewLimits": {
+        "properties": {
+          "max_s": {
+            "title": "Max S",
+            "type": "integer"
+          },
+          "warn_s": {
+            "title": "Warn S",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "max_s",
+          "warn_s"
+        ],
+        "title": "InterviewLimits",
+        "type": "object"
+      },
+      "InterviewResponse": {
+        "properties": {
+          "duration_s": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Elapsed seconds, as recorded by the relay",
+            "title": "Duration S"
+          },
+          "interview_id": {
+            "title": "Interview Id",
+            "type": "string"
+          },
+          "limits": {
+            "$ref": "#/components/schemas/InterviewLimits"
+          },
+          "scenario": {
+            "$ref": "#/components/schemas/ScenarioPublic"
+          },
+          "state": {
+            "enum": [
+              "created",
+              "live",
+              "ended",
+              "abandoned",
+              "uploaded"
+            ],
+            "title": "State",
+            "type": "string"
+          },
+          "voice": {
+            "title": "Voice",
+            "type": "string"
+          },
+          "voice_url": {
+            "description": "`wss://` relay endpoint for this interview",
+            "title": "Voice Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "interview_id",
+          "state",
+          "voice_url",
+          "scenario",
+          "voice",
+          "limits"
+        ],
+        "title": "InterviewResponse",
         "type": "object"
       },
       "KindUsage": {
@@ -1701,6 +1815,254 @@
         "summary": "Liveness (no auth)",
         "tags": [
           "system"
+        ]
+      }
+    },
+    "/v1/interviews": {
+      "post": {
+        "description": "Reserves one interview unit first (429 `interview_cap_reached` with `period` when spent); the unit is given back if the interview ends or is abandoned under two minutes. An earlier unfinished interview is abandoned first.",
+        "operationId": "createInterview",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateInterviewRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InterviewResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "`unauthenticated`: missing, invalid or revoked credentials"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "`daily_cap_reached` (daily run cap or concurrent-run limit) or `rate_limited`"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "`internal_error`"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "summary": "Start a practice interview (counts one usage unit)",
+        "tags": [
+          "interviews"
+        ]
+      }
+    },
+    "/v1/interviews/{id}": {
+      "get": {
+        "operationId": "getInterview",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "title": "Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InterviewResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "`unauthenticated`: missing, invalid or revoked credentials"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "`not_found`: no such resource for this user (never 403, so ids cannot be probed)"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "`daily_cap_reached` (daily run cap or concurrent-run limit) or `rate_limited`"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "`internal_error`"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "summary": "An interview's state and elapsed time",
+        "tags": [
+          "interviews"
+        ]
+      }
+    },
+    "/v1/interviews/{id}/end": {
+      "post": {
+        "description": "`created|live` becomes `ended` (`abandoned` when `discard`). Ending an interview that is already ended, abandoned or uploaded changes nothing and returns it as it is.",
+        "operationId": "endInterview",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "title": "Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/EndInterviewRequest"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InterviewResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "`unauthenticated`: missing, invalid or revoked credentials"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "`not_found`: no such resource for this user (never 403, so ids cannot be probed)"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "`daily_cap_reached` (daily run cap or concurrent-run limit) or `rate_limited`"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "`internal_error`"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "summary": "End (or discard) an interview; idempotent",
+        "tags": [
+          "interviews"
         ]
       }
     },

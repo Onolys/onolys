@@ -27,6 +27,17 @@ def _float(e: Mapping[str, str], name: str, default: float) -> float:
         raise ConfigError(f"{name} must be a number") from None
 
 
+def _bool(e: Mapping[str, str], name: str, default: bool) -> bool:
+    raw = e.get(name)
+    if raw is None:
+        return default
+    if raw.strip().lower() in ("1", "true", "yes", "on"):
+        return True
+    if raw.strip().lower() in ("0", "false", "no", "off", ""):
+        return False
+    raise ConfigError(f"{name} must be true or false")
+
+
 @dataclass(frozen=True)
 class Settings:
     env: str = "test"
@@ -53,6 +64,14 @@ class Settings:
     stt_cap_factor: float = 3.0  # STT poll cap = factor x audio duration ...
     stt_cap_min_s: float = 300.0  # ... but never under this
     stt_time_limit_s: float = 1200.0  # ... and never over this (the old flat limit)
+    voice_url: str = "ws://localhost:8081"  # voice relay base (no path); `wss://` outside local
+    ai_max_seconds: int = 600  # hard cap on one interview
+    ai_warn_seconds: int = 480  # client warns the user at this elapsed time
+    ai_min_seconds: int = 300  # shortest recording worth sending to the audit
+    ai_tolerance_seconds: int = 30
+    ai_abandon_count_seconds: int = 120  # ended/abandoned under this: the usage unit is refunded
+    ai_reconnect_seconds: int = 60  # relay waits this long for a dropped client
+    ai_mic_gate: bool = False
     uid_hmac_key: str = ""  # keys the `uid_hash` log field (Secret Manager `uid-hmac-key-{env}`)
 
     @classmethod
@@ -92,6 +111,16 @@ class Settings:
             routes_file=e.get("ROUTES_FILE", ""),
             default_preset=e.get("DEFAULT_PRESET", ""),
             git_sha=e.get("GIT_SHA", "dev"),
+            voice_url=e.get("VOICE_URL", cls.voice_url if local else ""),
+            ai_max_seconds=_int(e, "AI_MAX_SECONDS", cls.ai_max_seconds),
+            ai_warn_seconds=_int(e, "AI_WARN_SECONDS", cls.ai_warn_seconds),
+            ai_min_seconds=_int(e, "AI_MIN_SECONDS", cls.ai_min_seconds),
+            ai_tolerance_seconds=_int(e, "AI_TOLERANCE_SECONDS", cls.ai_tolerance_seconds),
+            ai_abandon_count_seconds=_int(
+                e, "AI_ABANDON_COUNT_SECONDS", cls.ai_abandon_count_seconds
+            ),
+            ai_reconnect_seconds=_int(e, "AI_RECONNECT_SECONDS", cls.ai_reconnect_seconds),
+            ai_mic_gate=_bool(e, "AI_MIC_GATE", cls.ai_mic_gate),
             uid_hmac_key=e.get("UID_HMAC_KEY", ""),
         )
         s.validate()
@@ -122,3 +151,19 @@ class Settings:
             raise ConfigError("STT_CAP_FACTOR and STT_CAP_MIN_S must be > 0")
         if self.stt_time_limit_s < self.stt_cap_min_s:
             raise ConfigError("STT_TIME_LIMIT_S must be >= STT_CAP_MIN_S")
+        for name, v in (
+            ("AI_MAX_SECONDS", self.ai_max_seconds),
+            ("AI_WARN_SECONDS", self.ai_warn_seconds),
+            ("AI_MIN_SECONDS", self.ai_min_seconds),
+            ("AI_TOLERANCE_SECONDS", self.ai_tolerance_seconds),
+            ("AI_ABANDON_COUNT_SECONDS", self.ai_abandon_count_seconds),
+            ("AI_RECONNECT_SECONDS", self.ai_reconnect_seconds),
+        ):
+            if v < 0:
+                raise ConfigError(f"{name} must be >= 0")
+        if self.ai_max_seconds <= 0 or self.ai_warn_seconds >= self.ai_max_seconds:
+            raise ConfigError("AI_WARN_SECONDS must be < AI_MAX_SECONDS (> 0)")
+        if self.voice_url:
+            scheme = ("ws://", "wss://") if self.env in LOCAL_ENVS else ("wss://",)
+            if not self.voice_url.startswith(scheme) or self.voice_url.endswith("/"):
+                raise ConfigError("VOICE_URL must be a wss:// base URL without a trailing slash")

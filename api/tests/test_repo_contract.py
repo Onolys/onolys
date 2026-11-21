@@ -15,6 +15,7 @@ from onolys_api.repo.limits import LimitDefaults
 from onolys_api.repo.models import (
     ApiKeyDoc,
     IdempotencyDoc,
+    InterviewDoc,
     RatingDoc,
     RatingDraftDoc,
     RecordingDoc,
@@ -771,3 +772,59 @@ def test_reserve_usage_refusal_writes_nothing_and_release_floors_at_zero(repo):
     day_doc, month_doc = repo.get_usage_docs(u, day)
     assert (day_doc.runs, month_doc.runs, month_doc.month) == (0, 0, "2026-11")
     assert repo.get_user(u).active_runs == 0
+
+
+# ---- SP10 interviews ----
+
+
+def _iv(uid="alice", state="created", **kw):
+    return InterviewDoc(
+        uid=uid, scenario_id="s1", voice="Kore", state=state, reservation_date="2026-11-21", **kw
+    )
+
+
+def test_interview_create_get_owner_only(repo):
+    alice, bob, nobody = (f"{n}-{uuid.uuid4().hex[:8]}" for n in ("alice", "bob", "nobody"))
+    i1, i2, a1, a2, a3, b1 = (uuid.uuid4().hex for _ in range(6))
+    repo.create_interview(alice, i1, _iv(alice))
+    got = repo.get_interview(alice, i1)
+    assert (got.id, got.uid, got.state, got.voice, got.duration_s) == (
+        i1, alice, "created", "Kore", None,
+    )  # fmt: skip
+    with pytest.raises(ConflictError):
+        repo.create_interview(alice, i1, _iv(alice))
+    with pytest.raises(NotFoundError):
+        repo.get_interview(bob, i1)  # foreign id looks like a missing one
+    with pytest.raises(NotFoundError):
+        repo.get_interview(alice, "nope")
+    with pytest.raises(ValueError):
+        repo.create_interview(bob, i2, _iv(alice))
+
+
+def test_interview_list_open_is_uid_scoped_and_state_filtered(repo):
+    alice, bob, nobody = (f"{n}-{uuid.uuid4().hex[:8]}" for n in ("alice", "bob", "nobody"))
+    i1, i2, a1, a2, a3, b1 = (uuid.uuid4().hex for _ in range(6))
+    repo.create_interview(alice, a1, _iv(alice))
+    repo.create_interview(alice, a2, _iv(alice, state="live"))
+    repo.create_interview(alice, a3, _iv(alice, state="ended"))
+    repo.create_interview(bob, b1, _iv(bob))
+    assert sorted(d.id for d in repo.list_open_interviews(alice)) == sorted([a1, a2])
+    assert repo.list_open_interviews(nobody) == []
+
+
+def test_interview_transition_settles_once_and_guards_owner(repo):
+    alice, bob, nobody = (f"{n}-{uuid.uuid4().hex[:8]}" for n in ("alice", "bob", "nobody"))
+    i1, i2, a1, a2, a3, b1 = (uuid.uuid4().hex for _ in range(6))
+    repo.create_interview(alice, i1, _iv(alice))
+    repo.update_interview(alice, i1, {"state": "live", "duration_s": 42.0})
+    at = datetime(2026, 11, 21, 12, 0, tzinfo=UTC)
+    won = repo.transition_interview(alice, i1, ("created", "live"), "ended", {"ended_at": at})
+    assert won is not None and (won.state, won.duration_s, won.ended_at) == ("ended", 42.0, at)
+    assert repo.transition_interview(alice, i1, ("created", "live"), "abandoned") is None
+    assert repo.get_interview(alice, i1).state == "ended"
+    up = repo.transition_interview(alice, i1, ("ended", "abandoned"), "uploaded")
+    assert up is not None and up.state == "uploaded"
+    with pytest.raises(NotFoundError):
+        repo.transition_interview(bob, i1, ("uploaded",), "ended")
+    with pytest.raises(NotFoundError):
+        repo.update_interview(bob, i1, {"duration_s": 1.0})
