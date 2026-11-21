@@ -2,12 +2,13 @@ import asyncio
 import io
 import logging
 import pathlib
+import sys
 from datetime import timedelta
+from types import ModuleType
 from types import SimpleNamespace as NS
 
 import pytest
 import yaml
-
 from onolys_core.errors import ConfigError, InputError
 from onolys_core.safe_log import log
 from onolys_core.voice import (
@@ -166,6 +167,34 @@ async def test_fixture_failure_injection():
 
 
 # ---- gemini adapter against a faked SDK ---------------------------------------------------
+
+
+class _Cfg:
+    """Stand-in for a google.genai.types model: keyword args become attributes, rest None."""
+
+    def __init__(self, **kw):
+        self.__dict__.update(kw)
+
+    def __getattr__(self, name):
+        if name.startswith("__"):
+            raise AttributeError(name)
+        return None
+
+
+@pytest.fixture(autouse=True)
+def fake_genai_types(monkeypatch):
+    """The core CI job installs onolys-core without the `voice-gemini` extra: fake the SDK."""
+    names = (
+        "SpeechConfig VoiceConfig PrebuiltVoiceConfig SessionResumptionConfig "
+        "ContextWindowCompressionConfig SlidingWindow LiveConnectConfig Blob"
+    ).split()
+    types = ModuleType("google.genai.types")
+    for n in names:
+        setattr(types, n, type(n, (_Cfg,), {}))
+    genai = ModuleType("google.genai")
+    genai.types = types
+    monkeypatch.setitem(sys.modules, "google.genai", genai)
+    monkeypatch.setitem(sys.modules, "google.genai.types", types)
 
 
 class FakeLive:
