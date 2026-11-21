@@ -257,3 +257,21 @@ def test_auto_first_run_costs_the_session_n_runs(repo):  # noqa: F811
     sid = _linked_ready(repo, uid, n_runs=2)
     maybe_start_first_run(repo, RecordingQueue(), uid, sid, mk_settings())
     assert user_counters(repo, uid, caps.utc_date()) == (1, 2)
+
+
+# ---- FX44 (A10): an interview session whose audio is not the relay's recording pays -----------
+
+
+def test_linked_session_with_unmatched_audio_is_charged(repo):  # noqa: F811
+    uid = f"u{uuid.uuid4().hex[:10]}"
+    sid = _linked_ready(repo, uid, interview_id="iv1", free_run_void=True)
+    maybe_start_first_run(repo, RecordingQueue(), uid, sid, mk_settings())
+    (run,) = repo.list_runs(uid, sid)
+    assert run.counted is True
+    assert user_counters(repo, uid, caps.utc_date()) == (1, 1)
+    # and it is held by the cap like any upload
+    sid2 = _linked_ready(repo, uid, interview_id="iv2", free_run_void=True)
+    maybe_start_first_run(repo, RecordingQueue(), uid, sid2, mk_settings(eval_cap_day=1))
+    assert repo.get_session(uid, sid2).first_run_id is None
+    r = _post_run(make_client(repo, mk_settings(eval_cap_day=1), RecordingQueue()), uid, sid2)
+    assert r.status_code == 429

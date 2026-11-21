@@ -32,6 +32,7 @@ from onolys_api.jobs.alive import ensure_alive as _ensure_alive
 from onolys_api.jobs.machine import advance
 from onolys_api.jobs.queue import TaskPayload
 from onolys_api.jobs.worker import Handler, PermanentError, TaskContext
+from onolys_api.repo.base import NotFoundError
 from onolys_api.repo.models import RecordingDoc
 from onolys_api.storage.base import MAX_UPLOAD_BYTES, BlobNotFoundError, BlobStore
 
@@ -89,6 +90,13 @@ def make_validate_handler(
             raise fail(ctx, too_long)
         if seconds < MIN_DURATION_S:
             raise fail(ctx, "audio_unreadable")
+
+    def _matches_relay(ctx: TaskContext, session, seconds: float) -> bool:
+        try:
+            recorded = ctx.repo.get_interview(ctx.uid, session.interview_id).duration_s
+        except NotFoundError:
+            return False
+        return recorded is not None and abs(seconds - recorded) <= cfg.ai_tolerance_seconds
 
     def validate(ctx: TaskContext) -> None:
         uid, sid = ctx.uid, ctx.sid
@@ -164,6 +172,12 @@ def make_validate_handler(
                 raise
             ensure_alive(ctx)  # a DELETE during the writes above must not leave audio behind
 
+        if session.interview_id:
+            # A10: the free first run is only for the interview's own recording: the uploaded
+            # audio must last as long as the relay recorded (within the tolerance)
+            ctx.repo.update_session(
+                uid, sid, {"free_run_void": not _matches_relay(ctx, session, seconds)}
+            )
         ctx.repo.add_recording(
             uid,
             sid,

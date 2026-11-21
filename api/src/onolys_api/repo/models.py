@@ -109,6 +109,9 @@ class SessionDoc(Doc):
     has_rating: bool = False
     first_run_id: str | None = None
     interview_id: str | None = None  # set by the AI interview (SP10): its first run is free (SP11)
+    # set by `validate`: the upload is not the audio the interview's relay recorded, so the free
+    # first run is void (A10); an unset flag on an interview session means the free run stands
+    free_run_void: bool = False
     upload: UploadInfo | None = None
     steps: dict[str, StepRecord] = Field(default_factory=dict)
     warnings: list[str] = Field(default_factory=list)

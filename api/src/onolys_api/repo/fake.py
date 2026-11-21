@@ -557,7 +557,7 @@ class FakeRepo:
             usage = self._get(f"usage/{uid}_{date}") or {"uid": uid, "date": date, "runs": 0}
             month = self._get(f"usage/{uid}_{date[:7]}") or {"uid": uid, "month": date[:7]}
             now = utcnow()
-            exempt = bool(sess.get("interview_id"))
+            exempt = bool(sess.get("interview_id")) and not sess.get("free_run_void")
             units = sess.get("n_runs", 1)
             decided = decide_start(user, usage, month, defaults, max_active, exempt, units)
             if decided != "ok":
@@ -616,7 +616,11 @@ class FakeRepo:
             usage = self._get(f"usage/{uid}_{date}") or {"uid": uid, "date": date, "runs": 0}
             month = self._get(f"usage/{uid}_{date[:7]}") or {"uid": uid, "month": date[:7]}
             # the free first run of an interview-linked session (SP11 R5), same as start_first_run
-            exempt = bool(sess.get("interview_id")) and not sess.get("first_run_id")
+            exempt = (
+                bool(sess.get("interview_id"))
+                and not sess.get("free_run_void")
+                and not sess.get("first_run_id")
+            )
             units = n_runs or sess.get("n_runs", 1)
             decided = decide_start(user, usage, month, defaults, max_active, exempt, units)
             if decided != "ok":
