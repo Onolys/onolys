@@ -88,6 +88,7 @@ Module split: `voice/prompt.py` (R2), `voice/relay.py` (loop, clock, resumption)
 | Public relay URL abuse/cost | ID token + Origin + max-instances + SP11 caps + 10 min clock |
 | Safari WebAudio/MediaRecorder codec (mp4 vs webm) | Pick supported `mimeType` at runtime; server already accepts mp4/m4a aliases |
 | Preview model churn | Model in config; adapter isolates changes |
+| Short-interview refund loop (unbounded <30 s refunds → free Gemini time / voice capacity) | [ACCEPTED by owner 2026-11-21: no per-user refund cap] |
 
 ## Open Questions
 | Q | Status |
