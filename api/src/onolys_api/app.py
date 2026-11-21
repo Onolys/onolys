@@ -47,7 +47,7 @@ from onolys_api.routes import speakers as speaker_routes
 from onolys_api.routes import tasks as task_routes
 from onolys_api.routes import usage as usage_routes
 from onolys_api.storage.base import BlobStore
-from onolys_api.storage.fake import FakeBlobStore
+from onolys_api.storage.fake import FAKE_ROUTE, FakeBlobStore
 from onolys_api.storage.fake_routes import make_fake_blob_router
 from onolys_api.voice import relay as voice_relay
 from onolys_api.voice.clock import SystemClock
@@ -90,6 +90,101 @@ class RequestIdMiddleware:
             await send(message)
 
         await self.app(scope, receive, send_with_id)
+
+
+MAX_JSON_BODY_BYTES = (
+    1024 * 1024
+)  # uploads use signed URLs; the largest JSON body is a 256 KiB card
+_NO_STORE_EXEMPT = frozenset({"/v1/healthz", "/v1/docs", "/v1/docs/redoc.standalone.js",
+                              "/v1/openapi.json"})  # fmt: skip
+
+
+def _request_id(scope: Scope) -> str | None:
+    return scope.get("state", {}).get("request_id")
+
+
+class BodyLimitMiddleware:
+    """413 `body_too_large` for any API request body over `MAX_JSON_BODY_BYTES` (A13).
+
+    Checked on Content-Length up front and on the bytes actually streamed (chunked bodies).
+    The dev-only fake signed-upload route is exempt: real uploads go straight to the bucket.
+    """
+
+    def __init__(self, app: ASGIApp, limit: int = MAX_JSON_BODY_BYTES) -> None:
+        self.app = app
+        self.limit = limit
+
+    async def _reject(self, scope: Scope, send: Send) -> None:
+        details: list[ErrorDetail] = [
+            {"code": "body_too_large", "message": "Request body is too large."}
+        ]
+        body = error_body(413, "Request body is too large.", details, _request_id(scope))
+        await JSONResponse(body, status_code=413)(scope, _no_receive, send)
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http" or scope["path"].startswith(FAKE_ROUTE):
+            await self.app(scope, receive, send)
+            return
+        for k, v in scope["headers"]:
+            if k == b"content-length" and v.isdigit() and int(v) > self.limit:
+                await self._reject(scope, send)
+                return
+        seen = 0
+        exceeded = False
+        replied = False
+
+        async def counting_receive() -> Message:
+            nonlocal seen, exceeded
+            message = await receive()
+            if message["type"] == "http.request":
+                seen += len(message.get("body", b""))
+                if seen > self.limit:
+                    exceeded = True
+                    return {"type": "http.request", "body": b"", "more_body": False}
+            return message
+
+        async def guarded_send(message: Message) -> None:
+            nonlocal replied
+            if exceeded:  # whatever the app made of the truncated body, answer 413 once
+                if not replied:
+                    replied = True
+                    await self._reject(scope, send)
+                return
+            await send(message)
+
+        await self.app(scope, counting_receive, guarded_send)
+
+
+async def _no_receive() -> Message:
+    return {"type": "http.request", "body": b"", "more_body": False}
+
+
+class NoStoreMiddleware:
+    """`Cache-Control: private, no-store` on every /v1 response but health and docs (A12).
+
+    A route's own Cache-Control wins. Errors get it too: harmless, and one rule is simpler.
+    """
+
+    def __init__(self, app: ASGIApp) -> None:
+        self.app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        path = scope.get("path", "")
+        if scope["type"] != "http" or not path.startswith("/v1/") or path in _NO_STORE_EXEMPT:
+            await self.app(scope, receive, send)
+            return
+
+        async def send_no_store(message: Message) -> None:
+            if message["type"] == "http.response.start":
+                headers = message.get("headers", [])
+                if not any(k.lower() == b"cache-control" for k, _ in headers):
+                    message = {
+                        **message,
+                        "headers": [*headers, (b"cache-control", b"private, no-store")],
+                    }
+            await send(message)
+
+        await self.app(scope, receive, send_no_store)
 
 
 class RequestLogMiddleware:
@@ -328,6 +423,8 @@ def create_app(
             adapters.voice if adapters is not None else build_voice_adapter(settings)
         )
 
+    app.add_middleware(NoStoreMiddleware)
+    app.add_middleware(BodyLimitMiddleware)
     app.add_middleware(
         ContractCORSMiddleware,
         allow_origins=list(settings.cors_origins),

@@ -328,7 +328,6 @@ def test_isolation_random_ids_between_users(api):
 
 
 def test_phi_responses_are_no_store(request, api):
-    known_bug(request, "A12: PHI responses lack Cache-Control: no-store")
     h = _uid()
     sid = api.post("/v1/sessions", json={}, headers=h).json()["session"]["id"]
     r = api.get(f"/v1/sessions/{sid}/speakers", headers=h)
