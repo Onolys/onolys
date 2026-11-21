@@ -1,4 +1,4 @@
-import { act, cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { here, renderApp } from "../test/renderApp";
@@ -130,7 +130,7 @@ describe("verify email", () => {
     renderApp("/verify-email", { user: { email: "a@clinic.org", verified: false } });
     await h1("Verify your email");
     expect(screen.getByText(/spam folder/i)).toBeInTheDocument();
-    expect(screen.getByText(/a@clinic\.org/)).toBeInTheDocument();
+    expect(within(screen.getByRole("main")).getByText(/a@clinic\.org/)).toBeInTheDocument();
   });
 
   it("Resend sends mail then locks for 60 seconds with a countdown", async () => {

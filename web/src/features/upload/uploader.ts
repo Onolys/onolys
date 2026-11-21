@@ -141,6 +141,13 @@ export function registerJob(sessionId: string, job: UploadJob): void {
   registryListeners.forEach((l) => l());
 }
 
+/** Cancel every job and forget them (user changed: no File may outlive its owner). */
+export function clearJobs(): void {
+  jobs.forEach((j) => j.cancel());
+  jobs.clear();
+  registryListeners.forEach((l) => l());
+}
+
 export function getJob(sessionId: string): UploadJob | undefined {
   return jobs.get(sessionId);
 }

@@ -40,7 +40,6 @@ test.describe("login / logout", () => {
   });
 
   test("E9: signing out from Settings lands on plain /login (no next=/settings)", async ({ page }) => {
-    test.fail(true, "E9: guard bounce adds ?next=/settings so the next login drops the user into Settings");
     await signUpVerified(page, "so@example.com");
     await signOutViaSettings(page);
     await expect(page).toHaveURL(/\/login$/);
@@ -79,7 +78,7 @@ test.describe("?next= handling", () => {
   });
 
   test("E3/W19/W7: next=/%09/evil.com does not crash the app after login", async ({ page }) => {
-    test.fail(true, "E3/W19: RR throws 'External navigation is not allowed' -> default error boundary, blank page without layout");
+    test.fail(true, "E3/W19 (FX32): RR still logs 'External navigation is not allowed' until readNext rejects control chars; layout now survives via errorElement");
     const c = collect(page);
     await account(page);
     await spa(page, "/login?next=/%09/evil.com");
@@ -91,7 +90,6 @@ test.describe("?next= handling", () => {
   });
 
   test("E11/W7: any render crash still keeps a way back (error element with layout)", async ({ page }) => {
-    test.fail(true, "E11/W7: no errorElement; crash shows RR default screen without header/nav");
     await account(page);
     await spa(page, "/login?next=/%09/evil.com");
     await fillLogin(page, "u1@example.com");

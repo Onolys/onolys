@@ -5,7 +5,6 @@ const PROTECTED = ["/", "/sessions/new", "/sessions/abc123", "/sessions/abc123/r
 
 test.describe("signed-out gating", () => {
   test("E1/W1: header does not offer Sessions / New session / Settings when signed out", async ({ page }) => {
-    test.fail(true, "E1/W1: Layout always renders the full nav");
     await page.goto("/login");
     await expect(page.getByRole("heading", { name: "Log in" })).toBeVisible();
     await shot(page, "so-login");
@@ -35,10 +34,8 @@ test.describe("signed-out gating", () => {
     for (const s of seen) expect(s).not.toMatch(/^Settings|API key|^Sessions/);
   });
 
-  test("clicking protected nav links signed out ends on /login (with next); Sample report is public", async ({ page }) => {
+  test("Sample report is public from the signed-out nav", async ({ page }) => {
     await page.goto("/login");
-    await page.locator("header nav a", { hasText: "Settings" }).click();
-    await expect(page).toHaveURL(/\/login\?next=%2Fsettings/);
     await page.locator("header nav a", { hasText: "Sample report" }).click();
     await expect(page.getByRole("heading", { name: "Sample report" })).toBeVisible();
     await shot(page, "so-sample-report");
@@ -64,7 +61,6 @@ test.describe("signed-out gating", () => {
   });
 
   test("E2/W1: 404 page for signed-out users does not offer 'Back to your sessions'", async ({ page }) => {
-    test.fail(true, "E2: NotFound copy/nav assumes signed-in user");
     await page.goto("/nope");
     await expect(page.getByRole("heading", { name: "Page not found" })).toBeVisible();
     await expect(page.getByText("Back to your sessions")).toHaveCount(0);

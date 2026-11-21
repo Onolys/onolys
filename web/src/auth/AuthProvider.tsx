@@ -1,13 +1,24 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { clearJobs } from "../features/upload/uploader";
 import type { AuthService, AuthUser } from "./types";
+
+export type AuthPhase = "loading" | "signedOut" | "unverified" | "verified";
+
+export function phaseOf(status: "loading" | "ready", user: AuthUser | null): AuthPhase {
+  if (status === "loading") return "loading";
+  if (!user) return "signedOut";
+  return user.emailVerified ? "verified" : "unverified";
+}
 
 export interface AuthContextValue {
   service: AuthService;
   /** `loading` until the SDK reports its initial state. */
   status: "loading" | "ready";
   user: AuthUser | null;
-  /** Signs out and drops every cached query (no PHI left in memory). */
+  /** Single source of truth for "who is looking at the app". */
+  phase: AuthPhase;
+  /** Signs out and drops every cached query (no PHI left in memory). Rejects if the SDK sign-out fails (cache kept). */
   signOut: () => Promise<void>;
 }
 
@@ -21,13 +32,22 @@ export function AuthProvider({ service, children }: { service: AuthService; chil
   });
 
   const signedIn = useRef(false);
+  // undefined until the first report; afterwards the uid (null = signed out).
+  const lastUid = useRef<string | null | undefined>(undefined);
   useEffect(
     () =>
       service.onAuthStateChanged((user) => {
+        const uid = user?.uid ?? null;
+        // Different user (or signed out by any route: other tab, revoked token): nothing of the old one may linger.
+        if (lastUid.current !== undefined && lastUid.current !== uid) {
+          queryClient.clear();
+          clearJobs();
+        }
+        lastUid.current = uid;
         signedIn.current = user !== null;
         setState({ status: "ready", user });
       }),
-    [service],
+    [service, queryClient],
   );
 
   // One sign-out at a time: queries still mounted after clear() may 401 again before the guard navigates.
@@ -37,15 +57,18 @@ export function AuthProvider({ service, children }: { service: AuthService; chil
     inflight.current ??= (async () => {
       try {
         await service.signOut();
-      } finally {
         queryClient.clear();
+      } finally {
         inflight.current = null;
       }
     })();
     return inflight.current;
   }, [service, queryClient]);
 
-  const value = useMemo(() => ({ service, ...state, signOut }), [service, state, signOut]);
+  const value = useMemo(
+    () => ({ service, ...state, phase: phaseOf(state.status, state.user), signOut }),
+    [service, state, signOut],
+  );
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 

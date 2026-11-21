@@ -50,7 +50,7 @@ async function spa(page, url) {
 }
 async function signOutViaSettings(page) {
   await page.locator("header nav a", { hasText: "Settings" }).click();
-  await page.getByRole("button", { name: "Sign out" }).click();
+  await page.locator("main").getByRole("button", { name: "Sign out" }).click();
 }
 const navLinks = (page) => page.locator("header nav a").allTextContents();
 const hasHScroll = (page) => page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 1);

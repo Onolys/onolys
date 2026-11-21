@@ -1,0 +1,127 @@
+import { screen, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { describe, expect, it, vi } from "vitest";
+import { createFakeAuthService } from "../auth/fakeService";
+import { registerJob, getJob } from "../features/upload/uploader";
+import type { UploadJob } from "../features/upload/uploader";
+import { here, renderApp } from "../test/renderApp";
+
+const h1 = (name: string) => screen.findByRole("heading", { level: 1, name });
+const navNames = () =>
+  within(screen.getByRole("navigation", { name: "Main" }))
+    .queryAllByRole("link")
+    .map((a) => a.textContent);
+const inNav = () => within(screen.getByRole("navigation", { name: "Main" }));
+
+describe("header nav by auth phase (D1)", () => {
+  it("signed out: Log in, Sign up, Sample report", async () => {
+    renderApp("/login");
+    await h1("Log in");
+    expect(navNames()).toEqual(["Log in", "Sign up", "Sample report"]);
+    expect(inNav().queryByRole("button", { name: "Sign out" })).not.toBeInTheDocument();
+  });
+
+  it("unverified: Verify email + Sign out, no app links", async () => {
+    renderApp("/verify-email", { user: { email: "a@clinic.org", verified: false } });
+    await h1("Verify your email");
+    expect(navNames()).toEqual(["Verify email"]);
+    expect(inNav().getByRole("button", { name: "Sign out" })).toBeInTheDocument();
+  });
+
+  it("verified: Sessions, New session, Settings, Sign out and the email", async () => {
+    renderApp("/", { user: { email: "a@clinic.org", verified: true } });
+    await h1("Sessions");
+    expect(navNames()).toEqual(["Sessions", "New session", "Settings"]);
+    expect(inNav().getByText("a@clinic.org")).toBeInTheDocument();
+    expect(inNav().getByRole("button", { name: "Sign out" })).toBeInTheDocument();
+  });
+
+  it("loading: brand only", async () => {
+    const service = createFakeAuthService();
+    service.onAuthStateChanged = () => () => {};
+    renderApp("/settings", { service });
+    await screen.findByRole("status");
+    expect(navNames()).toEqual([]);
+    expect(screen.getByRole("link", { name: "Onolys" })).toBeInTheDocument();
+  });
+
+  it("header Sign out lands on plain /login", async () => {
+    const { router } = renderApp("/settings", { user: { email: "a@clinic.org", verified: true } });
+    await h1("Settings");
+    await userEvent.click(inNav().getByRole("button", { name: "Sign out" }));
+    await h1("Log in");
+    expect(here(router)).toBe("/login");
+  });
+
+  it("sign-out from the Settings button lands on plain /login", async () => {
+    const { router } = renderApp("/settings", { user: { email: "a@clinic.org", verified: true } });
+    await h1("Settings");
+    await userEvent.click(within(screen.getByRole("main")).getByRole("button", { name: "Sign out" }));
+    await h1("Log in");
+    expect(here(router)).toBe("/login");
+  });
+
+  it("a failing sign-out shows an error, stays signed in and keeps the cache", async () => {
+    const service = createFakeAuthService();
+    vi.spyOn(service, "signOut").mockRejectedValue(new Error("network"));
+    const { router, queryClient } = renderApp("/settings", { service, user: { email: "a@clinic.org", verified: true } });
+    queryClient.setQueryData(["secret"], 1);
+    await h1("Settings");
+    await userEvent.click(inNav().getByRole("button", { name: "Sign out" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(/couldn't sign out/i);
+    expect(here(router)).toBe("/settings");
+    expect(queryClient.getQueryData(["secret"])).toBe(1);
+  });
+});
+
+describe("404 by phase", () => {
+  it.each([
+    [undefined, "Log in"],
+    [{ email: "a@clinic.org", verified: false }, "Verify your email"],
+    [{ email: "a@clinic.org", verified: true }, "Back to your sessions"],
+  ] as const)("%j offers %s", async (user, link) => {
+    renderApp("/nope", user ? { user } : {});
+    await h1("Page not found");
+    const main = within(screen.getByRole("main"));
+    expect(await main.findByRole("link", { name: link })).toBeInTheDocument();
+    expect(main.getAllByRole("link")).toHaveLength(1);
+  });
+});
+
+describe("user change", () => {
+  it("clears the query cache and upload registry when the uid changes or the user signs out elsewhere", async () => {
+    const service = createFakeAuthService();
+    const { queryClient } = renderApp("/settings", { service, user: { email: "a@clinic.org", verified: true } });
+    await h1("Settings");
+    const cancel = vi.fn();
+    registerJob("s1", { cancel, active: true } as unknown as UploadJob);
+    queryClient.setQueryData(["secret"], 1);
+    service.signedInAs("b@clinic.org", { verified: true });
+    await waitFor(() => expect(queryClient.getQueryData(["secret"])).toBeUndefined());
+    expect(cancel).toHaveBeenCalledTimes(1);
+    expect(getJob("s1")).toBeUndefined();
+  });
+
+  it("keeps the cache when the same user is re-reported", async () => {
+    const service = createFakeAuthService();
+    const { queryClient } = renderApp("/settings", { service, user: { email: "a@clinic.org", verified: true } });
+    await h1("Settings");
+    queryClient.setQueryData(["keep"], 1);
+    service.signedInAs("a@clinic.org", { verified: true });
+    await h1("Settings");
+    expect(queryClient.getQueryData(["keep"])).toBe(1);
+  });
+});
+
+describe("root error element", () => {
+  it("a render crash keeps the header and a way back", async () => {
+    const err = vi.spyOn(console, "error").mockImplementation(() => {});
+    const { service } = renderApp("/login?next=%2F%09%2Fevil.com");
+    await h1("Log in");
+    service.signedInAs("a@clinic.org", { verified: true });
+    await h1("Something went wrong");
+    expect(screen.getByRole("link", { name: "Onolys" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Back to the start" })).toBeInTheDocument();
+    err.mockRestore();
+  });
+});

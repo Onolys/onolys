@@ -1,4 +1,4 @@
-import { screen, waitFor } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { here, renderApp } from "../../test/renderApp";
@@ -110,7 +110,7 @@ describe("/auth/action resetPassword", () => {
     await user.click(screen.getByRole("button", { name: "Update password" }));
     await h1("Password updated");
     expect(service.calls.passwordResets).toBe(1);
-    expect(screen.getByRole("link", { name: "Log in" })).toHaveAttribute("href", "/login");
+    expect(within(screen.getByRole("main")).getByRole("link", { name: "Log in" })).toHaveAttribute("href", "/login");
     await service.signIn("a@clinic.org", "longenough1");
   });
 
@@ -134,7 +134,7 @@ describe("/auth/action verifyAndChangeEmail", () => {
     expect(service.calls.emailChanges).toBe(1);
     expect(screen.getByRole("status")).toHaveTextContent("b@clinic.org");
     expect(screen.getByRole("status")).toHaveTextContent("Log in again with your new email");
-    expect(screen.getByRole("link", { name: "Log in" })).toHaveAttribute("href", "/login");
+    expect(within(screen.getByRole("main")).getByRole("link", { name: "Log in" })).toHaveAttribute("href", "/login");
     await service.signIn("b@clinic.org", "password1");
   });
 
@@ -198,7 +198,7 @@ describe("/auth/action recoverEmail", () => {
     await user.click(screen.getByRole("button", { name: "Reset my password" }));
     expect(await screen.findByText(/reset email sent/i)).toBeInTheDocument();
     expect(service.calls.resets).toEqual(["old@clinic.org"]);
-    expect(screen.getByRole("link", { name: "Log in" })).toHaveAttribute("href", "/login");
+    expect(within(screen.getByRole("main")).getByRole("link", { name: "Log in" })).toHaveAttribute("href", "/login");
   });
 
   it("explains an invalid/expired code", async () => {

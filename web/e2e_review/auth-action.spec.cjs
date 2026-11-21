@@ -68,7 +68,6 @@ test.describe("/auth/action", () => {
   });
 
   test("E1c/W1: auth action page header shows no protected nav", async ({ page }) => {
-    test.fail(true, "E1c/W1");
     await page.goto(`${A}?mode=resetPassword&oobCode=bogus`);
     await H(page, "Reset link expired");
     await expect(page.locator("header nav a", { hasText: "Settings" })).toHaveCount(0);

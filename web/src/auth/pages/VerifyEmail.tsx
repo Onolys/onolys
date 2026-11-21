@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "../AuthProvider";
+import { useSignOut } from "../useSignOut";
 import { ErrorSummary } from "./parts";
 import { useFormError } from "./useFormError";
 
 export const RESEND_COOLDOWN_SECONDS = 60;
 
 export function VerifyEmail() {
-  const { service, user, signOut } = useAuth();
+  const { service, user } = useAuth();
+  const { signOut, error: signOutError } = useSignOut();
   const [cooldown, setCooldown] = useState(0);
   const [note, setNote] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -67,6 +69,7 @@ export function VerifyEmail() {
           Check your inbox — and your spam folder. We sent a verification link to <strong>{user?.email}</strong>.
         </p>
         {note && <p role="status">{note}</p>}
+        {signOutError && <p role="alert">{signOutError}</p>}
         <button type="button" className="primary" onClick={() => void check(true)}>
           I've verified
         </button>

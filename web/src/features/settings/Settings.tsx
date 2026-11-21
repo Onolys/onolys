@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { unwrap } from "../../api/client";
 import { describeError } from "../../api/errors";
-import { useAuth } from "../../auth/AuthProvider";
+import { useSignOut } from "../../auth/useSignOut";
 import { useApiClient } from "../../auth/useApiClient";
 import { CONTACT_EMAIL, HAS_CONTACT_EMAIL } from "../../config";
 import { formatResetTime } from "../../lib/format";
@@ -20,7 +20,7 @@ type Confirm = "regenerate" | "revoke" | null;
 export function Settings() {
   const client = useApiClient();
   const queryClient = useQueryClient();
-  const { signOut } = useAuth();
+  const { signOut, error: signOutError } = useSignOut();
   const key = useQuery({ queryKey: ["api-key"], queryFn: async () => unwrap(await client.GET("/api-key")) });
   const usage = useUsage();
 
@@ -141,6 +141,7 @@ export function Settings() {
         <button type="button" className="btn btn-secondary" onClick={() => void signOut()}>
           Sign out
         </button>
+        {signOutError && <p role="alert">{signOutError}</p>}
       </section>
 
       {confirm === "regenerate" ? (

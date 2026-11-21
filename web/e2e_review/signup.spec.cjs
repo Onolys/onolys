@@ -52,7 +52,7 @@ test.describe("signup", () => {
 
   test("existing email (any case) shows 'already exists' with a Log in link", async ({ page }) => {
     await signUp(page, "dup@example.com");
-    await page.getByRole("button", { name: "Sign out" }).click();
+    await page.locator("main").getByRole("button", { name: "Sign out" }).click();
     await spa(page, "/signup");
     await field(page, "Email").fill("DUP@example.com");
     await field(page, "Password").fill(PW);
@@ -70,7 +70,7 @@ test.describe("signup", () => {
     await create(page).dblclick();
     await expect(page).toHaveURL(/verify-email/);
     expect(c.pageerrors).toEqual([]);
-    await page.getByRole("button", { name: "Sign out" }).click();
+    await page.locator("main").getByRole("button", { name: "Sign out" }).click();
     await spa(page, "/signup");
     await field(page, "Email").fill("enter@example.com");
     await field(page, "Password").fill(PW);
@@ -80,13 +80,13 @@ test.describe("signup", () => {
 
   test("uppercase + surrounding whitespace email is normalised; unicode accepted", async ({ page }) => {
     await signUp(page, "Case@Example.com ");
-    await expect(page.getByText("case@example.com")).toBeVisible();
-    await page.getByRole("button", { name: "Sign out" }).click();
+    await expect(page.locator("main").getByText("case@example.com")).toBeVisible();
+    await page.locator("main").getByRole("button", { name: "Sign out" }).click();
     await spa(page, "/signup");
     await field(page, "Email").fill("üser+tag@exämple.com");
     await field(page, "Password").fill("pässwörd😀1");
     await create(page).click();
-    await expect(page.getByText("üser+tag@exämple.com")).toBeVisible();
+    await expect(page.locator("main").getByText("üser+tag@exämple.com")).toBeVisible();
   });
 
   test("E7: a very long (254 char) email does not cause horizontal scroll on the verify page", async ({ page }) => {
@@ -105,22 +105,21 @@ test.describe("signup", () => {
       await page.getByRole("button", { name: "Resend email" }).click();
       await expect(page.getByText("Verification email sent.")).toBeVisible();
       await expect(page.getByRole("button", { name: /Resend in \d+s/ })).toBeDisabled();
-      await page.getByRole("button", { name: "Sign out" }).click();
+      await page.locator("main").getByRole("button", { name: "Sign out" }).click();
       await expect(page).toHaveURL(/\/login/);
     });
 
     test("protected routes redirect to /verify-email (next preserved); login/signup redirect there too", async ({ page }) => {
       await signUp(page, "unv2@example.com");
-      await page.locator("header nav a", { hasText: "New session" }).click();
+      await spa(page, "/sessions/new");
       await expect(page).toHaveURL(/verify-email\?next=%2Fsessions%2Fnew/);
-      await page.locator("header nav a", { hasText: "Settings" }).click();
+      await spa(page, "/settings");
       await expect(page).toHaveURL(/verify-email\?next=%2Fsettings/);
       await spa(page, "/login");
       await expect(page).toHaveURL(/verify-email/);
     });
 
     test("E1b/W1: unverified header offers only account-safe links", async ({ page }) => {
-      test.fail(true, "E1b/W1: full app nav shown to unverified users");
       await signUp(page, "unv3@example.com");
       const links = await navLinks(page);
       for (const t of ["Sessions", "New session", "Settings"]) expect(links).not.toContain(t);
@@ -128,7 +127,7 @@ test.describe("signup", () => {
 
     test("verifying lands on the dashboard (next restored)", async ({ page }) => {
       await signUp(page, "unv4@example.com");
-      await page.locator("header nav a", { hasText: "New session" }).click();
+      await spa(page, "/sessions/new");
       await page.getByRole("button", { name: "I've verified" }).click();
       await expect(page.getByRole("heading", { name: "New session" })).toBeVisible();
     });

@@ -17,7 +17,6 @@ test.describe("mobile (iPhone 13 viewport)", () => {
   }
 
   test("E20: header nav fits in at most two rows on a phone", async ({ page }) => {
-    test.fail(true, "E20: header wraps to 3 rows (~189px tall) at 390px");
     await page.goto("/login");
     const box = await page.locator("header").boundingBox();
     expect(box.height).toBeLessThan(130);
