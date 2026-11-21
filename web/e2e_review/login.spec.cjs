@@ -77,7 +77,6 @@ test.describe("?next= handling", () => {
   });
 
   test("E3/W19/W7: next=/%09/evil.com does not crash the app after login", async ({ page }) => {
-    test.fail(true, "E3/W19 (FX32): RR still logs 'External navigation is not allowed' until readNext rejects control chars; layout now survives via errorElement");
     const c = collect(page);
     await account(page);
     await spa(page, "/login?next=/%09/evil.com");
@@ -97,7 +96,6 @@ test.describe("?next= handling", () => {
   });
 
   test("E12/W19: next=/auth/action (a dead-end page) falls back to /", async ({ page }) => {
-    test.fail(true, "E12: login redirects into 'This link isn't valid'");
     await account(page);
     await spa(page, "/login?next=/auth/action");
     await fillLogin(page, "u1@example.com");

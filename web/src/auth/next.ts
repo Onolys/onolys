@@ -1,8 +1,21 @@
 /** `?next=` handling: same-origin paths only (no open redirects). */
 
+/** Pages that are never a sensible post-login target (they would loop or dead-end). */
+const BLOCKED = new Set(["/login", "/signup", "/forgot-password", "/auth/action"]);
+const BASE = "https://next.invalid";
+
 export function readNext(search: string): string {
   const raw = new URLSearchParams(search).get("next");
-  if (!raw || !raw.startsWith("/") || raw.startsWith("//") || raw.includes("\\")) return "/";
+  // eslint-disable-next-line no-control-regex -- control chars are stripped by URL parsers, hiding "//host"
+  if (!raw || !raw.startsWith("/") || raw.startsWith("//") || raw.includes("\\") || /[\u0000-\u001f\u007f]/.test(raw)) return "/";
+  let url: URL;
+  try {
+    url = new URL(raw, BASE);
+  } catch {
+    return "/";
+  }
+  if (url.origin !== BASE) return "/";
+  if (BLOCKED.has(url.pathname.replace(/\/+$/, ""))) return "/";
   return raw;
 }
 

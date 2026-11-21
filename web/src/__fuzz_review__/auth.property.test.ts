@@ -39,7 +39,7 @@ describe("readNext", () => {
   });
 
   // F5: browsers strip ASCII tab/newline/CR from URLs, so "/\t/evil.com" resolves to //evil.com.
-  it.fails(
+  it(
     "F5: result resolves to the app origin for any input (no open redirect)",
     () => {
       fc.assert(
