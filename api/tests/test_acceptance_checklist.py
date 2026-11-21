@@ -94,7 +94,6 @@ CHECKLIST: dict[int, list[tuple[str, str]]] = {
     ],
     12: [
         ("test_combined_integration.py", "test_combined_mode_serves_healthz"),
-        ("test_quickstart.py", "test_quickstart_runs_end_to_end"),
         ("test_worker.py", "test_worker_rejects_missing_or_bad_oidc"),
         ("test_worker.py", "test_oidc_bypassed_only_in_local_test"),
         ("test_dev_script_and_image.py", "test_dev_script_checks_and_runs_combined_quickstart"),
@@ -129,7 +128,7 @@ CHECKLIST: dict[int, list[tuple[str, str]]] = {
         ("test_public_contract.py", "test_docs_page_references_no_other_host"),
         ("test_public_contract.py", "test_forbidden_paths_absent_and_path_params_named"),
         ("test_public_contract.py", "test_quickstart_in_openapi_description"),
-        ("test_quickstart.py", "test_quickstart_runs_end_to_end"),
+        ("test_dev_script_and_image.py", "test_dev_script_checks_and_runs_combined_quickstart"),
     ],
     18: [
         ("test_first_run.py", "test_confirm_in_report_ready_changes_next_run_only_report_unchanged")

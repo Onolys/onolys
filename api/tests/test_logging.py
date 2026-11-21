@@ -5,6 +5,7 @@ import hmac
 import json
 import logging
 
+import pytest
 import test_run
 import test_worker
 from onolys_core.safe_log import ALLOWED_FIELDS
@@ -17,6 +18,8 @@ from onolys_api.config import Settings
 from onolys_api.jobs.queue import TaskPayload
 from onolys_api.jobs.worker import PermanentError, RetryableError
 
+# env is parametrized [fake, firestore]; [firestore] twins run only for tests marked
+# @pytest.mark.firestore_smoke (see conftest.py).
 env = test_run.env
 repo = test_worker.repo
 CLIENT_LOGGERS = {"httpx", "httpcore", "asyncio"}
@@ -153,6 +156,7 @@ class ExplodingEval(FakeEvaluation):
         raise ValueError("SENTINEL-EVAL-MESSAGE")
 
 
+@pytest.mark.firestore_smoke
 async def test_failed_run_writes_one_line_with_all_required_keys(env, caplog):
     test_run.swap_eval(env, ExplodingEval())
     sid = await env.start(rate=False)

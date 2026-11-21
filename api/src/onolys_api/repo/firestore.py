@@ -13,6 +13,7 @@ import os
 import random
 import threading
 import time
+import weakref
 from datetime import datetime
 from typing import Any
 
@@ -125,7 +126,10 @@ class FirestoreRepo:
     def __init__(self, client: firestore.Client, blobs: BlobStore) -> None:
         self._client = client
         self._blobs = blobs
-        self._uid_locks: dict[str, threading.Lock] = {}
+        # weak values: a uid's lock is dropped once no caller holds it (callers keep a strong ref)
+        self._uid_locks: weakref.WeakValueDictionary[str, threading.Lock] = (
+            weakref.WeakValueDictionary()
+        )
         self._uid_locks_guard = threading.Lock()
 
     # ---- ownership helpers (every id-addressed call starts here) ----
@@ -163,7 +167,7 @@ class FirestoreRepo:
                 raise ConflictError()
             txn.set(ref, data)
 
-        self._contended(txn_fn)
+        self._contended(txn_fn, uid)
 
     def _drop_pointer(self, pointer) -> None:
         if pointer is not None:
@@ -233,7 +237,7 @@ class FirestoreRepo:
             txn.update(iref, {"session_id": sid})
             return "linked"
 
-        return self._contended(txn_fn)
+        return self._contended(txn_fn, uid)
 
     def get_session(self, uid: str, sid: str) -> SessionDoc:
         return _load(SessionDoc, self._owned_session(uid, sid)[1])
@@ -297,7 +301,7 @@ class FirestoreRepo:
             )
             return True
 
-        return self._contended(txn_fn)
+        return self._contended(txn_fn, uid)
 
     def delete_session(self, uid: str, sid: str) -> bool:
         sref, ssnap = self._owned_session(uid, sid, missing_ok=True)
@@ -423,7 +427,7 @@ class FirestoreRepo:
                 )
             return claim
 
-        return self._contended(txn_fn)
+        return self._contended(txn_fn, uid)
 
     def claim_run(self, uid: str, sid: str, run_id: str, now: datetime, lease_s: float) -> Claim:
         ref = self._run_ref(uid, sid, run_id)
@@ -449,7 +453,7 @@ class FirestoreRepo:
                 )
             return claim
 
-        return self._contended(txn_fn)
+        return self._contended(txn_fn, uid)
 
     def list_runs(self, uid: str, sid: str) -> list[RunDoc]:
         coll = self._session_ref(uid, sid).collection("runs")
@@ -752,14 +756,16 @@ class FirestoreRepo:
 
     def _uid_lock(self, uid: str) -> threading.Lock:
         with self._uid_locks_guard:
-            return self._uid_locks.setdefault(uid, threading.Lock())
+            lock = self._uid_locks.get(uid)
+            if lock is None:
+                lock = self._uid_locks[uid] = threading.Lock()
+            return lock
 
-    def _contended(self, txn_fn, uid: str | None = None):
-        # Same-user usage txns hit the same hot docs. Firestore locks pessimistically and the
-        # client retry has no backoff, so a burst thrashes until all attempts are exhausted: queue
-        # same-process callers per uid; retry rounds stay for cross-instance contention.
-        if uid is None:
-            return self._retry_txn(txn_fn)
+    def _contended(self, txn_fn, uid: str):
+        # Same-user txns (usage, claims, session children) hit the same hot docs. Firestore locks
+        # pessimistically and the client retry has no backoff, so a burst thrashes until all
+        # attempts are exhausted: queue same-process callers per uid; retry rounds stay for
+        # cross-instance contention.
         with self._uid_lock(uid):
             return self._retry_txn(txn_fn)
 
@@ -812,7 +818,7 @@ class FirestoreRepo:
             txn.set(ref, data)
             return data
 
-        data = self._contended(txn_fn)
+        data = self._contended(txn_fn, uid)
         return None if data is None else InterviewDoc.model_validate({**data, "id": iid})
 
     def update_interview(self, uid: str, iid: str, fields: dict[str, Any]) -> None:

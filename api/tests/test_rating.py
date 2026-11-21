@@ -27,6 +27,8 @@ pytestmark = pytest.mark.unit
 HAS_EMULATOR = bool(os.environ.get("FIRESTORE_EMULATOR_HOST"))
 
 
+# [firestore] twins run only for tests marked @pytest.mark.firestore_smoke (see conftest.py);
+# the rest of this file is HTTP/validation logic, covered on FakeRepo.
 @pytest.fixture(params=["fake", "firestore"])
 def repo(request, tmp_path):
     from onolys_api.storage.fake import FakeBlobStore
@@ -93,6 +95,7 @@ async def test_draft_stored_never_submits_or_starts_run(env, hook_calls):
     assert g["draft"]["card"]["notes"] == "wip" and g["final"] is None
 
 
+@pytest.mark.firestore_smoke
 async def test_draft_overwritten_single_doc(env):
     c, h, repo, uid, sid = env
     await put(c, h, sid, {"final": False, "card": {"notes": "one"}})
@@ -146,7 +149,9 @@ async def test_draft_with_unset_change_goal_still_autosaves(env):
         assert r.status_code == 202, (goal, r.text)
     r = await put(c, h, sid, {"final": False, "card": {"globals": {"cct": {"score": 3}}}})
     assert r.status_code == 202
-    assert (await put(c, h, sid, {"final": True, "card": card(change_goal=None)})).status_code == 422
+    assert (
+        await put(c, h, sid, {"final": True, "card": card(change_goal=None)})
+    ).status_code == 422
 
 
 async def test_draft_size_cap(env):
@@ -198,6 +203,7 @@ async def test_final_requires_change_goal(env):
     assert r.status_code == 422 and r.json()["details"][0]["code"] == "rating_invalid"
 
 
+@pytest.mark.firestore_smoke
 async def test_final_creates_revision_and_updates_session(env, hook_calls):
     c, h, repo, uid, sid = env
     r = await put(c, h, sid, {"final": True, "card": card()})
@@ -213,6 +219,7 @@ async def test_final_creates_revision_and_updates_session(env, hook_calls):
     assert len(hook_calls) == 1 and hook_calls[0][2:4] == (uid, sid)
 
 
+@pytest.mark.firestore_smoke
 async def test_each_final_is_new_revision_latest_wins(env):
     c, h, repo, uid, sid = env
     r1 = (await put(c, h, sid, {"final": True, "card": card(change_goal="one")})).json()
@@ -232,6 +239,7 @@ async def test_get_empty(env):
     assert g.status_code == 200 and g.json().get("final") is None and g.json().get("draft") is None
 
 
+@pytest.mark.firestore_smoke
 async def test_get_draft_only_when_newer_than_final(env):
     c, h, repo, uid, sid = env
     await put(c, h, sid, {"final": False, "card": {"notes": "old draft"}})
@@ -314,6 +322,7 @@ async def test_rejected_in_deleting(env):
     assert repo.latest_rating(uid, sid) is None and repo.get_rating_draft(uid, sid) is None
 
 
+@pytest.mark.firestore_smoke
 async def test_other_user_gets_404(env):
     c, h, repo, uid, sid = env
     other = {"Authorization": "Bearer test:mallory"}

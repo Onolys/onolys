@@ -32,6 +32,8 @@ from paudit.code_pass import CodePassFailed  # noqa: E402
 from paudit.engine import AllRunsFailed  # noqa: E402
 from paudit.globals_pass import GlobalsPassFailed  # noqa: E402
 
+# env is parametrized [fake, firestore]; [firestore] twins run only for tests/params marked
+# pytest.mark.firestore_smoke (see conftest.py).
 env = test_run.env
 repo = test_worker.repo
 SECRET = "SECRET-transcript-text"
@@ -175,7 +177,7 @@ def test_wrapper_records_code_and_one_failed_line(repo, caplog, make, stage, att
     [
         (lambda: InputError(SECRET), "invalid_parameters"),
         (lambda: PackError(SECRET), "internal_error"),
-        (lambda: LLMUnavailable(SECRET), UPSTREAM),
+        pytest.param(lambda: LLMUnavailable(SECRET), UPSTREAM, marks=pytest.mark.firestore_smoke),
         (lambda: LLMBadOutput(SECRET), UPSTREAM),
         (lambda: CodePassFailed(SECRET), "internal_error"),
         (lambda: EauditDeadline(SECRET), DEADLINE),

@@ -31,19 +31,8 @@ from onolys_api.storage.fake import FakeBlobStore
 HAS_EMULATOR = bool(os.environ.get("FIRESTORE_EMULATOR_HOST"))
 
 
-@pytest.fixture(
-    params=[
-        "fake",
-        pytest.param(
-            "firestore",
-            marks=[
-                pytest.mark.integration,
-                pytest.mark.skipif(not HAS_EMULATOR, reason="FIRESTORE_EMULATOR_HOST not set"),
-            ],
-        ),
-    ]
-)
-def blobs(request, tmp_path):
+@pytest.fixture
+def blobs(tmp_path):
     return FakeBlobStore(tmp_path / "blobs", bucket="test-bucket")
 
 
