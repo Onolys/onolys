@@ -28,9 +28,15 @@ from onolys_api.repo.base import (
     ConflictError,
     NotFoundError,
     Page,
-    ReserveOutcome,
     StartOutcome,
     decide_claim,
+)
+from onolys_api.repo.limits import (
+    KIND_FIELD,
+    Kind,
+    LimitDefaults,
+    ReserveUsageOutcome,
+    decide_reserve,
 )
 from onolys_api.repo.models import (
     ApiKeyDoc,
@@ -46,6 +52,7 @@ from onolys_api.repo.models import (
     SessionStatusDoc,
     TranscriptDoc,
     UsageDoc,
+    UsageMonthDoc,
     UserDoc,
     utcnow,
 )
@@ -496,25 +503,62 @@ class FirestoreRepo:
         )
         return _load(UsageDoc, ref.get())
 
-    def reserve_run(self, uid: str, date: str, cap: int, max_active: int) -> ReserveOutcome:
-        usage_ref = self._top("usage", f"{uid}_{date}")
+    def reserve_usage(
+        self, uid: str, kind: Kind, date: str, defaults: LimitDefaults, max_active: int
+    ) -> ReserveUsageOutcome:
+        day_ref = self._top("usage", f"{uid}_{date}")
+        month_ref = self._top("usage", f"{uid}_{date[:7]}")
         user_ref = self._top("users", uid)
+        field = KIND_FIELD[kind]
 
         @firestore.transactional
-        def txn_fn(txn) -> ReserveOutcome:
+        def txn_fn(txn) -> ReserveUsageOutcome:
             user = user_ref.get(transaction=txn).to_dict() or {}
-            usage = usage_ref.get(transaction=txn).to_dict() or {}
-            runs, active = usage.get("runs", 0), user.get("active_runs", 0)
-            eff_cap, eff_active = user.get("daily_cap"), user.get("max_active_runs")
-            if runs >= (cap if eff_cap is None else eff_cap):
-                return "daily_cap"
-            if active >= (max_active if eff_active is None else eff_active):
-                return "concurrent"
-            txn.set(usage_ref, {"uid": uid, "date": date, "runs": runs + 1}, merge=True)
-            txn.set(user_ref, {"active_runs": active + 1}, merge=True)
+            day = day_ref.get(transaction=txn).to_dict() or {}
+            month = month_ref.get(transaction=txn).to_dict() or {}
+            outcome = decide_reserve(user, day, month, kind, defaults, max_active)
+            if outcome != "ok":
+                return outcome
+            txn.set(day_ref, {"uid": uid, "date": date, field: day.get(field, 0) + 1}, merge=True)
+            txn.set(
+                month_ref,
+                {"uid": uid, "month": date[:7], field: month.get(field, 0) + 1},
+                merge=True,
+            )
+            if kind == "eval":
+                txn.set(user_ref, {"active_runs": user.get("active_runs", 0) + 1}, merge=True)
             return "ok"
 
         return self._contended(txn_fn)
+
+    def release_usage(self, uid: str, kind: Kind, date: str, refund: bool) -> None:
+        day_ref = self._top("usage", f"{uid}_{date}")
+        month_ref = self._top("usage", f"{uid}_{date[:7]}")
+        user_ref = self._top("users", uid)
+        field = KIND_FIELD[kind]
+
+        @firestore.transactional
+        def txn_fn(txn) -> None:
+            user = user_ref.get(transaction=txn).to_dict() or {}
+            day = day_ref.get(transaction=txn).to_dict() or {}
+            month = month_ref.get(transaction=txn).to_dict() or {}
+            if kind == "eval" and user.get("active_runs", 0) > 0:
+                txn.set(user_ref, {"active_runs": user["active_runs"] - 1}, merge=True)
+            if refund:
+                if day.get(field, 0) > 0:
+                    txn.set(day_ref, {field: day[field] - 1}, merge=True)
+                if month.get(field, 0) > 0:
+                    txn.set(month_ref, {field: month[field] - 1}, merge=True)
+
+        self._contended(txn_fn)
+
+    def get_usage_docs(self, uid: str, date: str) -> tuple[UsageDoc, UsageMonthDoc]:
+        day = self._top("usage", f"{uid}_{date}").get()
+        month = self._top("usage", f"{uid}_{date[:7]}").get()
+        return (
+            _load(UsageDoc, day) if day.exists else UsageDoc(uid=uid, date=date),
+            _load(UsageMonthDoc, month) if month.exists else UsageMonthDoc(uid=uid, month=date[:7]),
+        )
 
     def start_first_run(
         self, uid: str, sid: str, run_id: str, date: str, cap: int, max_active: int,
@@ -648,21 +692,6 @@ class FirestoreRepo:
             return "started"
 
         return self._contended(txn_fn)
-
-    def release_run(self, uid: str, date: str, refund: bool) -> None:
-        usage_ref = self._top("usage", f"{uid}_{date}")
-        user_ref = self._top("users", uid)
-
-        @firestore.transactional
-        def txn_fn(txn) -> None:
-            user = user_ref.get(transaction=txn).to_dict() or {}
-            usage = usage_ref.get(transaction=txn).to_dict() or {}
-            if user.get("active_runs", 0) > 0:
-                txn.set(user_ref, {"active_runs": user["active_runs"] - 1}, merge=True)
-            if refund and usage.get("runs", 0) > 0:
-                txn.set(usage_ref, {"runs": usage["runs"] - 1}, merge=True)
-
-        self._contended(txn_fn)
 
     def _contended(self, txn_fn):
         for round_ in range(_TXN_ROUNDS):

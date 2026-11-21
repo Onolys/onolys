@@ -23,7 +23,6 @@ class Usage(BaseModel):
 
 @router.get("", operation_id="getUsage", response_model=Usage, summary="Runs used today (UTC day)")
 def get_usage(request: Request, user: User) -> Usage:
-    runs, cap, resets = caps.usage_view(
-        request.app.state.repo, request.app.state.settings, user.uid
-    )
-    return Usage(runs_today=runs, daily_cap=cap, resets_at=resets)
+    view = caps.usage_view(request.app.state.repo, request.app.state.settings, user.uid)
+    day = view.eval.day
+    return Usage(runs_today=day.used, daily_cap=day.cap, resets_at=day.resets_at)

@@ -11,6 +11,7 @@ from onolys_core.transcript import Transcript, Turn
 from onolys_api.repo.base import ConflictError, NotFoundError
 from onolys_api.repo.fake import FakeRepo
 from onolys_api.repo.large import MAX_INLINE_BYTES
+from onolys_api.repo.limits import LimitDefaults
 from onolys_api.repo.models import (
     ApiKeyDoc,
     IdempotencyDoc,
@@ -700,7 +701,7 @@ def test_fail_stale_session_skips_fresh_moved_on_and_foreign(repo):
     ],
 )
 def test_cap_txns_survive_contention(repo, monkeypatch, exc):
-    """reserve_run/release_run (the active-run limit) re-run on exhausted retries and on a raw
+    """reserve_usage/release_usage re-run on exhausted retries and on a raw
     Aborted, instead of surfacing the error to the caller."""
     if isinstance(repo, FakeRepo):
         pytest.skip("Firestore transaction contention only")
@@ -714,8 +715,59 @@ def test_cap_txns_survive_contention(repo, monkeypatch, exc):
         return real(*a, **kw)
 
     monkeypatch.setattr(repo._client, "transaction", flaky)
-    assert repo.reserve_run(u, day, 5, 2) == "ok"
+    assert repo.reserve_usage(u, "eval", day, LimitDefaults(5, 50, 5, 30), 2) == "ok"
     assert len(calls) == 3
     calls.clear()
-    repo.release_run(u, day, refund=True)
+    repo.release_usage(u, "eval", day, refund=True)
     assert len(calls) == 3
+
+
+# ---- SP11 reserve_usage / release_usage / get_usage_docs ----
+
+
+def _reserve_in_parallel(repo, u, kinds, defaults, max_active=1000):
+    from concurrent.futures import ThreadPoolExecutor
+
+    with ThreadPoolExecutor(6) as ex:
+        return list(
+            ex.map(lambda k: repo.reserve_usage(u, k, "2026-11-20", defaults, max_active), kinds)
+        )
+
+
+@pytest.mark.parametrize("kind", ["eval", "interview"])
+def test_parallel_reserve_day_cap_3_per_kind(repo, kind):
+    u = f"u-{uuid.uuid4().hex[:8]}"
+    outs = _reserve_in_parallel(repo, u, [kind] * 6, LimitDefaults(3, 50, 3, 50))
+    assert outs.count("ok") == 3 and outs.count("day_cap") == 3
+    day, month = repo.get_usage_docs(u, "2026-11-20")
+    assert day.runs + day.interviews == 3 and month.runs + month.interviews == 3
+
+
+@pytest.mark.parametrize("kind", ["eval", "interview"])
+def test_parallel_reserve_month_cap_3_per_kind(repo, kind):
+    u = f"u-{uuid.uuid4().hex[:8]}"
+    outs = _reserve_in_parallel(repo, u, [kind] * 6, LimitDefaults(50, 3, 50, 3))
+    assert outs.count("ok") == 3 and outs.count("month_cap") == 3
+
+
+def test_parallel_reserve_mixed_kinds(repo):
+    u = f"u-{uuid.uuid4().hex[:8]}"
+    outs = _reserve_in_parallel(
+        repo, u, ["eval"] * 3 + ["interview"] * 3, LimitDefaults(2, 50, 2, 50)
+    )
+    assert outs.count("ok") == 4 and outs.count("day_cap") == 2
+    day, month = repo.get_usage_docs(u, "2026-11-20")
+    assert (day.runs, day.interviews, month.runs, month.interviews) == (2, 2, 2, 2)
+
+
+def test_reserve_usage_refusal_writes_nothing_and_release_floors_at_zero(repo):
+    u, day = f"u-{uuid.uuid4().hex[:8]}", "2026-11-20"
+    d = LimitDefaults(1, 1, 1, 1)
+    assert repo.reserve_usage(u, "eval", day, d, 5) == "ok"
+    assert repo.reserve_usage(u, "eval", day, d, 5) == "month_cap"
+    assert repo.get_usage_docs(u, day)[1].runs == 1
+    repo.release_usage(u, "eval", day, refund=True)
+    repo.release_usage(u, "eval", day, refund=True)
+    day_doc, month_doc = repo.get_usage_docs(u, day)
+    assert (day_doc.runs, month_doc.runs, month_doc.month) == (0, 0, "2026-11")
+    assert repo.get_user(u).active_runs == 0

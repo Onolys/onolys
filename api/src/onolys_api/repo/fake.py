@@ -13,7 +13,6 @@ from onolys_api.repo.base import (
     ConflictError,
     NotFoundError,
     Page,
-    ReserveOutcome,
     StartOutcome,
     decide_claim,
 )
@@ -23,6 +22,13 @@ from onolys_api.repo.firestore import (
     _decode_cursor,
     _encode_cursor,
     _idem_id,
+)
+from onolys_api.repo.limits import (
+    KIND_FIELD,
+    Kind,
+    LimitDefaults,
+    ReserveUsageOutcome,
+    decide_reserve,
 )
 from onolys_api.repo.models import (
     ApiKeyDoc,
@@ -38,6 +44,7 @@ from onolys_api.repo.models import (
     SessionStatusDoc,
     TranscriptDoc,
     UsageDoc,
+    UsageMonthDoc,
     UserDoc,
     utcnow,
 )
@@ -443,20 +450,44 @@ class FakeRepo:
         self._put(path, d)
         return self._load(UsageDoc, f"{uid}_{date}", d)
 
-    def reserve_run(self, uid: str, date: str, cap: int, max_active: int) -> ReserveOutcome:
+    def reserve_usage(
+        self, uid: str, kind: Kind, date: str, defaults: LimitDefaults, max_active: int
+    ) -> ReserveUsageOutcome:
+        field = KIND_FIELD[kind]
         with self._claim_lock:
             user = self._get(f"users/{uid}") or {}
-            usage = self._get(f"usage/{uid}_{date}") or {"uid": uid, "date": date, "runs": 0}
-            active = user.get("active_runs", 0)
-            eff_cap = user.get("daily_cap")
-            eff_active = user.get("max_active_runs")
-            if usage.get("runs", 0) >= (cap if eff_cap is None else eff_cap):
-                return "daily_cap"
-            if active >= (max_active if eff_active is None else eff_active):
-                return "concurrent"
-            self._put(f"usage/{uid}_{date}", {**usage, "runs": usage.get("runs", 0) + 1})
-            self._put(f"users/{uid}", {**user, "active_runs": active + 1})
+            day = self._get(f"usage/{uid}_{date}") or {"uid": uid, "date": date}
+            month = self._get(f"usage/{uid}_{date[:7]}") or {"uid": uid, "month": date[:7]}
+            outcome = decide_reserve(user, day, month, kind, defaults, max_active)
+            if outcome != "ok":
+                return outcome
+            self._put(f"usage/{uid}_{date}", {**day, field: day.get(field, 0) + 1})
+            self._put(f"usage/{uid}_{date[:7]}", {**month, field: month.get(field, 0) + 1})
+            if kind == "eval":
+                self._put(f"users/{uid}", {**user, "active_runs": user.get("active_runs", 0) + 1})
             return "ok"
+
+    def release_usage(self, uid: str, kind: Kind, date: str, refund: bool) -> None:
+        field = KIND_FIELD[kind]
+        with self._claim_lock:
+            user = self._get(f"users/{uid}") or {}
+            if kind == "eval" and user.get("active_runs", 0) > 0:
+                self._put(f"users/{uid}", {**user, "active_runs": user["active_runs"] - 1})
+            if refund:
+                for path in (f"usage/{uid}_{date}", f"usage/{uid}_{date[:7]}"):
+                    doc = self._get(path)
+                    if doc and doc.get(field, 0) > 0:
+                        self._put(path, {**doc, field: doc[field] - 1})
+
+    def get_usage_docs(self, uid: str, date: str) -> tuple[UsageDoc, UsageMonthDoc]:
+        day = self._get(f"usage/{uid}_{date}")
+        month = self._get(f"usage/{uid}_{date[:7]}")
+        return (
+            self._load(UsageDoc, f"{uid}_{date}", day) if day else UsageDoc(uid=uid, date=date),
+            self._load(UsageMonthDoc, f"{uid}_{date[:7]}", month)
+            if month
+            else UsageMonthDoc(uid=uid, month=date[:7]),
+        )
 
     def start_first_run(
         self, uid: str, sid: str, run_id: str, date: str, cap: int, max_active: int,
@@ -564,15 +595,6 @@ class FakeRepo:
             )  # fmt: skip
             self._record_status(uid, sid)
             return "started"
-
-    def release_run(self, uid: str, date: str, refund: bool) -> None:
-        with self._claim_lock:
-            user = self._get(f"users/{uid}") or {}
-            if user.get("active_runs", 0) > 0:
-                self._put(f"users/{uid}", {**user, "active_runs": user["active_runs"] - 1})
-            usage = self._get(f"usage/{uid}_{date}")
-            if refund and usage and usage.get("runs", 0) > 0:
-                self._put(f"usage/{uid}_{date}", {**usage, "runs": usage["runs"] - 1})
 
     def get_idempotency(self, uid: str, key: str) -> IdempotencyDoc | None:
         path = f"idempotency/{_idem_id(uid, key)}"

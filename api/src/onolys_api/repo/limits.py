@@ -68,3 +68,29 @@ def effective_cap(user: dict[str, Any] | None, kind: Kind, period: Period, d: Li
                 return legacy
             _warn(kind, period)
     return d.get(kind, period)
+
+
+ReserveUsageOutcome = Literal["ok", "day_cap", "month_cap", "concurrent"]
+
+
+def decide_reserve(
+    user: dict[str, Any] | None,
+    day: dict[str, Any] | None,
+    month: dict[str, Any] | None,
+    kind: Kind,
+    d: LimitDefaults,
+    max_active: int,
+) -> ReserveUsageOutcome:
+    """Shared reserve rule (both repos). Month is checked first so it wins when both are spent;
+    the concurrent limit applies to `eval` only (`users/{uid}.max_active_runs` overrides)."""
+    user = user or {}
+    field = KIND_FIELD[kind]
+    if (month or {}).get(field, 0) >= effective_cap(user, kind, "month", d):
+        return "month_cap"
+    if (day or {}).get(field, 0) >= effective_cap(user, kind, "day", d):
+        return "day_cap"
+    if kind == "eval":
+        eff = user.get("max_active_runs")
+        if user.get("active_runs", 0) >= (max_active if eff is None else eff):
+            return "concurrent"
+    return "ok"

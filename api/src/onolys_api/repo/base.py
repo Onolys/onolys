@@ -12,6 +12,7 @@ from typing import Any, Literal, Protocol
 from onolys_core.transcript import Transcript
 
 from onolys_api.errors import ApiError
+from onolys_api.repo.limits import Kind, LimitDefaults, ReserveUsageOutcome
 from onolys_api.repo.models import (
     ApiKeyDoc,
     IdempotencyDoc,
@@ -25,6 +26,7 @@ from onolys_api.repo.models import (
     SessionStatusDoc,
     TranscriptDoc,
     UsageDoc,
+    UsageMonthDoc,
     UserDoc,
 )
 
@@ -47,7 +49,6 @@ class Page[T]:
     next_cursor: str | None = None
 
 
-ReserveOutcome = Literal["ok", "daily_cap", "concurrent"]
 StartOutcome = Literal["started", "not_ready", "already", "daily_cap", "concurrent"]
 ClaimOutcome = Literal["claimed", "done", "failed", "busy"]
 
@@ -139,12 +140,19 @@ class Repo(Protocol):
     # usage + idempotency
     def get_usage(self, uid: str, date: str) -> UsageDoc: ...
     def add_usage(self, uid: str, date: str, runs: int = 0, tokens: int = 0) -> UsageDoc: ...
-    # R8: one transaction reads the user + usage docs, checks the daily cap (users/{uid}.daily_cap
-    # overrides `cap`) and the active-run limit (`max_active_runs` overrides `max_active`), and
-    # on "ok" does runs+1, active_runs+1. Nothing is written on a refusal.
-    def reserve_run(self, uid: str, date: str, cap: int, max_active: int) -> ReserveOutcome: ...
-    # active_runs-1 (floor 0); with refund also runs-1 (floor 0) on that day's usage doc.
-    def release_run(self, uid: str, date: str, refund: bool) -> None: ...
+    # SP11 R1/R4: ONE transaction over users/{uid}, the day doc and the month doc
+    # (`usage/{uid}_{YYYY-MM}`, key = date[:7]). Month is checked first ("month_cap"), then the day
+    # ("day_cap"), then, for `eval` only, the active-run limit ("concurrent"). Caps come from
+    # `effective_cap(user, ...)`. On "ok": day and month counters +1 (and `active_runs`+1 for
+    # eval). Nothing is written on a refusal.
+    def reserve_usage(
+        self, uid: str, kind: Kind, date: str, defaults: LimitDefaults, max_active: int
+    ) -> ReserveUsageOutcome: ...
+    # Decrements `active_runs` (eval only, floor 0); with `refund` also the day and month
+    # counters of the doc keys given by `date` (floor 0). One transaction.
+    def release_usage(self, uid: str, kind: Kind, date: str, refund: bool) -> None: ...
+    # `(day, month)` usage docs for `date` (zero-valued when absent).
+    def get_usage_docs(self, uid: str, date: str) -> tuple[UsageDoc, UsageMonthDoc]: ...
     # R4 first run, ONE transaction: reads session + status + user + usage + latest rating; if
     # `state=awaiting_input`, the three flags are set and `first_run_id` is absent, checks the cap
     # like `reserve_run`, then creates run `run_id` (snapshot: rating_id, n_runs, preset, stt,
