@@ -23,6 +23,7 @@ from onolys_api.jobs.queue import TaskPayload
 from onolys_api.jobs.run import release_once
 from onolys_api.presets import UnknownPreset
 from onolys_api.repo.base import NotFoundError
+from onolys_api.repo.limits import LimitDefaults
 from onolys_api.repo.models import RunDoc, SessionDoc, SessionError, SessionState, SttInfo
 
 ERRORS = {"default": {"model": ErrorResponse, "description": "Error"}}
@@ -134,15 +135,17 @@ def start_run(id: str, request: Request, user: User, body: RunRequest | None = N
     # One transaction: state check, cap reservation, run creation, first_run_id and `running`.
     # The loser of a race gets 409 and holds no slot.
     outcome = repo.start_run(
-        uid, id, run_id, date, settings.daily_run_cap, settings.max_active_runs,
+        uid, id, run_id, date, LimitDefaults.from_settings(settings), settings.max_active_runs,
         settings.git_sha, RUN_START_PROGRESS, RERUN_STATES, body.n_runs, preset,
     )  # fmt: skip
     if outcome == "not_ready":
         raise invalid_state()
     if outcome == "daily_cap":
-        raise ApiError.of(429, "daily_cap_reached", caps.DAILY_MESSAGE)
+        raise ApiError.of(429, "daily_cap_reached", caps.DAILY_MESSAGE, period="day")
+    if outcome == "month_cap":
+        raise ApiError.of(429, "monthly_cap_reached", caps.MONTHLY_MESSAGE, period="month")
     if outcome == "concurrent":
-        raise ApiError.of(429, "daily_cap_reached", caps.CONCURRENT_MESSAGE)
+        raise ApiError.of(429, "daily_cap_reached", caps.CONCURRENT_MESSAGE, period="day")
     try:
         queue = getattr(app.state, "queue", None)
         if queue is None:

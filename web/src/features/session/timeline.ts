@@ -50,7 +50,7 @@ const RUN_SUBLABELS: Record<string, string> = {
   assemble: "Building the report",
 };
 
-const VALIDATE_CODES = new Set(["unsupported_audio", "audio_too_long", "audio_too_large", "audio_unreadable"]);
+const VALIDATE_CODES = new Set(["unsupported_audio", "audio_too_long", "interview_too_long", "audio_too_large", "audio_unreadable"]);
 const TRANSCRIBE_CODES = new Set(["no_speech", "speakers_not_separated", "transcription_failed"]);
 
 /** Which step a `failed` session stopped at, from the error code and what had finished. */
@@ -135,9 +135,9 @@ export function deriveTimeline(doc: TimelineInput, opts: TimelineOptions = {}): 
       lines = ["Transcribing the recording."];
       break;
     case "awaiting_input": {
-      if (doc.error_code === "daily_cap_reached") {
+      if (doc.error_code === "daily_cap_reached" || doc.error_code === "monthly_cap_reached") {
         capReached = true;
-        lines = [messageForCode("daily_cap_reached", { resetsAt: opts.resetsAt })];
+        lines = [messageForCode(doc.error_code, { resetsAt: opts.resetsAt })];
         break;
       }
       lines = [];

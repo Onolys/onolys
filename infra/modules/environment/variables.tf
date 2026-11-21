@@ -79,9 +79,24 @@ variable "admin_max_instances" {
   default = 3
 }
 
-variable "daily_run_cap" {
+variable "eval_cap_day" {
   type    = number
-  default = 20
+  default = 10
+}
+
+variable "eval_cap_month" {
+  type    = number
+  default = 100
+}
+
+variable "ai_cap_day" {
+  type    = number
+  default = 5
+}
+
+variable "ai_cap_month" {
+  type    = number
+  default = 30
 }
 
 variable "default_preset" {
@@ -106,4 +121,45 @@ variable "notification_channel_ids" {
   description = "Monitoring notification channel ids for the failure alerts."
   type        = list(string)
   default     = []
+}
+
+variable "voice_max_instances" {
+  description = "Voice relay max instances (concurrency 10 each)."
+  type        = number
+  default     = 3
+}
+
+variable "ai_max_seconds" {
+  type    = number
+  default = 600
+}
+
+variable "ai_warn_seconds" {
+  type    = number
+  default = 480
+}
+
+variable "ai_min_seconds" {
+  type    = number
+  default = 300
+}
+
+variable "ai_tolerance_seconds" {
+  type    = number
+  default = 30
+}
+
+variable "ai_abandon_count_seconds" {
+  type    = number
+  default = 30
+}
+
+variable "ai_reconnect_seconds" {
+  type    = number
+  default = 60
+}
+
+variable "ai_mic_gate" {
+  type    = bool
+  default = false
 }

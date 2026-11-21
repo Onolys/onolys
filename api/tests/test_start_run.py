@@ -119,7 +119,7 @@ def test_manual_start_sets_first_run_id_when_unset(repo):  # noqa: F811
 
 def test_refused_start_reserves_nothing(repo):  # noqa: F811
     queue = RecordingQueue()
-    app = make_client(repo, mk_settings(max_active_runs=2, daily_run_cap=0), queue)
+    app = make_client(repo, mk_settings(max_active_runs=2, eval_cap_day=0), queue)
     uid = f"u{uuid.uuid4().hex[:10]}"
     h = {"Authorization": f"Bearer test:{uid}"}
     sid = new_session(repo, uid, state="report_ready", ready=True, **READY)
@@ -129,3 +129,84 @@ def test_refused_start_reserves_nothing(repo):  # noqa: F811
     assert repo.get_session(uid, sid).state == "report_ready"
     assert repo.list_runs(uid, sid) == []
     assert user_counters(repo, uid, caps.utc_date()) == (0, 0)
+
+
+# ---- the free first run of an interview-linked session also works through POST /runs (SP11 AC6)
+
+
+def _post_run(app, uid, sid):
+    with TestClient(app) as c:
+        return c.post(
+            f"/v1/sessions/{sid}/runs", json={}, headers={"Authorization": f"Bearer test:{uid}"}
+        )
+
+
+def _linked_ready(repo, uid, **fields):  # noqa: F811
+    sid = new_session(repo, uid, state="awaiting_input", ready=True, **READY, **fields)
+    set_flags(repo, uid, sid, rating_submitted=True)
+    return sid
+
+
+def test_linked_first_run_held_by_active_limit_starts_free_via_post_runs(repo):  # noqa: F811
+    uid = f"u{uuid.uuid4().hex[:10]}"
+    sid = _linked_ready(repo, uid, interview_id="iv1")
+    full = mk_settings(eval_cap_day=0, eval_cap_month=0)
+    held = mk_settings(eval_cap_day=0, eval_cap_month=0, max_active_runs=0)
+    maybe_start_first_run(repo, RecordingQueue(), uid, sid, held)  # held by MAX_ACTIVE_RUNS
+    assert repo.get_session(uid, sid).first_run_id is None
+    queue = RecordingQueue()
+    r = _post_run(make_client(repo, full, queue), uid, sid)
+    assert r.status_code == 202, r.text
+    sess = repo.get_session(uid, sid)
+    assert sess.state == "running" and sess.first_run_id == r.json()["run_id"]
+    (run,) = repo.list_runs(uid, sid)
+    assert run.counted is False and len(queue.runs) == 1
+    date = caps.utc_date()
+    assert user_counters(repo, uid, date) == (1, 0)  # a slot, but no usage
+    assert repo.get_usage_docs(uid, date)[1].runs == 0
+
+
+def test_linked_post_runs_still_obeys_the_active_limit(repo):  # noqa: F811
+    uid = f"u{uuid.uuid4().hex[:10]}"
+    sid = _linked_ready(repo, uid, interview_id="iv1")
+    r = _post_run(make_client(repo, mk_settings(max_active_runs=0)), uid, sid)
+    assert r.status_code == 429
+    assert repo.list_runs(uid, sid) == []
+    assert user_counters(repo, uid, caps.utc_date()) == (0, 0)
+
+
+def test_second_post_runs_on_a_linked_session_counts_one(repo):  # noqa: F811
+    from onolys_api.jobs.run import release_once
+
+    uid = f"u{uuid.uuid4().hex[:10]}"
+    sid = _linked_ready(repo, uid, interview_id="iv1")
+    s = mk_settings(eval_cap_day=1, eval_cap_month=1)
+    app = make_client(repo, s, RecordingQueue())
+    first = _post_run(app, uid, sid).json()["run_id"]
+    release_once(repo, uid, sid, first, False, caps.utc_date())
+    repo.update_session(uid, sid, {"state": "report_ready"})
+    r = _post_run(app, uid, sid)
+    assert r.status_code == 202, r.text
+    assert repo.get_run(uid, sid, r.json()["run_id"]).counted is True
+    assert user_counters(repo, uid, caps.utc_date())[1] == 1
+    assert repo.get_session(uid, sid).first_run_id == first
+
+
+def test_unlinked_post_runs_is_unchanged_counts_and_obeys_the_cap(repo):  # noqa: F811
+    uid = f"u{uuid.uuid4().hex[:10]}"
+    sid = _linked_ready(repo, uid)
+    assert _post_run(make_client(repo, mk_settings(eval_cap_day=0)), uid, sid).status_code == 429
+    r = _post_run(make_client(repo, mk_settings()), uid, sid)
+    assert r.status_code == 202
+    assert repo.get_run(uid, sid, r.json()["run_id"]).counted is True
+    assert user_counters(repo, uid, caps.utc_date()) == (1, 1)
+
+
+def test_session_detail_exposes_interview_id(repo):  # noqa: F811
+    uid = f"u{uuid.uuid4().hex[:10]}"
+    linked = _linked_ready(repo, uid, interview_id="iv1")
+    plain = _linked_ready(repo, uid)
+    h = {"Authorization": f"Bearer test:{uid}"}
+    with TestClient(make_client(repo)) as c:
+        assert c.get(f"/v1/sessions/{linked}", headers=h).json()["interview_id"] == "iv1"
+        assert c.get(f"/v1/sessions/{plain}", headers=h).json()["interview_id"] is None

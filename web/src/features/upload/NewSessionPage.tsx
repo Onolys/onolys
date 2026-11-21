@@ -11,8 +11,9 @@ import { describeError } from "../../api/errors";
 import { useApiClient } from "../../auth/useApiClient";
 import { ErrorCard } from "../session/ErrorCard";
 import { DEFAULT_LANGUAGE, LANGUAGES } from "./config";
-import { checkFile, fileExtension, readDuration, type PrecheckResult } from "./precheck";
-import { getJob, registerJob, UploadJob } from "./uploader";
+import { checkFile, readDuration, type PrecheckResult } from "./precheck";
+import { prepareUpload } from "./startUpload";
+import { getJob } from "./uploader";
 
 export function NewSessionPage() {
   const client = useApiClient();
@@ -59,24 +60,7 @@ export function NewSessionPage() {
         created.current = { key, body: bodyKey, id: res.session.id };
       }
       const id = created.current.id;
-      const request = async () =>
-        unwrap(
-          await client.POST("/sessions/{id}/audio", {
-            params: { path: { id } },
-            body: { content_type: f.type, size_bytes: f.size, filename_ext: fileExtension(f.name) },
-          }),
-        );
-      const first = await request();
-      registerJob(
-        id,
-        new UploadJob({
-          file: f,
-          first,
-          requestTarget: request,
-          complete: async () =>
-            unwrap(await client.POST("/sessions/{id}/audio/complete", { params: { path: { id } } })),
-        }),
-      );
+      await prepareUpload(client, id, f);
       return id;
     },
     onSuccess: (id) => {

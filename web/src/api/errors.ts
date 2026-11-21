@@ -20,11 +20,15 @@ const MESSAGES = {
   rating_invalid: "Some of your rating needs a change. Check the highlighted fields.",
   upstream_unavailable: "A service we depend on is busy right now. Please try again in a minute.",
   daily_cap_reached: "You've reached today's limit.",
+  monthly_cap_reached: "You've reached this month's limit.",
+  interview_cap_reached: "You've reached your AI interview limit.",
   invalid_state: "That isn't possible at this stage of the session. Refresh and try again.",
   rate_limited: "You're going a little fast. Wait a moment and try again.",
   unauthenticated: "Your sign-in has expired. Please sign in again.",
   forbidden: "You don't have access to do that.",
   not_found: "We couldn't find that. It may have been deleted.",
+  interview_too_long:
+    "This interview recording is longer than allowed. Start a new practice interview.",
   conflict: "That request clashes with an earlier one. Refresh and try again.",
   internal_error: GENERIC_MESSAGE,
 } as const satisfies Record<string, string>;
@@ -37,7 +41,7 @@ function isKnown(code: string | undefined): code is ErrorCode {
 }
 
 export interface MessageContext {
-  /** Reset time for `daily_cap_reached`, already formatted for display. */
+  /** Reset time (a time of day, or a date for the month cap) for the eval cap codes, already formatted. */
   resetsAt?: string;
 }
 
@@ -45,6 +49,9 @@ export function messageForCode(code: string | undefined, ctx: MessageContext = {
   if (!isKnown(code)) return GENERIC_MESSAGE;
   if (code === "daily_cap_reached" && ctx.resetsAt) {
     return `You've reached today's limit. You can start the rating after ${ctx.resetsAt}.`;
+  }
+  if (code === "monthly_cap_reached" && ctx.resetsAt) {
+    return `You've reached this month's limit. You can start the rating after ${ctx.resetsAt}.`;
   }
   return MESSAGES[code];
 }
@@ -55,6 +62,7 @@ export type FailureAction = "upload_new" | "run_again";
 const UPLOAD_NEW = new Set<string>([
   "unsupported_audio",
   "audio_too_long",
+  "interview_too_long",
   "audio_too_large",
   "audio_unreadable",
   "no_speech",

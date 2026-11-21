@@ -143,7 +143,7 @@ def test_error_schema_matches_model():
         (ROOT / "docs/contracts/public/public-error-response.schema.json").read_text()
     )
     item = schema["properties"]["details"]["items"]["properties"]
-    assert set(item) == {"code", "message", "field", "issue"}
+    assert set(item) == {"code", "message", "field", "issue", "period"}
     model = ErrorResponse.model_json_schema()["$defs"]["ErrorDetailModel"]["properties"]
     assert set(model) == set(item)
 

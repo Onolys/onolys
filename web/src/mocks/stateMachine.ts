@@ -19,6 +19,8 @@ import {
   type Turn,
 } from "./fixtures";
 
+import { MOCK_CHANGE_GOALS, MOCK_LIMITS, MOCK_SCENARIOS, MOCK_VOICES } from "./fixtures/scenarios";
+
 type S = components["schemas"];
 
 export class MockHttpError extends Error {
@@ -34,9 +36,28 @@ export class MockHttpError extends Error {
   }
 }
 
+export type CapKind = "eval" | "interview";
+export type CapPeriod = "day" | "month";
+export type Caps = Record<CapKind, Record<CapPeriod, number>>;
+export type CapsOverride = { [K in CapKind]?: Partial<Record<CapPeriod, number>> };
+
+const DEFAULT_CAPS: Caps = { eval: { day: 20, month: 100 }, interview: { day: 5, month: 30 } };
+const CAP_CODE: Record<CapKind, (p: CapPeriod) => ErrorCode> = {
+  eval: (p) => (p === "month" ? "monthly_cap_reached" : "daily_cap_reached"),
+  interview: () => "interview_cap_reached",
+};
+
+function mergeCaps(base: Caps, o: CapsOverride = {}): Caps {
+  return {
+    eval: { ...base.eval, ...o.eval },
+    interview: { ...base.interview, ...o.interview },
+  };
+}
+
 export interface MockOptions {
   emitter: MemoryStatusEmitter;
-  dailyCap?: number;
+  /** Per-kind day/month caps; unset values use the defaults. */
+  caps?: CapsOverride;
   now?: () => Date;
 }
 
@@ -97,6 +118,7 @@ interface SessionRec {
   holdFirstStart: boolean;
   uploadId: string | null;
   uploadType: string | null;
+  interview_id?: string;
   finals: Rating[];
   draft: { card: RatingCard; updated_at: string; seq: number } | null;
   runs: RunRec[];
@@ -107,7 +129,9 @@ function bad(status: number, code: string, message: string, details?: S["ErrorDe
   throw new MockHttpError(status, code, message, details);
 }
 
-const notFound = () => bad(404, "not_found", "Not found.");
+function notFound(): never {
+  return bad(404, "not_found", "Not found.");
+}
 
 function invalidParam(message: string): never {
   return bad(422, "invalid_parameters", message);
@@ -116,33 +140,36 @@ function invalidParam(message: string): never {
 export class MockBackend {
   private readonly emitter: MemoryStatusEmitter;
   private readonly now: () => Date;
-  private readonly initialCap: number;
-  private dailyCap: number;
+  private readonly initialCaps: Caps;
+  private caps: Caps;
   private sessions = new Map<string, SessionRec>();
-  private runsByDay = new Map<string, number>();
+  /** Successful uses, keyed `kind:uid:day` and `kind:uid:month`. */
+  private counters = new Map<string, number>();
   private idem = new Map<string, { hash: string; response: S["CreateSessionResponse"] }>();
   private apiKeys = new Map<string, { key_id: string; created: string }>();
+  private interviews = new Map<string, { uid: string; res: S["InterviewResponse"]; session_id?: string }>();
   private n = 0;
 
   constructor(opts: MockOptions) {
     this.emitter = opts.emitter;
     this.now = opts.now ?? (() => new Date());
-    this.initialCap = this.dailyCap = opts.dailyCap ?? 20;
+    this.initialCaps = this.caps = mergeCaps(DEFAULT_CAPS, opts.caps);
   }
 
   /** Drop all data and restore options (used between tests). */
   reset(): void {
     this.sessions.clear();
-    this.runsByDay.clear();
+    this.counters.clear();
     this.idem.clear();
     this.apiKeys.clear();
+    this.interviews.clear();
     this.n = 0;
-    this.dailyCap = this.initialCap;
+    this.caps = this.initialCaps;
     this.emitter.clear();
   }
 
-  configure(o: { dailyCap?: number }): void {
-    if (o.dailyCap !== undefined) this.dailyCap = o.dailyCap;
+  configure(o: { caps?: CapsOverride }): void {
+    this.caps = mergeCaps(this.caps, o.caps);
   }
 
   // ---- helpers ------------------------------------------------------------
@@ -173,12 +200,94 @@ export class MockBackend {
     this.emitter.emit(s.id, doc);
   }
 
-  private dayKey(uid: string): string {
-    return `${uid}:${this.now().toISOString().slice(0, 10)}`;
+  private counterKey(uid: string, kind: CapKind, period: CapPeriod): string {
+    const iso = this.now().toISOString();
+    return `${kind}:${uid}:${period === "day" ? iso.slice(0, 10) : iso.slice(0, 7)}`;
   }
 
-  private runsToday(uid: string): number {
-    return this.runsByDay.get(this.dayKey(uid)) ?? 0;
+  private used(uid: string, kind: CapKind, period: CapPeriod): number {
+    return this.counters.get(this.counterKey(uid, kind, period)) ?? 0;
+  }
+
+  private resetsAt(period: CapPeriod): string {
+    const d = this.now();
+    const [y, m, day] = [d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()];
+    return new Date(period === "day" ? Date.UTC(y, m, day + 1) : Date.UTC(y, m + 1, 1)).toISOString();
+  }
+
+  /** The exhausted period for a kind, month first (as the API does), or null. */
+  private blocked(uid: string, kind: CapKind): CapPeriod | null {
+    for (const p of ["month", "day"] as const) if (this.used(uid, kind, p) >= this.caps[kind][p]) return p;
+    return null;
+  }
+
+  /** The 429 for an exhausted kind (code per kind and period, `period` in the detail), else nothing. */
+  checkCap(uid: string, kind: CapKind): void {
+    const period = this.blocked(uid, kind);
+    if (!period) return;
+    const code = CAP_CODE[kind](period);
+    bad(429, code, `${kind} ${period} limit reached.`, [{ code, message: `${kind} ${period} limit reached.`, period }]);
+  }
+
+  /** Count one use of a kind. Callers check the cap first. */
+  private count(uid: string, kind: CapKind): void {
+    for (const p of ["day", "month"] as const) {
+      const key = this.counterKey(uid, kind, p);
+      this.counters.set(key, (this.counters.get(key) ?? 0) + 1);
+    }
+  }
+
+  /** Start an interview against its caps (429 `interview_cap_reached` when exhausted). For SP10. */
+  consumeInterview(uid: string): void {
+    this.checkCap(uid, "interview");
+    this.count(uid, "interview");
+  }
+
+  // ---- SP10 AI interviews --------------------------------------------------
+
+  listScenarios(): S["ScenarioList"] {
+    return { scenarios: MOCK_SCENARIOS.map((s) => ({ ...s })), voices: [...MOCK_VOICES] };
+  }
+
+  /** Start an interview: validate, spend a cap slot (429 `interview_cap_reached`), return the relay URL. */
+  createInterview(uid: string, body: S["CreateInterviewRequest"]): S["InterviewResponse"] {
+    const scenario = MOCK_SCENARIOS.find((s) => s.id === body?.scenario_id);
+    if (!scenario) invalidParam("scenario_id is not a known scenario");
+    if (body.voice != null && !MOCK_VOICES.includes(body.voice)) invalidParam("voice is not allowed");
+    this.consumeInterview(uid);
+    this.n += 1;
+    const interview_id = `iv_mock${this.n}`;
+    const res: S["InterviewResponse"] = {
+      interview_id,
+      state: "created",
+      scenario: { ...scenario },
+      voice: body.voice ?? scenario.voice,
+      voice_url: `wss://relay.mock.invalid/v1/voice/${interview_id}`,
+      limits: { ...MOCK_LIMITS },
+    };
+    this.interviews.set(interview_id, { uid, res });
+    return { ...res };
+  }
+
+  getInterview(uid: string, id: string): S["InterviewResponse"] {
+    const rec = this.interviews.get(id);
+    if (!rec || rec.uid !== uid) notFound();
+    return { ...rec.res };
+  }
+
+  /** Mock stand-in for the relay: `live` on connect, `duration_s` as recorded. */
+  setInterviewState(id: string, state: S["InterviewResponse"]["state"], duration_s?: number): void {
+    const rec = this.interviews.get(id);
+    if (!rec) notFound();
+    rec.res = { ...rec.res, state, ...(duration_s !== undefined ? { duration_s } : {}) };
+  }
+
+  endInterview(uid: string, id: string, body?: S["EndInterviewRequest"] | null): S["InterviewResponse"] {
+    const rec = this.interviews.get(id);
+    if (!rec || rec.uid !== uid) notFound();
+    if (rec.res.state === "ended" || rec.res.state === "abandoned" || rec.res.state === "uploaded") return { ...rec.res };
+    rec.res = { ...rec.res, state: body?.discard ? "abandoned" : "ended" };
+    return { ...rec.res };
   }
 
   private titleIs(s: SessionRec, name: string): boolean {
@@ -217,6 +326,12 @@ export class MockBackend {
     if (body.title != null && (typeof body.title !== "string" || body.title.length > 200))
       invalidParam("title is too long");
 
+    // SP10 link: an ended, unlinked interview of the caller; language and the draft change goal come from its scenario.
+    const linked = body.interview_id ? this.interviews.get(body.interview_id) : undefined;
+    if (body.interview_id) {
+      if (!linked || linked.uid !== uid) notFound();
+    }
+
     const idemKey = idempotencyKey ? `${uid}:${idempotencyKey}` : null;
     const hash = JSON.stringify(body);
     if (idemKey) {
@@ -227,14 +342,19 @@ export class MockBackend {
       }
     }
 
+    if (linked) {
+      if (linked.session_id) bad(409, "conflict", "Interview already linked to a session.");
+      if (linked.res.state !== "ended") bad(409, "invalid_state", "Interview is not ended.");
+    }
+
     const seq = this.n + 1;
     const id = this.id("s");
     const s: SessionRec = {
       id,
       uid,
       seq,
-      title: body.title ?? null,
-      language: body.language ?? "auto",
+      title: body.title ?? linked?.res.scenario.title ?? null,
+      language: linked ? linked.res.scenario.language : (body.language ?? "auto"),
       n_runs: body.n_runs ?? 1,
       preset: body.preset ?? "default",
       created_at: this.now().toISOString(),
@@ -255,6 +375,12 @@ export class MockBackend {
       reports: [],
     };
     s.holdFirstStart = this.titleIs(s, "cap-held");
+    if (linked && body.interview_id) {
+      s.interview_id = body.interview_id;
+      linked.session_id = id;
+      const goal = MOCK_CHANGE_GOALS[linked.res.scenario.id];
+      if (goal) s.draft = { card: { change_goal: goal } as RatingCard, updated_at: s.created_at, seq: seq };
+    }
     this.sessions.set(id, s);
     this.emit(s); // before returning, so a listener can attach at once
     const response = { session: { id, status: s.state } };
@@ -273,6 +399,7 @@ export class MockBackend {
       created_at: s.created_at,
       latest_report_version: s.reports.at(-1)?.version ?? null,
       error_code: s.error?.code ?? null,
+      interview_id: s.interview_id ?? null,
     }));
     const next = offset + limit;
     return next < all.length ? { items, next_cursor: String(next) } : { items };
@@ -294,6 +421,7 @@ export class MockBackend {
       language: s.language,
       n_runs: s.n_runs,
       preset: s.preset,
+      interview_id: s.interview_id ?? null,
       links: { self: `/v1/sessions/${s.id}` },
     };
     if (s.error) detail.error = { ...s.error };
@@ -450,8 +578,9 @@ export class MockBackend {
     const f = s.flags;
     if (s.state !== "awaiting_input" || s.first_run_id) return;
     if (!(f.transcript_ready && f.speaker_confirmed && f.rating_submitted)) return;
-    if (s.holdFirstStart || this.runsToday(s.uid) >= this.dailyCap) {
-      s.error = { code: "daily_cap_reached" };
+    const blocked = this.blocked(s.uid, "eval");
+    if (s.holdFirstStart || blocked) {
+      s.error = { code: blocked ? CAP_CODE.eval(blocked) : "daily_cap_reached" };
       this.emit(s);
       return;
     }
@@ -480,8 +609,7 @@ export class MockBackend {
     s.state = "running";
     s.step = "paudit";
     s.progress = RUN_START_PROGRESS;
-    const key = this.dayKey(s.uid);
-    this.runsByDay.set(key, (this.runsByDay.get(key) ?? 0) + 1);
+    this.count(s.uid, "eval");
     this.emit(s);
     return run;
   }
@@ -495,8 +623,7 @@ export class MockBackend {
       invalidParam("n_runs must be an integer from 1 to 5");
     if (body.preset != null && !PRESETS.includes(body.preset)) invalidParam("preset is not allowed");
     s.holdFirstStart = false; // the user pressed Start
-    if (this.runsToday(uid) >= this.dailyCap)
-      bad(429, "daily_cap_reached", "Daily run limit reached.");
+    this.checkCap(uid, "eval");
     const run = this.createRun(s, body);
     return { run_id: run.run_id, session: { id: s.id, status: s.state } };
   }
@@ -561,9 +688,13 @@ export class MockBackend {
   }
 
   getUsage(uid: string): S["Usage"] {
-    const d = this.now();
-    const reset = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() + 1));
-    return { runs_today: this.runsToday(uid), daily_cap: this.dailyCap, resets_at: reset.toISOString() };
+    const period = (kind: CapKind, p: CapPeriod) => ({
+      used: this.used(uid, kind, p),
+      cap: this.caps[kind][p],
+      resets_at: this.resetsAt(p),
+    });
+    const kindUsage = (kind: CapKind) => ({ day: period(kind, "day"), month: period(kind, "month") });
+    return { eval: kindUsage("eval"), interview: kindUsage("interview") };
   }
 
   // ---- the worker, one step at a time -------------------------------------

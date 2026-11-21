@@ -20,6 +20,7 @@ SessionState = Literal[
     "failed",
     "deleting",
 ]
+InterviewState = Literal["created", "live", "ended", "abandoned", "uploaded"]
 RunStatus = Literal["pending", "running", "done", "failed"]
 StepStatus = Literal["pending", "running", "done", "failed"]
 
@@ -47,7 +48,9 @@ class UserDoc(Doc):
     created_at: datetime = Field(default_factory=utcnow)
     prefs: dict[str, Any] = Field(default_factory=dict)
     expiry_days: int | None = None
-    daily_cap: int | None = None  # per-user override of DAILY_RUN_CAP (R8)
+    # Raw console values: any shape loads (never a 500, SP11 D6); `effective_cap` validates.
+    daily_cap: Any = None  # legacy eval day override (D5, deprecated)
+    limits: Any = None  # {eval|interview: {day|month: int}} (SP11 R3)
     max_active_runs: int | None = None  # per-user override of MAX_ACTIVE_RUNS (R8)
     active_runs: int = 0  # runs reserved and not yet released (R8 concurrent limit)
 
@@ -105,6 +108,7 @@ class SessionDoc(Doc):
     rating_submitted: bool = False
     has_rating: bool = False
     first_run_id: str | None = None
+    interview_id: str | None = None  # set by the AI interview (SP10): its first run is free (SP11)
     upload: UploadInfo | None = None
     steps: dict[str, StepRecord] = Field(default_factory=dict)
     warnings: list[str] = Field(default_factory=list)
@@ -179,6 +183,7 @@ class RunDoc(Doc):
     run_info: dict[str, Any] | None = None
     artifacts_prefix: str | None = None
     cap_date: str | None = None  # UTC day the cap slot was reserved on (R8)
+    counted: bool = True  # False: run did not consume an eval slot (exempt first run, SP11 R5)
     released: bool = False  # the cap slot was handed back: guards double release
 
 
@@ -202,11 +207,55 @@ class ApiKeyDoc(Doc):
 class UsageDoc(Doc):
     uid: str = ""
     date: str = ""
-    runs: int = 0
+    runs: int = 0  # eval count (name kept: old docs hold it)
+    interviews: int = 0  # missing on old docs reads 0
     tokens: int = 0
+
+
+class UsageMonthDoc(Doc):
+    """`usage/{uid}_{YYYY-MM}`: per-month counters (SP11 D1)."""
+
+    uid: str = ""
+    month: str = ""
+    runs: int = 0
+    interviews: int = 0
 
 
 class IdempotencyDoc(Doc):
     body_hash: str
     response: dict[str, Any]
     created_at: datetime = Field(default_factory=utcnow)
+
+
+class InterviewDoc(Doc):
+    """`interviews/{id}` (SP10 R5). `state`: created -> live -> ended|abandoned -> uploaded.
+    `duration_s` and `live` are written by the voice relay; `reservation_date` is the UTC day key
+    of the SP11 reservation, used for its one refund."""
+
+    uid: str
+    scenario_id: str
+    voice: str
+    state: InterviewState = "created"
+    created_at: datetime = Field(default_factory=utcnow)
+    reservation_date: str
+    duration_s: float | None = None
+    ended_at: datetime | None = None
+    session_id: str | None = None  # set once, with the session, by `create_session_for_interview`
+    # written by the voice relay only; never in any response
+    resumption_handle: str | None = None
+    disconnected_at: datetime | None = None
+    seen_at: datetime | None = None  # last relay checkpoint (a live relay refreshes it ~10 s)
+    live_at: datetime | None = None  # first created -> live transition (the sweep ceiling's start)
+    conn_id: str | None = None  # connection lease: the newest relay connection owns the interview
+    refunded: bool = False  # set with the settle transition: a refunded interview never links
+
+
+def interview_refundable(data: dict[str, Any], now: datetime, threshold_s: float) -> bool:
+    """Refund rule for a settling interview (SP10 R5): the best known elapsed time is under
+    `threshold_s`. A still-connected relay's last checkpoint is aged by `now - seen_at`, so a stale
+    `duration_s` cannot be used to dodge the charge. `created` (never live) is 0 s."""
+    elapsed = float(data.get("duration_s") or 0.0)
+    seen = data.get("seen_at")
+    if seen is not None and data.get("disconnected_at") is None:
+        elapsed += max(0.0, (now - seen).total_seconds())
+    return elapsed < threshold_s

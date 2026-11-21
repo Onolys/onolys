@@ -123,7 +123,7 @@ describe("MSW handlers over HTTP (fake auth)", () => {
   });
 
   it("returns 429 daily_cap_reached from POST /runs and usage reflects the cap", async () => {
-    mockBackend.configure({ dailyCap: 0 });
+    mockBackend.configure({ caps: { eval: { day: 0 } } });
     const { client } = clientFor("u1");
     const sid = await create(client);
     const p = { params: { path: { id: sid } } };
@@ -137,8 +137,8 @@ describe("MSW handlers over HTTP (fake auth)", () => {
     expect(detail).toMatchObject({ status: "awaiting_input", error: { code: "daily_cap_reached" } });
     const res = await client.POST("/sessions/{id}/runs", p);
     expect(res.response.status).toBe(429);
-    expect(res.error?.details[0].code).toBe("daily_cap_reached");
-    expect(unwrap(await client.GET("/usage"))).toMatchObject({ runs_today: 0, daily_cap: 0 });
+    expect(res.error?.details[0]).toMatchObject({ code: "daily_cap_reached", period: "day" });
+    expect(unwrap(await client.GET("/usage"))).toMatchObject({ eval: { day: { used: 0, cap: 0 } } });
   });
 
   it("honours Idempotency-Key through the client", async () => {
@@ -159,5 +159,64 @@ describe("MSW handlers over HTTP (fake auth)", () => {
     expect(p1.items).toHaveLength(2);
     const p2 = unwrap(await client.GET("/sessions", { params: { query: { limit: 2, cursor: p1.next_cursor } } }));
     expect(p2.items).toHaveLength(1);
+  });
+});
+
+describe("MSW interview handlers (SP10)", () => {
+  it("lists public scenarios only", async () => {
+    const { client } = clientFor("u1");
+    const body = unwrap(await client.GET("/scenarios"));
+    const { scenarios, voices } = body;
+    expect(voices.length).toBeGreaterThan(1);
+    expect(body).not.toHaveProperty("default_voice");
+    expect(scenarios.length).toBeGreaterThan(0);
+    for (const s of scenarios) {
+      expect(Object.keys(s).sort()).toEqual(["difficulty", "id", "language", "summary", "title", "voice"]);
+      expect(voices).toContain(s.voice);
+    }
+  });
+
+  it("creates an interview (201, default voice, limits, relay url), reads it and ends it", async () => {
+    const { client } = clientFor("u1");
+    const { scenarios } = unwrap(await client.GET("/scenarios"));
+    const res = await client.POST("/interviews", { body: { scenario_id: scenarios[1].id } });
+    expect(res.response.status).toBe(201);
+    const iv = unwrap(res);
+    expect(iv).toMatchObject({ state: "created", voice: scenarios[1].voice, limits: { max_s: 600, warn_s: 480 } });
+    expect(iv.voice_url).toMatch(new RegExp(`^wss://.+/v1/voice/${iv.interview_id}$`));
+    expect(unwrap(await client.GET("/interviews/{id}", { params: { path: { id: iv.interview_id } } })).interview_id).toBe(iv.interview_id);
+    const ended = unwrap(await client.POST("/interviews/{id}/end", { params: { path: { id: iv.interview_id } }, body: {} }));
+    expect(ended.state).toBe("ended");
+  });
+
+  it("discard abandons; other users get 404", async () => {
+    const { client } = clientFor("u1");
+    const iv = unwrap(await client.POST("/interviews", { body: { scenario_id: "sc_anxious_parent", voice: "Puck" } }));
+    expect(iv.voice).toBe("Puck");
+    const other = clientFor("u2").client;
+    const seen = await other.GET("/interviews/{id}", { params: { path: { id: iv.interview_id } } });
+    expect(seen.response.status).toBe(404);
+    const gone = unwrap(await client.POST("/interviews/{id}/end", { params: { path: { id: iv.interview_id } }, body: { discard: true } }));
+    expect(gone.state).toBe("abandoned");
+  });
+
+  it("422 invalid_parameters for an unknown scenario or voice", async () => {
+    const { client } = clientFor("u1");
+    for (const body of [{ scenario_id: "nope" }, { scenario_id: "sc_anxious_parent", voice: "Nobody" }]) {
+      const res = await client.POST("/interviews", { body });
+      expect(res.response.status).toBe(422);
+      expect(res.error?.details[0].code).toBe("invalid_parameters");
+    }
+    expect(unwrap(await client.GET("/usage")).interview.day.used).toBe(0);
+  });
+
+  it("429 interview_cap_reached with the period, counted in GET /usage", async () => {
+    mockBackend.configure({ caps: { interview: { day: 1 } } });
+    const { client } = clientFor("u1");
+    unwrap(await client.POST("/interviews", { body: { scenario_id: "sc_anxious_parent" } }));
+    const res = await client.POST("/interviews", { body: { scenario_id: "sc_anxious_parent" } });
+    expect(res.response.status).toBe(429);
+    expect(res.error?.details[0]).toMatchObject({ code: "interview_cap_reached", period: "day" });
+    expect(unwrap(await client.GET("/usage")).interview.day).toMatchObject({ used: 1, cap: 1 });
   });
 });

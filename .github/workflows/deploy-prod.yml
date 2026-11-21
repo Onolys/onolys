@@ -7,8 +7,10 @@ name: deploy-prod
 #   (rollbacks and re-deploys included; only after smoke passes). The newest prod-* tag = last fully successful deploy;
 #   to undo a bad release, roll back to the tag before it. After a failed run prod may be mixed (check /v1/healthz code_version
 #   or the revisions' GIT_SHA).
-#   Rollback = dispatch with version=<prod-* tag> (or an earlier sha that was deployed to staging): api, worker, rules, web all
+#   Rollback = dispatch with version=<prod-* tag> (or an earlier sha that was deployed to staging): api, worker, voice, rules, web all
 #   go back to that commit. List versions: git ls-remote --tags --refs --sort=-v:refname origin 'prod-*' | head
+#   Rollback to an image from before SP10 is BLOCKED by the voice digest guard: that image never ran on onolys-voice-staging
+#   and lacks SERVICE_MODE=voice. Roll back only to a prod-* version or sha that ran on all staging services including voice.
 #   Set sha OR version, not both. `v*` = optional human release trigger; `prod-*` = bot record of each successful deploy;
 #   roll back only by `prod-*` version or `sha`.
 #   The prod-* tags cannot re-trigger this workflow: they do not match `v*`, and tags pushed with GITHUB_TOKEN never trigger workflows.
@@ -16,7 +18,7 @@ name: deploy-prod
 #   WIF_PROVIDER, DEPLOYER_STAGING_SA (read-only resolve step), DEPLOYER_PROD_SA, GCP_PROJECT (optional), GCP_REGION (optional),
 #   PROD_VITE_FIREBASE_{API_KEY,AUTH_DOMAIN,APP_ID,STORAGE_BUCKET,MESSAGING_SENDER_ID} (Terraform output web_env_prod),
 #   PROD_VITE_CONTACT_EMAIL (optional)
-# Approval: the prod jobs (api, worker, rules, web) all start right after `resolve`, so GitHub shows ONE
+# Approval: the prod jobs (api, worker, voice, rules, web) all start right after `resolve`, so GitHub shows ONE
 # "Review pending deployments" prompt for `production` and one click releases them all (a later-starting gated job
 # would need a second approval). Trade-off: no ordering between api and web; the Hosting rewrite targets the service
 # by name, so that is safe. `resolve` uses the staging deployer, which can only read, before approval.
@@ -132,7 +134,7 @@ jobs:
             -H "Authorization: Bearer ${TOKEN}" \
             -H 'Accept: application/vnd.oci.image.index.v1+json, application/vnd.docker.distribution.manifest.list.v2+json, application/vnd.oci.image.manifest.v1+json, application/vnd.docker.distribution.manifest.v2+json' \
             "https://${REGION}-docker.pkg.dev/v2/${PROJECT}/onolys/api/manifests/${digest}"
-          for svc in onolys-api-staging onolys-worker-staging; do
+          for svc in onolys-api-staging onolys-worker-staging onolys-voice-staging; do
             gcloud run revisions list --service "$svc" --region "$REGION" --project "$PROJECT" --format=json > "$RUNNER_TEMP/revisions.json"
             python3 -I "$RUNNER_TEMP/staging_ran_image.py" --sha "$SHA" --digest "$digest" --index "$RUNNER_TEMP/index.json" --revisions "$RUNNER_TEMP/revisions.json" >/dev/null \
               || { echo "digest ${digest} (commit ${SHA}) never ran on ${svc} with GIT_SHA=${SHA}; deploy it to staging first" >&2; exit 1; }
@@ -178,6 +180,23 @@ jobs:
       image: ${{ needs.resolve.outputs.image }}
       region: us-central1
       git_sha: ${{ needs.resolve.outputs.sha }}
+    secrets: inherit
+
+  deploy-voice:
+    needs: resolve
+    permissions:
+      contents: read
+      id-token: write
+    uses: ./.github/workflows/_deploy-cloudrun.yml
+    with:
+      env: prod
+      service: onolys-voice-prod
+      image: ${{ needs.resolve.outputs.image }}
+      region: us-central1
+      git_sha: ${{ needs.resolve.outputs.sha }}
+      # Same image as the api; the mode comes from SERVICE_MODE (also set by Terraform on the service).
+      env_vars: |-
+        SERVICE_MODE=voice
     secrets: inherit
 
   rules:
@@ -245,7 +264,7 @@ jobs:
         run: npx --yes firebase-tools@${{ env.FIREBASE_TOOLS_VERSION }} deploy --config web/firebase.json --only hosting:app --project "$PROJECT" --non-interactive
 
   smoke:
-    needs: [resolve, deploy-api, deploy-worker, rules, web]
+    needs: [resolve, deploy-api, deploy-worker, deploy-voice, rules, web]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -268,7 +287,7 @@ jobs:
   # prod-* tag = the last fully successful deploy (rollback target). The only job that may write to the repo. The checkout is
   # a full-history git repo to push from (see fetch-depth below); the target commit is fetched only if not already present.
   tag:
-    needs: [resolve, deploy-api, deploy-worker, rules, web, smoke]
+    needs: [resolve, deploy-api, deploy-worker, deploy-voice, rules, web, smoke]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:

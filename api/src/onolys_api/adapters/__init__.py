@@ -1,7 +1,7 @@
 """Engine adapters: the only seam to the engines (PRD R6). `ADAPTERS=stub|real`."""
 
 from collections.abc import Callable, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 from onolys_core.stt.fixture import FixtureStt
@@ -14,13 +14,16 @@ from onolys_api.adapters.base import (
     Stage,
     StageStatus,
     Stt,
+    Voice,
 )
-from onolys_api.adapters.fake import FakeEvaluation, FakeStt
+from onolys_api.adapters.fake import FakeEvaluation, FakeStt, FakeVoice
 from onolys_api.config import Settings
 
 __all__ = [
     "AdapterError", "Adapters", "Evaluation", "EvaluationOutput", "FakeEvaluation", "FakeStt",
-    "FixtureStt", "ProgressCb", "Stage", "StageStatus", "Stt", "build_adapters",
+    "FakeVoice", "FixtureStt", "ProgressCb", "Stage", "StageStatus", "Stt", "Voice",
+    "build_adapters",
+    "build_voice_adapter",
 ]  # fmt: skip
 
 
@@ -28,6 +31,7 @@ __all__ = [
 class Adapters:
     stt: Stt
     evaluation: Evaluation
+    voice: Voice = field(default_factory=FakeVoice)
 
 
 def build_adapters(
@@ -39,8 +43,17 @@ def build_adapters(
     """`ADAPTERS=stub` -> fakes; `real` -> the SP09 adapters. The keyword hooks (a provider
     registry, an LLM client factory) let tests run the real wiring with fixture STT/LLM."""
     if settings.adapters == "stub":
-        return Adapters(stt=FakeStt(), evaluation=FakeEvaluation())
-    from onolys_api.adapters.real import RealEvaluation, RealStt
+        return Adapters(stt=FakeStt(), evaluation=FakeEvaluation(), voice=FakeVoice())
+    from onolys_api.adapters.real import RealEvaluation, RealStt, RealVoice
 
     evaluation = RealEvaluation(llm_factory=llm_factory) if llm_factory else RealEvaluation()
-    return Adapters(stt=RealStt(stt_registry), evaluation=evaluation)
+    return Adapters(stt=RealStt(stt_registry), evaluation=evaluation, voice=RealVoice())
+
+
+def build_voice_adapter(settings: Settings) -> Voice:
+    """The voice service needs only `Voice` (no STT or evaluation wiring)."""
+    if settings.adapters == "stub":
+        return FakeVoice()
+    from onolys_api.adapters.real import RealVoice
+
+    return RealVoice()

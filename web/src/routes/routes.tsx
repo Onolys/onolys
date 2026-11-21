@@ -7,6 +7,8 @@ import { PublicOnly, RequireUnverified, RequireVerified } from "../auth/guards";
 import { Dashboard } from "../features/dashboard/Dashboard";
 import { SampleReportPage } from "../features/report/SampleReportPage";
 import { ReportPage } from "../features/report/ReportPage";
+import { InterviewPage } from "../features/interview/InterviewPage";
+import { NewInterviewPage } from "../features/interview/NewInterviewPage";
 import { NewSessionPage } from "../features/upload/NewSessionPage";
 import { SessionPage } from "../features/session/SessionPage";
 import { Layout } from "./Layout";
@@ -31,6 +33,8 @@ export const routes: RouteObject[] = [
         children: [
           { path: "/", element: <Dashboard /> },
           { path: "/sessions/new", element: <NewSessionPage /> },
+          { path: "/interviews/new", element: <NewInterviewPage /> },
+          { path: "/interviews/:id", element: <InterviewPage /> },
           { path: "/sessions/:id", element: <SessionPage /> },
           { path: "/sessions/:id/reports/:version", element: <ReportPage /> },
           { path: "/settings", element: <Settings /> },

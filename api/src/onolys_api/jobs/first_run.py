@@ -3,11 +3,14 @@
 Called after each of the three inputs lands (transcribe completion, speaker confirm, final
 rating). Each caller sets its own flag first and then calls this, so the last caller always sees
 all three flags. The decision is one repo transaction (`Repo.start_first_run`): flags +
-`first_run_id` absent + cap check + run creation + `state=running` commit together, so exactly one
-caller wins. The cap reservation (runs+1, active_runs+1) lives in that same transaction: if the
-transaction loses the race or is refused, nothing was reserved and there is nothing to compensate.
+`first_run_id` absent + cap check (month and day; skipped for an AI-interview-linked session, which
+is free but still takes an active-run slot) + run creation + `state=running` commit together, so
+exactly one caller wins. The cap reservation (runs+1, active_runs+1) lives in that same
+transaction: if the transaction loses the race or is refused, nothing was reserved and there is
+nothing to compensate.
 The `run` task is enqueued only after commit, under the name `{run_id}-run` (duplicates are
-no-ops). If that enqueue fails, the committed run is failed and its slot refunded (compensation).
+no-ops). If that enqueue fails, the committed run is failed and its slot freed (compensation;
+refunded unless the run was the free first run).
 """
 
 import logging
@@ -19,6 +22,7 @@ from onolys_api.jobs import caps
 from onolys_api.jobs.machine import RUN_START_PROGRESS, advance
 from onolys_api.jobs.queue import TaskPayload, TaskQueue
 from onolys_api.repo.base import Repo
+from onolys_api.repo.limits import HELD_ERROR_CODE, LimitDefaults
 from onolys_api.repo.models import SessionError
 
 
@@ -32,15 +36,15 @@ def maybe_start_first_run(
     run_id = uuid4().hex
     date = caps.utc_date()
     outcome = repo.start_first_run(
-        uid, sid, run_id, date, settings.daily_run_cap, settings.max_active_runs,
+        uid, sid, run_id, date, LimitDefaults.from_settings(settings), settings.max_active_runs,
         settings.git_sha, RUN_START_PROGRESS,
     )  # fmt: skip
     if outcome != "started":
-        if outcome in ("daily_cap", "concurrent"):
+        if outcome in ("daily_cap", "month_cap", "concurrent"):
             logs.emit(
                 "first_run_held",
                 session_id=sid,
-                error_code="daily_cap_reached",
+                error_code=HELD_ERROR_CODE[outcome],
                 request_id=request_id,
             )
         return
@@ -54,7 +58,8 @@ def maybe_start_first_run(
             error_code="upstream_unavailable", exc_class=type(e).__name__, request_id=request_id,
         )  # fmt: skip
         repo.update_run(uid, sid, run_id, {"status": "failed", "error": "upstream_unavailable"})
-        caps.release_run(repo, uid, date, refund=True)
+        counted = repo.get_run(uid, sid, run_id).counted  # a free first run is never refunded
+        caps.release_run(repo, uid, date, refund=counted)
         advance(
             repo, uid, sid, to="failed", step=None,
             error=SessionError(code="upstream_unavailable", step="run"),

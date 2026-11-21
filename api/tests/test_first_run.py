@@ -191,7 +191,7 @@ def test_second_call_is_a_noop(repo):
     assert user_counters(repo, uid, caps.utc_date()) == (1, 1)
 
 
-@pytest.mark.parametrize("kw", [{"daily_run_cap": 0}, {"max_active_runs": 0}])
+@pytest.mark.parametrize("kw", [{"eval_cap_day": 0}, {"max_active_runs": 0}])
 def test_cap_hit_leaves_awaiting_input_with_error_code_and_leaks_nothing(repo, kw):
     uid, queue = "u5" + uuid.uuid4().hex[:6], RecordingQueue()
     sid = new_session(repo, uid, state="awaiting_input", ready=True)
@@ -210,9 +210,114 @@ def test_cap_hit_leaves_awaiting_input_with_error_code_and_leaks_nothing(repo, k
     assert repo.get_status(uid, sid).error_code is None and len(queue.runs) == 1
 
 
+def _ready(repo, uid, **fields):
+    sid = new_session(repo, uid, state="awaiting_input", ready=True, **fields)
+    set_flags(repo, uid, sid, speaker_confirmed=True, rating_submitted=True)
+    return sid
+
+
+def _month_runs(repo, uid) -> int:
+    return repo.get_usage_docs(uid, caps.utc_date())[1].runs
+
+
+def test_linked_first_run_is_free_and_works_at_a_full_cap(repo):
+    uid, queue = "ux" + uuid.uuid4().hex[:6], RecordingQueue()
+    sid = _ready(repo, uid, interview_id="iv1")
+    maybe_start_first_run(repo, queue, uid, sid, mk_settings(eval_cap_day=0, eval_cap_month=0))
+    sess = repo.get_session(uid, sid)
+    assert sess.state == "running" and sess.first_run_id and sess.error is None
+    (run,) = repo.list_runs(uid, sid)
+    assert run.counted is False and len(queue.runs) == 1
+    # usage unchanged (day + month), but it holds an active slot
+    assert user_counters(repo, uid, caps.utc_date()) == (1, 0)
+    assert _month_runs(repo, uid) == 0
+
+
+def test_linked_first_run_is_blocked_by_max_active_runs(repo):
+    uid, queue = "uy" + uuid.uuid4().hex[:6], RecordingQueue()
+    sid = _ready(repo, uid, interview_id="iv1")
+    maybe_start_first_run(repo, queue, uid, sid, mk_settings(max_active_runs=0))
+    sess = repo.get_session(uid, sid)
+    assert sess.state == "awaiting_input" and sess.first_run_id is None
+    assert sess.error is not None and sess.error.code == "daily_cap_reached"
+    assert repo.list_runs(uid, sid) == [] and queue.calls == []
+    assert user_counters(repo, uid, caps.utc_date()) == (0, 0)
+
+
+def test_unlinked_first_run_counts_one_day_and_month(repo):
+    uid, queue = "uz" + uuid.uuid4().hex[:6], RecordingQueue()
+    sid = _ready(repo, uid)
+    maybe_start_first_run(repo, queue, uid, sid, mk_settings())
+    (run,) = repo.list_runs(uid, sid)
+    assert run.counted is True
+    assert user_counters(repo, uid, caps.utc_date()) == (1, 1)
+    assert _month_runs(repo, uid) == 1
+
+
+@pytest.mark.parametrize(
+    "kw,code",
+    [
+        ({"eval_cap_day": 0}, "daily_cap_reached"),
+        ({"eval_cap_month": 0}, "monthly_cap_reached"),
+        ({"eval_cap_day": 0, "eval_cap_month": 0}, "monthly_cap_reached"),
+    ],
+)
+def test_auto_start_at_cap_holds_with_the_matching_error_code(repo, kw, code):
+    uid, queue = "uw" + uuid.uuid4().hex[:6], RecordingQueue()
+    sid = _ready(repo, uid)
+    maybe_start_first_run(repo, queue, uid, sid, mk_settings(**kw))
+    sess = repo.get_session(uid, sid)
+    assert sess.state == "awaiting_input" and sess.error.code == code
+    assert repo.get_status(uid, sid).error_code == code
+    assert repo.list_runs(uid, sid) == [] and queue.calls == []
+    assert user_counters(repo, uid, caps.utc_date()) == (0, 0)
+
+
+def test_exempt_release_frees_the_slot_but_never_refunds(repo):
+    from onolys_api.jobs.run import release_once
+
+    uid, queue = "uv" + uuid.uuid4().hex[:6], RecordingQueue()
+    date = caps.utc_date()
+    caps.reserve_run(repo, mk_settings(), uid)  # one real run already counted: usage 1
+    caps.release_run(repo, uid, date, refund=False)  # finished: counts stay, slot freed
+    sid = _ready(repo, uid, interview_id="iv1")
+    maybe_start_first_run(repo, queue, uid, sid, mk_settings())
+    assert user_counters(repo, uid, date) == (1, 1)
+    (run,) = repo.list_runs(uid, sid)
+    release_once(repo, uid, sid, run.run_id, True, date)  # asks for a refund; exempt: none
+    assert user_counters(repo, uid, date) == (0, 1)
+    assert _month_runs(repo, uid) == 1
+    release_once(repo, uid, sid, run.run_id, True, date)  # exactly once
+    assert user_counters(repo, uid, date) == (0, 1)
+
+
+def test_later_post_runs_style_start_counts_one_after_a_free_first_run(repo):
+    from onolys_api.repo.limits import LimitDefaults
+
+    uid, queue = "ut" + uuid.uuid4().hex[:6], RecordingQueue()
+    s = mk_settings(eval_cap_day=1, eval_cap_month=1)
+    sid = _ready(repo, uid, interview_id="iv1")
+    maybe_start_first_run(repo, queue, uid, sid, s)
+    (first,) = repo.list_runs(uid, sid)
+    repo.update_session(uid, sid, {"state": "report_ready", "clinician_speaker": "S1"})
+    from onolys_api.jobs.run import release_once
+
+    release_once(repo, uid, sid, first.run_id, False, caps.utc_date())
+    d = LimitDefaults.from_settings(s)
+    out = repo.start_run(
+        uid, sid, "r2", caps.utc_date(), d, 5, "sha", 45, ("report_ready",), None, None
+    )
+    assert out == "started"
+    assert repo.get_run(uid, sid, "r2").counted is True
+    assert user_counters(repo, uid, caps.utc_date()) == (1, 1) and _month_runs(repo, uid) == 1
+    # now the day cap (1) is spent for real
+    out = repo.start_run(uid, sid, "r3", caps.utc_date(), d, 5, "sha", 45, ("running",), None, None)
+    assert out == "month_cap"  # month is checked first and is spent too
+
+
 def test_cap_race_two_sessions_same_user_exactly_one_starts_no_leak(repo):
     uid, queue = "u6" + uuid.uuid4().hex[:6], RecordingQueue()
-    s = mk_settings(daily_run_cap=1)
+    s = mk_settings(eval_cap_day=1)
     sids = []
     for _ in range(2):
         sid = new_session(repo, uid, state="awaiting_input", ready=True)

@@ -40,6 +40,63 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/interviews": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start a practice interview (counts one usage unit)
+         * @description Reserves one interview unit first (429 `interview_cap_reached` with `period` when spent); the unit is given back if the interview ends or is abandoned under 30 seconds. An earlier unfinished interview is abandoned first.
+         */
+        post: operations["createInterview"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/interviews/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** An interview's state and elapsed time */
+        get: operations["getInterview"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/interviews/{id}/end": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * End (or discard) an interview; idempotent
+         * @description `created|live` becomes `ended` (`abandoned` when `discard`). Ending an interview that is already ended, abandoned or uploaded changes nothing and returns it as it is.
+         */
+        post: operations["endInterview"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/runs/{run_id}": {
         parameters: {
             query?: never;
@@ -49,6 +106,23 @@ export interface paths {
         };
         /** One run: status, params, run_info */
         get: operations["getRun"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/scenarios": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Practice-client scenarios (public fields only) */
+        get: operations["listScenarios"];
         put?: never;
         post?: never;
         delete?: never;
@@ -69,7 +143,7 @@ export interface paths {
         put?: never;
         /**
          * Create a session
-         * @description Writes the session and its PHI-free `session_status` document before returning. `Idempotency-Key` replays the original response for 24 h; the same key with a different body is 409 `conflict`.
+         * @description Writes the session and its PHI-free `session_status` document before returning. `Idempotency-Key` replays the original response for 24 h; the same key with a different body is 409 `conflict`. With `interview_id` the interview must be the caller's (404 otherwise), `ended` (else 409 `invalid_state`) and not linked to a session yet (else 409 `conflict`); the link and the session are written atomically, `language` comes from the scenario and `ratings/draft` is prefilled with its `change_goal`.
          */
         post: operations["createSession"];
         delete?: never;
@@ -286,7 +360,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Runs used today (UTC day) */
+        /** Usage and caps (UTC day and month) */
         get: operations["getUsage"];
         put?: never;
         post?: never;
@@ -388,8 +462,23 @@ export interface components {
              */
             status: "created" | "uploading" | "validating" | "transcribing" | "awaiting_input" | "running" | "report_ready" | "failed" | "deleting";
         };
+        /** CreateInterviewRequest */
+        CreateInterviewRequest: {
+            /** Scenario Id */
+            scenario_id: string;
+            /**
+             * Voice
+             * @description One of the configured voices; default: the scenario's
+             */
+            voice?: string | null;
+        };
         /** CreateSessionRequest */
         CreateSessionRequest: {
+            /**
+             * Interview Id
+             * @description An `ended`, not yet linked AI interview of the caller: the session takes its scenario language and title (unless `title` is set) and a prefilled rating draft
+             */
+            interview_id?: string | null;
             /**
              * Language
              * @description BCP-47 tag or `auto`
@@ -425,13 +514,22 @@ export interface components {
              */
             updated_at: string;
         };
+        /** EndInterviewRequest */
+        EndInterviewRequest: {
+            /**
+             * Discard
+             * @description Throw the interview away (state `abandoned`)
+             * @default false
+             */
+            discard?: boolean;
+        };
         /** ErrorDetailModel */
         ErrorDetailModel: {
             /**
              * Code
              * @enum {string}
              */
-            code: "invalid_json" | "unsupported_media_type" | "schema_violation" | "empty_transcript" | "empty_assessment" | "duplicate_ids" | "invalid_parameters" | "body_too_large" | "too_many_turns" | "too_many_sections" | "rate_limited" | "not_found" | "method_not_allowed" | "cors_rejected" | "request_rejected" | "upstream_unavailable" | "deadline_exceeded" | "internal_error" | "missing_parameter" | "unknown_pack" | "input_rejected" | "run_failed" | "unauthenticated" | "forbidden" | "invalid_state" | "unsupported_audio" | "audio_too_long" | "audio_too_large" | "audio_unreadable" | "no_speech" | "speakers_not_separated" | "transcription_failed" | "rating_invalid" | "daily_cap_reached" | "conflict";
+            code: "invalid_json" | "unsupported_media_type" | "schema_violation" | "empty_transcript" | "empty_assessment" | "duplicate_ids" | "invalid_parameters" | "body_too_large" | "too_many_turns" | "too_many_sections" | "rate_limited" | "not_found" | "method_not_allowed" | "cors_rejected" | "request_rejected" | "upstream_unavailable" | "deadline_exceeded" | "internal_error" | "missing_parameter" | "unknown_pack" | "input_rejected" | "run_failed" | "unauthenticated" | "forbidden" | "invalid_state" | "unsupported_audio" | "audio_too_long" | "audio_too_large" | "audio_unreadable" | "no_speech" | "speakers_not_separated" | "transcription_failed" | "rating_invalid" | "daily_cap_reached" | "monthly_cap_reached" | "interview_cap_reached" | "conflict" | "interview_too_long";
             /**
              * Field
              * @description `/`-joined path of the offending field in the rating card (e.g. `globals/cct/reason`); `$` is the whole card. Set on `rating_invalid`. A path only, never user text.
@@ -444,6 +542,11 @@ export interface components {
             issue?: ("invalid_type" | "too_long" | "out_of_range" | "required" | "unknown_key" | "invalid" | "order" | "too_large") | null;
             /** Message */
             message: string;
+            /**
+             * Period
+             * @description Which usage period was exhausted. Set on `daily_cap_reached`, `monthly_cap_reached` and `interview_cap_reached`.
+             */
+            period?: ("day" | "month") | null;
         };
         /**
          * ErrorResponse
@@ -498,6 +601,54 @@ export interface components {
              * @default ok
              */
             status?: string;
+        };
+        /** InterviewLimits */
+        InterviewLimits: {
+            /** Max S */
+            max_s: number;
+            /** Warn S */
+            warn_s: number;
+        };
+        /** InterviewResponse */
+        InterviewResponse: {
+            /**
+             * Duration S
+             * @description Elapsed seconds, as recorded by the relay
+             */
+            duration_s?: number | null;
+            /** Interview Id */
+            interview_id: string;
+            limits: components["schemas"]["InterviewLimits"];
+            scenario: components["schemas"]["ScenarioPublic"];
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "created" | "live" | "ended" | "abandoned" | "uploaded";
+            /** Voice */
+            voice: string;
+            /**
+             * Voice Url
+             * @description `wss://` relay endpoint for this interview
+             */
+            voice_url: string;
+        };
+        /** KindUsage */
+        KindUsage: {
+            day: components["schemas"]["Period"];
+            month: components["schemas"]["Period"];
+        };
+        /** Period */
+        Period: {
+            /** Cap */
+            cap: number;
+            /**
+             * Resets At
+             * Format: date-time
+             */
+            resets_at: string;
+            /** Used */
+            used: number;
         };
         /** RatingRequest */
         RatingRequest: {
@@ -650,6 +801,34 @@ export interface components {
             status: string;
             stt?: components["schemas"]["SttInfo"] | null;
         };
+        /** ScenarioList */
+        ScenarioList: {
+            /** Scenarios */
+            scenarios: components["schemas"]["ScenarioPublic"][];
+            /**
+             * Voices
+             * @description Every voice a practice interview may use (D16)
+             */
+            voices: string[];
+        };
+        /** ScenarioPublic */
+        ScenarioPublic: {
+            /** Difficulty */
+            difficulty: string;
+            /** Id */
+            id: string;
+            /** Language */
+            language: string;
+            /** Summary */
+            summary: string;
+            /** Title */
+            title: string;
+            /**
+             * Voice
+             * @description The scenario's own voice: the default when `POST /interviews` omits `voice`
+             */
+            voice: string;
+        };
         /** SessionDetail */
         SessionDetail: {
             /**
@@ -661,6 +840,11 @@ export interface components {
             flags: components["schemas"]["Flags"];
             /** Id */
             id: string;
+            /**
+             * Interview Id
+             * @description Set when an AI interview created this session: its first run is free.
+             */
+            interview_id?: string | null;
             /** Language */
             language: string;
             /** Latest Report Version */
@@ -715,6 +899,11 @@ export interface components {
             error_code?: string | null;
             /** Id */
             id: string;
+            /**
+             * Interview Id
+             * @description Set for sessions made from an AI interview
+             */
+            interview_id?: string | null;
             /** Latest Report Version */
             latest_report_version?: number | null;
             /**
@@ -803,15 +992,8 @@ export interface components {
         };
         /** Usage */
         Usage: {
-            /** Daily Cap */
-            daily_cap: number;
-            /**
-             * Resets At
-             * Format: date-time
-             */
-            resets_at: string;
-            /** Runs Today */
-            runs_today: number;
+            eval: components["schemas"]["KindUsage"];
+            interview: components["schemas"]["KindUsage"];
         };
     };
     responses: never;
@@ -990,6 +1172,177 @@ export interface operations {
             };
         };
     };
+    createInterview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateInterviewRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InterviewResponse"];
+                };
+            };
+            /** @description `unauthenticated`: missing, invalid or revoked credentials */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description `daily_cap_reached` (daily run cap or concurrent-run limit) or `rate_limited` */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description `internal_error` */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    getInterview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InterviewResponse"];
+                };
+            };
+            /** @description `unauthenticated`: missing, invalid or revoked credentials */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description `not_found`: no such resource for this user (never 403, so ids cannot be probed) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description `daily_cap_reached` (daily run cap or concurrent-run limit) or `rate_limited` */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description `internal_error` */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    endInterview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["EndInterviewRequest"] | null;
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InterviewResponse"];
+                };
+            };
+            /** @description `unauthenticated`: missing, invalid or revoked credentials */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description `not_found`: no such resource for this user (never 403, so ids cannot be probed) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description `daily_cap_reached` (daily run cap or concurrent-run limit) or `rate_limited` */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description `internal_error` */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     getRun: {
         parameters: {
             query?: never;
@@ -1021,6 +1374,53 @@ export interface operations {
             };
             /** @description `not_found`: no such resource for this user (never 403, so ids cannot be probed) */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description `daily_cap_reached` (daily run cap or concurrent-run limit) or `rate_limited` */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description `internal_error` */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    listScenarios: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScenarioList"];
+                };
+            };
+            /** @description `unauthenticated`: missing, invalid or revoked credentials */
+            401: {
                 headers: {
                     [name: string]: unknown;
                 };

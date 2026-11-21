@@ -1,0 +1,41 @@
+# Voice provider map (prod). Located like stt_providers.yaml; see onolys_core.voice.select.
+providers:
+  gemini_live:
+    provider: gemini_live_vertex
+    model: gemini-3.8-live  # alt verified id: gemini-live-2.5-flash-native-audio
+    voice: Kore
+    options:
+      location: us-central1
+      context_window_compression: false
+default: gemini_live
+voices:
+  - Zephyr
+  - Puck
+  - Charon
+  - Kore
+  - Fenrir
+  - Leda
+  - Orus
+  - Aoede
+  - Callirrhoe
+  - Autonoe
+  - Enceladus
+  - Iapetus
+  - Umbriel
+  - Algieba
+  - Despina
+  - Erinome
+  - Algenib
+  - Rasalgethi
+  - Laomedeia
+  - Achernar
+  - Alnilam
+  - Schedar
+  - Gacrux
+  - Pulcherrima
+  - Achird
+  - Zubenelgenubi
+  - Vindemiatrix
+  - Sadachbia
+  - Sadaltager
+  - Sulafat

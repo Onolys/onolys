@@ -12,9 +12,12 @@ from typing import Any, Literal, Protocol
 from onolys_core.transcript import Transcript
 
 from onolys_api.errors import ApiError
+from onolys_api.repo.limits import Kind, LimitDefaults, ReserveUsageOutcome
 from onolys_api.repo.models import (
     ApiKeyDoc,
     IdempotencyDoc,
+    InterviewDoc,
+    InterviewState,
     RatingDoc,
     RatingDraftDoc,
     RecordingDoc,
@@ -25,6 +28,7 @@ from onolys_api.repo.models import (
     SessionStatusDoc,
     TranscriptDoc,
     UsageDoc,
+    UsageMonthDoc,
     UserDoc,
 )
 
@@ -47,8 +51,8 @@ class Page[T]:
     next_cursor: str | None = None
 
 
-ReserveOutcome = Literal["ok", "daily_cap", "concurrent"]
-StartOutcome = Literal["started", "not_ready", "already", "daily_cap", "concurrent"]
+StartOutcome = Literal["started", "not_ready", "already", "daily_cap", "month_cap", "concurrent"]
+InterviewLinkOutcome = Literal["linked", "not_ended", "already_linked", "refunded"]
 ClaimOutcome = Literal["claimed", "done", "failed", "busy"]
 
 
@@ -81,6 +85,14 @@ class Repo(Protocol):
     def create_session(
         self, uid: str, sid: str, session: SessionDoc, status: SessionStatusDoc
     ) -> None: ...
+    # AI interview link (SP10 R6), ONE transaction: the interview must be the caller's (else
+    # NotFoundError), `ended` ("not_ended" otherwise), not `refunded` ("refunded": its unit was
+    # given back, so it must not also buy a free run) and unlinked ("already_linked" otherwise).
+    # Then it writes the session, its status, the `ratings/draft` doc and `interview.session_id`.
+    def create_session_for_interview(
+        self, uid: str, iid: str, sid: str, session: SessionDoc, status: SessionStatusDoc,
+        draft: RatingDraftDoc,
+    ) -> InterviewLinkOutcome: ...  # fmt: skip
     def get_session(self, uid: str, sid: str) -> SessionDoc: ...
     def get_status(self, uid: str, sid: str) -> SessionStatusDoc: ...
     def update_session(
@@ -139,37 +151,65 @@ class Repo(Protocol):
     # usage + idempotency
     def get_usage(self, uid: str, date: str) -> UsageDoc: ...
     def add_usage(self, uid: str, date: str, runs: int = 0, tokens: int = 0) -> UsageDoc: ...
-    # R8: one transaction reads the user + usage docs, checks the daily cap (users/{uid}.daily_cap
-    # overrides `cap`) and the active-run limit (`max_active_runs` overrides `max_active`), and
-    # on "ok" does runs+1, active_runs+1. Nothing is written on a refusal.
-    def reserve_run(self, uid: str, date: str, cap: int, max_active: int) -> ReserveOutcome: ...
-    # active_runs-1 (floor 0); with refund also runs-1 (floor 0) on that day's usage doc.
-    def release_run(self, uid: str, date: str, refund: bool) -> None: ...
+    # SP11 R1/R4: ONE transaction over users/{uid}, the day doc and the month doc
+    # (`usage/{uid}_{YYYY-MM}`, key = date[:7]). Month is checked first ("month_cap"), then the day
+    # ("day_cap"), then, for `eval` only, the active-run limit ("concurrent"). Caps come from
+    # `effective_cap(user, ...)`. On "ok": day and month counters +1 (and `active_runs`+1 for
+    # eval). Nothing is written on a refusal.
+    def reserve_usage(
+        self, uid: str, kind: Kind, date: str, defaults: LimitDefaults, max_active: int
+    ) -> ReserveUsageOutcome: ...
+    # Decrements `active_runs` (eval only, floor 0); with `refund` also the day and month
+    # counters of the doc keys given by `date` (floor 0). One transaction.
+    def release_usage(self, uid: str, kind: Kind, date: str, refund: bool) -> None: ...
+    # `(day, month)` usage docs for `date` (zero-valued when absent).
+    def get_usage_docs(self, uid: str, date: str) -> tuple[UsageDoc, UsageMonthDoc]: ...
     # R4 first run, ONE transaction: reads session + status + user + usage + latest rating; if
     # `state=awaiting_input`, the three flags are set and `first_run_id` is absent, checks the cap
-    # like `reserve_run`, then creates run `run_id` (snapshot: rating_id, n_runs, preset, stt,
-    # code_version), counts it (runs+1, active_runs+1), sets `first_run_id`, `state=running`, the
-    # status mirror and clears the error. Cap/concurrent hit: writes `error=daily_cap_reached`
-    # (state unchanged) and nothing else. Anything not ready: nothing written.
+    # like `reserve_usage("eval")`, then creates run `run_id` (snapshot: rating_id, n_runs, preset,
+    # stt, code_version), counts it (day+month runs+1, active_runs+1), sets `first_run_id`,
+    # `state=running`, the status mirror and clears the error. Cap/concurrent hit: writes
+    # `error=daily_cap_reached` (day, or concurrent) / `monthly_cap_reached` (month) (state
+    # unchanged) and nothing else. Anything not ready: nothing written.
+    # Exempt (SP11 R5): when the session has `interview_id` the first run skips the day/month
+    # checks and counters (still takes an `active_runs` slot and obeys the concurrent limit); the
+    # run doc stores `counted=false` so its release never refunds counters.
     def start_first_run(
-        self, uid: str, sid: str, run_id: str, date: str, cap: int, max_active: int,
+        self, uid: str, sid: str, run_id: str, date: str, defaults: LimitDefaults, max_active: int,
         code_version: str, start_progress: int,
     ) -> StartOutcome: ...  # fmt: skip
     # Manual start (`POST /runs`), ONE transaction: reads session + status + user + usage + latest
     # rating; if the session is in one of `allowed_states` with `transcript_ready`,
     # `speaker_confirmed` and `clinician_speaker` set (else "not_ready", nothing written), checks
-    # the cap like `reserve_run` (hit: "daily_cap"/"concurrent", nothing written), then creates
-    # run `run_id` (snapshot: rating_id, `n_runs` or the session's, `preset` or the session's, stt,
-    # code_version), counts it (runs+1, active_runs+1), sets `first_run_id` if absent,
-    # `state=running`, the status mirror (progress `start_progress`, or the max with it when
-    # entering from `awaiting_input`) and clears the error. Exactly one of two racing callers
-    # (two manual starts, or a manual start and the first-run gate) wins; the loser reserved
-    # nothing, so there is nothing to release.
+    # the caps like `reserve_usage("eval")` (hit: "daily_cap"/"month_cap"/"concurrent", nothing
+    # written), then creates run `run_id` (snapshot: rating_id, `n_runs` or the session's,
+    # `preset` or the session's, stt, code_version), counts it (day+month runs+1, active_runs+1;
+    # always counted), sets `first_run_id` if absent, `state=running`, the status mirror
+    # (progress `start_progress`, or the max with it when entering from `awaiting_input`) and
+    # clears the error. Exactly one of two racing callers (two manual starts, or a manual start
+    # and the first-run gate) wins; the loser reserved nothing, so there is nothing to release.
     def start_run(
-        self, uid: str, sid: str, run_id: str, date: str, cap: int, max_active: int,
+        self, uid: str, sid: str, run_id: str, date: str, defaults: LimitDefaults, max_active: int,
         code_version: str, start_progress: int, allowed_states: tuple[str, ...],
         n_runs: int | None, preset: str | None,
     ) -> StartOutcome: ...  # fmt: skip
+    # interviews (SP10 R5): uid-scoped `interviews/{id}`; foreign or missing -> NotFoundError.
+    def create_interview(self, uid: str, iid: str, doc: InterviewDoc) -> None: ...
+    def get_interview(self, uid: str, iid: str) -> InterviewDoc: ...
+    # the caller's interviews still in `created` or `live`
+    def list_open_interviews(self, uid: str) -> list[InterviewDoc]: ...
+    # ONE transaction: if the interview is in one of `from_states`, set `state=to_state` and
+    # `fields` (e.g. `ended_at`, `discarded`) and return the updated doc; otherwise write nothing
+    # and return None. Exactly one of several racing callers gets the doc (settle-once).
+    # With `refund_rule=(now, threshold_s)` the same write also stores `refunded` (see
+    # `models.interview_refundable`); an interview with `refunded` is never linkable to a session.
+    def transition_interview(
+        self, uid: str, iid: str, from_states: tuple[InterviewState, ...],
+        to_state: InterviewState, fields: dict[str, Any] | None = None,
+        refund_rule: tuple[datetime, float] | None = None,
+    ) -> InterviewDoc | None: ...  # fmt: skip
+    # plain field merge for the relay/uploader (`duration_s`, `state=live`, ...)
+    def update_interview(self, uid: str, iid: str, fields: dict[str, Any]) -> None: ...
     def get_idempotency(self, uid: str, key: str) -> IdempotencyDoc | None: ...
     def put_idempotency(self, uid: str, key: str, doc: IdempotencyDoc) -> bool: ...
     def delete_idempotency(self, uid: str, key: str) -> None: ...  # no-op if absent/foreign

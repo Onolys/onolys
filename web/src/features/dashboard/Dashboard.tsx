@@ -1,11 +1,14 @@
 /** `/` (PRD R5, D16): the caller's sessions, newest first, with status chips, usage and an empty state. */
-import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
+import { useInfiniteQuery } from "@tanstack/react-query";
 import { Link } from "react-router";
 import { unwrap } from "../../api/client";
-import { describeError } from "../../api/errors";
+import { describeError, messageForCode } from "../../api/errors";
 import { useApiClient } from "../../auth/useApiClient";
-import { formatResetTime } from "../../lib/format";
+import { interviewCapText } from "../interview/capText";
 import { ErrorCard } from "../session/ErrorCard";
+import { UsageLeft } from "../usage/UsageLeft";
+import { blockingPeriod, evalCapCode, formatBlockingReset } from "../usage/usage";
+import { useUsage } from "../usage/useUsage";
 import { STATUS_CHIP } from "./chips";
 
 const PAGE = 20;
@@ -23,11 +26,9 @@ export function Dashboard() {
       unwrap(await client.GET("/sessions", { params: { query: { limit: PAGE, cursor: pageParam } } })),
     getNextPageParam: (last) => last.next_cursor ?? undefined,
   });
-  const usage = useQuery({
-    queryKey: ["usage"],
-    queryFn: async () => unwrap(await client.GET("/usage")),
-  });
-  const atCap = usage.data ? usage.data.runs_today >= usage.data.daily_cap : false;
+  const usage = useUsage();
+  const blocking = blockingPeriod(usage.data, "eval");
+  const interviewBlocking = blockingPeriod(usage.data, "interview");
 
   const items = sessions.data?.pages.flatMap((p) => p.items) ?? [];
 
@@ -48,9 +49,6 @@ export function Dashboard() {
       <div className="empty-state">
         <p>Onolys rates a recorded session against the MITI and shows you where it agrees with your own rating, line by line.</p>
         <p>
-          <Link className="btn btn-primary" to="/sessions/new">
-            New session
-          </Link>{" "}
           <Link to="/sample-report">See a sample report</Link>
         </p>
       </div>
@@ -64,6 +62,11 @@ export function Dashboard() {
             return (
               <li key={s.id} className="session-row">
                 <Link to={`/sessions/${s.id}`}>{s.title ?? date(s.created_at)}</Link>{" "}
+                {s.interview_id ? (
+                  <>
+                    <span className="chip">AI interview</span>{" "}
+                  </>
+                ) : null}
                 <span className="chip" data-tone={chip.tone}>
                   {chip.text}
                 </span>{" "}
@@ -92,21 +95,50 @@ export function Dashboard() {
   return (
     <>
       <h1>Sessions</h1>
-      {usage.data ? (
-        <p className="form-note">
-          {usage.data.runs_today} of {usage.data.daily_cap} runs today
-        </p>
-      ) : null}
-      {atCap ? (
-        <p className="notice">You've reached today's limit. You can run again after {formatResetTime(usage.data?.resets_at)}.</p>
-      ) : null}
-      {items.length > 0 ? (
-        <p>
+      <div className="landing-cards">
+        <section className="landing-card" aria-labelledby="card-interview">
+          <h2 id="card-interview">Practise with an AI client</h2>
+          <p className="form-note">
+            A 10-minute role-play, then rated like any recording.
+            {usage.data ? (
+              <>
+                {" "}
+                <UsageLeft kind="interview" period="day" />, <UsageLeft kind="interview" period="month" />
+              </>
+            ) : null}
+          </p>
+          {interviewBlocking ? (
+            <>
+              <button type="button" className="btn btn-primary" disabled>
+                Start AI Interview
+              </button>
+              <p className="notice">{interviewCapText(interviewBlocking)}</p>
+            </>
+          ) : (
+            <Link className="btn btn-primary" to="/interviews/new">
+              Start AI Interview
+            </Link>
+          )}
+        </section>
+        <section className="landing-card" aria-labelledby="card-upload">
+          <h2 id="card-upload">Rate a recording</h2>
+          <p className="form-note">
+            Bring a session you recorded.
+            {usage.data ? (
+              <>
+                {" "}
+                <UsageLeft kind="eval" period="day" />, <UsageLeft kind="eval" period="month" />
+              </>
+            ) : null}
+          </p>
           <Link className="btn btn-primary" to="/sessions/new">
             New session
           </Link>
-        </p>
-      ) : null}
+          {blocking ? (
+            <p className="notice">{messageForCode(evalCapCode(blocking), { resetsAt: formatBlockingReset(blocking) })}</p>
+          ) : null}
+        </section>
+      </div>
       {body}
     </>
   );

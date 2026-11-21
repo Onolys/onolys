@@ -1,4 +1,4 @@
-"""App factory. One codebase, SERVICE_MODE=api|worker|combined."""
+"""App factory. One codebase, SERVICE_MODE=api|worker|combined|voice."""
 
 import logging
 import re
@@ -11,12 +11,13 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from onolys_core.errors import ConfigError
+from onolys_core.voice.select import allowed_voices, load_voice_config
 from pydantic import BaseModel
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from onolys_api import logs
-from onolys_api.adapters import Adapters, build_adapters
+from onolys_api.adapters import Adapters, build_adapters, build_voice_adapter
 from onolys_api.audio import AudioTools, FfmpegTools
 from onolys_api.auth.deps import Authenticator
 from onolys_api.auth.idtoken import InvalidToken, TokenVerifier
@@ -26,6 +27,7 @@ from onolys_api.docs import DESCRIPTION, add_error_responses, make_docs_router
 from onolys_api.errors import ApiError, ErrorDetail, ErrorResponse, error_body
 from onolys_api.factory import build_blobs, build_repo
 from onolys_api.jobs.delete import make_delete_handler
+from onolys_api.jobs.interview_sweep import make_interview_sweep_handler
 from onolys_api.jobs.queue import build_queue
 from onolys_api.jobs.run import make_run_handler
 from onolys_api.jobs.transcribe import make_poll_handler, make_transcribe_handler
@@ -36,8 +38,10 @@ from onolys_api.rating import load_schema as load_rating_schema
 from onolys_api.repo.base import Repo
 from onolys_api.routes import api_key as api_key_routes
 from onolys_api.routes import audio as audio_routes
+from onolys_api.routes import interviews as interview_routes
 from onolys_api.routes import rating as rating_routes
 from onolys_api.routes import runs as run_routes
+from onolys_api.routes import scenarios as scenario_routes
 from onolys_api.routes import sessions as session_routes
 from onolys_api.routes import speakers as speaker_routes
 from onolys_api.routes import tasks as task_routes
@@ -45,6 +49,9 @@ from onolys_api.routes import usage as usage_routes
 from onolys_api.storage.base import BlobStore
 from onolys_api.storage.fake import FakeBlobStore
 from onolys_api.storage.fake_routes import make_fake_blob_router
+from onolys_api.voice import relay as voice_relay
+from onolys_api.voice.clock import SystemClock
+from onolys_api.voice.scenarios import load_scenarios
 
 log = logging.getLogger("onolys_api")
 _REQUEST_ID_OK = re.compile(r"^[A-Za-z0-9._-]{1,64}$")
@@ -233,8 +240,13 @@ def create_app(
     )
     app.state.settings = settings
     app.state.clock = lambda: datetime.now(UTC)  # tests replace it
+    voice_cfg = load_voice_config()
+    app.state.voices = allowed_voices(voice_cfg)  # D16: what `POST /interviews {voice}` may name
+    app.state.scenarios = load_scenarios(voices=app.state.voices)  # fail at startup if invalid
     load_rating_schema()  # fail at startup, loudly, if the canonical rating schema is missing
-    app.state.blobs = blobs or build_blobs(settings)
+    voice_mode = settings.service_mode == "voice"
+    # the relay never touches audio blobs: no bucket needed there
+    app.state.blobs = blobs or (FakeBlobStore() if voice_mode else build_blobs(settings))
     app.state.repo = repo or build_repo(settings, app.state.blobs)
     app.state.presets = PresetResolver(settings)
     app.state.auth = Authenticator(settings, app.state.repo, token_verifier)
@@ -250,7 +262,10 @@ def create_app(
             "validate",
             HandlerSpec(
                 make_validate_handler(
-                    app.state.blobs, audio_tools or FfmpegTools(), app.state.presets.max_audio_s
+                    app.state.blobs,
+                    audio_tools or FfmpegTools(),
+                    app.state.presets.max_audio_s,
+                    settings,
                 ),
                 step="validate",
             ),
@@ -282,6 +297,12 @@ def create_app(
         app.state.runner.register(
             "delete", HandlerSpec(make_delete_handler(app.state.blobs), claim=False)
         )
+        app.state.runner.register(
+            "interview-sweep",
+            HandlerSpec(
+                make_interview_sweep_handler(settings, lambda: app.state.clock()), claim=False
+            ),
+        )
         if settings.env not in LOCAL_ENVS:
             if settings.worker_url and settings.tasks_sa:
                 app.state.oidc = oidc_verifier or OidcVerifier(
@@ -292,6 +313,13 @@ def create_app(
                 app.state.oidc = _RejectAllOidc()
             else:
                 raise ConfigError("WORKER_URL and TASKS_SA are required for the worker")
+
+    if voice_mode:
+        app.state.voice_clock = SystemClock()  # tests replace it
+        app.state.voice_connections = {}
+        app.state.voice_adapter = (
+            adapters.voice if adapters is not None else build_voice_adapter(settings)
+        )
 
     app.add_middleware(
         ContractCORSMiddleware,
@@ -317,6 +345,11 @@ def create_app(
     async def healthz() -> Healthz:
         return Healthz(service_mode=settings.service_mode, code_version=settings.git_sha)
 
+    if voice_mode:  # the relay serves only its socket and a health check
+        app.include_router(router)
+        app.include_router(voice_relay.router)
+        return app
+
     router.include_router(api_key_routes.router)
     router.include_router(session_routes.router)
     router.include_router(audio_routes.router)
@@ -325,6 +358,8 @@ def create_app(
     router.include_router(run_routes.router)
     router.include_router(run_routes.runs_router)
     router.include_router(usage_routes.router)
+    router.include_router(scenario_routes.router)
+    router.include_router(interview_routes.router)
     app.include_router(router)
     app.include_router(make_docs_router())
 

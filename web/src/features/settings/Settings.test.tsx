@@ -125,7 +125,9 @@ describe("settings: API key", () => {
 
   it("shows usage and the account-removal contact placeholder", async () => {
     renderApp("/settings", { user: USER });
-    expect(await main().findByText(/0 of 20 runs today/)).toBeInTheDocument();
+    expect(await main().findByText("20 of 20 left today")).toBeInTheDocument();
+    expect(main().getByText("5 of 5 left today")).toBeInTheDocument();
+    expect(main().getByText("30 of 30 left this month")).toBeInTheDocument();
     expect(main().getByText(/account removal/i)).toBeInTheDocument();
     expect(main().getByText(/deleting a session removes/i)).toBeInTheDocument();
   });
@@ -133,7 +135,7 @@ describe("settings: API key", () => {
   it("sign out clears the query cache and returns to login", async () => {
     const user = userEvent.setup();
     const { router, queryClient } = renderApp("/settings", { user: USER });
-    await main().findByText(/0 of 20 runs today/);
+    await main().findByText("20 of 20 left today");
     expect(queryClient.getQueryCache().getAll().length).toBeGreaterThan(0);
     await user.click(main().getByRole("button", { name: "Sign out" }));
     await waitFor(() => expect(here(router)).toMatch(/^\/login/));

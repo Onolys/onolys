@@ -16,6 +16,7 @@ locals {
     "firebasehosting.googleapis.com",
     "firebaserules.googleapis.com",
     "speech.googleapis.com",
+    "aiplatform.googleapis.com",
     "cloudbilling.googleapis.com",
     "billingbudgets.googleapis.com",
     "logging.googleapis.com",

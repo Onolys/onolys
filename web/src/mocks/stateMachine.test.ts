@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { createMemoryStatusEmitter, type SessionStatusDoc } from "../api/statusListener";
 import type { SessionState } from "../api/types";
-import { MockBackend, MockHttpError } from "./stateMachine";
+import { MockBackend, MockHttpError, type CapsOverride } from "./stateMachine";
 
 const U = "u1";
 const MP3 = { content_type: "audio/mpeg", size_bytes: 1_000_000, filename_ext: "mp3" };
@@ -11,7 +11,7 @@ const SCORED = {
   globals: { cct: { score: 4, reason: "Because" } },
 };
 
-function make(opts: { dailyCap?: number } = {}) {
+function make(opts: { caps?: CapsOverride } = {}) {
   const emitter = createMemoryStatusEmitter();
   const backend = new MockBackend({ emitter, ...opts });
   const history: SessionStatusDoc[] = [];
@@ -339,23 +339,101 @@ describe("daily cap", () => {
   });
 
   it("a real cap: POST /runs over the cap is 429 daily_cap_reached; usage reports it", () => {
-    const { backend } = make({ dailyCap: 1 });
+    const { backend } = make({ caps: { eval: { day: 1 } } });
     const sid = started(backend);
     backend.settle(sid);
     backend.confirmSpeaker(U, sid, "spk_0");
     backend.putRating(U, sid, { final: true, card: SCORED });
     backend.settle(sid);
-    expect(backend.getUsage(U)).toMatchObject({ runs_today: 1, daily_cap: 1 });
+    expect(backend.getUsage(U).eval.day).toMatchObject({ used: 1, cap: 1 });
     expectHttp(() => backend.startRun(U, sid, {}), 429, "daily_cap_reached");
   });
 
   it("the auto-start also stops at a real cap", () => {
-    const { backend } = make({ dailyCap: 0 });
+    const { backend } = make({ caps: { eval: { day: 0 } } });
     const sid = started(backend);
     backend.settle(sid);
     backend.confirmSpeaker(U, sid, "spk_0");
     backend.putRating(U, sid, { final: true, card: SCORED });
     expect(status(backend, sid).error).toEqual({ code: "daily_cap_reached" });
+  });
+});
+
+describe("usage caps by kind and period", () => {
+  function ready(backend: MockBackend): string {
+    const sid = started(backend);
+    backend.settle(sid);
+    backend.confirmSpeaker(U, sid, "spk_0");
+    backend.putRating(U, sid, { final: true, card: SCORED });
+    backend.settle(sid);
+    return sid;
+  }
+  const detail = (fn: () => unknown) => {
+    try {
+      fn();
+    } catch (e) {
+      return (e as MockHttpError).details[0];
+    }
+    return undefined;
+  };
+
+  it("getUsage returns per-kind day and month periods with reset times", () => {
+    const { backend } = make({ caps: { eval: { day: 3, month: 9 }, interview: { day: 2, month: 4 } } });
+    ready(backend);
+    expect(backend.getUsage(U)).toEqual({
+      eval: {
+        day: { used: 1, cap: 3, resets_at: expect.stringMatching(/T00:00:00\.000Z$/) },
+        month: { used: 1, cap: 9, resets_at: expect.stringMatching(/-01T00:00:00\.000Z$/) },
+      },
+      interview: {
+        day: { used: 0, cap: 2, resets_at: expect.any(String) },
+        month: { used: 0, cap: 4, resets_at: expect.any(String) },
+      },
+    });
+  });
+
+  it("eval day cap: 429 daily_cap_reached with period=day", () => {
+    const { backend } = make({ caps: { eval: { day: 1 } } });
+    const sid = ready(backend);
+    expectHttp(() => backend.startRun(U, sid, {}), 429, "daily_cap_reached");
+    expect(detail(() => backend.startRun(U, sid, {}))).toMatchObject({ period: "day" });
+  });
+
+  it("eval month cap: 429 monthly_cap_reached with period=month, and held auto-start uses the month code", () => {
+    const { backend } = make({ caps: { eval: { month: 1 } } });
+    const sid = ready(backend);
+    expectHttp(() => backend.startRun(U, sid, {}), 429, "monthly_cap_reached");
+    expect(detail(() => backend.startRun(U, sid, {}))).toMatchObject({ period: "month" });
+    const second = make({ caps: { eval: { month: 0 } } });
+    const sid2 = started(second.backend);
+    second.backend.settle(sid2);
+    second.backend.confirmSpeaker(U, sid2, "spk_0");
+    second.backend.putRating(U, sid2, { final: true, card: SCORED });
+    expect(status(second.backend, sid2).error).toEqual({ code: "monthly_cap_reached" });
+  });
+
+  it("both exhausted: the month code wins", () => {
+    const { backend } = make({ caps: { eval: { day: 1, month: 1 } } });
+    const sid = ready(backend);
+    expectHttp(() => backend.startRun(U, sid, {}), 429, "monthly_cap_reached");
+  });
+
+  it("interview caps: 429 interview_cap_reached with the period, kinds do not share counters", () => {
+    const { backend } = make({ caps: { interview: { day: 1, month: 5 } } });
+    backend.consumeInterview(U);
+    expect(backend.getUsage(U).interview.day.used).toBe(1);
+    expect(backend.getUsage(U).eval.day.used).toBe(0);
+    expectHttp(() => backend.consumeInterview(U), 429, "interview_cap_reached");
+    expect(detail(() => backend.consumeInterview(U))).toMatchObject({ period: "day" });
+    backend.configure({ caps: { interview: { month: 1 } } });
+    expect(detail(() => backend.consumeInterview(U))).toMatchObject({ code: "interview_cap_reached", period: "month" });
+  });
+
+  it("a refused attempt counts nothing", () => {
+    const { backend } = make({ caps: { eval: { day: 1 } } });
+    const sid = ready(backend);
+    expect(() => backend.startRun(U, sid, {})).toThrow();
+    expect(backend.getUsage(U).eval.day.used).toBe(1);
   });
 });
 

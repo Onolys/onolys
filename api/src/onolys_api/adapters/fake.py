@@ -13,6 +13,8 @@ from onolys_core.engine import PackRef, RunContext
 from onolys_core.stt import AudioRef, SttParams, SttRun, Word
 from onolys_core.stt.base import BaseSttAdapter
 from onolys_core.transcript import Transcript
+from onolys_core.voice import VoiceParams, VoiceSession
+from onolys_core.voice.fixture import FixtureVoice
 
 from onolys_api.adapters.base import AdapterError, EvaluationOutput, ProgressCb
 
@@ -360,3 +362,16 @@ class FakeEvaluation:
         cb("assemble", "done")
         artifacts = {"paudit": paudit, "eaudit": eaudit, "tips": {"valid": tips, "proposals": []}}
         return EvaluationOutput(report=report, artifacts=artifacts)
+
+
+class FakeVoice:
+    """Fake `Voice` (`ADAPTERS=stub`): the core fixture adapter (tone + scripted events),
+    whatever provider the params name. Records every `open` call."""
+
+    def __init__(self, inner: FixtureVoice | None = None) -> None:
+        self._inner = inner or FixtureVoice()
+        self.opened: list[VoiceParams] = []
+
+    async def open(self, params: VoiceParams) -> VoiceSession:
+        self.opened.append(params)
+        return await self._inner.open(params)

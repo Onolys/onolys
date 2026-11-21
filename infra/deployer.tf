@@ -52,11 +52,12 @@ locals {
     {
       api    = module.staging.api_service_name
       worker = module.staging.worker_service_name
+      voice  = module.staging.voice_service_name
     },
     var.admin_enabled["staging"] ? { admin = module.staging.admin_backend_service_name } : {},
   )
   staging_runtime_sas = merge(
-    { api = module.staging.api_sa_email, worker = module.staging.worker_sa_email },
+    { api = module.staging.api_sa_email, worker = module.staging.worker_sa_email, voice = module.staging.voice_sa_email },
     var.admin_enabled["staging"] ? { admin = module.staging.admin_backend_sa_email } : {},
   )
 }
@@ -182,11 +183,12 @@ locals {
     {
       api    = module.prod.api_service_name
       worker = module.prod.worker_service_name
+      voice  = module.prod.voice_service_name
     },
     var.admin_enabled["prod"] ? { admin = module.prod.admin_backend_service_name } : {},
   )
   prod_runtime_sas = merge(
-    { api = module.prod.api_sa_email, worker = module.prod.worker_sa_email },
+    { api = module.prod.api_sa_email, worker = module.prod.worker_sa_email, voice = module.prod.voice_sa_email },
     var.admin_enabled["prod"] ? { admin = module.prod.admin_backend_sa_email } : {},
   )
 }

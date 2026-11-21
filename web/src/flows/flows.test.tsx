@@ -271,7 +271,7 @@ describe("flow: delete a session (AC2)", () => {
     await u.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "Delete permanently" }));
     await h1("Sessions");
     expect(here(router)).toBe("/");
-    await screen.findByText(/no sessions|upload|New session/i);
+    await screen.findByText(/Onolys rates a recorded session/i); // the empty state (the cards also say "New session")
     expect(screen.queryByRole("link", { name: /Doomed visit/ })).toBeNull();
     expect(() => mockBackend.getSession(UID, sid)).toThrow();
   });

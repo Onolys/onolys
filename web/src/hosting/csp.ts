@@ -28,14 +28,14 @@ export function cspOf(entry: HostingEntry): Record<string, string[]> {
   return out;
 }
 
-/** True when `url` (absolute, or a path meaning same-origin) is allowed by `sources` of one directive. */
+/** True when `url` (absolute https/wss, or a path meaning same-origin) is allowed by `sources` of one directive. */
 export function allowedBy(sources: string[], url: string): boolean {
   if (url.startsWith("/")) return sources.includes("'self'");
   const { protocol, host } = new URL(url);
   return sources.some((s) => {
     if (s === "'self'" || s.startsWith("'")) return false;
-    const m = /^(https:\/\/)(\*\.)?([^/]+)$/.exec(s);
-    if (!m || protocol !== "https:") return false;
+    const m = /^(https|wss):\/\/(\*\.)?([^/]+)$/.exec(s);
+    if (!m || protocol !== `${m[1]}:`) return false;
     return m[2] ? host.endsWith(`.${m[3]}`) : host === m[3];
   });
 }

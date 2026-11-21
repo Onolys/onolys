@@ -11,9 +11,11 @@ from onolys_core.transcript import Transcript, Turn
 from onolys_api.repo.base import ConflictError, NotFoundError
 from onolys_api.repo.fake import FakeRepo
 from onolys_api.repo.large import MAX_INLINE_BYTES
+from onolys_api.repo.limits import LimitDefaults
 from onolys_api.repo.models import (
     ApiKeyDoc,
     IdempotencyDoc,
+    InterviewDoc,
     RatingDoc,
     RatingDraftDoc,
     RecordingDoc,
@@ -700,7 +702,7 @@ def test_fail_stale_session_skips_fresh_moved_on_and_foreign(repo):
     ],
 )
 def test_cap_txns_survive_contention(repo, monkeypatch, exc):
-    """reserve_run/release_run (the active-run limit) re-run on exhausted retries and on a raw
+    """reserve_usage/release_usage re-run on exhausted retries and on a raw
     Aborted, instead of surfacing the error to the caller."""
     if isinstance(repo, FakeRepo):
         pytest.skip("Firestore transaction contention only")
@@ -714,8 +716,175 @@ def test_cap_txns_survive_contention(repo, monkeypatch, exc):
         return real(*a, **kw)
 
     monkeypatch.setattr(repo._client, "transaction", flaky)
-    assert repo.reserve_run(u, day, 5, 2) == "ok"
+    assert repo.reserve_usage(u, "eval", day, LimitDefaults(5, 50, 5, 30), 2) == "ok"
     assert len(calls) == 3
     calls.clear()
-    repo.release_run(u, day, refund=True)
+    repo.release_usage(u, "eval", day, refund=True)
     assert len(calls) == 3
+
+
+# ---- SP11 reserve_usage / release_usage / get_usage_docs ----
+
+
+def _reserve_in_parallel(repo, u, kinds, defaults, max_active=1000):
+    from concurrent.futures import ThreadPoolExecutor
+
+    with ThreadPoolExecutor(6) as ex:
+        return list(
+            ex.map(lambda k: repo.reserve_usage(u, k, "2026-11-20", defaults, max_active), kinds)
+        )
+
+
+@pytest.mark.parametrize("kind", ["eval", "interview"])
+def test_parallel_reserve_day_cap_3_per_kind(repo, kind):
+    u = f"u-{uuid.uuid4().hex[:8]}"
+    outs = _reserve_in_parallel(repo, u, [kind] * 6, LimitDefaults(3, 50, 3, 50))
+    assert outs.count("ok") == 3 and outs.count("day_cap") == 3
+    day, month = repo.get_usage_docs(u, "2026-11-20")
+    assert day.runs + day.interviews == 3 and month.runs + month.interviews == 3
+
+
+@pytest.mark.parametrize("kind", ["eval", "interview"])
+def test_parallel_reserve_month_cap_3_per_kind(repo, kind):
+    u = f"u-{uuid.uuid4().hex[:8]}"
+    outs = _reserve_in_parallel(repo, u, [kind] * 6, LimitDefaults(50, 3, 50, 3))
+    assert outs.count("ok") == 3 and outs.count("month_cap") == 3
+
+
+def test_parallel_reserve_mixed_kinds(repo):
+    u = f"u-{uuid.uuid4().hex[:8]}"
+    outs = _reserve_in_parallel(
+        repo, u, ["eval"] * 3 + ["interview"] * 3, LimitDefaults(2, 50, 2, 50)
+    )
+    assert outs.count("ok") == 4 and outs.count("day_cap") == 2
+    day, month = repo.get_usage_docs(u, "2026-11-20")
+    assert (day.runs, day.interviews, month.runs, month.interviews) == (2, 2, 2, 2)
+
+
+def test_reserve_usage_refusal_writes_nothing_and_release_floors_at_zero(repo):
+    u, day = f"u-{uuid.uuid4().hex[:8]}", "2026-11-20"
+    d = LimitDefaults(1, 1, 1, 1)
+    assert repo.reserve_usage(u, "eval", day, d, 5) == "ok"
+    assert repo.reserve_usage(u, "eval", day, d, 5) == "month_cap"
+    assert repo.get_usage_docs(u, day)[1].runs == 1
+    repo.release_usage(u, "eval", day, refund=True)
+    repo.release_usage(u, "eval", day, refund=True)
+    day_doc, month_doc = repo.get_usage_docs(u, day)
+    assert (day_doc.runs, month_doc.runs, month_doc.month) == (0, 0, "2026-11")
+    assert repo.get_user(u).active_runs == 0
+
+
+# ---- SP10 interviews ----
+
+
+def _iv(uid="alice", state="created", **kw):
+    return InterviewDoc(
+        uid=uid, scenario_id="s1", voice="Kore", state=state, reservation_date="2026-11-21", **kw
+    )
+
+
+def test_interview_create_get_owner_only(repo):
+    alice, bob, nobody = (f"{n}-{uuid.uuid4().hex[:8]}" for n in ("alice", "bob", "nobody"))
+    i1, i2, a1, a2, a3, b1 = (uuid.uuid4().hex for _ in range(6))
+    repo.create_interview(alice, i1, _iv(alice))
+    got = repo.get_interview(alice, i1)
+    assert (got.id, got.uid, got.state, got.voice, got.duration_s) == (
+        i1, alice, "created", "Kore", None,
+    )  # fmt: skip
+    with pytest.raises(ConflictError):
+        repo.create_interview(alice, i1, _iv(alice))
+    with pytest.raises(NotFoundError):
+        repo.get_interview(bob, i1)  # foreign id looks like a missing one
+    with pytest.raises(NotFoundError):
+        repo.get_interview(alice, "nope")
+    with pytest.raises(ValueError):
+        repo.create_interview(bob, i2, _iv(alice))
+
+
+def test_interview_list_open_is_uid_scoped_and_state_filtered(repo):
+    alice, bob, nobody = (f"{n}-{uuid.uuid4().hex[:8]}" for n in ("alice", "bob", "nobody"))
+    i1, i2, a1, a2, a3, b1 = (uuid.uuid4().hex for _ in range(6))
+    repo.create_interview(alice, a1, _iv(alice))
+    repo.create_interview(alice, a2, _iv(alice, state="live"))
+    repo.create_interview(alice, a3, _iv(alice, state="ended"))
+    repo.create_interview(bob, b1, _iv(bob))
+    assert sorted(d.id for d in repo.list_open_interviews(alice)) == sorted([a1, a2])
+    assert repo.list_open_interviews(nobody) == []
+
+
+def test_interview_transition_settles_once_and_guards_owner(repo):
+    alice, bob, nobody = (f"{n}-{uuid.uuid4().hex[:8]}" for n in ("alice", "bob", "nobody"))
+    i1, i2, a1, a2, a3, b1 = (uuid.uuid4().hex for _ in range(6))
+    repo.create_interview(alice, i1, _iv(alice))
+    repo.update_interview(alice, i1, {"state": "live", "duration_s": 42.0})
+    at = datetime(2026, 11, 21, 12, 0, tzinfo=UTC)
+    won = repo.transition_interview(alice, i1, ("created", "live"), "ended", {"ended_at": at})
+    assert won is not None and (won.state, won.duration_s, won.ended_at) == ("ended", 42.0, at)
+    assert repo.transition_interview(alice, i1, ("created", "live"), "abandoned") is None
+    assert repo.get_interview(alice, i1).state == "ended"
+    up = repo.transition_interview(alice, i1, ("ended", "abandoned"), "uploaded")
+    assert up is not None and up.state == "uploaded"
+    with pytest.raises(NotFoundError):
+        repo.transition_interview(bob, i1, ("uploaded",), "ended")
+    with pytest.raises(NotFoundError):
+        repo.update_interview(bob, i1, {"duration_s": 1.0})
+
+
+def test_interview_transition_stores_refunded_and_blocks_linking(repo):
+    alice = f"alice-{uuid.uuid4().hex[:8]}"
+    short, long_, stale = (uuid.uuid4().hex for _ in range(3))
+    t0 = datetime(2026, 11, 21, 12, 0, tzinfo=UTC)
+    repo.create_interview(alice, short, _iv(alice))  # never live: 0 s
+    repo.create_interview(
+        alice, long_, _iv(alice, state="live", duration_s=40.0, disconnected_at=t0)
+    )
+    repo.create_interview(alice, stale, _iv(alice, state="live", duration_s=20.0, seen_at=t0))
+    now = t0 + timedelta(seconds=15)
+    rule = (now, 30.0)
+    assert repo.transition_interview(
+        alice, short, ("created", "live"), "ended", None, rule
+    ).refunded
+    assert not repo.transition_interview(
+        alice, long_, ("created", "live"), "ended", None, rule
+    ).refunded
+    # connected relay: 20 s recorded + 15 s since the last checkpoint = 35 s -> not refunded
+    assert not repo.transition_interview(
+        alice, stale, ("created", "live"), "ended", None, rule
+    ).refunded
+    assert repo.get_interview(alice, short).refunded is True
+
+    def link(interview, sid):
+        return repo.create_session_for_interview(
+            alice, interview, sid, SessionDoc(uid=alice, interview_id=interview),
+            SessionStatusDoc(uid=alice), RatingDraftDoc(card={}),
+        )  # fmt: skip
+
+    assert link(short, uuid.uuid4().hex) == "refunded"
+    assert link(long_, uuid.uuid4().hex) == "linked"
+
+
+def test_create_session_for_interview_links_atomically_once(repo):
+    alice, bob = (f"{n}-{uuid.uuid4().hex[:8]}" for n in ("alice", "bob"))
+    iid, sid, sid2, early = (uuid.uuid4().hex for _ in range(4))
+    repo.create_interview(alice, iid, _iv(alice, state="ended"))
+    repo.create_interview(alice, early, _iv(alice, state="live"))
+
+    def link(uid, interview, session_id):
+        return repo.create_session_for_interview(
+            uid, interview, session_id,
+            SessionDoc(uid=uid, interview_id=interview), SessionStatusDoc(uid=uid),
+            RatingDraftDoc(card={"change_goal": "g"}),
+        )  # fmt: skip
+
+    with pytest.raises(NotFoundError):
+        link(bob, iid, sid)  # foreign interview
+    assert link(alice, early, sid) == "not_ended"
+    with pytest.raises(NotFoundError):
+        repo.get_session(alice, sid)  # nothing was written
+    assert link(alice, iid, sid) == "linked"
+    assert repo.get_interview(alice, iid).session_id == sid
+    assert repo.get_session(alice, sid).interview_id == iid
+    assert repo.get_rating_draft(alice, sid).card == {"change_goal": "g"}
+    assert link(alice, iid, sid2) == "already_linked"
+    with pytest.raises(NotFoundError):
+        repo.get_session(alice, sid2)

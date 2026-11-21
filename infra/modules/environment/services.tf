@@ -16,7 +16,10 @@ locals {
     { name = "FIRESTORE_DATABASE", value = var.database_id },
     { name = "AUTH_PROJECT", value = var.project },
     { name = "AUDIO_BUCKET", value = google_storage_bucket.audio.name },
-    { name = "DAILY_RUN_CAP", value = tostring(var.daily_run_cap) },
+    { name = "EVAL_CAP_DAY", value = tostring(var.eval_cap_day) },
+    { name = "EVAL_CAP_MONTH", value = tostring(var.eval_cap_month) },
+    { name = "AI_CAP_DAY", value = tostring(var.ai_cap_day) },
+    { name = "AI_CAP_MONTH", value = tostring(var.ai_cap_month) },
     { name = "ADAPTERS", value = "real" },
     { name = "TASKS_QUEUE", value = google_cloud_tasks_queue.steps.name },
     { name = "TASKS_SA", value = google_service_account.tasks_invoker.email },
@@ -79,6 +82,11 @@ resource "google_cloud_run_v2_service" "api" {
         name  = "CORS_ORIGINS"
         value = join(",", var.cors_origins)
       }
+      env {
+        # Relay base the api hands to the browser in POST /interviews (voice.tf).
+        name  = "VOICE_URL"
+        value = "wss://${local.voice_host}"
+      }
       dynamic "env" {
         for_each = local.platform_env
         content {
@@ -99,7 +107,8 @@ resource "google_cloud_run_v2_service" "api" {
   lifecycle {
     ignore_changes = [
       template[0].containers[0].image,
-      template[0].revision,
+      # The template revision name is NOT ignored here: CI pins api traffic to a named revision, and ignoring it
+      # makes Terraform send that name back on any template update (409 "different configuration already exists").
       client,
       scaling, # service-level block the API fills with zeros (perpetual diff); per-revision scaling is set in template
       client_version,

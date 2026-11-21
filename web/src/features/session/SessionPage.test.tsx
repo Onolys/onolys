@@ -305,7 +305,7 @@ describe("session page: error cards", () => {
     toAwaiting(sid);
     mockBackend.confirmSpeaker(UID, sid, "spk_0");
     mockBackend.putRating(UID, sid, { final: true, no_rating: true, card: { change_goal: "g" } });
-    mockBackend.configure({ dailyCap: 1 });
+    mockBackend.configure({ caps: { eval: { day: 1 } } });
     const other = create();
     toAwaiting(other);
     mockBackend.confirmSpeaker(UID, other, "spk_0");
@@ -319,6 +319,71 @@ describe("session page: error cards", () => {
     const run = await screen.findByRole("button", { name: "Run again" });
     await waitFor(() => expect(run).toBeDisabled());
     expect(screen.getByRole("alert")).toHaveTextContent(/after .+/i);
+  });
+});
+
+describe("session page: interview-linked first run (free, works at a full eval cap)", () => {
+  const heldAtCap = (linked: boolean) => {
+    const sid = create();
+    toAwaiting(sid);
+    mockBackend.configure({ caps: { eval: { day: 0, month: 0 } } });
+    mockBackend.confirmSpeaker(UID, sid, "spk_0");
+    mockBackend.putRating(UID, sid, { final: true, no_rating: true, card: { change_goal: "g" } });
+    if (linked) {
+      server.use(
+        http.get("*/v1/sessions/:id", ({ params }) =>
+          HttpResponse.json({ ...mockBackend.getSession(UID, String(params.id)), interview_id: "iv1" }),
+        ),
+      );
+    }
+    return sid;
+  };
+
+  it("keeps Start enabled at a full eval cap for an interview-linked session", async () => {
+    const sid = heldAtCap(true);
+    open(sid);
+    await ready();
+    const start = await screen.findByRole("button", { name: "Start" });
+    await waitFor(() => expect(getCalls.length).toBeGreaterThan(0)); // the detail (interview_id) loads
+    await waitFor(() => expect(start).toBeEnabled());
+  });
+
+  it("still disables Start at a full eval cap for a normal session", async () => {
+    const sid = heldAtCap(false);
+    open(sid);
+    await ready();
+    const start = await screen.findByRole("button", { name: "Start" });
+    await waitFor(() => expect(start).toBeDisabled());
+  });
+});
+
+describe("session page: period-aware caps", () => {
+  it.each([
+    [{ eval: { month: 0 } }, /reached this month's limit/i],
+    [{ eval: { day: 0 } }, /reached today's limit/i],
+    [{ eval: { day: 0, month: 0 } }, /reached this month's limit/i],
+  ] as const)("disables Run again with the matching message for caps %j", async (caps, message) => {
+    const sid = create();
+    toAwaiting(sid);
+    mockBackend.configure({ caps });
+    open(sid);
+    await ready();
+    act(() => mockEmitter.emit(sid, failedDoc(sid, "internal_error")));
+    const run = await screen.findByRole("button", { name: "Run again" });
+    await waitFor(() => expect(run).toBeDisabled());
+    expect(screen.getByRole("alert")).toHaveTextContent(message);
+  });
+
+  it("shows the month copy for a held monthly_cap_reached start", async () => {
+    const sid = create();
+    toAwaiting(sid);
+    mockBackend.configure({ caps: { eval: { month: 0 } } });
+    mockBackend.confirmSpeaker(UID, sid, "spk_0");
+    mockBackend.putRating(UID, sid, { final: true, no_rating: true, card: { change_goal: "g" } });
+    open(sid);
+    const status = await ready();
+    await waitFor(() => expect(status).toHaveTextContent(/reached this month's limit/i));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Start" })).toBeDisabled());
   });
 });
 

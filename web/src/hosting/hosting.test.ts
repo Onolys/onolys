@@ -43,6 +43,30 @@ describe("web/firebase.json", () => {
     expect(csp["frame-src"]).toEqual(expect.arrayContaining(["https://accounts.google.com", "https://*.firebaseapp.com"]));
   });
 
+  it.each([
+    ["app", "onolys-voice-prod-1054076260967.us-central1.run.app", "onolys-voice-staging-1054076260967.us-central1.run.app"],
+    ["app-staging", "onolys-voice-staging-1054076260967.us-central1.run.app", "onolys-voice-prod-1054076260967.us-central1.run.app"],
+  ])("%s lets connect-src reach only its own voice relay over wss (SP10 R10)", (target, own, other) => {
+    const connect = cspOf(byTarget(target))["connect-src"];
+    expect(connect).toContain(`wss://${own}`);
+    expect(allowedBy(connect, `wss://${own}/v1/voice/iv_1`)).toBe(true);
+    expect(allowedBy(connect, `wss://${other}/v1/voice/iv_1`)).toBe(false);
+    expect(allowedBy(connect, `https://${own}/v1/voice/iv_1`)).toBe(false); // wss only, not https
+    expect(connect.filter((s) => s.startsWith("wss://"))).toHaveLength(1);
+  });
+
+  it("adds no blob: or data: script allowance for audio worklets (SP10 AC9)", () => {
+    for (const e of entries) {
+      const csp = cspOf(e);
+      expect(Object.keys(csp)).not.toContain("worker-src");
+      expect(Object.keys(csp)).not.toContain("script-src-elem");
+      for (const [directive, sources] of Object.entries(csp)) {
+        expect(sources, directive).not.toContain("blob:");
+        if (directive !== "img-src") expect(sources, directive).not.toContain("data:");
+      }
+    }
+  });
+
   it("allows no unsafe or wildcard-everything sources", () => {
     for (const e of entries) {
       for (const sources of Object.values(cspOf(e))) {
@@ -79,5 +103,8 @@ describe("web/firebase.json", () => {
     expect(allowedBy(["https://*.firebaseapp.com"], "https://x.firebaseapp.com/__/auth")).toBe(true);
     expect(allowedBy(["https://*.firebaseapp.com"], "https://firebaseapp.com")).toBe(false);
     expect(allowedBy(["'self'"], "https://evil.example")).toBe(false);
+    expect(allowedBy(["wss://a.run.app"], "wss://a.run.app/v1/voice/x")).toBe(true);
+    expect(allowedBy(["wss://a.run.app"], "https://a.run.app")).toBe(false);
+    expect(allowedBy(["https://a.run.app"], "wss://a.run.app")).toBe(false);
   });
 });

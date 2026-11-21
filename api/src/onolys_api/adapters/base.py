@@ -1,4 +1,4 @@
-"""The only seam to the engines (PRD R6, D2, D20): exactly two Protocols, `Stt` and `Evaluation`.
+"""The only seam to the engines (PRD R6, D2, D20): `Stt`, `Evaluation`, and (SP10 R3) `Voice`.
 
 `Stt` is the provider-neutral SP01 `SttAdapter` (`start`/`poll`); `Evaluation` wraps SP03
 `run_evaluation` (one call runs the whole `running` phase, asyncio inside). There are no
@@ -12,6 +12,7 @@ from onolys_core.engine import PackRef, RunContext
 from onolys_core.errors import OnolysError
 from onolys_core.stt import AudioRef, SttParams
 from onolys_core.transcript import Transcript
+from onolys_core.voice import VoiceParams, VoiceSession
 from pydantic import BaseModel, Field
 
 Stage = Literal["paudit", "eaudit", "tips", "compare", "assemble"]
@@ -60,3 +61,10 @@ class Evaluation(Protocol):
         {change_goal, coded_span{from_s,to_s}, language, n_runs, preset, code_version}.
         Raises AdapterError when the run fails (paudit failure)."""
         ...
+
+
+class Voice(Protocol):
+    """Realtime voice seam (SP10 R3): the relay opens one provider session per connection.
+    `params.provider` picks the core adapter; nothing else in the API names a provider."""
+
+    async def open(self, params: VoiceParams) -> VoiceSession: ...

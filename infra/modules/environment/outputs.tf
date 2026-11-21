@@ -58,3 +58,16 @@ output "admin_backend_service_name" {
 output "admin_backend_sa_email" {
   value = one(google_service_account.admin_backend[*].email)
 }
+
+output "voice_url" {
+  description = "Voice relay base URL (https); the browser connects over wss to the same host."
+  value       = google_cloud_run_v2_service.voice.uri
+}
+
+output "voice_service_name" {
+  value = google_cloud_run_v2_service.voice.name
+}
+
+output "voice_sa_email" {
+  value = google_service_account.voice.email
+}

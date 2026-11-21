@@ -11,9 +11,9 @@ from onolys_api.repo import large
 from onolys_api.repo.base import (
     Claim,
     ConflictError,
+    InterviewLinkOutcome,
     NotFoundError,
     Page,
-    ReserveOutcome,
     StartOutcome,
     decide_claim,
 )
@@ -24,10 +24,22 @@ from onolys_api.repo.firestore import (
     _encode_cursor,
     _idem_id,
 )
+from onolys_api.repo.limits import (
+    HELD_ERROR_CODE,
+    KIND_FIELD,
+    START_OUTCOME,
+    Kind,
+    LimitDefaults,
+    ReserveUsageOutcome,
+    decide_reserve,
+    decide_start,
+)
 from onolys_api.repo.models import (
     ApiKeyDoc,
     Doc,
     IdempotencyDoc,
+    InterviewDoc,
+    InterviewState,
     RatingDoc,
     RatingDraftDoc,
     RecordingDoc,
@@ -38,7 +50,9 @@ from onolys_api.repo.models import (
     SessionStatusDoc,
     TranscriptDoc,
     UsageDoc,
+    UsageMonthDoc,
     UserDoc,
+    interview_refundable,
     utcnow,
 )
 from onolys_api.storage.base import BlobStore
@@ -148,6 +162,29 @@ class FakeRepo:
         self._put(f"sessions/{sid}", session.to_store())
         self._put(f"session_status/{sid}", status.to_store())
         self._record_status(uid, sid)
+
+    def create_session_for_interview(
+        self, uid: str, iid: str, sid: str, session: SessionDoc, status: SessionStatusDoc,
+        draft: RatingDraftDoc,
+    ) -> InterviewLinkOutcome:  # fmt: skip
+        if session.uid != uid or status.uid != uid:
+            raise ValueError("document uid does not match the caller")
+        with self._claim_lock:  # the fake's "transaction"
+            iv = self._owned(f"interviews/{iid}", uid)
+            if iv.get("state") != "ended":
+                return "not_ended"
+            if iv.get("refunded"):
+                return "refunded"
+            if iv.get("session_id"):
+                return "already_linked"
+            if f"sessions/{sid}" in self._docs or f"session_status/{sid}" in self._docs:
+                raise ConflictError()
+            self._put(f"sessions/{sid}", session.to_store())
+            self._put(f"session_status/{sid}", status.to_store())
+            self._put(f"sessions/{sid}/ratings/{DRAFT_ID}", draft.to_store())
+            self._put(f"interviews/{iid}", {**iv, "session_id": sid})
+            self._record_status(uid, sid)
+            return "linked"
 
     def get_session(self, uid: str, sid: str) -> SessionDoc:
         return self._load(SessionDoc, sid, self._owned(f"sessions/{sid}", uid))
@@ -443,23 +480,47 @@ class FakeRepo:
         self._put(path, d)
         return self._load(UsageDoc, f"{uid}_{date}", d)
 
-    def reserve_run(self, uid: str, date: str, cap: int, max_active: int) -> ReserveOutcome:
+    def reserve_usage(
+        self, uid: str, kind: Kind, date: str, defaults: LimitDefaults, max_active: int
+    ) -> ReserveUsageOutcome:
+        field = KIND_FIELD[kind]
         with self._claim_lock:
             user = self._get(f"users/{uid}") or {}
-            usage = self._get(f"usage/{uid}_{date}") or {"uid": uid, "date": date, "runs": 0}
-            active = user.get("active_runs", 0)
-            eff_cap = user.get("daily_cap")
-            eff_active = user.get("max_active_runs")
-            if usage.get("runs", 0) >= (cap if eff_cap is None else eff_cap):
-                return "daily_cap"
-            if active >= (max_active if eff_active is None else eff_active):
-                return "concurrent"
-            self._put(f"usage/{uid}_{date}", {**usage, "runs": usage.get("runs", 0) + 1})
-            self._put(f"users/{uid}", {**user, "active_runs": active + 1})
+            day = self._get(f"usage/{uid}_{date}") or {"uid": uid, "date": date}
+            month = self._get(f"usage/{uid}_{date[:7]}") or {"uid": uid, "month": date[:7]}
+            outcome = decide_reserve(user, day, month, kind, defaults, max_active)
+            if outcome != "ok":
+                return outcome
+            self._put(f"usage/{uid}_{date}", {**day, field: day.get(field, 0) + 1})
+            self._put(f"usage/{uid}_{date[:7]}", {**month, field: month.get(field, 0) + 1})
+            if kind == "eval":
+                self._put(f"users/{uid}", {**user, "active_runs": user.get("active_runs", 0) + 1})
             return "ok"
 
+    def release_usage(self, uid: str, kind: Kind, date: str, refund: bool) -> None:
+        field = KIND_FIELD[kind]
+        with self._claim_lock:
+            user = self._get(f"users/{uid}") or {}
+            if kind == "eval" and user.get("active_runs", 0) > 0:
+                self._put(f"users/{uid}", {**user, "active_runs": user["active_runs"] - 1})
+            if refund:
+                for path in (f"usage/{uid}_{date}", f"usage/{uid}_{date[:7]}"):
+                    doc = self._get(path)
+                    if doc and doc.get(field, 0) > 0:
+                        self._put(path, {**doc, field: doc[field] - 1})
+
+    def get_usage_docs(self, uid: str, date: str) -> tuple[UsageDoc, UsageMonthDoc]:
+        day = self._get(f"usage/{uid}_{date}")
+        month = self._get(f"usage/{uid}_{date[:7]}")
+        return (
+            self._load(UsageDoc, f"{uid}_{date}", day) if day else UsageDoc(uid=uid, date=date),
+            self._load(UsageMonthDoc, f"{uid}_{date[:7]}", month)
+            if month
+            else UsageMonthDoc(uid=uid, month=date[:7]),
+        )
+
     def start_first_run(
-        self, uid: str, sid: str, run_id: str, date: str, cap: int, max_active: int,
+        self, uid: str, sid: str, run_id: str, date: str, defaults: LimitDefaults, max_active: int,
         code_version: str, start_progress: int,
     ) -> StartOutcome:  # fmt: skip
         with self._claim_lock:  # the fake's "transaction"
@@ -474,19 +535,17 @@ class FakeRepo:
             status = self._get(f"session_status/{sid}") or {}
             user = self._get(f"users/{uid}") or {}
             usage = self._get(f"usage/{uid}_{date}") or {"uid": uid, "date": date, "runs": 0}
+            month = self._get(f"usage/{uid}_{date[:7]}") or {"uid": uid, "month": date[:7]}
             now = utcnow()
-            eff_cap, eff_active = user.get("daily_cap"), user.get("max_active_runs")
-            outcome: StartOutcome | None = None
-            if usage.get("runs", 0) >= (cap if eff_cap is None else eff_cap):
-                outcome = "daily_cap"
-            elif user.get("active_runs", 0) >= (max_active if eff_active is None else eff_active):
-                outcome = "concurrent"
-            if outcome is not None:
-                err = {"code": "daily_cap_reached", "step": None}
+            exempt = bool(sess.get("interview_id"))
+            decided = decide_start(user, usage, month, defaults, max_active, exempt)
+            if decided != "ok":
+                outcome: StartOutcome = START_OUTCOME[decided]  # type: ignore[assignment]
+                code = HELD_ERROR_CODE[outcome]
+                err = {"code": code, "step": None}
                 self._put(f"sessions/{sid}", {**sess, "error": err, "updated_at": now})
                 self._put(
-                    f"session_status/{sid}",
-                    {**status, "error_code": "daily_cap_reached", "updated_at": now},
+                    f"session_status/{sid}", {**status, "error_code": code, "updated_at": now}
                 )
                 self._record_status(uid, sid)
                 return outcome
@@ -496,9 +555,12 @@ class FakeRepo:
                 uid=uid, session_id=sid, run_id=run_id, n_runs=sess.get("n_runs", 1),
                 preset=sess.get("preset"), rating_id=rating_id,
                 stt=sess.get("stt"), code_version=code_version, cap_date=date,
+                counted=not exempt,
             )  # fmt: skip
             self._create(f"sessions/{sid}/runs/{run_id}", run.to_store())
-            self._put(f"usage/{uid}_{date}", {**usage, "runs": usage.get("runs", 0) + 1})
+            if not exempt:
+                self._put(f"usage/{uid}_{date}", {**usage, "runs": usage.get("runs", 0) + 1})
+                self._put(f"usage/{uid}_{date[:7]}", {**month, "runs": month.get("runs", 0) + 1})
             self._put(f"users/{uid}", {**user, "active_runs": user.get("active_runs", 0) + 1})
             self._put(
                 f"sessions/{sid}",
@@ -514,7 +576,7 @@ class FakeRepo:
             return "started"
 
     def start_run(
-        self, uid: str, sid: str, run_id: str, date: str, cap: int, max_active: int,
+        self, uid: str, sid: str, run_id: str, date: str, defaults: LimitDefaults, max_active: int,
         code_version: str, start_progress: int, allowed_states: tuple[str, ...],
         n_runs: int | None, preset: str | None,
     ) -> StartOutcome:  # fmt: skip
@@ -530,11 +592,12 @@ class FakeRepo:
             status = self._get(f"session_status/{sid}") or {}
             user = self._get(f"users/{uid}") or {}
             usage = self._get(f"usage/{uid}_{date}") or {"uid": uid, "date": date, "runs": 0}
-            eff_cap, eff_active = user.get("daily_cap"), user.get("max_active_runs")
-            if usage.get("runs", 0) >= (cap if eff_cap is None else eff_cap):
-                return "daily_cap"
-            if user.get("active_runs", 0) >= (max_active if eff_active is None else eff_active):
-                return "concurrent"
+            month = self._get(f"usage/{uid}_{date[:7]}") or {"uid": uid, "month": date[:7]}
+            # the free first run of an interview-linked session (SP11 R5), same as start_first_run
+            exempt = bool(sess.get("interview_id")) and not sess.get("first_run_id")
+            decided = decide_start(user, usage, month, defaults, max_active, exempt)
+            if decided != "ok":
+                return START_OUTCOME[decided]  # type: ignore[return-value]
             revs = [(i, d) for i, d in self._children(sid, "ratings") if i != DRAFT_ID]
             rating_id = max(revs, key=lambda t: (t[1]["created_at"], t[0]))[0] if revs else None
             run = RunDoc(
@@ -542,6 +605,7 @@ class FakeRepo:
                 n_runs=n_runs or sess.get("n_runs", 1),
                 preset=preset or sess.get("preset"), rating_id=rating_id,
                 stt=sess.get("stt"), code_version=code_version, cap_date=date,
+                counted=not exempt,
             )  # fmt: skip
             now = utcnow()
             progress = (
@@ -550,7 +614,9 @@ class FakeRepo:
                 else max(status.get("progress", 0), start_progress)
             )
             self._create(f"sessions/{sid}/runs/{run_id}", run.to_store())
-            self._put(f"usage/{uid}_{date}", {**usage, "runs": usage.get("runs", 0) + 1})
+            if not exempt:
+                self._put(f"usage/{uid}_{date}", {**usage, "runs": usage.get("runs", 0) + 1})
+                self._put(f"usage/{uid}_{date[:7]}", {**month, "runs": month.get("runs", 0) + 1})
             self._put(f"users/{uid}", {**user, "active_runs": user.get("active_runs", 0) + 1})
             self._put(
                 f"sessions/{sid}",
@@ -565,14 +631,43 @@ class FakeRepo:
             self._record_status(uid, sid)
             return "started"
 
-    def release_run(self, uid: str, date: str, refund: bool) -> None:
+    # ---- interviews ----
+
+    def create_interview(self, uid: str, iid: str, doc: InterviewDoc) -> None:
+        if doc.uid != uid:
+            raise ValueError("document uid does not match the caller")
+        self._create(f"interviews/{iid}", doc.to_store())
+
+    def get_interview(self, uid: str, iid: str) -> InterviewDoc:
+        return self._load(InterviewDoc, iid, self._owned(f"interviews/{iid}", uid))
+
+    def list_open_interviews(self, uid: str) -> list[InterviewDoc]:
+        return [
+            self._load(InterviewDoc, p.removeprefix("interviews/"), copy.deepcopy(d))
+            for p, d in self._docs.items()
+            if p.startswith("interviews/") and d.get("uid") == uid
+            and d.get("state") in ("created", "live")
+        ]  # fmt: skip
+
+    def transition_interview(
+        self, uid: str, iid: str, from_states: tuple[InterviewState, ...],
+        to_state: InterviewState, fields: dict[str, Any] | None = None,
+        refund_rule: tuple[datetime, float] | None = None,
+    ) -> InterviewDoc | None:  # fmt: skip
         with self._claim_lock:
-            user = self._get(f"users/{uid}") or {}
-            if user.get("active_runs", 0) > 0:
-                self._put(f"users/{uid}", {**user, "active_runs": user["active_runs"] - 1})
-            usage = self._get(f"usage/{uid}_{date}")
-            if refund and usage and usage.get("runs", 0) > 0:
-                self._put(f"usage/{uid}_{date}", {**usage, "runs": usage["runs"] - 1})
+            d = self._owned(f"interviews/{iid}", uid)
+            if d.get("state") not in from_states:
+                return None
+            d = {**d, **(fields or {}), "state": to_state}
+            if refund_rule is not None:
+                d["refunded"] = interview_refundable(d, *refund_rule)
+            self._put(f"interviews/{iid}", d)
+            return self._load(InterviewDoc, iid, d)
+
+    def update_interview(self, uid: str, iid: str, fields: dict[str, Any]) -> None:
+        with self._claim_lock:
+            d = self._owned(f"interviews/{iid}", uid)
+            self._put(f"interviews/{iid}", {**d, **fields})
 
     def get_idempotency(self, uid: str, key: str) -> IdempotencyDoc | None:
         path = f"idempotency/{_idem_id(uid, key)}"
