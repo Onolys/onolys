@@ -322,6 +322,36 @@ describe("session page: error cards", () => {
   });
 });
 
+describe("session page: period-aware caps", () => {
+  it.each([
+    [{ eval: { month: 0 } }, /reached this month's limit/i],
+    [{ eval: { day: 0 } }, /reached today's limit/i],
+    [{ eval: { day: 0, month: 0 } }, /reached this month's limit/i],
+  ] as const)("disables Run again with the matching message for caps %j", async (caps, message) => {
+    const sid = create();
+    toAwaiting(sid);
+    mockBackend.configure({ caps });
+    open(sid);
+    await ready();
+    act(() => mockEmitter.emit(sid, failedDoc(sid, "internal_error")));
+    const run = await screen.findByRole("button", { name: "Run again" });
+    await waitFor(() => expect(run).toBeDisabled());
+    expect(screen.getByRole("alert")).toHaveTextContent(message);
+  });
+
+  it("shows the month copy for a held monthly_cap_reached start", async () => {
+    const sid = create();
+    toAwaiting(sid);
+    mockBackend.configure({ caps: { eval: { month: 0 } } });
+    mockBackend.confirmSpeaker(UID, sid, "spk_0");
+    mockBackend.putRating(UID, sid, { final: true, no_rating: true, card: { change_goal: "g" } });
+    open(sid);
+    const status = await ready();
+    await waitFor(() => expect(status).toHaveTextContent(/reached this month's limit/i));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Start" })).toBeDisabled());
+  });
+});
+
 describe("session page: delete", () => {
   it("asks first, says what is removed, and cancel keeps the session", async () => {
     const user = userEvent.setup();

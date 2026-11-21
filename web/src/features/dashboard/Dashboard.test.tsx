@@ -106,19 +106,30 @@ describe("dashboard: session list", () => {
     const sid = create("A");
     upload(sid);
     renderApp("/", { user: USER });
-    expect(await main().findByText("0 of 20 runs today")).toBeInTheDocument();
+    expect(await main().findByText("20 of 20 left today")).toBeInTheDocument();
+    expect(main().getByText("100 of 100 left this month")).toBeInTheDocument();
+    expect(main().getByText("5 of 5 left today")).toBeInTheDocument();
+    expect(main().getByText("30 of 30 left this month")).toBeInTheDocument();
     expect(main().getByRole("link", { name: "New session" })).toHaveAttribute("href", "/sessions/new");
   });
 
-  it("over the cap: says so with the reset time", async () => {
+  it("over the month cap: says so with the reset date", async () => {
+    mockBackend.configure({ caps: { eval: { month: 0 } } });
     server.use(
-      http.get("*/v1/usage", () =>
-        HttpResponse.json({ runs_today: 20, daily_cap: 20, resets_at: "2026-11-21T00:00:00.000Z" }),
-      ),
       http.get("*/v1/sessions", () => HttpResponse.json({ items: [item("a", "report_ready", { latest_report_version: 1 })] })),
     );
     renderApp("/", { user: USER });
-    expect(await main().findByText("20 of 20 runs today")).toBeInTheDocument();
+    expect(await main().findByText("0 of 0 left this month")).toBeInTheDocument();
+    expect(main().getByText(/reached this month's limit/i)).toHaveTextContent(/after .+/);
+  });
+
+  it("over the cap: says so with the reset time", async () => {
+    mockBackend.configure({ caps: { eval: { day: 0 } } });
+    server.use(
+      http.get("*/v1/sessions", () => HttpResponse.json({ items: [item("a", "report_ready", { latest_report_version: 1 })] })),
+    );
+    renderApp("/", { user: USER });
+    expect(await main().findByText("0 of 0 left today")).toBeInTheDocument();
     expect(main().getByText(/reached today's limit/i)).toHaveTextContent(/after .+/);
   });
 

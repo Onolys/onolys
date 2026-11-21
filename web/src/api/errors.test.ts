@@ -44,6 +44,12 @@ describe("messageForCode", () => {
     expect(messageForCode("daily_cap_reached")).toContain("today's limit");
   });
 
+  it("mentions the reset date for monthly_cap_reached when known", () => {
+    expect(messageForCode("monthly_cap_reached", { resetsAt: "Dec 1" })).toBe(
+      "You've reached this month's limit. You can start the rating after Dec 1.",
+    );
+  });
+
   it("has the monthly and interview cap copy", () => {
     expect(messageForCode("monthly_cap_reached")).toBe("You've reached this month's limit.");
     expect(messageForCode("interview_cap_reached")).toBe("You've reached your AI interview limit.");

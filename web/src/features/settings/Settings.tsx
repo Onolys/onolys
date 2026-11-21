@@ -7,6 +7,8 @@ import { useAuth } from "../../auth/AuthProvider";
 import { useApiClient } from "../../auth/useApiClient";
 import { CONTACT_EMAIL, HAS_CONTACT_EMAIL } from "../../config";
 import { formatResetTime } from "../../lib/format";
+import { UsageLeft } from "../usage/UsageLeft";
+import { useUsage } from "../usage/useUsage";
 import { ErrorCard } from "../session/ErrorCard";
 import { Modal } from "./Modal";
 
@@ -20,7 +22,7 @@ export function Settings() {
   const queryClient = useQueryClient();
   const { signOut } = useAuth();
   const key = useQuery({ queryKey: ["api-key"], queryFn: async () => unwrap(await client.GET("/api-key")) });
-  const usage = useQuery({ queryKey: ["usage"], queryFn: async () => unwrap(await client.GET("/usage")) });
+  const usage = useUsage();
 
   const [confirm, setConfirm] = useState<Confirm>(null);
   const [busy, setBusy] = useState(false);
@@ -115,10 +117,17 @@ export function Settings() {
       <section aria-labelledby="usage-h">
         <h2 id="usage-h">Usage</h2>
         {usage.data ? (
-          <p>
-            {usage.data.runs_today} of {usage.data.daily_cap} runs today
-            {formatResetTime(usage.data.resets_at) ? `, resets at ${formatResetTime(usage.data.resets_at)}` : ""}
-          </p>
+          <>
+            <p>
+              Ratings: <UsageLeft kind="eval" period="day" />, <UsageLeft kind="eval" period="month" />
+              {formatResetTime(usage.data.eval.day.resets_at)
+                ? `. Daily limit resets at ${formatResetTime(usage.data.eval.day.resets_at)}`
+                : ""}
+            </p>
+            <p>
+              Interviews: <UsageLeft kind="interview" period="day" />, <UsageLeft kind="interview" period="month" />
+            </p>
+          </>
         ) : (
           <p className="form-note">Loading…</p>
         )}

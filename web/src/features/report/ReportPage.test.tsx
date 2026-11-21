@@ -52,6 +52,19 @@ afterEach(() => {
   window.location.hash = "";
 });
 
+describe("report page: period-aware caps", () => {
+  it.each([
+    [{ eval: { month: 0 } }, /reached this month's limit/i],
+    [{ eval: { day: 0 } }, /reached today's limit/i],
+  ] as const)("disables Run again with the matching message for caps %j", async (caps, message) => {
+    const sid = reported({ final: true, card: SCORED });
+    mockBackend.configure({ caps });
+    open(sid);
+    expect(await screen.findByText(message)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Run again" })).toBeDisabled();
+  });
+});
+
 describe("report page, rated report", () => {
   it("shows the header with run details, version select and actions", async () => {
     const sid = reported({ final: true, card: SCORED });

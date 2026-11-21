@@ -3,7 +3,7 @@
  * gate slots, error cards and delete. The upload, rating card and speaker gate mount in
  * `slots.tsx`.
  */
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import { unwrap } from "../../api/client";
@@ -11,6 +11,8 @@ import { describeError, failureAction, messageForCode } from "../../api/errors";
 import type { SessionStatusDoc } from "../../api/statusListener";
 import { useApiClient } from "../../auth/useApiClient";
 import { formatElapsed, formatResetTime } from "../../lib/format";
+import { blockingPeriod, evalCapCode, formatBlockingReset } from "../usage/usage";
+import { USAGE_KEY, useUsage } from "../usage/useUsage";
 import { DeleteDialog } from "./DeleteDialog";
 import { ErrorCard } from "./ErrorCard";
 import { RatingCardSlot, SpeakerGateSlot, UploadSlot } from "./slots";
@@ -45,18 +47,19 @@ function SessionView({ id }: { id: string }) {
   const runStartedAt = view.phase === "live" ? view.runStartedAt : null;
   const now = useNow(runStartedAt !== null);
 
-  const needsUsage = doc !== null && (doc.state === "failed" || doc.error_code === "daily_cap_reached");
-  const usage = useQuery({
-    queryKey: ["usage"],
-    enabled: needsUsage,
-    queryFn: async () => unwrap(await client.GET("/usage")),
-  });
-  const atCap = usage.data ? usage.data.runs_today >= usage.data.daily_cap : false;
-  const resetsAt = formatResetTime(usage.data?.resets_at);
+  const needsUsage =
+    doc !== null &&
+    (doc.state === "failed" || doc.error_code === "daily_cap_reached" || doc.error_code === "monthly_cap_reached");
+  const usage = useUsage({ enabled: needsUsage });
+  const blocking = blockingPeriod(usage.data, "eval");
+  const atCap = blocking !== null;
+  // A held start (not a real cap) still shows when the day resets.
+  const resetsAt = formatBlockingReset(blocking) ?? formatResetTime(usage.data?.eval.day.resets_at);
 
   const run = useMutation({
     mutationFn: async () => unwrap(await client.POST("/sessions/{id}/runs", { params: { path: { id } } })),
-    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["usage"] }),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: USAGE_KEY }),
+    onError: () => void queryClient.invalidateQueries({ queryKey: USAGE_KEY }),
   });
 
   const remove = useMutation({
@@ -169,7 +172,7 @@ function SessionView({ id }: { id: string }) {
                   <button type="button" className="btn btn-primary" disabled={runLocked} onClick={() => run.mutate()}>
                     Run again
                   </button>
-                  {atCap ? <span>{messageForCode("daily_cap_reached", { resetsAt })}</span> : null}
+                  {blocking ? <span>{messageForCode(evalCapCode(blocking), { resetsAt })}</span> : null}
                 </>
               )}
             </ErrorCard>

@@ -1,11 +1,13 @@
 /** `/` (PRD R5, D16): the caller's sessions, newest first, with status chips, usage and an empty state. */
-import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
+import { useInfiniteQuery } from "@tanstack/react-query";
 import { Link } from "react-router";
 import { unwrap } from "../../api/client";
-import { describeError } from "../../api/errors";
+import { describeError, messageForCode } from "../../api/errors";
 import { useApiClient } from "../../auth/useApiClient";
-import { formatResetTime } from "../../lib/format";
 import { ErrorCard } from "../session/ErrorCard";
+import { UsageLeft } from "../usage/UsageLeft";
+import { blockingPeriod, evalCapCode, formatBlockingReset } from "../usage/usage";
+import { useUsage } from "../usage/useUsage";
 import { STATUS_CHIP } from "./chips";
 
 const PAGE = 20;
@@ -23,11 +25,8 @@ export function Dashboard() {
       unwrap(await client.GET("/sessions", { params: { query: { limit: PAGE, cursor: pageParam } } })),
     getNextPageParam: (last) => last.next_cursor ?? undefined,
   });
-  const usage = useQuery({
-    queryKey: ["usage"],
-    queryFn: async () => unwrap(await client.GET("/usage")),
-  });
-  const atCap = usage.data ? usage.data.runs_today >= usage.data.daily_cap : false;
+  const usage = useUsage();
+  const blocking = blockingPeriod(usage.data, "eval");
 
   const items = sessions.data?.pages.flatMap((p) => p.items) ?? [];
 
@@ -93,12 +92,17 @@ export function Dashboard() {
     <>
       <h1>Sessions</h1>
       {usage.data ? (
-        <p className="form-note">
-          {usage.data.runs_today} of {usage.data.daily_cap} runs today
-        </p>
+        <>
+          <p className="form-note">
+            Ratings: <UsageLeft kind="eval" period="day" />, <UsageLeft kind="eval" period="month" />
+          </p>
+          <p className="form-note">
+            Interviews: <UsageLeft kind="interview" period="day" />, <UsageLeft kind="interview" period="month" />
+          </p>
+        </>
       ) : null}
-      {atCap ? (
-        <p className="notice">You've reached today's limit. You can run again after {formatResetTime(usage.data?.resets_at)}.</p>
+      {blocking ? (
+        <p className="notice">{messageForCode(evalCapCode(blocking), { resetsAt: formatBlockingReset(blocking) })}</p>
       ) : null}
       {items.length > 0 ? (
         <p>

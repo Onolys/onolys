@@ -6,10 +6,11 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import { unwrap } from "../../api/client";
-import { ApiError, describeError } from "../../api/errors";
+import { ApiError, describeError, messageForCode } from "../../api/errors";
 import type { Report } from "../../api/report";
 import { useApiClient } from "../../auth/useApiClient";
-import { formatResetTime } from "../../lib/format";
+import { blockingPeriod, evalCapCode, formatBlockingReset } from "../usage/usage";
+import { USAGE_KEY, useUsage } from "../usage/useUsage";
 import { RatingCard } from "../rating/RatingCard";
 import { ErrorCard } from "../session/ErrorCard";
 import { TranscriptPanel } from "../transcript/TranscriptPanel";
@@ -65,17 +66,15 @@ function LoadedReport({ id, version }: { id: string; version: number }) {
     gcTime: 0,
     queryFn: async () => unwrap(await client.GET("/sessions/{id}/reports", { params: { path: { id } } })),
   });
-  const usage = useQuery({
-    queryKey: ["usage"],
-    queryFn: async () => unwrap(await client.GET("/usage")),
-  });
-  const atCap = usage.data ? usage.data.runs_today >= usage.data.daily_cap : false;
-  const resetsAt = formatResetTime(usage.data?.resets_at);
+  const usage = useUsage();
+  const blocking = blockingPeriod(usage.data, "eval");
+  const atCap = blocking !== null;
+  const resetsAt = formatBlockingReset(blocking);
 
   const run = useMutation({
     mutationFn: async () => unwrap(await client.POST("/sessions/{id}/runs", { params: { path: { id } } })),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ["usage"] });
+      void queryClient.invalidateQueries({ queryKey: USAGE_KEY });
       void navigate(`/sessions/${id}`);
     },
   });
@@ -156,7 +155,7 @@ function LoadedReport({ id, version }: { id: string; version: number }) {
             Add or edit my rating → Run again
           </button>
         </div>
-        {atCap ? <p className="form-note">You've reached today's limit. You can run again after {resetsAt}.</p> : null}
+        {blocking ? <p className="form-note">{messageForCode(evalCapCode(blocking), { resetsAt })}</p> : null}
         {runError ? <ErrorCard code={runError.code} reference={runError.requestId} resetsAt={resetsAt} /> : null}
       </header>
 

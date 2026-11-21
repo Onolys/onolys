@@ -39,7 +39,7 @@ function isKnown(code: string | undefined): code is ErrorCode {
 }
 
 export interface MessageContext {
-  /** Reset time for `daily_cap_reached`, already formatted for display. */
+  /** Reset time (a time of day, or a date for the month cap) for the eval cap codes, already formatted. */
   resetsAt?: string;
 }
 
@@ -47,6 +47,9 @@ export function messageForCode(code: string | undefined, ctx: MessageContext = {
   if (!isKnown(code)) return GENERIC_MESSAGE;
   if (code === "daily_cap_reached" && ctx.resetsAt) {
     return `You've reached today's limit. You can start the rating after ${ctx.resetsAt}.`;
+  }
+  if (code === "monthly_cap_reached" && ctx.resetsAt) {
+    return `You've reached this month's limit. You can start the rating after ${ctx.resetsAt}.`;
   }
   return MESSAGES[code];
 }
