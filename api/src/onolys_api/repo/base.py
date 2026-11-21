@@ -161,7 +161,9 @@ class Repo(Protocol):
     ) -> ReserveUsageOutcome: ...
     # Decrements `active_runs` (eval only, floor 0); with `refund` also the day and month
     # counters of the doc keys given by `date` (floor 0). One transaction.
-    def release_usage(self, uid: str, kind: Kind, date: str, refund: bool) -> None: ...
+    def release_usage(
+        self, uid: str, kind: Kind, date: str, refund: bool, units: int = 1
+    ) -> None: ...
     # ONE transaction: if run `run_id` is not yet `released`, set `released=True` and hand its eval
     # slot back (`active_runs`-1; with `refund and run.counted` also the day/month counters of
     # `run.cap_date or date`; nothing is handed back when both dates are None). Returns False when

@@ -58,8 +58,9 @@ def maybe_start_first_run(
             error_code="upstream_unavailable", exc_class=type(e).__name__, request_id=request_id,
         )  # fmt: skip
         repo.update_run(uid, sid, run_id, {"status": "failed", "error": "upstream_unavailable"})
-        counted = repo.get_run(uid, sid, run_id).counted  # a free first run is never refunded
-        caps.release_run(repo, uid, date, refund=counted)
+        from onolys_api.jobs.run import release_once  # jobs.run imports transcribe imports us
+
+        release_once(repo, uid, sid, run_id, True, date)  # refunds its units unless it was free
         advance(
             repo, uid, sid, to="failed", step=None,
             error=SessionError(code="upstream_unavailable", step="run"),

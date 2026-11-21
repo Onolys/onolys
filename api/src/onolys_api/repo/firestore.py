@@ -587,7 +587,7 @@ class FirestoreRepo:
 
         return self._contended(txn_fn, uid)
 
-    def release_usage(self, uid: str, kind: Kind, date: str, refund: bool) -> None:
+    def release_usage(self, uid: str, kind: Kind, date: str, refund: bool, units: int = 1) -> None:
         day_ref = self._top("usage", f"{uid}_{date}")
         month_ref = self._top("usage", f"{uid}_{date[:7]}")
         user_ref = self._top("users", uid)
@@ -602,9 +602,9 @@ class FirestoreRepo:
                 txn.set(user_ref, {"active_runs": user["active_runs"] - 1}, merge=True)
             if refund:
                 if day.get(field, 0) > 0:
-                    txn.set(day_ref, {field: day[field] - 1}, merge=True)
+                    txn.set(day_ref, {field: max(0, day[field] - units)}, merge=True)
                 if month.get(field, 0) > 0:
-                    txn.set(month_ref, {field: month[field] - 1}, merge=True)
+                    txn.set(month_ref, {field: max(0, month[field] - units)}, merge=True)
 
         self._contended(txn_fn, uid)
 
@@ -634,10 +634,11 @@ class FirestoreRepo:
                     txn.set(user_ref, {"active_runs": user["active_runs"] - 1}, merge=True)
                 if refund and run.get("counted", True):
                     field = KIND_FIELD["eval"]
+                    units = run.get("units", 1)
                     if day.get(field, 0) > 0:
-                        txn.set(day_ref, {field: day[field] - 1}, merge=True)
+                        txn.set(day_ref, {field: max(0, day[field] - units)}, merge=True)
                     if month.get(field, 0) > 0:
-                        txn.set(month_ref, {field: month[field] - 1}, merge=True)
+                        txn.set(month_ref, {field: max(0, month[field] - units)}, merge=True)
             return True
 
         try:
@@ -685,7 +686,8 @@ class FirestoreRepo:
             latest = [s for s in newest.get(transaction=txn) if s.id != DRAFT_ID]
             now = utcnow()
             exempt = bool(sess.get("interview_id"))
-            decided = decide_start(user, usage, month, defaults, max_active, exempt)
+            units = sess.get("n_runs", 1)
+            decided = decide_start(user, usage, month, defaults, max_active, exempt, units)
             if decided != "ok":
                 outcome: StartOutcome = START_OUTCOME[decided]  # type: ignore[assignment]
                 code = HELD_ERROR_CODE[outcome]
@@ -696,18 +698,18 @@ class FirestoreRepo:
                 uid=uid, session_id=sid, run_id=run_id, n_runs=sess.get("n_runs", 1),
                 preset=sess.get("preset"), rating_id=latest[0].id if latest else None,
                 stt=sess.get("stt"), code_version=code_version, cap_date=date,
-                counted=not exempt,
+                counted=not exempt, units=units,
             )  # fmt: skip
             txn.create(run_ref, run.to_store())
             if not exempt:
                 txn.set(
                     usage_ref,
-                    {"uid": uid, "date": date, "runs": usage.get("runs", 0) + 1},
+                    {"uid": uid, "date": date, "runs": usage.get("runs", 0) + units},
                     merge=True,
                 )
                 txn.set(
                     month_ref,
-                    {"uid": uid, "month": date[:7], "runs": month.get("runs", 0) + 1},
+                    {"uid": uid, "month": date[:7], "runs": month.get("runs", 0) + units},
                     merge=True,
                 )
             txn.set(user_ref, {"active_runs": user.get("active_runs", 0) + 1}, merge=True)
@@ -759,14 +761,15 @@ class FirestoreRepo:
             latest = [s for s in newest.get(transaction=txn) if s.id != DRAFT_ID]
             # the free first run of an interview-linked session (SP11 R5), same as start_first_run
             exempt = bool(sess.get("interview_id")) and not sess.get("first_run_id")
-            decided = decide_start(user, usage, month, defaults, max_active, exempt)
+            units = n_runs or sess.get("n_runs", 1)
+            decided = decide_start(user, usage, month, defaults, max_active, exempt, units)
             if decided != "ok":
                 return START_OUTCOME[decided]  # type: ignore[return-value]
             run = RunDoc(
                 uid=uid, session_id=sid, run_id=run_id, n_runs=n_runs or sess.get("n_runs", 1),
                 preset=preset or sess.get("preset"), rating_id=latest[0].id if latest else None,
                 stt=sess.get("stt"), code_version=code_version, cap_date=date,
-                counted=not exempt,
+                counted=not exempt, units=units,
             )  # fmt: skip
             progress = (
                 start_progress
@@ -787,12 +790,12 @@ class FirestoreRepo:
             if not exempt:
                 txn.set(
                     usage_ref,
-                    {"uid": uid, "date": date, "runs": usage.get("runs", 0) + 1},
+                    {"uid": uid, "date": date, "runs": usage.get("runs", 0) + units},
                     merge=True,
                 )
                 txn.set(
                     month_ref,
-                    {"uid": uid, "month": date[:7], "runs": month.get("runs", 0) + 1},
+                    {"uid": uid, "month": date[:7], "runs": month.get("runs", 0) + units},
                     merge=True,
                 )
             txn.set(user_ref, {"active_runs": user.get("active_runs", 0) + 1}, merge=True)

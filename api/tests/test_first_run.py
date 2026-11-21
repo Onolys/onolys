@@ -90,7 +90,7 @@ def new_session(repo, uid, *, state="transcribing", ready=False, speakers=("S1",
     now = datetime.now(UTC)
     repo.create_session(
         uid, sid,
-        SessionDoc(uid=uid, n_runs=2, preset="p1", stt=SttInfo(provider="x", model="m", language="en"),
+        SessionDoc(uid=uid, n_runs=1, preset="p1", stt=SttInfo(provider="x", model="m", language="en"),
                    created_at=now, updated_at=now),
         SessionStatusDoc(uid=uid, updated_at=now),
     )  # fmt: skip
@@ -150,7 +150,7 @@ def test_starts_run_when_all_three_inputs_present(repo):
     assert st.state == "running" and st.progress == 45 and st.error_code is None
     (run,) = repo.list_runs(uid, sid)
     assert run.run_id == sess.first_run_id and run.status == "pending"
-    assert (run.rating_id, run.n_runs, run.preset, run.code_version) == (rid, 2, "p1", "sha-test")
+    assert (run.rating_id, run.n_runs, run.preset, run.code_version) == (rid, 1, "p1", "sha-test")
     assert run.stt == SttInfo(provider="x", model="m", language="en")
     assert [(c.kind, c.run_id, c.uid, c.sid) for c in queue.calls] == [
         ("run", run.run_id, uid, sid)

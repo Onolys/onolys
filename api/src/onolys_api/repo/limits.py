@@ -80,14 +80,16 @@ def decide_reserve(
     kind: Kind,
     d: LimitDefaults,
     max_active: int,
+    units: int = 1,
 ) -> ReserveUsageOutcome:
     """Shared reserve rule (both repos). Month is checked first so it wins when both are spent;
-    the concurrent limit applies to `eval` only (`users/{uid}.max_active_runs` overrides)."""
+    the concurrent limit applies to `eval` only (`users/{uid}.max_active_runs` overrides).
+    `units` is what the action costs (an n_runs run costs n_runs): refused unless all fit."""
     user = user or {}
     field = KIND_FIELD[kind]
-    if (month or {}).get(field, 0) >= effective_cap(user, kind, "month", d):
+    if (month or {}).get(field, 0) + units > effective_cap(user, kind, "month", d):
         return "month_cap"
-    if (day or {}).get(field, 0) >= effective_cap(user, kind, "day", d):
+    if (day or {}).get(field, 0) + units > effective_cap(user, kind, "day", d):
         return "day_cap"
     if kind == "eval" and _at_active_limit(user, max_active):
         return "concurrent"
@@ -106,12 +108,13 @@ def decide_start(
     d: LimitDefaults,
     max_active: int,
     exempt: bool,
+    units: int = 1,
 ) -> ReserveUsageOutcome:
     """Run-start rule (`start_first_run`/`start_run`, both repos): the eval reserve rule, except an
     `exempt` run (first AI-linked evaluation, SP11 R5) skips the day/month checks and still obeys
-    the concurrent-run limit."""
+    the concurrent-run limit. A counted run costs `units` (= its n_runs)."""
     if not exempt:
-        return decide_reserve(user, day, month, "eval", d, max_active)
+        return decide_reserve(user, day, month, "eval", d, max_active, units)
     return "concurrent" if _at_active_limit(user or {}, max_active) else "ok"
 
 

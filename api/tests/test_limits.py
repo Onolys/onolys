@@ -82,3 +82,57 @@ def test_models():
     m = UsageMonthDoc()
     assert (m.runs, m.interviews) == (0, 0)
     assert RunDoc(uid="u", session_id="s", run_id="r").counted is True
+
+
+# ---- FX42/M9/M10: unit-cost cap decisions and the per-user override branches ------------------
+
+
+def _d():
+    from onolys_api.repo.limits import LimitDefaults
+
+    return LimitDefaults(eval_day=10, eval_month=100, interview_day=5, interview_month=30)
+
+
+def test_decide_reserve_units_must_all_fit():
+    from onolys_api.repo.limits import decide_reserve
+
+    d = _d()
+    day = {"runs": 7}
+    assert decide_reserve(None, day, None, "eval", d, 2, units=3) == "ok"  # 7 + 3 == cap
+    assert decide_reserve(None, day, None, "eval", d, 2, units=4) == "day_cap"
+    assert decide_reserve(None, None, {"runs": 98}, "eval", d, 2, units=3) == "month_cap"
+    assert decide_reserve(None, {"runs": 10}, None, "eval", d, 2) == "day_cap"  # default 1 unit
+
+
+def test_decide_start_units_exempt_and_active_limit():
+    from onolys_api.repo.limits import decide_start
+
+    d = _d()
+    assert decide_start(None, {"runs": 8}, None, d, 2, False, 3) == "day_cap"
+    assert decide_start(None, {"runs": 8}, None, d, 2, False, 2) == "ok"
+    assert decide_start(None, {"runs": 99}, {"runs": 999}, d, 2, True, 5) == "ok"  # exempt
+    # user=None means no active runs; a real user at the limit is refused (M10)
+    assert decide_start(None, None, None, d, 1, True) == "ok"
+    assert decide_start({"active_runs": 1}, None, None, d, 1, True) == "concurrent"
+    assert decide_start({"active_runs": 1, "max_active_runs": 5}, None, None, d, 1, False) == "ok"
+    assert decide_start({"active_runs": 0}, None, None, d, 0, True) == "concurrent"
+
+
+def test_effective_cap_override_branches():
+    from onolys_api.repo.limits import effective_cap
+
+    d = _d()
+    assert effective_cap(None, "eval", "day", d) == 10  # no user, no limits (M9)
+    assert effective_cap({}, "eval", "day", d) == 10
+    assert effective_cap({"limits": {"eval": {"day": 25}}}, "eval", "day", d) == 25
+    # partial override: other period / kind fall back to the default
+    partial = {"limits": {"eval": {"day": 25}}}
+    assert effective_cap(partial, "eval", "month", d) == 100
+    assert effective_cap(partial, "interview", "day", d) == 5
+    assert effective_cap({"limits": {"eval": {"day": 0}}}, "eval", "day", d) == 0  # 0 is valid
+    # malformed shapes are ignored, never raise
+    assert effective_cap({"limits": "x"}, "eval", "day", d) == 10
+    assert effective_cap({"limits": {"eval": 5}}, "eval", "day", d) == 10
+    assert effective_cap({"limits": {"eval": {"day": True}}}, "eval", "day", d) == 10
+    assert effective_cap({"daily_cap": 4}, "eval", "day", d) == 4
+    assert effective_cap({"daily_cap": 4}, "eval", "month", d) == 100

@@ -301,13 +301,15 @@ def test_concurrent_api_key_create_leaves_single_active_key(fs_api):
     assert live == [], f"{len(live)} key(s) still valid after DELETE"
 
 
-def test_concurrent_session_create_is_bounded_per_user(request, fake_api):
+def test_session_create_is_free_and_uncapped(fake_api):
+    """FX46 (A4, owner decision): creating a session costs nothing and has no cap; only POST /runs
+    (and starting an AI interview) uses a unit."""
     api = fake_api
-    known_bug(request, "A4: no open-session cap (product call on the limit)")
     h = _uid()
     rs = _concurrently(api, [lambda: api.post("/v1/sessions", json={}, headers=h)] * 20)
-    assert all(r.status_code < 500 for r in rs)
-    assert not all(r.status_code == 202 for r in rs), "20 concurrent creates all accepted"
+    assert all(r.status_code == 202 for r in rs), [r.status_code for r in rs]
+    usage = api.get("/v1/usage", headers=h).json()
+    assert usage["eval"]["day"]["used"] == 0 and usage["interview"]["day"]["used"] == 0
 
 
 def test_isolation_random_ids_between_users(api):

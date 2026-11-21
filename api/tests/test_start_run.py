@@ -210,3 +210,50 @@ def test_session_detail_exposes_interview_id(repo):  # noqa: F811
     with TestClient(make_client(repo)) as c:
         assert c.get(f"/v1/sessions/{linked}", headers=h).json()["interview_id"] == "iv1"
         assert c.get(f"/v1/sessions/{plain}", headers=h).json()["interview_id"] is None
+
+
+# ---- FX42 (A5): a run costs n_runs units ---------------------------------------------------
+
+
+def test_n_runs_costs_n_units_and_refunds_all(repo):  # noqa: F811
+    from onolys_api.jobs.run import release_once
+
+    uid = f"u{uuid.uuid4().hex[:10]}"
+    sid = _linked_ready(repo, uid)
+    app = make_client(repo, mk_settings(eval_cap_day=5, eval_cap_month=5), RecordingQueue())
+    with TestClient(app) as c:
+        r = c.post(f"/v1/sessions/{sid}/runs", json={"n_runs": 3},
+                   headers={"Authorization": f"Bearer test:{uid}"})  # fmt: skip
+    assert r.status_code == 202, r.text
+    date = caps.utc_date()
+    assert user_counters(repo, uid, date) == (1, 3)  # one slot, three units
+    assert repo.get_usage_docs(uid, date)[1].runs == 3
+    release_once(repo, uid, sid, r.json()["run_id"], True, date)
+    assert user_counters(repo, uid, date) == (0, 0)
+    assert repo.get_usage_docs(uid, date)[1].runs == 0
+
+
+def test_n_runs_beyond_the_units_left_is_refused_and_reserves_nothing(repo):  # noqa: F811
+    uid = f"u{uuid.uuid4().hex[:10]}"
+    sid = _linked_ready(repo, uid)
+    for settings in (mk_settings(eval_cap_day=2), mk_settings(eval_cap_month=2)):
+        r = _post_run_n(make_client(repo, settings), uid, sid, 3)
+        assert r.status_code == 429, r.text
+        assert r.json()["details"][0]["code"] in ("daily_cap_reached", "monthly_cap_reached")
+    assert repo.list_runs(uid, sid) == []
+    assert user_counters(repo, uid, caps.utc_date()) == (0, 0)
+    ok = _post_run_n(make_client(repo, mk_settings(eval_cap_day=3), RecordingQueue()), uid, sid, 3)
+    assert ok.status_code == 202  # exactly the units left fit
+
+
+def _post_run_n(app, uid, sid, n):
+    with TestClient(app) as c:
+        return c.post(f"/v1/sessions/{sid}/runs", json={"n_runs": n},
+                      headers={"Authorization": f"Bearer test:{uid}"})  # fmt: skip
+
+
+def test_auto_first_run_costs_the_session_n_runs(repo):  # noqa: F811
+    uid = f"u{uuid.uuid4().hex[:10]}"
+    sid = _linked_ready(repo, uid, n_runs=2)
+    maybe_start_first_run(repo, RecordingQueue(), uid, sid, mk_settings())
+    assert user_counters(repo, uid, caps.utc_date()) == (1, 2)
