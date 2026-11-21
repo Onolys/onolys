@@ -26,11 +26,11 @@ jobs:
       - run: uv run --no-sync python -m eval.run --mode oracle --gate poc
 
   api-real-mode:
-    # SP09 R5: real evaluation with no GCP (fixture STT, real Claude LLM, fake repo and blobs).
+    # SP09 R5: real evaluation with no GCP (fixture STT, real Gemini LLM, fake repo and blobs).
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
-      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5

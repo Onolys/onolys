@@ -4,7 +4,7 @@ Every `IAUDIT_*` setting, read from `Settings` in `engines/eaudit/src/eaudit/con
 
 **Audience:** users.
 
-Two things are not `Settings` fields. `IAUDIT_CONTRACTS_DIR` points at the schema directory (default: `docs/contracts` of the repo) and is read from the environment only, so `.env` does not set it. Provider keys are the standard variables LiteLLM reads, for example `ANTHROPIC_API_KEY`. They are never logged. With `IAUDIT_LLM_MODE=live` and no key present, the service starts, logs a warning, and audits fail with 503.
+Two things are not `Settings` fields. `IAUDIT_CONTRACTS_DIR` points at the schema directory (default: `docs/contracts` of the repo) and is read from the environment only, so `.env` does not set it. Provider keys are the standard variables LiteLLM reads, for example `GEMINI_API_KEY`. They are never logged. With `IAUDIT_LLM_MODE=live` and no key present, the service starts, logs a warning, and audits fail with 503.
 
 Values here are the defaults. Tuning values (thresholds, caps, windows) are guesses to be tuned against the evaluation harness; see [../testing/evaluation.md](../testing/evaluation.md).
 
@@ -21,9 +21,9 @@ Values here are the defaults. Tuning values (thresholds, caps, windows) are gues
 
 | Variable | Default | Meaning |
 |---|---|---|
-| `IAUDIT_MODEL_CHEAP` | `anthropic/claude-haiku-5-5` | LiteLLM model id for the cheap tier (prep tagging). |
-| `IAUDIT_MODEL_MID` | `anthropic/claude-sonnet-5-5` | LiteLLM model id for the mid tier (atomize, link, check). |
-| `IAUDIT_MODEL_STRONG` | `anthropic/claude-opus-5-5` | LiteLLM model id for the strong tier. Offline use only. |
+| `IAUDIT_MODEL_CHEAP` | `gemini/gemini-4-hydrogen` | LiteLLM model id for the cheap tier (prep tagging). |
+| `IAUDIT_MODEL_MID` | `gemini/gemini-4-neon` | LiteLLM model id for the mid tier (atomize, link, check). |
+| `IAUDIT_MODEL_STRONG` | `gemini/gemini-4-carbon` | LiteLLM model id for the strong tier. Offline use only. |
 | `IAUDIT_LLM_TIMEOUT_S` | `30` | Default call timeout for a stage with no `*_CALL_TIMEOUT_S` of its own, and the time a retry needs to fit. A stage cap replaces it, even when longer. |
 | `IAUDIT_AUDIT_DEADLINE_S` | `100` | Hard cap for one audit. A startup warning is logged above 100. |
 | `IAUDIT_LLM_MAX_RETRIES` | `1` | Retries of a failed model call (timeout, bad JSON, provider error). |

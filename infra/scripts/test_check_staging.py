@@ -16,14 +16,17 @@ def test_anon_api_ok_and_worker_denied():
     assert not chk.anon_worker_denied(200) and not chk.anon_worker_denied(404)
 
 
-def test_worker_env_refs_only_anthropic():
-    ok = [{"name": "ANTHROPIC_API_KEY", "valueSource": {"secretKeyRef": {"secret": "anthropic-api-key"}}}, {"name": "ENV", "value": "staging"}]
+def test_worker_env_refs_only_llm_keys():
+    ref = lambda n, s: {"name": n, "valueSource": {"secretKeyRef": {"secret": s}}}
+    ok = [ref("GEMINI_API_KEY", "gemini-api-key-staging"), ref("ANTHROPIC_API_KEY", "anthropic-api-key-staging"), {"name": "ENV", "value": "staging"}]
     assert chk.worker_env_problems(ok) == []
-    plain = [{"name": "ANTHROPIC_API_KEY", "value": "sk-x"}]
-    assert chk.worker_env_problems(plain)
-    extra = ok + [{"name": "GEMINI_API_KEY", "valueSource": {"secretKeyRef": {"secret": "g"}}}, {"name": "STT_X", "value": "1"}]
+    assert chk.worker_env_problems([{"name": "GEMINI_API_KEY", "value": "k"}, ok[1]])  # plaintext gemini rejected
+    assert chk.worker_env_problems([ok[0], {"name": "ANTHROPIC_API_KEY", "value": "sk-x"}])  # plaintext anthropic rejected
+    extra = ok + [ref("OPENAI_API_KEY", "o"), {"name": "STT_X", "value": "1"}]
     assert len(chk.worker_env_problems(extra)) == 2
-    assert chk.worker_env_problems([{"name": "ENV", "value": "staging"}])  # ref missing
+    assert chk.worker_env_problems([ok[1], ok[2]]) == ["GEMINI_API_KEY missing"]
+    assert chk.worker_env_problems([ok[0], ok[2]]) == ["ANTHROPIC_API_KEY missing"]
+    assert chk.worker_env_problems([{"name": "ENV", "value": "staging"}])  # refs missing
 
 
 def test_iam_project_bindings():
@@ -99,7 +102,7 @@ def test_wif_binding_prod_only_production_env():
 # ---- UID_HMAC_KEY wiring ----
 def test_worker_env_allows_uid_hmac_secret_ref():
     ref = lambda n, s: {"name": n, "valueSource": {"secretKeyRef": {"secret": s}}}
-    base = [ref("ANTHROPIC_API_KEY", "anthropic-api-key"), {"name": "ENV", "value": "staging"}]
+    base = [ref("GEMINI_API_KEY", "gemini-api-key"), ref("ANTHROPIC_API_KEY", "anthropic-api-key"), {"name": "ENV", "value": "staging"}]
     assert chk.worker_env_problems(base + [ref("UID_HMAC_KEY", "uid-hmac-key-staging")]) == []
     assert chk.worker_env_problems(base + [{"name": "UID_HMAC_KEY", "value": "plain"}])  # plaintext rejected
     assert chk.worker_env_problems(base + [ref("OTHER_SECRET", "x")])  # other refs still rejected

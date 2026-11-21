@@ -76,3 +76,11 @@ def test_prod_run_does_not_touch_staging_or_legacy():
     run(c, {"ANTHROPIC_API_KEY": "p"}, target="prod")
     assert c.v["anthropic-api-key"] == b"legacy" and c.v["anthropic-api-key-staging"] == b"s"
     assert sorted(c.adds) == ["anthropic-api-key-prod", "uid-hmac-key-prod"]
+
+
+def test_default_map_seeds_gemini_and_keeps_existing_anthropic():
+    assert seed.DEFAULT_MAP == {"GEMINI_API_KEY": "gemini-api-key", "ANTHROPIC_API_KEY": "anthropic-api-key"}
+    c = Fake({"anthropic-api-key-staging": b"old", "uid-hmac-key-staging": b"h" * 64})
+    r = seed.seed(c, env="staging", provider_maps=seed.DEFAULT_MAP, environ={"GEMINI_API_KEY": "g-key"})
+    assert r.ok and c.adds == ["gemini-api-key-staging"]  # unset ANTHROPIC_API_KEY keeps its version
+    assert c.v["gemini-api-key-staging"] == b"g-key" and c.v["anthropic-api-key-staging"] == b"old"

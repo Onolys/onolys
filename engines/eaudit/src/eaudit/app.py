@@ -34,7 +34,7 @@ from eaudit.pipeline import (
 
 log = logging.getLogger("iaudit")
 MAX_SAFE_DEADLINE_S = 100
-_KEY_VARS = ("ANTHROPIC_API_KEY", "OPENAI_API_KEY", "LITELLM_API_KEY")  # presence only
+_KEY_VARS = ("GEMINI_API_KEY", "ANTHROPIC_API_KEY", "OPENAI_API_KEY", "LITELLM_API_KEY")  # presence only
 
 
 class ContractCORSMiddleware(CORSMiddleware):

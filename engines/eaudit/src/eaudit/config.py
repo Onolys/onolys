@@ -20,9 +20,9 @@ class Settings(BaseSettings):
     # CORS
     cors_origins: Annotated[list[str], NoDecode] = ["http://localhost:5173"]
     # Models (LiteLLM ids)
-    model_cheap: str = "anthropic/claude-haiku-5-5"
-    model_mid: str = "anthropic/claude-sonnet-5-5"
-    model_strong: str = "anthropic/claude-opus-5-5"
+    model_cheap: str = "gemini/gemini-4-hydrogen"
+    model_mid: str = "gemini/gemini-4-neon"
+    model_strong: str = "gemini/gemini-4-carbon"
     # Timeouts / retries / concurrency
     llm_timeout_s: float = 30
     audit_deadline_s: float = 100
@@ -144,15 +144,14 @@ class Settings(BaseSettings):
             routes[name] = Route(
                 litellm_id=model,
                 structured_output_mode=self.llm_response_format,
-                caching_mode="anthropic_ephemeral",
-                supports_temperature=True,
+                caching_mode="provider_implicit",
+                supports_temperature=False,
                 max_output_tokens=max(16000, self.atomize_max_tokens),
                 timeout_s=timeout,  # per-stage caps clamp below this
                 max_concurrency=self.llm_max_concurrency,
                 max_retries=self.llm_max_retries,
                 backoff_s=0,
-                # Haiku 5.5 thinks by default and can spend all of max_tokens on it.
-                extra_params={"thinking": {"type": "disabled"}},
+                extra_params={},  # no thinking param: Gemini defaults apply
             )
         return LLMConfig(
             llm_mode=self.llm_mode,

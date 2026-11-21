@@ -154,7 +154,7 @@ async def test_alias_style_routes_via_registry_default():
     fake = Fake(completion())
     c = LiteLLMClient(LLMConfig(llm_mode="live"), acompletion=fake)
     await c.complete_json(req(tier="paudit_code"))
-    assert fake.calls[0]["model"] == "anthropic/claude-sonnet-5-5"
+    assert fake.calls[0]["model"] == "gemini/gemini-4-neon"
     assert "temperature" not in fake.calls[0]
 
 
@@ -262,3 +262,37 @@ def test_make_client_stub_and_fixture_skip_key_check(monkeypatch, tmp_path):
     routes = {"mid": route(api_key_env="MY_KEY")}
     make_client(replace(LLMConfig(llm_mode="stub"), routes=routes))
     make_client(LLMConfig(llm_mode="fixture", fixture_dir=str(tmp_path), routes=routes))
+
+
+async def test_gemini_route_kwargs_from_packaged_default():
+    fake = Fake(completion())
+    c = LiteLLMClient(LLMConfig(llm_mode="live"), acompletion=fake)
+    await c.complete_json(req(tier="cheap", cache_prefix="P", temperature=0.3))
+    kw = fake.calls[0]
+    assert kw["model"] == "gemini/gemini-4-hydrogen"
+    assert kw["response_format"] == {"type": "json_object"}
+    assert "temperature" not in kw and "thinking" not in kw
+    # provider_implicit caching: prefixes are plain text in the system message, no cache_control
+    assert kw["messages"][0]["content"] == "P\n\nsys"
+
+
+async def test_gemini_request_builds_offline_and_reads_key_from_env(monkeypatch):
+    """Real LiteLLM, HTTP stubbed: provider resolves, key comes from GEMINI_API_KEY, body is Gemini's."""
+    import litellm
+    from litellm.llms.custom_httpx.http_handler import AsyncHTTPHandler
+
+    seen = {}
+
+    async def fake_post(self, url, *a, **k):
+        seen.update(url=url, body=k.get("json"), headers=k.get("headers"))
+        raise RuntimeError("no network in unit tests")
+
+    monkeypatch.setenv("GEMINI_API_KEY", "gem-test-key")
+    monkeypatch.setattr(AsyncHTTPHandler, "post", fake_post)
+    c = LiteLLMClient(LLMConfig(llm_mode="live"), acompletion=litellm.acompletion)
+    with pytest.raises(LLMUnavailable):
+        await c.complete_json(req(tier="mid", retry=False))
+    assert "gemini-4-neon:generateContent" in seen["url"]
+    assert seen["headers"]["x-goog-api-key"] == "gem-test-key"
+    assert seen["body"]["generationConfig"]["response_mime_type"] == "application/json"
+    assert "temperature" not in seen["body"]["generationConfig"]

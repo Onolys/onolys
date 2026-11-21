@@ -4,7 +4,7 @@
     prefix 2 = stage text                   (instructions, taxonomy, few-shot; per stage)
     user     = per-claim block
 
-Anthropic caches by exact prefix, so the transcript must come before stage text for the two
+Provider prompt caches (Gemini implicit, Anthropic) match by exact prefix, so the transcript must come before stage text for the two
 stages to share one cache write. Act hints need prep, so they live in the claim block.
 """
 

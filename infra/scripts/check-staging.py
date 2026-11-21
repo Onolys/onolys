@@ -2,7 +2,7 @@
 """Live env checks, staging (default) or prod (PRD R8 resolved checks, R10, AC3/AC4/AC6). ADC auth, no gcloud. Prints results, exit 1 on any failure.
 
   python3 infra/scripts/check-staging.py [--env prod]  # anon invoker checks, worker env refs, IAM isolation both ways, WIF binding
-  python3 infra/scripts/check-staging.py --egress   # also: one-off Cloud Run job hits api.anthropic.com, then is deleted
+  python3 infra/scripts/check-staging.py --egress   # also: one-off Cloud Run job hits generativelanguage.googleapis.com, then is deleted
 
 Note: no x-goog-user-project header on any call (keeps it safe for CloudBilling-style APIs); every API used here
 works without it. No secret values are read or printed.
@@ -53,19 +53,24 @@ def anon_worker_denied(code):
     return code in (401, 403)
 
 
+# Default `llm_secrets` (infra/variables.tf): Gemini for evaluation, Anthropic for the `claude` preset.
+LLM_KEYS = ("GEMINI_API_KEY", "ANTHROPIC_API_KEY")
+
+
 def worker_env_problems(env):
     out = []
     byname = {e["name"]: e for e in env}
-    ref = byname.get("ANTHROPIC_API_KEY")
-    if ref is None:
-        out.append("ANTHROPIC_API_KEY missing")
-    elif "valueSource" not in ref or "value" in ref:
-        out.append("ANTHROPIC_API_KEY is not a pure secret ref")
+    for key in LLM_KEYS:
+        ref = byname.get(key)
+        if ref is None:
+            out.append(f"{key} missing")
+        elif "valueSource" not in ref or "value" in ref:
+            out.append(f"{key} is not a pure secret ref")
     hm = byname.get("UID_HMAC_KEY")
     if hm is not None and ("valueSource" not in hm or "value" in hm):
         out.append("UID_HMAC_KEY is not a pure secret ref")
     for n, e in byname.items():
-        if n not in ("ANTHROPIC_API_KEY", "UID_HMAC_KEY") and (n.endswith("_API_KEY") or n.startswith("STT_") or "valueSource" in e):
+        if n not in (*LLM_KEYS, "UID_HMAC_KEY") and (n.endswith("_API_KEY") or n.startswith("STT_") or "valueSource" in e):
             out.append(f"unexpected provider/secret env: {n}")
     return out
 
@@ -138,7 +143,7 @@ def run_egress(tok):
     base = f"https://run.googleapis.com/v2/projects/{PROJECT}/locations/{REGION}/jobs"
     name = "egress-check-tmp"
     code_py = ("import urllib.request,urllib.error,sys\n"
-               "try:\n r=urllib.request.urlopen('https://api.anthropic.com/v1/models',timeout=20);print('HTTP',r.status)\n"
+               "try:\n r=urllib.request.urlopen('https://generativelanguage.googleapis.com/v1beta/models',timeout=20);print('HTTP',r.status)\n"
                "except urllib.error.HTTPError as e:\n print('HTTP',e.code)\n"
                "except Exception as e:\n print('FAIL',e);sys.exit(1)\n")
     job = {"template": {"template": {"maxRetries": 0, "timeout": "60s",
@@ -194,7 +199,7 @@ def main(argv=None):
         uris[svc] = d["uri"]
         if svc == "worker":
             rec("worker env refs", not worker_env_problems(d["template"]["containers"][0].get("env", [])),
-                "; ".join(worker_env_problems(d["template"]["containers"][0].get("env", []))) or "ANTHROPIC_API_KEY (+UID_HMAC_KEY) secret refs only")
+                "; ".join(worker_env_problems(d["template"]["containers"][0].get("env", []))) or "GEMINI_API_KEY, ANTHROPIC_API_KEY (+UID_HMAC_KEY) secret refs only")
     s, _ = call("GET", uris["api"] + "/")
     rec("anonymous api", anon_api_ok(s), f"HTTP {s}")
     s, _ = call("GET", uris["worker"] + "/")
@@ -237,7 +242,7 @@ def main(argv=None):
     s, pol = call("GET", f"{run}/onolys-api-{env}:getIamPolicy", tok)
     rec("api allUsers invoker binding", any(m == "allUsers" for b in pol.get("bindings", []) for m in b["members"]), "org policy did not block")
     if a.egress:
-        rec("egress to api.anthropic.com", run_egress(tok))
+        rec("egress to generativelanguage.googleapis.com", run_egress(tok))
     return 1 if fails else 0
 
 

@@ -10,9 +10,9 @@ def test_defaults():
     assert s.max_turns == 2000
     assert s.max_sections == 50
     assert s.cors_origins == ["http://localhost:5173"]
-    assert s.model_cheap == "anthropic/claude-haiku-5-5"
-    assert s.model_mid == "anthropic/claude-sonnet-5-5"
-    assert s.model_strong == "anthropic/claude-opus-5-5"
+    assert s.model_cheap == "gemini/gemini-4-hydrogen"
+    assert s.model_mid == "gemini/gemini-4-neon"
+    assert s.model_strong == "gemini/gemini-4-carbon"
     assert s.llm_timeout_s == 30
     assert s.audit_deadline_s == 100
     assert s.llm_max_retries == 1
