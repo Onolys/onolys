@@ -3,6 +3,7 @@
 import httpx
 import pytest
 from audio_helpers import MAGIC, A, StubTools
+
 from onolys_api.app import create_app
 from onolys_api.audio import ProbeResult
 from onolys_api.repo.fake import FakeRepo
@@ -65,6 +66,13 @@ async def test_links_ended_interview_and_prefills_everything(api, repo):
     # the draft is returned by GET rating, with no final
     g = (await api.get(f"/v1/sessions/{sid}/rating", headers=A)).json()
     assert g["final"] is None and g["draft"]["card"] == {"change_goal": GOAL}
+
+
+async def test_refunded_interview_cannot_be_linked(api, repo):
+    iid = interview(repo, refunded=True)
+    r = await link(api, iid)
+    assert r.status_code == 409 and r.json()["details"][0]["code"] == "invalid_state"
+    assert repo.get_interview("alice", iid).session_id is None
 
 
 async def test_list_tags_interview_sessions(api, repo):

@@ -830,6 +830,39 @@ def test_interview_transition_settles_once_and_guards_owner(repo):
         repo.update_interview(bob, i1, {"duration_s": 1.0})
 
 
+def test_interview_transition_stores_refunded_and_blocks_linking(repo):
+    alice = f"alice-{uuid.uuid4().hex[:8]}"
+    short, long_, stale = (uuid.uuid4().hex for _ in range(3))
+    t0 = datetime(2026, 11, 21, 12, 0, tzinfo=UTC)
+    repo.create_interview(alice, short, _iv(alice))  # never live: 0 s
+    repo.create_interview(
+        alice, long_, _iv(alice, state="live", duration_s=40.0, disconnected_at=t0)
+    )
+    repo.create_interview(alice, stale, _iv(alice, state="live", duration_s=20.0, seen_at=t0))
+    now = t0 + timedelta(seconds=15)
+    rule = (now, 30.0)
+    assert repo.transition_interview(
+        alice, short, ("created", "live"), "ended", None, rule
+    ).refunded
+    assert not repo.transition_interview(
+        alice, long_, ("created", "live"), "ended", None, rule
+    ).refunded
+    # connected relay: 20 s recorded + 15 s since the last checkpoint = 35 s -> not refunded
+    assert not repo.transition_interview(
+        alice, stale, ("created", "live"), "ended", None, rule
+    ).refunded
+    assert repo.get_interview(alice, short).refunded is True
+
+    def link(interview, sid):
+        return repo.create_session_for_interview(
+            alice, interview, sid, SessionDoc(uid=alice, interview_id=interview),
+            SessionStatusDoc(uid=alice), RatingDraftDoc(card={}),
+        )  # fmt: skip
+
+    assert link(short, uuid.uuid4().hex) == "refunded"
+    assert link(long_, uuid.uuid4().hex) == "linked"
+
+
 def test_create_session_for_interview_links_atomically_once(repo):
     alice, bob = (f"{n}-{uuid.uuid4().hex[:8]}" for n in ("alice", "bob"))
     iid, sid, sid2, early = (uuid.uuid4().hex for _ in range(4))

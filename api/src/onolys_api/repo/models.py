@@ -244,3 +244,17 @@ class InterviewDoc(Doc):
     # written by the voice relay only; never in any response
     resumption_handle: str | None = None
     disconnected_at: datetime | None = None
+    seen_at: datetime | None = None  # last relay checkpoint (a live relay refreshes it ~10 s)
+    conn_id: str | None = None  # connection lease: the newest relay connection owns the interview
+    refunded: bool = False  # set with the settle transition: a refunded interview never links
+
+
+def interview_refundable(data: dict[str, Any], now: datetime, threshold_s: float) -> bool:
+    """Refund rule for a settling interview (SP10 R5): the best known elapsed time is under
+    `threshold_s`. A still-connected relay's last checkpoint is aged by `now - seen_at`, so a stale
+    `duration_s` cannot be used to dodge the charge. `created` (never live) is 0 s."""
+    elapsed = float(data.get("duration_s") or 0.0)
+    seen = data.get("seen_at")
+    if seen is not None and data.get("disconnected_at") is None:
+        elapsed += max(0.0, (now - seen).total_seconds())
+    return elapsed < threshold_s

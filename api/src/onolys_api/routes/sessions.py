@@ -155,6 +155,8 @@ def _create_for_interview(
     outcome = repo.create_session_for_interview(uid, body.interview_id, sid, session, status, draft)
     if outcome == "not_ended":
         raise ApiError.of(409, "invalid_state", "The interview has not ended yet.")
+    if outcome == "refunded":
+        raise ApiError.of(409, "invalid_state", "A refunded (very short) interview cannot be used.")
     if outcome == "already_linked":
         raise ApiError.of(409, "conflict", "The interview already has a session.")
 

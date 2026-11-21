@@ -1,7 +1,7 @@
 """Task queue (R5): Cloud Tasks in the cloud, an in-memory queue for SERVICE_MODE=combined.
 
 Task names make enqueue idempotent inside Cloud Tasks' dedup window: `{sid}-validate`,
-`{sid}-transcribe`, `{sid}-poll-{n}`, `{run_id}-run`, `{sid}-delete`, `{sid}-interview-sweep`
+`{sid}-transcribe`, `{sid}-poll-{n}`, `{run_id}-run`, `{sid}-delete`, `{sid}-interview-sweep[-{n}]`
 (`sid` holds the interview id there). The payload carries the request id (never any text).
 `enqueue` is sync: routes and handlers run in threadpool workers.
 """
@@ -47,6 +47,8 @@ def task_name(p: TaskPayload) -> str:
         if p.n is None:
             raise ValueError("poll task needs n")
         return f"{p.sid}-poll-{p.n}"
+    if p.kind == "interview-sweep" and p.n:
+        return f"{p.sid}-interview-sweep-{p.n}"  # a re-check: the first sweep's name is spent
     return f"{p.sid}-{p.kind}"
 
 

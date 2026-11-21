@@ -60,6 +60,7 @@ from onolys_api.repo.models import (
     UsageDoc,
     UsageMonthDoc,
     UserDoc,
+    interview_refundable,
     utcnow,
 )
 from onolys_api.storage.base import BlobStore
@@ -217,6 +218,8 @@ class FirestoreRepo:
                 raise NotFoundError()
             if data.get("state") != "ended":
                 return "not_ended"
+            if data.get("refunded"):
+                return "refunded"
             if data.get("session_id"):
                 return "already_linked"
             if sref.get(transaction=txn).exists or stref.get(transaction=txn).exists:
@@ -775,6 +778,7 @@ class FirestoreRepo:
     def transition_interview(
         self, uid: str, iid: str, from_states: tuple[InterviewState, ...],
         to_state: InterviewState, fields: dict[str, Any] | None = None,
+        refund_rule: tuple[datetime, float] | None = None,
     ) -> InterviewDoc | None:  # fmt: skip
         ref = self._top("interviews", iid)
         _owned(ref, uid)
@@ -787,6 +791,8 @@ class FirestoreRepo:
             if data.get("state") not in from_states:
                 return None
             data = {**data, **(fields or {}), "state": to_state}
+            if refund_rule is not None:
+                data["refunded"] = interview_refundable(data, *refund_rule)
             txn.set(ref, data)
             return data
 

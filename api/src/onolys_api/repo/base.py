@@ -52,7 +52,7 @@ class Page[T]:
 
 
 StartOutcome = Literal["started", "not_ready", "already", "daily_cap", "month_cap", "concurrent"]
-InterviewLinkOutcome = Literal["linked", "not_ended", "already_linked"]
+InterviewLinkOutcome = Literal["linked", "not_ended", "already_linked", "refunded"]
 ClaimOutcome = Literal["claimed", "done", "failed", "busy"]
 
 
@@ -86,7 +86,8 @@ class Repo(Protocol):
         self, uid: str, sid: str, session: SessionDoc, status: SessionStatusDoc
     ) -> None: ...
     # AI interview link (SP10 R6), ONE transaction: the interview must be the caller's (else
-    # NotFoundError), `ended` ("not_ended" otherwise) and unlinked ("already_linked" otherwise).
+    # NotFoundError), `ended` ("not_ended" otherwise), not `refunded` ("refunded": its unit was
+    # given back, so it must not also buy a free run) and unlinked ("already_linked" otherwise).
     # Then it writes the session, its status, the `ratings/draft` doc and `interview.session_id`.
     def create_session_for_interview(
         self, uid: str, iid: str, sid: str, session: SessionDoc, status: SessionStatusDoc,
@@ -200,9 +201,12 @@ class Repo(Protocol):
     # ONE transaction: if the interview is in one of `from_states`, set `state=to_state` and
     # `fields` (e.g. `ended_at`, `discarded`) and return the updated doc; otherwise write nothing
     # and return None. Exactly one of several racing callers gets the doc (settle-once).
+    # With `refund_rule=(now, threshold_s)` the same write also stores `refunded` (see
+    # `models.interview_refundable`); an interview with `refunded` is never linkable to a session.
     def transition_interview(
         self, uid: str, iid: str, from_states: tuple[InterviewState, ...],
         to_state: InterviewState, fields: dict[str, Any] | None = None,
+        refund_rule: tuple[datetime, float] | None = None,
     ) -> InterviewDoc | None: ...  # fmt: skip
     # plain field merge for the relay/uploader (`duration_s`, `state=live`, ...)
     def update_interview(self, uid: str, iid: str, fields: dict[str, Any]) -> None: ...

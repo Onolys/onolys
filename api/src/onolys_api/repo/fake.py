@@ -52,6 +52,7 @@ from onolys_api.repo.models import (
     UsageDoc,
     UsageMonthDoc,
     UserDoc,
+    interview_refundable,
     utcnow,
 )
 from onolys_api.storage.base import BlobStore
@@ -172,6 +173,8 @@ class FakeRepo:
             iv = self._owned(f"interviews/{iid}", uid)
             if iv.get("state") != "ended":
                 return "not_ended"
+            if iv.get("refunded"):
+                return "refunded"
             if iv.get("session_id"):
                 return "already_linked"
             if f"sessions/{sid}" in self._docs or f"session_status/{sid}" in self._docs:
@@ -649,12 +652,15 @@ class FakeRepo:
     def transition_interview(
         self, uid: str, iid: str, from_states: tuple[InterviewState, ...],
         to_state: InterviewState, fields: dict[str, Any] | None = None,
+        refund_rule: tuple[datetime, float] | None = None,
     ) -> InterviewDoc | None:  # fmt: skip
         with self._claim_lock:
             d = self._owned(f"interviews/{iid}", uid)
             if d.get("state") not in from_states:
                 return None
             d = {**d, **(fields or {}), "state": to_state}
+            if refund_rule is not None:
+                d["refunded"] = interview_refundable(d, *refund_rule)
             self._put(f"interviews/{iid}", d)
             return self._load(InterviewDoc, iid, d)
 
