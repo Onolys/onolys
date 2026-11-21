@@ -88,6 +88,8 @@ def _classify(exc: BaseException, stage: Stage) -> tuple[str, bool]:
             return (UPSTREAM, True) if _stt_transient(exc) else (TRANSCRIPTION, False)
         if _stt_transient(exc):
             return UPSTREAM, True
+    if isinstance(exc, _GOOGLE_TRANSIENT):  # validate/run read GCS and Firestore: a blip retries
+        return UPSTREAM, True
     if isinstance(exc, LLMError):
         return _classify_llm(exc)
     if isinstance(exc, TimeoutError) or _named(exc, "eaudit", "DeadlineExceeded"):
