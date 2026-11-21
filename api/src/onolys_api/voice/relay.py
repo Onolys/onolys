@@ -188,6 +188,16 @@ class Relay:
             return
 
         resumed = doc.state == "live"
+        start_window = settings.ai_max_seconds + settings.ai_reconnect_seconds
+        if not resumed and (self.clock.wall() - doc.created_at).total_seconds() > start_window:
+            # never went live and the picker has been open too long: refundable, not a live
+            # interview (the sweep's ceiling would cut it off mid-call)
+            await _io(
+                settle_interview, self.repo, settings, self.uid, self.iid, "abandoned",
+                self.clock.wall(),
+            )  # fmt: skip
+            await self.fail("interview_not_live", CLOSE_NOT_LIVE)
+            return
         if resumed and doc.disconnected_at is not None:
             gap = (self.clock.wall() - doc.disconnected_at).total_seconds()
             if gap > settings.ai_reconnect_seconds:  # too late: the interview ends as it was
@@ -205,12 +215,17 @@ class Relay:
         self.handle = doc.resumption_handle if resumed else None
         self.conn_id = uuid.uuid4().hex
 
+        live_fields: dict[str, Any] = {
+            "disconnected_at": None,
+            "conn_id": self.conn_id,
+            "duration_s": carried,
+            "seen_at": self.clock.wall(),
+        }
+        if not resumed:
+            live_fields["live_at"] = self.clock.wall()  # the sweep's ceiling counts from here
         won = await _io(
             self.repo.transition_interview, self.uid, self.iid, ("created", "live"), "live",
-            {
-                "disconnected_at": None, "conn_id": self.conn_id, "duration_s": carried,
-                "seen_at": self.clock.wall(),
-            },
+            live_fields,
         )  # fmt: skip
         if won is None:
             await self.fail("interview_not_live", CLOSE_NOT_LIVE)
@@ -289,7 +304,17 @@ class Relay:
             "seen_at": self.clock.wall(),
         }
         if disconnected:
+            # final checkpoint: only the lease holder may mark the drop (a superseded connection
+            # must not stamp `disconnected_at` onto the interview the new connection owns)
+            try:
+                current = await _io(self.repo.get_interview, self.uid, self.iid)
+            except NotFoundError:
+                return
+            if current.conn_id != self.conn_id:
+                return
             fields["disconnected_at"] = self.clock.wall()
+        else:
+            fields["disconnected_at"] = None  # lease verified by the caller: connected now
         await _io(self.repo.update_interview, self.uid, self.iid, fields)
 
     async def _finish(self, duration_s: float) -> None:

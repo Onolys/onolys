@@ -245,6 +245,7 @@ class InterviewDoc(Doc):
     resumption_handle: str | None = None
     disconnected_at: datetime | None = None
     seen_at: datetime | None = None  # last relay checkpoint (a live relay refreshes it ~10 s)
+    live_at: datetime | None = None  # first created -> live transition (the sweep ceiling's start)
     conn_id: str | None = None  # connection lease: the newest relay connection owns the interview
     refunded: bool = False  # set with the settle transition: a refunded interview never links
 

@@ -6,11 +6,15 @@ mic prompt, reconnect gaps). The handler therefore re-checks instead of abandoni
 - `live`, connected: alive while the relay's last checkpoint (`seen_at`, ~10 s cadence) is fresh;
 - `live`, disconnected: alive while within the reconnect window (plus a margin);
 - `created` (not connected yet): alive;
-all bounded by a hard ceiling of `2 * (AI_MAX_SECONDS + AI_RECONNECT_SECONDS)` after create.
-Alive: the sweep re-enqueues itself (`n + 1`, a distinct task name). Otherwise it abandons through
+all bounded by a hard ceiling of `2 * (AI_MAX_SECONDS + AI_RECONNECT_SECONDS)` after create (after
+`live_at`, the first created -> live transition, for live interviews; the relay refuses a `created`
+interview older than `AI_MAX_SECONDS + AI_RECONNECT_SECONDS`).
+Alive: the sweep re-enqueues itself (`n + 1`, a distinct task name). Otherwise it settles through
 `settle_interview`, the single settle/refund routine (End, discard, lazy abandon and this sweep
 share it); only the transition's winner releases, so it is exactly once. Already settled (or
-deleted) interviews are a no-op. No Cloud Scheduler: it is a delayed task.
+deleted) interviews are a no-op. The state is `ended` for a live interview whose client dropped
+(`disconnected_at` set; real recorded time, like the relay), else `abandoned`. No Cloud Scheduler:
+it is a delayed task.
 """
 
 from collections.abc import Callable
@@ -40,7 +44,8 @@ def recheck_delay_s(settings: Settings) -> int:
 
 def interview_is_alive(doc: InterviewDoc, settings: Settings, now: datetime) -> bool:
     """Is a still-open interview legitimately in progress (so the sweep must not abandon it)?"""
-    if (now - doc.created_at).total_seconds() >= hard_ceiling_s(settings):
+    start = doc.live_at if doc.state == "live" and doc.live_at is not None else doc.created_at
+    if (now - start).total_seconds() >= hard_ceiling_s(settings):
         return False
     if doc.state == "created":
         return True
@@ -72,6 +77,10 @@ def make_interview_sweep_handler(settings: Settings, clock: Callable[[], datetim
             )
             logs.emit("interview_sweep_recheck", session_id=ctx.sid, n=n)
             return
-        settle_interview(ctx.repo, settings, ctx.uid, ctx.sid, "abandoned", now)
+        # a live interview that lost its client has real recorded time: end it (linkable), as the
+        # relay does for the same case; never-live / stale-checkpoint ones are abandoned
+        went_live = doc.state == "live" and doc.disconnected_at is not None
+        to_state = "ended" if went_live else "abandoned"
+        settle_interview(ctx.repo, settings, ctx.uid, ctx.sid, to_state, now)
 
     return handle

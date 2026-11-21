@@ -554,6 +554,56 @@ async def test_stale_connection_lease_closes_the_older_connection(tmp_path):
     assert d.conn_id == "another-instance" and d.disconnected_at is None  # newer owner untouched
 
 
+async def test_superseded_connections_final_checkpoint_does_not_mark_the_new_owner(tmp_path):
+    env = Env(tmp_path)
+    env.interview()
+    async with serve(env.app) as base:
+        c = await connect(base)
+        await ready(c)
+        await env.clock.advance(5)
+        env.repo.update_interview("alice", "i1", {"conn_id": "another-instance"})
+        await c.ws.close()  # the old connection sees a client drop and writes its final checkpoint
+        await asyncio.sleep(0.3)
+    d = env.doc()
+    assert d.conn_id == "another-instance" and d.disconnected_at is None
+
+
+async def test_poll_checkpoint_clears_a_stale_disconnected_at(tmp_path):
+    env = Env(tmp_path)
+    env.interview()
+    async with serve(env.app) as base:
+        c = await connect(base)
+        await ready(c)
+        env.repo.update_interview("alice", "i1", {"disconnected_at": T0})
+        await env.clock.advance(10)
+        assert env.doc().disconnected_at is None
+        await c.ws.close()
+
+
+async def test_stale_created_interview_is_refused_and_refunded(tmp_path):
+    env = Env(tmp_path)
+    env.interview()
+    await env.clock.advance(600 + 60 + 1)  # older than AI_MAX_SECONDS + AI_RECONNECT_SECONDS
+    async with serve(env.app) as base:
+        c = await connect(base)
+        assert await c.recv_json() == {"type": "error", "code": "interview_not_live"}
+        await expect_close(c, 4409)
+    d = env.doc()
+    assert d.state == "abandoned" and d.refunded is True
+    assert env.voice.opened == []
+
+
+async def test_created_interview_inside_the_start_window_is_served(tmp_path):
+    env = Env(tmp_path)
+    env.interview()
+    await env.clock.advance(600)
+    async with serve(env.app) as base:
+        c = await connect(base)
+        await ready(c)
+        await c.ws.close()
+    assert env.doc().live_at is not None
+
+
 # ---- mic gate ----
 
 

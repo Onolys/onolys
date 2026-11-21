@@ -133,6 +133,33 @@ async def test_sweep_abandons_a_disconnected_interview_past_the_reconnect_window
     from onolys_api.jobs.queue import TaskPayload
 
     app.state.runner.handle(TaskPayload(kind="interview-sweep", uid="alice", sid=iid))
+    d = repo.get_interview("alice", iid)
+    assert d.state == "ended"  # it went live and has real recorded time: linkable, like the relay
+
+
+async def test_sweep_abandons_a_never_live_stale_interview_still(api, app, repo):
+    from onolys_api.jobs.queue import TaskPayload
+
+    iid = await create(api)
+    app.state.queue.pending.clear()
+    app.state.now[0] = NOW + timedelta(seconds=hard_ceiling_s(app.state.settings))
+    app.state.runner.handle(TaskPayload(kind="interview-sweep", uid="alice", sid=iid))
+    assert repo.get_interview("alice", iid).state == "abandoned"
+
+
+async def test_sweep_ceiling_for_a_live_interview_counts_from_live_at(api, app, repo):
+    from onolys_api.jobs.queue import TaskPayload
+
+    at = hard_ceiling_s(app.state.settings) - 100
+    live_at = NOW + timedelta(seconds=1000)  # started long after the picker opened
+    iid = await _setup_live(
+        api, app, repo, at + 1000, seen_at=NOW + timedelta(seconds=at + 995), live_at=live_at
+    )  # past create + ceiling, but only `at` seconds since live_at
+    app.state.runner.handle(TaskPayload(kind="interview-sweep", uid="alice", sid=iid))
+    assert repo.get_interview("alice", iid).state == "live"
+    assert len(app.state.queue.pending) == 1
+    app.state.now[0] = live_at + timedelta(seconds=hard_ceiling_s(app.state.settings))
+    app.state.runner.handle(TaskPayload(kind="interview-sweep", uid="alice", sid=iid, n=1))
     assert repo.get_interview("alice", iid).state == "abandoned"
 
 
