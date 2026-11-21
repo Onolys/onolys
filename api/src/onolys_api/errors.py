@@ -130,9 +130,13 @@ def error_responses(*statuses: int) -> dict[int | str, dict]:
 
 _STATUS_TEXT = {
     401: "`unauthenticated`: missing, invalid or revoked credentials",
+    403: "`forbidden`: API keys cannot manage API keys",
     404: "`not_found`: no such resource for this user (never 403, so ids cannot be probed)",
     409: "`invalid_state` or `conflict`: not allowed in the session's current state",
-    422: "`invalid_parameters`, `unsupported_audio`, `audio_too_large` or `rating_invalid`",
+    422: (
+        "`invalid_parameters` (incl. a malformed id, cursor or body), `unsupported_audio`, "
+        "`audio_too_large` or `rating_invalid`"
+    ),
     429: "`daily_cap_reached` (daily run cap or concurrent-run limit) or `rate_limited`",
     500: "`internal_error`",
     503: "`upstream_unavailable`: retry shortly",

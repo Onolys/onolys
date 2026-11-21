@@ -197,8 +197,7 @@ def test_create_session_rejects_unknown_language(request, api):
     assert r.status_code == 422
 
 
-def test_garbage_body_is_documented_422(request, api):
-    known_bug(request, "F2/A14: undecodable JSON body -> 400 request_rejected, not in openapi")
+def test_garbage_body_is_documented_422(api):
     r = api.post(
         "/v1/sessions", content=b"\xff", headers={**_uid(), "content-type": "application/json"}
     )

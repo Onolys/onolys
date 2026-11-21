@@ -179,6 +179,11 @@ def register_error_handlers(app: FastAPI) -> None:
             503: ("upstream_unavailable", "Service temporarily unavailable."),
             504: ("deadline_exceeded", "The request ran out of time."),
         }
+        if exc.status_code == 400:  # undecodable body: same documented 422 as invalid JSON
+            return _response(
+                request, 422, "Request rejected: invalid parameters.",
+                [{"code": "invalid_parameters", "message": "body: invalid parameter"}],
+            )  # fmt: skip
         if exc.status_code in known:
             code, message = known[exc.status_code]
         elif exc.status_code >= 500:

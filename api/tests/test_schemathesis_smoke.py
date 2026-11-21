@@ -36,7 +36,7 @@ def _build():
 
 
 APP = _build()
-# GET /v1/sessions: cursor 500s are tracked by test_list_cursor_never_5xx (F4).
+# GET /v1/sessions: cursor 500s are covered by test_list_cursor_never_5xx.
 schema = schemathesis.openapi.from_asgi("/v1/openapi.json", APP).exclude(
     method="GET", path="/v1/sessions"
 )

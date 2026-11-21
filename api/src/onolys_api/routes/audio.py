@@ -18,6 +18,7 @@ from onolys_api.errors import ApiError, ErrorResponse
 from onolys_api.jobs.machine import advance, invalid_state
 from onolys_api.jobs.queue import TaskPayload
 from onolys_api.repo.base import NotFoundError
+from onolys_api.routes.ids import ResourceId
 from onolys_api.routes.sessions import SessionRef
 from onolys_api.storage.base import MAX_UPLOAD_BYTES, READ_URL_TTL_S, BlobNotFoundError
 
@@ -65,7 +66,7 @@ def _owned_open(request: Request, user: AuthUser, id: str):
     ),
 )
 def request_upload(
-    id: str, body: AudioUploadRequest, request: Request, user: User
+    id: ResourceId, body: AudioUploadRequest, request: Request, user: User
 ) -> AudioUploadResponse:
     fmt = resolve_format(body.content_type, body.filename_ext)
     if fmt is None:
@@ -105,7 +106,7 @@ def request_upload(
     summary="Tell the server the PUT finished",
     description="Returns 202 and enqueues `validate`; transcription starts after it passes.",
 )
-def complete_upload(id: str, request: Request, user: User) -> dict[str, SessionRef]:
+def complete_upload(id: ResourceId, request: Request, user: User) -> dict[str, SessionRef]:
     repo, blobs = request.app.state.repo, request.app.state.blobs
     try:
         session = _owned_open(request, user, id)
@@ -123,14 +124,18 @@ def complete_upload(id: str, request: Request, user: User) -> dict[str, SessionR
         raise ApiError.of(503, "upstream_unavailable", "Service temporarily unavailable.")
     if session.state == "uploading":
         advance(repo, user.uid, id, to="validating", step="validate")
-    queue.enqueue(
-        TaskPayload(
-            kind="validate",
-            uid=user.uid,
-            sid=id,
-            request_id=getattr(request.state, "request_id", None),
-        )
-    )  # name-deduplicated: a repeated `complete` is harmless
+    try:
+        queue.enqueue(
+            TaskPayload(
+                kind="validate",
+                uid=user.uid,
+                sid=id,
+                request_id=getattr(request.state, "request_id", None),
+            )
+        )  # name-deduplicated: a repeated `complete` is harmless
+    except Exception:
+        # state stays `validating`, so the client can simply call `complete` again
+        raise ApiError.of(503, "upstream_unavailable", "Service temporarily unavailable.") from None
     if (
         session.interview_id
     ):  # the interview's audio is in: `ended` -> `uploaded` (once, idempotent)
@@ -144,7 +149,7 @@ def complete_upload(id: str, request: Request, user: User) -> dict[str, SessionR
     response_model=AudioReadResponse,
     summary="Short-lived signed read URL for the original upload",
 )
-def get_audio(id: str, request: Request, user: User) -> AudioReadResponse:
+def get_audio(id: ResourceId, request: Request, user: User) -> AudioReadResponse:
     repo, blobs = request.app.state.repo, request.app.state.blobs
     _owned_open(request, user, id)
     recording = next((r for r in repo.list_recordings(user.uid, id) if r.format), None)
