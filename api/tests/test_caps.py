@@ -1,4 +1,4 @@
-"""Daily run cap + concurrent-run limit + GET /usage (R8, D14, AC7).
+"""Daily run cap + concurrent-run limit (R8, D14, AC7); GET /usage lives in test_usage_route.py.
 
 Repo-level tests run against FakeRepo and the Firestore emulator (when FIRESTORE_EMULATOR_HOST is
 set); the API tests use FakeRepo.
@@ -9,10 +9,8 @@ import uuid
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime, timedelta
 
-import httpx
 import pytest
 
-from onolys_api.app import create_app
 from onolys_api.config import Settings
 from onolys_api.errors import ApiError
 from onolys_api.jobs import caps
@@ -394,51 +392,3 @@ def test_parallel_reserve_mixed_kinds_each_capped_independently(repo):
 def test_max_active_runs_setting(monkeypatch):
     assert Settings.from_env({}).max_active_runs == 2
     assert Settings.from_env({"MAX_ACTIVE_RUNS": "3"}).max_active_runs == 3
-
-
-# ---- GET /v1/usage ----
-
-A = {"Authorization": "Bearer test:alice"}
-
-
-@pytest.fixture
-def api_repo(tmp_path):
-    return FakeRepo(FakeBlobStore(tmp_path / "b"))
-
-
-@pytest.fixture
-async def api(tmp_path, api_repo):
-    app = create_app(
-        Settings(env="test", auth_mode="fake", service_mode="combined", eval_cap_day=20),
-        repo=api_repo,
-        blobs=FakeBlobStore(tmp_path / "b2"),
-    )
-    async with httpx.AsyncClient(
-        transport=httpx.ASGITransport(app=app, raise_app_exceptions=False), base_url="http://t"
-    ) as c:
-        yield c
-
-
-async def test_get_usage_requires_auth(api):
-    assert (await api.get("/v1/usage")).status_code == 401
-
-
-async def test_get_usage_shape_and_counts(api, api_repo):
-    r = await api.get("/v1/usage", headers=A)
-    assert r.status_code == 200
-    body = r.json()
-    assert set(body) == {"runs_today", "daily_cap", "resets_at"}
-    assert body["runs_today"] == 0 and body["daily_cap"] == 20
-    resets = datetime.fromisoformat(body["resets_at"].replace("Z", "+00:00"))
-    now = datetime.now(UTC)
-    assert now < resets <= now + timedelta(days=1)
-    assert (resets.hour, resets.minute, resets.second) == (0, 0, 0)
-    api_repo.add_usage("alice", now.strftime("%Y-%m-%d"), runs=3)
-    set_user_fields(api_repo, "alice", daily_cap=9)
-    body = (await api.get("/v1/usage", headers=A)).json()
-    assert body["runs_today"] == 3 and body["daily_cap"] == 9
-
-
-async def test_get_usage_is_per_user(api, api_repo):
-    api_repo.add_usage("bob", datetime.now(UTC).strftime("%Y-%m-%d"), runs=4)
-    assert (await api.get("/v1/usage", headers=A)).json()["runs_today"] == 0

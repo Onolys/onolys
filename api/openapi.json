@@ -511,6 +511,46 @@
         "title": "Healthz",
         "type": "object"
       },
+      "KindUsage": {
+        "properties": {
+          "day": {
+            "$ref": "#/components/schemas/Period"
+          },
+          "month": {
+            "$ref": "#/components/schemas/Period"
+          }
+        },
+        "required": [
+          "day",
+          "month"
+        ],
+        "title": "KindUsage",
+        "type": "object"
+      },
+      "Period": {
+        "properties": {
+          "cap": {
+            "title": "Cap",
+            "type": "integer"
+          },
+          "resets_at": {
+            "format": "date-time",
+            "title": "Resets At",
+            "type": "string"
+          },
+          "used": {
+            "title": "Used",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "used",
+          "cap",
+          "resets_at"
+        ],
+        "title": "Period",
+        "type": "object"
+      },
       "RatingRequest": {
         "properties": {
           "card": {
@@ -1431,24 +1471,16 @@
       },
       "Usage": {
         "properties": {
-          "daily_cap": {
-            "title": "Daily Cap",
-            "type": "integer"
+          "eval": {
+            "$ref": "#/components/schemas/KindUsage"
           },
-          "resets_at": {
-            "format": "date-time",
-            "title": "Resets At",
-            "type": "string"
-          },
-          "runs_today": {
-            "title": "Runs Today",
-            "type": "integer"
+          "interview": {
+            "$ref": "#/components/schemas/KindUsage"
           }
         },
         "required": [
-          "runs_today",
-          "daily_cap",
-          "resets_at"
+          "eval",
+          "interview"
         ],
         "title": "Usage",
         "type": "object"
@@ -3358,7 +3390,7 @@
             "APIKeyHeader": []
           }
         ],
-        "summary": "Runs used today (UTC day)",
+        "summary": "Usage and caps (UTC day and month)",
         "tags": [
           "usage"
         ]

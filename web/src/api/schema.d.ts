@@ -303,7 +303,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Runs used today (UTC day) */
+        /** Usage and caps (UTC day and month) */
         get: operations["getUsage"];
         put?: never;
         post?: never;
@@ -520,6 +520,23 @@ export interface components {
              * @default ok
              */
             status?: string;
+        };
+        /** KindUsage */
+        KindUsage: {
+            day: components["schemas"]["Period"];
+            month: components["schemas"]["Period"];
+        };
+        /** Period */
+        Period: {
+            /** Cap */
+            cap: number;
+            /**
+             * Resets At
+             * Format: date-time
+             */
+            resets_at: string;
+            /** Used */
+            used: number;
         };
         /** RatingRequest */
         RatingRequest: {
@@ -843,15 +860,8 @@ export interface components {
         };
         /** Usage */
         Usage: {
-            /** Daily Cap */
-            daily_cap: number;
-            /**
-             * Resets At
-             * Format: date-time
-             */
-            resets_at: string;
-            /** Runs Today */
-            runs_today: number;
+            eval: components["schemas"]["KindUsage"];
+            interview: components["schemas"]["KindUsage"];
         };
     };
     responses: never;

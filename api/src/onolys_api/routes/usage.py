@@ -1,4 +1,4 @@
-"""`GET /v1/usage`: today's run count against the daily cap (R8)."""
+"""`GET /v1/usage`: eval + interview used/cap/resets_at for the UTC day and month (R8, D3)."""
 
 from datetime import datetime
 from typing import Annotated
@@ -15,14 +15,32 @@ router = APIRouter(prefix="/usage", tags=["usage"], responses=ERRORS)
 User = Annotated[AuthUser, Depends(current_user)]
 
 
-class Usage(BaseModel):
-    runs_today: int
-    daily_cap: int
+class Period(BaseModel):
+    used: int
+    cap: int
     resets_at: datetime
 
 
-@router.get("", operation_id="getUsage", response_model=Usage, summary="Runs used today (UTC day)")
+class KindUsage(BaseModel):
+    day: Period
+    month: Period
+
+
+class Usage(BaseModel):
+    eval: KindUsage
+    interview: KindUsage
+
+
+def _kind(k: caps.KindUsage) -> KindUsage:
+    return KindUsage(
+        day=Period(used=k.day.used, cap=k.day.cap, resets_at=k.day.resets_at),
+        month=Period(used=k.month.used, cap=k.month.cap, resets_at=k.month.resets_at),
+    )
+
+
+@router.get(
+    "", operation_id="getUsage", response_model=Usage, summary="Usage and caps (UTC day and month)"
+)
 def get_usage(request: Request, user: User) -> Usage:
     view = caps.usage_view(request.app.state.repo, request.app.state.settings, user.uid)
-    day = view.eval.day
-    return Usage(runs_today=day.used, daily_cap=day.cap, resets_at=day.resets_at)
+    return Usage(eval=_kind(view.eval), interview=_kind(view.interview))
