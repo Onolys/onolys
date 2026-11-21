@@ -13,6 +13,7 @@ import os
 import random
 import threading
 import time
+import weakref
 from datetime import datetime
 from typing import Any
 
@@ -125,7 +126,10 @@ class FirestoreRepo:
     def __init__(self, client: firestore.Client, blobs: BlobStore) -> None:
         self._client = client
         self._blobs = blobs
-        self._uid_locks: dict[str, threading.Lock] = {}
+        # weak values: a uid's lock is dropped once no caller holds it (callers keep a strong ref)
+        self._uid_locks: weakref.WeakValueDictionary[str, threading.Lock] = (
+            weakref.WeakValueDictionary()
+        )
         self._uid_locks_guard = threading.Lock()
 
     # ---- ownership helpers (every id-addressed call starts here) ----
@@ -752,7 +756,10 @@ class FirestoreRepo:
 
     def _uid_lock(self, uid: str) -> threading.Lock:
         with self._uid_locks_guard:
-            return self._uid_locks.setdefault(uid, threading.Lock())
+            lock = self._uid_locks.get(uid)
+            if lock is None:
+                lock = self._uid_locks[uid] = threading.Lock()
+            return lock
 
     def _contended(self, txn_fn, uid: str):
         # Same-user txns (usage, claims, session children) hit the same hot docs. Firestore locks

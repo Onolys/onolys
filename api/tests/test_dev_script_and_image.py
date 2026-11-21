@@ -56,13 +56,16 @@ def test_dev_script_preflight_and_flags():
 @pytest.mark.integration
 @needs_tools
 def test_dev_script_checks_and_runs_combined_quickstart():
-    out = subprocess.run(
-        [str(DEV), "--quickstart"],
-        env={**os.environ, "PORT": str(free_port()), "UV_NO_SYNC": "1"},
-        capture_output=True,
-        text=True,
-        timeout=180,
-    )
+    for _ in range(2):  # free_port() can lose its port to another xdist worker: retry once
+        out = subprocess.run(
+            [str(DEV), "--quickstart"],
+            env={**os.environ, "PORT": str(free_port()), "UV_NO_SYNC": "1"},
+            capture_output=True,
+            text=True,
+            timeout=180,
+        )
+        if not (out.returncode == 1 and "in use" in out.stderr):
+            break
     assert out.returncode == 0, out.stderr
     report = json.loads(out.stdout.strip().splitlines()[-1])
     assert report["version"] == 1 and report["report"]["scorecard"]
