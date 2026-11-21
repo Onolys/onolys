@@ -20,7 +20,7 @@ staging: same shape, site onolys-app-staging, Firestore DB `staging`, *-staging 
 |---|---|---|
 | Cloud Run api | `onolys-api-staging` | `onolys-api-prod` |
 | Cloud Run worker | `onolys-worker-staging` | `onolys-worker-prod` |
-| Cloud Run admin backend | `onolys-admin-backend-staging` (`admin_enabled.staging=true`) | `onolys-admin-backend-prod` (`admin_enabled.prod=true`) |
+| Cloud Run admin backend | `onolys-admin-backend-staging` (`admin_enabled.staging=true`) | none (prod admin removed 2026-11-21, `admin_enabled.prod=false`) |
 | Firestore database (Native, `us-central1`) | `staging` | `(default)` (delete-protection on) |
 | GCS bucket (private) | `onolys-audio-staging` | `onolys-audio-prod` |
 | Cloud Tasks queue | `steps-staging` | `steps-prod` |
@@ -33,7 +33,7 @@ staging: same shape, site onolys-app-staging, Firestore DB `staging`, *-staging 
 
 Shared (project level): Artifact Registry repo `onolys` (`us-central1-docker.pkg.dev/onolys/onolys`, no cleanup policy, so any earlier sha stays deployable), budget `onolys monthly`, Monitoring channel `Onolys owner email`, Workload Identity pool `github` with provider `github` (condition `assertion.repository=='Onolys/onolys'`), Speech-to-Text service agent `service-1054076260967@gcp-sa-speech.iam.gserviceaccount.com` (`objectViewer` on both buckets), Identity Platform config (email+password, min length 8, open sign-up, no MFA).
 
-Admin (SP07) resources (`onolys-admin`, `onolys-admin-staging` sites, `admin.onolys.com`, `onolys-admin-backend-{env}`, `admin-allowed-emails-{env}`) exist only per env while `admin_enabled` (a map, default `{ staging = true, prod = true }`) is true for that env: staging owns `onolys-admin-staging`, its web app, `onolys-admin-backend-staging`, `admin-allowed-emails-staging` and the `onolys-admin-staging.web.app` authorised domain; prod ones (`onolys-admin`, `admin.onolys.com`, `onolys-admin-backend-prod`) are enabled for launch. `onolys-admin-backend-staging` is public at Cloud Run (`allUsers` invoker) on purpose; access is enforced in the app (Firebase ID token + allowlist), timeout 130 s, runs as `admin-backend-staging`.
+Admin (SP07) resources (`onolys-admin`, `onolys-admin-staging` sites, `admin.onolys.com`, `onolys-admin-backend-{env}`, `admin-allowed-emails-{env}`) exist only per env while `admin_enabled` (a map, default `{ staging = true, prod = false }`) is true for that env. Owner decision 2026-11-21: staging is the ONLY admin environment and serves `admin.onolys.com` (it auto-deploys from `main`; admin uses only synthetic MITI fixtures, no user data). Staging owns the `onolys-admin-staging` site, its web app, `onolys-admin-backend-staging` (CORS allows `https://admin.onolys.com` and `https://onolys-admin-staging.web.app`), `admin-allowed-emails-staging`, the `admin.onolys.com` Hosting custom domain and the `admin.onolys.com` / `onolys-admin-staging.web.app` authorised domains. The prod admin (`onolys-admin` site and web app, `onolys-admin-backend-prod`, its SA, invoker, secret and IAM, prod admin deployer IAM) was destroyed. `onolys-admin-backend-staging` is public at Cloud Run (`allUsers` invoker) on purpose; access is enforced in the app (Firebase ID token + allowlist), timeout 130 s, runs as `admin-backend-staging`.
 
 Sizing (checked on the live services):
 
@@ -87,7 +87,7 @@ Run `cd infra && terraform output` (needs ADC; see Operating Terraform).
 | `deployer_prod_email` | GitHub var `DEPLOYER_PROD_SA`. Now: `deployer-prod@onolys.iam.gserviceaccount.com` |
 | `web_env_staging` | map with `VITE_FIREBASE_API_KEY`, `_AUTH_DOMAIN`, `_APP_ID`, `_STORAGE_BUCKET`, `_MESSAGING_SENDER_ID`, `_PROJECT_ID`, and `VITE_FIRESTORE_DATABASE` (= `staging`). Sensitive: read with `terraform output -json web_env_staging` |
 | `web_env_prod` | same keys; `VITE_FIRESTORE_DATABASE` = `(default)` |
-| `web_env_admin_staging`, `web_env_admin_prod` | `null` until `admin_enabled` is true for that env |
+| `web_env_admin_staging`, `web_env_admin_prod` | `null` until `admin_enabled` is true for that env (`web_env_admin_prod` stays `null`) |
 | `required_dns_updates` | DNS records the owner adds (next section) |
 | `custom_domain_status` | Hosting verification state per custom domain |
 
@@ -108,7 +108,7 @@ Status then (`terraform output custom_domain_status`): `ownership OWNERSHIP_MISS
 
 Re-run the output before adding records: the values change if Hosting changes its desired state, and the TXT value is per-certificate. Remove any conflicting `A`/`AAAA` record on `app.onolys.com` (a `CNAME` cannot coexist with other records on the same host).
 
-`admin.onolys.com` records are now in `required_dns_updates` (admin is enabled on both envs); the owner adds them (see sweep AC8). Staging has no custom domain (`onolys-app-staging.web.app` only).
+`admin.onolys.com` is a custom domain on the staging admin site `onolys-admin-staging`; its records are in `required_dns_updates` (CNAME to `onolys-admin-staging.web.app` plus the `_acme-challenge` TXT); the owner adds them. No other staging custom domain (`onolys-app-staging.web.app` only).
 
 ## GitHub settings the owner must set
 
@@ -125,13 +125,13 @@ Environments: create `production` with Tejit as required reviewer (all prod jobs
 | `STAGING_VITE_FIREBASE_API_KEY`, `_AUTH_DOMAIN`, `_APP_ID`, `_STORAGE_BUCKET`, `_MESSAGING_SENDER_ID` | deploy-staging (web build) | `web_env_staging` keys `VITE_FIREBASE_*` (same names without the `STAGING_` prefix) |
 | `PROD_VITE_FIREBASE_API_KEY`, `_AUTH_DOMAIN`, `_APP_ID`, `_STORAGE_BUCKET`, `_MESSAGING_SENDER_ID` | deploy-prod (web build) | `web_env_prod` keys |
 | `STAGING_VITE_CONTACT_EMAIL`, `PROD_VITE_CONTACT_EMAIL` | optional, web build | owner's contact address |
-| `ADMIN_STAGING_VITE_FIREBASE_{API_KEY,AUTH_DOMAIN,APP_ID}`, `ADMIN_PROD_VITE_FIREBASE_{API_KEY,AUTH_DOMAIN,APP_ID}` | deploy-admin (after launch) | `web_env_admin_staging` / `web_env_admin_prod` |
+| `ADMIN_STAGING_VITE_FIREBASE_{API_KEY,AUTH_DOMAIN,APP_ID}` | deploy-admin | `web_env_admin_staging` (no prod admin vars) |
 
 `VITE_FIREBASE_PROJECT_ID` is taken from `GCP_PROJECT`/`onolys` in the workflow; `VITE_FIRESTORE_DATABASE` is hard-coded per workflow (see Terraform outputs).
 
 Secrets: the only one is `ANTHROPIC_API_KEY`, read by `nightly.yml` (job `api-real-mode`, a live Claude run); it should hold the staging/test key, never the prod key (prod's key lives only in Secret Manager as `anthropic-api-key-prod`). Deploys use WIF, so no JSON key and no deploy secret exists. Do not add a GCP key.
 
-Workflows: `deploy-staging.yml` runs after the `CI` workflow succeeds on `main` (also manual). `deploy-prod.yml` is manual (`workflow_dispatch`, input `sha` or `version`) or on a `v*` tag. `deploy-admin.yml` is for SP07 and needs `admin_enabled` true for that env first. `nightly.yml` runs 06:17 UTC daily.
+Workflows: `deploy-staging.yml` runs after the `CI` workflow succeeds on `main` (also manual). `deploy-prod.yml` is manual (`workflow_dispatch`, input `sha` or `version`) or on a `v*` tag. `deploy-admin.yml` deploys the staging admin only (backend + `onolys-admin-staging` site): automatically on push to `main` touching `admin/`, `frontend/`, `engines/`, `protocols/`, contracts or deps; also manual. There is no prod admin. `nightly.yml` runs 06:17 UTC daily.
 
 ## Operating Terraform
 
@@ -183,7 +183,7 @@ Today (staging, same list intended for prod): `tejitpabari99@gmail.com`, `gitika
 
 Edit in the console: Secret Manager, open `admin-allowed-emails-{env}`, **+ New version**, paste the FULL list (it replaces the old one), Add. A running revision keeps the old value, so make Cloud Run pick it up: Cloud Run, `onolys-admin-backend-{env}`, **Edit & deploy new revision**, **Deploy** (or re-run `deploy-admin.yml`).
 
-Edit with the script (value never printed; staging shown, `--env prod` for prod (admin is enabled)):
+Edit with the script (value never printed; staging shown, `--admin` is staging only, prod admin is removed):
 
 ```bash
 ADMIN_ALLOWED_EMAILS="a@x.com,b@y.com" python3 infra/scripts/seed-secrets.py --env staging --admin
@@ -294,7 +294,7 @@ Measured live on 2026-11-21 (about 16:50-17:05 UTC) with ADC REST calls (Cloud R
 | AC9 | MET (drill partial) | Live revisions carry the deployed commit: staging api (traffic revision `onolys-api-staging-096e3ed-34-1`) and worker `GIT_SHA=096e3ed...`; prod api and worker `205a03f...` (healthz `code_version` agrees on `app.onolys.com`, `onolys-app.web.app` and the run.app URL). Rollback drill run 44922869893 (earlier sha `205a03f`) redeployed rules, web, api and worker and passed smoke; its `tag` job failed (fix in PR #42, unmerged). Roll-forward by tag deferred by the owner; see the drill section above |
 | AC10 | MET (owner confirmed email arrived, 2026-11-21) | Test line written to prod at launch check: `request_id sp06-sweep-1795279972`, `status=failed`, `error_code sp06_sweep_test`, service `onolys-worker-prod`, 16:52:52Z. Alert `0.ofa4aj5s6bk0` on policy `Onolys failed step/run (prod)` opened 16:53:06Z (14 s later), state OPEN. Runbook query `jsonPayload.request_id="sp06-sweep-1795279972"` through `entries:list` returned that one line. Policies `Onolys api 5xx rate (prod|staging)` and metrics `onolys-api-5xx-{env}` exist and are enabled. The agent did not read the owner's inbox: owner to confirm one email "Onolys failed step/run (prod)" arrived. Staging precedent: 71 s incident, SP09 Task 10 |
 
-Cloud Run limits as measured (R8): api 1 CPU / 1 GiB, 60 s, concurrency 80; worker 2 CPU / 2 GiB, 900 s, concurrency 2; admin-backend 1 CPU / 1 GiB, 130 s, concurrency 20 (max 3). Prod admin-backend still runs the placeholder `hello` image (SP07 deploys the real one after launch). R13: `deploy-staging.yml`, `deploy-prod.yml`, `_deploy-cloudrun.yml` exist; every deploy authenticates by WIF.
+Cloud Run limits as measured (R8): api 1 CPU / 1 GiB, 60 s, concurrency 80; worker 2 CPU / 2 GiB, 900 s, concurrency 2; admin-backend 1 CPU / 1 GiB, 130 s, concurrency 20 (max 3). Prod admin-backend was removed 2026-11-21. R13: `deploy-staging.yml`, `deploy-prod.yml`, `_deploy-cloudrun.yml` exist; every deploy authenticates by WIF.
 
 ### Terraform plan results
 
@@ -323,6 +323,6 @@ Command: `cd infra && terraform plan -var staging_alerts=true -var 'git_sha={sta
 
 ### Needs the owner
 
-- DNS for `admin.onolys.com` (SP07 launch): `CNAME admin.onolys.com -> onolys-admin.web.app` and `TXT _acme-challenge.admin.onolys.com = 3N1SsioqcatYp9F5-WqCy1uRbvLookFlM0PrwGBGDFA` (re-read `terraform output required_dns_updates` first; the TXT value is per certificate).
+- DNS for `admin.onolys.com` (now on the staging admin site, 2026-11-21): `CNAME admin.onolys.com -> onolys-admin-staging.web.app` (change from `onolys-admin.web.app` if already added) and `TXT _acme-challenge.admin.onolys.com = xxXeEebxmc605rHqNrOZN69RxCiSd4SQOsPva57mgKs` (re-read `terraform output required_dns_updates` first; the TXT value is per certificate).
 - Anthropic rate tier (step 7a) if `worker_max_instances` is ever raised (currently kept at 3).
 - Merge PR #42 (tag job fix); then the deferred roll-forward-by-tag drill if wanted.
