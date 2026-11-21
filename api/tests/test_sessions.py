@@ -210,6 +210,7 @@ async def test_list_newest_first_with_pagination_and_isolation(client, repo):
         "created_at",
         "latest_report_version",
         "error_code",
+        "interview_id",
     }
     assert len((await client.get("/v1/sessions", headers=B)).json()["items"]) == 1
 

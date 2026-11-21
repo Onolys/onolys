@@ -1,5 +1,6 @@
 """effective_cap override resolution (SP11 R3, D5, D6) and the usage models."""
 
+import json
 import logging
 
 import pytest
@@ -52,7 +53,12 @@ def test_malformed_leaf_falls_back_without_logging_value(bad, caplog):
     u = {"limits": {"eval": {"day": bad}}}
     assert effective_cap(u, "eval", "day", D) == 10
     assert any(r.levelno == logging.WARNING for r in caplog.records)
-    assert "secret-value" not in caplog.text and "12" not in caplog.text.replace("eval", "")
+    for r in caplog.records:
+        # code_version (from GIT_SHA, e.g. "abc123" in CI) may legitimately contain "12".
+        payload = json.loads(r.getMessage())
+        payload.pop("code_version", None)
+        dumped = json.dumps(payload)
+        assert "secret-value" not in dumped and "12" not in dumped
 
 
 def test_malformed_leaf_falls_through_to_legacy():
