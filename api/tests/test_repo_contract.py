@@ -705,14 +705,14 @@ def test_cap_txns_survive_contention(repo, monkeypatch, exc):
         return real(*a, **kw)
 
     monkeypatch.setattr(repo._client, "transaction", flaky)
-    assert repo.reserve_usage(u, "eval", day, LimitDefaults(5, 50, 5, 30), 2) == "ok"
+    assert repo.reserve_usage(u, "eval", day, LimitDefaults(5, 5), 2) == "ok"
     assert len(calls) == 3
     calls.clear()
     repo.release_usage(u, "eval", day, refund=True)
     assert len(calls) == 3
 
 
-# ---- SP11 reserve_usage / release_usage / get_usage_docs ----
+# ---- SP11 reserve_usage / release_usage / get_usage_doc ----
 
 
 def _reserve_in_parallel(repo, u, kinds, defaults, max_active=1000):
@@ -727,39 +727,29 @@ def _reserve_in_parallel(repo, u, kinds, defaults, max_active=1000):
 @pytest.mark.parametrize("kind", ["eval", "interview"])
 def test_parallel_reserve_day_cap_3_per_kind(repo, kind):
     u = f"u-{uuid.uuid4().hex[:8]}"
-    outs = _reserve_in_parallel(repo, u, [kind] * 6, LimitDefaults(3, 50, 3, 50))
+    outs = _reserve_in_parallel(repo, u, [kind] * 6, LimitDefaults(3, 3))
     assert outs.count("ok") == 3 and outs.count("day_cap") == 3
-    day, month = repo.get_usage_docs(u, "2026-11-20")
-    assert day.runs + day.interviews == 3 and month.runs + month.interviews == 3
-
-
-@pytest.mark.parametrize("kind", ["eval", "interview"])
-def test_parallel_reserve_month_cap_3_per_kind(repo, kind):
-    u = f"u-{uuid.uuid4().hex[:8]}"
-    outs = _reserve_in_parallel(repo, u, [kind] * 6, LimitDefaults(50, 3, 50, 3))
-    assert outs.count("ok") == 3 and outs.count("month_cap") == 3
+    day = repo.get_usage_doc(u, "2026-11-20")
+    assert day.runs + day.interviews == 3
 
 
 def test_parallel_reserve_mixed_kinds(repo):
     u = f"u-{uuid.uuid4().hex[:8]}"
-    outs = _reserve_in_parallel(
-        repo, u, ["eval"] * 3 + ["interview"] * 3, LimitDefaults(2, 50, 2, 50)
-    )
+    outs = _reserve_in_parallel(repo, u, ["eval"] * 3 + ["interview"] * 3, LimitDefaults(2, 2))
     assert outs.count("ok") == 4 and outs.count("day_cap") == 2
-    day, month = repo.get_usage_docs(u, "2026-11-20")
-    assert (day.runs, day.interviews, month.runs, month.interviews) == (2, 2, 2, 2)
+    day = repo.get_usage_doc(u, "2026-11-20")
+    assert (day.runs, day.interviews) == (2, 2)
 
 
 def test_reserve_usage_refusal_writes_nothing_and_release_floors_at_zero(repo):
     u, day = f"u-{uuid.uuid4().hex[:8]}", "2026-11-20"
-    d = LimitDefaults(1, 1, 1, 1)
+    d = LimitDefaults(1, 1)
     assert repo.reserve_usage(u, "eval", day, d, 5) == "ok"
-    assert repo.reserve_usage(u, "eval", day, d, 5) == "month_cap"
-    assert repo.get_usage_docs(u, day)[1].runs == 1
+    assert repo.reserve_usage(u, "eval", day, d, 5) == "day_cap"
+    assert repo.get_usage_doc(u, day).runs == 1
     repo.release_usage(u, "eval", day, refund=True)
     repo.release_usage(u, "eval", day, refund=True)
-    day_doc, month_doc = repo.get_usage_docs(u, day)
-    assert (day_doc.runs, month_doc.runs, month_doc.month) == (0, 0, "2026-11")
+    assert repo.get_usage_doc(u, day).runs == 0
     assert repo.get_user(u).active_runs == 0
 
 
@@ -885,7 +875,7 @@ def test_concurrent_interview_creates_reserve_exactly_once(repo):
     from onolys_api.repo.limits import LimitDefaults
 
     alice = f"alice-{uuid.uuid4().hex[:8]}"
-    d = LimitDefaults(10, 100, 5, 30)
+    d = LimitDefaults(10, 5)
     day = "2026-11-21"
 
     def go(_):
@@ -896,11 +886,11 @@ def test_concurrent_interview_creates_reserve_exactly_once(repo):
         outs = list(ex.map(go, range(8)))
     assert sorted(outs) == ["ok"] + ["open_exists"] * 7
     assert len(repo.list_open_interviews(alice)) == 1
-    assert repo.get_usage_docs(alice, day)[0].interviews == 1
+    assert repo.get_usage_doc(alice, day).interviews == 1
     # a capped user: nothing written
     bob = f"bob-{uuid.uuid4().hex[:8]}"
     assert repo.create_interview_reserved(bob, uuid.uuid4().hex, _iv(bob),
-                                          LimitDefaults(10, 100, 0, 0), 2) == "month_cap"  # fmt: skip
+                                          LimitDefaults(10, 0), 2) == "day_cap"  # fmt: skip
     assert repo.list_open_interviews(bob) == []
 
 
@@ -916,4 +906,4 @@ def test_interview_refund_cap_counts_on_the_reservation_day(repo):
         )
         got.append(done.refunded)
     assert got == [True, True, True, False]
-    assert repo.get_usage_docs(alice, "2026-11-21")[0].interview_refunds == 3
+    assert repo.get_usage_doc(alice, "2026-11-21").interview_refunds == 3

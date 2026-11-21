@@ -216,21 +216,16 @@ def _ready(repo, uid, **fields):
     return sid
 
 
-def _month_runs(repo, uid) -> int:
-    return repo.get_usage_docs(uid, caps.utc_date())[1].runs
-
-
 def test_linked_first_run_is_free_and_works_at_a_full_cap(repo):
     uid, queue = "ux" + uuid.uuid4().hex[:6], RecordingQueue()
     sid = _ready(repo, uid, interview_id="iv1")
-    maybe_start_first_run(repo, queue, uid, sid, mk_settings(eval_cap_day=0, eval_cap_month=0))
+    maybe_start_first_run(repo, queue, uid, sid, mk_settings(eval_cap_day=0))
     sess = repo.get_session(uid, sid)
     assert sess.state == "running" and sess.first_run_id and sess.error is None
     (run,) = repo.list_runs(uid, sid)
     assert run.counted is False and len(queue.runs) == 1
-    # usage unchanged (day + month), but it holds an active slot
+    # usage unchanged, but it holds an active slot
     assert user_counters(repo, uid, caps.utc_date()) == (1, 0)
-    assert _month_runs(repo, uid) == 0
 
 
 def test_linked_first_run_is_blocked_by_max_active_runs(repo):
@@ -244,22 +239,19 @@ def test_linked_first_run_is_blocked_by_max_active_runs(repo):
     assert user_counters(repo, uid, caps.utc_date()) == (0, 0)
 
 
-def test_unlinked_first_run_counts_one_day_and_month(repo):
+def test_unlinked_first_run_counts_one_day(repo):
     uid, queue = "uz" + uuid.uuid4().hex[:6], RecordingQueue()
     sid = _ready(repo, uid)
     maybe_start_first_run(repo, queue, uid, sid, mk_settings())
     (run,) = repo.list_runs(uid, sid)
     assert run.counted is True
     assert user_counters(repo, uid, caps.utc_date()) == (1, 1)
-    assert _month_runs(repo, uid) == 1
 
 
 @pytest.mark.parametrize(
     "kw,code",
     [
         ({"eval_cap_day": 0}, "daily_cap_reached"),
-        ({"eval_cap_month": 0}, "monthly_cap_reached"),
-        ({"eval_cap_day": 0, "eval_cap_month": 0}, "monthly_cap_reached"),
     ],
 )
 def test_auto_start_at_cap_holds_with_the_matching_error_code(repo, kw, code):
@@ -286,7 +278,6 @@ def test_exempt_release_frees_the_slot_but_never_refunds(repo):
     (run,) = repo.list_runs(uid, sid)
     release_once(repo, uid, sid, run.run_id, True, date)  # asks for a refund; exempt: none
     assert user_counters(repo, uid, date) == (0, 1)
-    assert _month_runs(repo, uid) == 1
     release_once(repo, uid, sid, run.run_id, True, date)  # exactly once
     assert user_counters(repo, uid, date) == (0, 1)
 
@@ -330,7 +321,7 @@ def test_later_post_runs_style_start_counts_one_after_a_free_first_run(repo):
     from onolys_api.repo.limits import LimitDefaults
 
     uid, queue = "ut" + uuid.uuid4().hex[:6], RecordingQueue()
-    s = mk_settings(eval_cap_day=1, eval_cap_month=1)
+    s = mk_settings(eval_cap_day=1)
     sid = _ready(repo, uid, interview_id="iv1")
     maybe_start_first_run(repo, queue, uid, sid, s)
     (first,) = repo.list_runs(uid, sid)
@@ -344,10 +335,10 @@ def test_later_post_runs_style_start_counts_one_after_a_free_first_run(repo):
     )
     assert out == "started"
     assert repo.get_run(uid, sid, "r2").counted is True
-    assert user_counters(repo, uid, caps.utc_date()) == (1, 1) and _month_runs(repo, uid) == 1
+    assert user_counters(repo, uid, caps.utc_date()) == (1, 1)
     # now the day cap (1) is spent for real
     out = repo.start_run(uid, sid, "r3", caps.utc_date(), d, 5, "sha", 45, ("running",), None, None)
-    assert out == "month_cap"  # month is checked first and is spent too
+    assert out == "daily_cap"
 
 
 def test_cap_race_two_sessions_same_user_exactly_one_starts_no_leak(repo):

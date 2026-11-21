@@ -377,7 +377,6 @@
               "transcription_failed",
               "rating_invalid",
               "daily_cap_reached",
-              "monthly_cap_reached",
               "interview_cap_reached",
               "conflict",
               "interview_too_long"
@@ -426,17 +425,14 @@
           "period": {
             "anyOf": [
               {
-                "enum": [
-                  "day",
-                  "month"
-                ],
+                "const": "day",
                 "type": "string"
               },
               {
                 "type": "null"
               }
             ],
-            "description": "Which usage period was exhausted. Set on `daily_cap_reached`, `monthly_cap_reached` and `interview_cap_reached`.",
+            "description": "Which usage period was exhausted. Set on `daily_cap_reached` and `interview_cap_reached`.",
             "title": "Period"
           }
         },
@@ -644,14 +640,10 @@
         "properties": {
           "day": {
             "$ref": "#/components/schemas/Period"
-          },
-          "month": {
-            "$ref": "#/components/schemas/Period"
           }
         },
         "required": [
-          "day",
-          "month"
+          "day"
         ],
         "title": "KindUsage",
         "type": "object"
@@ -4013,7 +4005,7 @@
             "APIKeyHeader": []
           }
         ],
-        "summary": "Usage and caps (UTC day and month)",
+        "summary": "Usage and caps (UTC day)",
         "tags": [
           "usage"
         ]

@@ -3,7 +3,7 @@
 Called after each of the three inputs lands (transcribe completion, speaker confirm, final
 rating). Each caller sets its own flag first and then calls this, so the last caller always sees
 all three flags. The decision is one repo transaction (`Repo.start_first_run`): flags +
-`first_run_id` absent + cap check (month and day; skipped for an AI-interview-linked session, which
+`first_run_id` absent + cap check (day; skipped for an AI-interview-linked session, which
 is free but still takes an active-run slot) + run creation + `state=running` commit together, so
 exactly one caller wins. The cap reservation (runs+1, active_runs+1) lives in that same
 transaction: if the transaction loses the race or is refused, nothing was reserved and there is
@@ -40,7 +40,7 @@ def maybe_start_first_run(
         settings.git_sha, RUN_START_PROGRESS,
     )  # fmt: skip
     if outcome != "started":
-        if outcome in ("daily_cap", "month_cap", "concurrent"):
+        if outcome in ("daily_cap", "concurrent"):
             logs.emit(
                 "first_run_held",
                 session_id=sid,

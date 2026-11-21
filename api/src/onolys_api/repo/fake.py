@@ -50,7 +50,6 @@ from onolys_api.repo.models import (
     SessionStatusDoc,
     TranscriptDoc,
     UsageDoc,
-    UsageMonthDoc,
     UserDoc,
     interview_refundable,
     utcnow,
@@ -488,12 +487,10 @@ class FakeRepo:
         with self._claim_lock:
             user = self._get(f"users/{uid}") or {}
             day = self._get(f"usage/{uid}_{date}") or {"uid": uid, "date": date}
-            month = self._get(f"usage/{uid}_{date[:7]}") or {"uid": uid, "month": date[:7]}
-            outcome = decide_reserve(user, day, month, kind, defaults, max_active)
+            outcome = decide_reserve(user, day, kind, defaults, max_active)
             if outcome != "ok":
                 return outcome
             self._put(f"usage/{uid}_{date}", {**day, field: day.get(field, 0) + 1})
-            self._put(f"usage/{uid}_{date[:7]}", {**month, field: month.get(field, 0) + 1})
             if kind == "eval":
                 self._put(f"users/{uid}", {**user, "active_runs": user.get("active_runs", 0) + 1})
             return "ok"
@@ -505,10 +502,10 @@ class FakeRepo:
             if kind == "eval" and user.get("active_runs", 0) > 0:
                 self._put(f"users/{uid}", {**user, "active_runs": user["active_runs"] - 1})
             if refund:
-                for path in (f"usage/{uid}_{date}", f"usage/{uid}_{date[:7]}"):
-                    doc = self._get(path)
-                    if doc and doc.get(field, 0) > 0:
-                        self._put(path, {**doc, field: max(0, doc[field] - units)})
+                path = f"usage/{uid}_{date}"
+                doc = self._get(path)
+                if doc and doc.get(field, 0) > 0:
+                    self._put(path, {**doc, field: max(0, doc[field] - units)})
 
     def release_run_slot(
         self, uid: str, sid: str, run_id: str, refund: bool, date: str | None
@@ -529,15 +526,9 @@ class FakeRepo:
                 )
             return True
 
-    def get_usage_docs(self, uid: str, date: str) -> tuple[UsageDoc, UsageMonthDoc]:
+    def get_usage_doc(self, uid: str, date: str) -> UsageDoc:
         day = self._get(f"usage/{uid}_{date}")
-        month = self._get(f"usage/{uid}_{date[:7]}")
-        return (
-            self._load(UsageDoc, f"{uid}_{date}", day) if day else UsageDoc(uid=uid, date=date),
-            self._load(UsageMonthDoc, f"{uid}_{date[:7]}", month)
-            if month
-            else UsageMonthDoc(uid=uid, month=date[:7]),
-        )
+        return self._load(UsageDoc, f"{uid}_{date}", day) if day else UsageDoc(uid=uid, date=date)
 
     def start_first_run(
         self, uid: str, sid: str, run_id: str, date: str, defaults: LimitDefaults, max_active: int,
@@ -555,11 +546,10 @@ class FakeRepo:
             status = self._get(f"session_status/{sid}") or {}
             user = self._get(f"users/{uid}") or {}
             usage = self._get(f"usage/{uid}_{date}") or {"uid": uid, "date": date, "runs": 0}
-            month = self._get(f"usage/{uid}_{date[:7]}") or {"uid": uid, "month": date[:7]}
             now = utcnow()
             exempt = bool(sess.get("interview_id")) and not sess.get("free_run_void")
             units = sess.get("n_runs", 1)
-            decided = decide_start(user, usage, month, defaults, max_active, exempt, units)
+            decided = decide_start(user, usage, defaults, max_active, exempt, units)
             if decided != "ok":
                 outcome: StartOutcome = START_OUTCOME[decided]  # type: ignore[assignment]
                 code = HELD_ERROR_CODE[outcome]
@@ -581,8 +571,6 @@ class FakeRepo:
             self._create(f"sessions/{sid}/runs/{run_id}", run.to_store())
             if not exempt:
                 self._put(f"usage/{uid}_{date}", {**usage, "runs": usage.get("runs", 0) + units})
-                mruns = month.get("runs", 0) + units
-                self._put(f"usage/{uid}_{date[:7]}", {**month, "runs": mruns})
             self._put(f"users/{uid}", {**user, "active_runs": user.get("active_runs", 0) + 1})
             self._put(
                 f"sessions/{sid}",
@@ -614,7 +602,6 @@ class FakeRepo:
             status = self._get(f"session_status/{sid}") or {}
             user = self._get(f"users/{uid}") or {}
             usage = self._get(f"usage/{uid}_{date}") or {"uid": uid, "date": date, "runs": 0}
-            month = self._get(f"usage/{uid}_{date[:7]}") or {"uid": uid, "month": date[:7]}
             # the free first run of an interview-linked session (SP11 R5), same as start_first_run
             exempt = (
                 bool(sess.get("interview_id"))
@@ -622,7 +609,7 @@ class FakeRepo:
                 and not sess.get("first_run_id")
             )
             units = n_runs or sess.get("n_runs", 1)
-            decided = decide_start(user, usage, month, defaults, max_active, exempt, units)
+            decided = decide_start(user, usage, defaults, max_active, exempt, units)
             if decided != "ok":
                 return START_OUTCOME[decided]  # type: ignore[return-value]
             revs = [(i, d) for i, d in self._children(sid, "ratings") if i != DRAFT_ID]
@@ -643,8 +630,6 @@ class FakeRepo:
             self._create(f"sessions/{sid}/runs/{run_id}", run.to_store())
             if not exempt:
                 self._put(f"usage/{uid}_{date}", {**usage, "runs": usage.get("runs", 0) + units})
-                mruns = month.get("runs", 0) + units
-                self._put(f"usage/{uid}_{date[:7]}", {**month, "runs": mruns})
             self._put(f"users/{uid}", {**user, "active_runs": user.get("active_runs", 0) + 1})
             self._put(
                 f"sessions/{sid}",

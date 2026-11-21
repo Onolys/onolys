@@ -51,9 +51,7 @@ class Settings:
     audio_bucket: str = ""
     cors_origins: tuple[str, ...] = ()
     eval_cap_day: int = 10
-    eval_cap_month: int = 100
     ai_cap_day: int = 5
-    ai_cap_month: int = 30
     max_active_runs: int = 2
     tasks_queue: str = ""
     tasks_sa: str = ""
@@ -104,9 +102,7 @@ class Settings:
                 o.strip() for o in e.get("CORS_ORIGINS", "").split(",") if o.strip()
             ),
             eval_cap_day=_int(e, "EVAL_CAP_DAY", cls.eval_cap_day),
-            eval_cap_month=_int(e, "EVAL_CAP_MONTH", cls.eval_cap_month),
             ai_cap_day=_int(e, "AI_CAP_DAY", cls.ai_cap_day),
-            ai_cap_month=_int(e, "AI_CAP_MONTH", cls.ai_cap_month),
             max_active_runs=max_active,
             tasks_queue=e.get("TASKS_QUEUE", ""),
             tasks_sa=e.get("TASKS_SA", ""),
@@ -144,14 +140,9 @@ class Settings:
                 raise ConfigError(f"{name} must be one of {', '.join(allowed)}")
         if self.auth_mode == "fake" and self.env not in LOCAL_ENVS:
             raise ConfigError("AUTH_MODE=fake is only allowed when ENV is local or test")
-        for kind, day, month in (
-            ("EVAL", self.eval_cap_day, self.eval_cap_month),
-            ("AI", self.ai_cap_day, self.ai_cap_month),
-        ):
-            if day < 0 or month < 0:
-                raise ConfigError(f"{kind}_CAP_DAY and {kind}_CAP_MONTH must be >= 0")
-            if month < day:
-                raise ConfigError(f"{kind}_CAP_MONTH must be >= {kind}_CAP_DAY")
+        for kind, day in (("EVAL", self.eval_cap_day), ("AI", self.ai_cap_day)):
+            if day < 0:
+                raise ConfigError(f"{kind}_CAP_DAY must be >= 0")
         if self.max_active_runs < 0:
             raise ConfigError("MAX_ACTIVE_RUNS must be >= 0")
         if self.stt_cap_factor <= 0 or self.stt_cap_min_s <= 0:

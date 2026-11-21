@@ -44,7 +44,6 @@ ERROR_CODES = (
     "transcription_failed",
     "rating_invalid",
     "daily_cap_reached",
-    "monthly_cap_reached",
     "interview_cap_reached",
     "conflict",
     "interview_too_long",
@@ -57,7 +56,7 @@ class ErrorDetail(TypedDict):
     message: str
     field: NotRequired[str]
     issue: NotRequired[str]
-    period: NotRequired[Literal["day", "month"]]
+    period: NotRequired[Literal["day"]]
 
 
 class ErrorDetailModel(BaseModel):
@@ -84,11 +83,11 @@ class ErrorDetailModel(BaseModel):
         ]
         | None
     ) = Field(None, description="What is wrong at `field`. Set on `rating_invalid`.")
-    period: Literal["day", "month"] | None = Field(
+    period: Literal["day"] | None = Field(
         None,
         description=(
-            "Which usage period was exhausted. Set on `daily_cap_reached`, `monthly_cap_reached` "
-            "and `interview_cap_reached`."
+            "Which usage period was exhausted. Set on `daily_cap_reached` and "
+            "`interview_cap_reached`."
         ),
     )
 
@@ -115,7 +114,7 @@ class ApiError(Exception):
 
     @classmethod
     def of(
-        cls, status: int, code: str, message: str, period: Literal["day", "month"] | None = None
+        cls, status: int, code: str, message: str, period: Literal["day"] | None = None
     ) -> "ApiError":
         detail: ErrorDetail = {"code": code, "message": message}
         if period is not None:

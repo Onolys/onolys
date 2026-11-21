@@ -15,7 +15,6 @@ locals {
     { name = "VOICE_PROVIDERS_FILE", value = "config/${var.env}/voice_providers.yaml" },
     { name = "ADAPTERS", value = "real" },
     { name = "AI_CAP_DAY", value = tostring(var.ai_cap_day) },
-    { name = "AI_CAP_MONTH", value = tostring(var.ai_cap_month) },
     { name = "AI_MAX_SECONDS", value = tostring(var.ai_max_seconds) },
     { name = "AI_WARN_SECONDS", value = tostring(var.ai_warn_seconds) },
     { name = "AI_MIN_SECONDS", value = tostring(var.ai_min_seconds) },

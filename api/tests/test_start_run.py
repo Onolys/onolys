@@ -150,8 +150,8 @@ def _linked_ready(repo, uid, **fields):  # noqa: F811
 def test_linked_first_run_held_by_active_limit_starts_free_via_post_runs(repo):  # noqa: F811
     uid = f"u{uuid.uuid4().hex[:10]}"
     sid = _linked_ready(repo, uid, interview_id="iv1")
-    full = mk_settings(eval_cap_day=0, eval_cap_month=0)
-    held = mk_settings(eval_cap_day=0, eval_cap_month=0, max_active_runs=0)
+    full = mk_settings(eval_cap_day=0)
+    held = mk_settings(eval_cap_day=0, max_active_runs=0)
     maybe_start_first_run(repo, RecordingQueue(), uid, sid, held)  # held by MAX_ACTIVE_RUNS
     assert repo.get_session(uid, sid).first_run_id is None
     queue = RecordingQueue()
@@ -163,7 +163,7 @@ def test_linked_first_run_held_by_active_limit_starts_free_via_post_runs(repo): 
     assert run.counted is False and len(queue.runs) == 1
     date = caps.utc_date()
     assert user_counters(repo, uid, date) == (1, 0)  # a slot, but no usage
-    assert repo.get_usage_docs(uid, date)[1].runs == 0
+    assert repo.get_usage_doc(uid, date).runs == 0
 
 
 def test_linked_post_runs_still_obeys_the_active_limit(repo):  # noqa: F811
@@ -180,7 +180,7 @@ def test_second_post_runs_on_a_linked_session_counts_one(repo):  # noqa: F811
 
     uid = f"u{uuid.uuid4().hex[:10]}"
     sid = _linked_ready(repo, uid, interview_id="iv1")
-    s = mk_settings(eval_cap_day=1, eval_cap_month=1)
+    s = mk_settings(eval_cap_day=1)
     app = make_client(repo, s, RecordingQueue())
     first = _post_run(app, uid, sid).json()["run_id"]
     release_once(repo, uid, sid, first, False, caps.utc_date())
@@ -220,26 +220,25 @@ def test_n_runs_costs_n_units_and_refunds_all(repo):  # noqa: F811
 
     uid = f"u{uuid.uuid4().hex[:10]}"
     sid = _linked_ready(repo, uid)
-    app = make_client(repo, mk_settings(eval_cap_day=5, eval_cap_month=5), RecordingQueue())
+    app = make_client(repo, mk_settings(eval_cap_day=5), RecordingQueue())
     with TestClient(app) as c:
         r = c.post(f"/v1/sessions/{sid}/runs", json={"n_runs": 3},
                    headers={"Authorization": f"Bearer test:{uid}"})  # fmt: skip
     assert r.status_code == 202, r.text
     date = caps.utc_date()
     assert user_counters(repo, uid, date) == (1, 3)  # one slot, three units
-    assert repo.get_usage_docs(uid, date)[1].runs == 3
+    assert repo.get_usage_doc(uid, date).runs == 3
     release_once(repo, uid, sid, r.json()["run_id"], True, date)
     assert user_counters(repo, uid, date) == (0, 0)
-    assert repo.get_usage_docs(uid, date)[1].runs == 0
+    assert repo.get_usage_doc(uid, date).runs == 0
 
 
 def test_n_runs_beyond_the_units_left_is_refused_and_reserves_nothing(repo):  # noqa: F811
     uid = f"u{uuid.uuid4().hex[:10]}"
     sid = _linked_ready(repo, uid)
-    for settings in (mk_settings(eval_cap_day=2), mk_settings(eval_cap_month=2)):
-        r = _post_run_n(make_client(repo, settings), uid, sid, 3)
-        assert r.status_code == 429, r.text
-        assert r.json()["details"][0]["code"] in ("daily_cap_reached", "monthly_cap_reached")
+    r = _post_run_n(make_client(repo, mk_settings(eval_cap_day=2)), uid, sid, 3)
+    assert r.status_code == 429, r.text
+    assert r.json()["details"][0]["code"] == "daily_cap_reached"
     assert repo.list_runs(uid, sid) == []
     assert user_counters(repo, uid, caps.utc_date()) == (0, 0)
     ok = _post_run_n(make_client(repo, mk_settings(eval_cap_day=3), RecordingQueue()), uid, sid, 3)

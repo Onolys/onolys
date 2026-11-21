@@ -145,8 +145,6 @@ def start_run(
         raise invalid_state()
     if outcome == "daily_cap":
         raise ApiError.of(429, "daily_cap_reached", caps.DAILY_MESSAGE, period="day")
-    if outcome == "month_cap":
-        raise ApiError.of(429, "monthly_cap_reached", caps.MONTHLY_MESSAGE, period="month")
     if outcome == "concurrent":
         raise ApiError.of(429, "daily_cap_reached", caps.CONCURRENT_MESSAGE, period="day")
     try:

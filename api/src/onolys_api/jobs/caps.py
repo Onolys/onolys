@@ -1,13 +1,12 @@
-"""Usage limits (SP11 R1, R4, R6; formerly the SP04 R8 spend guard): per-kind day + month caps and
-the eval concurrent-run limit.
+"""Usage limits (SP11 R1, R4, R6; formerly the SP04 R8 spend guard): one DAILY cap per kind and
+the eval concurrent-run limit (FX46: no monthly caps).
 
 `reserve(repo, settings, uid, kind)` atomically checks and counts one unit, or raises 429:
-eval day cap or concurrent limit -> `daily_cap_reached` (period=day), eval month ->
-`monthly_cap_reached` (period=month), interview -> `interview_cap_reached` (with the period). When
-both periods are spent the month wins. Every reservation must be released exactly once with
+eval day cap or concurrent limit -> `daily_cap_reached` (period=day), interview ->
+`interview_cap_reached` (period=day). Every reservation must be released exactly once with
 `release(repo, uid, reservation, refund)`: `refund=True` when it failed before any LLM call (gives
-the day and month counts back), `refund=False` when it ended after spending. A refund hits the
-docs the reservation was made on, even if the UTC day/month has rolled over since.
+the day count back), `refund=False` when it ended after spending. A refund hits the
+docs the reservation was made on, even if the UTC day has rolled over since.
 
 `reserve_run`/`release_run` are the eval wrappers the run call sites use.
 """
@@ -41,17 +40,13 @@ __all__ = [
 
 DAILY_MESSAGE = "Daily run limit reached."
 CONCURRENT_MESSAGE = "Too many runs in progress."
-MONTHLY_MESSAGE = "Monthly run limit reached."
-INTERVIEW_MESSAGES: dict[Period, str] = {
-    "day": "Daily AI interview limit reached.",
-    "month": "Monthly AI interview limit reached.",
-}
+INTERVIEW_DAILY_MESSAGE = "Daily AI interview limit reached."
 
 
 @dataclass(frozen=True)
 class Reservation:
     kind: Kind
-    date: str  # UTC day key the reservation was counted on (month key = date[:7])
+    date: str  # UTC day key the reservation was counted on
 
 
 @dataclass(frozen=True)
@@ -64,7 +59,6 @@ class PeriodUsage:
 @dataclass(frozen=True)
 class KindUsage:
     day: PeriodUsage
-    month: PeriodUsage
 
 
 @dataclass(frozen=True)
@@ -81,12 +75,6 @@ def resets_at(now: datetime | None = None) -> datetime:
     """Next UTC midnight."""
     d = (now or datetime.now(UTC)).astimezone(UTC)
     return datetime(d.year, d.month, d.day, tzinfo=UTC) + timedelta(days=1)
-
-
-def month_resets_at(now: datetime | None = None) -> datetime:
-    """The 1st of the next UTC month, 00:00."""
-    d = (now or datetime.now(UTC)).astimezone(UTC)
-    return datetime(d.year + (d.month == 12), d.month % 12 + 1, 1, tzinfo=UTC)
 
 
 def reserve(
@@ -116,11 +104,8 @@ def start_interview(
 
 
 def _refuse(kind: Kind, outcome: str) -> NoReturn:
-    period: Period = "month" if outcome == "month_cap" else "day"
     if kind == "interview":
-        raise ApiError.of(429, "interview_cap_reached", INTERVIEW_MESSAGES[period], period=period)
-    if outcome == "month_cap":
-        raise ApiError.of(429, "monthly_cap_reached", MONTHLY_MESSAGE, period="month")
+        raise ApiError.of(429, "interview_cap_reached", INTERVIEW_DAILY_MESSAGE, period="day")
     message = CONCURRENT_MESSAGE if outcome == "concurrent" else DAILY_MESSAGE
     raise ApiError.of(429, "daily_cap_reached", message, period="day")
 
@@ -139,20 +124,16 @@ def release_run(repo: Repo, uid: str, date: str, refund: bool) -> None:
 
 
 def usage_view(repo: Repo, settings: Settings, uid: str, now: datetime | None = None) -> UsageView:
-    """Used / cap / resets_at per kind and period, per-user overrides applied."""
+    """Used / cap / resets_at per kind (UTC day), per-user overrides applied."""
     user = repo.get_user(uid)
     user_d = user.model_dump() if user is not None else None
     defaults = LimitDefaults.from_settings(settings)
-    day, month = repo.get_usage_docs(uid, utc_date(now))
-    day_reset, month_reset = resets_at(now), month_resets_at(now)
+    day = repo.get_usage_doc(uid, utc_date(now))
+    reset = resets_at(now)
 
-    def kind_usage(kind: Kind, d_used: int, m_used: int) -> KindUsage:
-        return KindUsage(
-            PeriodUsage(d_used, effective_cap(user_d, kind, "day", defaults), day_reset),
-            PeriodUsage(m_used, effective_cap(user_d, kind, "month", defaults), month_reset),
-        )
+    def kind_usage(kind: Kind, used: int) -> KindUsage:
+        return KindUsage(PeriodUsage(used, effective_cap(user_d, kind, "day", defaults), reset))
 
     return UsageView(
-        eval=kind_usage("eval", day.runs, month.runs),
-        interview=kind_usage("interview", day.interviews, month.interviews),
+        eval=kind_usage("eval", day.runs), interview=kind_usage("interview", day.interviews)
     )

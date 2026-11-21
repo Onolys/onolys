@@ -28,7 +28,6 @@ from onolys_api.repo.models import (
     SessionStatusDoc,
     TranscriptDoc,
     UsageDoc,
-    UsageMonthDoc,
     UserDoc,
 )
 
@@ -51,7 +50,7 @@ class Page[T]:
     next_cursor: str | None = None
 
 
-StartOutcome = Literal["started", "not_ready", "already", "daily_cap", "month_cap", "concurrent"]
+StartOutcome = Literal["started", "not_ready", "already", "daily_cap", "concurrent"]
 InterviewLinkOutcome = Literal["linked", "not_ended", "already_linked", "refunded"]
 ClaimOutcome = Literal["claimed", "done", "failed", "busy"]
 
@@ -151,37 +150,37 @@ class Repo(Protocol):
     # usage + idempotency
     def get_usage(self, uid: str, date: str) -> UsageDoc: ...
     def add_usage(self, uid: str, date: str, runs: int = 0, tokens: int = 0) -> UsageDoc: ...
-    # SP11 R1/R4: ONE transaction over users/{uid}, the day doc and the month doc
-    # (`usage/{uid}_{YYYY-MM}`, key = date[:7]). Month is checked first ("month_cap"), then the day
+    # SP11 R1/R4: ONE transaction over users/{uid} and the day doc
+    # (`usage/{uid}_{YYYY-MM-DD}`; no monthly caps). The day is checked first
     # ("day_cap"), then, for `eval` only, the active-run limit ("concurrent"). Caps come from
-    # `effective_cap(user, ...)`. On "ok": day and month counters +1 (and `active_runs`+1 for
+    # `effective_cap(user, ...)`. On "ok": the day counter +1 (and `active_runs`+1 for
     # eval). Nothing is written on a refusal.
     def reserve_usage(
         self, uid: str, kind: Kind, date: str, defaults: LimitDefaults, max_active: int
     ) -> ReserveUsageOutcome: ...
-    # Decrements `active_runs` (eval only, floor 0); with `refund` also the day and month
-    # counters of the doc keys given by `date` (floor 0). One transaction.
+    # Decrements `active_runs` (eval only, floor 0); with `refund` also the day
+    # counter of the doc given by `date` (floor 0). One transaction.
     def release_usage(
         self, uid: str, kind: Kind, date: str, refund: bool, units: int = 1
     ) -> None: ...
     # ONE transaction: if run `run_id` is not yet `released`, set `released=True` and hand its eval
-    # slot back (`active_runs`-1; with `refund and run.counted` also the day/month counters of
+    # slot back (`active_runs`-1; with `refund and run.counted` also the day counter of
     # `run.cap_date or date`; nothing is handed back when both dates are None). Returns False when
     # it was already released (nothing written). NotFoundError when the run is gone.
     def release_run_slot(
         self, uid: str, sid: str, run_id: str, refund: bool, date: str | None
     ) -> bool: ...
-    # `(day, month)` usage docs for `date` (zero-valued when absent).
-    def get_usage_docs(self, uid: str, date: str) -> tuple[UsageDoc, UsageMonthDoc]: ...
+    # the day usage doc for `date` (zero-valued when absent).
+    def get_usage_doc(self, uid: str, date: str) -> UsageDoc: ...
     # R4 first run, ONE transaction: reads session + status + user + usage + latest rating; if
     # `state=awaiting_input`, the three flags are set and `first_run_id` is absent, checks the cap
     # like `reserve_usage("eval")`, then creates run `run_id` (snapshot: rating_id, n_runs, preset,
-    # stt, code_version), counts it (day+month runs+1, active_runs+1), sets `first_run_id`,
+    # stt, code_version), counts it (day runs+1, active_runs+1), sets `first_run_id`,
     # `state=running`, the status mirror and clears the error. Cap/concurrent hit: writes
-    # `error=daily_cap_reached` (day, or concurrent) / `monthly_cap_reached` (month) (state
+    # `error=daily_cap_reached` (day, or concurrent) (state
     # unchanged) and nothing else. Anything not ready: nothing written.
-    # Exempt (SP11 R5): when the session has `interview_id` the first run skips the day/month
-    # checks and counters (still takes an `active_runs` slot and obeys the concurrent limit); the
+    # Exempt (SP11 R5): when the session has `interview_id` the first run skips the day
+    # check and counters (still takes an `active_runs` slot and obeys the concurrent limit); the
     # run doc stores `counted=false` so its release never refunds counters.
     def start_first_run(
         self, uid: str, sid: str, run_id: str, date: str, defaults: LimitDefaults, max_active: int,
@@ -190,9 +189,9 @@ class Repo(Protocol):
     # Manual start (`POST /runs`), ONE transaction: reads session + status + user + usage + latest
     # rating; if the session is in one of `allowed_states` with `transcript_ready`,
     # `speaker_confirmed` and `clinician_speaker` set (else "not_ready", nothing written), checks
-    # the caps like `reserve_usage("eval")` (hit: "daily_cap"/"month_cap"/"concurrent", nothing
+    # the caps like `reserve_usage("eval")` (hit: "daily_cap"/"concurrent", nothing
     # written), then creates run `run_id` (snapshot: rating_id, `n_runs` or the session's,
-    # `preset` or the session's, stt, code_version), counts it (day+month runs+1, active_runs+1;
+    # `preset` or the session's, stt, code_version), counts it (day runs+1, active_runs+1;
     # always counted), sets `first_run_id` if absent, `state=running`, the status mirror
     # (progress `start_progress`, or the max with it when entering from `awaiting_input`) and
     # clears the error. Exactly one of two racing callers (two manual starts, or a manual start
@@ -205,8 +204,8 @@ class Repo(Protocol):
     # interviews (SP10 R5): uid-scoped `interviews/{id}`; foreign or missing -> NotFoundError.
     def create_interview(self, uid: str, iid: str, doc: InterviewDoc) -> None: ...
     # ONE transaction (A9): refuse with "open_exists" when the caller has an interview in
-    # `created|live`; else check the interview day/month caps like `reserve_usage("interview")`
-    # ("day_cap"/"month_cap"), then count the unit on `doc.reservation_date` and create the doc.
+    # `created|live`; else check the interview day cap like `reserve_usage("interview")`
+    # ("day_cap"), then count the unit on `doc.reservation_date` and create the doc.
     # Concurrent callers: exactly one reserves; nothing is written on a refusal.
     def create_interview_reserved(
         self, uid: str, iid: str, doc: InterviewDoc, defaults: LimitDefaults, max_active: int

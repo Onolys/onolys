@@ -84,19 +84,9 @@ variable "eval_cap_day" {
   default = 10
 }
 
-variable "eval_cap_month" {
-  type    = number
-  default = 100
-}
-
 variable "ai_cap_day" {
   type    = number
   default = 5
-}
-
-variable "ai_cap_month" {
-  type    = number
-  default = 30
 }
 
 variable "default_preset" {

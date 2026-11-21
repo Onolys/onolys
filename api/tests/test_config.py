@@ -10,8 +10,7 @@ def test_defaults_local():
     s = Settings.from_env({})
     assert (s.env, s.service_mode, s.auth_mode, s.adapters) == ("local", "combined", "fake", "stub")
     assert s.firestore_database == "(default)"
-    assert (s.eval_cap_day, s.eval_cap_month) == (10, 100)
-    assert (s.ai_cap_day, s.ai_cap_month) == (5, 30)
+    assert (s.eval_cap_day, s.ai_cap_day) == (10, 5)
 
 
 def test_parses_all_vars():
@@ -28,9 +27,7 @@ def test_parses_all_vars():
             "AUDIO_BUCKET": "b",
             "CORS_ORIGINS": "https://a.com, https://b.com ,",
             "EVAL_CAP_DAY": "7",
-            "EVAL_CAP_MONTH": "70",
             "AI_CAP_DAY": "2",
-            "AI_CAP_MONTH": "9",
             "TASKS_QUEUE": "q",
             "TASKS_SA": "sa",
             "WORKER_URL": "https://w",
@@ -41,7 +38,7 @@ def test_parses_all_vars():
     )
     assert s.service_mode == "worker" and s.firestore_database == "staging"
     assert s.cors_origins == ("https://a.com", "https://b.com")
-    assert (s.eval_cap_day, s.eval_cap_month, s.ai_cap_day, s.ai_cap_month) == (7, 70, 2, 9)
+    assert (s.eval_cap_day, s.ai_cap_day) == (7, 2)
     assert s.git_sha == "sha" and s.worker_url == "https://w"
 
 
@@ -69,12 +66,8 @@ def test_fake_auth_allowed_locally(env):
         {"ADAPTERS": "x"},
         {"AUTH_MODE": "x"},
         {"EVAL_CAP_DAY": "many"},
-        {"AI_CAP_MONTH": "1.5"},
         {"EVAL_CAP_DAY": "-1"},
         {"AI_CAP_DAY": "-1"},
-        {"EVAL_CAP_MONTH": "-1", "EVAL_CAP_DAY": "0"},
-        {"EVAL_CAP_DAY": "11", "EVAL_CAP_MONTH": "10"},
-        {"AI_CAP_DAY": "6", "AI_CAP_MONTH": "5"},
         {"STT_CAP_FACTOR": "lots"},
         {"STT_CAP_FACTOR": "0"},
         {"STT_CAP_MIN_S": "-5"},

@@ -59,7 +59,6 @@ from onolys_api.repo.models import (
     SessionStatusDoc,
     TranscriptDoc,
     UsageDoc,
-    UsageMonthDoc,
     UserDoc,
     interview_refundable,
     utcnow,
@@ -563,7 +562,6 @@ class FirestoreRepo:
         self, uid: str, kind: Kind, date: str, defaults: LimitDefaults, max_active: int
     ) -> ReserveUsageOutcome:
         day_ref = self._top("usage", f"{uid}_{date}")
-        month_ref = self._top("usage", f"{uid}_{date[:7]}")
         user_ref = self._top("users", uid)
         field = KIND_FIELD[kind]
 
@@ -571,16 +569,10 @@ class FirestoreRepo:
         def txn_fn(txn) -> ReserveUsageOutcome:
             user = user_ref.get(transaction=txn).to_dict() or {}
             day = day_ref.get(transaction=txn).to_dict() or {}
-            month = month_ref.get(transaction=txn).to_dict() or {}
-            outcome = decide_reserve(user, day, month, kind, defaults, max_active)
+            outcome = decide_reserve(user, day, kind, defaults, max_active)
             if outcome != "ok":
                 return outcome
             txn.set(day_ref, {"uid": uid, "date": date, field: day.get(field, 0) + 1}, merge=True)
-            txn.set(
-                month_ref,
-                {"uid": uid, "month": date[:7], field: month.get(field, 0) + 1},
-                merge=True,
-            )
             if kind == "eval":
                 txn.set(user_ref, {"active_runs": user.get("active_runs", 0) + 1}, merge=True)
             return "ok"
@@ -589,7 +581,6 @@ class FirestoreRepo:
 
     def release_usage(self, uid: str, kind: Kind, date: str, refund: bool, units: int = 1) -> None:
         day_ref = self._top("usage", f"{uid}_{date}")
-        month_ref = self._top("usage", f"{uid}_{date[:7]}")
         user_ref = self._top("users", uid)
         field = KIND_FIELD[kind]
 
@@ -597,14 +588,11 @@ class FirestoreRepo:
         def txn_fn(txn) -> None:
             user = user_ref.get(transaction=txn).to_dict() or {}
             day = day_ref.get(transaction=txn).to_dict() or {}
-            month = month_ref.get(transaction=txn).to_dict() or {}
             if kind == "eval" and user.get("active_runs", 0) > 0:
                 txn.set(user_ref, {"active_runs": user["active_runs"] - 1}, merge=True)
             if refund:
                 if day.get(field, 0) > 0:
                     txn.set(day_ref, {field: max(0, day[field] - units)}, merge=True)
-                if month.get(field, 0) > 0:
-                    txn.set(month_ref, {field: max(0, month[field] - units)}, merge=True)
 
         self._contended(txn_fn, uid)
 
@@ -625,9 +613,7 @@ class FirestoreRepo:
             day_key = run.get("cap_date") or date
             user = user_ref.get(transaction=txn).to_dict() or {}
             day_ref = self._top("usage", f"{uid}_{day_key}") if day_key else None
-            month_ref = self._top("usage", f"{uid}_{day_key[:7]}") if day_key else None
             day = (day_ref.get(transaction=txn).to_dict() or {}) if day_ref else {}
-            month = (month_ref.get(transaction=txn).to_dict() or {}) if month_ref else {}
             txn.update(run_ref, {"released": True})
             if day_key:
                 if user.get("active_runs", 0) > 0:
@@ -637,8 +623,6 @@ class FirestoreRepo:
                     units = run.get("units", 1)
                     if day.get(field, 0) > 0:
                         txn.set(day_ref, {field: max(0, day[field] - units)}, merge=True)
-                    if month.get(field, 0) > 0:
-                        txn.set(month_ref, {field: max(0, month[field] - units)}, merge=True)
             return True
 
         try:
@@ -646,13 +630,9 @@ class FirestoreRepo:
         except GoogleNotFound:  # the run's session was deleted under it
             raise NotFoundError() from None
 
-    def get_usage_docs(self, uid: str, date: str) -> tuple[UsageDoc, UsageMonthDoc]:
+    def get_usage_doc(self, uid: str, date: str) -> UsageDoc:
         day = self._top("usage", f"{uid}_{date}").get()
-        month = self._top("usage", f"{uid}_{date[:7]}").get()
-        return (
-            _load(UsageDoc, day) if day.exists else UsageDoc(uid=uid, date=date),
-            _load(UsageMonthDoc, month) if month.exists else UsageMonthDoc(uid=uid, month=date[:7]),
-        )
+        return _load(UsageDoc, day) if day.exists else UsageDoc(uid=uid, date=date)
 
     def start_first_run(
         self, uid: str, sid: str, run_id: str, date: str, defaults: LimitDefaults, max_active: int,
@@ -661,7 +641,6 @@ class FirestoreRepo:
         sref = self._session_ref(uid, sid)
         stref = self._top("session_status", sid)
         usage_ref = self._top("usage", f"{uid}_{date}")
-        month_ref = self._top("usage", f"{uid}_{date[:7]}")
         user_ref = self._top("users", uid)
         run_ref = sref.collection("runs").document(run_id)
         ratings = sref.collection("ratings")
@@ -682,12 +661,11 @@ class FirestoreRepo:
             status = stref.get(transaction=txn).to_dict() or {}
             user = user_ref.get(transaction=txn).to_dict() or {}
             usage = usage_ref.get(transaction=txn).to_dict() or {}
-            month = month_ref.get(transaction=txn).to_dict() or {}
             latest = [s for s in newest.get(transaction=txn) if s.id != DRAFT_ID]
             now = utcnow()
             exempt = bool(sess.get("interview_id")) and not sess.get("free_run_void")
             units = sess.get("n_runs", 1)
-            decided = decide_start(user, usage, month, defaults, max_active, exempt, units)
+            decided = decide_start(user, usage, defaults, max_active, exempt, units)
             if decided != "ok":
                 outcome: StartOutcome = START_OUTCOME[decided]  # type: ignore[assignment]
                 code = HELD_ERROR_CODE[outcome]
@@ -705,11 +683,6 @@ class FirestoreRepo:
                 txn.set(
                     usage_ref,
                     {"uid": uid, "date": date, "runs": usage.get("runs", 0) + units},
-                    merge=True,
-                )
-                txn.set(
-                    month_ref,
-                    {"uid": uid, "month": date[:7], "runs": month.get("runs", 0) + units},
                     merge=True,
                 )
             txn.set(user_ref, {"active_runs": user.get("active_runs", 0) + 1}, merge=True)
@@ -736,7 +709,6 @@ class FirestoreRepo:
         sref = self._session_ref(uid, sid)
         stref = self._top("session_status", sid)
         usage_ref = self._top("usage", f"{uid}_{date}")
-        month_ref = self._top("usage", f"{uid}_{date[:7]}")
         user_ref = self._top("users", uid)
         run_ref = sref.collection("runs").document(run_id)
         ratings = sref.collection("ratings")
@@ -757,7 +729,6 @@ class FirestoreRepo:
             status = stref.get(transaction=txn).to_dict() or {}
             user = user_ref.get(transaction=txn).to_dict() or {}
             usage = usage_ref.get(transaction=txn).to_dict() or {}
-            month = month_ref.get(transaction=txn).to_dict() or {}
             latest = [s for s in newest.get(transaction=txn) if s.id != DRAFT_ID]
             # the free first run of an interview-linked session (SP11 R5), same as start_first_run
             exempt = (
@@ -766,7 +737,7 @@ class FirestoreRepo:
                 and not sess.get("first_run_id")
             )
             units = n_runs or sess.get("n_runs", 1)
-            decided = decide_start(user, usage, month, defaults, max_active, exempt, units)
+            decided = decide_start(user, usage, defaults, max_active, exempt, units)
             if decided != "ok":
                 return START_OUTCOME[decided]  # type: ignore[return-value]
             run = RunDoc(
@@ -795,11 +766,6 @@ class FirestoreRepo:
                 txn.set(
                     usage_ref,
                     {"uid": uid, "date": date, "runs": usage.get("runs", 0) + units},
-                    merge=True,
-                )
-                txn.set(
-                    month_ref,
-                    {"uid": uid, "month": date[:7], "runs": month.get("runs", 0) + units},
                     merge=True,
                 )
             txn.set(user_ref, {"active_runs": user.get("active_runs", 0) + 1}, merge=True)
@@ -855,7 +821,6 @@ class FirestoreRepo:
             raise ValueError("document uid does not match the caller")
         date = doc.reservation_date
         day_ref = self._top("usage", f"{uid}_{date}")
-        month_ref = self._top("usage", f"{uid}_{date[:7]}")
         user_ref = self._top("users", uid)
         iv_ref = self._top("interviews", iid)
         open_q = _uid_query(self._client.collection("interviews"), uid).where(
@@ -868,17 +833,11 @@ class FirestoreRepo:
                 return "open_exists"
             user = user_ref.get(transaction=txn).to_dict() or {}
             day = day_ref.get(transaction=txn).to_dict() or {}
-            month = month_ref.get(transaction=txn).to_dict() or {}
-            outcome = decide_reserve(user, day, month, "interview", defaults, max_active)
+            outcome = decide_reserve(user, day, "interview", defaults, max_active)
             if outcome != "ok":
                 return outcome
             field = KIND_FIELD["interview"]
             txn.set(day_ref, {"uid": uid, "date": date, field: day.get(field, 0) + 1}, merge=True)
-            txn.set(
-                month_ref,
-                {"uid": uid, "month": date[:7], field: month.get(field, 0) + 1},
-                merge=True,
-            )
             txn.create(iv_ref, doc.to_store())
             return "ok"
 

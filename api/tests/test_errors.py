@@ -33,12 +33,12 @@ def test_schema_enum_matches_codes_and_is_superset_of_eaudit(schema):
         "transcription_failed",
         "rating_invalid",
         "daily_cap_reached",
-        "monthly_cap_reached",
         "interview_cap_reached",
         "conflict",
         "interview_too_long",
     ):
         assert new in enum
+    assert "monthly_cap_reached" not in enum
     assert schema["properties"]["schema_version"] == {"const": "0.0.1"}
 
 
@@ -49,10 +49,8 @@ def test_error_body_validates(schema):
     assert "request_id" not in error_body(400, "m", [{"code": "conflict", "message": "m"}])
 
 
-@pytest.mark.parametrize(
-    "code", ["daily_cap_reached", "monthly_cap_reached", "interview_cap_reached"]
-)
-@pytest.mark.parametrize("period", ["day", "month"])
+@pytest.mark.parametrize("code", ["daily_cap_reached", "interview_cap_reached"])
+@pytest.mark.parametrize("period", ["day"])
 def test_cap_codes_accept_period(schema, code, period):
     err = ApiError.of(429, code, "Cap.", period=period)
     assert err.details == [{"code": code, "message": "Cap.", "period": period}]
@@ -65,9 +63,9 @@ def test_period_omitted_by_default(schema):
     assert "period" not in ApiError.of(429, "daily_cap_reached", "x").details[0]
 
 
-@pytest.mark.parametrize("bad", ["week", "", None, 1])
+@pytest.mark.parametrize("bad", ["week", "month", "", None, 1])
 def test_schema_rejects_bad_period(schema, bad):
-    body = error_body(429, "m", [{"code": "monthly_cap_reached", "message": "m", "period": bad}])
+    body = error_body(429, "m", [{"code": "daily_cap_reached", "message": "m", "period": bad}])
     with pytest.raises(jsonschema.ValidationError):
         jsonschema.validate(body, schema)
 
@@ -75,15 +73,15 @@ def test_schema_rejects_bad_period(schema, bad):
 async def test_period_serialised_in_response(client, schema, app):
     @app.get("/v1/_cap")
     async def cap():
-        raise ApiError.of(429, "monthly_cap_reached", "Month.", period="month")
+        raise ApiError.of(429, "daily_cap_reached", "Day.", period="day")
 
     r = await client.get("/v1/_cap")
     assert r.status_code == 429
     jsonschema.validate(r.json(), schema)
     assert r.json()["details"][0] == {
-        "code": "monthly_cap_reached",
-        "message": "Month.",
-        "period": "month",
+        "code": "daily_cap_reached",
+        "message": "Day.",
+        "period": "day",
     }
 
 

@@ -50,7 +50,7 @@ class UserDoc(Doc):
     expiry_days: int | None = None
     # Raw console values: any shape loads (never a 500, SP11 D6); `effective_cap` validates.
     daily_cap: Any = None  # legacy eval day override (D5, deprecated)
-    limits: Any = None  # {eval|interview: {day|month: int}} (SP11 R3)
+    limits: Any = None  # {eval|interview: {day: int}} (SP11 R3)
     max_active_runs: int | None = None  # per-user override of MAX_ACTIVE_RUNS (R8)
     active_runs: int = 0  # runs reserved and not yet released (R8 concurrent limit)
 
@@ -217,15 +217,6 @@ class UsageDoc(Doc):
     interviews: int = 0  # missing on old docs reads 0
     interview_refunds: int = 0  # short-interview refunds given this day (capped, A9)
     tokens: int = 0
-
-
-class UsageMonthDoc(Doc):
-    """`usage/{uid}_{YYYY-MM}`: per-month counters (SP11 D1)."""
-
-    uid: str = ""
-    month: str = ""
-    runs: int = 0
-    interviews: int = 0
 
 
 class IdempotencyDoc(Doc):
