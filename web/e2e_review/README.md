@@ -18,7 +18,7 @@ npm run e2e                      # mock mode; add args after `--`, e.g. `npm run
 
 ## Live-ish mode
 
-Start Firestore emulator + api (AUTH_MODE=fake, ADAPTERS=stub) as in `docs/agent_files/review-full-app-20261121/RUN.md`,
+Start Firestore emulator + api (AUTH_MODE=fake, ADAPTERS=stub) as in `docs/testing/local-setup.md` (section "Main app (web + api)", mode B),
 then run `E2E_MODE=live npm run e2e`; the config starts `npm run dev:live` with the right `VITE_*` env.
 Only tests tagged `@live` (live.spec.cjs) run in that mode; everything else is mock-only and is the CI-intended set.
 Stop emulator/api afterwards.
@@ -30,5 +30,5 @@ Stop emulator/api afterwards.
 - Real Firebase Auth cannot be exercised (no auth emulator): invalid-email, missing-password, too-many-requests,
   valid `/auth/action` oobCodes, cross-tab sign-out and Google sign-in are not covered.
 - Do not write logs/artifacts under `web/` outside `e2e_review/test-results/` (vite full-reloads the page on file changes,
-  which signs fake-auth users out mid-test). Screenshots go to `docs/agent_files/review-full-app-20261121/e2e-shots/spec-*.png`.
+  which signs fake-auth users out mid-test). Screenshots are off by default; `E2E_SHOTS=1` writes `test-results/shots/spec-*.png` (gitignored).
 - Fixtures: `fixtures/ten-min.mp3` (10:30 sine), `one-min.wav`, `notaudio.txt`.

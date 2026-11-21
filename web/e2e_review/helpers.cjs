@@ -2,11 +2,12 @@ const path = require("path");
 const fs = require("fs");
 const { expect } = require("@playwright/test");
 
-const SHOTS = path.resolve(__dirname, "../../docs/agent_files/review-full-app-20261121/e2e-shots");
+const SHOTS = path.join(__dirname, "test-results", "shots"); // gitignored; only written with E2E_SHOTS=1
 const FIX = (f) => path.join(__dirname, "fixtures", f);
 const PW = "password1";
 
 async function shot(page, name) {
+  if (process.env.E2E_SHOTS !== "1") return;
   fs.mkdirSync(SHOTS, { recursive: true });
   await page.screenshot({ path: path.join(SHOTS, `spec-${name}.png`) });
 }

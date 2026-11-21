@@ -5,7 +5,7 @@ const path = require("path");
 const PORT = process.env.E2E_PORT || "5173";
 const LIVE = process.env.E2E_MODE === "live";
 // Live mode needs Firestore emulator (:8081) + api (:8000, AUTH_MODE=fake, ADAPTERS=stub) already running, see
-// docs/agent_files/review-full-app-20261121/RUN.md
+// docs/testing/local-setup.md (section "Main app (web + api)", mode B)
 const LIVE_ENV = { VITE_USE_MOCKS: "false", VITE_AUTH_MODE: "fake", VITE_API_BASE_URL: "http://127.0.0.1:8000/v1", VITE_FIRESTORE_EMULATOR: "127.0.0.1:8081", VITE_FIREBASE_PROJECT_ID: "demo-onolys", VITE_FIREBASE_DATABASE: "(default)", VITE_FIRESTORE_DATABASE: "(default)" };
 
 module.exports = defineConfig({
