@@ -119,7 +119,6 @@ test.describe("forgot password", () => {
   });
 
   test("E13/W14: a malformed email ('foo') does not show the success confirmation", async ({ page }) => {
-    test.fail(true, "E13/W14: 'foo' shows 'we've sent a link' (owner UX Q12 pending)");
     await page.goto("/forgot-password");
     await field(page, "Email").fill("foo");
     await page.getByRole("button", { name: /Send reset link/ }).click();

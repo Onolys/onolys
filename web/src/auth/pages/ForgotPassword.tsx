@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { Link, useLocation } from "react-router";
 import { useAuth } from "../AuthProvider";
-import { errorCode } from "../errors";
+import { EMAIL_PATTERN, errorCode } from "../errors";
 import { withNext } from "../next";
 import { ErrorSummary } from "./parts";
 import { useFormError } from "./useFormError";
@@ -10,7 +10,8 @@ import { useFormError } from "./useFormError";
 export const RESET_CONFIRMATION = "If an account exists for that email, we've sent a link to reset your password.";
 
 // Only failures that say nothing about the account are shown; everything else gets the confirmation.
-const SHOWN = new Set(["auth/network-request-failed", "auth/too-many-requests"]);
+// "invalid-email" is about the input, not the account.
+const SHOWN = new Set(["auth/network-request-failed", "auth/too-many-requests", "auth/invalid-email"]);
 
 export function ForgotPassword() {
   const { service } = useAuth();
@@ -23,10 +24,9 @@ export function ForgotPassword() {
     e.preventDefault();
     const email = String(new FormData(e.currentTarget).get("email") ?? "").trim();
     form.clear();
-    if (!email) {
-      form.failWith("Enter your email address.");
-      return;
-    }
+    setSent(false);
+    if (!email) return form.failWith("Enter your email address.", "email");
+    if (!EMAIL_PATTERN.test(email)) return form.failWith("Enter a valid email address.", "email");
     setBusy(true);
     try {
       await service.sendPasswordReset(email);
@@ -47,7 +47,7 @@ export function ForgotPassword() {
         {sent && <p role="status">{RESET_CONFIRMATION}</p>}
         <label>
           Email
-          <input name="email" type="email" autoComplete="email" required />
+          <input name="email" type="email" autoComplete="email" required {...form.fieldProps("email")} />
         </label>
         <button type="submit" className="primary" disabled={busy}>
           Send reset link

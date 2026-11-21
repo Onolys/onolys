@@ -204,6 +204,44 @@ describe("forgot password", () => {
   });
 });
 
+describe("forgot password errors (FX22)", () => {
+  it("clears the confirmation when a later submit fails, so success and error never show together", async () => {
+    const user = userEvent.setup();
+    const { service } = renderApp("/forgot-password");
+    await h1("Reset your password");
+    await user.type(screen.getByLabelText("Email"), "nobody@clinic.org");
+    await user.click(screen.getByRole("button", { name: "Send reset link" }));
+    await screen.findByRole("status");
+    vi.spyOn(service, "sendPasswordReset").mockRejectedValueOnce({ code: "auth/network-request-failed" });
+    await user.click(screen.getByRole("button", { name: "Send reset link" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Can't reach the server");
+    expect(screen.queryByRole("status")).toBeNull();
+  });
+
+  it("rejects a malformed email on the client without the confirmation or a service call", async () => {
+    const user = userEvent.setup();
+    const { service } = renderApp("/forgot-password");
+    await h1("Reset your password");
+    await user.type(screen.getByLabelText("Email"), "foo");
+    await user.click(screen.getByRole("button", { name: "Send reset link" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Enter a valid email");
+    expect(screen.getByLabelText("Email")).toHaveAttribute("aria-invalid", "true");
+    expect(screen.queryByRole("status")).toBeNull();
+    expect(service.calls.resets).toEqual([]);
+  });
+
+  it("shows the valid-email message when the provider says invalid-email, not the confirmation", async () => {
+    const user = userEvent.setup();
+    const { service } = renderApp("/forgot-password");
+    await h1("Reset your password");
+    vi.spyOn(service, "sendPasswordReset").mockRejectedValueOnce({ code: "auth/invalid-email" });
+    await user.type(screen.getByLabelText("Email"), "a@b.co");
+    await user.click(screen.getByRole("button", { name: "Send reset link" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Enter a valid email");
+    expect(screen.queryByRole("status")).toBeNull();
+  });
+});
+
 describe("verify email", () => {
   afterEach(() => vi.useRealTimers());
 
