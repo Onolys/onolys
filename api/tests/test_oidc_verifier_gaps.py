@@ -79,7 +79,7 @@ def test_unknown_kid_triggers_one_cert_refresh_then_succeeds():
         calls.append(1)
         return {"k1": PUB1} if len(calls) == 1 else {"k1": PUB1, "k2": PUB2}
 
-    v = OidcVerifier(AUD, SA, fetch_certs=fetch)
+    v = OidcVerifier(AUD, SA, fetch_certs=fetch, min_refresh_s=0)  # refresh floor off (FX4)
     assert v.verify(_mint(PRIV1, "k1")) == SA
     assert v.verify(_mint(PRIV2, "k2")) == SA  # rotated key: forced refetch
     assert len(calls) == 2
@@ -87,10 +87,19 @@ def test_unknown_kid_triggers_one_cert_refresh_then_succeeds():
 
 def test_unknown_kid_after_refresh_still_rejected():
     fetch = MagicMock(return_value={"k1": PUB1})
-    v = OidcVerifier(AUD, SA, fetch_certs=fetch)
+    v = OidcVerifier(AUD, SA, fetch_certs=fetch, min_refresh_s=0)
     with pytest.raises(InvalidToken):
         v.verify(_mint(PRIV2, "k-unknown"))
     assert fetch.call_count == 2  # initial + one forced refresh, no loop
+
+
+def test_unknown_kid_refresh_is_rate_limited_by_default():
+    fetch = MagicMock(return_value={"k1": PUB1})
+    v = OidcVerifier(AUD, SA, fetch_certs=fetch)
+    for _ in range(3):
+        with pytest.raises(InvalidToken):
+            v.verify(_mint(PRIV2, "k-unknown"))
+    assert fetch.call_count == 1  # FX4: forced refresh floored at MIN_REFRESH_S
 
 
 def test_cert_fetch_failure_is_503_not_invalid_token():
