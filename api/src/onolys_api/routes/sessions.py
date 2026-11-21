@@ -91,6 +91,10 @@ class SessionDetail(BaseModel):
     language: str
     n_runs: int
     preset: str | None = None
+    interview_id: str | None = Field(
+        default=None,
+        description="Set when an AI interview created this session: its first run is free.",
+    )
     created_at: datetime
     updated_at: datetime
     links: dict[str, str]
@@ -253,6 +257,7 @@ def get_session(id: str, request: Request, user: User) -> SessionDetail:
         language=s.language,
         n_runs=s.n_runs,
         preset=s.preset,
+        interview_id=s.interview_id,
         created_at=s.created_at,
         updated_at=s.updated_at,
         links=links,

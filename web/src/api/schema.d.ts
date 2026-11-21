@@ -825,6 +825,11 @@ export interface components {
             flags: components["schemas"]["Flags"];
             /** Id */
             id: string;
+            /**
+             * Interview Id
+             * @description Set when an AI interview created this session: its first run is free.
+             */
+            interview_id?: string | null;
             /** Language */
             language: string;
             /** Latest Report Version */

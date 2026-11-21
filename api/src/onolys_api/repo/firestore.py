@@ -669,13 +669,16 @@ class FirestoreRepo:
             usage = usage_ref.get(transaction=txn).to_dict() or {}
             month = month_ref.get(transaction=txn).to_dict() or {}
             latest = [s for s in newest.get(transaction=txn) if s.id != DRAFT_ID]
-            decided = decide_start(user, usage, month, defaults, max_active, False)
+            # the free first run of an interview-linked session (SP11 R5), same as start_first_run
+            exempt = bool(sess.get("interview_id")) and not sess.get("first_run_id")
+            decided = decide_start(user, usage, month, defaults, max_active, exempt)
             if decided != "ok":
                 return START_OUTCOME[decided]  # type: ignore[return-value]
             run = RunDoc(
                 uid=uid, session_id=sid, run_id=run_id, n_runs=n_runs or sess.get("n_runs", 1),
                 preset=preset or sess.get("preset"), rating_id=latest[0].id if latest else None,
                 stt=sess.get("stt"), code_version=code_version, cap_date=date,
+                counted=not exempt,
             )  # fmt: skip
             progress = (
                 start_progress
@@ -686,14 +689,17 @@ class FirestoreRepo:
             if not sess.get("first_run_id"):
                 fields["first_run_id"] = run_id
             txn.create(run_ref, run.to_store())
-            txn.set(
-                usage_ref, {"uid": uid, "date": date, "runs": usage.get("runs", 0) + 1}, merge=True
-            )
-            txn.set(
-                month_ref,
-                {"uid": uid, "month": date[:7], "runs": month.get("runs", 0) + 1},
-                merge=True,
-            )
+            if not exempt:
+                txn.set(
+                    usage_ref,
+                    {"uid": uid, "date": date, "runs": usage.get("runs", 0) + 1},
+                    merge=True,
+                )
+                txn.set(
+                    month_ref,
+                    {"uid": uid, "month": date[:7], "runs": month.get("runs", 0) + 1},
+                    merge=True,
+                )
             txn.set(user_ref, {"active_runs": user.get("active_runs", 0) + 1}, merge=True)
             txn.update(sref, fields)
             txn.set(

@@ -3,7 +3,7 @@
  * gate slots, error cards and delete. The upload, rating card and speaker gate mount in
  * `slots.tsx`.
  */
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import { unwrap } from "../../api/client";
@@ -55,6 +55,19 @@ function SessionView({ id }: { id: string }) {
   const atCap = blocking !== null;
   // A held start (not a real cap) still shows when the day resets.
   const resetsAt = formatBlockingReset(blocking) ?? formatResetTime(usage.data?.eval.day.resets_at);
+
+  // An interview-linked session's first run is free (SP11 R5), so a held first start is not blocked by
+  // the eval cap. The status doc is PHI-free and carries no link: ask the session detail, only then.
+  const firstStartHeld =
+    doc !== null &&
+    doc.state === "awaiting_input" &&
+    (doc.error_code === "daily_cap_reached" || doc.error_code === "monthly_cap_reached");
+  const detail = useQuery({
+    queryKey: ["session-detail", id],
+    enabled: firstStartHeld,
+    queryFn: async () => unwrap(await client.GET("/sessions/{id}", { params: { path: { id } } })),
+  });
+  const freeFirstRun = firstStartHeld && Boolean(detail.data?.interview_id);
 
   const run = useMutation({
     mutationFn: async () => unwrap(await client.POST("/sessions/{id}/runs", { params: { path: { id } } })),
@@ -147,7 +160,12 @@ function SessionView({ id }: { id: string }) {
 
           {timeline.capReached ? (
             <p>
-              <button type="button" className="btn btn-primary" disabled={runLocked} onClick={() => run.mutate()}>
+              <button
+                type="button"
+                className="btn btn-primary"
+                disabled={run.isPending || (atCap && !freeFirstRun)}
+                onClick={() => run.mutate()}
+              >
                 Start
               </button>
             </p>

@@ -108,3 +108,16 @@ async def test_per_user_isolation(api, repo):
     b = (await api.get("/v1/usage", headers=A)).json()
     assert b["eval"]["day"] == {**b["eval"]["day"], "used": 0, "cap": 20}
     assert b["interview"]["month"]["used"] == 0
+
+
+@pytest.mark.parametrize(
+    "raw", [{"limits": "oops"}, {"limits": [1]}, {"limits": 5}, {"daily_cap": "3"}]
+)
+async def test_malformed_user_limits_never_500_and_use_defaults(api, repo, raw):
+    repo._put("users/alice", raw)
+    r = await api.get("/v1/usage", headers=A)
+    assert r.status_code == 200, r.text
+    b = r.json()
+    assert b["eval"]["day"]["cap"] == 20 and b["eval"]["month"]["cap"] == 200
+    assert b["interview"]["day"]["cap"] == 4 and b["interview"]["month"]["cap"] == 40
+    assert repo.ensure_user("alice") is not None  # every route's ensure_user survives it

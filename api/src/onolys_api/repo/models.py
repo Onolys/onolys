@@ -48,8 +48,9 @@ class UserDoc(Doc):
     created_at: datetime = Field(default_factory=utcnow)
     prefs: dict[str, Any] = Field(default_factory=dict)
     expiry_days: int | None = None
-    daily_cap: int | None = None  # legacy eval day override (D5, deprecated)
-    limits: dict[str, Any] | None = None  # {eval|interview: {day|month: int}} (SP11 R3)
+    # Raw console values: any shape loads (never a 500, SP11 D6); `effective_cap` validates.
+    daily_cap: Any = None  # legacy eval day override (D5, deprecated)
+    limits: Any = None  # {eval|interview: {day|month: int}} (SP11 R3)
     max_active_runs: int | None = None  # per-user override of MAX_ACTIVE_RUNS (R8)
     active_runs: int = 0  # runs reserved and not yet released (R8 concurrent limit)
 
@@ -239,3 +240,6 @@ class InterviewDoc(Doc):
     reservation_date: str
     duration_s: float | None = None
     ended_at: datetime | None = None
+    # written by the voice relay only; never in any response
+    resumption_handle: str | None = None
+    disconnected_at: datetime | None = None

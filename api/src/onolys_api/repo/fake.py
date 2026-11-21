@@ -568,7 +568,9 @@ class FakeRepo:
             user = self._get(f"users/{uid}") or {}
             usage = self._get(f"usage/{uid}_{date}") or {"uid": uid, "date": date, "runs": 0}
             month = self._get(f"usage/{uid}_{date[:7]}") or {"uid": uid, "month": date[:7]}
-            decided = decide_start(user, usage, month, defaults, max_active, False)
+            # the free first run of an interview-linked session (SP11 R5), same as start_first_run
+            exempt = bool(sess.get("interview_id")) and not sess.get("first_run_id")
+            decided = decide_start(user, usage, month, defaults, max_active, exempt)
             if decided != "ok":
                 return START_OUTCOME[decided]  # type: ignore[return-value]
             revs = [(i, d) for i, d in self._children(sid, "ratings") if i != DRAFT_ID]
@@ -578,6 +580,7 @@ class FakeRepo:
                 n_runs=n_runs or sess.get("n_runs", 1),
                 preset=preset or sess.get("preset"), rating_id=rating_id,
                 stt=sess.get("stt"), code_version=code_version, cap_date=date,
+                counted=not exempt,
             )  # fmt: skip
             now = utcnow()
             progress = (
@@ -586,8 +589,9 @@ class FakeRepo:
                 else max(status.get("progress", 0), start_progress)
             )
             self._create(f"sessions/{sid}/runs/{run_id}", run.to_store())
-            self._put(f"usage/{uid}_{date}", {**usage, "runs": usage.get("runs", 0) + 1})
-            self._put(f"usage/{uid}_{date[:7]}", {**month, "runs": month.get("runs", 0) + 1})
+            if not exempt:
+                self._put(f"usage/{uid}_{date}", {**usage, "runs": usage.get("runs", 0) + 1})
+                self._put(f"usage/{uid}_{date[:7]}", {**month, "runs": month.get("runs", 0) + 1})
             self._put(f"users/{uid}", {**user, "active_runs": user.get("active_runs", 0) + 1})
             self._put(
                 f"sessions/{sid}",
