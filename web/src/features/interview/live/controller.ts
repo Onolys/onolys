@@ -3,7 +3,7 @@
  * Protocol: first message `{type:"auth", id_token}`; binary PCM16 16 kHz up; `ready`, binary PCM16 24 kHz,
  * `ai_speaking`, `interrupted`, `warn`, `time_up`, `error` down. A close that is not 1000 or 44xx is a dropped
  * connection: the same URL is retried for `reconnectWindowMs`; the recorder is paused meanwhile and resumed on
- * `ready{resumed:true}`, so the recording holds only connected time (matches the relay clock and the server limit).
+ * every `ready`, so the recording holds only connected time (matches the relay clock and the server limit).
  */
 import type { AudioEngine } from "../audio/engine";
 import { createRelaySocket } from "../relay/createRelaySocket";
@@ -70,6 +70,7 @@ export function createLiveController(opts: ControllerOptions): LiveController {
   let ending = false;
   let disposed = false;
   let firstDropAt: number | null = null;
+  let contentSeen = true; // false from `ready` until the first audio / ai_speaking frame
   let retryTimer: ReturnType<typeof setTimeout> | undefined;
   let baseElapsed = 0;
   let baseAt = Date.now();
@@ -88,6 +89,13 @@ export function createLiveController(opts: ControllerOptions): LiveController {
     retryTimer = undefined;
     set({ phase, errorCode, aiSpeaking: false });
     settleEnd();
+  };
+
+  const noteContent = () => {
+    if (!contentSeen) {
+      contentSeen = true;
+      firstDropAt = null;
+    }
   };
 
   const connect = () => {
@@ -109,6 +117,7 @@ export function createLiveController(opts: ControllerOptions): LiveController {
     s.onmessage = (ev) => {
       if (socket !== s) return;
       if (typeof ev.data !== "string") {
+        noteContent();
         opts.engine.playPcm24k(ev.data as ArrayBuffer);
         return;
       }
@@ -121,13 +130,14 @@ export function createLiveController(opts: ControllerOptions): LiveController {
       switch (msg.type) {
         case "ready":
           authed = true;
-          firstDropAt = null;
-          if (msg.resumed) opts.engine.resumeRecording();
+          contentSeen = false; // the reconnect budget resets on content, not on `ready` alone
+          opts.engine.resumeRecording(); // no-op unless paused (also after a first-connect drop)
           baseElapsed = msg.elapsed_s ?? 0;
           baseAt = Date.now();
           set({ phase: "live", maxS: msg.max_s ?? state.maxS, warnS: msg.warn_s ?? state.warnS, errorCode: null });
           break;
         case "ai_speaking":
+          noteContent();
           set({ aiSpeaking: Boolean((msg as { on?: boolean }).on) });
           break;
         case "interrupted":

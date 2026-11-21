@@ -265,9 +265,9 @@ describe("live interview", () => {
     expect(engines).toHaveLength(1);
     expect(engines[0]!.closed).toBe(false);
     expect(engines[0]!.stopped).toBe(0);
-    // only connected time is recorded: paused on the drop, resumed on `ready{resumed:true}`
+    // only connected time is recorded: paused on the drop, resumed on `ready{resumed:true}` (resume is called on every ready: initial + reconnect; a no-op unless paused)
     expect(engines[0]!.paused).toBe(1);
-    expect(engines[0]!.resumed).toBe(1);
+    expect(engines[0]!.resumed).toBe(2);
   });
 
   it("flushes queued AI audio on interrupted", async () => {
