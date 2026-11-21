@@ -259,7 +259,7 @@ jobs:
   # Runs only when every prod deploy job AND the healthz smoke succeeded (default success() over `needs`). Tags the promoted commit
   # prod-<UTC date>.<n>, always a NEW tag (also for a rollback / re-deploy of an already-tagged sha), so the newest
   # prod-* tag = the last fully successful deploy (rollback target). The only job that may write to the repo. The checkout is
-  # only a git repo to push from; the target commit is fetched just to tag it.
+  # a full-history git repo to push from (see fetch-depth below); the target commit is fetched only if not already present.
   tag:
     needs: [resolve, deploy-api, deploy-worker, rules, web, smoke]
     runs-on: ubuntu-latest
@@ -267,7 +267,11 @@ jobs:
     permissions:
       contents: write
     steps:
+      # Full history: with a shallow checkout the target (an old commit on rollback) is not connected to origin's refs locally, so
+      # git push would upload its trees and blobs (incl. .github/workflows/*), which GITHUB_TOKEN may not push. Complete history = tag object only.
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - name: Create and push the annotated prod-<date>.<n> tag
         env:
           SHA: ${{ needs.resolve.outputs.sha }}
@@ -277,7 +281,7 @@ jobs:
           set -o pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git fetch --no-tags --depth=1 origin "$SHA"
+          git cat-file -e "${SHA}^{commit}" 2>/dev/null || git fetch --no-tags origin "$SHA"
           run_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
           pushed=""
           for attempt in 1 2 3 4 5; do
