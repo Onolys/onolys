@@ -132,7 +132,7 @@ function VerifyEmailAction({ oobCode, continueUrl }: { oobCode: string; continue
       <h1>Verify your email</h1>
       <div className="auth-form">
         {form.error && <ErrorSummary error={form.error} search="" />}
-        {failure && (
+        {failure ? (
           <div role="alert" className="form-error">
             <p>This verification link is invalid, has expired, or was already used.</p>
             <p>
@@ -141,11 +141,14 @@ function VerifyEmailAction({ oobCode, continueUrl }: { oobCode: string; continue
               </Link>
             </p>
           </div>
+        ) : (
+          <>
+            <p>Confirm your email address to finish setting up your account.</p>
+            <button type="button" className="primary" disabled={busy} onClick={() => void verify()}>
+              Verify my email
+            </button>
+          </>
         )}
-        <p>Confirm your email address to finish setting up your account.</p>
-        <button type="button" className="primary" disabled={busy} onClick={() => void verify()}>
-          Verify my email
-        </button>
       </div>
     </>
   );

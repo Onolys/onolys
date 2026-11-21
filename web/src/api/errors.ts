@@ -123,6 +123,20 @@ export function parseErrorBody(status: number, body: unknown): ApiError {
   return new ApiError(status, code, details, requestId);
 }
 
+/**
+ * An id in the URL that names nothing: 404, or 422 `invalid_parameters` (the API's answer for a
+ * malformed, non-32-hex id). Pages with a session or report id show the same "not found" for both.
+ */
+export function isNotFoundError(err: unknown): boolean {
+  return err instanceof ApiError && (err.status === 404 || (err.status === 422 && err.code === "invalid_parameters"));
+}
+
+/** Like `describeError`, but a not-found-style error (see `isNotFoundError`) always reads as `not_found`. */
+export function describeLookupError(err: unknown, ctx: MessageContext = {}): ErrorDescription {
+  const d = describeError(err, ctx);
+  return isNotFoundError(err) ? { ...d, code: "not_found", message: messageForCode("not_found") } : d;
+}
+
 export interface ErrorDescription {
   code: string;
   message: string;

@@ -6,6 +6,8 @@ import {
   ERROR_CODES,
   GENERIC_MESSAGE,
   describeError,
+  describeLookupError,
+  isNotFoundError,
   failureAction,
   messageForCode,
   parseErrorBody,
@@ -209,5 +211,17 @@ describe("enum parity with the public schema", () => {
 
   it("schema period is day|month", () => {
     expect(item.period.enum).toEqual(["day", "month"]);
+  });
+});
+
+describe("isNotFoundError / describeLookupError", () => {
+  it("treats 404 and 422 invalid_parameters (malformed id) as not found, nothing else", () => {
+    const e = (status: number, code: string) => parseErrorBody(status, body(status, code));
+    expect(isNotFoundError(e(404, "not_found"))).toBe(true);
+    expect(isNotFoundError(e(422, "invalid_parameters"))).toBe(true);
+    expect(isNotFoundError(e(422, "rating_invalid"))).toBe(false);
+    expect(isNotFoundError(e(500, "internal_error"))).toBe(false);
+    expect(describeLookupError(e(422, "invalid_parameters")).code).toBe("not_found");
+    expect(describeLookupError(e(500, "internal_error")).code).toBe("internal_error");
   });
 });

@@ -90,7 +90,6 @@ test.describe("signup", () => {
   });
 
   test("E7: a very long (254 char) email does not cause horizontal scroll on the verify page", async ({ page }) => {
-    test.fail(true, "E7: long address overflows; buttons stretch off screen");
     await signUp(page, `${"a".repeat(240)}@example.com`);
     await expect(page).toHaveURL(/verify-email/);
     await shot(page, "signup-long-email");

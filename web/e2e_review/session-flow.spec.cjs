@@ -91,7 +91,6 @@ test.describe("main flow (mock backend)", () => {
   });
 
   test("E21: a missing session shows an error, not an endless 'Loading session...'", async ({ page }) => {
-    test.fail(true, "E21: /sessions/<unknown> stays on 'Loading session...' forever (mock and live); no request, no error");
     await signUpVerified(page, "miss@example.com");
     await spa(page, "/sessions/s_does_not_exist");
     await expect(page.getByRole("alert").or(page.getByText(/not found|couldn't/i)).first()).toBeVisible({ timeout: 10_000 });

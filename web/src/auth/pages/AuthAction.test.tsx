@@ -55,6 +55,9 @@ describe("/auth/action verifyEmail", () => {
     await userEvent.setup().click(await screen.findByRole("button", { name: "Verify my email" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("invalid, has expired, or was already used");
     expect(screen.getByRole("link", { name: /new verification email/ })).toHaveAttribute("href", "/login");
+    // the dead code is no longer offered again (E14)
+    expect(screen.queryByRole("button", { name: "Verify my email" })).toBeNull();
+    expect(screen.queryByText(/Confirm your email address/)).toBeNull();
   });
 
   it("links to /verify-email for a new link when signed in", async () => {

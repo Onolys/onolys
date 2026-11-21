@@ -58,7 +58,6 @@ test.describe("mobile (iPhone 13 viewport)", () => {
   });
 
   test("E7m: 254-char email on verify page does not scroll sideways on a phone", async ({ page }) => {
-    test.fail(true, "E7: long address overflows");
     await signUp(page, `${"a".repeat(240)}@example.com`);
     await expect(page).toHaveURL(/verify-email/);
     expect(await hasHScroll(page)).toBe(false);

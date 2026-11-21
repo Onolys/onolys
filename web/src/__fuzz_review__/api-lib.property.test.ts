@@ -117,8 +117,8 @@ describe("lib/format", () => {
     );
   });
 
-  // F6: NaN / Infinity render as "NaN:NaN" / "Infinity:NaN".
-  it.fails("F6: formatElapsed(NaN | Infinity) still renders m:ss", () => {
+  // F6 (fixed, FX40): NaN / Infinity used to render as "NaN:NaN" / "Infinity:NaN".
+  it("F6: formatElapsed(NaN | Infinity) still renders m:ss", () => {
     fc.assert(
       fc.property(fc.constantFrom(NaN, Infinity, -Infinity), (ms) => {
         expect(formatElapsed(ms)).toMatch(/^\d+:\d\d$/);
@@ -166,8 +166,8 @@ describe("lib/codepoints", () => {
     );
   });
 
-  // F7: out-of-range / negative offsets silently fall back to the whole tail/head instead of "".
-  it.fails(
+  // F7 (fixed, FX40): out-of-range / negative offsets used to fall back to the whole tail/head instead of "".
+  it(
     "F7: sliceCodePoints with negative or reversed offsets returns empty",
     () => {
       expect(sliceCodePoints("abc", -1, 2)).toBe("");

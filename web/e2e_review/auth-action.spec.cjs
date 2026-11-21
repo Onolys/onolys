@@ -30,7 +30,6 @@ test.describe("/auth/action", () => {
   });
 
   test("E14: after an invalid verify code the 'Confirm your email address... Verify my email' prompt is not still offered", async ({ page }) => {
-    test.fail(true, "E14: failure banner is shown above the unchanged prompt and enabled button");
     await page.goto(`${A}?mode=verifyEmail&oobCode=bogus`);
     await page.getByRole("button", { name: "Verify my email" }).click();
     await expect(page.getByText(/invalid, has expired/)).toBeVisible();

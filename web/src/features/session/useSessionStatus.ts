@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useState, type RefObject } from "react";
-import { ApiError, describeError, type ErrorDescription } from "../../api/errors";
+import { ApiError, describeLookupError, type ErrorDescription } from "../../api/errors";
 import { unwrap } from "../../api/client";
 import type { components } from "../../api/schema";
 import { getStatusListener, type SessionStatusDoc } from "../../api/statusListener";
@@ -160,7 +160,7 @@ export function useSessionStatus(id: string, quiet: RefObject<boolean>): StatusV
   if (link === "up") return view;
   // 404 / 4xx (unknown or someone else's session) will not heal by polling.
   if (poll.isError && (!poll.data || (poll.error instanceof ApiError && poll.error.status < 500))) {
-    return { phase: "error", error: describeError(poll.error) };
+    return { phase: "error", error: describeLookupError(poll.error) };
   }
   if (fallbackDoc) return { phase: "fallback", doc: fallbackDoc, exhausted: link === "exhausted" };
   return view; // last live doc (or loading) until the first poll answers

@@ -6,7 +6,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import { unwrap } from "../../api/client";
-import { ApiError, describeError, messageForCode } from "../../api/errors";
+import { describeError, isNotFoundError, messageForCode } from "../../api/errors";
 import type { Report } from "../../api/report";
 import { useApiClient } from "../../auth/useApiClient";
 import { blockingPeriod, evalCapCode, formatBlockingReset } from "../usage/usage";
@@ -91,7 +91,7 @@ function LoadedReport({ id, version }: { id: string; version: number }) {
     );
   }
   if (view.isError || !view.data || !report) {
-    if (view.error instanceof ApiError && view.error.status === 404) return <NotFound id={id} />;
+    if (isNotFoundError(view.error)) return <NotFound id={id} />;
     const e = describeError(view.error);
     return (
       <>

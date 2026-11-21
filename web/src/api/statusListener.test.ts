@@ -38,6 +38,13 @@ describe("memory status emitter", () => {
     expect(cb).not.toHaveBeenCalled();
   });
 
+  it("with reportMissing, a subscribe to a missing doc gets null (as Firestore does)", () => {
+    const em = createMemoryStatusEmitter({ reportMissing: true });
+    const cb = vi.fn();
+    em.subscribe("s1", cb, vi.fn());
+    expect(cb).toHaveBeenCalledExactlyOnceWith(null);
+  });
+
   it("pushes later snapshots only to subscribers of that session", () => {
     const em = createMemoryStatusEmitter();
     const a = vi.fn();

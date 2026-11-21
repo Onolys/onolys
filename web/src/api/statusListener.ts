@@ -46,7 +46,7 @@ interface Sub {
   onError: (err: Error) => void;
 }
 
-export function createMemoryStatusEmitter(): MemoryStatusEmitter {
+export function createMemoryStatusEmitter(opts: { reportMissing?: boolean } = {}): MemoryStatusEmitter {
   const docs = new Map<string, SessionStatusDoc>();
   const subs = new Map<string, Set<Sub>>();
 
@@ -62,6 +62,8 @@ export function createMemoryStatusEmitter(): MemoryStatusEmitter {
       set.add(sub);
       const current = docs.get(sessionId);
       if (current) onStatus({ ...current });
+      // Like Firestore's onSnapshot, a missing doc reports `null` (the page then asks the API, which answers 404).
+      else if (opts.reportMissing) onStatus(null);
       return () => {
         subs.get(sessionId)?.delete(sub);
       };

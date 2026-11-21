@@ -156,6 +156,26 @@ describe("session page: status listener", () => {
     expect(screen.getByRole("link", { name: /back to your sessions/i })).toHaveAttribute("href", "/");
   });
 
+  it("an unknown session id ends in the not-found card, not an endless spinner (E21)", async () => {
+    open("s_nope");
+    const card = await screen.findByRole("alert", undefined, { timeout: 4000 });
+    expect(card).toHaveTextContent(/couldn't find that/i);
+  });
+
+  it("a malformed session id (422 invalid_parameters) shows the same not-found card (E21)", async () => {
+    server.use(
+      http.get("*/v1/sessions/:id", () =>
+        HttpResponse.json(
+          { schema_version: "0.0.1", status: 422, message: "x", details: [{ code: "invalid_parameters", message: "x" }], request_id: "req_422" },
+          { status: 422 },
+        ),
+      ),
+    );
+    open("not-hex");
+    const card = await screen.findByRole("alert", undefined, { timeout: 4000 });
+    expect(card).toHaveTextContent(/couldn't find that/i);
+  });
+
   it("unsubscribes when the user leaves the page", async () => {
     const sid = create();
     const inner = getStatusListener();

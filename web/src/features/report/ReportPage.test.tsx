@@ -268,6 +268,19 @@ describe("report page, tolerance", () => {
     expect(cell).toHaveAttribute("data-label", "Onolys");
   });
 
+  it("a malformed session id (422 invalid_parameters) shows the same not-found page as 404 (E21)", async () => {
+    server.use(
+      http.get("*/v1/sessions/:id/reports/:version", () =>
+        HttpResponse.json(
+          { schema_version: "0.0.1", status: 422, message: "x", details: [{ code: "invalid_parameters", message: "x" }], request_id: "req_422" },
+          { status: 422 },
+        ),
+      ),
+    );
+    open("not-hex");
+    expect(await screen.findByText("We couldn't find that report.")).toBeInTheDocument();
+  });
+
   it("hides empty tips and shows warnings as quiet notices", async () => {
     const r = clone();
     r.tips = [];
