@@ -292,7 +292,7 @@ Measured live on 2026-11-21 (about 16:50-17:05 UTC) with ADC REST calls (Cloud R
 | AC7 | MET | Budget `onolys monthly` (USD 20; 50 %, 90 %, 100 % current, 100 % forecast) with channel `Onolys owner email` (id 749283734341274206), project-scoped. Note: a second, non-Terraform budget `onolys` (USD 20; 50/80/100 %, project-level recipients) also exists on the billing account; left untouched. Cloud Run: api max 10 prod / 3 staging, concurrency 80; worker concurrency 2, max 3 both envs. Queues: `maxConcurrentDispatches 6` in both (2 x 3), `maxDispatchesPerSecond 5` |
 | AC8 | MET | This page: resource names, env var table, outputs (incl. `VITE_FIRESTORE_DATABASE`), DNS records, runbook (reference id query, `error_code` table, rollback). DNS section refreshed against `terraform output` today: `app.onolys.com` is now `OWNERSHIP_ACTIVE`, `HOST_ACTIVE`, `CERT_ACTIVE` (was missing on 2026-11-20); `admin.onolys.com` still `OWNERSHIP_MISSING`, `HOST_UNHOSTED`, `CERT_VALIDATING` (needs the owner's DNS records, below) |
 | AC9 | MET (drill partial) | Live revisions carry the deployed commit: staging api (traffic revision `onolys-api-staging-096e3ed-34-1`) and worker `GIT_SHA=096e3ed...`; prod api and worker `205a03f...` (healthz `code_version` agrees on `app.onolys.com`, `onolys-app.web.app` and the run.app URL). Rollback drill run 44922869893 (earlier sha `205a03f`) redeployed rules, web, api and worker and passed smoke; its `tag` job failed (fix in PR #42, unmerged). Roll-forward by tag deferred by the owner; see the drill section above |
-| AC10 | MET (email arrival: owner to confirm) | Test line written to prod at launch check: `request_id sp06-sweep-1795279972`, `status=failed`, `error_code sp06_sweep_test`, service `onolys-worker-prod`, 16:52:52Z. Alert `0.ofa4aj5s6bk0` on policy `Onolys failed step/run (prod)` opened 16:53:06Z (14 s later), state OPEN. Runbook query `jsonPayload.request_id="sp06-sweep-1795279972"` through `entries:list` returned that one line. Policies `Onolys api 5xx rate (prod|staging)` and metrics `onolys-api-5xx-{env}` exist and are enabled. The agent did not read the owner's inbox: owner to confirm one email "Onolys failed step/run (prod)" arrived. Staging precedent: 71 s incident, SP09 Task 10 |
+| AC10 | MET (owner confirmed email arrived, 2026-11-21) | Test line written to prod at launch check: `request_id sp06-sweep-1795279972`, `status=failed`, `error_code sp06_sweep_test`, service `onolys-worker-prod`, 16:52:52Z. Alert `0.ofa4aj5s6bk0` on policy `Onolys failed step/run (prod)` opened 16:53:06Z (14 s later), state OPEN. Runbook query `jsonPayload.request_id="sp06-sweep-1795279972"` through `entries:list` returned that one line. Policies `Onolys api 5xx rate (prod|staging)` and metrics `onolys-api-5xx-{env}` exist and are enabled. The agent did not read the owner's inbox: owner to confirm one email "Onolys failed step/run (prod)" arrived. Staging precedent: 71 s incident, SP09 Task 10 |
 
 Cloud Run limits as measured (R8): api 1 CPU / 1 GiB, 60 s, concurrency 80; worker 2 CPU / 2 GiB, 900 s, concurrency 2; admin-backend 1 CPU / 1 GiB, 130 s, concurrency 20 (max 3). Prod admin-backend still runs the placeholder `hello` image (SP07 deploys the real one after launch). R13: `deploy-staging.yml`, `deploy-prod.yml`, `_deploy-cloudrun.yml` exist; every deploy authenticates by WIF.
 
@@ -315,10 +315,14 @@ Command: `cd infra && terraform plan -var staging_alerts=true -var 'git_sha={sta
 
 **(c) Hosting `/v1` pass-through: SP09's acceptance, referenced only.** `staging-e2e.md` Task 11(a): Hosting forwards `Authorization`, `/v1` not cached (`no-cache`, no `HIT`/`Age`), AC11 there. Spot check today: `/v1/healthz` returns 200 through `app.onolys.com`, `onolys-app.web.app` and `onolys-app-staging.web.app`.
 
+### Owner confirmations (2026-11-21)
+
+- AC10 prod alert email ARRIVED: "[ALERT - No severity] Onolys failed step/run (prod)" for `onolys-worker-prod` revision `onolys-worker-prod-00005-96t` (Google Cloud Alerting, 11:53 local). AC10 fully met.
+- Worker `max-instances`: keep 3 (owner decision).
+- Unmanaged budget `onolys`: keep (owner decision).
+
 ### Needs the owner
 
-- Confirm the prod alert email (`sp06-sweep-1795279972`, "Onolys failed step/run (prod)") reached the inbox; the channel verification click if not.
 - DNS for `admin.onolys.com` (SP07 launch): `CNAME admin.onolys.com -> onolys-admin.web.app` and `TXT _acme-challenge.admin.onolys.com = 3N1SsioqcatYp9F5-WqCy1uRbvLookFlM0PrwGBGDFA` (re-read `terraform output required_dns_updates` first; the TXT value is per certificate).
-- Anthropic rate tier (step 7a), then a decision on `worker_max_instances`.
+- Anthropic rate tier (step 7a) if `worker_max_instances` is ever raised (currently kept at 3).
 - Merge PR #42 (tag job fix); then the deferred roll-forward-by-tag drill if wanted.
-- Decide whether to delete the duplicate non-Terraform budget `onolys`.
