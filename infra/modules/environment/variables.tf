@@ -122,3 +122,44 @@ variable "notification_channel_ids" {
   type        = list(string)
   default     = []
 }
+
+variable "voice_max_instances" {
+  description = "Voice relay max instances (concurrency 10 each)."
+  type        = number
+  default     = 3
+}
+
+variable "ai_max_seconds" {
+  type    = number
+  default = 600
+}
+
+variable "ai_warn_seconds" {
+  type    = number
+  default = 480
+}
+
+variable "ai_min_seconds" {
+  type    = number
+  default = 300
+}
+
+variable "ai_tolerance_seconds" {
+  type    = number
+  default = 30
+}
+
+variable "ai_abandon_count_seconds" {
+  type    = number
+  default = 120
+}
+
+variable "ai_reconnect_seconds" {
+  type    = number
+  default = 60
+}
+
+variable "ai_mic_gate" {
+  type    = bool
+  default = false
+}

@@ -147,6 +147,7 @@ output "web_env_staging" {
     VITE_FIREBASE_STORAGE_BUCKET      = data.google_firebase_web_app_config.app_staging.storage_bucket
     VITE_FIREBASE_MESSAGING_SENDER_ID = data.google_firebase_web_app_config.app_staging.messaging_sender_id
     VITE_FIRESTORE_DATABASE           = module.staging.database_id
+    VITE_VOICE_URL                    = replace(module.staging.voice_url, "https://", "wss://")
   }
 }
 
@@ -160,6 +161,7 @@ output "web_env_prod" {
     VITE_FIREBASE_STORAGE_BUCKET      = data.google_firebase_web_app_config.app.storage_bucket
     VITE_FIREBASE_MESSAGING_SENDER_ID = data.google_firebase_web_app_config.app.messaging_sender_id
     VITE_FIRESTORE_DATABASE           = "(default)"
+    VITE_VOICE_URL                    = replace(module.prod.voice_url, "https://", "wss://")
   }
 }
 
@@ -185,4 +187,14 @@ output "web_env_admin_prod" {
     VITE_FIREBASE_STORAGE_BUCKET      = data.google_firebase_web_app_config.admin[0].storage_bucket
     VITE_FIREBASE_MESSAGING_SENDER_ID = data.google_firebase_web_app_config.admin[0].messaging_sender_id
   } : null
+}
+
+output "voice_url_staging" {
+  description = "Voice relay URL (staging); https, use wss:// from the browser."
+  value       = module.staging.voice_url
+}
+
+output "voice_url_prod" {
+  description = "Voice relay URL (prod); https, use wss:// from the browser."
+  value       = module.prod.voice_url
 }

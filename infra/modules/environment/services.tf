@@ -82,6 +82,11 @@ resource "google_cloud_run_v2_service" "api" {
         name  = "CORS_ORIGINS"
         value = join(",", var.cors_origins)
       }
+      env {
+        # Relay base the api hands to the browser in POST /interviews (voice.tf).
+        name  = "VOICE_URL"
+        value = "wss://${local.voice_host}"
+      }
       dynamic "env" {
         for_each = local.platform_env
         content {
