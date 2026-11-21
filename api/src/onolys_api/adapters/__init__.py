@@ -23,6 +23,7 @@ __all__ = [
     "AdapterError", "Adapters", "Evaluation", "EvaluationOutput", "FakeEvaluation", "FakeStt",
     "FakeVoice", "FixtureStt", "ProgressCb", "Stage", "StageStatus", "Stt", "Voice",
     "build_adapters",
+    "build_voice_adapter",
 ]  # fmt: skip
 
 
@@ -47,3 +48,12 @@ def build_adapters(
 
     evaluation = RealEvaluation(llm_factory=llm_factory) if llm_factory else RealEvaluation()
     return Adapters(stt=RealStt(stt_registry), evaluation=evaluation, voice=RealVoice())
+
+
+def build_voice_adapter(settings: Settings) -> Voice:
+    """The voice service needs only `Voice` (no STT or evaluation wiring)."""
+    if settings.adapters == "stub":
+        return FakeVoice()
+    from onolys_api.adapters.real import RealVoice
+
+    return RealVoice()

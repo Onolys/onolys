@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from onolys_core.errors import ConfigError
 
 ENVS = ("local", "test", "staging", "prod")
-SERVICE_MODES = ("api", "worker", "combined")
+SERVICE_MODES = ("api", "worker", "combined", "voice")
 ADAPTER_KINDS = ("stub", "real")
 AUTH_MODES = ("fake", "idp")
 LOCAL_ENVS = ("local", "test")

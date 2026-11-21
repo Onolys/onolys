@@ -1,4 +1,4 @@
-"""App factory. One codebase, SERVICE_MODE=api|worker|combined."""
+"""App factory. One codebase, SERVICE_MODE=api|worker|combined|voice."""
 
 import logging
 import re
@@ -17,7 +17,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from onolys_api import logs
-from onolys_api.adapters import Adapters, build_adapters
+from onolys_api.adapters import Adapters, build_adapters, build_voice_adapter
 from onolys_api.audio import AudioTools, FfmpegTools
 from onolys_api.auth.deps import Authenticator
 from onolys_api.auth.idtoken import InvalidToken, TokenVerifier
@@ -48,6 +48,8 @@ from onolys_api.routes import usage as usage_routes
 from onolys_api.storage.base import BlobStore
 from onolys_api.storage.fake import FakeBlobStore
 from onolys_api.storage.fake_routes import make_fake_blob_router
+from onolys_api.voice import relay as voice_relay
+from onolys_api.voice.clock import SystemClock
 from onolys_api.voice.scenarios import load_scenarios
 
 log = logging.getLogger("onolys_api")
@@ -240,7 +242,9 @@ def create_app(
     app.state.voices = allowed_voices()  # D16: what `POST /interviews {voice}` may name
     app.state.scenarios = load_scenarios(voices=app.state.voices)  # fail at startup if invalid
     load_rating_schema()  # fail at startup, loudly, if the canonical rating schema is missing
-    app.state.blobs = blobs or build_blobs(settings)
+    voice_mode = settings.service_mode == "voice"
+    # the relay never touches audio blobs: no bucket needed there
+    app.state.blobs = blobs or (FakeBlobStore() if voice_mode else build_blobs(settings))
     app.state.repo = repo or build_repo(settings, app.state.blobs)
     app.state.presets = PresetResolver(settings)
     app.state.auth = Authenticator(settings, app.state.repo, token_verifier)
@@ -299,6 +303,13 @@ def create_app(
             else:
                 raise ConfigError("WORKER_URL and TASKS_SA are required for the worker")
 
+    if voice_mode:
+        app.state.voice_clock = SystemClock()  # tests replace it
+        app.state.voice_connections = {}
+        app.state.voice_adapter = (
+            adapters.voice if adapters is not None else build_voice_adapter(settings)
+        )
+
     app.add_middleware(
         ContractCORSMiddleware,
         allow_origins=list(settings.cors_origins),
@@ -322,6 +333,11 @@ def create_app(
     )
     async def healthz() -> Healthz:
         return Healthz(service_mode=settings.service_mode, code_version=settings.git_sha)
+
+    if voice_mode:  # the relay serves only its socket and a health check
+        app.include_router(router)
+        app.include_router(voice_relay.router)
+        return app
 
     router.include_router(api_key_routes.router)
     router.include_router(session_routes.router)
