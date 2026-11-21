@@ -270,6 +270,27 @@ describe("session page: error cards", () => {
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 
+  it("keeps Run again locked after a successful POST until the session state changes (W15)", async () => {
+    const user = userEvent.setup();
+    const sid = create();
+    open(sid);
+    await ready();
+    act(() => mockEmitter.emit(sid, failedDoc(sid, "internal_error")));
+    let posts = 0;
+    server.use(
+      http.post("*/v1/sessions/:id/runs", () => {
+        posts += 1;
+        return HttpResponse.json({ session_id: sid }, { status: 202 });
+      }),
+    );
+    const btn = await screen.findByRole("button", { name: "Run again" });
+    await user.click(btn);
+    await waitFor(() => expect(posts).toBe(1));
+    await waitFor(() => expect(btn).toBeDisabled());
+    await user.click(btn);
+    expect(posts).toBe(1);
+  });
+
   it("shows the API's message and request id when Run again itself fails", async () => {
     const user = userEvent.setup();
     const sid = create();

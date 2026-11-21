@@ -75,6 +75,11 @@ function SessionView({ id }: { id: string }) {
     onError: () => void queryClient.invalidateQueries({ queryKey: USAGE_KEY }),
   });
 
+  // A successful POST keeps the buttons locked until the status doc moves on (else a second POST races it).
+  const { reset: resetRun } = run;
+  const docState = doc?.state;
+  useEffect(() => resetRun(), [docState, resetRun]);
+
   const remove = useMutation({
     mutationFn: async () => {
       deleting.current = true; // the doc vanishing is expected, not an error
@@ -111,7 +116,7 @@ function SessionView({ id }: { id: string }) {
   const timeline = doc ? deriveTimeline(doc, { resetsAt }) : null;
   const failureCode = doc?.state === "failed" ? (doc.error_code ?? undefined) : undefined;
   const runError = run.error ? describeError(run.error, { resetsAt }) : null;
-  const runLocked = run.isPending || atCap;
+  const runLocked = run.isPending || run.isSuccess || atCap;
 
   return (
     <>
@@ -163,7 +168,7 @@ function SessionView({ id }: { id: string }) {
               <button
                 type="button"
                 className="btn btn-primary"
-                disabled={run.isPending || (atCap && !freeFirstRun)}
+                disabled={run.isPending || run.isSuccess || (atCap && !freeFirstRun)}
                 onClick={() => run.mutate()}
               >
                 Start

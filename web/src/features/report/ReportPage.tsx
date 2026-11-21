@@ -148,7 +148,7 @@ function LoadedReport({ id, version }: { id: string; version: number }) {
               ))}
             </select>
           </label>
-          <button type="button" className="btn btn-primary" disabled={run.isPending || atCap} onClick={() => run.mutate()}>
+          <button type="button" className="btn btn-primary" disabled={run.isPending || run.isSuccess || atCap} onClick={() => run.mutate()}>
             Run again
           </button>
           <button type="button" className="btn btn-secondary" aria-expanded={editingRating} onClick={() => setEditingRating((v) => !v)}>
@@ -176,7 +176,7 @@ function LoadedReport({ id, version }: { id: string; version: number }) {
 
       <div className="report-panes" data-tab={tab}>
         <div className="report-main">
-          <ReportSections report={report} onSelect={onSelect} onRunAgain={() => run.mutate()} runAgainDisabled={run.isPending || atCap} />
+          <ReportSections report={report} onSelect={onSelect} onRunAgain={() => run.mutate()} runAgainDisabled={run.isPending || run.isSuccess || atCap} />
         </div>
         <section className="report-transcript" aria-label="Transcript">
           <TranscriptPanel sessionId={id} highlights={highlights} />
