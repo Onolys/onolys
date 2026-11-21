@@ -11,6 +11,7 @@ const m = {
   getRedirectResult: vi.fn(),
   createUser: vi.fn(),
   sendEmailVerification: vi.fn(),
+  signOut: vi.fn(),
 };
 
 vi.mock("firebase/app", () => ({ initializeApp: () => ({}) }));
@@ -30,7 +31,7 @@ vi.mock("firebase/auth", () => ({
   signInWithEmailAndPassword: vi.fn(),
   signInWithPopup: vi.fn(),
   signInWithRedirect: vi.fn(),
-  signOut: vi.fn(),
+  signOut: (...a: unknown[]) => m.signOut(...a),
 }));
 
 import { createFirebaseAuthService } from "./firebaseService";
@@ -96,6 +97,21 @@ describe("firebase email-change action codes", () => {
     m.reload.mockRejectedValue({ code: "auth/user-token-expired" });
     expect(await make().applyEmailChange("oob")).toEqual({ signedIn: false });
     expect(m.applyActionCode).toHaveBeenCalledOnce();
+  });
+  it("applyEmailChange signs out when the session cannot be refreshed (FX34)", async () => {
+    m.reload.mockRejectedValue({ code: "auth/user-token-expired" });
+    await make().applyEmailChange("oob");
+    expect(m.signOut).toHaveBeenCalledWith(auth);
+  });
+  it("applyEmailChange does not claim signedIn for a different account than the code's (FX34)", async () => {
+    m.checkActionCode.mockResolvedValue({ operation: "VERIFY_AND_CHANGE_EMAIL", data: { email: "new@x.co", previousEmail: "other@x.co" } });
+    expect(await make().applyEmailChange("oob")).toEqual({ signedIn: false });
+    expect(m.applyActionCode).toHaveBeenCalledOnce();
+    expect(m.reload).not.toHaveBeenCalled();
+  });
+  it("applyEmailChange stays signedIn when the current user matches the code's account (FX34)", async () => {
+    m.checkActionCode.mockResolvedValue({ operation: "VERIFY_AND_CHANGE_EMAIL", data: { email: "new@b.co", previousEmail: "A@b.co" } });
+    expect(await make().applyEmailChange("oob")).toEqual({ signedIn: true });
   });
   it("applyEmailChange with nobody signed in is signedIn false", async () => {
     auth.currentUser = null;

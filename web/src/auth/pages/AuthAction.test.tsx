@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { here, renderApp } from "../../test/renderApp";
 import { createFakeAuthService } from "../fakeService";
-import { resolveContinue } from "./AuthAction";
+import { appHosts, resolveContinue } from "./AuthAction";
 
 const h1 = (name: string) => screen.findByRole("heading", { level: 1, name });
 
@@ -113,8 +113,12 @@ describe("resolveContinue", () => {
     expect(resolveContinue("https://app.onolys.com/verify-email?x=1", o)).toEqual({ kind: "path", path: "/verify-email?x=1" });
     expect(resolveContinue("/settings", o)).toEqual({ kind: "path", path: "/settings" });
   });
-  it("allows known app hosts (staging shares the project) as external", () => {
-    expect(resolveContinue("https://onolys-app-staging.web.app/verify-email", o)).toEqual({
+  it("allows only configured app hosts as external (FX34)", () => {
+    expect(resolveContinue("https://onolys-app-staging.web.app/verify-email", o)).toEqual({ kind: "path", path: "/" });
+    expect(appHosts({ VITE_APP_HOSTS: " Staging.Example , other.example", VITE_FIREBASE_AUTH_DOMAIN: "auth.example" })).toEqual(
+      new Set(["staging.example", "other.example", "auth.example"]),
+    );
+    expect(resolveContinue("https://onolys-app-staging.web.app/verify-email", o, new Set(["onolys-app-staging.web.app"]))).toEqual({
       kind: "external",
       href: "https://onolys-app-staging.web.app/verify-email",
     });

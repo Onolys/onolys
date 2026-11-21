@@ -139,14 +139,29 @@ export function createFirebaseAuthService(config: FirebaseWebConfig): AuthServic
       return { email, previousEmail: info.data.previousEmail ?? null };
     },
     async applyEmailChange(oobCode) {
+      // Which account the code belongs to (best effort: applyActionCode below reports invalid codes).
+      let info: Awaited<ReturnType<typeof checkActionCode>> | undefined;
+      try {
+        info = await checkActionCode(auth, oobCode);
+      } catch {
+        info = undefined;
+      }
+      const emails = [info?.data?.email, info?.data?.previousEmail].filter(Boolean).map((e) => e!.toLowerCase());
+      const before = auth.currentUser;
       await applyActionCode(auth, oobCode);
       const user = auth.currentUser;
       if (!user) return { signedIn: false };
+      if (emails.length > 0 && !emails.includes((before?.email ?? "").toLowerCase())) return { signedIn: false }; // someone else's link
       try {
         await reload(user);
         await user.getIdToken(true);
       } catch {
-        return { signedIn: false }; // the email change revoked this session's tokens
+        try {
+          await fbSignOut(auth);
+        } catch {
+          /* already signed out */
+        } // the email change revoked this session's tokens: do not rely on the SDK
+        return { signedIn: false };
       }
       emit();
       return { signedIn: true };

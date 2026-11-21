@@ -13,13 +13,19 @@ import { useFormError } from "./useFormError";
  * and the page uses our own auth instance. The `apiKey` query param is ignored.
  */
 
-/** Hosts a continue link may send the user back to: this origin plus the app's own sites (staging shares the auth project). */
-const APP_HOSTS = new Set(["app.onolys.com", "onolys-app.web.app", "onolys-app-staging.web.app"]);
+/**
+ * Hosts (besides this origin) a continue link may send the user back to: the Firebase auth domain plus any
+ * comma-separated hostnames in `VITE_APP_HOSTS` (e.g. a sibling environment that shares the auth project).
+ */
+export function appHosts(env: Record<string, string | undefined> = import.meta.env): Set<string> {
+  const list = [env.VITE_FIREBASE_AUTH_DOMAIN, ...(env.VITE_APP_HOSTS ?? "").split(",")];
+  return new Set(list.map((h) => (h ?? "").trim().toLowerCase()).filter(Boolean));
+}
 
 export type Continue = { kind: "path"; path: string } | { kind: "external"; href: string };
 
-/** Never an open redirect: same-origin path, or an https URL on a known app host, else `/`. */
-export function resolveContinue(raw: string | null, origin: string = window.location.origin): Continue {
+/** Never an open redirect: same-origin path, or an https URL on a configured app host, else `/`. */
+export function resolveContinue(raw: string | null, origin: string = window.location.origin, hosts: Set<string> = appHosts()): Continue {
   const home: Continue = { kind: "path", path: "/" };
   if (!raw) return home;
   let url: URL;
@@ -29,7 +35,7 @@ export function resolveContinue(raw: string | null, origin: string = window.loca
     return home;
   }
   if (url.origin === origin) return { kind: "path", path: url.pathname + url.search + url.hash };
-  if (url.protocol === "https:" && !url.username && !url.password && APP_HOSTS.has(url.hostname)) {
+  if (url.protocol === "https:" && !url.username && !url.password && hosts.has(url.hostname)) {
     return { kind: "external", href: url.href };
   }
   return home;
