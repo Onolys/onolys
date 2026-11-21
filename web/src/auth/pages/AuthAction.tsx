@@ -4,6 +4,7 @@ import { useAuth } from "../AuthProvider";
 import { MIN_PASSWORD_LENGTH, errorCode, mapAuthError } from "../errors";
 import type { EmailChangeInfo, EmailChangeKind } from "../types";
 import { ErrorSummary } from "./parts";
+import type { LoginState } from "./Login";
 import { useFormError } from "./useFormError";
 
 /**
@@ -159,7 +160,7 @@ function ResetPasswordAction({ oobCode }: { oobCode: string }) {
   const [checkError, setCheckError] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
   const [busy, setBusy] = useState(false);
-  const [done, setDone] = useState(false);
+  const navigate = useNavigate();
   const form = useFormError();
 
   // Checking the code does not consume it, so this is safe on load.
@@ -194,7 +195,8 @@ function ResetPasswordAction({ oobCode }: { oobCode: string }) {
     setBusy(true);
     try {
       await service.confirmPasswordReset(oobCode, password);
-      setDone(true);
+      // Login shows "Password updated" and prefills the email.
+      void navigate("/login", { replace: true, state: { email: email ?? undefined, passwordUpdated: true } satisfies LoginState });
     } catch (err) {
       if (EXPIRED.has(errorCode(err) ?? "")) setInvalid(true);
       else form.fail(err);
@@ -203,17 +205,6 @@ function ResetPasswordAction({ oobCode }: { oobCode: string }) {
     }
   }
 
-  if (done) {
-    return (
-      <>
-        <h1>Password updated</h1>
-        <p role="status">Your password has been changed.</p>
-        <p>
-          <Link to="/login">Log in</Link>
-        </p>
-      </>
-    );
-  }
   if (invalid) {
     return (
       <>

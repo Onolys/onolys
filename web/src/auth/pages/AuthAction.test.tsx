@@ -130,7 +130,7 @@ describe("/auth/action resetPassword", () => {
   it("shows the email, rejects short passwords, then resets", async () => {
     const service = await svc();
     const code = service.issueActionCode("resetPassword", "a@clinic.org");
-    renderApp(`/auth/action?mode=resetPassword&oobCode=${code}`, { service });
+    const { router } = renderApp(`/auth/action?mode=resetPassword&oobCode=${code}`, { service });
     const user = userEvent.setup();
     await h1("Choose a new password");
     expect(screen.getByText("a@clinic.org")).toBeInTheDocument();
@@ -141,9 +141,11 @@ describe("/auth/action resetPassword", () => {
     await user.clear(screen.getByLabelText("New password"));
     await user.type(screen.getByLabelText("New password"), "longenough1");
     await user.click(screen.getByRole("button", { name: "Update password" }));
-    await h1("Password updated");
+    await h1("Log in");
     expect(service.calls.passwordResets).toBe(1);
-    expect(within(screen.getByRole("main")).getByRole("link", { name: "Log in" })).toHaveAttribute("href", "/login");
+    expect(here(router)).toBe("/login");
+    expect(within(screen.getByRole("main")).getByRole("status")).toHaveTextContent("Password updated");
+    expect(screen.getByLabelText("Email")).toHaveValue("a@clinic.org");
     await service.signIn("a@clinic.org", "longenough1");
   });
 

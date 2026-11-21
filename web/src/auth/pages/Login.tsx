@@ -6,9 +6,16 @@ import { withNext } from "../next";
 import { ErrorSummary } from "./parts";
 import { useFormError } from "./useFormError";
 
+/** Router state set by the password-reset flow. */
+export interface LoginState {
+  email?: string;
+  passwordUpdated?: boolean;
+}
+
 export function Login() {
   const { service } = useAuth();
-  const { search } = useLocation();
+  const { search, state } = useLocation();
+  const from = (state ?? {}) as LoginState;
   const [busy, setBusy] = useState(false);
   const form = useFormError();
 
@@ -52,10 +59,11 @@ export function Login() {
     <>
       <h1>Log in</h1>
       <form className="auth-form" onSubmit={(e) => void onSubmit(e)} noValidate>
+        {from.passwordUpdated && !form.error && <p role="status">Password updated. Log in with your new password.</p>}
         {form.error && <ErrorSummary error={form.error} search={search} />}
         <label>
           Email
-          <input name="email" type="email" autoComplete="email" required {...form.fieldProps("email")} />
+          <input name="email" type="email" autoComplete="email" defaultValue={from.email ?? ""} required {...form.fieldProps("email")} />
         </label>
         <label>
           Password
