@@ -166,6 +166,8 @@ terraform apply
 
 No `gcloud` needed; the providers use `user_project_override` with billing project `onolys`. `terraform plan/apply` is manual (no CI apply). Cloud Run images and `GIT_SHA` belong to CI: after a CI deploy `plan` may show `GIT_SHA` drift; apply with `-var 'git_sha={staging="<staging sha>",prod="<prod sha>"}'` (root map var, one value per env) to keep it quiet. CI-set labels: `commit-sha`, `managed-by` (service + template) and `goog-terraform-provisioned` (template) are ignored via `lifecycle`.
 
+After a CI pinned api deploy (`pin_traffic`, revision named `<service>-<sha7>-<run>-<attempt>`), the next plan shows a harmless `template.revision -> null` on the api (it is deliberately not in `ignore_changes`, otherwise apply fails with 409 "Revision ... with different configuration already exists"); Cloud Run then auto-names the new revision.
+
 Seed secret values outside state (values never printed, never in tfvars):
 
 ```bash

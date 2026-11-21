@@ -124,3 +124,13 @@ def test_deployer_can_deploy_voice_service_and_act_as_its_sa():
     for env in ("staging", "prod"):
         assert f"voice  = module.{env}.voice_service_name" in text
         assert f"voice = module.{env}.voice_sa_email" in text
+
+
+def test_api_service_does_not_ignore_template_revision():
+    # CI pins api traffic to a named revision; ignoring template[0].revision makes Terraform send that name
+    # back on any in-place update -> 409 "Revision ... with different configuration already exists".
+    svc = blocks((MOD / "services.tf").read_text(), "google_cloud_run_v2_service")
+    assert "template[0].revision" not in svc["api"]
+    assert "template[0].containers[0].image" in svc["api"]  # image stays CI-owned
+    for other in ("worker", "admin_backend"):
+        assert "template[0].revision" in svc[other]

@@ -107,7 +107,8 @@ resource "google_cloud_run_v2_service" "api" {
   lifecycle {
     ignore_changes = [
       template[0].containers[0].image,
-      template[0].revision,
+      # The template revision name is NOT ignored here: CI pins api traffic to a named revision, and ignoring it
+      # makes Terraform send that name back on any template update (409 "different configuration already exists").
       client,
       scaling, # service-level block the API fills with zeros (perpetual diff); per-revision scaling is set in template
       client_version,
