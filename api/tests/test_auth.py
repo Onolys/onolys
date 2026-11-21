@@ -1,19 +1,26 @@
 """R1 / AC4: ID tokens, API keys, /v1/api-key, fake-auth guard. No network."""
 
 import time
+from datetime import UTC, datetime, timedelta
+from types import SimpleNamespace
 
 import httpx
 import pytest
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
+from fastapi.security import HTTPAuthorizationCredentials
 from google.auth import crypt, jwt
 from onolys_core.errors import ConfigError
 
 from onolys_api.app import create_app
+from onolys_api.auth import deps
+from onolys_api.auth.deps import Authenticator
 from onolys_api.auth.idtoken import IdTokenVerifier, InvalidToken
 from onolys_api.auth.keys import hash_secret, new_key, parse_key
 from onolys_api.config import Settings
+from onolys_api.errors import ApiError
 from onolys_api.repo.fake import FakeRepo
+from onolys_api.repo.models import ApiKeyDoc
 
 PROJECT = "onolys-test"
 KID = "k1"
@@ -36,13 +43,15 @@ PRIV, PUB = _keypair()
 OTHER_PRIV, _ = _keypair()
 
 
-def mint(uid="u1", *, verified=True, aud=PROJECT, iss=None, exp_in=3600, priv=PRIV, kid=KID):
+def mint(
+    uid="u1", *, verified=True, aud=PROJECT, iss=None, exp_in=3600, priv=PRIV, kid=KID, iat_in=-5
+):
     now = int(time.time())
     claims = {
         "sub": uid,
         "aud": aud,
         "iss": iss or f"https://securetoken.google.com/{PROJECT}",
-        "iat": now - 5,
+        "iat": now + iat_in,
         "exp": now + exp_in,
         "email_verified": verified,
     }
@@ -101,6 +110,37 @@ async def test_valid_token_resolves_uid_and_creates_user(idp_client, repo):
 )
 async def test_bad_tokens_are_401(idp_client, kwargs):
     assert_401(await idp_client.get("/v1/api-key", headers=bearer(mint(**kwargs))))
+
+
+@pytest.mark.parametrize("uid", ["a" * 128, "a-b_C9"])
+def test_sub_accepted(uid):
+    v = IdTokenVerifier(PROJECT, fetch_certs=lambda: {KID: PUB})
+    assert v.verify(mint(uid)) == uid
+
+
+@pytest.mark.parametrize("uid", ["a" * 129, "", "a/b", 123, None, ["x"]])
+def test_sub_rejected(uid):
+    v = IdTokenVerifier(PROJECT, fetch_certs=lambda: {KID: PUB})
+    with pytest.raises(InvalidToken):
+        v.verify(mint(uid))
+
+
+@pytest.mark.parametrize(
+    "kwargs, ok",
+    [
+        ({"exp_in": -9}, True),  # just expired, inside the 10s skew
+        ({"exp_in": -11}, False),
+        ({"iat_in": 9}, True),  # issued slightly in the future
+        ({"iat_in": 11}, False),
+    ],
+)
+def test_clock_skew_window(kwargs, ok):
+    v = IdTokenVerifier(PROJECT, fetch_certs=lambda: {KID: PUB})
+    if ok:
+        assert v.verify(mint("u1", **kwargs)) == "u1"
+    else:
+        with pytest.raises(InvalidToken):
+            v.verify(mint("u1", **kwargs))
 
 
 async def test_garbage_and_missing_credentials_are_401(idp_client):
@@ -340,3 +380,80 @@ async def test_key_maps_to_owner_uid(client, app):
 
 async def test_healthz_needs_no_auth(client):
     assert (await client.get("/v1/healthz")).status_code == 200
+
+
+# ---- Authenticator internals (mutation survivors M5-M7) ----
+
+
+def _idp(auth_project="", gcp_project="", verifier=None):
+    s = Settings(
+        env="staging", service_mode="api", auth_mode="idp",
+        auth_project=auth_project, gcp_project=gcp_project,
+    )  # fmt: skip
+    return Authenticator(s, FakeRepo(None), verifier)
+
+
+def test_idp_project_falls_back_to_gcp_project():
+    assert _idp(gcp_project="gp")._verifier._project == "gp"
+    assert _idp(auth_project="ap", gcp_project="gp")._verifier._project == "ap"
+
+
+def test_idp_without_any_project_is_a_config_error():
+    with pytest.raises(ConfigError):
+        _idp()
+    _idp(verifier=IdTokenVerifier(PROJECT, lambda: {}))  # injected verifier needs no project
+
+
+def _key(client_repo, secret="S" * 43, kid="0123456789abcdef", **doc):
+    client_repo.create_api_key(
+        "alice", kid, ApiKeyDoc(uid="alice", hash=hash_secret(secret), **doc)
+    )
+    return f"onolys_{kid}_{secret}"
+
+
+async def test_unknown_key_still_compares_against_a_64_char_dummy(client, app, monkeypatch):
+    seen = []
+    real = deps.secret_matches
+    monkeypatch.setattr(deps, "secret_matches", lambda s, h: seen.append(h) or real(s, h))
+    with pytest.raises(ApiError):
+        app.state.auth.authenticate(None, "onolys_0123456789abcdef_" + "A" * 43)
+    assert seen == ["0" * 64]
+
+
+async def test_last_used_throttle_boundary(client, app, monkeypatch):
+    repo = app.state.auth._repo
+    t0 = datetime(2026, 1, 1, tzinfo=UTC)
+    key = _key(repo, last_used_at=t0)
+    now = [t0 + timedelta(seconds=59)]
+
+    class FakeDT(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return now[0]
+
+    monkeypatch.setattr(deps, "datetime", FakeDT)
+    app.state.auth.authenticate(None, key)
+    assert repo.get_api_key("0123456789abcdef").last_used_at == t0  # inside the minute
+    now[0] = t0 + deps.LAST_USED_EVERY  # exactly the interval: written
+    app.state.auth.authenticate(None, key)
+    assert repo.get_api_key("0123456789abcdef").last_used_at == now[0]
+
+
+async def test_seen_set_is_cleared_only_when_full(client, app, monkeypatch):
+    monkeypatch.setattr(deps, "_SEEN_CAP", 3)
+    a = app.state.auth
+    for uid in ("u1", "u2", "u3"):
+        a.authenticate(f"test:{uid}", None)
+    assert a._seen == {"u1", "u2", "u3"}  # at the cap but not over: kept
+    a.authenticate("test:u4", None)
+    assert a._seen == {"u4"}  # full: evicted, then the new uid recorded
+
+
+async def test_current_user_records_auth_kind(client, app):
+    repo = app.state.auth._repo
+    key = _key(repo)
+    for tok, key_hdr, kind in (("test:alice", None, "token"), (None, key, "api_key")):
+        req = SimpleNamespace(app=app, state=SimpleNamespace(auth_kind=None))
+        creds = HTTPAuthorizationCredentials(scheme="Bearer", credentials=tok) if tok else None
+        user = deps.current_user(req, creds, key_hdr)
+        assert (user.auth_kind, req.state.auth_kind) == (kind, kind)
