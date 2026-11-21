@@ -104,4 +104,9 @@ variable "git_sha" {
     staging = "unset"
     prod    = "unset"
   }
+
+  validation {
+    condition     = toset(keys(var.git_sha)) == toset(["staging", "prod"])
+    error_message = "git_sha needs exactly the keys staging and prod."
+  }
 }

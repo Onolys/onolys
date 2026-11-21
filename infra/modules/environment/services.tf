@@ -1,7 +1,7 @@
 # Cloud Run shells (PRD R8/R14). The image is owned by CI after first create (ignore_changes).
 # GIT_SHA: provider v6 models `env` as a SET, so a single entry cannot be ignored (env[0] is rejected)
 # and ignoring all of env would also hide secret-ref changes. GIT_SHA is therefore a variable;
-# after a CI deploy, plan shows it as drift until applied with -var git_sha=<deployed sha>.
+# after a CI deploy, plan shows it as drift until applied with -var 'git_sha={staging="<sha>",prod="<sha>"}' (see docs/reference/infra.md).
 
 locals {
   worker_url = "https://onolys-worker-${var.env}-${data.google_project.this.number}.${var.region}.run.app"

@@ -108,7 +108,7 @@ Status then (`terraform output custom_domain_status`): `ownership OWNERSHIP_MISS
 
 Re-run the output before adding records: the values change if Hosting changes its desired state, and the TXT value is per-certificate. Remove any conflicting `A`/`AAAA` record on `app.onolys.com` (a `CNAME` cannot coexist with other records on the same host).
 
-`admin.onolys.com` has no record yet: it exists only with `admin_enabled=true`; the output then adds its records. Staging has no custom domain (`onolys-app-staging.web.app` only).
+`admin.onolys.com` records are now in `required_dns_updates` (admin is enabled on both envs); the owner adds them (see sweep AC8). Staging has no custom domain (`onolys-app-staging.web.app` only).
 
 ## GitHub settings the owner must set
 
@@ -143,7 +143,7 @@ cd infra && terraform init && terraform plan     # add -lock=false for a read-on
 terraform apply
 ```
 
-No `gcloud` needed; the providers use `user_project_override` with billing project `onolys`. `terraform plan/apply` is manual (no CI apply). Cloud Run images and `GIT_SHA` belong to CI: after a CI deploy `plan` may show `GIT_SHA` drift; apply with `-var 'git_sha={staging="<staging sha>",prod="<prod sha>"}'` (root map var, one value per env) to keep it quiet. CI-set labels (`commit-sha`, `managed-by`, `goog-terraform-provisioned`) are ignored via `lifecycle`.
+No `gcloud` needed; the providers use `user_project_override` with billing project `onolys`. `terraform plan/apply` is manual (no CI apply). Cloud Run images and `GIT_SHA` belong to CI: after a CI deploy `plan` may show `GIT_SHA` drift; apply with `-var 'git_sha={staging="<staging sha>",prod="<prod sha>"}'` (root map var, one value per env) to keep it quiet. CI-set labels: `commit-sha`, `managed-by` (service + template) and `goog-terraform-provisioned` (template) are ignored via `lifecycle`.
 
 Seed secret values outside state (values never printed, never in tfvars):
 
@@ -183,7 +183,7 @@ Today (staging, same list intended for prod): `tejitpabari99@gmail.com`, `gitika
 
 Edit in the console: Secret Manager, open `admin-allowed-emails-{env}`, **+ New version**, paste the FULL list (it replaces the old one), Add. A running revision keeps the old value, so make Cloud Run pick it up: Cloud Run, `onolys-admin-backend-{env}`, **Edit & deploy new revision**, **Deploy** (or re-run `deploy-admin.yml`).
 
-Edit with the script (value never printed; staging shown, `--env prod` once prod admin is enabled):
+Edit with the script (value never printed; staging shown, `--env prod` for prod (admin is enabled)):
 
 ```bash
 ADMIN_ALLOWED_EMAILS="a@x.com,b@y.com" python3 infra/scripts/seed-secrets.py --env staging --admin
@@ -300,7 +300,7 @@ Cloud Run limits as measured (R8): api 1 CPU / 1 GiB, 60 s, concurrency 80; work
 
 Command: `cd infra && terraform plan -var staging_alerts=true -var 'git_sha={staging="096e3edde31fe4134cb588c092201691bf774a83",prod="205a03fa48aa2a43416d8be1dacd130a9a20d9a0"}' -lock=false`.
 
-- `-target=module.prod`: **No changes** (prod is empty).
+- `-target=module.prod`: **No changes** (prod has no drift).
 - Unscoped: `Plan: 0 to add, 2 to change, 0 to destroy`, both on staging, both known and pre-existing, not a sweep failure:
   - `module.staging...google_cloud_run_v2_service.api`: its template is currently the no-traffic PR-42 preview revision (`onolys-api-staging-pr-42-fc89744-14-1`: `SERVICE_MODE=combined`, `ADAPTERS=stub`, preview `CORS_ORIGINS`, `GIT_SHA=fc89744`, `cpu_idle=false`) while 100 % of traffic stays on `onolys-api-staging-096e3ed-34-1`. A preview deploy replaces the service template. Plan would reset it to the real template.
   - `module.staging...admin_backend[0]`: `GIT_SHA` is `205a03f`, plan sets `096e3ed` (admin deploys come from `deploy-admin.yml`, not `deploy-staging`).

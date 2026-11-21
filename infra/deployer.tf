@@ -47,7 +47,7 @@ resource "google_service_account_iam_member" "deployer_staging_wif" {
 
 locals {
   deployer_staging_member = "serviceAccount:${google_service_account.deployer_staging.email}"
-  # Admin entries (SP07) exist only while admin_enabled (staging) is true; nothing changes while it is false.
+  # Admin entries (SP07) are gated per env by admin_enabled (staging and prod); nothing changes for an env while its flag is false.
   staging_services = merge(
     {
       api    = module.staging.api_service_name
