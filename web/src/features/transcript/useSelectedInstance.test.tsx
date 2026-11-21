@@ -1,10 +1,11 @@
 import { act, renderHook } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { createElement, type ReactNode } from "react";
+import { MemoryRouter, useNavigate } from "react-router";
+import { describe, expect, it } from "vitest";
 import { parseInstanceHash, useSelectedInstance } from "./useSelectedInstance";
 
-afterEach(() => {
-  window.location.hash = "";
-});
+const wrap = (initial: string) => ({ children }: { children: ReactNode }) =>
+  createElement(MemoryRouter, { initialEntries: [initial] }, children);
 
 describe("instance hash", () => {
   it("parses #i=<id> and ignores anything else", () => {
@@ -15,16 +16,16 @@ describe("instance hash", () => {
     expect(parseInstanceHash("#i=%3Cb%3E")).toBe("<b>");
   });
 
-  it("reads the hash, selects by writing it, and reacts to hashchange", () => {
-    window.location.hash = "#i=first";
-    const { result } = renderHook(() => useSelectedInstance());
-    expect(result.current[0]).toBe("first");
-    act(() => result.current[1]("second"));
-    expect(window.location.hash).toBe("#i=second");
-    act(() => {
-      window.location.hash = "";
-      window.dispatchEvent(new HashChangeEvent("hashchange"));
-    });
-    expect(result.current[0]).toBeNull();
+  it("reads the router hash, selects through the router, and follows SPA navigation (W27)", () => {
+    const { result } = renderHook(() => ({ sel: useSelectedInstance(), nav: useNavigate() }), { wrapper: wrap("/r#i=first") });
+    expect(result.current.sel[0]).toBe("first");
+    act(() => result.current.sel[1]("second"));
+    expect(result.current.sel[0]).toBe("second");
+    act(() => void result.current.nav("/elsewhere"));
+    expect(result.current.sel[0]).toBeNull();
+    act(() => void result.current.nav("/r#i=third"));
+    expect(result.current.sel[0]).toBe("third");
+    act(() => result.current.sel[1](null));
+    expect(result.current.sel[0]).toBeNull();
   });
 });

@@ -202,7 +202,7 @@ function Behaviours({ r, title, labels, onSelect }: { r: Report; title: string; 
               <tr key={b.item_id}>
                 <th scope="row">{labels.get(b.item_id) ?? b.item_id}</th>
                 <td data-label="You">{rated ? num(b.clinician_count) : "–"}</td>
-                <td data-label="Onolys">{num(b.onolys_count?.values?.[0] ?? b.onolys_count?.mean)}</td>
+                <td data-label="Onolys">{num(b.onolys_count?.mean ?? b.onolys_count?.values?.[0])}</td>
                 <td data-label="Instances">
                   {(b.instances ?? []).map((inst) => (
                     <button key={inst.id} type="button" className="line-chip" title={inst.rationale} onClick={() => onSelect(inst.id)}>

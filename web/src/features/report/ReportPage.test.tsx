@@ -49,7 +49,6 @@ const row = (name: RegExp, sec = "Scorecard") => within(section(sec)).getByRole(
 
 afterEach(() => {
   delete (Element.prototype as { scrollIntoView?: unknown }).scrollIntoView;
-  window.location.hash = "";
 });
 
 describe("report page: period-aware caps", () => {
@@ -145,14 +144,14 @@ describe("report page, rated report", () => {
     const scroll = vi.fn();
     Element.prototype.scrollIntoView = scroll;
     const sid = reported({ final: true, card: SCORED });
-    open(sid);
+    const { router } = open(sid);
     await screen.findByRole("list", { name: "Transcript" });
     await screen.findByRole("region", { name: "Behaviour counts" });
     const chip = within(row(/Complex Reflection/, "Behaviour counts")).getByRole("button", {
       name: /part of you still wants to get out there/,
     });
     await userEvent.click(chip);
-    expect(window.location.hash).toBe("#i=cr-1");
+    expect(router.state.location.hash).toBe("#i=cr-1");
     await waitFor(() => expect(scroll).toHaveBeenCalled());
     const mark = within(screen.getByRole("list", { name: "Transcript" })).getByText(/part of you still wants to get out there/);
     expect(mark.tagName).toBe("MARK");
@@ -161,11 +160,11 @@ describe("report page, rated report", () => {
 
   it("a tip quote highlights in the transcript", async () => {
     const sid = reported({ final: true, card: SCORED });
-    open(sid);
+    const { router } = open(sid);
     await screen.findByRole("list", { name: "Transcript" });
     const tips = within(await screen.findByRole("region", { name: "Tips" }));
     await userEvent.click(tips.getAllByRole("button", { name: /You'd like to walk more in the evenings\./ })[0]);
-    expect(window.location.hash).toMatch(/^#i=/);
+    expect(router.state.location.hash).toMatch(/^#i=/);
     await waitFor(() => expect(document.querySelector("mark.pulse")).not.toBeNull());
   });
 });
@@ -254,6 +253,19 @@ describe("report page, tolerance", () => {
     open(sid);
     await screen.findByRole("region", { name: "Scorecard" });
     expect(screen.getAllByText(/based on 3 runs/).length).toBeGreaterThan(0);
+  });
+
+  it("behaviour table shows the mean across runs, not run 1 (W28)", async () => {
+    const r = clone();
+    r.header.n_runs = 3;
+    const b = r.behaviours.find((x: { item_id: string }) => x.item_id === "cr")!;
+    b.onolys_count = { mean: 4, min: 2, max: 6, values: [2, 4, 6] };
+    serve(r);
+    const sid = reported({ final: true, card: SCORED });
+    open(sid);
+    const table = within(await screen.findByRole("region", { name: "Behaviour counts" }));
+    const cell = within(table.getByRole("row", { name: /Complex Reflection/ })).getByText("4");
+    expect(cell).toHaveAttribute("data-label", "Onolys");
   });
 
   it("hides empty tips and shows warnings as quiet notices", async () => {
