@@ -127,13 +127,20 @@ describe("failureAction", () => {
     "speakers_not_separated",
     "transcription_failed",
   ])("%s offers a new upload", (code) => {
-    expect(failureAction(code)).toBe("upload_new");
+    expect(failureAction(code, true)).toBe("upload_new");
   });
 
   it.each(["upstream_unavailable", "internal_error", "unknown", undefined])(
     "%s offers Run again",
     (code) => {
-      expect(failureAction(code)).toBe("run_again");
+      expect(failureAction(code, true)).toBe("run_again");
+    },
+  );
+
+  it.each(["upstream_unavailable", "internal_error", "unknown", undefined])(
+    "%s with no transcript offers a new upload (BH2)",
+    (code) => {
+      expect(failureAction(code, false)).toBe("upload_new");
     },
   );
 });

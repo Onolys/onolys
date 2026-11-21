@@ -70,7 +70,12 @@ const UPLOAD_NEW = new Set<string>([
   "transcription_failed",
 ]);
 
-export function failureAction(code: string | undefined): FailureAction {
+/**
+ * Without a ready transcript a re-run is always rejected (409), so the only way
+ * forward is a new upload; with one, bad-file codes still need a new upload.
+ */
+export function failureAction(code: string | undefined, transcriptReady: boolean): FailureAction {
+  if (!transcriptReady) return "upload_new";
   return code !== undefined && UPLOAD_NEW.has(code) ? "upload_new" : "run_again";
 }
 

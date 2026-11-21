@@ -245,6 +245,16 @@ describe("session page: error cards", () => {
     expect(within(card).queryByRole("link", { name: "Upload a different file" })).not.toBeInTheDocument();
   });
 
+  it.each(["internal_error", "upstream_unavailable"])("%s before a transcript offers a new upload, not Run again (BH2)", async (code) => {
+    const sid = create();
+    open(sid);
+    await ready();
+    act(() => mockEmitter.emit(sid, { ...failedDoc(sid, code), transcript_ready: false, speaker_confirmed: false, rating_submitted: false }));
+    const card = await screen.findByRole("alert");
+    expect(within(card).getByRole("link", { name: "Upload a different file" })).toBeInTheDocument();
+    expect(within(card).queryByRole("button", { name: "Run again" })).not.toBeInTheDocument();
+  });
+
   it("Run again starts a new run and the timeline moves on", async () => {
     const user = userEvent.setup();
     const sid = create("fail-paudit");

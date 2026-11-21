@@ -181,7 +181,7 @@ function SessionView({ id }: { id: string }) {
 
           {doc.state === "failed" ? (
             <ErrorCard code={failureCode} reference={id} resetsAt={resetsAt}>
-              {failureAction(failureCode) === "upload_new" ? (
+              {failureAction(failureCode, doc.transcript_ready) === "upload_new" ? (
                 <Link className="btn btn-primary" to={`/sessions/new?from=${encodeURIComponent(id)}`}>
                   Upload a different file
                 </Link>
