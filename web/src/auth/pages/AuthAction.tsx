@@ -13,12 +13,17 @@ import { useFormError } from "./useFormError";
  * and the page uses our own auth instance. The `apiKey` query param is ignored.
  */
 
+const DEFAULT_APP_HOSTS = ["app.onolys.com", "onolys-app.web.app", "onolys-app-staging.web.app"];
+
 /**
  * Hosts (besides this origin) a continue link may send the user back to: the Firebase auth domain plus any
- * comma-separated hostnames in `VITE_APP_HOSTS` (e.g. a sibling environment that shares the auth project).
+ * comma-separated hostnames in `VITE_APP_HOSTS` (default: the three Onolys app hosts when unset) (e.g. a sibling environment that shares the auth project).
  */
 export function appHosts(env: Record<string, string | undefined> = import.meta.env): Set<string> {
-  const list = [env.VITE_FIREBASE_AUTH_DOMAIN, ...(env.VITE_APP_HOSTS ?? "").split(",")];
+  const configured = (env.VITE_APP_HOSTS ?? "").split(",").map((h) => h.trim().toLowerCase()).filter(Boolean);
+  // Deploy workflows do not set VITE_APP_HOSTS, so fall back to the known app hosts.
+  const extra = configured.length > 0 ? configured : DEFAULT_APP_HOSTS;
+  const list = [env.VITE_FIREBASE_AUTH_DOMAIN, ...extra];
   return new Set(list.map((h) => (h ?? "").trim().toLowerCase()).filter(Boolean));
 }
 

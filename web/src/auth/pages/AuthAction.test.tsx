@@ -114,7 +114,7 @@ describe("resolveContinue", () => {
     expect(resolveContinue("/settings", o)).toEqual({ kind: "path", path: "/settings" });
   });
   it("allows only configured app hosts as external (FX34)", () => {
-    expect(resolveContinue("https://onolys-app-staging.web.app/verify-email", o)).toEqual({ kind: "path", path: "/" });
+    expect(resolveContinue("https://evil.example/verify-email", o)).toEqual({ kind: "path", path: "/" });
     expect(appHosts({ VITE_APP_HOSTS: " Staging.Example , other.example", VITE_FIREBASE_AUTH_DOMAIN: "auth.example" })).toEqual(
       new Set(["staging.example", "other.example", "auth.example"]),
     );
@@ -122,6 +122,13 @@ describe("resolveContinue", () => {
       kind: "external",
       href: "https://onolys-app-staging.web.app/verify-email",
     });
+  });
+  it("falls back to the default app hosts when VITE_APP_HOSTS is unset or empty (FX34 follow-up)", () => {
+    for (const v of [undefined, "", " , "]) {
+      const hosts = appHosts({ VITE_APP_HOSTS: v, VITE_FIREBASE_AUTH_DOMAIN: "auth.example" });
+      expect(hosts).toEqual(new Set(["auth.example", "app.onolys.com", "onolys-app.web.app", "onolys-app-staging.web.app"]));
+    }
+    expect(appHosts({ VITE_APP_HOSTS: "x.example" }).has("app.onolys.com")).toBe(false);
   });
   it("never redirects to other origins or odd schemes", () => {
     for (const bad of ["https://evil.example/x", "//evil.example", "javascript:alert(1)", "http://onolys-app.web.app/", "https://app.onolys.com@evil.example/", null, "http://[bad"]) {
