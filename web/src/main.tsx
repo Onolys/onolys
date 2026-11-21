@@ -4,6 +4,7 @@ import { App } from "./App";
 import { createFirestoreStatusListener } from "./api/firestoreListener";
 import { setStatusListener } from "./api/statusListener";
 import { createAuthService } from "./auth/createAuthService";
+import { renderBootError } from "./bootError";
 import "./styles/inter-latin.css";
 import "./styles/tokens.css";
 import "./styles/app.css";
@@ -28,9 +29,13 @@ void enableMocking()
   .then(registerStatusListener)
   .then(() => createAuthService())
   .then((authService) => {
-  createRoot(document.getElementById("root")!).render(
-    <StrictMode>
-      <App authService={authService} />
-    </StrictMode>,
-  );
-});
+    createRoot(document.getElementById("root")!).render(
+      <StrictMode>
+        <App authService={authService} />
+      </StrictMode>,
+    );
+  })
+  .catch((err: unknown) => {
+    console.error("Boot failed", err);
+    renderBootError(document.getElementById("root")!);
+  });
