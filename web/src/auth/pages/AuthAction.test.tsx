@@ -74,6 +74,39 @@ describe("/auth/action verifyEmail", () => {
   });
 });
 
+describe("/auth/action pre-check failures and already verified (FX17)", () => {
+  it("verifyEmail: a signed-in verified user sees Already verified + Continue, not invalid-link copy", async () => {
+    const service = createFakeAuthService();
+    service.signedInAs("a@clinic.org", { verified: true });
+    renderApp("/auth/action?mode=verifyEmail&oobCode=used", { service, user: { email: "a@clinic.org", verified: true } });
+    await h1("Already verified");
+    expect(screen.getByRole("button", { name: "Continue" })).toBeInTheDocument();
+    expect(screen.queryByText(/invalid/)).toBeNull();
+  });
+
+  it("resetPassword: a network failure of the pre-check shows the network message and Try again, then recovers", async () => {
+    const service = await svc();
+    const code = service.issueActionCode("resetPassword", "a@clinic.org");
+    const spy = vi.spyOn(service, "verifyPasswordResetCode").mockRejectedValueOnce({ code: "auth/network-request-failed" });
+    renderApp(`/auth/action?mode=resetPassword&oobCode=${code}`, { service });
+    expect(await screen.findByRole("alert")).toHaveTextContent("Can't reach the server");
+    expect(screen.queryByText(/Reset link expired/)).toBeNull();
+    await userEvent.setup().click(screen.getByRole("button", { name: "Try again" }));
+    await h1("Choose a new password");
+    expect(spy).toHaveBeenCalledTimes(2);
+  });
+
+  it("change email: a network failure of the pre-check shows the network message and Try again", async () => {
+    const service = await svc();
+    const code = service.issueActionCode("verifyAndChangeEmail", "a@clinic.org", { newEmail: "b@clinic.org" });
+    vi.spyOn(service, "checkEmailChangeCode").mockRejectedValueOnce({ code: "auth/network-request-failed" });
+    renderApp(`/auth/action?mode=verifyAndChangeEmail&oobCode=${code}`, { service });
+    expect(await screen.findByRole("alert")).toHaveTextContent("Can't reach the server");
+    await userEvent.setup().click(screen.getByRole("button", { name: "Try again" }));
+    await h1("Confirm your new email");
+  });
+});
+
 describe("resolveContinue", () => {
   const o = "https://app.onolys.com";
   it("allows same-origin paths", () => {

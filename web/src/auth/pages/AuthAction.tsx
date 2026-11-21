@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { Link, useLocation, useNavigate } from "react-router";
 import { useAuth } from "../AuthProvider";
-import { MIN_PASSWORD_LENGTH, errorCode } from "../errors";
+import { MIN_PASSWORD_LENGTH, errorCode, mapAuthError } from "../errors";
 import type { EmailChangeInfo, EmailChangeKind } from "../types";
 import { ErrorSummary } from "./parts";
 import { useFormError } from "./useFormError";
@@ -91,6 +91,18 @@ function VerifyEmailAction({ oobCode, continueUrl }: { oobCode: string; continue
     else void navigate(next.path);
   }
 
+  if (user?.emailVerified && !done) {
+    return (
+      <>
+        <h1>Already verified</h1>
+        <p role="status">Your email address is already verified.</p>
+        <button type="button" className="primary" onClick={carryOn}>
+          Continue
+        </button>
+      </>
+    );
+  }
+
   if (done) {
     return (
       <>
@@ -127,10 +139,25 @@ function VerifyEmailAction({ oobCode, continueUrl }: { oobCode: string; continue
   );
 }
 
+/** The pre-check failed for a reason other than an invalid/expired code (network, throttling): the link may still be fine. */
+function CheckFailed({ message, onRetry }: { message: string; onRetry: () => void }) {
+  return (
+    <>
+      <h1>Couldn't check your link</h1>
+      <p role="alert">{message}</p>
+      <button type="button" className="primary" onClick={onRetry}>
+        Try again
+      </button>
+    </>
+  );
+}
+
 function ResetPasswordAction({ oobCode }: { oobCode: string }) {
   const { service } = useAuth();
   const [email, setEmail] = useState<string | null>(null);
   const [invalid, setInvalid] = useState(false);
+  const [checkError, setCheckError] = useState<string | null>(null);
+  const [attempt, setAttempt] = useState(0);
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState(false);
   const form = useFormError();
@@ -140,12 +167,21 @@ function ResetPasswordAction({ oobCode }: { oobCode: string }) {
     let live = true;
     service.verifyPasswordResetCode(oobCode).then(
       (e) => live && setEmail(e),
-      () => live && setInvalid(true),
+      (err) => {
+        if (!live) return;
+        if (EXPIRED.has(errorCode(err) ?? "")) setInvalid(true);
+        else setCheckError(mapAuthError(errorCode(err)).message);
+      },
     );
     return () => {
       live = false;
     };
-  }, [service, oobCode]);
+  }, [service, oobCode, attempt]);
+
+  function retryCheck() {
+    setCheckError(null);
+    setAttempt((n) => n + 1);
+  }
 
   async function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -189,6 +225,7 @@ function ResetPasswordAction({ oobCode }: { oobCode: string }) {
       </>
     );
   }
+  if (checkError) return <CheckFailed message={checkError} onRetry={retryCheck} />;
   if (!email) return <h1>Checking your link…</h1>;
 
   return (
@@ -222,6 +259,8 @@ function EmailChangeAction({ mode, oobCode, continueUrl }: { mode: EmailChangeKi
   const navigate = useNavigate();
   const [info, setInfo] = useState<EmailChangeInfo | null>(null);
   const [invalid, setInvalid] = useState(false);
+  const [checkError, setCheckError] = useState<string | null>(null);
+  const [attempt, setAttempt] = useState(0);
   const [busy, setBusy] = useState(false);
   const [signedIn, setSignedIn] = useState<boolean | null>(null); // null until applied
   const [resetSent, setResetSent] = useState(false);
@@ -234,12 +273,21 @@ function EmailChangeAction({ mode, oobCode, continueUrl }: { mode: EmailChangeKi
     let live = true;
     service.checkEmailChangeCode(oobCode, mode).then(
       (i) => live && setInfo(i),
-      () => live && setInvalid(true),
+      (err) => {
+        if (!live) return;
+        if (EXPIRED.has(errorCode(err) ?? "")) setInvalid(true);
+        else setCheckError(mapAuthError(errorCode(err)).message);
+      },
     );
     return () => {
       live = false;
     };
-  }, [service, oobCode, mode]);
+  }, [service, oobCode, mode, attempt]);
+
+  function retryCheck() {
+    setCheckError(null);
+    setAttempt((n) => n + 1);
+  }
 
   async function apply() {
     form.clear();
@@ -282,6 +330,7 @@ function EmailChangeAction({ mode, oobCode, continueUrl }: { mode: EmailChangeKi
       </>
     );
   }
+  if (checkError) return <CheckFailed message={checkError} onRetry={retryCheck} />;
   if (!info) return <h1>Checking your link…</h1>;
 
   if (signedIn !== null) {
