@@ -145,6 +145,23 @@ jobs:
       git_sha: ${{ needs.build.outputs.sha }}
     secrets: inherit
 
+  deploy-voice:
+    needs: [build, deploy-api]
+    permissions:
+      contents: read
+      id-token: write
+    uses: ./.github/workflows/_deploy-cloudrun.yml
+    with:
+      env: staging
+      service: onolys-voice-staging
+      image: ${{ needs.build.outputs.image }}
+      region: us-central1
+      git_sha: ${{ needs.build.outputs.sha }}
+      # Same image as the api; the mode comes from SERVICE_MODE (also set by Terraform on the service).
+      env_vars: |-
+        SERVICE_MODE=voice
+    secrets: inherit
+
   rules:
     needs: build
     runs-on: ubuntu-latest
@@ -205,7 +222,7 @@ jobs:
         run: npx --yes firebase-tools@${{ env.FIREBASE_TOOLS_VERSION }} deploy --config web/firebase.json --only hosting:app-staging --project "$PROJECT" --non-interactive
 
   smoke:
-    needs: [build, deploy-api, deploy-worker, rules, web]
+    needs: [build, deploy-api, deploy-worker, deploy-voice, rules, web]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
