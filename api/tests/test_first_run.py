@@ -291,6 +291,41 @@ def test_exempt_release_frees_the_slot_but_never_refunds(repo):
     assert user_counters(repo, uid, date) == (0, 1)
 
 
+def _counted_run(repo, uid, queue):
+    sid = _ready(repo, uid)
+    maybe_start_first_run(repo, queue, uid, sid, mk_settings())
+    (run,) = repo.list_runs(uid, sid)
+    assert run.counted and not run.released
+    return sid, run
+
+
+def test_release_persists_the_flag_and_releases_exactly_once(repo):
+    from onolys_api.jobs.run import release_once
+
+    uid, queue = "ur" + uuid.uuid4().hex[:6], RecordingQueue()
+    date = caps.utc_date()
+    sid, run = _counted_run(repo, uid, queue)
+    _counted_run(repo, uid, queue)  # a second run: a stray second release would eat its slot
+    assert user_counters(repo, uid, date) == (2, 2)
+    release_once(repo, uid, sid, run.run_id, True, date)
+    assert repo.get_run(uid, sid, run.run_id).released is True
+    assert user_counters(repo, uid, date) == (1, 1)
+    release_once(repo, uid, sid, run.run_id, True, date)
+    assert user_counters(repo, uid, date) == (1, 1)
+
+
+def test_concurrent_release_hands_the_slot_back_once(repo):
+    from onolys_api.jobs.run import release_once
+
+    uid, queue = "uc" + uuid.uuid4().hex[:6], RecordingQueue()
+    date = caps.utc_date()
+    sid, run = _counted_run(repo, uid, queue)
+    _counted_run(repo, uid, queue)
+    with ThreadPoolExecutor(6) as pool:
+        list(pool.map(lambda _: release_once(repo, uid, sid, run.run_id, True, date), range(6)))
+    assert user_counters(repo, uid, date) == (1, 1)
+
+
 def test_later_post_runs_style_start_counts_one_after_a_free_first_run(repo):
     from onolys_api.repo.limits import LimitDefaults
 

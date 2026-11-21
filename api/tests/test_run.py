@@ -352,6 +352,25 @@ async def test_retryable_failure_on_last_attempt_fails_and_releases_once(env):
     assert env.counters()[0] == 0
 
 
+async def test_retry_after_a_spent_llm_call_never_refunds(env):
+    """Attempt 1 calls the evaluation and fails retryably; attempt 2 then dies before calling it.
+    The unit was spent on attempt 1, so the final release must not refund it (A20)."""
+
+    class SpendThenBreak(FakeEvaluation):
+        async def run(self, *a, **kw):
+            env.repo.update_session(env.uid, sid, {"clinician_speaker": None})
+            raise AdapterError("upstream_unavailable")
+
+    swap_eval(env, SpendThenBreak())
+    sid = await env.start()
+    env.drain()
+    s = env.repo.get_session(env.uid, sid)
+    assert s.state == "failed" and s.error.code == "internal_error"
+    (run,) = env.repo.list_runs(env.uid, sid)
+    assert run.llm_started is True and run.released is True
+    assert env.counters() == (0, 1)
+
+
 async def test_redelivered_run_task_is_a_noop(env):
     sid = await env.finished()
     (run,) = env.repo.list_runs(env.uid, sid)

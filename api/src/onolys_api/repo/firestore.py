@@ -608,6 +608,43 @@ class FirestoreRepo:
 
         self._contended(txn_fn, uid)
 
+    def release_run_slot(
+        self, uid: str, sid: str, run_id: str, refund: bool, date: str | None
+    ) -> bool:
+        run_ref = self._run_ref(uid, sid, run_id)
+        user_ref = self._top("users", uid)
+
+        @firestore.transactional
+        def txn_fn(txn) -> bool:
+            run_snap = run_ref.get(transaction=txn)
+            if not run_snap.exists:
+                raise NotFoundError()
+            run = run_snap.to_dict() or {}
+            if run.get("released"):
+                return False
+            day_key = run.get("cap_date") or date
+            user = user_ref.get(transaction=txn).to_dict() or {}
+            day_ref = self._top("usage", f"{uid}_{day_key}") if day_key else None
+            month_ref = self._top("usage", f"{uid}_{day_key[:7]}") if day_key else None
+            day = (day_ref.get(transaction=txn).to_dict() or {}) if day_ref else {}
+            month = (month_ref.get(transaction=txn).to_dict() or {}) if month_ref else {}
+            txn.update(run_ref, {"released": True})
+            if day_key:
+                if user.get("active_runs", 0) > 0:
+                    txn.set(user_ref, {"active_runs": user["active_runs"] - 1}, merge=True)
+                if refund and run.get("counted", True):
+                    field = KIND_FIELD["eval"]
+                    if day.get(field, 0) > 0:
+                        txn.set(day_ref, {field: day[field] - 1}, merge=True)
+                    if month.get(field, 0) > 0:
+                        txn.set(month_ref, {field: month[field] - 1}, merge=True)
+            return True
+
+        try:
+            return self._contended(txn_fn, uid)
+        except GoogleNotFound:  # the run's session was deleted under it
+            raise NotFoundError() from None
+
     def get_usage_docs(self, uid: str, date: str) -> tuple[UsageDoc, UsageMonthDoc]:
         day = self._top("usage", f"{uid}_{date}").get()
         month = self._top("usage", f"{uid}_{date[:7]}").get()

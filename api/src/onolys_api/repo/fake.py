@@ -70,7 +70,7 @@ class FakeRepo:
         self._blobs = blobs
         self._docs: dict[str, dict[str, Any]] = {}  # full path -> stored dict
         self.status_writes: list[tuple[str, str, dict[str, Any]]] = []
-        self._claim_lock = threading.Lock()
+        self._claim_lock = threading.RLock()  # reentrant: release_run_slot calls release_usage
 
     # ---- storage primitives ----
 
@@ -509,6 +509,23 @@ class FakeRepo:
                     doc = self._get(path)
                     if doc and doc.get(field, 0) > 0:
                         self._put(path, {**doc, field: doc[field] - 1})
+
+    def release_run_slot(
+        self, uid: str, sid: str, run_id: str, refund: bool, date: str | None
+    ) -> bool:
+        with self._claim_lock:  # the fake's "transaction"
+            self._own(uid, sid)
+            path = f"sessions/{sid}/runs/{run_id}"
+            d = self._get(path)
+            if d is None:
+                raise NotFoundError()
+            if d.get("released"):
+                return False
+            self._put(path, {**d, "released": True})
+            date = d.get("cap_date") or date
+            if date:
+                self.release_usage(uid, "eval", date, refund and d.get("counted", True))
+            return True
 
     def get_usage_docs(self, uid: str, date: str) -> tuple[UsageDoc, UsageMonthDoc]:
         day = self._get(f"usage/{uid}_{date}")

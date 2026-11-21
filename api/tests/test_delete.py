@@ -228,13 +228,15 @@ async def test_stuck_cleanup_survives_both_attempts_failing_without_leaking_slot
 
 def count_releases(env: Env) -> list:
     calls: list = []
-    orig = env.repo.release_usage
+    orig = env.repo.release_run_slot
 
-    def release_usage(uid, kind, date, refund):
-        calls.append(refund)
-        orig(uid, kind, date, refund)
+    def release_run_slot(uid, sid, run_id, refund, date):
+        released = orig(uid, sid, run_id, refund, date)
+        if released:  # only a real release counts: a repeat is a no-op
+            calls.append(refund)
+        return released
 
-    env.repo.release_usage = release_usage
+    env.repo.release_run_slot = release_run_slot
     return calls
 
 

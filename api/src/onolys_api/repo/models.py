@@ -186,6 +186,7 @@ class RunDoc(Doc):
     cap_date: str | None = None  # UTC day the cap slot was reserved on (R8)
     counted: bool = True  # False: run did not consume an eval slot (exempt first run, SP11 R5)
     released: bool = False  # the cap slot was handed back: guards double release
+    llm_started: bool = False  # the evaluation was called on some attempt: a unit is spent
 
 
 class ReportDoc(Doc):

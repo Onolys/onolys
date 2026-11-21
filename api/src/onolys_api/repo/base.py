@@ -162,6 +162,13 @@ class Repo(Protocol):
     # Decrements `active_runs` (eval only, floor 0); with `refund` also the day and month
     # counters of the doc keys given by `date` (floor 0). One transaction.
     def release_usage(self, uid: str, kind: Kind, date: str, refund: bool) -> None: ...
+    # ONE transaction: if run `run_id` is not yet `released`, set `released=True` and hand its eval
+    # slot back (`active_runs`-1; with `refund and run.counted` also the day/month counters of
+    # `run.cap_date or date`; nothing is handed back when both dates are None). Returns False when
+    # it was already released (nothing written). NotFoundError when the run is gone.
+    def release_run_slot(
+        self, uid: str, sid: str, run_id: str, refund: bool, date: str | None
+    ) -> bool: ...
     # `(day, month)` usage docs for `date` (zero-valued when absent).
     def get_usage_docs(self, uid: str, date: str) -> tuple[UsageDoc, UsageMonthDoc]: ...
     # R4 first run, ONE transaction: reads session + status + user + usage + latest rating; if
