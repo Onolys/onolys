@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field
 from onolys_api.auth.deps import AuthUser, current_user
 from onolys_api.errors import ApiError, ErrorResponse
 from onolys_api.jobs.caps import release, reserve
+from onolys_api.jobs.interview_sweep import enqueue_sweep
 from onolys_api.jobs.interviews import abandon_open_interviews, settle_interview
 from onolys_api.repo.models import InterviewDoc, InterviewState
 from onolys_api.routes.scenarios import ScenarioPublic
@@ -87,6 +88,8 @@ def create_interview(
     reservation = reserve(repo, settings, uid, "interview", now)  # 429 passes through
     iid = uuid4().hex
     try:
+        # before the doc: a failed enqueue refunds and fails the create (no unswept interview)
+        enqueue_sweep(getattr(state, "queue", None), settings, uid, iid)
         repo.create_interview(
             uid, iid,
             InterviewDoc(

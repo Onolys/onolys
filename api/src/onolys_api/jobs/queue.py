@@ -1,8 +1,9 @@
 """Task queue (R5): Cloud Tasks in the cloud, an in-memory queue for SERVICE_MODE=combined.
 
 Task names make enqueue idempotent inside Cloud Tasks' dedup window: `{sid}-validate`,
-`{sid}-transcribe`, `{sid}-poll-{n}`, `{run_id}-run`, `{sid}-delete`. The payload carries the
-request id (never any text). `enqueue` is sync: routes and handlers run in threadpool workers.
+`{sid}-transcribe`, `{sid}-poll-{n}`, `{run_id}-run`, `{sid}-delete`, `{sid}-interview-sweep`
+(`sid` holds the interview id there). The payload carries the request id (never any text).
+`enqueue` is sync: routes and handlers run in threadpool workers.
 """
 
 import threading
@@ -15,8 +16,15 @@ from pydantic import BaseModel
 from onolys_api import logs
 from onolys_api.config import Settings
 
-TaskKind = Literal["validate", "transcribe", "transcribe-poll", "run", "delete"]
-KINDS: tuple[str, ...] = ("validate", "transcribe", "transcribe-poll", "run", "delete")
+TaskKind = Literal["validate", "transcribe", "transcribe-poll", "run", "delete", "interview-sweep"]
+KINDS: tuple[str, ...] = (
+    "validate",
+    "transcribe",
+    "transcribe-poll",
+    "run",
+    "delete",
+    "interview-sweep",
+)
 MAX_ATTEMPTS = 2  # the Cloud Tasks queue's max_attempts: the one automatic retry (D3)
 DISPATCH_DEADLINE_S = 600
 

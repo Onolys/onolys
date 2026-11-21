@@ -27,6 +27,7 @@ from onolys_api.docs import DESCRIPTION, add_error_responses, make_docs_router
 from onolys_api.errors import ApiError, ErrorDetail, ErrorResponse, error_body
 from onolys_api.factory import build_blobs, build_repo
 from onolys_api.jobs.delete import make_delete_handler
+from onolys_api.jobs.interview_sweep import make_interview_sweep_handler
 from onolys_api.jobs.queue import build_queue
 from onolys_api.jobs.run import make_run_handler
 from onolys_api.jobs.transcribe import make_poll_handler, make_transcribe_handler
@@ -291,6 +292,12 @@ def create_app(
         )
         app.state.runner.register(
             "delete", HandlerSpec(make_delete_handler(app.state.blobs), claim=False)
+        )
+        app.state.runner.register(
+            "interview-sweep",
+            HandlerSpec(
+                make_interview_sweep_handler(settings, lambda: app.state.clock()), claim=False
+            ),
         )
         if settings.env not in LOCAL_ENVS:
             if settings.worker_url and settings.tasks_sa:
