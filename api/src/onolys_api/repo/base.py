@@ -52,6 +52,7 @@ class Page[T]:
 
 
 StartOutcome = Literal["started", "not_ready", "already", "daily_cap", "month_cap", "concurrent"]
+InterviewLinkOutcome = Literal["linked", "not_ended", "already_linked"]
 ClaimOutcome = Literal["claimed", "done", "failed", "busy"]
 
 
@@ -84,6 +85,13 @@ class Repo(Protocol):
     def create_session(
         self, uid: str, sid: str, session: SessionDoc, status: SessionStatusDoc
     ) -> None: ...
+    # AI interview link (SP10 R6), ONE transaction: the interview must be the caller's (else
+    # NotFoundError), `ended` ("not_ended" otherwise) and unlinked ("already_linked" otherwise).
+    # Then it writes the session, its status, the `ratings/draft` doc and `interview.session_id`.
+    def create_session_for_interview(
+        self, uid: str, iid: str, sid: str, session: SessionDoc, status: SessionStatusDoc,
+        draft: RatingDraftDoc,
+    ) -> InterviewLinkOutcome: ...  # fmt: skip
     def get_session(self, uid: str, sid: str) -> SessionDoc: ...
     def get_status(self, uid: str, sid: str) -> SessionStatusDoc: ...
     def update_session(

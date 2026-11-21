@@ -240,6 +240,7 @@ class InterviewDoc(Doc):
     reservation_date: str
     duration_s: float | None = None
     ended_at: datetime | None = None
+    session_id: str | None = None  # set once, with the session, by `create_session_for_interview`
     # written by the voice relay only; never in any response
     resumption_handle: str | None = None
     disconnected_at: datetime | None = None

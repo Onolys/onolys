@@ -78,7 +78,8 @@
               "daily_cap_reached",
               "monthly_cap_reached",
               "interview_cap_reached",
-              "conflict"
+              "conflict",
+              "interview_too_long"
             ]
           },
           "message": {

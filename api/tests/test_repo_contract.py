@@ -828,3 +828,30 @@ def test_interview_transition_settles_once_and_guards_owner(repo):
         repo.transition_interview(bob, i1, ("uploaded",), "ended")
     with pytest.raises(NotFoundError):
         repo.update_interview(bob, i1, {"duration_s": 1.0})
+
+
+def test_create_session_for_interview_links_atomically_once(repo):
+    alice, bob = (f"{n}-{uuid.uuid4().hex[:8]}" for n in ("alice", "bob"))
+    iid, sid, sid2, early = (uuid.uuid4().hex for _ in range(4))
+    repo.create_interview(alice, iid, _iv(alice, state="ended"))
+    repo.create_interview(alice, early, _iv(alice, state="live"))
+
+    def link(uid, interview, session_id):
+        return repo.create_session_for_interview(
+            uid, interview, session_id,
+            SessionDoc(uid=uid, interview_id=interview), SessionStatusDoc(uid=uid),
+            RatingDraftDoc(card={"change_goal": "g"}),
+        )  # fmt: skip
+
+    with pytest.raises(NotFoundError):
+        link(bob, iid, sid)  # foreign interview
+    assert link(alice, early, sid) == "not_ended"
+    with pytest.raises(NotFoundError):
+        repo.get_session(alice, sid)  # nothing was written
+    assert link(alice, iid, sid) == "linked"
+    assert repo.get_interview(alice, iid).session_id == sid
+    assert repo.get_session(alice, sid).interview_id == iid
+    assert repo.get_rating_draft(alice, sid).card == {"change_goal": "g"}
+    assert link(alice, iid, sid2) == "already_linked"
+    with pytest.raises(NotFoundError):
+        repo.get_session(alice, sid2)

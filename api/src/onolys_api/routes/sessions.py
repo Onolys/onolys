@@ -19,7 +19,13 @@ from onolys_api.jobs.queue import TaskPayload
 from onolys_api.jobs.stale import settle_if_stale
 from onolys_api.presets import UnknownPreset
 from onolys_api.repo.base import NotFoundError
-from onolys_api.repo.models import IdempotencyDoc, SessionDoc, SessionState, SessionStatusDoc
+from onolys_api.repo.models import (
+    IdempotencyDoc,
+    RatingDraftDoc,
+    SessionDoc,
+    SessionState,
+    SessionStatusDoc,
+)
 
 IDEMPOTENCY_TTL = timedelta(hours=24)
 MAX_KEY_LEN = 200
@@ -35,6 +41,15 @@ class CreateSessionRequest(BaseModel):
     n_runs: int = Field(1, ge=1, le=5)
     preset: str | None = Field(None, max_length=64, description="Allowlisted preset name")
     title: str | None = Field(None, max_length=200)
+    interview_id: str | None = Field(
+        None,
+        min_length=1,
+        max_length=100,
+        description=(
+            "An `ended`, not yet linked AI interview of the caller: the session takes its "
+            "scenario language and title (unless `title` is set) and a prefilled rating draft"
+        ),
+    )
 
     @field_validator("language")
     @classmethod
@@ -111,6 +126,38 @@ def _replay(doc: IdempotencyDoc, body_hash: str, response: Response) -> CreateSe
     return CreateSessionResponse.model_validate(doc.response)
 
 
+def _interview_scenario(request: Request, uid: str, iid: str) -> dict:
+    interview = request.app.state.repo.get_interview(uid, iid)  # NotFoundError -> 404
+    scenario = request.app.state.scenarios.get(interview.scenario_id)
+    if scenario is None:
+        raise ApiError.of(422, "invalid_parameters", "interview_id: its scenario is gone")
+    return scenario
+
+
+def _create_for_interview(
+    request: Request,
+    body: CreateSessionRequest,
+    uid: str,
+    sid: str,
+    session: SessionDoc,
+    status: SessionStatusDoc,
+    now: datetime,
+) -> None:
+    """Write the session, its link and the prefilled rating draft in one repo transaction."""
+    assert body.interview_id is not None
+    repo = request.app.state.repo
+    scenario = _interview_scenario(request, uid, body.interview_id)
+    session.interview_id = body.interview_id
+    session.language = scenario["language"]
+    session.title = body.title or scenario["public"]["title"]
+    draft = RatingDraftDoc(card={"change_goal": scenario["change_goal"]}, updated_at=now)
+    outcome = repo.create_session_for_interview(uid, body.interview_id, sid, session, status, draft)
+    if outcome == "not_ended":
+        raise ApiError.of(409, "invalid_state", "The interview has not ended yet.")
+    if outcome == "already_linked":
+        raise ApiError.of(409, "conflict", "The interview already has a session.")
+
+
 @router.post(
     "",
     operation_id="createSession",
@@ -120,7 +167,10 @@ def _replay(doc: IdempotencyDoc, body_hash: str, response: Response) -> CreateSe
     description=(
         "Writes the session and its PHI-free `session_status` document before returning. "
         "`Idempotency-Key` replays the original response for 24 h; the same key with a different "
-        "body is 409 `conflict`."
+        "body is 409 `conflict`. With `interview_id` the interview must be the caller's (404 "
+        "otherwise), `ended` (else 409 `invalid_state`) and not linked to a session yet (else 409 "
+        "`conflict`); the link and the session are written atomically, `language` comes from the "
+        "scenario and `ratings/draft` is prefilled with its `change_goal`."
     ),
 )
 def create_session(
@@ -150,27 +200,33 @@ def create_session(
         if prior is not None:
             repo.delete_idempotency(uid, idempotency_key)  # expired
 
+    language = body.language
+    if body.interview_id is not None:
+        # 404 for a foreign or missing interview (never reveals another user's id); its scenario
+        # decides the language, and a scenario removed since is not a usable source
+        scenario = _interview_scenario(request, uid, body.interview_id)
+        language = scenario["language"]
     try:
-        preset, stt = request.app.state.presets.resolve(body.preset, body.language)
+        preset, stt = request.app.state.presets.resolve(body.preset, language)
     except UnknownPreset:
         raise ApiError.of(422, "invalid_parameters", "preset: unknown preset") from None
 
     sid = uuid4().hex
-    repo.create_session(
-        uid,
-        sid,
-        SessionDoc(
-            uid=uid,
-            title=body.title,
-            language=body.language,
-            stt=stt,
-            n_runs=body.n_runs,
-            preset=preset,
-            created_at=now,
-            updated_at=now,
-        ),
-        SessionStatusDoc(uid=uid, updated_at=now),
+    session = SessionDoc(
+        uid=uid,
+        title=body.title,
+        language=body.language,
+        stt=stt,
+        n_runs=body.n_runs,
+        preset=preset,
+        created_at=now,
+        updated_at=now,
     )
+    status = SessionStatusDoc(uid=uid, updated_at=now)
+    if body.interview_id is None:
+        repo.create_session(uid, sid, session, status)
+    else:
+        _create_for_interview(request, body, uid, sid, session, status, now)
     result = CreateSessionResponse(session=SessionRef(id=sid, status="created"))
 
     if idempotency_key:
@@ -180,6 +236,8 @@ def create_session(
         if not repo.put_idempotency(uid, idempotency_key, stored):
             # lost a race with the same key: drop our session, answer with the winner's
             repo.delete_session(uid, sid)
+            if body.interview_id is not None:  # give the interview back: this call linked nothing
+                repo.update_interview(uid, body.interview_id, {"session_id": None})
             winner = repo.get_idempotency(uid, idempotency_key)
             if winner is not None:
                 return _replay(winner, body_hash, response)

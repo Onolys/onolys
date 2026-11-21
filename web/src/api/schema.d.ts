@@ -143,7 +143,7 @@ export interface paths {
         put?: never;
         /**
          * Create a session
-         * @description Writes the session and its PHI-free `session_status` document before returning. `Idempotency-Key` replays the original response for 24 h; the same key with a different body is 409 `conflict`.
+         * @description Writes the session and its PHI-free `session_status` document before returning. `Idempotency-Key` replays the original response for 24 h; the same key with a different body is 409 `conflict`. With `interview_id` the interview must be the caller's (404 otherwise), `ended` (else 409 `invalid_state`) and not linked to a session yet (else 409 `conflict`); the link and the session are written atomically, `language` comes from the scenario and `ratings/draft` is prefilled with its `change_goal`.
          */
         post: operations["createSession"];
         delete?: never;
@@ -475,6 +475,11 @@ export interface components {
         /** CreateSessionRequest */
         CreateSessionRequest: {
             /**
+             * Interview Id
+             * @description An `ended`, not yet linked AI interview of the caller: the session takes its scenario language and title (unless `title` is set) and a prefilled rating draft
+             */
+            interview_id?: string | null;
+            /**
              * Language
              * @description BCP-47 tag or `auto`
              * @default auto
@@ -524,7 +529,7 @@ export interface components {
              * Code
              * @enum {string}
              */
-            code: "invalid_json" | "unsupported_media_type" | "schema_violation" | "empty_transcript" | "empty_assessment" | "duplicate_ids" | "invalid_parameters" | "body_too_large" | "too_many_turns" | "too_many_sections" | "rate_limited" | "not_found" | "method_not_allowed" | "cors_rejected" | "request_rejected" | "upstream_unavailable" | "deadline_exceeded" | "internal_error" | "missing_parameter" | "unknown_pack" | "input_rejected" | "run_failed" | "unauthenticated" | "forbidden" | "invalid_state" | "unsupported_audio" | "audio_too_long" | "audio_too_large" | "audio_unreadable" | "no_speech" | "speakers_not_separated" | "transcription_failed" | "rating_invalid" | "daily_cap_reached" | "monthly_cap_reached" | "interview_cap_reached" | "conflict";
+            code: "invalid_json" | "unsupported_media_type" | "schema_violation" | "empty_transcript" | "empty_assessment" | "duplicate_ids" | "invalid_parameters" | "body_too_large" | "too_many_turns" | "too_many_sections" | "rate_limited" | "not_found" | "method_not_allowed" | "cors_rejected" | "request_rejected" | "upstream_unavailable" | "deadline_exceeded" | "internal_error" | "missing_parameter" | "unknown_pack" | "input_rejected" | "run_failed" | "unauthenticated" | "forbidden" | "invalid_state" | "unsupported_audio" | "audio_too_long" | "audio_too_large" | "audio_unreadable" | "no_speech" | "speakers_not_separated" | "transcription_failed" | "rating_invalid" | "daily_cap_reached" | "monthly_cap_reached" | "interview_cap_reached" | "conflict" | "interview_too_long";
             /**
              * Field
              * @description `/`-joined path of the offending field in the rating card (e.g. `globals/cct/reason`); `$` is the whole card. Set on `rating_invalid`. A path only, never user text.

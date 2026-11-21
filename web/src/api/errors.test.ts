@@ -120,6 +120,7 @@ describe("failureAction", () => {
   it.each([
     "unsupported_audio",
     "audio_too_long",
+    "interview_too_long",
     "audio_too_large",
     "audio_unreadable",
     "no_speech",

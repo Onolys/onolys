@@ -47,6 +47,7 @@ ERROR_CODES = (
     "monthly_cap_reached",
     "interview_cap_reached",
     "conflict",
+    "interview_too_long",
 )
 ErrorCode = Literal[ERROR_CODES]  # type: ignore[valid-type]
 

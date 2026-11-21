@@ -50,7 +50,7 @@ const RUN_SUBLABELS: Record<string, string> = {
   assemble: "Building the report",
 };
 
-const VALIDATE_CODES = new Set(["unsupported_audio", "audio_too_long", "audio_too_large", "audio_unreadable"]);
+const VALIDATE_CODES = new Set(["unsupported_audio", "audio_too_long", "interview_too_long", "audio_too_large", "audio_unreadable"]);
 const TRANSCRIBE_CODES = new Set(["no_speech", "speakers_not_separated", "transcription_failed"]);
 
 /** Which step a `failed` session stopped at, from the error code and what had finished. */

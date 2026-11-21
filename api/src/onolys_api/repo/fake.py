@@ -11,6 +11,7 @@ from onolys_api.repo import large
 from onolys_api.repo.base import (
     Claim,
     ConflictError,
+    InterviewLinkOutcome,
     NotFoundError,
     Page,
     StartOutcome,
@@ -160,6 +161,27 @@ class FakeRepo:
         self._put(f"sessions/{sid}", session.to_store())
         self._put(f"session_status/{sid}", status.to_store())
         self._record_status(uid, sid)
+
+    def create_session_for_interview(
+        self, uid: str, iid: str, sid: str, session: SessionDoc, status: SessionStatusDoc,
+        draft: RatingDraftDoc,
+    ) -> InterviewLinkOutcome:  # fmt: skip
+        if session.uid != uid or status.uid != uid:
+            raise ValueError("document uid does not match the caller")
+        with self._claim_lock:  # the fake's "transaction"
+            iv = self._owned(f"interviews/{iid}", uid)
+            if iv.get("state") != "ended":
+                return "not_ended"
+            if iv.get("session_id"):
+                return "already_linked"
+            if f"sessions/{sid}" in self._docs or f"session_status/{sid}" in self._docs:
+                raise ConflictError()
+            self._put(f"sessions/{sid}", session.to_store())
+            self._put(f"session_status/{sid}", status.to_store())
+            self._put(f"sessions/{sid}/ratings/{DRAFT_ID}", draft.to_store())
+            self._put(f"interviews/{iid}", {**iv, "session_id": sid})
+            self._record_status(uid, sid)
+            return "linked"
 
     def get_session(self, uid: str, sid: str) -> SessionDoc:
         return self._load(SessionDoc, sid, self._owned(f"sessions/{sid}", uid))

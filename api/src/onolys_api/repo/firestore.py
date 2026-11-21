@@ -26,6 +26,7 @@ from onolys_api.repo import large
 from onolys_api.repo.base import (
     Claim,
     ConflictError,
+    InterviewLinkOutcome,
     NotFoundError,
     Page,
     StartOutcome,
@@ -196,6 +197,37 @@ class FirestoreRepo:
             batch.commit()
         except AlreadyExists:
             raise ConflictError() from None
+
+    def create_session_for_interview(
+        self, uid: str, iid: str, sid: str, session: SessionDoc, status: SessionStatusDoc,
+        draft: RatingDraftDoc,
+    ) -> InterviewLinkOutcome:  # fmt: skip
+        if session.uid != uid or status.uid != uid:
+            raise ValueError("document uid does not match the caller")
+        iref = self._top("interviews", iid)
+        _owned(iref, uid)  # 404 for a foreign or missing interview
+        sref, stref = self._top("sessions", sid), self._top("session_status", sid)
+        dref = sref.collection("ratings").document(DRAFT_ID)
+
+        @firestore.transactional
+        def txn_fn(txn) -> InterviewLinkOutcome:
+            snap = iref.get(transaction=txn)
+            data = snap.to_dict() or {}
+            if not snap.exists or data.get("uid") != uid:
+                raise NotFoundError()
+            if data.get("state") != "ended":
+                return "not_ended"
+            if data.get("session_id"):
+                return "already_linked"
+            if sref.get(transaction=txn).exists or stref.get(transaction=txn).exists:
+                raise ConflictError()
+            txn.create(sref, session.to_store())
+            txn.create(stref, status.to_store())
+            txn.set(dref, draft.to_store())
+            txn.update(iref, {"session_id": sid})
+            return "linked"
+
+        return self._contended(txn_fn)
 
     def get_session(self, uid: str, sid: str) -> SessionDoc:
         return _load(SessionDoc, self._owned_session(uid, sid)[1])

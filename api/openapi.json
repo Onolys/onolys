@@ -239,6 +239,20 @@
       },
       "CreateSessionRequest": {
         "properties": {
+          "interview_id": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "An `ended`, not yet linked AI interview of the caller: the session takes its scenario language and title (unless `title` is set) and a prefilled rating draft",
+            "title": "Interview Id"
+          },
           "language": {
             "default": "auto",
             "description": "BCP-47 tag or `auto`",
@@ -365,7 +379,8 @@
               "daily_cap_reached",
               "monthly_cap_reached",
               "interview_cap_reached",
-              "conflict"
+              "conflict",
+              "interview_too_long"
             ],
             "title": "Code",
             "type": "string"
@@ -2317,7 +2332,7 @@
         ]
       },
       "post": {
-        "description": "Writes the session and its PHI-free `session_status` document before returning. `Idempotency-Key` replays the original response for 24 h; the same key with a different body is 409 `conflict`.",
+        "description": "Writes the session and its PHI-free `session_status` document before returning. `Idempotency-Key` replays the original response for 24 h; the same key with a different body is 409 `conflict`. With `interview_id` the interview must be the caller's (404 otherwise), `ended` (else 409 `invalid_state`) and not linked to a session yet (else 409 `conflict`); the link and the session are written atomically, `language` comes from the scenario and `ratings/draft` is prefilled with its `change_goal`.",
         "operationId": "createSession",
         "parameters": [
           {

@@ -36,6 +36,7 @@ def test_schema_enum_matches_codes_and_is_superset_of_eaudit(schema):
         "monthly_cap_reached",
         "interview_cap_reached",
         "conflict",
+        "interview_too_long",
     ):
         assert new in enum
     assert schema["properties"]["schema_version"] == {"const": "0.0.1"}

@@ -27,6 +27,8 @@ const MESSAGES = {
   unauthenticated: "Your sign-in has expired. Please sign in again.",
   forbidden: "You don't have access to do that.",
   not_found: "We couldn't find that. It may have been deleted.",
+  interview_too_long:
+    "This interview recording is longer than allowed. Start a new practice interview.",
   conflict: "That request clashes with an earlier one. Refresh and try again.",
   internal_error: GENERIC_MESSAGE,
 } as const satisfies Record<string, string>;
@@ -60,6 +62,7 @@ export type FailureAction = "upload_new" | "run_again";
 const UPLOAD_NEW = new Set<string>([
   "unsupported_audio",
   "audio_too_long",
+  "interview_too_long",
   "audio_too_large",
   "audio_unreadable",
   "no_speech",

@@ -27,6 +27,7 @@ from onolys_api.audio import (
     sniff,
     staging_key,
 )
+from onolys_api.config import Settings
 from onolys_api.jobs.alive import ensure_alive as _ensure_alive
 from onolys_api.jobs.machine import advance
 from onolys_api.jobs.queue import TaskPayload
@@ -35,6 +36,7 @@ from onolys_api.repo.models import RecordingDoc
 from onolys_api.storage.base import MAX_UPLOAD_BYTES, BlobNotFoundError, BlobStore
 
 SHORT_WARNING = "short_recording"
+SHORT_INTERVIEW_WARNING = "short_interview"  # replaces `short_recording` for AI interviews
 
 
 def _sha256(path: Path) -> str:
@@ -49,8 +51,13 @@ def make_validate_handler(
     blobs: BlobStore,
     tools: AudioTools,
     max_audio_s: Callable[[str | None, str | None], float] | None = None,
+    settings: Settings | None = None,
 ) -> Handler:
-    """`max_audio_s(provider, model)` gives the longest accepted audio for the session's STT."""
+    """`max_audio_s(provider, model)` gives the longest accepted audio for the session's STT.
+    `settings` carries the AI interview bounds (`AI_MAX_SECONDS` + `AI_TOLERANCE_SECONDS`
+    longest, `AI_MIN_SECONDS` shortest before a warning) used when the session has `interview_id`.
+    """
+    cfg = settings or Settings()
 
     def purge(uid: str, sid: str) -> None:
         blobs.delete_prefix(f"uploads/{uid}/{sid}/")
@@ -75,9 +82,11 @@ def make_validate_handler(
                 return key, True
         return None
 
-    def check_duration(ctx: TaskContext, seconds: float, limit: float) -> None:
+    def check_duration(
+        ctx: TaskContext, seconds: float, limit: float, too_long: str = "audio_too_long"
+    ) -> None:
         if seconds > limit:
-            raise fail(ctx, "audio_too_long")
+            raise fail(ctx, too_long)
         if seconds < MIN_DURATION_S:
             raise fail(ctx, "audio_unreadable")
 
@@ -92,6 +101,12 @@ def make_validate_handler(
         limit = (
             max_audio_s(stt.provider, stt.model) if max_audio_s and stt else DEFAULT_MAX_DURATION_S
         )
+
+        too_long = "audio_too_long"
+        if session.interview_id:  # an AI interview recording: its own, tighter ceiling
+            interview_limit = float(cfg.ai_max_seconds + cfg.ai_tolerance_seconds)
+            if interview_limit <= limit:
+                limit, too_long = interview_limit, "interview_too_long"
 
         size = blobs.size(src_key)
         if size is None:
@@ -120,7 +135,7 @@ def make_validate_handler(
                 raise fail(ctx, "audio_unreadable")
             seconds = probe.duration_s
             if seconds is not None:
-                check_duration(ctx, seconds, limit)
+                check_duration(ctx, seconds, limit, too_long)
 
             try:
                 cap = None if seconds is not None else limit + UNKNOWN_DURATION_MARGIN_S
@@ -131,7 +146,7 @@ def make_validate_handler(
                 raise fail(ctx, "audio_unreadable") from None
             if seconds is None:
                 raise fail(ctx, "audio_unreadable")
-            check_duration(ctx, seconds, limit)
+            check_duration(ctx, seconds, limit, too_long)
             ctx.check_deadline()
 
             orig = original_key(uid, sid, fmt)
@@ -161,8 +176,13 @@ def make_validate_handler(
                 sha256=digest,
             ),
         )
-        if seconds < SHORT_RECORDING_S and SHORT_WARNING not in session.warnings:
-            ctx.repo.update_session(uid, sid, {"warnings": [*session.warnings, SHORT_WARNING]})
+        short = (
+            (SHORT_INTERVIEW_WARNING, seconds < cfg.ai_min_seconds)
+            if session.interview_id
+            else (SHORT_WARNING, seconds < SHORT_RECORDING_S)
+        )
+        if short[1] and short[0] not in session.warnings:
+            ctx.repo.update_session(uid, sid, {"warnings": [*session.warnings, short[0]]})
         if session.state == "validating":
             advance(ctx.repo, uid, sid, to="transcribing", step="transcribe")
         ctx.enqueue(TaskPayload(kind="transcribe", uid=uid, sid=sid))

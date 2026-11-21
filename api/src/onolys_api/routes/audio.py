@@ -131,6 +131,10 @@ def complete_upload(id: str, request: Request, user: User) -> dict[str, SessionR
             request_id=getattr(request.state, "request_id", None),
         )
     )  # name-deduplicated: a repeated `complete` is harmless
+    if (
+        session.interview_id
+    ):  # the interview's audio is in: `ended` -> `uploaded` (once, idempotent)
+        repo.transition_interview(user.uid, session.interview_id, ("ended",), "uploaded")
     return {"session": SessionRef(id=id, status="validating")}
 
 
