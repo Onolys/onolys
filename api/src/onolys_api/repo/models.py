@@ -47,7 +47,8 @@ class UserDoc(Doc):
     created_at: datetime = Field(default_factory=utcnow)
     prefs: dict[str, Any] = Field(default_factory=dict)
     expiry_days: int | None = None
-    daily_cap: int | None = None  # per-user override of the eval daily cap (R8)
+    daily_cap: int | None = None  # legacy eval day override (D5, deprecated)
+    limits: dict[str, Any] | None = None  # {eval|interview: {day|month: int}} (SP11 R3)
     max_active_runs: int | None = None  # per-user override of MAX_ACTIVE_RUNS (R8)
     active_runs: int = 0  # runs reserved and not yet released (R8 concurrent limit)
 
@@ -179,6 +180,7 @@ class RunDoc(Doc):
     run_info: dict[str, Any] | None = None
     artifacts_prefix: str | None = None
     cap_date: str | None = None  # UTC day the cap slot was reserved on (R8)
+    counted: bool = True  # False: run did not consume an eval slot (exempt first run, SP11 R5)
     released: bool = False  # the cap slot was handed back: guards double release
 
 
@@ -202,8 +204,18 @@ class ApiKeyDoc(Doc):
 class UsageDoc(Doc):
     uid: str = ""
     date: str = ""
-    runs: int = 0
+    runs: int = 0  # eval count (name kept: old docs hold it)
+    interviews: int = 0  # missing on old docs reads 0
     tokens: int = 0
+
+
+class UsageMonthDoc(Doc):
+    """`usage/{uid}_{YYYY-MM}`: per-month counters (SP11 D1)."""
+
+    uid: str = ""
+    month: str = ""
+    runs: int = 0
+    interviews: int = 0
 
 
 class IdempotencyDoc(Doc):
