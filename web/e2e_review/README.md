@@ -10,17 +10,16 @@ delete its `test.fail` line. Findings: `docs/agent_files/review-full-app-2026112
 From `web/`:
 
 ```
-NODE_PATH=<dir with @playwright/test> node <that dir>/@playwright/test/cli.js test -c e2e_review/playwright.config.cjs
+npm run e2e                      # mock mode; add args after `--`, e.g. `npm run e2e -- login`
 ```
 
-On this machine `<dir>` is `/root/projects/onolys/miti/node_modules` (`@playwright/test` is not a dependency of web/;
-chromium is preinstalled, do not run `playwright install`). The config starts `npm run dev:mock` on :5173 itself
-(or reuses a server already there). Tests are independent and `fullyParallel`, so a CI job can shard: `... --shard=1/3`. Single spec: add its name, e.g. `... test -c e2e_review/playwright.config.cjs login`.
+`@playwright/test` is a web devDependency (pinned to the preinstalled 1.65.1). Chromium is preinstalled on this machine; do not run `playwright install`. The config starts `npm run dev:mock` on :5173 itself
+(or reuses a server already there). Tests are independent and `fullyParallel`, so a CI job can shard: `npm run e2e -- --shard=1/3`. Single spec: `npm run e2e -- login`.
 
 ## Live-ish mode
 
 Start Firestore emulator + api (AUTH_MODE=fake, ADAPTERS=stub) as in `docs/agent_files/review-full-app-20261121/RUN.md`,
-then run the same command with `E2E_MODE=live`; the config starts `npm run dev:live` with the right `VITE_*` env.
+then run `E2E_MODE=live npm run e2e`; the config starts `npm run dev:live` with the right `VITE_*` env.
 Only tests tagged `@live` (live.spec.cjs) run in that mode; everything else is mock-only and is the CI-intended set.
 Stop emulator/api afterwards.
 

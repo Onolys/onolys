@@ -16,7 +16,8 @@
     "test": "vitest run",
     "test:flaky": "FLAKY=1 vitest run --passWithNoTests",
     "gen:api": "openapi-typescript ../api/openapi.json -o src/api/schema.d.ts --default-non-nullable false && json2ts -i ../engines/evaluation/schemas/report.schema.json -o src/api/report.d.ts --additionalProperties=false",
-    "check:api": "npm run gen:api && git diff --exit-code -- src/api/schema.d.ts src/api/report.d.ts"
+    "check:api": "npm run gen:api && git diff --exit-code -- src/api/schema.d.ts src/api/report.d.ts",
+    "e2e": "playwright test -c e2e_review/playwright.config.cjs"
   },
   "dependencies": {
     "@tanstack/react-query": "5.108.1",
@@ -28,6 +29,9 @@
   },
   "devDependencies": {
     "@eslint/js": "9.39.5",
+    "@playwright/test": "1.65.1",
+    "@stryker-mutator/core": "^10.1.1",
+    "@stryker-mutator/vitest-runner": "^10.1.1",
     "@testing-library/dom": "10.4.2",
     "@testing-library/jest-dom": "8.0.0",
     "@testing-library/react": "16.3.3",
@@ -42,6 +46,7 @@
     "eslint": "9.39.5",
     "eslint-plugin-jsx-a11y": "6.10.2",
     "eslint-plugin-react-hooks": "7.1.1",
+    "fast-check": "^4.10.3",
     "globals": "17.14.0",
     "jsdom": "31.0.1",
     "json-schema-to-typescript": "16.0.0",
