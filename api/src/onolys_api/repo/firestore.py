@@ -11,6 +11,7 @@ import binascii
 import hashlib
 import os
 import random
+import threading
 import time
 from datetime import datetime
 from typing import Any
@@ -124,6 +125,8 @@ class FirestoreRepo:
     def __init__(self, client: firestore.Client, blobs: BlobStore) -> None:
         self._client = client
         self._blobs = blobs
+        self._uid_locks: dict[str, threading.Lock] = {}
+        self._uid_locks_guard = threading.Lock()
 
     # ---- ownership helpers (every id-addressed call starts here) ----
 
@@ -569,7 +572,7 @@ class FirestoreRepo:
                 txn.set(user_ref, {"active_runs": user.get("active_runs", 0) + 1}, merge=True)
             return "ok"
 
-        return self._contended(txn_fn)
+        return self._contended(txn_fn, uid)
 
     def release_usage(self, uid: str, kind: Kind, date: str, refund: bool) -> None:
         day_ref = self._top("usage", f"{uid}_{date}")
@@ -590,7 +593,7 @@ class FirestoreRepo:
                 if month.get(field, 0) > 0:
                     txn.set(month_ref, {field: month[field] - 1}, merge=True)
 
-        self._contended(txn_fn)
+        self._contended(txn_fn, uid)
 
     def get_usage_docs(self, uid: str, date: str) -> tuple[UsageDoc, UsageMonthDoc]:
         day = self._top("usage", f"{uid}_{date}").get()
@@ -671,7 +674,7 @@ class FirestoreRepo:
             )  # fmt: skip
             return "started"
 
-        return self._contended(txn_fn)
+        return self._contended(txn_fn, uid)
 
     def start_run(
         self, uid: str, sid: str, run_id: str, date: str, defaults: LimitDefaults, max_active: int,
@@ -745,9 +748,22 @@ class FirestoreRepo:
             )  # fmt: skip
             return "started"
 
-        return self._contended(txn_fn)
+        return self._contended(txn_fn, uid)
 
-    def _contended(self, txn_fn):
+    def _uid_lock(self, uid: str) -> threading.Lock:
+        with self._uid_locks_guard:
+            return self._uid_locks.setdefault(uid, threading.Lock())
+
+    def _contended(self, txn_fn, uid: str | None = None):
+        # Same-user usage txns hit the same hot docs. Firestore locks pessimistically and the
+        # client retry has no backoff, so a burst thrashes until all attempts are exhausted: queue
+        # same-process callers per uid; retry rounds stay for cross-instance contention.
+        if uid is None:
+            return self._retry_txn(txn_fn)
+        with self._uid_lock(uid):
+            return self._retry_txn(txn_fn)
+
+    def _retry_txn(self, txn_fn):
         for round_ in range(_TXN_ROUNDS):
             try:
                 return txn_fn(self._client.transaction(max_attempts=_TXN_ATTEMPTS))
