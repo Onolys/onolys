@@ -130,8 +130,8 @@ def start_run(
     if body.preset is not None:
         try:
             preset, _ = app.state.presets.resolve(body.preset, s.language)
-        except UnknownPreset:
-            raise ApiError.of(422, "invalid_parameters", "preset: unknown preset") from None
+        except UnknownPreset as e:
+            raise ApiError.of(422, "invalid_parameters", f"preset: {e}") from None
     settings = app.state.settings
     run_id = uuid4().hex
     date = caps.utc_date()

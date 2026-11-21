@@ -105,7 +105,7 @@ async def test_allowlisted_preset_applies_its_stt_key(tmp_path, blobs, settings)
     from dataclasses import replace
 
     repo = FakeRepo(blobs)
-    app = create_app(replace(settings, routes_file=str(routes)), repo=repo, blobs=blobs)
+    app = create_app(replace(settings, extra_presets=("fast",), routes_file=str(routes)), repo=repo, blobs=blobs)
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://t") as c:
         sid = (await create(c, preset="fast", language="en")).json()["session"]["id"]
         sid2 = (await create(c)).json()["session"]["id"]

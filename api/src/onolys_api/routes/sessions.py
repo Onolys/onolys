@@ -212,8 +212,8 @@ def create_session(
         language = scenario["language"]
     try:
         preset, stt = request.app.state.presets.resolve(body.preset, language)
-    except UnknownPreset:
-        raise ApiError.of(422, "invalid_parameters", "preset: unknown preset") from None
+    except UnknownPreset as e:
+        raise ApiError.of(422, "invalid_parameters", f"preset: {e}") from None
 
     sid = uuid4().hex
     session = SessionDoc(

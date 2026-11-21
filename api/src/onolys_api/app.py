@@ -254,6 +254,8 @@ def create_app(
     app.state.blobs = blobs or (FakeBlobStore() if voice_mode else build_blobs(settings))
     app.state.repo = repo or build_repo(settings, app.state.blobs)
     app.state.presets = PresetResolver(settings)
+    if settings.adapters == "real" and settings.service_mode in ("worker", "combined"):
+        app.state.presets.check_keys()  # the worker runs the LLM: its keys must be there
     app.state.auth = Authenticator(settings, app.state.repo, token_verifier)
     queue = build_queue(settings)
     if queue is not None:

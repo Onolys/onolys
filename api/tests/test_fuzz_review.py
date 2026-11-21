@@ -185,8 +185,7 @@ def test_create_session_body_never_5xx(fake_api, body):
     assert r.status_code < 500, (r.status_code, body, r.text)
 
 
-def test_create_session_rejects_non_public_preset(request, api):
-    known_bug(request, "A6: any preset is user-selectable")
+def test_create_session_rejects_non_public_preset(api):
     r = api.post("/v1/sessions", json={"preset": "claude"}, headers=_uid())
     assert r.status_code == 422
 

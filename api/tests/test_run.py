@@ -142,7 +142,7 @@ async def env(request, settings, blobs, tmp_path):
     spy(repo)
     stt, ev = FakeStt(), FakeEvaluation()
     app = create_app(
-        replace(settings, routes_file=str(routes)),
+        replace(settings, extra_presets=("fast",), routes_file=str(routes)),
         repo=repo,
         blobs=blobs,
         audio_tools=StubTools(),
