@@ -9,11 +9,11 @@ variable "region" {
 }
 
 variable "admin_enabled" {
-  description = "Gates the admin (SP07) resources per environment: staging builds the staging admin backend, site, web app and authorised domain; prod enabled for launch."
+  description = "Gates the admin (SP07) resources per environment: staging is the ONLY admin environment (serves admin.onolys.com, owner decision 2026-11-21); prod admin is off."
   type        = map(bool)
   default = {
     staging = true
-    prod    = true
+    prod    = false
   }
 
   validation {

@@ -109,6 +109,7 @@ module "staging" {
   notification_channel_ids = [google_monitoring_notification_channel.owner_email.id]
   admin_cors_origins = [
     "https://${var.admin_staging_site_id}.web.app",
+    "https://admin.onolys.com",
     "http://localhost:5173",
   ]
   cors_origins = [

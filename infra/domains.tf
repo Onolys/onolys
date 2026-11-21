@@ -8,12 +8,12 @@ resource "google_firebase_hosting_custom_domain" "app" {
   wait_dns_verification = false
 }
 
-# Admin domain (SP07, after launch): gated by admin_enabled (prod).
+# Admin domain: the single (staging) admin environment serves admin.onolys.com (owner decision 2026-11-21).
 resource "google_firebase_hosting_custom_domain" "admin" {
-  count                 = var.admin_enabled["prod"] ? 1 : 0
+  count                 = var.admin_enabled["staging"] ? 1 : 0
   provider              = google-beta
   project               = var.project
-  site_id               = google_firebase_hosting_site.admin[0].site_id
+  site_id               = google_firebase_hosting_site.admin_staging[0].site_id
   custom_domain         = "admin.onolys.com"
   wait_dns_verification = false
 }
