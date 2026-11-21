@@ -31,11 +31,11 @@ def test_app_domain_on_prod_site_ungated():
     assert "wait_dns_verification = false" in b  # owner adds DNS after apply
 
 
-def test_admin_domain_gated_by_admin_enabled():
+def test_admin_domain_on_staging_admin_site():
     b = norm(block(src(), 'resource "google_firebase_hosting_custom_domain" "admin"'))
     assert 'custom_domain = "admin.onolys.com"' in b
-    assert "var.admin_enabled[\"prod\"] ? 1 : 0" in b
-    assert "google_firebase_hosting_site.admin[0].site_id" in b
+    assert "var.admin_enabled[\"staging\"] ? 1 : 0" in b
+    assert "google_firebase_hosting_site.admin_staging[0].site_id" in b
 
 
 def test_no_staging_custom_domain():
