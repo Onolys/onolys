@@ -67,3 +67,34 @@ def pytest_collection_modifyitems(items):
             and callspec.params.get("repo") == "firestore"
         ):
             item.add_marker(pytest.mark.flaky)
+    _trim_firestore_twins(items)
+
+
+# These files exercise HTTP/validation logic, not Firestore semantics (repo_contract covers
+# those). Their [firestore] twins only add emulator time, so keep a few smoke cases per file.
+FIRESTORE_SMOKE = {
+    "test_rating.py": {
+        "test_final_creates_revision_and_updates_session[firestore]",
+        "test_each_final_is_new_revision_latest_wins[firestore]",
+        "test_draft_overwritten_single_doc[firestore]",
+        "test_get_draft_only_when_newer_than_final[firestore]",
+        "test_other_user_gets_404[firestore]",
+    },
+    "test_error_map.py": {
+        "test_stubbed_engine_failure_maps_through_run_and_status_body[firestore-llm]"
+    },
+    "test_logging.py": {"test_failed_run_writes_one_line_with_all_required_keys[firestore]"},
+}
+
+
+def _trim_firestore_twins(items):
+    kept, dropped = [], []
+    for item in items:
+        smoke = FIRESTORE_SMOKE.get(item.path.name)
+        if smoke is not None and "[firestore" in item.name and item.name not in smoke:
+            dropped.append(item)
+        else:
+            kept.append(item)
+    if dropped:
+        dropped[0].config.hook.pytest_deselected(items=dropped)
+        items[:] = kept
