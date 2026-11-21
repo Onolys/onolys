@@ -67,7 +67,21 @@ def pytest_collection_modifyitems(items):
             and callspec.params.get("repo") == "firestore"
         ):
             item.add_marker(pytest.mark.flaky)
+        if _needs_emulator(item):
+            item.add_marker(pytest.mark.firestore)
     _trim_firestore_twins(items)
+
+
+# Files that talk to the Firestore emulator without a [firestore] param.
+EMULATOR_FILES = {"test_auth_emulator.py", "test_firestore_emulator.py"}
+
+
+def _needs_emulator(item) -> bool:
+    """CI splits on this: `-m "not firestore"` (no emulator) vs `-m firestore` (emulator job)."""
+    if item.path.name in EMULATOR_FILES:
+        return True
+    callspec = getattr(item, "callspec", None)
+    return callspec is not None and "firestore" in callspec.id.split("-")
 
 
 # These files exercise HTTP/validation logic, not Firestore semantics (repo_contract covers
