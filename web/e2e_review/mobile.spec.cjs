@@ -1,6 +1,7 @@
 const { test, expect, devices } = require("@playwright/test");
-const { shot, FIX, signUp, signUpVerified, spa, hasHScroll } = require("./helpers.cjs");
+const { shot, FIX, signUp, spa, hasHScroll } = require("./helpers.cjs");
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const { defaultBrowserType, ...iphone } = devices["iPhone 13"]; // run on chromium (only chromium is installed)
 test.use({ ...iphone, deviceScaleFactor: 1 });
 
