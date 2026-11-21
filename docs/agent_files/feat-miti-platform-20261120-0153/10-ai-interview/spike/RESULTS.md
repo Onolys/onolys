@@ -96,3 +96,33 @@ cd engines/core && GOOGLE_CLOUD_QUOTA_PROJECT=onolys python -m onolys_core.stt.c
 - [ ] Compare gemini-3.8-live vs gemini-live-2.5-flash-native-audio (3.8 had cleaner leak results and half the cost in tests).
 - [ ] Run the downloaded recording through stt.check (command above); two separable speakers?
 - [ ] Read `sessions.jsonl` for latency + token counts; sign off go/no-go with chosen model, voice, cost/min.
+
+## Owner decision and live results (2026-11-21)
+
+**Decision: GO.** Model `gemini-3.8-live` ("faster to reply"). Voices: keep the full list of 30; the end user chooses the voice, scenario `voice` is only the default (spike default Kore). Owner uploaded recordings to Drive folder "2026-11-21 09-29".
+
+### Live metrics (owner sessions, `sessions.jsonl` 14:18-14:26; live file identical to the copy, metrics only, no speech text)
+Cost via `cost.py` pricing (read-only); latency = `latency.turn_ms` (last loud mic frame -> first AI audio, includes server VAD wait).
+| Model | Sessions | Minutes | Cost/min | Reply latency (turn_ms) | Opening | Errors |
+|---|---|---|---|---|---|---|
+| gemini-3.8-live | 3 (Kore 106 s, Zephyr 199 s, Umbriel 76 s) | 6.35 | $0.039 ($0.022 / $0.051 / $0.035 per session; $0.25 total) | n=32: median 1.34 s, p90 1.48 s, range 8 ms (1 barge-in artifact) to 2.0 s | 655-705 ms | none |
+| gemini-live-2.5-flash-native-audio | 1 valid (Charon 88 s) + 1 failed (4.9 s) | 1.46 | $0.021 (single short session) | n=7: median 1.89 s, p90 2.17 s, range 103 ms to 3.1 s | 7340 ms | `ConnectionClosedError` on the 4.9 s session; `server.log` shows an upstream `1011 Resource exhausted` (not time-matched, likely that session) |
+
+Comparison with the earlier automated figures: 3.8 measured $0.044/min on 180 s of continuous sample audio vs $0.039/min live; both are short-session numbers. The 5/10-min projections ($0.06 / $0.11 per min) stand as unmeasured upper-ish bounds: context is re-billed every turn so cost/min rises with length (the longest live session, 199 s, was $0.051/min). Latency: automated 3.8 reply turns 0.7-1.7 s (median 742 ms, with barge-in artifacts) vs live median 1.34 s: the live figure is the trustworthy one (real turn-taking, includes the owner's SSH tunnel RTT); it is under the ~1.5 s target at median and p90 but not by much. 2.5 was slower live (1.89 s median, 7.3 s opening, one 1011 failure), consistent with the owner preferring 3.8. Pairing note: the 3 recordings correspond to the 3 3.8 sessions by duration (104.8/197.9/74.5 s vs 106.1/199.1/75.8 s); there is no 2.5 recording.
+
+### STT check on the owner recordings
+Downloaded from Drive to `/root/.config/onolys/audio/sp10/` (outside the repo), `ffmpeg -ac 1 -ar 16000` to wav, uploaded to `gs://onolys-audio-staging/sp10/` (write access works with ADC), `python -m onolys_core.stt.check --project onolys`. All three are opus stereo webm; ffprobe reports no container duration (N/A), so duration comes from the converted wav.
+| Recording | Duration | `--min-minutes 5` | `--min-minutes 1` | Turns | Speakers |
+|---|---|---|---|---|---|
+| sp10-1795270740033 | 104.8 s (1.8 min) | FAIL (length only) | PASS | 13 | 2, monotonic offsets |
+| sp10-1795270953863 | 197.9 s (3.3 min) | FAIL (length only) | PASS | 35 | 2, monotonic offsets |
+| sp10-1795271056508 | 74.5 s (1.2 min) | FAIL (length only) | PASS | 17 | 2, monotonic offsets |
+Speaker separation works (2 speakers on every file, offsets monotonic; language en). The 5-min owner gate is NOT met by any recording (longest 3.3 min). Transcript text was not inspected, so whether the two speakers map to clinician vs AI correctly is unverified beyond the speaker count.
+
+### Not done / unverified
+- No 10-minute session was run; no recording reaches the 5-min STT gate (AC10 still needs a 5+ min recording; rerun with `--min-minutes 5` on a longer one).
+- Edge and Safari not reported by the owner; Chrome only implied by the recordings. Playback pitch/speed check not reported.
+- Echo test (headphones vs laptop speakers) not reported.
+- Interruption (talk over the AI) and persona-fidelity/hidden-info-earned checks not reported; the 3.8 leak result stays at 14/15 (soft fail #12, prompt fix noted for Tasks 2/12).
+- Voice audition: sessions used Kore, Zephyr, Umbriel (3.8) and Charon (2.5); no per-voice verdict reported, hence all 30 stay selectable.
+- Cost/min measured only on sessions of 1.3-3.3 min; at 10 min expect ~$0.11/min (projection).
