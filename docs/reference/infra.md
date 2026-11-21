@@ -256,3 +256,23 @@ Release = dispatch `deploy-prod` with `sha` empty (promotes the commit staging r
 List prod versions: `git ls-remote --tags --refs --sort=-v:refname origin 'prod-*' | head`.
 
 Details (from `.github/workflows/deploy-prod.yml`): Actions > deploy-prod > Run workflow > `version` = e.g. `prod-2026-11-21.1` (or `sha` = the full 40-char commit; set one, not both; empty both promotes the commit staging api runs now). The commit must have been built by `deploy-staging` (image tagged with that sha in Artifact Registry), and that image (the tag's index digest or one of its platform digests) must have run on both staging api and staging worker with `GIT_SHA=<sha>`, otherwise `resolve` fails ("never ran on ... deploy it to staging first"). Approve the one `production` review prompt. After it finishes, the prod revisions carry `GIT_SHA=<sha>`, and `code_version` in new log lines shows it. The `prod-*` tags cannot trigger `deploy-prod` (they do not match `v*`, and tags pushed with `GITHUB_TOKEN` trigger nothing). Firestore data is not rolled back.
+
+### Prod promotion + rollback drill (2026-11-21)
+
+**(a) Promotion, run 44922391380.** Promoted `096e3edde31fe4134cb588c092201691bf774a83`; production review approved; all jobs passed (resolve, rules, web, deploy-api, deploy-worker, smoke, tag) in ~4.5 min.
+
+- Prod api revision `-00003-brc`, worker `-00004-nh4`, `GIT_SHA` `096e3ed`.
+- Prod api digest equals staging: `sha256:88045a94675bc4417eed09e22acf5647bc8d408b192a5750845f02e758580c9f`.
+- Healthz `https://onolys-app.web.app/v1/healthz` returned 200, `code_version` `096e3ed`.
+- Tag created: `prod-2026-11-21.1`.
+
+**(b) Rollback, run 44922869893.** Rolled back to `205a03fa48aa2a43416d8be1dacd130a9a20d9a0`. Deploys and smoke passed:
+
+- api `-00004-hjw`, worker `-00005-96t`, `GIT_SHA` `205a03f`.
+- Digest `sha256:ff0fad588e301b216d548b2dcd0214da70f190ab5ced8149a75b16c0980f07c9`; healthz 200.
+- The `tag` job FAILED: "refusing to allow a GitHub App to create or update workflow .github/workflows/ci.yml without workflows permission". Cause: the shallow checkout in the tag job made the push upload the old commit's objects (including the workflow file). Fix is in PR #42 (full history checkout).
+- Prod currently runs `205a03f`, untagged.
+
+**(c) Roll-forward by tag: not run.** Deferred by the owner (2026-11-21). To finish later: merge #42, dispatch `deploy-prod` with `version=prod-2026-11-21.1` (expect a new tag), then a blank dispatch for the main head.
+
+**Earlier failed attempts** (nothing deployed by either): 44914754450 (checkout deleted the creds file, fixed in #40); 44918021819 (index digest vs platform digest mismatch, fixed in #41).
