@@ -34,9 +34,28 @@ export class MockHttpError extends Error {
   }
 }
 
+export type CapKind = "eval" | "interview";
+export type CapPeriod = "day" | "month";
+export type Caps = Record<CapKind, Record<CapPeriod, number>>;
+export type CapsOverride = { [K in CapKind]?: Partial<Record<CapPeriod, number>> };
+
+const DEFAULT_CAPS: Caps = { eval: { day: 20, month: 100 }, interview: { day: 5, month: 30 } };
+const CAP_CODE: Record<CapKind, (p: CapPeriod) => ErrorCode> = {
+  eval: (p) => (p === "month" ? "monthly_cap_reached" : "daily_cap_reached"),
+  interview: () => "interview_cap_reached",
+};
+
+function mergeCaps(base: Caps, o: CapsOverride = {}): Caps {
+  return {
+    eval: { ...base.eval, ...o.eval },
+    interview: { ...base.interview, ...o.interview },
+  };
+}
+
 export interface MockOptions {
   emitter: MemoryStatusEmitter;
-  dailyCap?: number;
+  /** Per-kind day/month caps; unset values use the defaults. */
+  caps?: CapsOverride;
   now?: () => Date;
 }
 
@@ -116,10 +135,11 @@ function invalidParam(message: string): never {
 export class MockBackend {
   private readonly emitter: MemoryStatusEmitter;
   private readonly now: () => Date;
-  private readonly initialCap: number;
-  private dailyCap: number;
+  private readonly initialCaps: Caps;
+  private caps: Caps;
   private sessions = new Map<string, SessionRec>();
-  private runsByDay = new Map<string, number>();
+  /** Successful uses, keyed `kind:uid:day` and `kind:uid:month`. */
+  private counters = new Map<string, number>();
   private idem = new Map<string, { hash: string; response: S["CreateSessionResponse"] }>();
   private apiKeys = new Map<string, { key_id: string; created: string }>();
   private n = 0;
@@ -127,22 +147,22 @@ export class MockBackend {
   constructor(opts: MockOptions) {
     this.emitter = opts.emitter;
     this.now = opts.now ?? (() => new Date());
-    this.initialCap = this.dailyCap = opts.dailyCap ?? 20;
+    this.initialCaps = this.caps = mergeCaps(DEFAULT_CAPS, opts.caps);
   }
 
   /** Drop all data and restore options (used between tests). */
   reset(): void {
     this.sessions.clear();
-    this.runsByDay.clear();
+    this.counters.clear();
     this.idem.clear();
     this.apiKeys.clear();
     this.n = 0;
-    this.dailyCap = this.initialCap;
+    this.caps = this.initialCaps;
     this.emitter.clear();
   }
 
-  configure(o: { dailyCap?: number }): void {
-    if (o.dailyCap !== undefined) this.dailyCap = o.dailyCap;
+  configure(o: { caps?: CapsOverride }): void {
+    this.caps = mergeCaps(this.caps, o.caps);
   }
 
   // ---- helpers ------------------------------------------------------------
@@ -173,12 +193,47 @@ export class MockBackend {
     this.emitter.emit(s.id, doc);
   }
 
-  private dayKey(uid: string): string {
-    return `${uid}:${this.now().toISOString().slice(0, 10)}`;
+  private counterKey(uid: string, kind: CapKind, period: CapPeriod): string {
+    const iso = this.now().toISOString();
+    return `${kind}:${uid}:${period === "day" ? iso.slice(0, 10) : iso.slice(0, 7)}`;
   }
 
-  private runsToday(uid: string): number {
-    return this.runsByDay.get(this.dayKey(uid)) ?? 0;
+  private used(uid: string, kind: CapKind, period: CapPeriod): number {
+    return this.counters.get(this.counterKey(uid, kind, period)) ?? 0;
+  }
+
+  private resetsAt(period: CapPeriod): string {
+    const d = this.now();
+    const [y, m, day] = [d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()];
+    return new Date(period === "day" ? Date.UTC(y, m, day + 1) : Date.UTC(y, m + 1, 1)).toISOString();
+  }
+
+  /** The exhausted period for a kind, month first (as the API does), or null. */
+  private blocked(uid: string, kind: CapKind): CapPeriod | null {
+    for (const p of ["month", "day"] as const) if (this.used(uid, kind, p) >= this.caps[kind][p]) return p;
+    return null;
+  }
+
+  /** The 429 for an exhausted kind (code per kind and period, `period` in the detail), else nothing. */
+  checkCap(uid: string, kind: CapKind): void {
+    const period = this.blocked(uid, kind);
+    if (!period) return;
+    const code = CAP_CODE[kind](period);
+    bad(429, code, `${kind} ${period} limit reached.`, [{ code, message: `${kind} ${period} limit reached.`, period }]);
+  }
+
+  /** Count one use of a kind. Callers check the cap first. */
+  private count(uid: string, kind: CapKind): void {
+    for (const p of ["day", "month"] as const) {
+      const key = this.counterKey(uid, kind, p);
+      this.counters.set(key, (this.counters.get(key) ?? 0) + 1);
+    }
+  }
+
+  /** Start an interview against its caps (429 `interview_cap_reached` when exhausted). For SP10. */
+  consumeInterview(uid: string): void {
+    this.checkCap(uid, "interview");
+    this.count(uid, "interview");
   }
 
   private titleIs(s: SessionRec, name: string): boolean {
@@ -450,8 +505,9 @@ export class MockBackend {
     const f = s.flags;
     if (s.state !== "awaiting_input" || s.first_run_id) return;
     if (!(f.transcript_ready && f.speaker_confirmed && f.rating_submitted)) return;
-    if (s.holdFirstStart || this.runsToday(s.uid) >= this.dailyCap) {
-      s.error = { code: "daily_cap_reached" };
+    const blocked = this.blocked(s.uid, "eval");
+    if (s.holdFirstStart || blocked) {
+      s.error = { code: blocked ? CAP_CODE.eval(blocked) : "daily_cap_reached" };
       this.emit(s);
       return;
     }
@@ -480,8 +536,7 @@ export class MockBackend {
     s.state = "running";
     s.step = "paudit";
     s.progress = RUN_START_PROGRESS;
-    const key = this.dayKey(s.uid);
-    this.runsByDay.set(key, (this.runsByDay.get(key) ?? 0) + 1);
+    this.count(s.uid, "eval");
     this.emit(s);
     return run;
   }
@@ -495,8 +550,7 @@ export class MockBackend {
       invalidParam("n_runs must be an integer from 1 to 5");
     if (body.preset != null && !PRESETS.includes(body.preset)) invalidParam("preset is not allowed");
     s.holdFirstStart = false; // the user pressed Start
-    if (this.runsToday(uid) >= this.dailyCap)
-      bad(429, "daily_cap_reached", "Daily run limit reached.");
+    this.checkCap(uid, "eval");
     const run = this.createRun(s, body);
     return { run_id: run.run_id, session: { id: s.id, status: s.state } };
   }
@@ -561,9 +615,13 @@ export class MockBackend {
   }
 
   getUsage(uid: string): S["Usage"] {
-    const d = this.now();
-    const reset = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() + 1));
-    return { runs_today: this.runsToday(uid), daily_cap: this.dailyCap, resets_at: reset.toISOString() };
+    const period = (kind: CapKind, p: CapPeriod) => ({
+      used: this.used(uid, kind, p),
+      cap: this.caps[kind][p],
+      resets_at: this.resetsAt(p),
+    });
+    const kindUsage = (kind: CapKind) => ({ day: period(kind, "day"), month: period(kind, "month") });
+    return { eval: kindUsage("eval"), interview: kindUsage("interview") };
   }
 
   // ---- the worker, one step at a time -------------------------------------

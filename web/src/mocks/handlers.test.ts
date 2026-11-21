@@ -123,7 +123,7 @@ describe("MSW handlers over HTTP (fake auth)", () => {
   });
 
   it("returns 429 daily_cap_reached from POST /runs and usage reflects the cap", async () => {
-    mockBackend.configure({ dailyCap: 0 });
+    mockBackend.configure({ caps: { eval: { day: 0 } } });
     const { client } = clientFor("u1");
     const sid = await create(client);
     const p = { params: { path: { id: sid } } };
@@ -137,8 +137,8 @@ describe("MSW handlers over HTTP (fake auth)", () => {
     expect(detail).toMatchObject({ status: "awaiting_input", error: { code: "daily_cap_reached" } });
     const res = await client.POST("/sessions/{id}/runs", p);
     expect(res.response.status).toBe(429);
-    expect(res.error?.details[0].code).toBe("daily_cap_reached");
-    expect(unwrap(await client.GET("/usage"))).toMatchObject({ runs_today: 0, daily_cap: 0 });
+    expect(res.error?.details[0]).toMatchObject({ code: "daily_cap_reached", period: "day" });
+    expect(unwrap(await client.GET("/usage"))).toMatchObject({ eval: { day: { used: 0, cap: 0 } } });
   });
 
   it("honours Idempotency-Key through the client", async () => {

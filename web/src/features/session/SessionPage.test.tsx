@@ -305,7 +305,7 @@ describe("session page: error cards", () => {
     toAwaiting(sid);
     mockBackend.confirmSpeaker(UID, sid, "spk_0");
     mockBackend.putRating(UID, sid, { final: true, no_rating: true, card: { change_goal: "g" } });
-    mockBackend.configure({ dailyCap: 1 });
+    mockBackend.configure({ caps: { eval: { day: 1 } } });
     const other = create();
     toAwaiting(other);
     mockBackend.confirmSpeaker(UID, other, "spk_0");

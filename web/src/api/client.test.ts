@@ -28,12 +28,12 @@ describe("bearer auth", () => {
     server.use(
       http.get(`${BASE}/usage`, ({ request }) => {
         auth = request.headers.get("authorization");
-        return HttpResponse.json({ runs_today: 1, daily_cap: 20, resets_at: "x" });
+        return HttpResponse.json({ eval: { day: { used: 1, cap: 20, resets_at: "x" }, month: { used: 1, cap: 100, resets_at: "x" } }, interview: { day: { used: 0, cap: 5, resets_at: "x" }, month: { used: 0, cap: 30, resets_at: "x" } } });
       }),
     );
     const { client, getToken } = setup();
     const res = await client.GET("/usage");
-    expect(res.data?.daily_cap).toBe(20);
+    expect(res.data?.eval.day.cap).toBe(20);
     expect(auth).toBe("Bearer stale");
     expect(getToken).toHaveBeenCalledWith(false);
   });
@@ -43,7 +43,7 @@ describe("bearer auth", () => {
     server.use(
       http.get(`${BASE}/usage`, ({ request }) => {
         auth = request.headers.get("authorization");
-        return HttpResponse.json({ runs_today: 0, daily_cap: 20, resets_at: "x" });
+        return HttpResponse.json({ eval: { day: { used: 1, cap: 20, resets_at: "x" }, month: { used: 1, cap: 100, resets_at: "x" } }, interview: { day: { used: 0, cap: 5, resets_at: "x" }, month: { used: 0, cap: 30, resets_at: "x" } } });
       }),
     );
     const { client } = setup(vi.fn(async (): Promise<string | null> => null));
@@ -60,12 +60,12 @@ describe("401 handling", () => {
         const a = request.headers.get("authorization");
         seen.push(a);
         if (a === "Bearer stale") return HttpResponse.json(errBody(401, "unauthenticated"), { status: 401 });
-        return HttpResponse.json({ runs_today: 2, daily_cap: 20, resets_at: "x" });
+        return HttpResponse.json({ eval: { day: { used: 2, cap: 20, resets_at: "x" }, month: { used: 1, cap: 100, resets_at: "x" } }, interview: { day: { used: 0, cap: 5, resets_at: "x" }, month: { used: 0, cap: 30, resets_at: "x" } } });
       }),
     );
     const { client, getToken, onSessionExpired } = setup();
     const res = await client.GET("/usage");
-    expect(res.data?.runs_today).toBe(2);
+    expect(res.data?.eval.day.used).toBe(2);
     expect(seen).toEqual(["Bearer stale", "Bearer fresh"]);
     expect(getToken.mock.calls).toEqual([[false], [true]]);
     expect(onSessionExpired).not.toHaveBeenCalled();
@@ -196,11 +196,11 @@ describe("unwrap", () => {
   it("returns data on success", async () => {
     server.use(
       http.get(`${BASE}/usage`, () =>
-        HttpResponse.json({ runs_today: 3, daily_cap: 20, resets_at: "x" }),
+        HttpResponse.json({ eval: { day: { used: 3, cap: 20, resets_at: "x" }, month: { used: 1, cap: 100, resets_at: "x" } }, interview: { day: { used: 0, cap: 5, resets_at: "x" }, month: { used: 0, cap: 30, resets_at: "x" } } }),
       ),
     );
     const { client } = setup();
-    expect(unwrap(await client.GET("/usage")).runs_today).toBe(3);
+    expect(unwrap(await client.GET("/usage")).eval.day.used).toBe(3);
   });
 
   it("returns undefined for a 204", async () => {
