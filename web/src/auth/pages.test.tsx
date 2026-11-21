@@ -32,6 +32,38 @@ describe("sign up", () => {
     expect(service.calls.signUps).toBe(0);
   });
 
+  it("asks for an email (no service call) when it is empty or malformed, and marks the field invalid", async () => {
+    const user = userEvent.setup();
+    const { service } = renderApp("/signup");
+    await h1("Sign up");
+    await user.type(screen.getByLabelText("Password"), "longenough1");
+    await user.click(screen.getByRole("button", { name: "Create account" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(/enter your email/i);
+    const email = screen.getByLabelText("Email");
+    expect(email).toHaveAttribute("aria-invalid", "true");
+    expect(email.getAttribute("aria-describedby")).toBe(screen.getByRole("alert").id);
+    expect(screen.getByLabelText("Password")).not.toHaveAttribute("aria-invalid");
+    for (const bad of ["foo", "a@b"]) {
+      await user.clear(email);
+      await user.type(email, bad);
+      await user.click(screen.getByRole("button", { name: "Create account" }));
+      expect(await screen.findByRole("alert")).toHaveTextContent(/valid email/i);
+    }
+    expect(service.calls.signUps).toBe(0);
+  });
+
+  it("marks the password field invalid for a short password", async () => {
+    const user = userEvent.setup();
+    renderApp("/signup");
+    await h1("Sign up");
+    await user.type(screen.getByLabelText("Email"), "new@clinic.org");
+    await user.type(screen.getByLabelText("Password"), "short");
+    await user.click(screen.getByRole("button", { name: "Create account" }));
+    await screen.findByRole("alert");
+    expect(screen.getByLabelText("Password")).toHaveAttribute("aria-invalid", "true");
+    expect(screen.getByLabelText("Email")).not.toHaveAttribute("aria-invalid");
+  });
+
   it("offers login when the email is already in use", async () => {
     const user = userEvent.setup();
     const service = createFakeAuthService();
@@ -84,6 +116,27 @@ describe("log in", () => {
     await user.type(screen.getByLabelText("Password"), "wrongwrong");
     await user.click(screen.getByRole("button", { name: "Log in" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("That email and password don't match");
+  });
+
+  it("asks for email, then password, instead of calling the service on an empty form", async () => {
+    const user = userEvent.setup();
+    const { service } = renderApp("/login");
+    await h1("Log in");
+    await user.click(screen.getByRole("button", { name: "Log in" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(/enter your email/i);
+    expect(screen.getByLabelText("Email")).toHaveAttribute("aria-invalid", "true");
+    await user.type(screen.getByLabelText("Email"), "a@clinic.org");
+    await user.click(screen.getByRole("button", { name: "Log in" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(/enter your password/i);
+    expect(screen.getByLabelText("Password")).toHaveAttribute("aria-invalid", "true");
+    expect(service.calls.signIns).toBe(0);
+  });
+
+  it("shows the error of a failed Google redirect sign-in", async () => {
+    const service = createFakeAuthService();
+    vi.spyOn(service, "consumeRedirectError").mockResolvedValue("auth/account-exists-with-different-credential");
+    renderApp("/login", { service });
+    expect(await screen.findByRole("alert")).toHaveTextContent("This email has a password account. Sign in with your password.");
   });
 
   it("links to sign up and forgot password, carrying ?next=", async () => {

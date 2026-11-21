@@ -119,3 +119,15 @@ describe("firebase signUp", () => {
     await expect(make().signUp("a@b.co", "password1")).rejects.toMatchObject({ code: "auth/email-already-in-use" });
   });
 });
+
+describe("firebase redirect sign-in result", () => {
+  it("reports the failure code once instead of swallowing it", async () => {
+    m.getRedirectResult.mockRejectedValue({ code: "auth/account-exists-with-different-credential" });
+    const svc = make();
+    expect(await svc.consumeRedirectError()).toBe("auth/account-exists-with-different-credential");
+    expect(await svc.consumeRedirectError()).toBeUndefined();
+  });
+  it("reports nothing when there was no redirect or it succeeded", async () => {
+    expect(await make().consumeRedirectError()).toBeUndefined();
+  });
+});

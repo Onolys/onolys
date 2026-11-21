@@ -125,6 +125,9 @@ export function createFakeAuthService(options: FakeAuthOptions = {}): FakeAuthSe
       if (!accounts.has(key)) accounts.set(key, { uid: uidFor(key), email: key, password: null, verified: true });
       enter(key);
     },
+    async consumeRedirectError() {
+      return undefined;
+    },
     async sendPasswordReset(email) {
       calls.resets.push(email);
       if (!accounts.has(norm(email))) throw new AuthError("auth/user-not-found");

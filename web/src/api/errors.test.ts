@@ -97,6 +97,52 @@ describe("parseErrorBody", () => {
   });
 });
 
+describe("parseErrorBody malformed entries (FX56 / M19)", () => {
+  it("drops detail entries without a string code and message, keeping the valid ones", () => {
+    const err = parseErrorBody(500, {
+      details: [
+        null,
+        "x",
+        { code: "no_speech" },
+        { message: "only message" },
+        { code: 1, message: "m" },
+        { code: "c", message: 2 },
+        { code: "audio_too_long", message: "ok" },
+      ],
+    });
+    expect(err.details).toEqual([{ code: "audio_too_long", message: "ok" }]);
+    expect(err.code).toBe("audio_too_long");
+  });
+
+  it("ignores non-array details and a non-string request_id", () => {
+    const err = parseErrorBody(500, { details: "nope", request_id: 123 });
+    expect(err.details).toEqual([]);
+    expect(err.requestId).toBeUndefined();
+    expect(err.code).toBe("unknown");
+    expect(parseErrorBody(500, { request_id: "r1" }).requestId).toBe("r1");
+  });
+
+  it("treats null and primitive bodies as contract-less", () => {
+    for (const b of [null, undefined, 5, "x"]) expect(parseErrorBody(500, b).code).toBe("unknown");
+  });
+});
+
+describe("known-code guards (FX56 / M20)", () => {
+  it("does not treat inherited object keys as known codes", () => {
+    for (const c of ["toString", "constructor", "__proto__", "hasOwnProperty"]) {
+      expect(messageForCode(c)).toBe(GENERIC_MESSAGE);
+    }
+  });
+
+  it("failureAction: no code or unknown code with a transcript is run_again; without one upload_new", () => {
+    expect(failureAction(undefined, true)).toBe("run_again");
+    expect(failureAction("something_new", true)).toBe("run_again");
+    expect(failureAction("toString", true)).toBe("run_again");
+    expect(failureAction(undefined, false)).toBe("upload_new");
+    expect(failureAction("no_speech", true)).toBe("upload_new");
+  });
+});
+
 describe("describeError", () => {
   it("describes an ApiError with its reference", () => {
     const d = describeError(parseErrorBody(409, body(409, "invalid_state")));

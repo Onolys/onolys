@@ -25,7 +25,6 @@ test.describe("login / logout", () => {
   });
 
   test("E8/W11: empty submit asks for email/password instead of claiming credentials mismatch", async ({ page }) => {
-    test.fail(true, "E8/W11: no client check on Login; empty form says 'email and password don't match'");
     await page.goto("/login");
     await loginBtn(page).click();
     await expect(page.getByText(/enter your (email|password)/i)).toBeVisible();

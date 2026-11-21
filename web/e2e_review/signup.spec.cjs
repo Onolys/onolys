@@ -17,14 +17,12 @@ test.describe("signup", () => {
   });
 
   test("E4: empty form tells the user the email is missing", async ({ page }) => {
-    test.fail(true, "E4: empty submit only reports the password rule, nothing about email");
     await page.goto("/signup");
     await create(page).click();
     await expect(page.getByText(/enter your email|email is required/i)).toBeVisible();
   });
 
   test("E4b: valid password + empty email shows an email error and creates no account", async ({ page }) => {
-    test.fail(true, "E4b/W11: empty email is sent to the auth service (fake: account '' is created, user lands on /verify-email)");
     await page.goto("/signup");
     await field(page, "Password").fill(PW);
     await create(page).click();
@@ -35,7 +33,6 @@ test.describe("signup", () => {
   });
 
   test("E5: malformed email ('foo', 'a@b') is rejected before an account is created", async ({ page }) => {
-    test.fail(true, "E5: fake auth accepts any string; no client-side format check (real Firebase rejects, UX untested)");
     for (const e of ["foo", "a@b"]) {
       await signUp(page, e);
       await expect(page).toHaveURL(/\/signup/);
@@ -43,7 +40,6 @@ test.describe("signup", () => {
   });
 
   test("E6: error fields are programmatically marked invalid (aria-invalid) when validation fails", async ({ page }) => {
-    test.fail(true, "E6: no aria-invalid on any field");
     await page.goto("/signup");
     await field(page, "Password").fill("short");
     await create(page).click();

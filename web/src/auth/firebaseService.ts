@@ -54,7 +54,10 @@ export function createFirebaseAuthService(config: FirebaseWebConfig): AuthServic
   };
 
   // Completes a redirect sign-in; the token listener below reports the user.
-  void getRedirectResult(auth).catch(() => undefined);
+  let redirectError: Promise<string | undefined> | undefined = getRedirectResult(auth).then(
+    () => undefined,
+    (err: unknown) => (err as { code?: string } | null)?.code ?? "auth/unknown",
+  );
   onIdTokenChanged(auth, emit);
 
   const need = (): User => {
@@ -79,6 +82,11 @@ export function createFirebaseAuthService(config: FirebaseWebConfig): AuthServic
         // The account exists and the user is signed in; the verify page offers Resend and shows its own error.
       }
       emit();
+    },
+    async consumeRedirectError() {
+      const pending = redirectError;
+      redirectError = undefined;
+      return pending;
     },
     async signIn(email, password) {
       await signInWithEmailAndPassword(auth, email, password);
