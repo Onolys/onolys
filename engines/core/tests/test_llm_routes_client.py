@@ -320,7 +320,7 @@ async def test_reasoning_effort_low_becomes_gemini_thinking_config(model, monkey
     monkeypatch.setattr(AsyncHTTPHandler, "post", fake_post)
     cfg = LLMConfig(llm_mode="live", routes={tier: shipped[tier]})
     c = LiteLLMClient(cfg, acompletion=litellm.acompletion)
-    with pytest.raises(Exception):
+    with pytest.raises(Exception):  # noqa: B017 - any failure after the stubbed POST is fine
         await c.complete_json(req(tier=tier))
     body = json.loads(sent[0]) if isinstance(sent[0], (str, bytes)) else sent[0]
     thinking = body["generationConfig"]["thinkingConfig"]
