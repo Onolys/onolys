@@ -346,7 +346,7 @@ def test_usage_view_interview_and_month_fields(repo):
     )
 
 
-def _parallel(repo, s, u, kinds, now=NOON):
+def _parallel(repo, s, u, kinds, now=NOON, workers=6):
     def attempt(kind):
         try:
             caps.reserve(repo, s, u, kind, now)
@@ -354,7 +354,7 @@ def _parallel(repo, s, u, kinds, now=NOON):
         except ApiError as e:
             return code_of(e)
 
-    with ThreadPoolExecutor(6) as ex:
+    with ThreadPoolExecutor(workers) as ex:
         return list(ex.map(attempt, kinds))
 
 
@@ -387,6 +387,16 @@ def test_parallel_reserve_mixed_kinds_each_capped_independently(repo):
     assert outs.count("ok") == 6
     day, _ = repo.get_usage_docs(u, DAY)
     assert (day.runs, day.interviews) == (3, 3)
+
+
+def test_parallel_reserve_burst_under_contention_all_succeed(repo):
+    u = uid()
+    s = settings(eval_cap_day=100, ai_cap_day=100, max_active_runs=1000)
+    outs = _parallel(repo, s, u, ["eval"] * 10 + ["interview"] * 10, workers=20)
+    assert outs == ["ok"] * 20
+    day, month = repo.get_usage_docs(u, DAY)
+    assert (day.runs, day.interviews) == (10, 10)
+    assert (month.runs, month.interviews) == (10, 10)
 
 
 def test_max_active_runs_setting(monkeypatch):
