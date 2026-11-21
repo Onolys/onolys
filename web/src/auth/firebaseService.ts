@@ -73,7 +73,11 @@ export function createFirebaseAuthService(config: FirebaseWebConfig): AuthServic
     },
     async signUp(email, password) {
       const cred = await createUserWithEmailAndPassword(auth, email, password);
-      await sendEmailVerification(cred.user, { url: `${window.location.origin}/verify-email` });
+      try {
+        await sendEmailVerification(cred.user, { url: `${window.location.origin}/verify-email` });
+      } catch {
+        // The account exists and the user is signed in; the verify page offers Resend and shows its own error.
+      }
       emit();
     },
     async signIn(email, password) {

@@ -8,21 +8,24 @@ const m = {
   verifyPasswordResetCode: vi.fn(),
   confirmPasswordReset: vi.fn(),
   reload: vi.fn(),
+  getRedirectResult: vi.fn(),
+  createUser: vi.fn(),
+  sendEmailVerification: vi.fn(),
 };
 
 vi.mock("firebase/app", () => ({ initializeApp: () => ({}) }));
 vi.mock("firebase/auth", () => ({
   GoogleAuthProvider: class {},
   getAuth: () => auth,
-  getRedirectResult: () => Promise.resolve(null),
+  getRedirectResult: (...a: unknown[]) => m.getRedirectResult(...a),
   onIdTokenChanged: vi.fn(),
   applyActionCode: (...a: unknown[]) => m.applyActionCode(...a),
   checkActionCode: (...a: unknown[]) => m.checkActionCode(...a),
   verifyPasswordResetCode: (...a: unknown[]) => m.verifyPasswordResetCode(...a),
   confirmPasswordReset: (...a: unknown[]) => m.confirmPasswordReset(...a),
   reload: (...a: unknown[]) => m.reload(...a),
-  createUserWithEmailAndPassword: vi.fn(),
-  sendEmailVerification: vi.fn(),
+  createUserWithEmailAndPassword: (...a: unknown[]) => m.createUser(...a),
+  sendEmailVerification: (...a: unknown[]) => m.sendEmailVerification(...a),
   sendPasswordResetEmail: vi.fn(),
   signInWithEmailAndPassword: vi.fn(),
   signInWithPopup: vi.fn(),
@@ -38,6 +41,7 @@ beforeEach(() => {
   vi.resetAllMocks();
   auth.currentUser = currentUser;
   currentUser.getIdToken.mockResolvedValue("t");
+  m.getRedirectResult.mockResolvedValue(null);
 });
 
 describe("firebase action-code methods", () => {
@@ -100,5 +104,18 @@ describe("firebase email-change action codes", () => {
   it("applyEmailChange propagates apply errors", async () => {
     m.applyActionCode.mockRejectedValue({ code: "auth/invalid-action-code" });
     await expect(make().applyEmailChange("oob")).rejects.toMatchObject({ code: "auth/invalid-action-code" });
+  });
+});
+
+describe("firebase signUp", () => {
+  it("still resolves when the verification email cannot be sent (VerifyEmail has Resend)", async () => {
+    m.createUser.mockResolvedValue({ user: currentUser });
+    m.sendEmailVerification.mockRejectedValue({ code: "auth/too-many-requests" });
+    await expect(make().signUp("a@b.co", "password1")).resolves.toBeUndefined();
+    expect(m.sendEmailVerification).toHaveBeenCalledOnce();
+  });
+  it("still rejects when the account cannot be created", async () => {
+    m.createUser.mockRejectedValue({ code: "auth/email-already-in-use" });
+    await expect(make().signUp("a@b.co", "password1")).rejects.toMatchObject({ code: "auth/email-already-in-use" });
   });
 });
