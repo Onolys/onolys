@@ -30,7 +30,7 @@ def resets_at(now: datetime | None = None) -> datetime:
 def reserve_run(repo: Repo, settings: Settings, uid: str, now: datetime | None = None) -> str:
     """Reserve one run slot; returns the UTC date key to pass to `release_run`."""
     date = utc_date(now)
-    outcome = repo.reserve_run(uid, date, settings.daily_run_cap, settings.max_active_runs)
+    outcome = repo.reserve_run(uid, date, settings.eval_cap_day, settings.max_active_runs)
     if outcome == "daily_cap":
         raise ApiError.of(429, "daily_cap_reached", DAILY_MESSAGE)
     if outcome == "concurrent":
@@ -48,8 +48,6 @@ def usage_view(
     """`(runs_today, daily_cap, resets_at)` with the per-user override applied."""
     user = repo.get_user(uid)
     cap = (
-        user.daily_cap
-        if user is not None and user.daily_cap is not None
-        else settings.daily_run_cap
+        user.daily_cap if user is not None and user.daily_cap is not None else settings.eval_cap_day
     )
     return repo.get_usage(uid, utc_date(now)).runs, cap, resets_at(now)

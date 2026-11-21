@@ -191,7 +191,7 @@ def test_second_call_is_a_noop(repo):
     assert user_counters(repo, uid, caps.utc_date()) == (1, 1)
 
 
-@pytest.mark.parametrize("kw", [{"daily_run_cap": 0}, {"max_active_runs": 0}])
+@pytest.mark.parametrize("kw", [{"eval_cap_day": 0}, {"max_active_runs": 0}])
 def test_cap_hit_leaves_awaiting_input_with_error_code_and_leaks_nothing(repo, kw):
     uid, queue = "u5" + uuid.uuid4().hex[:6], RecordingQueue()
     sid = new_session(repo, uid, state="awaiting_input", ready=True)
@@ -212,7 +212,7 @@ def test_cap_hit_leaves_awaiting_input_with_error_code_and_leaks_nothing(repo, k
 
 def test_cap_race_two_sessions_same_user_exactly_one_starts_no_leak(repo):
     uid, queue = "u6" + uuid.uuid4().hex[:6], RecordingQueue()
-    s = mk_settings(daily_run_cap=1)
+    s = mk_settings(eval_cap_day=1)
     sids = []
     for _ in range(2):
         sid = new_session(repo, uid, state="awaiting_input", ready=True)

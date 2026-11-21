@@ -392,7 +392,7 @@ async def test_post_runs_state_and_input_checks(env):
 
 async def test_post_runs_cap_429_and_releases(env):
     sid = await env.finished()
-    env.app.state.settings = replace(env.app.state.settings, daily_run_cap=1)
+    env.app.state.settings = replace(env.app.state.settings, eval_cap_day=1)
     r = await env.c.post(f"/v1/sessions/{sid}/runs", json={}, headers=env.h)
     assert r.status_code == 429 and r.json()["details"][0]["code"] == "daily_cap_reached"
     assert env.repo.get_session(env.uid, sid).state == "report_ready"
@@ -400,11 +400,11 @@ async def test_post_runs_cap_429_and_releases(env):
 
 
 async def test_cap_held_first_run_starts_with_post_runs(env):
-    env.app.state.settings = replace(env.app.state.settings, daily_run_cap=0)
+    env.app.state.settings = replace(env.app.state.settings, eval_cap_day=0)
     sid = await env.start()
     s = env.repo.get_session(env.uid, sid)
     assert s.state == "awaiting_input" and s.error.code == "daily_cap_reached"
-    env.app.state.settings = replace(env.app.state.settings, daily_run_cap=20)
+    env.app.state.settings = replace(env.app.state.settings, eval_cap_day=20)
     r = await env.c.post(f"/v1/sessions/{sid}/runs", json={}, headers=env.h)
     assert r.status_code == 202
     s = env.repo.get_session(env.uid, sid)

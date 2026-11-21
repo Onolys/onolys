@@ -134,7 +134,7 @@ def start_run(id: str, request: Request, user: User, body: RunRequest | None = N
     # One transaction: state check, cap reservation, run creation, first_run_id and `running`.
     # The loser of a race gets 409 and holds no slot.
     outcome = repo.start_run(
-        uid, id, run_id, date, settings.daily_run_cap, settings.max_active_runs,
+        uid, id, run_id, date, settings.eval_cap_day, settings.max_active_runs,
         settings.git_sha, RUN_START_PROGRESS, RERUN_STATES, body.n_runs, preset,
     )  # fmt: skip
     if outcome == "not_ready":

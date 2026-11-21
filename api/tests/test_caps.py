@@ -62,7 +62,7 @@ def code_of(exc: ApiError) -> str:
 
 
 def test_21st_run_of_the_day_is_429_daily_cap_reached(repo):
-    u, s = uid(), settings(daily_run_cap=20, max_active_runs=1000)
+    u, s = uid(), settings(eval_cap_day=20, max_active_runs=1000)
     for _ in range(20):
         caps.reserve_run(repo, s, u, NOON)
     with pytest.raises(ApiError) as e:
@@ -72,7 +72,7 @@ def test_21st_run_of_the_day_is_429_daily_cap_reached(repo):
 
 
 def test_new_utc_day_starts_a_fresh_count(repo):
-    u, s = uid(), settings(daily_run_cap=1, max_active_runs=1000)
+    u, s = uid(), settings(eval_cap_day=1, max_active_runs=1000)
     caps.reserve_run(repo, s, u, NOON)
     with pytest.raises(ApiError):
         caps.reserve_run(repo, s, u, NOON)
@@ -80,7 +80,7 @@ def test_new_utc_day_starts_a_fresh_count(repo):
 
 
 def test_per_user_override_beats_the_config_default(repo):
-    u, s = uid(), settings(daily_run_cap=20, max_active_runs=1000)
+    u, s = uid(), settings(eval_cap_day=20, max_active_runs=1000)
     set_user_fields(repo, u, daily_cap=2)
     caps.reserve_run(repo, s, u, NOON)
     caps.reserve_run(repo, s, u, NOON)
@@ -90,7 +90,7 @@ def test_per_user_override_beats_the_config_default(repo):
 
 
 def test_concurrent_reservations_never_exceed_the_cap(repo):
-    u, s = uid(), settings(daily_run_cap=3, max_active_runs=1000)
+    u, s = uid(), settings(eval_cap_day=3, max_active_runs=1000)
 
     def attempt(_):
         try:
@@ -106,7 +106,7 @@ def test_concurrent_reservations_never_exceed_the_cap(repo):
 
 
 def test_refund_before_any_llm_call_frees_the_slot_and_the_count(repo):
-    u, s = uid(), settings(daily_run_cap=1, max_active_runs=1000)
+    u, s = uid(), settings(eval_cap_day=1, max_active_runs=1000)
     day = caps.reserve_run(repo, s, u, NOON)
     assert day == DAY
     with pytest.raises(ApiError):
@@ -117,7 +117,7 @@ def test_refund_before_any_llm_call_frees_the_slot_and_the_count(repo):
 
 
 def test_release_without_refund_keeps_the_daily_count(repo):
-    u, s = uid(), settings(daily_run_cap=1, max_active_runs=1)
+    u, s = uid(), settings(eval_cap_day=1, max_active_runs=1)
     day = caps.reserve_run(repo, s, u, NOON)
     caps.release_run(repo, u, day, refund=False)  # run finished after spending LLM calls
     assert repo.get_usage(u, DAY).runs == 1
@@ -131,14 +131,14 @@ def test_release_never_goes_below_zero(repo):
     caps.release_run(repo, u, DAY, refund=True)
     caps.release_run(repo, u, DAY, refund=True)
     assert repo.get_usage(u, DAY).runs == 0
-    s = settings(daily_run_cap=5, max_active_runs=1)
+    s = settings(eval_cap_day=5, max_active_runs=1)
     caps.reserve_run(repo, s, u, NOON)
     with pytest.raises(ApiError):  # the stray releases did not create extra slots
         caps.reserve_run(repo, s, u, NOON)
 
 
 def test_third_concurrent_active_run_is_429_and_a_finished_run_frees_a_slot(repo):
-    u, s = uid(), settings(daily_run_cap=20, max_active_runs=2)
+    u, s = uid(), settings(eval_cap_day=20, max_active_runs=2)
     d1 = caps.reserve_run(repo, s, u, NOON)
     caps.reserve_run(repo, s, u, NOON)
     with pytest.raises(ApiError) as e:
@@ -150,7 +150,7 @@ def test_third_concurrent_active_run_is_429_and_a_finished_run_frees_a_slot(repo
 
 
 def test_concurrent_attempts_cannot_exceed_the_active_run_limit(repo):
-    u, s = uid(), settings(daily_run_cap=20, max_active_runs=2)
+    u, s = uid(), settings(eval_cap_day=20, max_active_runs=2)
 
     def attempt(_):
         try:
@@ -165,7 +165,7 @@ def test_concurrent_attempts_cannot_exceed_the_active_run_limit(repo):
 
 
 def test_per_user_active_limit_override(repo):
-    u, s = uid(), settings(daily_run_cap=20, max_active_runs=2)
+    u, s = uid(), settings(eval_cap_day=20, max_active_runs=2)
     set_user_fields(repo, u, max_active_runs=1)
     caps.reserve_run(repo, s, u, NOON)
     with pytest.raises(ApiError):
@@ -173,7 +173,7 @@ def test_per_user_active_limit_override(repo):
 
 
 def test_usage_view_and_reset_time(repo):
-    u, s = uid(), settings(daily_run_cap=20)
+    u, s = uid(), settings(eval_cap_day=20)
     assert caps.usage_view(repo, s, u, NOON) == (0, 20, datetime(2026, 11, 21, tzinfo=UTC))
     caps.reserve_run(repo, s, u, NOON)
     set_user_fields(repo, u, daily_cap=7)
@@ -198,7 +198,7 @@ def api_repo(tmp_path):
 @pytest.fixture
 async def api(tmp_path, api_repo):
     app = create_app(
-        Settings(env="test", auth_mode="fake", service_mode="combined", daily_run_cap=20),
+        Settings(env="test", auth_mode="fake", service_mode="combined", eval_cap_day=20),
         repo=api_repo,
         blobs=FakeBlobStore(tmp_path / "b2"),
     )

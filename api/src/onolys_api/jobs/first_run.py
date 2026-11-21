@@ -32,7 +32,7 @@ def maybe_start_first_run(
     run_id = uuid4().hex
     date = caps.utc_date()
     outcome = repo.start_first_run(
-        uid, sid, run_id, date, settings.daily_run_cap, settings.max_active_runs,
+        uid, sid, run_id, date, settings.eval_cap_day, settings.max_active_runs,
         settings.git_sha, RUN_START_PROGRESS,
     )  # fmt: skip
     if outcome != "started":

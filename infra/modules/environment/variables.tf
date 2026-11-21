@@ -79,9 +79,24 @@ variable "admin_max_instances" {
   default = 3
 }
 
-variable "daily_run_cap" {
+variable "eval_cap_day" {
   type    = number
-  default = 20
+  default = 10
+}
+
+variable "eval_cap_month" {
+  type    = number
+  default = 100
+}
+
+variable "ai_cap_day" {
+  type    = number
+  default = 5
+}
+
+variable "ai_cap_month" {
+  type    = number
+  default = 30
 }
 
 variable "default_preset" {

@@ -9,7 +9,9 @@ pytestmark = pytest.mark.unit
 def test_defaults_local():
     s = Settings.from_env({})
     assert (s.env, s.service_mode, s.auth_mode, s.adapters) == ("local", "combined", "fake", "stub")
-    assert s.daily_run_cap == 20 and s.firestore_database == "(default)"
+    assert s.firestore_database == "(default)"
+    assert (s.eval_cap_day, s.eval_cap_month) == (10, 100)
+    assert (s.ai_cap_day, s.ai_cap_month) == (5, 30)
 
 
 def test_parses_all_vars():
@@ -25,7 +27,10 @@ def test_parses_all_vars():
             "AUTH_PROJECT": "ap",
             "AUDIO_BUCKET": "b",
             "CORS_ORIGINS": "https://a.com, https://b.com ,",
-            "DAILY_RUN_CAP": "5",
+            "EVAL_CAP_DAY": "7",
+            "EVAL_CAP_MONTH": "70",
+            "AI_CAP_DAY": "2",
+            "AI_CAP_MONTH": "9",
             "TASKS_QUEUE": "q",
             "TASKS_SA": "sa",
             "WORKER_URL": "https://w",
@@ -35,7 +40,8 @@ def test_parses_all_vars():
         }
     )
     assert s.service_mode == "worker" and s.firestore_database == "staging"
-    assert s.cors_origins == ("https://a.com", "https://b.com") and s.daily_run_cap == 5
+    assert s.cors_origins == ("https://a.com", "https://b.com")
+    assert (s.eval_cap_day, s.eval_cap_month, s.ai_cap_day, s.ai_cap_month) == (7, 70, 2, 9)
     assert s.git_sha == "sha" and s.worker_url == "https://w"
 
 
@@ -62,8 +68,13 @@ def test_fake_auth_allowed_locally(env):
         {"ENV": "dev"},
         {"ADAPTERS": "x"},
         {"AUTH_MODE": "x"},
-        {"DAILY_RUN_CAP": "many"},
-        {"DAILY_RUN_CAP": "-1"},
+        {"EVAL_CAP_DAY": "many"},
+        {"AI_CAP_MONTH": "1.5"},
+        {"EVAL_CAP_DAY": "-1"},
+        {"AI_CAP_DAY": "-1"},
+        {"EVAL_CAP_MONTH": "-1", "EVAL_CAP_DAY": "0"},
+        {"EVAL_CAP_DAY": "11", "EVAL_CAP_MONTH": "10"},
+        {"AI_CAP_DAY": "6", "AI_CAP_MONTH": "5"},
         {"STT_CAP_FACTOR": "lots"},
         {"STT_CAP_FACTOR": "0"},
         {"STT_CAP_MIN_S": "-5"},
@@ -82,3 +93,17 @@ def test_stt_cap_defaults_and_overrides():
         {"STT_CAP_FACTOR": "2", "STT_CAP_MIN_S": "120", "STT_TIME_LIMIT_S": "900"}
     )
     assert (s.stt_cap_factor, s.stt_cap_min_s, s.stt_time_limit_s) == (2.0, 120.0, 900.0)
+
+
+def test_daily_run_cap_removed_everywhere():
+    import pathlib
+
+    root = pathlib.Path(__file__).resolve().parents[2]
+    assert not hasattr(Settings(), "daily_run_cap")
+    paths = [root / "api/.env.example", root / "api/src/onolys_api/config.py"]
+    paths += (root / "infra").rglob("*.tf")
+    for p in paths:
+        if ".terraform" in p.parts:
+            continue
+        text = p.read_text().lower()
+        assert "daily_run_cap" not in text, p

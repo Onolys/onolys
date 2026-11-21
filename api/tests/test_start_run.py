@@ -119,7 +119,7 @@ def test_manual_start_sets_first_run_id_when_unset(repo):  # noqa: F811
 
 def test_refused_start_reserves_nothing(repo):  # noqa: F811
     queue = RecordingQueue()
-    app = make_client(repo, mk_settings(max_active_runs=2, daily_run_cap=0), queue)
+    app = make_client(repo, mk_settings(max_active_runs=2, eval_cap_day=0), queue)
     uid = f"u{uuid.uuid4().hex[:10]}"
     h = {"Authorization": f"Bearer test:{uid}"}
     sid = new_session(repo, uid, state="report_ready", ready=True, **READY)
