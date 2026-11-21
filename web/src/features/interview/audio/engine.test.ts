@@ -50,6 +50,12 @@ describe("createAudioEngine (mocked browser)", () => {
       ondataavailable: ((e: { data: Blob }) => void) | null = null;
       onstop: (() => void) | null = null;
       start = vi.fn();
+      pause = vi.fn(() => {
+        this.state = "paused";
+      });
+      resume = vi.fn(() => {
+        this.state = "recording";
+      });
       constructor(public s: unknown, o?: { mimeType: string }) {
         this.mimeType = o?.mimeType ?? "";
         recorders.push(this);
@@ -87,6 +93,17 @@ describe("createAudioEngine (mocked browser)", () => {
     expect(play.port.postMessage).toHaveBeenCalledWith(expect.any(ArrayBuffer), [expect.any(ArrayBuffer)]);
     e.flush();
     expect(play.port.postMessage).toHaveBeenLastCalledWith("flush");
+
+    e.pauseRecording();
+    expect(recorder.pause).toHaveBeenCalledTimes(1);
+    e.pauseRecording(); // idempotent while paused
+    expect(recorder.pause).toHaveBeenCalledTimes(1);
+    e.playPcm24k(new Int16Array([1])); // mic/playback graph stays alive
+    expect(play.port.postMessage).toHaveBeenCalledTimes(3);
+    e.resumeRecording();
+    expect(recorder.resume).toHaveBeenCalledTimes(1);
+    e.resumeRecording();
+    expect(recorder.resume).toHaveBeenCalledTimes(1);
 
     const blob = await e.stopRecording();
     expect(blob.size).toBe(3);

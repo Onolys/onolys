@@ -7,7 +7,8 @@ import { captureUrl, playbackUrl } from "./workletUrls";
  *   await e.start()            // mic (AEC + NS), worklets, recorder; call from a user gesture
  *   e.playPcm24k(buf)          // AI audio (PCM16 24 kHz mono); plays to speakers AND the recording
  *   e.flush()                  // on `interrupted`: drop queued AI audio
- *   const blob = await e.stopRecording()   // mixed mic+AI; recorder keeps running across reconnects
+ *   e.pauseRecording() / e.resumeRecording()  // only connected time is recorded: pause while reconnecting
+ *   const blob = await e.stopRecording()   // mixed mic+AI (connected time only)
  *   e.mimeType                 // chosen recorder container ("" = browser default)
  *   e.close()                  // stop mic, tear down context
  */
@@ -15,6 +16,8 @@ export interface AudioEngine {
   start(): Promise<void>;
   playPcm24k(pcm: ArrayBuffer | Int16Array): void;
   flush(): void;
+  pauseRecording(): void;
+  resumeRecording(): void;
   stopRecording(): Promise<Blob>;
   readonly mimeType: string;
   close(): void;
@@ -74,6 +77,12 @@ export function createAudioEngine(opts: { onCaptureFrame: (frame: ArrayBuffer) =
     },
     flush() {
       playNode?.port.postMessage("flush");
+    },
+    pauseRecording() {
+      if (rec?.state === "recording") rec.pause(); // mic + playback graph stay alive
+    },
+    resumeRecording() {
+      if (rec?.state === "paused") rec.resume();
     },
     stopRecording() {
       const r = rec;

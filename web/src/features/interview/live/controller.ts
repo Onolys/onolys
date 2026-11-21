@@ -2,7 +2,8 @@
  * Live interview controller (SP10 R8, R4): drives the relay socket and the audio engine, no UI.
  * Protocol: first message `{type:"auth", id_token}`; binary PCM16 16 kHz up; `ready`, binary PCM16 24 kHz,
  * `ai_speaking`, `interrupted`, `warn`, `time_up`, `error` down. A close that is not 1000 or 44xx is a dropped
- * connection: the same URL is retried for `reconnectWindowMs`, while the audio engine keeps recording.
+ * connection: the same URL is retried for `reconnectWindowMs`; the recorder is paused meanwhile and resumed on
+ * `ready{resumed:true}`, so the recording holds only connected time (matches the relay clock and the server limit).
  */
 import type { AudioEngine } from "../audio/engine";
 import { createRelaySocket } from "../relay/createRelaySocket";
@@ -24,7 +25,7 @@ export interface LiveState {
 export interface ControllerOptions {
   url: string;
   getToken: () => Promise<string | null>;
-  engine: Pick<AudioEngine, "playPcm24k" | "flush">;
+  engine: Pick<AudioEngine, "playPcm24k" | "flush" | "pauseRecording" | "resumeRecording">;
   /** Defaults to `createRelaySocket` (the fake in mock builds). */
   createSocket?: (url: string) => RelaySocket;
   reconnectWindowMs?: number;
@@ -111,7 +112,7 @@ export function createLiveController(opts: ControllerOptions): LiveController {
         opts.engine.playPcm24k(ev.data as ArrayBuffer);
         return;
       }
-      let msg: { type?: string; elapsed_s?: number; max_s?: number; warn_s?: number; code?: string };
+      let msg: { type?: string; resumed?: boolean; elapsed_s?: number; max_s?: number; warn_s?: number; code?: string };
       try {
         msg = JSON.parse(ev.data);
       } catch {
@@ -121,6 +122,7 @@ export function createLiveController(opts: ControllerOptions): LiveController {
         case "ready":
           authed = true;
           firstDropAt = null;
+          if (msg.resumed) opts.engine.resumeRecording();
           baseElapsed = msg.elapsed_s ?? 0;
           baseAt = Date.now();
           set({ phase: "live", maxS: msg.max_s ?? state.maxS, warnS: msg.warn_s ?? state.warnS, errorCode: null });
@@ -151,10 +153,11 @@ export function createLiveController(opts: ControllerOptions): LiveController {
         const known: Record<number, string> = { 4401: "signed_out", 4404: "not_found", 4409: "not_live" };
         return terminal("error", known[code] ?? "relay_error");
       }
-      // dropped: retry the same URL; the recorder keeps running
+      // dropped: retry the same URL; the recorder pauses (connected time only)
       const now = Date.now();
       firstDropAt ??= now;
       if (now - firstDropAt >= windowMs) return terminal("error", "connection_lost");
+      opts.engine.pauseRecording();
       set({ phase: "reconnecting" });
       retryTimer = setTimeout(connect, retryMs);
     };

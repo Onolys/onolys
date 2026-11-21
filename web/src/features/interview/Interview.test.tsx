@@ -17,6 +17,8 @@ class FakeEngine {
   played = 0;
   flushed = 0;
   stopped = 0;
+  paused = 0;
+  resumed = 0;
   mimeType = "audio/webm";
   onCaptureFrame: (f: ArrayBuffer) => void;
   constructor(o: { onCaptureFrame: (f: ArrayBuffer) => void }) {
@@ -32,6 +34,12 @@ class FakeEngine {
   }
   flush() {
     this.flushed++;
+  }
+  pauseRecording() {
+    this.paused++;
+  }
+  resumeRecording() {
+    this.resumed++;
   }
   async stopRecording() {
     this.stopped++;
@@ -238,6 +246,9 @@ describe("live interview", () => {
     expect(engines).toHaveLength(1);
     expect(engines[0]!.closed).toBe(false);
     expect(engines[0]!.stopped).toBe(0);
+    // only connected time is recorded: paused on the drop, resumed on `ready{resumed:true}`
+    expect(engines[0]!.paused).toBe(1);
+    expect(engines[0]!.resumed).toBe(1);
   });
 
   it("flushes queued AI audio on interrupted", async () => {
