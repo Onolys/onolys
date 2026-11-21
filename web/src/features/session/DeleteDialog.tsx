@@ -1,6 +1,6 @@
 import { useEffect, useRef, type ReactNode } from "react";
 
-/** Confirm dialog for permanent deletion (PRD R4 Delete). Escape or Cancel closes it. */
+/** Confirm dialog for permanent deletion (PRD R4 Delete). Escape or Cancel closes it (not while a delete is in flight). */
 export function DeleteDialog({
   busy,
   onConfirm,
@@ -23,7 +23,7 @@ export function DeleteDialog({
   const onKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Escape") {
       e.stopPropagation();
-      onCancel();
+      if (!busy) onCancel(); // a delete in flight cannot be dismissed: its failure must stay visible
     } else if (e.key === "Tab") {
       // keep focus inside the dialog
       const items = dialogRef.current?.querySelectorAll<HTMLElement>("button:not([disabled])");

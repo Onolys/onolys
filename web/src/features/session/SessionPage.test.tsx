@@ -1,4 +1,4 @@
-import { act, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -461,6 +461,32 @@ describe("session page: delete", () => {
     await user.click(within(dialog).getByRole("button", { name: "Delete permanently" }));
     await waitFor(() => expect(within(dialog).getByRole("alert")).toHaveTextContent("Reference: req_del"));
     expect(screen.getByRole("dialog")).toBeInTheDocument();
+  });
+
+  it("Escape is ignored while a delete is in flight, so a failure is still shown (W32)", async () => {
+    const user = userEvent.setup();
+    const sid = create();
+    open(sid);
+    await ready();
+    let release: () => void = () => {};
+    const gate = new Promise<void>((r) => (release = r));
+    server.use(
+      http.delete("*/v1/sessions/:id", async () => {
+        await gate;
+        return HttpResponse.json(
+          { schema_version: "0.0.1", status: 500, message: "x", details: [{ code: "internal_error", message: "x" }], request_id: "req_esc" },
+          { status: 500 },
+        );
+      }),
+    );
+    await user.click(screen.getByRole("button", { name: "Delete session" }));
+    const dialog = await screen.findByRole("dialog");
+    await user.click(within(dialog).getByRole("button", { name: "Delete permanently" }));
+    await waitFor(() => expect(within(dialog).getByRole("button", { name: "Delete permanently" })).toBeDisabled());
+    fireEvent.keyDown(dialog, { key: "Escape" }); // focus can still be inside the dialog (e.g. on Cancel)
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    release();
+    await waitFor(() => expect(within(dialog).getByRole("alert")).toHaveTextContent("Reference: req_esc"));
   });
 
   it("Escape closes the dialog", async () => {
