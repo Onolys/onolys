@@ -9,6 +9,7 @@ from types import SimpleNamespace as NS
 
 import pytest
 import yaml
+
 from onolys_core.errors import ConfigError, InputError
 from onolys_core.safe_log import log
 from onolys_core.voice import (
