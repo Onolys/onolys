@@ -14,11 +14,13 @@ docs the reservation was made on, even if the UTC day/month has rolled over sinc
 
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
+from typing import NoReturn
 
 from onolys_api.config import Settings
 from onolys_api.errors import ApiError
 from onolys_api.repo.base import Repo
 from onolys_api.repo.limits import Kind, LimitDefaults, Period, effective_cap
+from onolys_api.repo.models import InterviewDoc
 
 __all__ = [
     "Kind",
@@ -28,6 +30,7 @@ __all__ = [
     "PeriodUsage",
     "UsageView",
     "reserve",
+    "start_interview",
     "release",
     "reserve_run",
     "release_run",
@@ -94,6 +97,25 @@ def reserve(
                                  settings.max_active_runs)  # fmt: skip
     if outcome == "ok":
         return Reservation(kind, date)
+    _refuse(kind, outcome)
+
+
+def start_interview(
+    repo: Repo, settings: Settings, uid: str, iid: str, doc: InterviewDoc
+) -> Reservation:
+    """Reserve one interview unit and create `doc` in ONE repo transaction (A9): concurrent starts
+    cannot both reserve. 429 when capped; 409 `conflict` when the caller already has an open one."""
+    outcome = repo.create_interview_reserved(
+        uid, iid, doc, LimitDefaults.from_settings(settings), settings.max_active_runs
+    )
+    if outcome == "ok":
+        return Reservation("interview", doc.reservation_date)
+    if outcome == "open_exists":
+        raise ApiError.of(409, "conflict", "Another interview is already starting.")
+    _refuse("interview", outcome)
+
+
+def _refuse(kind: Kind, outcome: str) -> NoReturn:
     period: Period = "month" if outcome == "month_cap" else "day"
     if kind == "interview":
         raise ApiError.of(429, "interview_cap_reached", INTERVIEW_MESSAGES[period], period=period)

@@ -3,7 +3,7 @@
 import copy
 import threading
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 
 from onolys_core.transcript import Transcript
 
@@ -665,6 +665,21 @@ class FakeRepo:
     def get_interview(self, uid: str, iid: str) -> InterviewDoc:
         return self._load(InterviewDoc, iid, self._owned(f"interviews/{iid}", uid))
 
+    def create_interview_reserved(
+        self, uid: str, iid: str, doc: InterviewDoc, defaults: LimitDefaults, max_active: int
+    ) -> ReserveUsageOutcome | Literal["open_exists"]:
+        if doc.uid != uid:
+            raise ValueError("document uid does not match the caller")
+        with self._claim_lock:
+            if self.list_open_interviews(uid):
+                return "open_exists"
+            outcome = self.reserve_usage(
+                uid, "interview", doc.reservation_date, defaults, max_active
+            )
+            if outcome == "ok":
+                self._create(f"interviews/{iid}", doc.to_store())
+            return outcome
+
     def list_open_interviews(self, uid: str) -> list[InterviewDoc]:
         return [
             self._load(InterviewDoc, p.removeprefix("interviews/"), copy.deepcopy(d))
@@ -676,7 +691,7 @@ class FakeRepo:
     def transition_interview(
         self, uid: str, iid: str, from_states: tuple[InterviewState, ...],
         to_state: InterviewState, fields: dict[str, Any] | None = None,
-        refund_rule: tuple[datetime, float] | None = None,
+        refund_rule: tuple[datetime, float] | tuple[datetime, float, int] | None = None,
     ) -> InterviewDoc | None:  # fmt: skip
         with self._claim_lock:
             d = self._owned(f"interviews/{iid}", uid)
@@ -684,7 +699,17 @@ class FakeRepo:
                 return None
             d = {**d, **(fields or {}), "state": to_state}
             if refund_rule is not None:
-                d["refunded"] = interview_refundable(d, *refund_rule)
+                d["refunded"] = interview_refundable(d, *refund_rule[:2])
+                if d["refunded"] and len(refund_rule) > 2:
+                    day_path = f"usage/{uid}_{d['reservation_date']}"
+                    day = self._get(day_path) or {"uid": uid, "date": d["reservation_date"]}
+                    if day.get("interview_refunds", 0) >= refund_rule[2]:
+                        d["refunded"] = False
+                    else:
+                        self._put(
+                            day_path,
+                            {**day, "interview_refunds": day.get("interview_refunds", 0) + 1},
+                        )
             self._put(f"interviews/{iid}", d)
             return self._load(InterviewDoc, iid, d)
 

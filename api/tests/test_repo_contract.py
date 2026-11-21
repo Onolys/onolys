@@ -877,3 +877,43 @@ def test_create_session_for_interview_links_atomically_once(repo):
     assert link(alice, iid, sid2) == "already_linked"
     with pytest.raises(NotFoundError):
         repo.get_session(alice, sid2)
+
+
+def test_concurrent_interview_creates_reserve_exactly_once(repo):
+    from concurrent.futures import ThreadPoolExecutor
+
+    from onolys_api.repo.limits import LimitDefaults
+
+    alice = f"alice-{uuid.uuid4().hex[:8]}"
+    d = LimitDefaults(10, 100, 5, 30)
+    day = "2026-11-21"
+
+    def go(_):
+        doc = _iv(alice)
+        return repo.create_interview_reserved(alice, uuid.uuid4().hex, doc, d, 2)
+
+    with ThreadPoolExecutor(8) as ex:
+        outs = list(ex.map(go, range(8)))
+    assert sorted(outs) == ["ok"] + ["open_exists"] * 7
+    assert len(repo.list_open_interviews(alice)) == 1
+    assert repo.get_usage_docs(alice, day)[0].interviews == 1
+    # a capped user: nothing written
+    bob = f"bob-{uuid.uuid4().hex[:8]}"
+    assert repo.create_interview_reserved(bob, uuid.uuid4().hex, _iv(bob),
+                                          LimitDefaults(10, 100, 0, 0), 2) == "month_cap"  # fmt: skip
+    assert repo.list_open_interviews(bob) == []
+
+
+def test_interview_refund_cap_counts_on_the_reservation_day(repo):
+    alice = f"alice-{uuid.uuid4().hex[:8]}"
+    now = datetime(2026, 11, 21, 12, 0, tzinfo=UTC)
+    got = []
+    for _ in range(4):
+        iid = uuid.uuid4().hex
+        repo.create_interview(alice, iid, _iv(alice))
+        done = repo.transition_interview(
+            alice, iid, ("created", "live"), "abandoned", None, (now, 30.0, 3)
+        )
+        got.append(done.refunded)
+    assert got == [True, True, True, False]
+    assert repo.get_usage_docs(alice, "2026-11-21")[0].interview_refunds == 3

@@ -254,7 +254,9 @@ async def test_enqueue_failure_fails_create_with_refund_and_no_interview(api, ap
     app.state.queue.enqueue = boom
     r = await api.post("/v1/interviews", headers=A, json={"scenario_id": SCENARIO})
     assert r.status_code == 500
-    assert [c[0] for c in repo.calls] == ["reserve", "release"] and releases(repo) == [True]
+    assert [c[0] for c in repo.calls] == ["reserve", "create", "release"] and releases(repo) == [
+        True
+    ]
     assert repo.get_usage_docs("alice", "2026-11-21")[0].interviews == 0
     assert repo.list_open_interviews("alice") == []
 

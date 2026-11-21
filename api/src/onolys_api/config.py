@@ -70,6 +70,7 @@ class Settings:
     ai_min_seconds: int = 300  # shortest recording worth sending to the audit
     ai_tolerance_seconds: int = 30
     ai_abandon_count_seconds: int = 30  # ended/abandoned under this: the usage unit is refunded
+    ai_refunds_per_day: int = 3  # at most this many such refunds per user per UTC day (A9)
     ai_reconnect_seconds: int = 60  # relay waits this long for a dropped client
     ai_mic_gate: bool = False
     uid_hmac_key: str = ""  # keys the `uid_hash` log field (Secret Manager `uid-hmac-key-{env}`)
@@ -119,6 +120,7 @@ class Settings:
             ai_abandon_count_seconds=_int(
                 e, "AI_ABANDON_COUNT_SECONDS", cls.ai_abandon_count_seconds
             ),
+            ai_refunds_per_day=_int(e, "AI_REFUNDS_PER_DAY", cls.ai_refunds_per_day),
             ai_reconnect_seconds=_int(e, "AI_RECONNECT_SECONDS", cls.ai_reconnect_seconds),
             ai_mic_gate=_bool(e, "AI_MIC_GATE", cls.ai_mic_gate),
             uid_hmac_key=e.get("UID_HMAC_KEY", ""),
@@ -157,6 +159,7 @@ class Settings:
             ("AI_MIN_SECONDS", self.ai_min_seconds),
             ("AI_TOLERANCE_SECONDS", self.ai_tolerance_seconds),
             ("AI_ABANDON_COUNT_SECONDS", self.ai_abandon_count_seconds),
+            ("AI_REFUNDS_PER_DAY", self.ai_refunds_per_day),
             ("AI_RECONNECT_SECONDS", self.ai_reconnect_seconds),
         ):
             if v < 0:

@@ -29,7 +29,6 @@ class SpyRepo(FakeRepo):
     def __init__(self, blobs):
         super().__init__(blobs)
         self.calls: list[tuple] = []
-        self.fail_create = False
 
     def reserve_usage(self, uid, kind, date, defaults, max_active):
         self.calls.append(("reserve", uid, kind, date))
@@ -39,11 +38,11 @@ class SpyRepo(FakeRepo):
         self.calls.append(("release", uid, kind, date, refund))
         return super().release_usage(uid, kind, date, refund)
 
-    def create_interview(self, uid, iid, doc):
-        self.calls.append(("create", uid))
-        if self.fail_create:
-            raise RuntimeError("boom")
-        return super().create_interview(uid, iid, doc)
+    def create_interview_reserved(self, uid, iid, doc, defaults, max_active):
+        out = super().create_interview_reserved(uid, iid, doc, defaults, max_active)
+        if out == "ok":
+            self.calls.append(("create", uid))
+        return out
 
 
 @pytest.fixture
@@ -129,8 +128,13 @@ async def test_response_leaks_no_persona_text(api):
         assert hidden not in text
 
 
-async def test_failed_create_releases_with_refund(api, repo):
-    repo.fail_create = True
+class _FailingQueue:
+    def enqueue(self, *a, **k):
+        raise RuntimeError("queue down")
+
+
+async def test_failed_create_releases_with_refund(api, repo, app):
+    app.state.queue = _FailingQueue()
     r = await create(api)
     assert r.status_code == 500
     assert [c[0] for c in repo.calls] == ["reserve", "create", "release"]
@@ -308,3 +312,27 @@ def test_settings_ai_and_voice_url():
     ):
         with pytest.raises(ConfigError):
             Settings.from_env(bad)
+
+
+async def test_short_interview_refunds_are_capped_per_day(api, repo):
+    """A9: only the first 3 short (<30 s) interviews of a user per day get the unit back."""
+    for i in range(5):
+        iid = (await create(api)).json()["interview_id"]
+        assert (await api.post(f"/v1/interviews/{iid}/end", headers=A)).status_code == 200
+        assert repo.get_interview("alice", iid).refunded is (i < 3)
+        assert usage(repo)[0] == max(0, i + 1 - 3)  # 4th and 5th stay counted
+
+
+async def test_second_create_while_one_is_open_is_a_conflict_not_a_second_unit(api, repo):
+    # a still-open interview is abandoned by the next create; a racing create must not reserve
+    first = await create(api)
+    assert first.status_code == 201
+    repo.update_interview("alice", first.json()["interview_id"], {"state": "live"})
+    from onolys_api.repo.limits import LimitDefaults
+
+    doc = InterviewDoc(
+        uid="alice", scenario_id=SCENARIO, voice="Kore", reservation_date="2026-11-21"
+    )
+    out = repo.create_interview_reserved("alice", "b" * 32, doc, LimitDefaults(10, 100, 5, 30), 2)
+    assert out == "open_exists"
+    assert usage(repo) == (1, 1)

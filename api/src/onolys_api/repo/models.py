@@ -212,6 +212,7 @@ class UsageDoc(Doc):
     date: str = ""
     runs: int = 0  # eval count (name kept: old docs hold it)
     interviews: int = 0  # missing on old docs reads 0
+    interview_refunds: int = 0  # short-interview refunds given this day (capped, A9)
     tokens: int = 0
 
 

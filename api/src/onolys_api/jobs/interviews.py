@@ -6,7 +6,8 @@ caller wins; only the winner touches the SP11 reservation: `refund=True` when th
 elapsed time (relay-recorded `duration_s`, aged by `now - seen_at` while the relay is connected) is
 under `AI_ABANDON_COUNT_SECONDS`, else the unit stays counted. The verdict is stored as
 `refunded` in the same write as the transition; a refunded interview can never be linked to a
-session (no free evaluation on top of the refund). A caller that loses (already
+session (no free evaluation on top of the refund). At most `AI_REFUNDS_PER_DAY` refunds are given
+per user per UTC day (A9); later short interviews stay counted. A caller that loses (already
 ended/abandoned/uploaded) changes nothing.
 """
 
@@ -33,7 +34,7 @@ def settle_interview(
     Returns the interview as it now is (unchanged when it was already settled)."""
     doc = repo.transition_interview(
         uid, iid, OPEN_STATES, to_state, {"ended_at": now},
-        refund_rule=(now, float(settings.ai_abandon_count_seconds)),
+        refund_rule=(now, float(settings.ai_abandon_count_seconds), settings.ai_refunds_per_day),
     )  # fmt: skip
     if doc is None:
         return repo.get_interview(uid, iid)

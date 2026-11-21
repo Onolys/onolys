@@ -14,7 +14,7 @@ import threading
 import time
 import weakref
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 
 from google.api_core.exceptions import Aborted, AlreadyExists, InvalidArgument
 from google.api_core.exceptions import NotFound as GoogleNotFound
@@ -844,6 +844,42 @@ class FirestoreRepo:
         except AlreadyExists:
             raise ConflictError() from None
 
+    def create_interview_reserved(
+        self, uid: str, iid: str, doc: InterviewDoc, defaults: LimitDefaults, max_active: int
+    ) -> ReserveUsageOutcome | Literal["open_exists"]:
+        if doc.uid != uid:
+            raise ValueError("document uid does not match the caller")
+        date = doc.reservation_date
+        day_ref = self._top("usage", f"{uid}_{date}")
+        month_ref = self._top("usage", f"{uid}_{date[:7]}")
+        user_ref = self._top("users", uid)
+        iv_ref = self._top("interviews", iid)
+        open_q = _uid_query(self._client.collection("interviews"), uid).where(
+            filter=FieldFilter("state", "in", ["created", "live"])
+        )
+
+        @firestore.transactional
+        def txn_fn(txn):
+            if any(True for _ in open_q.get(transaction=txn)):
+                return "open_exists"
+            user = user_ref.get(transaction=txn).to_dict() or {}
+            day = day_ref.get(transaction=txn).to_dict() or {}
+            month = month_ref.get(transaction=txn).to_dict() or {}
+            outcome = decide_reserve(user, day, month, "interview", defaults, max_active)
+            if outcome != "ok":
+                return outcome
+            field = KIND_FIELD["interview"]
+            txn.set(day_ref, {"uid": uid, "date": date, field: day.get(field, 0) + 1}, merge=True)
+            txn.set(
+                month_ref,
+                {"uid": uid, "month": date[:7], field: month.get(field, 0) + 1},
+                merge=True,
+            )
+            txn.create(iv_ref, doc.to_store())
+            return "ok"
+
+        return self._contended(txn_fn, uid)
+
     def get_interview(self, uid: str, iid: str) -> InterviewDoc:
         return _load(InterviewDoc, _owned(self._top("interviews", iid), uid))
 
@@ -856,7 +892,7 @@ class FirestoreRepo:
     def transition_interview(
         self, uid: str, iid: str, from_states: tuple[InterviewState, ...],
         to_state: InterviewState, fields: dict[str, Any] | None = None,
-        refund_rule: tuple[datetime, float] | None = None,
+        refund_rule: tuple[datetime, float] | tuple[datetime, float, int] | None = None,
     ) -> InterviewDoc | None:  # fmt: skip
         ref = self._top("interviews", iid)
         _owned(ref, uid)
@@ -870,7 +906,21 @@ class FirestoreRepo:
                 return None
             data = {**data, **(fields or {}), "state": to_state}
             if refund_rule is not None:
-                data["refunded"] = interview_refundable(data, *refund_rule)
+                data["refunded"] = interview_refundable(data, *refund_rule[:2])
+                if data["refunded"] and len(refund_rule) > 2:
+                    day_ref = self._top("usage", f"{uid}_{data['reservation_date']}")
+                    given = (day_ref.get(transaction=txn).to_dict() or {}).get(
+                        "interview_refunds", 0
+                    )
+                    if given >= refund_rule[2]:
+                        data["refunded"] = False
+                    else:
+                        txn.set(
+                            day_ref,
+                            {"uid": uid, "date": data["reservation_date"],
+                             "interview_refunds": given + 1},
+                            merge=True,
+                        )  # fmt: skip
             txn.set(ref, data)
             return data
 

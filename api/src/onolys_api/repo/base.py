@@ -204,18 +204,27 @@ class Repo(Protocol):
     ) -> StartOutcome: ...  # fmt: skip
     # interviews (SP10 R5): uid-scoped `interviews/{id}`; foreign or missing -> NotFoundError.
     def create_interview(self, uid: str, iid: str, doc: InterviewDoc) -> None: ...
+    # ONE transaction (A9): refuse with "open_exists" when the caller has an interview in
+    # `created|live`; else check the interview day/month caps like `reserve_usage("interview")`
+    # ("day_cap"/"month_cap"), then count the unit on `doc.reservation_date` and create the doc.
+    # Concurrent callers: exactly one reserves; nothing is written on a refusal.
+    def create_interview_reserved(
+        self, uid: str, iid: str, doc: InterviewDoc, defaults: LimitDefaults, max_active: int
+    ) -> ReserveUsageOutcome | Literal["open_exists"]: ...
     def get_interview(self, uid: str, iid: str) -> InterviewDoc: ...
     # the caller's interviews still in `created` or `live`
     def list_open_interviews(self, uid: str) -> list[InterviewDoc]: ...
     # ONE transaction: if the interview is in one of `from_states`, set `state=to_state` and
     # `fields` (e.g. `ended_at`, `discarded`) and return the updated doc; otherwise write nothing
     # and return None. Exactly one of several racing callers gets the doc (settle-once).
-    # With `refund_rule=(now, threshold_s)` the same write also stores `refunded` (see
-    # `models.interview_refundable`); an interview with `refunded` is never linkable to a session.
+    # With `refund_rule=(now, threshold_s[, max_refunds])` the same write also stores `refunded`
+    # (see `models.interview_refundable`); an interview with `refunded` is never linkable to a
+    # session. With `max_refunds` the refund is only given while the reservation day's
+    # `interview_refunds` count is below it (the count is bumped in the same transaction).
     def transition_interview(
         self, uid: str, iid: str, from_states: tuple[InterviewState, ...],
         to_state: InterviewState, fields: dict[str, Any] | None = None,
-        refund_rule: tuple[datetime, float] | None = None,
+        refund_rule: tuple[datetime, float] | tuple[datetime, float, int] | None = None,
     ) -> InterviewDoc | None: ...  # fmt: skip
     # plain field merge for the relay/uploader (`duration_s`, `state=live`, ...)
     def update_interview(self, uid: str, iid: str, fields: dict[str, Any]) -> None: ...
