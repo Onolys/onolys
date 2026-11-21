@@ -20,7 +20,7 @@ staging: same shape, site onolys-app-staging, Firestore DB `staging`, *-staging 
 |---|---|---|
 | Cloud Run api | `onolys-api-staging` | `onolys-api-prod` |
 | Cloud Run worker | `onolys-worker-staging` | `onolys-worker-prod` |
-| Cloud Run admin backend | `onolys-admin-backend-staging` (`admin_enabled.staging=true`) | not created (`admin_enabled.prod=false`) |
+| Cloud Run admin backend | `onolys-admin-backend-staging` (`admin_enabled.staging=true`) | `onolys-admin-backend-prod` (`admin_enabled.prod=true`) |
 | Firestore database (Native, `us-central1`) | `staging` | `(default)` (delete-protection on) |
 | GCS bucket (private) | `onolys-audio-staging` | `onolys-audio-prod` |
 | Cloud Tasks queue | `steps-staging` | `steps-prod` |
@@ -33,7 +33,7 @@ staging: same shape, site onolys-app-staging, Firestore DB `staging`, *-staging 
 
 Shared (project level): Artifact Registry repo `onolys` (`us-central1-docker.pkg.dev/onolys/onolys`, no cleanup policy, so any earlier sha stays deployable), budget `onolys monthly`, Monitoring channel `Onolys owner email`, Workload Identity pool `github` with provider `github` (condition `assertion.repository=='Onolys/onolys'`), Speech-to-Text service agent `service-1054076260967@gcp-sa-speech.iam.gserviceaccount.com` (`objectViewer` on both buckets), Identity Platform config (email+password, min length 8, open sign-up, no MFA).
 
-Admin (SP07) resources (`onolys-admin`, `onolys-admin-staging` sites, `admin.onolys.com`, `onolys-admin-backend-{env}`, `admin-allowed-emails-{env}`) exist only per env while `admin_enabled` (a map, default `{ staging = true, prod = false }`) is true for that env: staging owns `onolys-admin-staging`, its web app, `onolys-admin-backend-staging`, `admin-allowed-emails-staging` and the `onolys-admin-staging.web.app` authorised domain; prod ones (`onolys-admin`, `admin.onolys.com`, `onolys-admin-backend-prod`) stay off until launch. `onolys-admin-backend-staging` is public at Cloud Run (`allUsers` invoker) on purpose; access is enforced in the app (Firebase ID token + allowlist), timeout 130 s, runs as `admin-backend-staging`.
+Admin (SP07) resources (`onolys-admin`, `onolys-admin-staging` sites, `admin.onolys.com`, `onolys-admin-backend-{env}`, `admin-allowed-emails-{env}`) exist only per env while `admin_enabled` (a map, default `{ staging = true, prod = true }`) is true for that env: staging owns `onolys-admin-staging`, its web app, `onolys-admin-backend-staging`, `admin-allowed-emails-staging` and the `onolys-admin-staging.web.app` authorised domain; prod ones (`onolys-admin`, `admin.onolys.com`, `onolys-admin-backend-prod`) are enabled for launch. `onolys-admin-backend-staging` is public at Cloud Run (`allUsers` invoker) on purpose; access is enforced in the app (Firebase ID token + allowlist), timeout 130 s, runs as `admin-backend-staging`.
 
 Sizing (checked on the live services):
 
@@ -143,7 +143,7 @@ cd infra && terraform init && terraform plan     # add -lock=false for a read-on
 terraform apply
 ```
 
-No `gcloud` needed; the providers use `user_project_override` with billing project `onolys`. `terraform plan/apply` is manual (no CI apply). Cloud Run images and `GIT_SHA` belong to CI: after a CI deploy `plan` may show `GIT_SHA` drift; apply with `-var git_sha=<deployed sha>` to keep it quiet.
+No `gcloud` needed; the providers use `user_project_override` with billing project `onolys`. `terraform plan/apply` is manual (no CI apply). Cloud Run images and `GIT_SHA` belong to CI: after a CI deploy `plan` may show `GIT_SHA` drift; apply with `-var 'git_sha={staging="<staging sha>",prod="<prod sha>"}'` (root map var, one value per env) to keep it quiet. CI-set labels (`commit-sha`, `managed-by`, `goog-terraform-provisioned`) are ignored via `lifecycle`.
 
 Seed secret values outside state (values never printed, never in tfvars):
 

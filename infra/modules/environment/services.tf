@@ -103,6 +103,11 @@ resource "google_cloud_run_v2_service" "api" {
       client,
       scaling, # service-level block the API fills with zeros (perpetual diff); per-revision scaling is set in template
       client_version,
+      labels["commit-sha"], # set by CI (google-github-actions/deploy-cloudrun)
+      labels["managed-by"], # set by CI
+      template[0].labels["commit-sha"],
+      template[0].labels["managed-by"],
+      template[0].labels["goog-terraform-provisioned"],
     ]
   }
 
@@ -190,6 +195,11 @@ resource "google_cloud_run_v2_service" "worker" {
       client,
       scaling, # service-level block the API fills with zeros (perpetual diff); per-revision scaling is set in template
       client_version,
+      labels["commit-sha"], # set by CI (google-github-actions/deploy-cloudrun)
+      labels["managed-by"], # set by CI
+      template[0].labels["commit-sha"],
+      template[0].labels["managed-by"],
+      template[0].labels["goog-terraform-provisioned"],
     ]
   }
 
@@ -286,6 +296,11 @@ resource "google_cloud_run_v2_service" "admin_backend" {
       client,
       scaling, # service-level block the API fills with zeros (perpetual diff); per-revision scaling is set in template
       client_version,
+      labels["commit-sha"], # set by CI (google-github-actions/deploy-cloudrun)
+      labels["managed-by"], # set by CI
+      template[0].labels["commit-sha"],
+      template[0].labels["managed-by"],
+      template[0].labels["goog-terraform-provisioned"],
     ]
   }
 

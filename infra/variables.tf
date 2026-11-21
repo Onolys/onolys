@@ -9,11 +9,11 @@ variable "region" {
 }
 
 variable "admin_enabled" {
-  description = "Gates the admin (SP07) resources per environment: staging builds the staging admin backend, site, web app and authorised domain; prod stays off until launch."
+  description = "Gates the admin (SP07) resources per environment: staging builds the staging admin backend, site, web app and authorised domain; prod enabled for launch."
   type        = map(bool)
   default = {
     staging = true
-    prod    = false
+    prod    = true
   }
 
   validation {
@@ -95,4 +95,13 @@ variable "github_repository" {
   description = "GitHub repo (owner/name) allowed to impersonate the deployer SAs via WIF."
   type        = string
   default     = "Onolys/onolys"
+}
+
+variable "git_sha" {
+  description = "Initial/current GIT_SHA env value per environment. CI overwrites it at deploy; pass the live values on apply to keep plan quiet."
+  type        = map(string)
+  default = {
+    staging = "unset"
+    prod    = "unset"
+  }
 }

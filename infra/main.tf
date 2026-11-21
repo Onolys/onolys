@@ -104,6 +104,7 @@ module "staging" {
   llm_secrets              = var.llm_secrets
   stt_secrets              = var.stt_secrets
   admin_enabled            = var.admin_enabled["staging"]
+  git_sha                  = var.git_sha["staging"]
   alerts_enabled           = var.staging_alerts
   notification_channel_ids = [google_monitoring_notification_channel.owner_email.id]
   admin_cors_origins = [
@@ -133,6 +134,7 @@ module "prod" {
   llm_secrets              = var.llm_secrets
   stt_secrets              = var.stt_secrets
   admin_enabled            = var.admin_enabled["prod"]
+  git_sha                  = var.git_sha["prod"]
   alerts_enabled           = true
   notification_channel_ids = [google_monitoring_notification_channel.owner_email.id]
   admin_cors_origins       = ["https://${var.admin_site_id}.web.app"]
