@@ -74,7 +74,7 @@ async def test_create_enqueues_one_sweep_at_max_plus_reconnect_plus_60(api, app)
 
 async def test_sweep_abandons_stuck_interview_and_refunds_when_short(api, app, repo):
     iid = await create(api)
-    repo.update_interview("alice", iid, {"state": "live", "duration_s": 30})
+    repo.update_interview("alice", iid, {"state": "live", "duration_s": 20})
     app.state.queue.drain()
     assert repo.get_interview("alice", iid).state == "abandoned"
     assert releases(repo) == [True]
@@ -83,7 +83,7 @@ async def test_sweep_abandons_stuck_interview_and_refunds_when_short(api, app, r
 
 async def test_sweep_keeps_the_unit_at_or_above_threshold(api, app, repo):
     iid = await create(api)
-    repo.update_interview("alice", iid, {"state": "live", "duration_s": 120})
+    repo.update_interview("alice", iid, {"state": "live", "duration_s": 30})
     app.state.queue.drain()
     assert repo.get_interview("alice", iid).state == "abandoned"
     assert releases(repo) == [False]
@@ -117,7 +117,7 @@ async def test_sweep_of_a_deleted_or_missing_interview_is_2xx(api, app):
 
 @pytest.mark.parametrize("path", ["end", "discard", "lazy", "sweep"])
 @pytest.mark.parametrize(
-    "duration,refund", [(None, True), (119.9, True), (120, False), (400, False)]
+    "duration,refund", [(None, True), (29.9, True), (30, False), (400, False)]
 )
 async def test_refund_once_under_threshold_across_all_four_paths(
     api, app, repo, path, duration, refund

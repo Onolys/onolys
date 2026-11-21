@@ -67,7 +67,7 @@ def _view(request: Request, doc: InterviewDoc) -> InterviewResponse:
     summary="Start a practice interview (counts one usage unit)",
     description=(
         "Reserves one interview unit first (429 `interview_cap_reached` with `period` when "
-        "spent); the unit is given back if the interview ends or is abandoned under two minutes. "
+        "spent); the unit is given back if the interview ends or is abandoned under 30 seconds. "
         "An earlier unfinished interview is abandoned first."
     ),
 )  # fmt: skip

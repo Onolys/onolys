@@ -69,7 +69,7 @@ class Settings:
     ai_warn_seconds: int = 480  # client warns the user at this elapsed time
     ai_min_seconds: int = 300  # shortest recording worth sending to the audit
     ai_tolerance_seconds: int = 30
-    ai_abandon_count_seconds: int = 120  # ended/abandoned under this: the usage unit is refunded
+    ai_abandon_count_seconds: int = 30  # ended/abandoned under this: the usage unit is refunded
     ai_reconnect_seconds: int = 60  # relay waits this long for a dropped client
     ai_mic_gate: bool = False
     uid_hmac_key: str = ""  # keys the `uid_hash` log field (Secret Manager `uid-hmac-key-{env}`)

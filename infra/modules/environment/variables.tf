@@ -151,7 +151,7 @@ variable "ai_tolerance_seconds" {
 
 variable "ai_abandon_count_seconds" {
   type    = number
-  default = 120
+  default = 30
 }
 
 variable "ai_reconnect_seconds" {

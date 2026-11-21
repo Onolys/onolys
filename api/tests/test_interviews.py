@@ -172,7 +172,7 @@ async def test_foreign_user_gets_404_everywhere(api, repo):
 
 async def test_end_short_refunds_once_and_is_idempotent(api, repo):
     iid = (await create(api)).json()["interview_id"]
-    set_duration(repo, iid, 30)
+    set_duration(repo, iid, 29)
     for _ in range(3):
         r = await api.post(f"/v1/interviews/{iid}/end", headers=A, json={})
         assert r.status_code == 200 and r.json()["state"] == "ended"
@@ -182,7 +182,7 @@ async def test_end_short_refunds_once_and_is_idempotent(api, repo):
 
 async def test_end_long_keeps_the_unit_no_refund(api, repo):
     iid = (await create(api)).json()["interview_id"]
-    set_duration(repo, iid, 120)  # exactly the threshold counts
+    set_duration(repo, iid, 30)  # exactly the threshold counts
     await api.post(f"/v1/interviews/{iid}/end", headers=A)  # no body at all
     await api.post(f"/v1/interviews/{iid}/end", headers=A)
     assert [c[-1] for c in repo.calls if c[0] == "release"] == [False]
@@ -198,7 +198,7 @@ async def test_discard_abandons_and_end_after_discard_changes_nothing(api, repo)
     again = await api.post(f"/v1/interviews/{iid}/end", headers=A, json={"discard": True})
     assert again.json()["state"] == "abandoned"
     assert len([c for c in repo.calls if c[0] == "release"]) == 1
-    assert usage(repo) == (0, 0)  # never recorded -> under 120 s -> refunded
+    assert usage(repo) == (0, 0)  # never recorded -> under 30 s -> refunded
 
 
 async def test_lazy_abandon_refund_rule(api, repo):
@@ -289,7 +289,7 @@ async def test_fake_voice_records_open():
 def test_settings_ai_and_voice_url():
     s = Settings.from_env({})
     assert (s.ai_max_seconds, s.ai_warn_seconds, s.ai_min_seconds) == (600, 480, 300)
-    assert (s.ai_tolerance_seconds, s.ai_abandon_count_seconds) == (30, 120)
+    assert (s.ai_tolerance_seconds, s.ai_abandon_count_seconds) == (30, 30)
     assert (s.ai_reconnect_seconds, s.ai_mic_gate, s.voice_url) == (
         60,
         False,
