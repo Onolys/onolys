@@ -9,6 +9,8 @@ name: deploy-prod
 #   or the revisions' GIT_SHA).
 #   Rollback = dispatch with version=<prod-* tag> (or an earlier sha that was deployed to staging): api, worker, voice, rules, web all
 #   go back to that commit. List versions: git ls-remote --tags --refs --sort=-v:refname origin 'prod-*' | head
+#   Rollback to an image from before SP10 is BLOCKED by the voice digest guard: that image never ran on onolys-voice-staging
+#   and lacks SERVICE_MODE=voice. Roll back only to a prod-* version or sha that ran on all staging services including voice.
 #   Set sha OR version, not both. `v*` = optional human release trigger; `prod-*` = bot record of each successful deploy;
 #   roll back only by `prod-*` version or `sha`.
 #   The prod-* tags cannot re-trigger this workflow: they do not match `v*`, and tags pushed with GITHUB_TOKEN never trigger workflows.

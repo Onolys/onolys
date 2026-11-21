@@ -86,7 +86,7 @@ Failures found by the worker (not an HTTP error) appear as `error.code` on the s
 
 The clinician role-plays against an AI client; the recording then goes through the normal upload and evaluation path. Why Gemini and a relay: [ADR 0024](../decisions/0024-ai-practice-interview-gemini-live-relay.md).
 
-`GET /scenarios` returns `{"scenarios": [{"id", "title", "difficulty", "summary", "language"}], "voices": [...], "default_voice": "..."}`. Only these public fields are returned; the persona, hidden information and response rules never leave the server.
+`GET /scenarios` returns `{"scenarios": [{"id", "title", "difficulty", "summary", "language", "voice"}], "voices": [...]}`. `voices` is every voice a practice interview may use; each scenario's `voice` is its default (used when `POST /interviews` omits `voice`; the web picker always sends one). Only these public fields are returned; the persona, hidden information and response rules never leave the server.
 
 `POST /interviews {"scenario_id", "voice"?}` returns `201` with `interview_id`, `voice_url` (the relay base URL), `scenario`, `voice` (the chosen or default voice), `state` and `limits {max_s, warn_s}` (default 600 s and 480 s). It takes one `interview` usage unit first: `429 interview_cap_reached` (with `period`) when the day or month cap is spent, `422 invalid_parameters` for an unknown scenario or voice. An earlier unfinished interview of the same user is abandoned lazily at this point.
 
