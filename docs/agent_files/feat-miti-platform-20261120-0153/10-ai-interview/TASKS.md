@@ -22,9 +22,9 @@ External dependency (not SP10 work): **SP11 usage limits**, built before SP10 ex
 | 8 | Infra: `onolys-voice-{env}` Cloud Run service | 1 | done |
 | 9 | Web audio engine (worklet capture/playback, recording graph) | 1 | done |
 | 10 | Web CSP + MSW mocks + in-page fake relay | 4, 5, 9 | done |
-| 11 | Web interview feature + landing cards | 7, 9, 10, SP11 | todo |
+| 11 | Web interview feature + landing cards | 7, 9, 10, SP11 | done |
 | 12 | Staging end-to-end (LIVE) | 5, 6, 7, 8, 11 | todo |
-| 13 | Docs: public API, ADR, branch README | 1-12 | todo |
+| 13 | Docs: public API, ADR, branch README | 1-12 | done |
 
 Parallel lanes (disjoint files): after 1, run 2 / 3 / 8 / 9 together. After 2+3 and 4, run 5 / 6 / 7 together (5 in `voice/`, 6 in `jobs/`, 7 in sessions + validate; 6 and 4 both touch `routes/interviews.py`, hence sequential). 10 follows once 4's OpenAPI exists. Each API task regenerates `api/openapi.json`; do not run them concurrently.
 
