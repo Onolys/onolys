@@ -102,6 +102,8 @@ def test_daily_run_cap_removed_everywhere():
     assert not hasattr(Settings(), "daily_run_cap")
     paths = [root / "api/.env.example", root / "api/src/onolys_api/config.py"]
     paths += (root / "infra").rglob("*.tf")
+    paths += (root / ".github/workflows").glob("*.yml")
+    paths += [p for p in (root / "scripts/ci").glob("*") if p.is_file()]
     for p in paths:
         if ".terraform" in p.parts:
             continue
