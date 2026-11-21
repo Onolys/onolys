@@ -20,7 +20,9 @@ class ScenarioPublic(BaseModel):
     difficulty: str
     summary: str
     language: str
-    voice: str = Field(description="The scenario's own voice: the default when `POST /interviews` omits `voice`")
+    voice: str = Field(
+        description="The scenario's own voice: the default when `POST /interviews` omits `voice`"
+    )
 
 
 class ScenarioList(BaseModel):

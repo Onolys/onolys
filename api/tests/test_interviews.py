@@ -105,7 +105,7 @@ async def test_create_reserves_first_then_creates_doc(api, repo):
     assert b["state"] == "created" and b["voice"] == "Kore"  # the scenario's default voice
     assert b["voice_url"] == f"wss://voice.example/v1/voice/{b['interview_id']}"
     assert b["limits"] == {"max_s": 600, "warn_s": 480}
-    assert set(b["scenario"]) == {"id", "title", "difficulty", "summary", "language"}
+    assert set(b["scenario"]) == {"id", "title", "difficulty", "summary", "language", "voice"}
     assert usage(repo) == (1, 1)
     doc = repo.get_interview("alice", b["interview_id"])
     assert (doc.uid, doc.scenario_id, doc.state, doc.reservation_date) == (
