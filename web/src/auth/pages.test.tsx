@@ -352,3 +352,34 @@ describe("verify email", () => {
     expect(screen.queryByRole("status")).toBeNull();
   });
 });
+
+describe("Google button busy and cancel handling (FX33)", () => {
+  for (const [path, title] of [["/login", "Log in"], ["/signup", "Sign up"]] as const) {
+    it(`${path}: disables both buttons while Google is pending`, async () => {
+      const user = userEvent.setup();
+      const { service } = renderApp(path);
+      await h1(title);
+      let release: () => void = () => {};
+      service.signInWithGoogle = vi.fn(() => new Promise<void>((r) => (release = r)));
+      const google = screen.getByRole("button", { name: "Continue with Google" });
+      await user.click(google);
+      expect(google).toBeDisabled();
+      expect(screen.getByRole("button", { name: path === "/login" ? "Log in" : "Create account" })).toBeDisabled();
+      release();
+      await waitFor(() => expect(google).toBeEnabled());
+    });
+
+    it(`${path}: a closed or cancelled popup shows no error`, async () => {
+      const user = userEvent.setup();
+      const { service } = renderApp(path);
+      await h1(title);
+      for (const code of ["auth/popup-closed-by-user", "auth/cancelled-popup-request"]) {
+        service.signInWithGoogle = vi.fn(() => Promise.reject({ code }));
+        await user.click(screen.getByRole("button", { name: "Continue with Google" }));
+        await waitFor(() => expect(service.signInWithGoogle).toHaveBeenCalled());
+        await waitFor(() => expect(screen.getByRole("button", { name: "Continue with Google" })).toBeEnabled());
+        expect(screen.queryByRole("alert")).toBeNull();
+      }
+    });
+  }
+});

@@ -13,6 +13,12 @@ export interface MappedAuthError {
 /** Simple shape check (something@host.tld); the server stays the authority. */
 export const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+/** The user closed the Google popup (or a second click replaced it): not an error worth showing. */
+export function isPopupCancel(err: unknown): boolean {
+  const code = errorCode(err);
+  return code === "auth/popup-closed-by-user" || code === "auth/cancelled-popup-request";
+}
+
 export function mapAuthError(code: string | undefined): MappedAuthError {
   switch (code) {
     case "auth/wrong-password":

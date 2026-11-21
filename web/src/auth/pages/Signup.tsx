@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { Link, useLocation } from "react-router";
 import { useAuth } from "../AuthProvider";
-import { EMAIL_PATTERN, MIN_PASSWORD_LENGTH } from "../errors";
+import { EMAIL_PATTERN, MIN_PASSWORD_LENGTH, isPopupCancel } from "../errors";
 import { readNext, withNext } from "../next";
 import { ErrorSummary } from "./parts";
 import { useFormError } from "./useFormError";
@@ -37,11 +37,15 @@ export function Signup() {
   }
 
   async function google() {
+    if (busy) return;
     form.clear();
+    setBusy(true);
     try {
       await service.signInWithGoogle();
     } catch (err) {
-      form.fail(err);
+      if (!isPopupCancel(err)) form.fail(err);
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -69,7 +73,7 @@ export function Signup() {
         <button type="submit" className="primary" disabled={busy}>
           Create account
         </button>
-        <button type="button" className="secondary" onClick={() => void google()}>
+        <button type="button" className="secondary" disabled={busy} onClick={() => void google()}>
           Continue with Google
         </button>
         <p>
