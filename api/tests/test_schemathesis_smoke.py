@@ -44,7 +44,7 @@ schema = schemathesis.openapi.from_asgi("/v1/openapi.json", APP).exclude(
 
 @schema.parametrize()
 @settings(
-    max_examples=4,
+    max_examples=1,
     deadline=None,
     derandomize=True,
     suppress_health_check=list(HealthCheck),

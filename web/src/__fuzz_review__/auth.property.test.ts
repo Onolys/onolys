@@ -61,7 +61,7 @@ describe("readNext", () => {
             expect(sameOrigin(readNext(q(next)))).toBe(true);
           },
         ),
-        { numRuns: 500 },
+        { numRuns: 500, examples: [["/\t/evil.com"]] },
       );
     },
   );

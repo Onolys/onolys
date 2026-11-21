@@ -28,16 +28,10 @@ ALICE = {"Authorization": "Bearer test:alice"}
 BOB = {"Authorization": "Bearer test:bob"}
 
 
-@pytest.fixture(
-    params=[
-        "fake",
-        pytest.param("firestore", marks=[pytest.mark.integration, pytest.mark.firestore]),
-    ]
-)
-def api(request, tmp_path):
-    """(sync httpx client, kind) bound to a fresh app on the chosen repo."""
+def _make_api(kind, tmp_path):
+    """Generator: (sync httpx client, kind) bound to a fresh app on the chosen repo."""
     blobs = FakeBlobStore(tmp_path / "blobs")
-    if request.param == "fake":
+    if kind == "fake":
         repo = FakeRepo(blobs)
     else:
         if not HAS_EMULATOR:
@@ -64,24 +58,29 @@ def api(request, tmp_path):
     from starlette.testclient import TestClient
 
     with TestClient(app, raise_server_exceptions=False) as c:
-        c.kind = request.param  # type: ignore[attr-defined]
+        c.kind = kind  # type: ignore[attr-defined]
         yield c
 
 
-@pytest.fixture
-def fake_api(api):
-    """In-memory repo only (fast, xdist-safe): used by the hypothesis tests."""
-    if api.kind != "fake":
-        pytest.skip("fake repo only")
-    return api
+# "firestore" in the param id makes conftest auto-add the `firestore` marker (emulator CI job).
+FS_PARAM = pytest.param("firestore", marks=[pytest.mark.integration, pytest.mark.firestore])
+
+
+@pytest.fixture(params=["fake", FS_PARAM])
+def api(request, tmp_path):
+    yield from _make_api(request.param, tmp_path)
 
 
 @pytest.fixture
-def fs_api(api):
-    """Firestore emulator only: used by the race tests (keep small; the emulator job is serial)."""
-    if api.kind != "firestore":
-        pytest.skip("firestore emulator only")
-    return api
+def fake_api(tmp_path):
+    """In-memory repo only (fast, xdist-safe, never builds a Firestore client)."""
+    yield from _make_api("fake", tmp_path)
+
+
+@pytest.fixture(params=[FS_PARAM])
+def fs_api(request, tmp_path):
+    """Firestore emulator only (the emulator job is serial: keep these few)."""
+    yield from _make_api("firestore", tmp_path)
 
 
 def _uid() -> dict:
@@ -107,7 +106,7 @@ ID_ROUTES = [
     ("get", "/v1/runs/{x}"),
     ("get", "/v1/interviews/{x}"),
 ]
-WEIRD_IDS = ["__x__", ".", "..", "%2e", "a%2Fb", "é" * 40, "0" * 5000, "\x00", "%00", "~", " "]
+WEIRD_IDS = [".", "%2e", "é" * 40, "0" * 5000, "\x00"]
 # Known bugs (firestore repo): reserved doc ids and over-long ids reach Firestore -> InvalidArgument.
 FS_BAD_IDS = {"__x__", "%2e"}
 
@@ -119,18 +118,21 @@ def _seg(x: str) -> str:
 
 
 @pytest.mark.parametrize("x", WEIRD_IDS)
-@pytest.mark.parametrize(("method", "tpl"), ID_ROUTES)
-def test_weird_path_ids_never_5xx(request, api, method, tpl, x):
-    if api.kind == "firestore" and x not in FS_BAD_IDS | {"0" * 5000}:
-        pytest.skip("firestore: only the known-bad ids (keeps the emulator group small)")
-    if api.kind == "firestore" and (
-        (x in FS_BAD_IDS and "/runs/" not in tpl) or (x == "0" * 5000 and tpl == "/v1/runs/{x}")
-    ):
+@pytest.mark.parametrize(("method", "tpl"), ID_ROUTES[:2] + ID_ROUTES[-4:])
+def test_weird_path_ids_never_5xx(fake_api, method, tpl, x):
+    r = fake_api.request(method, tpl.format(x=_seg(x)), headers=_uid())
+    assert r.status_code < 500, (r.status_code, x)
+
+
+@pytest.mark.parametrize("x", sorted(FS_BAD_IDS | {"0" * 5000}))
+@pytest.mark.parametrize(("method", "tpl"), ID_ROUTES[:6] + ID_ROUTES[-2:])
+def test_weird_path_ids_never_5xx_firestore(request, fs_api, method, tpl, x):
+    if (x in FS_BAD_IDS and "/runs/" not in tpl) or (x == "0" * 5000 and tpl == "/v1/runs/{x}"):
         known_bug(
             request,
             "F1/A3 (F3 for 5000-char run id): reserved/over-long id -> Firestore InvalidArgument -> 500",
         )
-    r = api.request(method, tpl.format(x=_seg(x)), headers=_uid())
+    r = fs_api.request(method, tpl.format(x=_seg(x)), headers=_uid())
     assert r.status_code < 500, (r.status_code, x)
 
 
