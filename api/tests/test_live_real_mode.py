@@ -1,9 +1,9 @@
 """SP09 Task 6 / R5 / AC: local real mode, no GCP. Real LLM, fixture STT.
 
 `ADAPTERS=real`, `SERVICE_MODE=combined`, a local `stt_providers.yaml` whose default is
-`provider: fixture`, the shipped Claude Sonnet routes. Real paudit, real reasons audit and real
+`provider: fixture`, the shipped Gemini routes. Real paudit, real reasons audit and real
 tips run on the synthetic evaluation fixture transcript; only STT is the fixture provider. The
-repo and blob store are the in-memory fakes. Needs ANTHROPIC_API_KEY.
+repo and blob store are the in-memory fakes. Needs GEMINI_API_KEY.
 
 Manual / nightly only (excluded by `-m "not live"`, the api pytest default):
 
@@ -72,8 +72,8 @@ def _usages(node):
 
 
 async def test_real_mode_fixture_stt_real_llm_reaches_report_ready(settings, blobs, tmp_path):
-    if not os.environ.get("ANTHROPIC_API_KEY"):
-        pytest.skip("set ANTHROPIC_API_KEY (live LLM)")
+    if not os.environ.get("GEMINI_API_KEY"):
+        pytest.skip("set GEMINI_API_KEY (live LLM)")
     cfg = tmp_path / "cfg"
     cfg.mkdir()
     default_routes = resources.files("onolys_core.llm").joinpath("routes.default.yaml")

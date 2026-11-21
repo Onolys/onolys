@@ -1,5 +1,7 @@
 # Identity Platform (PRD R4): one user pool for both envs; data isolation is by Firestore DB/bucket.
-# Google sign-in and email templates are owner console steps (OAuth client cannot be created by API).
+# Google sign-in is an owner console step (OAuth client cannot be created by API). The email action URL
+# (verify/reset links -> https://app.onolys.com/auth/action, our in-app handler) is set by identity-config.py;
+# email template wording is still edited in the console.
 
 locals {
   # Firebase project defaults (kept: the project was created with them) + PRD R4 hosts.
@@ -58,7 +60,7 @@ resource "google_identity_platform_config" "default" {
   depends_on = [google_project_service.api]
 }
 
-# The provider has no password policy / email-enumeration-protection fields: REST-patch them.
+# The provider has no password policy / email-enumeration-protection / email action URL fields: REST-patch them.
 resource "terraform_data" "identity_policy" {
   triggers_replace = [
     filesha256("${path.module}/scripts/identity-config.py"),

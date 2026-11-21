@@ -2,6 +2,9 @@ import { describe, expect, it } from "vitest";
 import { MIN_PASSWORD_LENGTH, mapAuthError } from "./errors";
 
 describe("mapAuthError", () => {
+  it("asks for a fresh login when the session was revoked", () => {
+    expect(mapAuthError("auth/user-token-expired").message).toMatch(/log in again/i);
+  });
   it("maps wrong credentials to one plain message", () => {
     for (const code of ["auth/wrong-password", "auth/invalid-credential", "auth/user-not-found"]) {
       expect(mapAuthError(code).message).toBe("That email and password don't match. Try again or reset your password.");
@@ -23,5 +26,13 @@ describe("mapAuthError", () => {
     expect(mapAuthError("auth/popup-closed-by-user").message).toMatch(/cancelled/i);
     expect(mapAuthError("auth/whatever").message).toBe("Something went wrong. Please try again.");
     expect(mapAuthError(undefined).offerLogin).toBeFalsy();
+  });
+});
+
+describe("action-code errors", () => {
+  it("maps invalid/expired action codes to a plain message", () => {
+    for (const c of ["auth/invalid-action-code", "auth/expired-action-code"]) {
+      expect(mapAuthError(c).message).toMatch(/invalid, has expired, or was already used/);
+    }
   });
 });

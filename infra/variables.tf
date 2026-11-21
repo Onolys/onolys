@@ -49,7 +49,7 @@ variable "billing_account_id" {
 variable "llm_secrets" {
   description = "Map of env-var name to base secret id for LLM provider keys; each environment gets `<base>-<env>`."
   type        = map(string)
-  default     = { ANTHROPIC_API_KEY = "anthropic-api-key" }
+  default     = { GEMINI_API_KEY = "gemini-api-key", ANTHROPIC_API_KEY = "anthropic-api-key" }
 }
 
 variable "stt_secrets" {

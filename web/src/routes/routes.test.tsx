@@ -1,4 +1,4 @@
-import { screen } from "@testing-library/react";
+import { cleanup, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { renderApp } from "../test/renderApp";
 
@@ -33,6 +33,16 @@ describe("route table", () => {
   it("/verify-email renders for a signed-in unverified user", async () => {
     renderApp("/verify-email", { user: { email: "a@clinic.org", verified: false } });
     expect(await screen.findByRole("heading", { level: 1, name: "Verify your email" })).toBeInTheDocument();
+  });
+
+  it("/auth/action renders signed out, signed-in unverified and signed-in verified without redirect", async () => {
+    const path = "/auth/action?mode=verifyEmail&oobCode=abc";
+    for (const user of [undefined, { email: "a@clinic.org", verified: false }, VERIFIED]) {
+      const { router } = renderApp(path, user ? { user } : {});
+      expect(await screen.findByRole("heading", { level: 1, name: "Verify your email" })).toBeInTheDocument();
+      expect(router.state.location.pathname).toBe("/auth/action");
+      cleanup();
+    }
   });
 
   it("has banner, nav, main and contentinfo landmarks", async () => {
