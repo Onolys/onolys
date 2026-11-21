@@ -19,6 +19,9 @@ CERTS_URL = (
 )
 CERT_TTL_S = 3600
 CLOCK_SKEW_S = 10
+MIN_REFRESH_S = 60  # floor between cert fetches once certs are cached
+UNKNOWN_KID_TTL_S = 300
+MAX_UNKNOWN_KIDS = 1024
 
 CertFetcher = Callable[[], dict[str, str]]
 
@@ -42,32 +45,84 @@ def fetch_google_certs() -> dict[str, str]:
 
 
 class IdTokenVerifier:
+    """Cert cache: TTL refresh, rotation refresh bounded by `min_refresh_s`, stale-on-failure.
+
+    An unauthenticated caller controls the token's `kid`, so an unknown kid must never force an
+    unbounded fetch: forced refreshes are rate limited, unknown kids are negative-cached, the
+    fetch runs single-flight under its own lock (never the cache state lock), and a failed fetch
+    keeps serving the previous certs.
+    """
+
     def __init__(
         self,
         project: str,
         fetch_certs: CertFetcher = fetch_google_certs,
         ttl_s: float = CERT_TTL_S,
         clock: Callable[[], float] = time.monotonic,
+        min_refresh_s: float = MIN_REFRESH_S,
+        unknown_kid_ttl_s: float = UNKNOWN_KID_TTL_S,
     ) -> None:
         self._project = project
         self._fetch = fetch_certs
         self._ttl = ttl_s
         self._clock = clock
+        self._min_refresh = min_refresh_s
+        self._unknown_ttl = unknown_kid_ttl_s
         self._certs: dict[str, str] = {}
         self._fetched_at = float("-inf")
-        self._lock = threading.Lock()
+        self._last_attempt = float("-inf")
+        self._unknown: dict[str, float] = {}  # kid -> negative-cache expiry
+        self._state_lock = threading.Lock()  # guards the fields above, never held across a fetch
+        self._fetch_lock = threading.Lock()  # single-flight
+
+    def _is_unknown(self, kid: object) -> bool:
+        if not isinstance(kid, str):
+            return False
+        with self._state_lock:
+            expiry = self._unknown.get(kid)
+            return expiry is not None and self._clock() < expiry
+
+    def _remember_unknown(self, kid: object) -> None:
+        if not isinstance(kid, str):
+            return
+        with self._state_lock:
+            if len(self._unknown) >= MAX_UNKNOWN_KIDS:
+                self._unknown.clear()
+            self._unknown[kid] = self._clock() + self._unknown_ttl
 
     def _get_certs(self, force: bool = False) -> dict[str, str]:
-        with self._lock:
-            if force or self._clock() - self._fetched_at > self._ttl:
-                try:
-                    self._certs = self._fetch()
-                except Exception:
-                    raise ApiError.of(
-                        503, "upstream_unavailable", "Service temporarily unavailable."
-                    ) from None
-                self._fetched_at = self._clock()
-            return self._certs
+        def due() -> bool:
+            now = self._clock()
+            if not self._certs:
+                return True
+            if now - self._last_attempt < self._min_refresh:
+                return False
+            return force or now - self._fetched_at > self._ttl
+
+        with self._state_lock:
+            if not due():
+                return self._certs
+        with self._fetch_lock:
+            with self._state_lock:
+                if not due():  # another caller refreshed while we waited
+                    return self._certs
+                stale = self._certs
+            attempt = self._clock()
+            try:
+                fresh = self._fetch()
+            except Exception:
+                with self._state_lock:
+                    self._last_attempt = attempt
+                if stale:
+                    return stale
+                raise ApiError.of(
+                    503, "upstream_unavailable", "Service temporarily unavailable."
+                ) from None
+            with self._state_lock:
+                self._certs = fresh
+                self._fetched_at = self._last_attempt = attempt
+                self._unknown.clear()
+                return fresh
 
     def _decode(self, token: str, certs: dict[str, str]) -> dict:
         return jwt.decode(
@@ -83,8 +138,14 @@ class IdTokenVerifier:
             if header.get("alg") != "RS256":
                 raise InvalidToken
             certs = self._get_certs()
-            if header.get("kid") not in certs:  # key rotation: refresh once
+            kid = header.get("kid")
+            if kid not in certs:  # key rotation: rate-limited refresh
+                if self._is_unknown(kid):
+                    raise InvalidToken
                 certs = self._get_certs(force=True)
+                if kid not in certs:
+                    self._remember_unknown(kid)
+                    raise InvalidToken
             claims = self._decode(token, certs)
         except ApiError:
             raise

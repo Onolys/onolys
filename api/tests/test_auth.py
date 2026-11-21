@@ -10,7 +10,7 @@ from google.auth import crypt, jwt
 from onolys_core.errors import ConfigError
 
 from onolys_api.app import create_app
-from onolys_api.auth.idtoken import IdTokenVerifier
+from onolys_api.auth.idtoken import IdTokenVerifier, InvalidToken
 from onolys_api.auth.keys import hash_secret, new_key, parse_key
 from onolys_api.config import Settings
 from onolys_api.repo.fake import FakeRepo
@@ -109,19 +109,90 @@ async def test_garbage_and_missing_credentials_are_401(idp_client):
     assert_401(await idp_client.get("/v1/api-key", headers=bearer("test:u1")))  # no fake in idp
 
 
-async def test_cert_rotation_refetches_once():
+class _Clock:
+    def __init__(self):
+        self.t = 1000.0
+
+    def __call__(self):
+        return self.t
+
+
+def _verifier(certs, clock, **kw):
     calls = []
-    certs = {"old": "x"}
 
     def fetch():
         calls.append(1)
+        if isinstance(certs, Exception):
+            raise certs
         return dict(certs)
 
-    v = IdTokenVerifier(PROJECT, fetch_certs=fetch)
+    return IdTokenVerifier(PROJECT, fetch_certs=fetch, clock=clock, **kw), calls
+
+
+async def test_cert_rotation_refetches_once():
+    clock, certs = _Clock(), {"old": "x"}
+    v, calls = _verifier(certs, clock)
     assert v._get_certs() == {"old": "x"}
     certs.clear()
     certs[KID] = PUB
+    clock.t += 61  # past the min refresh interval
     assert v.verify(mint("u9")) == "u9"
+    assert len(calls) == 2
+    assert v.verify(mint("u9")) == "u9"  # kid now cached: no further fetch
+    assert len(calls) == 2
+
+
+async def test_unknown_kid_flood_fetches_once_then_is_negative_cached():
+    clock, calls_certs = _Clock(), {KID: PUB}
+    v, calls = _verifier(calls_certs, clock)
+    assert v.verify(mint("u1")) == "u1"
+    assert len(calls) == 1
+    clock.t += 61
+    for i in range(5):  # 5 distinct unknown kids, then repeats of the first
+        with pytest.raises(InvalidToken):
+            v.verify(mint(kid=f"junk{i}"))
+    assert len(calls) == 2  # one refresh, the rest inside min interval
+    clock.t += 61  # past the min interval, repeat kid is still negative-cached
+    with pytest.raises(InvalidToken):
+        v.verify(mint(kid="junk0"))
+    assert len(calls) == 2
+    assert v.verify(mint("u1")) == "u1"  # legit callers unaffected
+
+
+async def test_failed_refresh_serves_stale_certs():
+    clock, certs = _Clock(), {KID: PUB}
+    v, calls = _verifier(certs, clock)
+    assert v.verify(mint("u1")) == "u1"
+    v._fetch = lambda: (_ for _ in ()).throw(OSError("down"))
+    clock.t += 3601  # TTL expired, fetch fails: keep serving the old certs
+    assert v.verify(mint("u1")) == "u1"
+    with pytest.raises(InvalidToken):  # unknown kid while upstream is down: 401, not 503
+        v.verify(mint(kid="nope"))
+
+
+async def test_cert_ttl_boundary_and_no_refetch_within_ttl():
+    clock, certs = _Clock(), {KID: PUB}
+    v, calls = _verifier(certs, clock, ttl_s=100)
+    v._get_certs()
+    clock.t += 100  # exactly the ttl: still fresh
+    v._get_certs()
+    assert len(calls) == 1
+    clock.t += 0.5  # just past
+    v._get_certs()
+    assert len(calls) == 2
+    v._get_certs()  # default force=False: cached
+    assert len(calls) == 2
+
+
+async def test_forced_refresh_respects_min_interval_boundary():
+    clock, certs = _Clock(), {KID: PUB}
+    v, calls = _verifier(certs, clock, min_refresh_s=60)
+    v._get_certs()
+    clock.t += 59.9
+    v._get_certs(force=True)
+    assert len(calls) == 1
+    clock.t += 0.1  # exactly min interval
+    v._get_certs(force=True)
     assert len(calls) == 2
 
 
