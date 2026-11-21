@@ -323,6 +323,8 @@
               "transcription_failed",
               "rating_invalid",
               "daily_cap_reached",
+              "monthly_cap_reached",
+              "interview_cap_reached",
               "conflict"
             ],
             "title": "Code",
@@ -365,6 +367,22 @@
           "message": {
             "title": "Message",
             "type": "string"
+          },
+          "period": {
+            "anyOf": [
+              {
+                "enum": [
+                  "day",
+                  "month"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Which usage period was exhausted. Set on `daily_cap_reached`, `monthly_cap_reached` and `interview_cap_reached`.",
+            "title": "Period"
           }
         },
         "required": [

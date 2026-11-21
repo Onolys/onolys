@@ -44,6 +44,8 @@ ERROR_CODES = (
     "transcription_failed",
     "rating_invalid",
     "daily_cap_reached",
+    "monthly_cap_reached",
+    "interview_cap_reached",
     "conflict",
 )
 ErrorCode = Literal[ERROR_CODES]  # type: ignore[valid-type]
@@ -54,6 +56,7 @@ class ErrorDetail(TypedDict):
     message: str
     field: NotRequired[str]
     issue: NotRequired[str]
+    period: NotRequired[Literal["day", "month"]]
 
 
 class ErrorDetailModel(BaseModel):
@@ -80,6 +83,13 @@ class ErrorDetailModel(BaseModel):
         ]
         | None
     ) = Field(None, description="What is wrong at `field`. Set on `rating_invalid`.")
+    period: Literal["day", "month"] | None = Field(
+        None,
+        description=(
+            "Which usage period was exhausted. Set on `daily_cap_reached`, `monthly_cap_reached` "
+            "and `interview_cap_reached`."
+        ),
+    )
 
 
 class ErrorResponse(BaseModel):
@@ -103,8 +113,13 @@ class ApiError(Exception):
         self.request_id = request_id
 
     @classmethod
-    def of(cls, status: int, code: str, message: str) -> "ApiError":
-        return cls(status, message, [{"code": code, "message": message}])
+    def of(
+        cls, status: int, code: str, message: str, period: Literal["day", "month"] | None = None
+    ) -> "ApiError":
+        detail: ErrorDetail = {"code": code, "message": message}
+        if period is not None:
+            detail["period"] = period
+        return cls(status, message, [detail])
 
 
 def error_responses(*statuses: int) -> dict[int | str, dict]:

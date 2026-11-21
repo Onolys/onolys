@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   ApiError,
@@ -40,6 +42,11 @@ describe("messageForCode", () => {
       "tomorrow 00:00",
     );
     expect(messageForCode("daily_cap_reached")).toContain("today's limit");
+  });
+
+  it("has the monthly and interview cap copy", () => {
+    expect(messageForCode("monthly_cap_reached")).toBe("You've reached this month's limit.");
+    expect(messageForCode("interview_cap_reached")).toBe("You've reached your AI interview limit.");
   });
 
   it("falls back to the generic message for unknown codes", () => {
@@ -122,4 +129,25 @@ describe("failureAction", () => {
       expect(failureAction(code)).toBe("run_again");
     },
   );
+});
+
+describe("enum parity with the public schema", () => {
+  const schema = JSON.parse(
+    readFileSync(
+      resolve(process.cwd(), "../docs/contracts/public/public-error-response.schema.json"),
+      "utf8",
+    ),
+  );
+  const item = schema.properties.details.items.properties;
+
+  it("every web code is in the schema enum, including the cap codes", () => {
+    for (const code of ERROR_CODES) expect(item.code.enum).toContain(code);
+    for (const code of ["daily_cap_reached", "monthly_cap_reached", "interview_cap_reached"]) {
+      expect(ERROR_CODES).toContain(code);
+    }
+  });
+
+  it("schema period is day|month", () => {
+    expect(item.period.enum).toEqual(["day", "month"]);
+  });
 });

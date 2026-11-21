@@ -20,6 +20,8 @@ const MESSAGES = {
   rating_invalid: "Some of your rating needs a change. Check the highlighted fields.",
   upstream_unavailable: "A service we depend on is busy right now. Please try again in a minute.",
   daily_cap_reached: "You've reached today's limit.",
+  monthly_cap_reached: "You've reached this month's limit.",
+  interview_cap_reached: "You've reached your AI interview limit.",
   invalid_state: "That isn't possible at this stage of the session. Refresh and try again.",
   rate_limited: "You're going a little fast. Wait a moment and try again.",
   unauthenticated: "Your sign-in has expired. Please sign in again.",

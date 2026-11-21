@@ -33,6 +33,8 @@ def test_schema_enum_matches_codes_and_is_superset_of_eaudit(schema):
         "transcription_failed",
         "rating_invalid",
         "daily_cap_reached",
+        "monthly_cap_reached",
+        "interview_cap_reached",
         "conflict",
     ):
         assert new in enum
@@ -44,6 +46,44 @@ def test_error_body_validates(schema):
     jsonschema.validate(body, schema)
     assert body["request_id"] == "r1"
     assert "request_id" not in error_body(400, "m", [{"code": "conflict", "message": "m"}])
+
+
+@pytest.mark.parametrize(
+    "code", ["daily_cap_reached", "monthly_cap_reached", "interview_cap_reached"]
+)
+@pytest.mark.parametrize("period", ["day", "month"])
+def test_cap_codes_accept_period(schema, code, period):
+    err = ApiError.of(429, code, "Cap.", period=period)
+    assert err.details == [{"code": code, "message": "Cap.", "period": period}]
+    body = error_body(429, "Cap.", err.details)
+    assert body["details"][0]["period"] == period
+    jsonschema.validate(body, schema)
+
+
+def test_period_omitted_by_default(schema):
+    assert "period" not in ApiError.of(429, "daily_cap_reached", "x").details[0]
+
+
+@pytest.mark.parametrize("bad", ["week", "", None, 1])
+def test_schema_rejects_bad_period(schema, bad):
+    body = error_body(429, "m", [{"code": "monthly_cap_reached", "message": "m", "period": bad}])
+    with pytest.raises(jsonschema.ValidationError):
+        jsonschema.validate(body, schema)
+
+
+async def test_period_serialised_in_response(client, schema, app):
+    @app.get("/v1/_cap")
+    async def cap():
+        raise ApiError.of(429, "monthly_cap_reached", "Month.", period="month")
+
+    r = await client.get("/v1/_cap")
+    assert r.status_code == 429
+    jsonschema.validate(r.json(), schema)
+    assert r.json()["details"][0] == {
+        "code": "monthly_cap_reached",
+        "message": "Month.",
+        "period": "month",
+    }
 
 
 async def test_not_found_validates_and_echoes_request_id(client, schema):
