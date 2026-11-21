@@ -231,3 +231,42 @@ async def test_no_sentinel_in_logs_over_full_flow(env, caplog, capsys, monkeypat
         assert s not in out, s
     assert not [d for d in lines(caplog) if "_unstructured" in d], "unstructured API log line"
     assert failed(caplog) == []
+
+
+@pytest.mark.unit
+def test_uvicorn_error_log_has_no_traceback_or_input(capsys):
+    """S1/FX14: uvicorn logs `Exception in ASGI application` with exc_info; a ResponseValidationError
+    message embeds the offending `input` (PHI). Nothing but the exception class may reach the log."""
+    import io
+
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+    from pydantic import BaseModel
+
+    class Out(BaseModel):
+        n: int
+
+    app = FastAPI()
+
+    @app.get("/x", response_model=Out)
+    def x():
+        return {"n": "PHI-SENTINEL-TRANSCRIPT"}
+
+    with pytest.raises(Exception) as ei:
+        TestClient(app).get("/x")
+    assert "PHI-SENTINEL-TRANSCRIPT" in str(ei.value)  # the raw exception does carry it
+
+    logs.configure(Settings(git_sha="sha9", uid_hmac_key="k"))
+    buf = io.StringIO()
+    h = logging.StreamHandler(buf)
+    h.setFormatter(logging.Formatter("%(levelname)s %(name)s %(message)s"))
+    lg = logging.getLogger("uvicorn.error")
+    lg.addHandler(h)
+    try:
+        lg.error("Exception in ASGI application\n", exc_info=ei.value)
+    finally:
+        lg.removeHandler(h)
+    out = buf.getvalue()
+    assert "PHI-SENTINEL" not in out
+    assert "Traceback" not in out
+    assert "ResponseValidationError" in out
