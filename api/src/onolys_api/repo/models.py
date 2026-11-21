@@ -106,6 +106,7 @@ class SessionDoc(Doc):
     rating_submitted: bool = False
     has_rating: bool = False
     first_run_id: str | None = None
+    interview_id: str | None = None  # set by the AI interview (SP10): its first run is free (SP11)
     upload: UploadInfo | None = None
     steps: dict[str, StepRecord] = Field(default_factory=dict)
     warnings: list[str] = Field(default_factory=list)

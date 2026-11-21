@@ -24,11 +24,14 @@ from onolys_api.repo.firestore import (
     _idem_id,
 )
 from onolys_api.repo.limits import (
+    HELD_ERROR_CODE,
     KIND_FIELD,
+    START_OUTCOME,
     Kind,
     LimitDefaults,
     ReserveUsageOutcome,
     decide_reserve,
+    decide_start,
 )
 from onolys_api.repo.models import (
     ApiKeyDoc,
@@ -490,7 +493,7 @@ class FakeRepo:
         )
 
     def start_first_run(
-        self, uid: str, sid: str, run_id: str, date: str, cap: int, max_active: int,
+        self, uid: str, sid: str, run_id: str, date: str, defaults: LimitDefaults, max_active: int,
         code_version: str, start_progress: int,
     ) -> StartOutcome:  # fmt: skip
         with self._claim_lock:  # the fake's "transaction"
@@ -505,19 +508,17 @@ class FakeRepo:
             status = self._get(f"session_status/{sid}") or {}
             user = self._get(f"users/{uid}") or {}
             usage = self._get(f"usage/{uid}_{date}") or {"uid": uid, "date": date, "runs": 0}
+            month = self._get(f"usage/{uid}_{date[:7]}") or {"uid": uid, "month": date[:7]}
             now = utcnow()
-            eff_cap, eff_active = user.get("daily_cap"), user.get("max_active_runs")
-            outcome: StartOutcome | None = None
-            if usage.get("runs", 0) >= (cap if eff_cap is None else eff_cap):
-                outcome = "daily_cap"
-            elif user.get("active_runs", 0) >= (max_active if eff_active is None else eff_active):
-                outcome = "concurrent"
-            if outcome is not None:
-                err = {"code": "daily_cap_reached", "step": None}
+            exempt = bool(sess.get("interview_id"))
+            decided = decide_start(user, usage, month, defaults, max_active, exempt)
+            if decided != "ok":
+                outcome: StartOutcome = START_OUTCOME[decided]  # type: ignore[assignment]
+                code = HELD_ERROR_CODE[outcome]
+                err = {"code": code, "step": None}
                 self._put(f"sessions/{sid}", {**sess, "error": err, "updated_at": now})
                 self._put(
-                    f"session_status/{sid}",
-                    {**status, "error_code": "daily_cap_reached", "updated_at": now},
+                    f"session_status/{sid}", {**status, "error_code": code, "updated_at": now}
                 )
                 self._record_status(uid, sid)
                 return outcome
@@ -527,9 +528,12 @@ class FakeRepo:
                 uid=uid, session_id=sid, run_id=run_id, n_runs=sess.get("n_runs", 1),
                 preset=sess.get("preset"), rating_id=rating_id,
                 stt=sess.get("stt"), code_version=code_version, cap_date=date,
+                counted=not exempt,
             )  # fmt: skip
             self._create(f"sessions/{sid}/runs/{run_id}", run.to_store())
-            self._put(f"usage/{uid}_{date}", {**usage, "runs": usage.get("runs", 0) + 1})
+            if not exempt:
+                self._put(f"usage/{uid}_{date}", {**usage, "runs": usage.get("runs", 0) + 1})
+                self._put(f"usage/{uid}_{date[:7]}", {**month, "runs": month.get("runs", 0) + 1})
             self._put(f"users/{uid}", {**user, "active_runs": user.get("active_runs", 0) + 1})
             self._put(
                 f"sessions/{sid}",
@@ -545,7 +549,7 @@ class FakeRepo:
             return "started"
 
     def start_run(
-        self, uid: str, sid: str, run_id: str, date: str, cap: int, max_active: int,
+        self, uid: str, sid: str, run_id: str, date: str, defaults: LimitDefaults, max_active: int,
         code_version: str, start_progress: int, allowed_states: tuple[str, ...],
         n_runs: int | None, preset: str | None,
     ) -> StartOutcome:  # fmt: skip
@@ -561,11 +565,10 @@ class FakeRepo:
             status = self._get(f"session_status/{sid}") or {}
             user = self._get(f"users/{uid}") or {}
             usage = self._get(f"usage/{uid}_{date}") or {"uid": uid, "date": date, "runs": 0}
-            eff_cap, eff_active = user.get("daily_cap"), user.get("max_active_runs")
-            if usage.get("runs", 0) >= (cap if eff_cap is None else eff_cap):
-                return "daily_cap"
-            if user.get("active_runs", 0) >= (max_active if eff_active is None else eff_active):
-                return "concurrent"
+            month = self._get(f"usage/{uid}_{date[:7]}") or {"uid": uid, "month": date[:7]}
+            decided = decide_start(user, usage, month, defaults, max_active, False)
+            if decided != "ok":
+                return START_OUTCOME[decided]  # type: ignore[return-value]
             revs = [(i, d) for i, d in self._children(sid, "ratings") if i != DRAFT_ID]
             rating_id = max(revs, key=lambda t: (t[1]["created_at"], t[0]))[0] if revs else None
             run = RunDoc(
@@ -582,6 +585,7 @@ class FakeRepo:
             )
             self._create(f"sessions/{sid}/runs/{run_id}", run.to_store())
             self._put(f"usage/{uid}_{date}", {**usage, "runs": usage.get("runs", 0) + 1})
+            self._put(f"usage/{uid}_{date[:7]}", {**month, "runs": month.get("runs", 0) + 1})
             self._put(f"users/{uid}", {**user, "active_runs": user.get("active_runs", 0) + 1})
             self._put(
                 f"sessions/{sid}",

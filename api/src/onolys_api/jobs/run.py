@@ -85,7 +85,7 @@ def release_once(repo, uid: str, sid: str, run_id: str, refund: bool, date: str 
     except NotFoundError:  # session deleted under the run: the delete already freed the slot
         return
     if date:
-        caps.release_run(repo, uid, date, refund)
+        caps.release_run(repo, uid, date, refund and run.counted)
 
 
 def make_run_handler(

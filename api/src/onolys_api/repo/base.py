@@ -49,7 +49,7 @@ class Page[T]:
     next_cursor: str | None = None
 
 
-StartOutcome = Literal["started", "not_ready", "already", "daily_cap", "concurrent"]
+StartOutcome = Literal["started", "not_ready", "already", "daily_cap", "month_cap", "concurrent"]
 ClaimOutcome = Literal["claimed", "done", "failed", "busy"]
 
 
@@ -155,26 +155,30 @@ class Repo(Protocol):
     def get_usage_docs(self, uid: str, date: str) -> tuple[UsageDoc, UsageMonthDoc]: ...
     # R4 first run, ONE transaction: reads session + status + user + usage + latest rating; if
     # `state=awaiting_input`, the three flags are set and `first_run_id` is absent, checks the cap
-    # like `reserve_run`, then creates run `run_id` (snapshot: rating_id, n_runs, preset, stt,
-    # code_version), counts it (runs+1, active_runs+1), sets `first_run_id`, `state=running`, the
-    # status mirror and clears the error. Cap/concurrent hit: writes `error=daily_cap_reached`
-    # (state unchanged) and nothing else. Anything not ready: nothing written.
+    # like `reserve_usage("eval")`, then creates run `run_id` (snapshot: rating_id, n_runs, preset,
+    # stt, code_version), counts it (day+month runs+1, active_runs+1), sets `first_run_id`,
+    # `state=running`, the status mirror and clears the error. Cap/concurrent hit: writes
+    # `error=daily_cap_reached` (day, or concurrent) / `monthly_cap_reached` (month) (state
+    # unchanged) and nothing else. Anything not ready: nothing written.
+    # Exempt (SP11 R5): when the session has `interview_id` the first run skips the day/month
+    # checks and counters (still takes an `active_runs` slot and obeys the concurrent limit); the
+    # run doc stores `counted=false` so its release never refunds counters.
     def start_first_run(
-        self, uid: str, sid: str, run_id: str, date: str, cap: int, max_active: int,
+        self, uid: str, sid: str, run_id: str, date: str, defaults: LimitDefaults, max_active: int,
         code_version: str, start_progress: int,
     ) -> StartOutcome: ...  # fmt: skip
     # Manual start (`POST /runs`), ONE transaction: reads session + status + user + usage + latest
     # rating; if the session is in one of `allowed_states` with `transcript_ready`,
     # `speaker_confirmed` and `clinician_speaker` set (else "not_ready", nothing written), checks
-    # the cap like `reserve_run` (hit: "daily_cap"/"concurrent", nothing written), then creates
-    # run `run_id` (snapshot: rating_id, `n_runs` or the session's, `preset` or the session's, stt,
-    # code_version), counts it (runs+1, active_runs+1), sets `first_run_id` if absent,
-    # `state=running`, the status mirror (progress `start_progress`, or the max with it when
-    # entering from `awaiting_input`) and clears the error. Exactly one of two racing callers
-    # (two manual starts, or a manual start and the first-run gate) wins; the loser reserved
-    # nothing, so there is nothing to release.
+    # the caps like `reserve_usage("eval")` (hit: "daily_cap"/"month_cap"/"concurrent", nothing
+    # written), then creates run `run_id` (snapshot: rating_id, `n_runs` or the session's,
+    # `preset` or the session's, stt, code_version), counts it (day+month runs+1, active_runs+1;
+    # always counted), sets `first_run_id` if absent, `state=running`, the status mirror
+    # (progress `start_progress`, or the max with it when entering from `awaiting_input`) and
+    # clears the error. Exactly one of two racing callers (two manual starts, or a manual start
+    # and the first-run gate) wins; the loser reserved nothing, so there is nothing to release.
     def start_run(
-        self, uid: str, sid: str, run_id: str, date: str, cap: int, max_active: int,
+        self, uid: str, sid: str, run_id: str, date: str, defaults: LimitDefaults, max_active: int,
         code_version: str, start_progress: int, allowed_states: tuple[str, ...],
         n_runs: int | None, preset: str | None,
     ) -> StartOutcome: ...  # fmt: skip

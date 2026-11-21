@@ -32,11 +32,14 @@ from onolys_api.repo.base import (
     decide_claim,
 )
 from onolys_api.repo.limits import (
+    HELD_ERROR_CODE,
     KIND_FIELD,
+    START_OUTCOME,
     Kind,
     LimitDefaults,
     ReserveUsageOutcome,
     decide_reserve,
+    decide_start,
 )
 from onolys_api.repo.models import (
     ApiKeyDoc,
@@ -561,12 +564,13 @@ class FirestoreRepo:
         )
 
     def start_first_run(
-        self, uid: str, sid: str, run_id: str, date: str, cap: int, max_active: int,
+        self, uid: str, sid: str, run_id: str, date: str, defaults: LimitDefaults, max_active: int,
         code_version: str, start_progress: int,
     ) -> StartOutcome:  # fmt: skip
         sref = self._session_ref(uid, sid)
         stref = self._top("session_status", sid)
         usage_ref = self._top("usage", f"{uid}_{date}")
+        month_ref = self._top("usage", f"{uid}_{date[:7]}")
         user_ref = self._top("users", uid)
         run_ref = sref.collection("runs").document(run_id)
         ratings = sref.collection("ratings")
@@ -587,33 +591,35 @@ class FirestoreRepo:
             status = stref.get(transaction=txn).to_dict() or {}
             user = user_ref.get(transaction=txn).to_dict() or {}
             usage = usage_ref.get(transaction=txn).to_dict() or {}
+            month = month_ref.get(transaction=txn).to_dict() or {}
             latest = [s for s in newest.get(transaction=txn) if s.id != DRAFT_ID]
             now = utcnow()
-            eff_cap, eff_active = user.get("daily_cap"), user.get("max_active_runs")
-            outcome: StartOutcome | None = None
-            if usage.get("runs", 0) >= (cap if eff_cap is None else eff_cap):
-                outcome = "daily_cap"
-            elif user.get("active_runs", 0) >= (max_active if eff_active is None else eff_active):
-                outcome = "concurrent"
-            if outcome is not None:
-                txn.update(
-                    sref, {"error": {"code": "daily_cap_reached", "step": None}, "updated_at": now}
-                )
-                txn.set(
-                    stref,
-                    {"error_code": "daily_cap_reached", "uid": uid, "updated_at": now},
-                    merge=True,
-                )
+            exempt = bool(sess.get("interview_id"))
+            decided = decide_start(user, usage, month, defaults, max_active, exempt)
+            if decided != "ok":
+                outcome: StartOutcome = START_OUTCOME[decided]  # type: ignore[assignment]
+                code = HELD_ERROR_CODE[outcome]
+                txn.update(sref, {"error": {"code": code, "step": None}, "updated_at": now})
+                txn.set(stref, {"error_code": code, "uid": uid, "updated_at": now}, merge=True)
                 return outcome
             run = RunDoc(
                 uid=uid, session_id=sid, run_id=run_id, n_runs=sess.get("n_runs", 1),
                 preset=sess.get("preset"), rating_id=latest[0].id if latest else None,
                 stt=sess.get("stt"), code_version=code_version, cap_date=date,
+                counted=not exempt,
             )  # fmt: skip
             txn.create(run_ref, run.to_store())
-            txn.set(
-                usage_ref, {"uid": uid, "date": date, "runs": usage.get("runs", 0) + 1}, merge=True
-            )
+            if not exempt:
+                txn.set(
+                    usage_ref,
+                    {"uid": uid, "date": date, "runs": usage.get("runs", 0) + 1},
+                    merge=True,
+                )
+                txn.set(
+                    month_ref,
+                    {"uid": uid, "month": date[:7], "runs": month.get("runs", 0) + 1},
+                    merge=True,
+                )
             txn.set(user_ref, {"active_runs": user.get("active_runs", 0) + 1}, merge=True)
             txn.update(
                 sref,
@@ -631,13 +637,14 @@ class FirestoreRepo:
         return self._contended(txn_fn)
 
     def start_run(
-        self, uid: str, sid: str, run_id: str, date: str, cap: int, max_active: int,
+        self, uid: str, sid: str, run_id: str, date: str, defaults: LimitDefaults, max_active: int,
         code_version: str, start_progress: int, allowed_states: tuple[str, ...],
         n_runs: int | None, preset: str | None,
     ) -> StartOutcome:  # fmt: skip
         sref = self._session_ref(uid, sid)
         stref = self._top("session_status", sid)
         usage_ref = self._top("usage", f"{uid}_{date}")
+        month_ref = self._top("usage", f"{uid}_{date[:7]}")
         user_ref = self._top("users", uid)
         run_ref = sref.collection("runs").document(run_id)
         ratings = sref.collection("ratings")
@@ -658,12 +665,11 @@ class FirestoreRepo:
             status = stref.get(transaction=txn).to_dict() or {}
             user = user_ref.get(transaction=txn).to_dict() or {}
             usage = usage_ref.get(transaction=txn).to_dict() or {}
+            month = month_ref.get(transaction=txn).to_dict() or {}
             latest = [s for s in newest.get(transaction=txn) if s.id != DRAFT_ID]
-            eff_cap, eff_active = user.get("daily_cap"), user.get("max_active_runs")
-            if usage.get("runs", 0) >= (cap if eff_cap is None else eff_cap):
-                return "daily_cap"
-            if user.get("active_runs", 0) >= (max_active if eff_active is None else eff_active):
-                return "concurrent"
+            decided = decide_start(user, usage, month, defaults, max_active, False)
+            if decided != "ok":
+                return START_OUTCOME[decided]  # type: ignore[return-value]
             run = RunDoc(
                 uid=uid, session_id=sid, run_id=run_id, n_runs=n_runs or sess.get("n_runs", 1),
                 preset=preset or sess.get("preset"), rating_id=latest[0].id if latest else None,
@@ -680,6 +686,11 @@ class FirestoreRepo:
             txn.create(run_ref, run.to_store())
             txn.set(
                 usage_ref, {"uid": uid, "date": date, "runs": usage.get("runs", 0) + 1}, merge=True
+            )
+            txn.set(
+                month_ref,
+                {"uid": uid, "month": date[:7], "runs": month.get("runs", 0) + 1},
+                merge=True,
             )
             txn.set(user_ref, {"active_runs": user.get("active_runs", 0) + 1}, merge=True)
             txn.update(sref, fields)

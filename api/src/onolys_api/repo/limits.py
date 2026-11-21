@@ -89,8 +89,36 @@ def decide_reserve(
         return "month_cap"
     if (day or {}).get(field, 0) >= effective_cap(user, kind, "day", d):
         return "day_cap"
-    if kind == "eval":
-        eff = user.get("max_active_runs")
-        if user.get("active_runs", 0) >= (max_active if eff is None else eff):
-            return "concurrent"
+    if kind == "eval" and _at_active_limit(user, max_active):
+        return "concurrent"
     return "ok"
+
+
+def _at_active_limit(user: dict[str, Any], max_active: int) -> bool:
+    eff = user.get("max_active_runs")
+    return user.get("active_runs", 0) >= (max_active if eff is None else eff)
+
+
+def decide_start(
+    user: dict[str, Any] | None,
+    day: dict[str, Any] | None,
+    month: dict[str, Any] | None,
+    d: LimitDefaults,
+    max_active: int,
+    exempt: bool,
+) -> ReserveUsageOutcome:
+    """Run-start rule (`start_first_run`/`start_run`, both repos): the eval reserve rule, except an
+    `exempt` run (first AI-linked evaluation, SP11 R5) skips the day/month checks and still obeys
+    the concurrent-run limit."""
+    if not exempt:
+        return decide_reserve(user, day, month, "eval", d, max_active)
+    return "concurrent" if _at_active_limit(user or {}, max_active) else "ok"
+
+
+# `decide_start` outcome -> repo `StartOutcome` and the session error code a held first run gets.
+START_OUTCOME = {"day_cap": "daily_cap", "month_cap": "month_cap", "concurrent": "concurrent"}
+HELD_ERROR_CODE = {
+    "daily_cap": "daily_cap_reached",
+    "month_cap": "monthly_cap_reached",
+    "concurrent": "daily_cap_reached",
+}
