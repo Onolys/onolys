@@ -92,7 +92,7 @@ The clinician role-plays against an AI client; the recording then goes through t
 
 `GET /interviews/{id}` returns the state and `duration_s`. `POST /interviews/{id}/end {"discard"?: bool}` ends the interview (or abandons it when `discard` is true) and is idempotent. Another user's interview is `404`.
 
-States: `created` → `live` → `ended` | `abandoned` → `uploaded` (set once the linked session's audio upload completes). An interview that ends or is abandoned under 120 s (`AI_ABANDON_COUNT_SECONDS`) refunds its usage unit, once. A sweeper abandons interviews stuck in `created` or `live` after `AI_MAX_SECONDS` + `AI_RECONNECT_SECONDS` + 60 s.
+States: `created` → `live` → `ended` | `abandoned` → `uploaded` (set once the linked session's audio upload completes). An interview that ends or is abandoned under 30 s (`AI_ABANDON_COUNT_SECONDS`) refunds its usage unit, once. A sweeper abandons interviews stuck in `created` or `live` after `AI_MAX_SECONDS` + `AI_RECONNECT_SECONDS` + 60 s.
 
 To evaluate an interview, `POST /sessions` with `interview_id`: the interview must be the caller's (404 otherwise), `ended` (409 `invalid_state` otherwise) and not already linked (409 `conflict`). The session takes `language` and a default `title` from the scenario, and its rating draft is prefilled with the scenario's change goal. The first evaluation run of such a session is free (see `GET /usage`). `GET /sessions` and `GET /sessions/{id}` carry `interview_id` (`null` for plain uploads).
 
