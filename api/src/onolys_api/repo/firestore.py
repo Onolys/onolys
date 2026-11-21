@@ -284,7 +284,8 @@ class FirestoreRepo:
             sess = snap.to_dict() or {}
             if sess.get("uid") != uid:
                 raise NotFoundError()
-            if sess.get("state") != state or sess["updated_at"] >= before:
+            started = sess.get("stage_started_at") or sess["updated_at"]
+            if sess.get("state") != state or started >= before:
                 return False
             now = utcnow()
             fields: dict[str, Any] = {"state": "failed", "error": error.model_dump(),
@@ -668,7 +669,7 @@ class FirestoreRepo:
             txn.update(
                 sref,
                 {"first_run_id": run_id, "state": "running", "step": None, "error": None,
-                 "updated_at": now},
+                 "updated_at": now, "stage_started_at": now},
             )  # fmt: skip
             txn.set(
                 stref,
@@ -727,7 +728,14 @@ class FirestoreRepo:
                 if sess["state"] in ("report_ready", "failed")
                 else max(status.get("progress", 0), start_progress)
             )
-            fields = {"state": "running", "step": None, "error": None, "updated_at": utcnow()}
+            now_ = utcnow()
+            fields = {
+                "state": "running",
+                "step": None,
+                "error": None,
+                "updated_at": now_,
+                "stage_started_at": now_,
+            }
             if not sess.get("first_run_id"):
                 fields["first_run_id"] = run_id
             txn.create(run_ref, run.to_store())

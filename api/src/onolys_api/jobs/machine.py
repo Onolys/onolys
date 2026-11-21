@@ -12,7 +12,7 @@ from typing import Any, get_args
 
 from onolys_api.errors import ApiError
 from onolys_api.repo.base import Repo
-from onolys_api.repo.models import SessionError, SessionState
+from onolys_api.repo.models import SessionError, SessionState, utcnow
 
 STATES: tuple[str, ...] = get_args(SessionState)
 
@@ -124,6 +124,8 @@ def advance(
     if error is _KEEP and to is not None and to != "failed":
         error = None
     s_fields: dict[str, Any] = {"state": new_state}
+    if to is not None:
+        s_fields["stage_started_at"] = utcnow()  # the stale check keys off this, not updated_at
     st_fields: dict[str, Any] = {"state": new_state, "progress": progress}
     if step is not _KEEP:
         s_fields["step"] = step

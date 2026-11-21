@@ -235,7 +235,8 @@ class FakeRepo:
         with self._claim_lock:  # the fake's "transaction"
             sess = self._owned(f"sessions/{sid}", uid)
             assert sess is not None
-            if sess.get("state") != state or sess["updated_at"] >= before:
+            started = sess.get("stage_started_at") or sess["updated_at"]
+            if sess.get("state") != state or started >= before:
                 return False
             now = utcnow()
             sess.update(state="failed", error=error.model_dump(), updated_at=now)
@@ -565,7 +566,7 @@ class FakeRepo:
             self._put(
                 f"sessions/{sid}",
                 {**sess, "first_run_id": run_id, "state": "running", "step": None, "error": None,
-                 "updated_at": now},
+                 "updated_at": now, "stage_started_at": now},
             )  # fmt: skip
             self._put(
                 f"session_status/{sid}",
@@ -621,7 +622,7 @@ class FakeRepo:
             self._put(
                 f"sessions/{sid}",
                 {**sess, "first_run_id": sess.get("first_run_id") or run_id, "state": "running",
-                 "step": None, "error": None, "updated_at": now},
+                 "step": None, "error": None, "updated_at": now, "stage_started_at": now},
             )  # fmt: skip
             self._put(
                 f"session_status/{sid}",

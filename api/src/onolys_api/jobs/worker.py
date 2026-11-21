@@ -7,8 +7,9 @@ Per delivery: claim the step/run record (lease = deadline + 60 s), run the handl
 - RetryableError / TimeoutError: if another attempt is left (X-CloudTasks-TaskRetryCount + 1 <
   MAX_ATTEMPTS) release the claim and answer 503 so Cloud Tasks retries; on the last attempt
   record `failed` and answer 2xx.
-Duplicate deliveries find `done`/`failed` and do nothing; a live lease answers 503 (2xx on the
-last attempt). Every session transition goes through `advance`, which mirrors session_status.
+Duplicate deliveries find `done`/`failed` and do nothing; a live lease always answers 503 (a dropped
+task is recovered by the lazy stale check on read, `jobs/stale.py`).
+Every session transition goes through `advance`, which mirrors session_status.
 Logs carry codes and ids only, never text.
 """
 
@@ -146,7 +147,7 @@ class TaskRunner:
                 if claim.outcome in ("done", "failed"):
                     return TaskResult(200, "duplicate")
                 if claim.outcome == "busy":
-                    return TaskResult(200 if last else 503, "busy")
+                    return TaskResult(503, "busy")  # never 2xx: the live holder may crash (A1)
                 attempt = max(attempt, claim.attempts)
             ctx = TaskContext(
                 payload, self.repo, self.queue, attempt,
