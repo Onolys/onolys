@@ -185,11 +185,12 @@ method=GET; url=""; body=""
 while [[ $# -gt 0 ]]; do case "$1" in -X) method="$2"; shift 2 ;; -d) body="$2"; shift 2 ;; -H) shift 2 ;; -*) shift ;; *) url="$1"; shift ;; esac; done
 case "$method $url" in
   "GET "*/revisions/*) cat "${CURL_REV:?}" ;;
-  "GET "*/operations/*) printf '%s' "${CURL_OP:-{\"done\":true\}}" ;;
-  "GET "*/services/*) cat "${CURL_SVC:?}" ;;
-  "PATCH "*) printf '%s' "$body" > "$PATCH_BODY"; echo "$url" > "$PATCH_URL"
+  "GET "*/operations/*) echo '{"error":{"code":403,"status":"PERMISSION_DENIED"}}'; exit 22 ;;  # the deployer SA may not read operations
+  "GET "*/services/*) if [[ -e "$PATCH_BODY" ]]; then cat "${CURL_POLL:-$CURL_SVC}"; else cat "${CURL_SVC:?}"; fi ;;  # after the PATCH: the polled service
+  "PATCH "*) echo "$url" > "$PATCH_URL"
     if [[ "${CURL_PATCH_RC:-0}" != 0 ]]; then printf '%s\n' "${CURL_PATCH_MSG:-error}"; exit "$CURL_PATCH_RC"; fi
-    printf '{"name":"projects/onolys/locations/us-central1/operations/op1"}' ;;
+    printf '%s' "$body" > "$PATCH_BODY"
+    printf '{"name":"projects/onolys/locations/us-central1/operations/op1","metadata":{"generation":"%s"}}' "${CURL_PATCH_GEN:-7}" ;;
 esac
 exit 0
 STUB
@@ -207,11 +208,12 @@ mk_svc() {  # mk_svc <clean|preview> [serving revision name or "none"]
       | .containers[0] |= (del(.name) | .image="r/api@sha256:bbb")
       | if $mode=="preview" then .containers[0].env=[{name:"ADAPTERS",value:"stub"},{name:"SERVICE_MODE",value:"combined"},{name:"GIT_SHA",value:"fc89744"}] | .containers[0].resources.cpuIdle=false else . end)}' "$T/rev.json" 
 }
-mk_svc clean > "$T/svc_clean.json"; mk_svc preview > "$T/svc_preview.json"; mk_svc preview none > "$T/svc_notraffic.json"
-export CURL_REV="$T/rev.json" CURL_SVC="$T/svc_clean.json"
+mk_gen() { jq --arg g "$1" --arg r "$2" --arg c "$3" '. + {generation:$g, observedGeneration:$r, terminalCondition:{type:"Ready",state:$c}}' "$T/svc_clean.json"; }
+mk_svc clean > "$T/svc_clean.json"; mk_gen 7 7 CONDITION_SUCCEEDED > "$T/svc_done.json"; mk_gen 7 6 CONDITION_RECONCILING > "$T/svc_pending.json"; mk_gen 7 7 CONDITION_FAILED > "$T/svc_failed.json"; mk_gen 9 9 CONDITION_SUCCEEDED > "$T/svc_newer.json"; mk_svc preview > "$T/svc_preview.json"; mk_svc preview none > "$T/svc_notraffic.json"
+export CURL_REV="$T/rev.json" CURL_SVC="$T/svc_clean.json" CURL_POLL="$T/svc_done.json"
 run_restore() { : > "$CALLS"; rm -f "$PATCH_BODY" "$PATCH_URL"; PATH="$T/bin:$PATH" bash "$PP" restore-template "$@" >"$T/restore.out" 2>&1; }
 
-run_cleanup() { : > "$CALLS"; PATH="$T/bin:$PATH" bash "$PP" cleanup "$@" >/dev/null 2>&1; }
+run_cleanup() { : > "$CALLS"; rm -f "$PATCH_BODY" "$PATCH_URL"; PATH="$T/bin:$PATH" bash "$PP" cleanup "$@" >/dev/null 2>&1; }
 
 # --- restore-template: the staging service template goes back to the serving revision; traffic is never part of the write
 CURL_SVC="$T/svc_clean.json" run_restore 42 && ok "restore: clean template succeeds" || bad "restore: clean template succeeds"
@@ -229,8 +231,12 @@ CURL_SVC="$T/svc_preview.json" CURL_PATCH_RC=22 CURL_PATCH_MSG='{"error":{"code"
 [[ "$(grep -c '^curl .*-X PATCH' "$CALLS")" == 3 ]] && ok "restore: etag conflict retried (3 attempts, re-read each time)" || bad "restore: etag conflict retried"
 CURL_SVC="$T/svc_preview.json" CURL_PATCH_RC=22 CURL_PATCH_MSG='{"error":{"code":403,"status":"PERMISSION_DENIED"}}' run_restore 42 && bad "restore: permission error fails" || ok "restore: permission error fails"
 [[ "$(grep -c '^curl .*-X PATCH' "$CALLS")" == 1 ]] && ok "restore: non-conflict error not retried" || bad "restore: non-conflict error not retried"
-CURL_SVC="$T/svc_preview.json" CURL_OP='{"done":true,"error":{"code":9,"message":"boom"}}' run_restore 42 && bad "restore: failed operation fails" || ok "restore: failed operation fails"
-CURL_SVC="$T/svc_preview.json" CURL_OP='{"done":false}' RESTORE_POLLS=2 run_restore 42 && bad "restore: unfinished operation fails" || ok "restore: unfinished operation fails"
+CURL_SVC="$T/svc_preview.json" CURL_POLL="$T/svc_failed.json" run_restore 42 && bad "restore: failed service condition fails" || ok "restore: failed service condition fails"
+CURL_SVC="$T/svc_preview.json" CURL_POLL="$T/svc_pending.json" RESTORE_POLLS=2 run_restore 42 && bad "restore: service still reconciling (observedGeneration < generation) fails at timeout" || ok "restore: service still reconciling fails at timeout"
+CURL_SVC="$T/svc_preview.json" CURL_POLL="$T/svc_newer.json" run_restore 42 && ok "restore: newer observed generation (concurrent update) counts as done" || bad "restore: newer observed generation counts as done"
+grep -q '/operations/' "$CALLS" && bad "restore: never polls the operations endpoint (no IAM for it)" || ok "restore: never polls the operations endpoint"
+CURL_SVC="$T/svc_preview.json" run_restore 42 && ok "restore: done once observedGeneration >= PATCH generation and Ready" || bad "restore: done once observedGeneration >= PATCH generation"
+grep -q '/operations/' "$CALLS" && bad "restore: success path polls no operation" || ok "restore: success path polls no operation"
 run_restore abc && bad "restore: rejects bad PR number" || ok "restore: rejects bad PR number"
 # cleanup restores before deleting revisions, and fails when the restore fails
 GC_REVS=$'onolys-api-staging-pr-42-fc89744-14-1\n' CURL_SVC="$T/svc_preview.json" run_cleanup 42 && ok "cleanup with preview template succeeds" || bad "cleanup with preview template succeeds"

@@ -178,7 +178,7 @@ run_api() {  # run_api <METHOD> <path under https://run.googleapis.com/v2/> [jso
 
 # rc 0 = matches / restored, 1 = hard error, 3 = etag conflict (caller retries)
 restore_template_once() {
-  local svc serving rev want have body resp op i
+  local svc serving rev want have body resp gen obs state i
   svc="$(run_api GET "$RUN_BASE/services/$SERVICE")" || { echo "restore-template: cannot read service" >&2; return 1; }
   serving="$(printf '%s' "$svc" | jq -er '[.traffic[]? | select(.type == "TRAFFIC_TARGET_ALLOCATION_TYPE_REVISION" and (.percent // 0) > 0)] | sort_by(.percent) | last | .revision // empty')" \
     || { echo "restore-template: no revision serves traffic; template left alone" >&2; return 1; }
@@ -193,16 +193,23 @@ restore_template_once() {
     printf '%s' "$resp" | grep -Eiq 'ABORTED|etag|409|modified|conflict' && return 3
     echo "restore-template: PATCH failed" >&2; return 1
   fi
-  op="$(printf '%s' "$resp" | jq -er '.name')" || { echo "restore-template: no operation in PATCH response" >&2; return 1; }
+  # Wait on the SERVICE, not the long-running operation (the deployer SA may not read operations): the PATCH response carries the
+  # service generation this update produced; done = Ready and observedGeneration >= that generation (a later one = a newer update).
+  gen="$(printf '%s' "$resp" | jq -r '.metadata.generation // empty')"
+  [[ "$gen" =~ ^[0-9]+$ ]] || gen="$(( $(printf '%s' "$svc" | jq -r '.generation // 0') + 1 ))"
   for i in $(seq 1 "${RESTORE_POLLS:-60}"); do
-    resp="$(run_api GET "$op")" || { echo "restore-template: cannot poll $op" >&2; return 1; }
-    if [[ "$(printf '%s' "$resp" | jq -r '.done // false')" == true ]]; then
-      printf '%s' "$resp" | jq -e '.error' >/dev/null 2>&1 && { echo "restore-template: operation failed: $(printf '%s' "$resp" | jq -c .error)" >&2; return 1; }
-      echo "restore-template: template restored from serving revision $serving"; return 0
+    resp="$(run_api GET "$RUN_BASE/services/$SERVICE")" || { echo "restore-template: cannot poll service" >&2; return 1; }
+    state="$(printf '%s' "$resp" | jq -r '.terminalCondition.state // empty')"
+    obs="$(printf '%s' "$resp" | jq -r '.observedGeneration // 0')"
+    if [[ "$obs" =~ ^[0-9]+$ && "$obs" -ge "$gen" ]]; then
+      case "$state" in
+        CONDITION_SUCCEEDED) echo "restore-template: template restored from serving revision $serving (generation $obs)"; return 0 ;;
+        CONDITION_FAILED) echo "restore-template: service update failed: $(printf '%s' "$resp" | jq -c '.terminalCondition')" >&2; return 1 ;;
+      esac
     fi
     sleep "${RESTORE_POLL_SLEEP:-5}"
   done
-  echo "restore-template: operation $op did not finish" >&2; return 1
+  echo "restore-template: service did not reach generation $gen (Ready) in time" >&2; return 1
 }
 
 restore_template() {
