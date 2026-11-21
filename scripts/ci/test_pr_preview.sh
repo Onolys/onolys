@@ -199,17 +199,20 @@ export PATCH_BODY="$T/patch_body" PATCH_URL="$T/patch_url" RESTORE_POLL_SLEEP=0 
 # fixtures: serving revision R7 (real/api), service template either equal to it (clean) or the preview config
 SRV=onolys-api-staging-abc1234-7-1; PRV=onolys-api-staging-pr-42-fc89744-14-1
 jq -n --arg n "projects/onolys/locations/us-central1/services/onolys-api-staging/revisions/$SRV" '{name:$n,uid:"u1",generation:"1",createTime:"t",logUri:"l",conditions:[],observedGeneration:"1",
-  labels:{"managed-by":"github-actions"},scaling:{maxInstanceCount:3},timeout:"60s",serviceAccount:"api-staging@onolys.iam.gserviceaccount.com",maxInstanceRequestConcurrency:80,client:"gcloud",
+  labels:{"managed-by":"github-actions","cloud.googleapis.com/location":"us-central1","run.googleapis.com/startupProbeType":"Default"},annotations:{"run.googleapis.com/client-name":"gcloud","autoscaling.knative.dev/maxScale":"3","serving.knative.dev/creator":"d@x","client.knative.dev/user-image":"i","team":"keep"},scaling:{maxInstanceCount:3},timeout:"60s",serviceAccount:"api-staging@onolys.iam.gserviceaccount.com",maxInstanceRequestConcurrency:80,client:"gcloud",
   containers:[{name:"api-1",image:"r/api@sha256:aaa",env:[{name:"ADAPTERS",value:"real"},{name:"SERVICE_MODE",value:"api"},{name:"GIT_SHA",value:"abc1234"}],resources:{limits:{cpu:"1"},cpuIdle:true}}]}' > "$T/rev.json"
-mk_svc() {  # mk_svc <clean|preview> [serving revision name or "none"]
-  jq --arg mode "$1" --arg srv "${2:-$SRV}" --arg prv "$PRV" '{etag:"\"e1\"",
+mk_svc() {  # mk_svc <clean|preview> [serving revision name or "none"] [template revision name]
+  jq --arg rname "${3:-}" --arg mode "$1" --arg srv "${2:-$SRV}" --arg prv "$PRV" '{etag:"\"e1\"",
     traffic:([{type:"TRAFFIC_TARGET_ALLOCATION_TYPE_REVISION",revision:$srv,percent:100},{type:"TRAFFIC_TARGET_ALLOCATION_TYPE_REVISION",revision:$prv,percent:0,tag:"pr-42"}] | if $srv=="none" then map(select(.percent==0)) else . end),
-    template:(del(.name,.uid,.generation,.createTime,.logUri,.conditions,.observedGeneration,.client) + {revision:$prv}
+    template:(del(.name,.uid,.generation,.createTime,.logUri,.conditions,.observedGeneration,.client) | .labels |= with_entries(select(.key | test("/") | not)) | .annotations |= with_entries(select(.key | test("/") | not)) | . + {revision:(if $rname == "" then $prv else $rname end)}
       | .containers[0] |= (del(.name) | .image="r/api@sha256:bbb")
       | if $mode=="preview" then .containers[0].env=[{name:"ADAPTERS",value:"stub"},{name:"SERVICE_MODE",value:"combined"},{name:"GIT_SHA",value:"fc89744"}] | .containers[0].resources.cpuIdle=false else . end)}' "$T/rev.json" 
 }
 mk_gen() { jq --arg g "$1" --arg r "$2" --arg c "$3" '. + {generation:$g, observedGeneration:$r, terminalCondition:{type:"Ready",state:$c}}' "$T/svc_clean.json"; }
 mk_svc clean > "$T/svc_clean.json"; mk_gen 7 7 CONDITION_SUCCEEDED > "$T/svc_done.json"; mk_gen 7 6 CONDITION_RECONCILING > "$T/svc_pending.json"; mk_gen 7 7 CONDITION_FAILED > "$T/svc_failed.json"; mk_gen 9 9 CONDITION_SUCCEEDED > "$T/svc_newer.json"; mk_svc preview > "$T/svc_preview.json"; mk_svc preview none > "$T/svc_notraffic.json"
+mk_svc preview "$SRV" onolys-api-staging-def5678-9-1 > "$T/svc_maindeploy.json"      # main deploy gap: template = NEW release, traffic still on the old revision
+mk_svc preview "$SRV" onolys-api-staging-pr-42-tpl-1795284254 > "$T/svc_tplname.json" # already restored once
+jq '. + {reconciling:true}' "$T/svc_preview.json" > "$T/svc_reconciling.json"
 export CURL_REV="$T/rev.json" CURL_SVC="$T/svc_clean.json" CURL_POLL="$T/svc_done.json"
 run_restore() { : > "$CALLS"; rm -f "$PATCH_BODY" "$PATCH_URL"; PATH="$T/bin:$PATH" bash "$PP" restore-template "$@" >"$T/restore.out" 2>&1; }
 
@@ -238,6 +241,16 @@ grep -q '/operations/' "$CALLS" && bad "restore: never polls the operations endp
 CURL_SVC="$T/svc_preview.json" run_restore 42 && ok "restore: done once observedGeneration >= PATCH generation and Ready" || bad "restore: done once observedGeneration >= PATCH generation"
 grep -q '/operations/' "$CALLS" && bad "restore: success path polls no operation" || ok "restore: success path polls no operation"
 run_restore abc && bad "restore: rejects bad PR number" || ok "restore: rejects bad PR number"
+# review fixes: restore only a preview template (a main deploy's template must never be rolled back), never while reconciling
+CURL_SVC="$T/svc_maindeploy.json" run_restore 42 && ok "restore: main-named template (deploy gap) is left alone" || bad "restore: main-named template left alone (rc)"
+[[ ! -e "$PATCH_BODY" ]] && ok "restore: no PATCH when the template revision is not a preview revision" || bad "restore: no PATCH when the template revision is not a preview revision"
+CURL_SVC="$T/svc_tplname.json" run_restore 42 && [[ ! -e "$PATCH_BODY" ]] && ok "restore: no PATCH when the template is already a -tpl- restore revision" || bad "restore: no PATCH for -tpl- template"
+CURL_SVC="$T/svc_reconciling.json" run_restore 42 && [[ ! -e "$PATCH_BODY" ]] && ok "restore: no PATCH while the service is reconciling" || bad "restore: no PATCH while reconciling"
+# system labels/annotations: stripped from the write and from the comparison
+CURL_SVC="$T/svc_clean.json" run_restore 42; [[ ! -e "$PATCH_BODY" ]] && ok "restore: system labels/annotations on the revision do not cause a permanent mismatch" || bad "restore: system keys cause mismatch"
+CURL_SVC="$T/svc_preview.json" run_restore 42
+jq -e '[.template.labels, .template.annotations | keys[]] | (map(test("^(serving|cloud|run|autoscaling|client)\\.(knative\\.dev|googleapis\\.com)/")) | any | not) and (index("team") != null) and (index("managed-by") != null)' "$PATCH_BODY" >/dev/null && ok "restore: PATCH body has no system label/annotation keys, keeps user ones" || bad "restore: system keys in PATCH body ($(jq -c '[.template.labels,.template.annotations]' "$PATCH_BODY" 2>/dev/null))"
+grep -q 'Authorization: Bearer' "$CALLS" && bad "restore: bearer token not in curl argv" || ok "restore: bearer token not in curl argv (stdin header)"
 # cleanup restores before deleting revisions, and fails when the restore fails
 GC_REVS=$'onolys-api-staging-pr-42-fc89744-14-1\n' CURL_SVC="$T/svc_preview.json" run_cleanup 42 && ok "cleanup with preview template succeeds" || bad "cleanup with preview template succeeds"
 pl="$(grep -n '^curl .*-X PATCH' "$CALLS" | head -1 | cut -d: -f1)"; dl2="$(grep -n 'revisions delete' "$CALLS" | head -1 | cut -d: -f1)"
