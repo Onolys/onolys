@@ -89,6 +89,12 @@ export function createHandlers(b: MockBackend): HttpHandler[] {
       b.deleteApiKey(uid);
       return new HttpResponse(null, { status: 204 });
     })),
+    http.get(`${V1}/scenarios`, guarded(() => json(b.listScenarios()))),
+    http.post(`${V1}/interviews`, guarded(async ({ uid, request }) => json(b.createInterview(uid, await body(request)), 201))),
+    http.get(`${V1}/interviews/:id`, guarded(({ uid, params }) => json(b.getInterview(uid, params.id)))),
+    http.post(`${V1}/interviews/:id/end`, guarded(async ({ uid, params, request }) =>
+      json(b.endInterview(uid, params.id, await body(request))),
+    )),
     http.get(`${V1}/usage`, guarded(({ uid }) => json(b.getUsage(uid)))),
 
     // Stand-in for the GCS signed URL: pinned to the canonical Content-Type, like the real one.

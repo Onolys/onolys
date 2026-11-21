@@ -19,6 +19,8 @@ import {
   type Turn,
 } from "./fixtures";
 
+import { MOCK_DEFAULT_VOICE, MOCK_LIMITS, MOCK_SCENARIOS, MOCK_VOICES } from "./fixtures/scenarios";
+
 type S = components["schemas"];
 
 export class MockHttpError extends Error {
@@ -126,7 +128,9 @@ function bad(status: number, code: string, message: string, details?: S["ErrorDe
   throw new MockHttpError(status, code, message, details);
 }
 
-const notFound = () => bad(404, "not_found", "Not found.");
+function notFound(): never {
+  return bad(404, "not_found", "Not found.");
+}
 
 function invalidParam(message: string): never {
   return bad(422, "invalid_parameters", message);
@@ -142,6 +146,7 @@ export class MockBackend {
   private counters = new Map<string, number>();
   private idem = new Map<string, { hash: string; response: S["CreateSessionResponse"] }>();
   private apiKeys = new Map<string, { key_id: string; created: string }>();
+  private interviews = new Map<string, { uid: string; res: S["InterviewResponse"] }>();
   private n = 0;
 
   constructor(opts: MockOptions) {
@@ -156,6 +161,7 @@ export class MockBackend {
     this.counters.clear();
     this.idem.clear();
     this.apiKeys.clear();
+    this.interviews.clear();
     this.n = 0;
     this.caps = this.initialCaps;
     this.emitter.clear();
@@ -234,6 +240,53 @@ export class MockBackend {
   consumeInterview(uid: string): void {
     this.checkCap(uid, "interview");
     this.count(uid, "interview");
+  }
+
+  // ---- SP10 AI interviews --------------------------------------------------
+
+  listScenarios(): S["ScenarioList"] {
+    return { scenarios: MOCK_SCENARIOS.map((s) => ({ ...s })) };
+  }
+
+  /** Start an interview: validate, spend a cap slot (429 `interview_cap_reached`), return the relay URL. */
+  createInterview(uid: string, body: S["CreateInterviewRequest"]): S["InterviewResponse"] {
+    const scenario = MOCK_SCENARIOS.find((s) => s.id === body?.scenario_id);
+    if (!scenario) invalidParam("scenario_id is not a known scenario");
+    if (body.voice != null && !MOCK_VOICES.includes(body.voice)) invalidParam("voice is not allowed");
+    this.consumeInterview(uid);
+    this.n += 1;
+    const interview_id = `iv_mock${this.n}`;
+    const res: S["InterviewResponse"] = {
+      interview_id,
+      state: "created",
+      scenario: { ...scenario },
+      voice: body.voice ?? MOCK_DEFAULT_VOICE,
+      voice_url: `wss://relay.mock.invalid/v1/voice/${interview_id}`,
+      limits: { ...MOCK_LIMITS },
+    };
+    this.interviews.set(interview_id, { uid, res });
+    return { ...res };
+  }
+
+  getInterview(uid: string, id: string): S["InterviewResponse"] {
+    const rec = this.interviews.get(id);
+    if (!rec || rec.uid !== uid) notFound();
+    return { ...rec.res };
+  }
+
+  /** Mock stand-in for the relay: `live` on connect, `duration_s` as recorded. */
+  setInterviewState(id: string, state: S["InterviewResponse"]["state"], duration_s?: number): void {
+    const rec = this.interviews.get(id);
+    if (!rec) notFound();
+    rec.res = { ...rec.res, state, ...(duration_s !== undefined ? { duration_s } : {}) };
+  }
+
+  endInterview(uid: string, id: string, body?: S["EndInterviewRequest"] | null): S["InterviewResponse"] {
+    const rec = this.interviews.get(id);
+    if (!rec || rec.uid !== uid) notFound();
+    if (rec.res.state === "ended" || rec.res.state === "abandoned" || rec.res.state === "uploaded") return { ...rec.res };
+    rec.res = { ...rec.res, state: body?.discard ? "abandoned" : "ended" };
+    return { ...rec.res };
   }
 
   private titleIs(s: SessionRec, name: string): boolean {
