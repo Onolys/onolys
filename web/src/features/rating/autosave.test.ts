@@ -94,4 +94,14 @@ describe("autosaver", () => {
     await vi.advanceTimersByTimeAsync(5000);
     expect(save).not.toHaveBeenCalled();
   });
+
+  it("W2: flush then dispose (unmount) still saves an edit younger than the debounce", async () => {
+    const { a, save } = make();
+    a.change();
+    void a.flush({ keepalive: true });
+    a.dispose();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(save).toHaveBeenCalledTimes(1);
+    expect(save).toHaveBeenCalledWith(true);
+  });
 });

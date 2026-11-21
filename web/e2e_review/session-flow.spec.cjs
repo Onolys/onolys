@@ -79,7 +79,6 @@ test.describe("main flow (mock backend)", () => {
   });
 
   test("W2/E17: a rating edit made just before in-app Back navigation is not lost", async ({ page }) => {
-    test.fail(true, "E17/W2: unmount flush is cancelled by dispose; edits <2s old dropped");
     await signUpVerified(page, "w2@example.com");
     await newSession(page);
     await expect(page.locator("#rating-change_goal")).toBeVisible();
