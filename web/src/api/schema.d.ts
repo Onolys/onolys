@@ -51,7 +51,7 @@ export interface paths {
         put?: never;
         /**
          * Start a practice interview (counts one usage unit)
-         * @description Reserves one interview unit first (429 `interview_cap_reached` with `period` when spent); the unit is given back if the interview ends or is abandoned under two minutes. An earlier unfinished interview is abandoned first.
+         * @description Reserves one interview unit first (429 `interview_cap_reached` with `period` when spent); the unit is given back if the interview ends or is abandoned under 30 seconds. An earlier unfinished interview is abandoned first.
          */
         post: operations["createInterview"];
         delete?: never;
@@ -803,11 +803,6 @@ export interface components {
         };
         /** ScenarioList */
         ScenarioList: {
-            /**
-             * Default Voice
-             * @description The configured default voice, one of `voices`
-             */
-            default_voice: string;
             /** Scenarios */
             scenarios: components["schemas"]["ScenarioPublic"][];
             /**
@@ -828,6 +823,11 @@ export interface components {
             summary: string;
             /** Title */
             title: string;
+            /**
+             * Voice
+             * @description The scenario's own voice: the default when `POST /interviews` omits `voice`
+             */
+            voice: string;
         };
         /** SessionDetail */
         SessionDetail: {

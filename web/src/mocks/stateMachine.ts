@@ -19,7 +19,7 @@ import {
   type Turn,
 } from "./fixtures";
 
-import { MOCK_CHANGE_GOALS, MOCK_DEFAULT_VOICE, MOCK_LIMITS, MOCK_SCENARIOS, MOCK_VOICES } from "./fixtures/scenarios";
+import { MOCK_CHANGE_GOALS, MOCK_LIMITS, MOCK_SCENARIOS, MOCK_VOICES } from "./fixtures/scenarios";
 
 type S = components["schemas"];
 
@@ -246,7 +246,7 @@ export class MockBackend {
   // ---- SP10 AI interviews --------------------------------------------------
 
   listScenarios(): S["ScenarioList"] {
-    return { scenarios: MOCK_SCENARIOS.map((s) => ({ ...s })), voices: [...MOCK_VOICES], default_voice: MOCK_DEFAULT_VOICE };
+    return { scenarios: MOCK_SCENARIOS.map((s) => ({ ...s })), voices: [...MOCK_VOICES] };
   }
 
   /** Start an interview: validate, spend a cap slot (429 `interview_cap_reached`), return the relay URL. */
@@ -261,7 +261,7 @@ export class MockBackend {
       interview_id,
       state: "created",
       scenario: { ...scenario },
-      voice: body.voice ?? MOCK_DEFAULT_VOICE,
+      voice: body.voice ?? scenario.voice,
       voice_url: `wss://relay.mock.invalid/v1/voice/${interview_id}`,
       limits: { ...MOCK_LIMITS },
     };

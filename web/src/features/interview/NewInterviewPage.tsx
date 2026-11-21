@@ -33,7 +33,7 @@ export function NewInterviewPage() {
 
   const list = scenarios.data?.scenarios ?? [];
   const chosen = scenarioId ?? list[0]?.id ?? null;
-  const chosenVoice = voice ?? scenarios.data?.default_voice ?? "";
+  const chosenVoice = voice ?? list.find((s) => s.id === chosen)?.voice ?? "";
 
   const checkMic = async () => {
     setMic("checking");
@@ -50,7 +50,7 @@ export function NewInterviewPage() {
     mutationFn: async () =>
       unwrap(
         await client.POST("/interviews", {
-          body: { scenario_id: chosen ?? "", ...(voice ? { voice } : {}) },
+          body: { scenario_id: chosen ?? "", voice: chosenVoice },
         }),
       ),
     onSuccess: (interview) => {
@@ -95,7 +95,10 @@ export function NewInterviewPage() {
           <legend>Scenario</legend>
           {list.map((s) => (
             <label key={s.id} className="scenario-option">
-              <input type="radio" name="scenario" checked={chosen === s.id} onChange={() => setScenarioId(s.id)} />{" "}
+              <input type="radio" name="scenario" checked={chosen === s.id} onChange={() => {
+                  setScenarioId(s.id);
+                  setVoice(null); // the picker follows the scenario's own voice
+                }} />{" "}
               <strong>{s.title}</strong> <span className="chip">{s.difficulty}</span>
               <span className="form-note"> {s.summary}</span>
             </label>

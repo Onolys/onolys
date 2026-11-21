@@ -2,9 +2,9 @@
 import type { components } from "../../api/schema";
 
 export const MOCK_SCENARIOS: components["schemas"]["ScenarioPublic"][] = [
-  { id: "sc_anxious_parent", title: "Anxious parent", difficulty: "easy", summary: "A parent worried about a child's persistent cough.", language: "en" },
-  { id: "sc_reluctant_patient", title: "Reluctant patient", difficulty: "medium", summary: "A patient who minimises symptoms and resists follow-up.", language: "en" },
-  { id: "sc_angry_relative", title: "Angry relative", difficulty: "hard", summary: "A relative upset about a delayed discharge.", language: "en" },
+  { id: "sc_anxious_parent", title: "Anxious parent", difficulty: "easy", summary: "A parent worried about a child's persistent cough.", language: "en", voice: "Kore" },
+  { id: "sc_reluctant_patient", title: "Reluctant patient", difficulty: "medium", summary: "A patient who minimises symptoms and resists follow-up.", language: "en", voice: "Leda" },
+  { id: "sc_angry_relative", title: "Angry relative", difficulty: "hard", summary: "A relative upset about a delayed discharge.", language: "en", voice: "Charon" },
 ];
 
 /** The change goal each scenario prefills on the linked session (server-side only in the real API). */
@@ -16,5 +16,4 @@ export const MOCK_CHANGE_GOALS: Record<string, string> = {
 
 /** The staging voice list (config/staging/voice_providers.yaml), as `GET /scenarios` returns it. */
 export const MOCK_VOICES = ["Zephyr", "Puck", "Charon", "Kore", "Fenrir", "Leda", "Orus", "Aoede", "Callirrhoe"];
-export const MOCK_DEFAULT_VOICE = "Kore";
 export const MOCK_LIMITS = { max_s: 600, warn_s: 480 };

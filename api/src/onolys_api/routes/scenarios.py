@@ -20,12 +20,12 @@ class ScenarioPublic(BaseModel):
     difficulty: str
     summary: str
     language: str
+    voice: str = Field(description="The scenario's own voice: the default when `POST /interviews` omits `voice`")
 
 
 class ScenarioList(BaseModel):
     scenarios: list[ScenarioPublic]
     voices: list[str] = Field(description="Every voice a practice interview may use (D16)")
-    default_voice: str = Field(description="The configured default voice, one of `voices`")
 
 
 @router.get(
@@ -36,5 +36,4 @@ def list_scenarios(request: Request, user: User) -> ScenarioList:
     return ScenarioList(
         scenarios=[ScenarioPublic(**public_view(s)) for s in request.app.state.scenarios.values()],
         voices=request.app.state.voices,
-        default_voice=request.app.state.default_voice,
     )

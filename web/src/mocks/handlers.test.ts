@@ -165,20 +165,24 @@ describe("MSW handlers over HTTP (fake auth)", () => {
 describe("MSW interview handlers (SP10)", () => {
   it("lists public scenarios only", async () => {
     const { client } = clientFor("u1");
-    const { scenarios, voices, default_voice } = unwrap(await client.GET("/scenarios"));
+    const body = unwrap(await client.GET("/scenarios"));
+    const { scenarios, voices } = body;
     expect(voices.length).toBeGreaterThan(1);
-    expect(voices).toContain(default_voice);
+    expect(body).not.toHaveProperty("default_voice");
     expect(scenarios.length).toBeGreaterThan(0);
-    for (const s of scenarios) expect(Object.keys(s).sort()).toEqual(["difficulty", "id", "language", "summary", "title"]);
+    for (const s of scenarios) {
+      expect(Object.keys(s).sort()).toEqual(["difficulty", "id", "language", "summary", "title", "voice"]);
+      expect(voices).toContain(s.voice);
+    }
   });
 
   it("creates an interview (201, default voice, limits, relay url), reads it and ends it", async () => {
     const { client } = clientFor("u1");
     const { scenarios } = unwrap(await client.GET("/scenarios"));
-    const res = await client.POST("/interviews", { body: { scenario_id: scenarios[0].id } });
+    const res = await client.POST("/interviews", { body: { scenario_id: scenarios[1].id } });
     expect(res.response.status).toBe(201);
     const iv = unwrap(res);
-    expect(iv).toMatchObject({ state: "created", voice: "Kore", limits: { max_s: 600, warn_s: 480 } });
+    expect(iv).toMatchObject({ state: "created", voice: scenarios[1].voice, limits: { max_s: 600, warn_s: 480 } });
     expect(iv.voice_url).toMatch(new RegExp(`^wss://.+/v1/voice/${iv.interview_id}$`));
     expect(unwrap(await client.GET("/interviews/{id}", { params: { path: { id: iv.interview_id } } })).interview_id).toBe(iv.interview_id);
     const ended = unwrap(await client.POST("/interviews/{id}/end", { params: { path: { id: iv.interview_id } }, body: {} }));

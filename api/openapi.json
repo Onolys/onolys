@@ -1097,11 +1097,6 @@
       },
       "ScenarioList": {
         "properties": {
-          "default_voice": {
-            "description": "The configured default voice, one of `voices`",
-            "title": "Default Voice",
-            "type": "string"
-          },
           "scenarios": {
             "items": {
               "$ref": "#/components/schemas/ScenarioPublic"
@@ -1120,8 +1115,7 @@
         },
         "required": [
           "scenarios",
-          "voices",
-          "default_voice"
+          "voices"
         ],
         "title": "ScenarioList",
         "type": "object"
@@ -1147,6 +1141,11 @@
           "title": {
             "title": "Title",
             "type": "string"
+          },
+          "voice": {
+            "description": "The scenario's own voice: the default when `POST /interviews` omits `voice`",
+            "title": "Voice",
+            "type": "string"
           }
         },
         "required": [
@@ -1154,7 +1153,8 @@
           "title",
           "difficulty",
           "summary",
-          "language"
+          "language",
+          "voice"
         ],
         "title": "ScenarioPublic",
         "type": "object"
@@ -1874,7 +1874,7 @@
     },
     "/v1/interviews": {
       "post": {
-        "description": "Reserves one interview unit first (429 `interview_cap_reached` with `period` when spent); the unit is given back if the interview ends or is abandoned under two minutes. An earlier unfinished interview is abandoned first.",
+        "description": "Reserves one interview unit first (429 `interview_cap_reached` with `period` when spent); the unit is given back if the interview ends or is abandoned under 30 seconds. An earlier unfinished interview is abandoned first.",
         "operationId": "createInterview",
         "requestBody": {
           "content": {

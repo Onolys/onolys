@@ -85,10 +85,13 @@ async def test_get_scenarios_public_keys_only(client, sample):
     assert find_leaks(r.text, sample) == []
 
 
-async def test_get_scenarios_exposes_voices_and_default(client, app):
+async def test_get_scenarios_exposes_allowed_voices_and_each_scenarios_voice(client, app):
     body = (await client.get("/v1/scenarios", headers=H)).json()
     assert body["voices"] == app.state.voices and len(body["voices"]) > 1
-    assert body["default_voice"] in body["voices"]
+    assert "default_voice" not in body  # one rule: the scenario's voice is the default
+    for item in body["scenarios"]:
+        assert item["voice"] == app.state.scenarios[item["id"]]["voice"]
+        assert item["voice"] in body["voices"]
 
 
 async def test_get_scenarios_requires_auth(client):

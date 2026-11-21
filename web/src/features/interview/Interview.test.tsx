@@ -168,6 +168,25 @@ describe("picker", () => {
     expect(track.stop).toHaveBeenCalled();
   });
 
+  it("preselects the selected scenario's voice, follows scenario changes, and always sends voice", async () => {
+    const u = userEvent.setup();
+    const bodies: string[] = [];
+    const realFetch = globalThis.fetch;
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+      if (input instanceof Request && input.method === "POST" && input.url.endsWith("/interviews")) bodies.push(await input.clone().text());
+      return realFetch(input, init);
+    });
+    const { router } = renderApp("/interviews/new", { user: USER });
+    const voice = (await main().findByLabelText("Voice")) as HTMLSelectElement;
+    expect(voice.value).toBe("Kore"); // first scenario's voice
+    await u.click(main().getByRole("radio", { name: /Reluctant patient/ }));
+    expect(voice.value).toBe("Leda");
+    await u.click(main().getByRole("button", { name: "Start interview" }));
+    await waitFor(() => expect(here(router)).toMatch(/^\/interviews\/iv_/));
+    expect(JSON.parse(bodies[0]!)).toMatchObject({ scenario_id: "sc_reluctant_patient", voice: "Leda" });
+    vi.restoreAllMocks();
+  });
+
   it("explains a denied microphone", async () => {
     const u = userEvent.setup();
     vi.stubGlobal("navigator", { ...navigator, mediaDevices: { getUserMedia: vi.fn(async () => Promise.reject(new Error("no"))) } });

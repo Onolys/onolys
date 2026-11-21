@@ -242,7 +242,6 @@ def create_app(
     app.state.clock = lambda: datetime.now(UTC)  # tests replace it
     voice_cfg = load_voice_config()
     app.state.voices = allowed_voices(voice_cfg)  # D16: what `POST /interviews {voice}` may name
-    app.state.default_voice = voice_cfg["providers"][voice_cfg["default"]]["voice"]
     app.state.scenarios = load_scenarios(voices=app.state.voices)  # fail at startup if invalid
     load_rating_schema()  # fail at startup, loudly, if the canonical rating schema is missing
     voice_mode = settings.service_mode == "voice"

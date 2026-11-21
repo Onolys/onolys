@@ -15,7 +15,7 @@ from onolys_core.voice.select import allowed_voices
 from onolys_api.rating import load_pack_cached
 
 SCHEMA_NAME = "scenario.schema.json"
-PUBLIC_FIELDS = ("id", "title", "difficulty", "summary", "language")
+PUBLIC_FIELDS = ("id", "title", "difficulty", "summary", "language", "voice")
 
 
 def scenarios_dir() -> Path:
@@ -57,9 +57,9 @@ def load_scenarios(
 
 
 def public_view(sc: dict[str, Any]) -> dict[str, Any]:
-    """`id,title,difficulty,summary,language` only (never persona, hidden_info, rules)."""
+    """`id,title,difficulty,summary,language,voice` only (never persona, hidden_info, rules)."""
     pub = sc["public"]
     return {
         "id": sc["id"], "title": pub["title"], "difficulty": pub["difficulty"],
-        "summary": pub["summary"], "language": sc["language"],
+        "summary": pub["summary"], "language": sc["language"], "voice": sc["voice"],
     }  # fmt: skip
