@@ -25,3 +25,11 @@ describe("mapAuthError", () => {
     expect(mapAuthError(undefined).offerLogin).toBeFalsy();
   });
 });
+
+describe("action-code errors", () => {
+  it("maps invalid/expired action codes to a plain message", () => {
+    for (const c of ["auth/invalid-action-code", "auth/expired-action-code"]) {
+      expect(mapAuthError(c).message).toMatch(/invalid, has expired, or was already used/);
+    }
+  });
+});

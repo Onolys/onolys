@@ -1,4 +1,5 @@
 import type { RouteObject } from "react-router";
+import { AuthAction } from "../auth/pages/AuthAction";
 import { ForgotPassword } from "../auth/pages/ForgotPassword";
 import { Login } from "../auth/pages/Login";
 import { Signup } from "../auth/pages/Signup";
@@ -40,6 +41,8 @@ export const routes: RouteObject[] = [
           { path: "/settings", element: <Settings /> },
         ],
       },
+      // Email action links (verify email, reset password): reachable in every auth state, so no guard.
+      { path: "/auth/action", element: <AuthAction /> },
       { path: "/sample-report", element: <SampleReportPage /> },
       { path: "*", element: <P.NotFound /> },
     ],

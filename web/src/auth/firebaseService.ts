@@ -2,6 +2,8 @@
 import { initializeApp } from "firebase/app";
 import {
   GoogleAuthProvider,
+  applyActionCode,
+  confirmPasswordReset as fbConfirmPasswordReset,
   createUserWithEmailAndPassword,
   getAuth,
   getRedirectResult,
@@ -13,6 +15,7 @@ import {
   signInWithPopup,
   signInWithRedirect,
   signOut as fbSignOut,
+  verifyPasswordResetCode as fbVerifyPasswordResetCode,
   type User,
 } from "firebase/auth";
 import { AuthError, type AuthService, type AuthUser } from "./types";
@@ -94,6 +97,21 @@ export function createFirebaseAuthService(config: FirebaseWebConfig): AuthServic
       await user.getIdToken(true); // the cached token lacks email_verified until refreshed
       emit();
       return toUser(auth.currentUser);
+    },
+    async applyEmailVerification(oobCode) {
+      await applyActionCode(auth, oobCode);
+      const user = auth.currentUser;
+      if (user) {
+        await reload(user);
+        await user.getIdToken(true); // the cached token lacks email_verified until refreshed
+        emit();
+      }
+    },
+    async verifyPasswordResetCode(oobCode) {
+      return fbVerifyPasswordResetCode(auth, oobCode);
+    },
+    async confirmPasswordReset(oobCode, newPassword) {
+      await fbConfirmPasswordReset(auth, oobCode, newPassword);
     },
     async getToken(forceRefresh = false) {
       const user = auth.currentUser;

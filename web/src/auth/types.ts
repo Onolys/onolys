@@ -27,6 +27,11 @@ export interface AuthService {
   sendVerificationEmail(): Promise<void>;
   /** Reload the user and force-refresh the ID token (the cached one lacks `email_verified`). */
   refreshUser(): Promise<AuthUser | null>;
+  /** Consumes a verifyEmail action code; if signed in, refreshes the user so guards see `emailVerified`. */
+  applyEmailVerification(oobCode: string): Promise<void>;
+  /** Checks a password-reset code (does not consume it) and returns the account email. */
+  verifyPasswordResetCode(oobCode: string): Promise<string>;
+  confirmPasswordReset(oobCode: string, newPassword: string): Promise<void>;
   /** SDK-managed token; `forceRefresh` maps to `getIdToken(true)`. */
   getToken(forceRefresh?: boolean): Promise<string | null>;
   signOut(): Promise<void>;

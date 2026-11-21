@@ -19,12 +19,14 @@ class Fake:
         self.patches.append((mask, body))
 
 
+CB = "https://app.onolys.com/auth/action"
 GOOD = {
     "passwordPolicyConfig": {
         "passwordPolicyEnforcementState": "ENFORCE",
         "passwordPolicyVersions": [{"customStrengthOptions": {"minPasswordLength": 8}}],
     },
     "emailPrivacyConfig": {"enableImprovedEmailPrivacy": True},
+    "notification": {"sendEmail": {"callbackUri": CB}},
 }
 
 
@@ -32,7 +34,8 @@ def test_patches_when_unset():
     c = Fake({})
     ic.ensure(c)
     mask, body = c.patches[0]
-    assert set(mask.split(",")) == {"passwordPolicyConfig", "emailPrivacyConfig"}
+    assert set(mask.split(",")) == {"passwordPolicyConfig", "emailPrivacyConfig", "notification.sendEmail.callbackUri"}
+    assert body["notification"] == {"sendEmail": {"callbackUri": CB}}
     assert body["passwordPolicyConfig"]["passwordPolicyVersions"][0]["customStrengthOptions"]["minPasswordLength"] == 8
     assert body["emailPrivacyConfig"]["enableImprovedEmailPrivacy"] is True
 
@@ -50,3 +53,16 @@ def test_add_domains_unions_and_skips_when_present():
     c2 = Fake({"authorizedDomains": ["a.web.app"]})
     ic.add_domains(c2, ["a.web.app"])
     assert c2.patches == []
+
+
+def test_callback_uri_patched_alone_when_default_hosted_handler():
+    cfg = dict(GOOD, notification={"sendEmail": {"callbackUri": "https://onolys.firebaseapp.com/__/auth/action"}})
+    c = Fake(cfg)
+    ic.ensure(c)
+    assert c.patches == [("notification.sendEmail.callbackUri", {"notification": {"sendEmail": {"callbackUri": CB}}})]
+
+
+def test_callback_uri_is_configurable():
+    c = Fake(GOOD)
+    ic.ensure(c, callback_uri="https://x.example/auth/action")
+    assert c.patches[0][1]["notification"]["sendEmail"]["callbackUri"] == "https://x.example/auth/action"

@@ -32,4 +32,24 @@ describe("fake auth service", () => {
     await s.signOut();
     expect(await s.getToken()).toBeNull();
   });
+  it("applyEmailVerification consumes the code, verifies and refreshes the signed-in user", async () => {
+    const s = createFakeAuthService();
+    await s.signUp("a@b.co", "password1");
+    const code = s.issueActionCode("verifyEmail", "a@b.co");
+    await s.applyEmailVerification(code);
+    expect((await s.refreshUser())?.emailVerified).toBe(true);
+    await expect(s.applyEmailVerification(code)).rejects.toMatchObject({ code: "auth/invalid-action-code" });
+    const old = s.issueActionCode("verifyEmail", "a@b.co", { expired: true });
+    await expect(s.applyEmailVerification(old)).rejects.toMatchObject({ code: "auth/expired-action-code" });
+  });
+  it("password reset: verify returns the email without consuming; confirm sets the password", async () => {
+    const s = createFakeAuthService();
+    await s.signUp("a@b.co", "password1");
+    await s.signOut();
+    const code = s.issueActionCode("resetPassword", "a@b.co");
+    expect(await s.verifyPasswordResetCode(code)).toBe("a@b.co");
+    await s.confirmPasswordReset(code, "newpassword1");
+    await s.signIn("a@b.co", "newpassword1");
+    await expect(s.confirmPasswordReset(code, "again1234")).rejects.toMatchObject({ code: "auth/invalid-action-code" });
+  });
 });

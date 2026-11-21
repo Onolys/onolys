@@ -2,7 +2,7 @@
 """Identity Platform settings the Terraform google provider cannot express (PRD R4), plus extra authorised domains.
 
 Usage (ADC, quota project `onolys`):
-  python3 infra/scripts/identity-config.py                      # ensure password policy (min 8) + enumeration protection
+  python3 infra/scripts/identity-config.py                      # ensure password policy (min 8) + enumeration protection + email action URL
   python3 infra/scripts/identity-config.py --domains-only --add-domain HOST ...  # union HOST(s) into authorised domains
 
 Idempotent: PATCHes only when the live config differs; domains are only ever added, never removed.
@@ -24,6 +24,10 @@ POLICY = {
     "passwordPolicyVersions": [{"customStrengthOptions": {"minPasswordLength": 8}}],
 }
 PRIVACY = {"enableImprovedEmailPrivacy": True}
+# Email links (verify email, reset password) go to our in-app handler: Google's hosted one calls the API
+# with the config's `AQ.` key and fails with 401 (shown as "link expired").
+DEFAULT_CALLBACK_URI = "https://app.onolys.com/auth/action"
+CALLBACK_MASK = "notification.sendEmail.callbackUri"
 
 
 def _policy_ok(cur):
@@ -34,16 +38,22 @@ def _policy_ok(cur):
     )
 
 
-def ensure(client):
+def ensure(client, callback_uri=DEFAULT_CALLBACK_URI):
     cfg = client.get()
     body = {}
+    masks = []
     if not _policy_ok(cfg.get("passwordPolicyConfig")):
         body["passwordPolicyConfig"] = POLICY
+        masks.append("passwordPolicyConfig")
     if not (cfg.get("emailPrivacyConfig") or {}).get("enableImprovedEmailPrivacy"):
         body["emailPrivacyConfig"] = PRIVACY
+        masks.append("emailPrivacyConfig")
+    if ((cfg.get("notification") or {}).get("sendEmail") or {}).get("callbackUri") != callback_uri:
+        body["notification"] = {"sendEmail": {"callbackUri": callback_uri}}
+        masks.append(CALLBACK_MASK)
     if body:
-        client.patch(",".join(body), body)
-        print("patched: " + ", ".join(body))
+        client.patch(",".join(masks), body)
+        print("patched: " + ", ".join(masks))
     else:
         print("already set")
 
@@ -94,13 +104,14 @@ class Client:
 def main(argv=None):
     ap = argparse.ArgumentParser()
     ap.add_argument("--add-domain", action="append", default=[], metavar="HOST")
+    ap.add_argument("--callback-uri", default=DEFAULT_CALLBACK_URI, metavar="URL", help="email action URL (verify/reset links)")
     ap.add_argument("--domains-only", action="store_true", help="skip the policy check (fast path for CI preview deploys)")
     args = ap.parse_args(argv)
     c = Client()
     if args.domains_only:
         add_domains(c, args.add_domain)
         return
-    ensure(c)
+    ensure(c, args.callback_uri)
     if args.add_domain:
         add_domains(c, args.add_domain)
 

@@ -27,6 +27,9 @@ export function mapAuthError(code: string | undefined): MappedAuthError {
     case "auth/popup-closed-by-user":
     case "auth/cancelled-popup-request":
       return { message: "Google sign-in was cancelled." };
+    case "auth/invalid-action-code":
+    case "auth/expired-action-code":
+      return { message: "This link is invalid, has expired, or was already used." };
     case "auth/user-disabled":
       return { message: "This account has been disabled. Contact support." };
     default:

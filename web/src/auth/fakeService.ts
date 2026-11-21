@@ -25,7 +25,11 @@ export interface FakeAuthService extends AuthService {
     verificationEmails: number;
     forcedRefreshes: number;
     resets: string[];
+    emailVerifications: number;
+    passwordResets: number;
   };
+  /** Test shortcut: mint a one-time email action code for an existing account. */
+  issueActionCode(kind: "verifyEmail" | "resetPassword", email: string, opts?: { expired?: boolean }): string;
   /** Pretend the user clicked the email link (visible after the next refreshUser). */
   markVerified(email: string): void;
   /** Test shortcut: be signed in as this account right now. */
@@ -64,6 +68,17 @@ export function createFakeAuthService(options: FakeAuthOptions = {}): FakeAuthSe
     verificationEmails: 0,
     forcedRefreshes: 0,
     resets: [],
+    emailVerifications: 0,
+    passwordResets: 0,
+  };
+  const codes = new Map<string, { kind: "verifyEmail" | "resetPassword"; email: string; expired: boolean }>();
+  let codeSeq = 0;
+  const takeCode = (code: string, kind: "verifyEmail" | "resetPassword", consume: boolean) => {
+    const c = codes.get(code);
+    if (!c || c.kind !== kind) throw new AuthError("auth/invalid-action-code");
+    if (c.expired) throw new AuthError("auth/expired-action-code");
+    if (consume) codes.delete(code);
+    return c;
   };
 
   return {
@@ -115,6 +130,33 @@ export function createFakeAuthService(options: FakeAuthOptions = {}): FakeAuthSe
       seenVerified = a.verified;
       emit();
       return view();
+    },
+    async applyEmailVerification(oobCode) {
+      const c = takeCode(oobCode, "verifyEmail", true);
+      calls.emailVerifications++;
+      const a = accounts.get(c.email);
+      if (a) a.verified = true;
+      if (currentEmail && a) {
+        calls.forcedRefreshes++;
+        seenVerified = accounts.get(currentEmail)!.verified;
+        emit();
+      }
+    },
+    async verifyPasswordResetCode(oobCode) {
+      return takeCode(oobCode, "resetPassword", false).email;
+    },
+    async confirmPasswordReset(oobCode, newPassword) {
+      const c = takeCode(oobCode, "resetPassword", false);
+      if (newPassword.length < 6) throw new AuthError("auth/weak-password");
+      takeCode(oobCode, "resetPassword", true);
+      calls.passwordResets++;
+      const a = accounts.get(c.email);
+      if (a) a.password = newPassword;
+    },
+    issueActionCode(kind, email, opts = {}) {
+      const code = `code_${++codeSeq}`;
+      codes.set(code, { kind, email: norm(email), expired: Boolean(opts.expired) });
+      return code;
     },
     async getToken(forceRefresh) {
       if (!currentEmail) return null;
