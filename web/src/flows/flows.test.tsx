@@ -123,6 +123,7 @@ describe("flow: sign-up, verify, upload, speaker + rating during transcription, 
     await h1("Sign up");
     await u.type(screen.getByLabelText("Email"), EMAIL);
     await u.type(screen.getByLabelText("Password"), "longenough1");
+    await u.type(screen.getByLabelText("Confirm password"), "longenough1");
     await u.click(screen.getByRole("button", { name: "Create account" }));
     await h1("Verify your email");
     expect(screen.getByText(/spam/i)).toBeInTheDocument();

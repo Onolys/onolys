@@ -6,6 +6,14 @@ import { registerJob, getJob } from "../features/upload/uploader";
 import type { UploadJob } from "../features/upload/uploader";
 import { here, renderApp } from "../test/renderApp";
 
+const crash = vi.hoisted(() => ({ on: false }));
+vi.mock("../features/dashboard/Dashboard", () => ({
+  Dashboard: () => {
+    if (crash.on) throw new Error("boom");
+    return <h1>Sessions</h1>;
+  },
+}));
+
 const h1 = (name: string) => screen.findByRole("heading", { level: 1, name });
 const navNames = () =>
   within(screen.getByRole("navigation", { name: "Main" }))
@@ -116,12 +124,12 @@ describe("user change", () => {
 describe("root error element", () => {
   it("a render crash keeps the header and a way back", async () => {
     const err = vi.spyOn(console, "error").mockImplementation(() => {});
-    const { service } = renderApp("/login?next=%2F%09%2Fevil.com");
-    await h1("Log in");
-    service.signedInAs("a@clinic.org", { verified: true });
+    crash.on = true;
+    renderApp("/", { user: { email: "a@clinic.org", verified: true } });
     await h1("Something went wrong");
     expect(screen.getByRole("link", { name: "Onolys" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Back to the start" })).toBeInTheDocument();
     err.mockRestore();
+    crash.on = false;
   });
 });
