@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { loginUrl, readNext, withNext } from "./next";
+import { loginUrl, readNext, verifyContinueUrl, withNext } from "./next";
 
 describe("next param", () => {
   it("accepts same-origin paths", () => {
@@ -17,5 +17,10 @@ describe("next param", () => {
     expect(loginUrl("/", "")).toBe("/login");
     expect(withNext("/signup", "?next=%2Fsettings")).toBe("/signup?next=%2Fsettings");
     expect(withNext("/signup", "")).toBe("/signup");
+  });
+  it("builds the verification continue URL, keeping next (FX24)", () => {
+    expect(verifyContinueUrl("https://app.example", "/settings?a=1")).toBe("https://app.example/verify-email?next=%2Fsettings%3Fa%3D1");
+    expect(verifyContinueUrl("https://app.example", "/")).toBe("https://app.example/verify-email");
+    expect(verifyContinueUrl("https://app.example")).toBe("https://app.example/verify-email");
   });
 });

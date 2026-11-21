@@ -18,6 +18,7 @@ describe("sign up", () => {
     await h1("Verify your email");
     expect(service.calls.verificationEmails).toBe(1);
     expect(here(router)).toBe("/verify-email?next=%2Fsettings");
+    expect(service.calls.verificationNexts).toEqual(["/settings"]);
   });
 
   it("blocks passwords under 8 characters with an error summary and does not call the service", async () => {
@@ -243,7 +244,10 @@ describe("forgot password errors (FX22)", () => {
 });
 
 describe("verify email", () => {
-  afterEach(() => vi.useRealTimers());
+  afterEach(() => {
+    vi.useRealTimers();
+    sessionStorage.clear();
+  });
 
   it("mentions the spam folder", async () => {
     renderApp("/verify-email", { user: { email: "a@clinic.org", verified: false } });
@@ -301,5 +305,50 @@ describe("verify email", () => {
     act(() => void window.dispatchEvent(new Event("focus")));
     await h1("Sessions");
     expect(service.calls.forcedRefreshes).toBe(1);
+  });
+
+  it("Resend asks the email link to come back to ?next= (FX24)", async () => {
+    const user = userEvent.setup();
+    const { service } = renderApp("/verify-email?next=%2Fsettings", { user: { email: "a@clinic.org", verified: false } });
+    await h1("Verify your email");
+    await user.click(screen.getByRole("button", { name: "Resend email" }));
+    await screen.findByRole("button", { name: /Resend in/ });
+    expect(service.calls.verificationNexts).toEqual(["/settings"]);
+  });
+
+  it("the resend cooldown survives a reload (FX24)", async () => {
+    const user = userEvent.setup();
+    renderApp("/verify-email", { user: { email: "a@clinic.org", verified: false } });
+    await h1("Verify your email");
+    await user.click(screen.getByRole("button", { name: "Resend email" }));
+    await screen.findByRole("button", { name: /Resend in/ });
+    cleanup();
+    renderApp("/verify-email", { user: { email: "a@clinic.org", verified: false } });
+    await h1("Verify your email");
+    expect(screen.getByRole("button", { name: /Resend in/ })).toBeDisabled();
+  });
+
+  it("\"I've verified\" is busy while checking (FX24)", async () => {
+    const user = userEvent.setup();
+    const { service } = renderApp("/verify-email", { user: { email: "a@clinic.org", verified: false } });
+    await h1("Verify your email");
+    let release!: () => void;
+    vi.spyOn(service, "refreshUser").mockImplementationOnce(() => new Promise((r) => (release = () => r(null))));
+    await user.click(screen.getByRole("button", { name: "I've verified" }));
+    expect(await screen.findByRole("button", { name: "Checking…" })).toBeDisabled();
+    release();
+    expect(await screen.findByRole("button", { name: "I've verified" })).toBeEnabled();
+  });
+
+  it("clears the old note on the next action (FX24)", async () => {
+    const user = userEvent.setup();
+    const { service } = renderApp("/verify-email", { user: { email: "a@clinic.org", verified: false } });
+    await h1("Verify your email");
+    await user.click(screen.getByRole("button", { name: "I've verified" }));
+    expect(await screen.findByRole("status")).toHaveTextContent("haven't seen your verification");
+    vi.spyOn(service, "sendVerificationEmail").mockRejectedValueOnce({ code: "auth/too-many-requests" });
+    await user.click(screen.getByRole("button", { name: "Resend email" }));
+    expect(await screen.findByRole("alert")).toBeInTheDocument();
+    expect(screen.queryByRole("status")).toBeNull();
   });
 });

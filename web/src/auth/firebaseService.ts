@@ -19,6 +19,7 @@ import {
   verifyPasswordResetCode as fbVerifyPasswordResetCode,
   type User,
 } from "firebase/auth";
+import { verifyContinueUrl } from "./next";
 import { AuthError, type AuthService, type AuthUser, type EmailChangeKind } from "./types";
 
 const OPERATION: Record<EmailChangeKind, string> = {
@@ -74,10 +75,10 @@ export function createFirebaseAuthService(config: FirebaseWebConfig): AuthServic
       });
       return () => void listeners.delete(cb);
     },
-    async signUp(email, password) {
+    async signUp(email, password, next) {
       const cred = await createUserWithEmailAndPassword(auth, email, password);
       try {
-        await sendEmailVerification(cred.user, { url: `${window.location.origin}/verify-email` });
+        await sendEmailVerification(cred.user, { url: verifyContinueUrl(window.location.origin, next) });
       } catch {
         // The account exists and the user is signed in; the verify page offers Resend and shows its own error.
       }
@@ -105,8 +106,8 @@ export function createFirebaseAuthService(config: FirebaseWebConfig): AuthServic
     async sendPasswordReset(email) {
       await sendPasswordResetEmail(auth, email);
     },
-    async sendVerificationEmail() {
-      await sendEmailVerification(need(), { url: `${window.location.origin}/verify-email` });
+    async sendVerificationEmail(next) {
+      await sendEmailVerification(need(), { url: verifyContinueUrl(window.location.origin, next) });
     },
     async refreshUser() {
       const user = auth.currentUser;

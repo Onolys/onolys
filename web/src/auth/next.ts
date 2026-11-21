@@ -25,3 +25,8 @@ export function verifyUrl(pathname: string, search: string): string {
   const target = pathname + search;
   return target === "/" ? "/verify-email" : `/verify-email?next=${encodeURIComponent(target)}`;
 }
+
+/** Where the verification email's link returns after verifying; keeps `next` so the user lands where they were going. */
+export function verifyContinueUrl(origin: string, next = "/"): string {
+  return `${origin}/verify-email${next === "/" ? "" : `?next=${encodeURIComponent(next)}`}`;
+}

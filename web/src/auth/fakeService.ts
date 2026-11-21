@@ -25,6 +25,8 @@ export interface FakeAuthService extends AuthService {
     signIns: number;
     googleSignIns: number;
     verificationEmails: number;
+    /** `next` each verification email asked to come back to (default "/"). */
+    verificationNexts: string[];
     forcedRefreshes: number;
     resets: string[];
     emailVerifications: number;
@@ -76,6 +78,7 @@ export function createFakeAuthService(options: FakeAuthOptions = {}): FakeAuthSe
     signIns: 0,
     googleSignIns: 0,
     verificationEmails: 0,
+    verificationNexts: [],
     forcedRefreshes: 0,
     resets: [],
     emailVerifications: 0,
@@ -104,13 +107,14 @@ export function createFakeAuthService(options: FakeAuthOptions = {}): FakeAuthSe
       });
       return () => void listeners.delete(cb);
     },
-    async signUp(email, password) {
+    async signUp(email, password, next = "/") {
       calls.signUps++;
       const key = norm(email);
       if (accounts.has(key)) throw new AuthError("auth/email-already-in-use");
       if (password.length < 6) throw new AuthError("auth/weak-password");
       accounts.set(key, { uid: uidFor(key), email: key, password, verified: false });
       calls.verificationEmails++;
+      calls.verificationNexts.push(next);
       enter(key);
     },
     async signIn(email, password) {
@@ -132,9 +136,10 @@ export function createFakeAuthService(options: FakeAuthOptions = {}): FakeAuthSe
       calls.resets.push(email);
       if (!accounts.has(norm(email))) throw new AuthError("auth/user-not-found");
     },
-    async sendVerificationEmail() {
+    async sendVerificationEmail(next = "/") {
       if (!currentEmail) throw new AuthError("auth/requires-recent-login");
       calls.verificationEmails++;
+      calls.verificationNexts.push(next);
     },
     async refreshUser() {
       if (!currentEmail) return null;

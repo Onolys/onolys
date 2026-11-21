@@ -2,7 +2,7 @@ import { useState, type FormEvent } from "react";
 import { Link, useLocation } from "react-router";
 import { useAuth } from "../AuthProvider";
 import { EMAIL_PATTERN, MIN_PASSWORD_LENGTH } from "../errors";
-import { withNext } from "../next";
+import { readNext, withNext } from "../next";
 import { ErrorSummary } from "./parts";
 import { useFormError } from "./useFormError";
 
@@ -28,7 +28,7 @@ export function Signup() {
     form.clear();
     setBusy(true);
     try {
-      await service.signUp(email, password); // the guard then moves us to /verify-email
+      await service.signUp(email, password, readNext(search)); // the guard then moves us to /verify-email
     } catch (err) {
       form.fail(err);
     } finally {
