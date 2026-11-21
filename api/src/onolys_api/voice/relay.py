@@ -10,6 +10,7 @@ import asyncio
 import contextlib
 import json
 import logging
+import uuid
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -38,7 +39,9 @@ from onolys_api.voice.prompt import build_system_prompt
 
 router = APIRouter()
 AUTH_TIMEOUT_S = 10.0
-MAX_REOPENS = 3  # consecutive upstream reopens without any upstream event
+MAX_REOPENS = 3  # consecutive upstream reopens without any content event (audio, turn, handle)
+REOPEN_BACKOFF_S = 0.25  # real-time wait before the 2nd, 3rd... consecutive fruitless reopen
+POLL_INTERVAL_S = 10.0  # live-state poll + checkpoint cadence: bounds free time after an End
 CLOSE_UNAUTH, CLOSE_FORBIDDEN, CLOSE_NOT_FOUND, CLOSE_NOT_LIVE = 4401, 4403, 4404, 4409
 
 
@@ -72,18 +75,24 @@ class Relay:
         self.handle: str | None = None
         self.ai_speaking = False
         self.uid = ""
+        self.conn_id = ""
 
     # ---- client frames ----
 
-    async def send_json(self, obj: dict[str, Any]) -> None:
+    async def _send(self, fn, payload) -> None:
         async with self._send_lock:
             if self.ws.application_state == WebSocketState.CONNECTED:
-                await self.ws.send_text(json.dumps(obj))
+                try:
+                    await fn(payload)
+                except (RuntimeError, WebSocketDisconnect):
+                    # the client went away and this send noticed first: same as a receive-side drop
+                    raise _Fatal("client_drop") from None
+
+    async def send_json(self, obj: dict[str, Any]) -> None:
+        await self._send(self.ws.send_text, json.dumps(obj))
 
     async def send_audio(self, pcm: bytes) -> None:
-        async with self._send_lock:
-            if self.ws.application_state == WebSocketState.CONNECTED:
-                await self.ws.send_bytes(pcm)
+        await self._send(self.ws.send_bytes, pcm)
 
     async def fail(self, code: str, close: int) -> None:
         with contextlib.suppress(Exception):
@@ -136,6 +145,11 @@ class Relay:
             await self.close(CLOSE_UNAUTH)
             return
         self.uid = uid
+        try:  # ownership first: a non-owner must not even cut the owner's socket
+            await _io(self.repo.get_interview, uid, self.iid)
+        except NotFoundError:
+            await self.fail("interview_not_found", CLOSE_NOT_FOUND)  # same for foreign and missing
+            return
 
         registry: dict[str, Connection] = st.voice_connections
         old = registry.get(self.iid)
@@ -189,10 +203,14 @@ class Relay:
             await self.fail("interview_not_live", CLOSE_NOT_LIVE)
             return
         self.handle = doc.resumption_handle if resumed else None
+        self.conn_id = uuid.uuid4().hex
 
         won = await _io(
             self.repo.transition_interview, self.uid, self.iid, ("created", "live"), "live",
-            {"disconnected_at": None},
+            {
+                "disconnected_at": None, "conn_id": self.conn_id, "duration_s": carried,
+                "seen_at": self.clock.wall(),
+            },
         )  # fmt: skip
         if won is None:
             await self.fail("interview_not_live", CLOSE_NOT_LIVE)
@@ -206,15 +224,21 @@ class Relay:
             await self.fail("upstream_unavailable", 1011)
             return
         logs.emit("voice_open", outcome="resumed" if resumed else "new")
-        await self.send_json({
-            "type": "ready", "resumed": resumed, "elapsed_s": round(timer.elapsed(), 3),
-            "max_s": settings.ai_max_seconds, "warn_s": settings.ai_warn_seconds,
-        })  # fmt: skip
+        try:
+            await self.send_json({
+                "type": "ready", "resumed": resumed, "elapsed_s": round(timer.elapsed(), 3),
+                "max_s": settings.ai_max_seconds, "warn_s": settings.ai_warn_seconds,
+            })  # fmt: skip
+        except _Fatal:  # the client vanished before `ready`
+            await self._close_upstream()
+            await self._checkpoint(timer, disconnected=True)
+            return
 
         tasks = {
             "up": asyncio.create_task(self._pump_up(), name="up"),
             "down": asyncio.create_task(self._pump_down(doc, timer), name="down"),
             "timer": asyncio.create_task(self._run_timer(timer), name="timer"),
+            "poll": asyncio.create_task(self._run_poll(timer), name="poll"),
             "stop": asyncio.create_task(conn.stop.wait(), name="stop"),
         }
         outcome = "client_drop"
@@ -223,13 +247,13 @@ class Relay:
             for name, t in tasks.items():
                 if t in done:
                     outcome = name
-                    if name in ("up", "down", "timer") and t.exception() is not None:
+                    if name in ("up", "down", "timer", "poll") and t.exception() is not None:
                         exc = t.exception()
                         if isinstance(exc, _Fatal):
                             outcome = exc.outcome
                         else:
                             raise exc
-                    elif name in ("up", "down", "timer"):
+                    elif name in ("up", "down", "timer", "poll"):
                         outcome = t.result() or name
         finally:
             for t in tasks.values():
@@ -238,7 +262,9 @@ class Relay:
             await self._close_upstream()
 
         elapsed = min(timer.elapsed(), float(settings.ai_max_seconds))
-        if outcome == "time_up":
+        if outcome == "not_live":  # settled elsewhere (End/abandon) or a newer connection owns it
+            await self.fail("interview_not_live", CLOSE_NOT_LIVE)  # no checkpoint: not ours now
+        elif outcome == "time_up":
             await self._finish(float(settings.ai_max_seconds))
             await self.close(1000)
         elif outcome == "end":
@@ -260,13 +286,17 @@ class Relay:
         fields: dict[str, Any] = {
             "duration_s": min(timer.elapsed(), float(self.settings.ai_max_seconds)),
             "resumption_handle": self.handle,
+            "seen_at": self.clock.wall(),
         }
         if disconnected:
             fields["disconnected_at"] = self.clock.wall()
         await _io(self.repo.update_interview, self.uid, self.iid, fields)
 
     async def _finish(self, duration_s: float) -> None:
-        await _io(self.repo.update_interview, self.uid, self.iid, {"duration_s": duration_s})
+        await _io(
+            self.repo.update_interview, self.uid, self.iid,
+            {"duration_s": duration_s, "seen_at": self.clock.wall()},
+        )  # fmt: skip
         await _io(
             settle_interview, self.repo, self.settings, self.uid, self.iid, "ended",
             self.clock.wall(),
@@ -323,7 +353,8 @@ class Relay:
                 raise _Fatal("upstream_unavailable")
             try:
                 async for ev in session.events():
-                    fruitless = 0
+                    if isinstance(ev, (AudioOut, TurnComplete, Interrupted, ResumptionHandle)):
+                        fruitless = 0  # only real content proves the upstream works
                     if isinstance(ev, AudioOut):
                         await self._set_speaking(True)
                         await self.send_audio(ev.pcm24k)
@@ -352,12 +383,27 @@ class Relay:
                 raise _Fatal("upstream_unavailable")
             await self._close_upstream()
             await self._set_speaking(False)
+            if fruitless > 1:  # a session that dies right after open: do not hot-loop
+                await asyncio.sleep(REOPEN_BACKOFF_S * (fruitless - 1))
             try:
                 await self._open_upstream(doc)
             except VoiceProviderError:
                 raise _Fatal("upstream_unavailable") from None
 
     # ---- clock ----
+
+    async def _run_poll(self, timer: ConnectedTimer) -> None:
+        """Every POLL_INTERVAL_S: stop if the interview left `live` (End, abandon, sweep) or another
+        connection took the lease; else checkpoint, so the stored duration is never far stale."""
+        while True:
+            await self.clock.sleep(POLL_INTERVAL_S)
+            try:
+                doc = await _io(self.repo.get_interview, self.uid, self.iid)
+            except NotFoundError:
+                raise _Fatal("not_live") from None
+            if doc.state != "live" or doc.conn_id != self.conn_id:
+                raise _Fatal("not_live")
+            await self._checkpoint(timer, disconnected=False)
 
     async def _run_timer(self, timer: ConnectedTimer) -> str:
         s = self.settings

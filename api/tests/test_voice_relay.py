@@ -3,18 +3,20 @@
 import asyncio
 import json
 import logging
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 import pytest
 import websockets
 from leak_helpers import find_leaks
-from onolys_core.voice import AudioOut, GoAway, ResumptionHandle, TurnComplete
+from onolys_core.voice import AudioOut, Closed, GoAway, ResumptionHandle, TurnComplete
 from onolys_core.voice.fixture import FixtureVoice, tone_pcm24k
+from starlette.websockets import WebSocketDisconnect, WebSocketState
 from voice_helpers import ManualClock, serve
 
 from onolys_api.adapters.fake import FakeVoice
 from onolys_api.app import create_app
 from onolys_api.config import Settings
+from onolys_api.jobs.interviews import settle_interview
 from onolys_api.repo.fake import FakeRepo
 from onolys_api.repo.models import InterviewDoc
 from onolys_api.storage.fake import FakeBlobStore
@@ -369,6 +371,187 @@ async def test_persistent_upstream_failure_surfaces_error(tmp_path):
         await ready(c)
         msgs = await c.drain_json(1.0)
         assert {"type": "error", "code": "upstream_unavailable"} in msgs
+
+
+async def test_upstream_that_closes_right_after_every_open_gives_up_with_error(
+    tmp_path, monkeypatch
+):
+    # mirrors the real Gemini adapter: any failure becomes `Closed(reason)` (never an exception)
+    import onolys_api.voice.relay as relay
+
+    monkeypatch.setattr(relay, "REOPEN_BACKOFF_S", 0.0)
+    voice = FakeVoice(FixtureVoice([Closed("boom")]))
+    env = Env(tmp_path, voice=voice)
+    env.interview()
+    async with serve(env.app) as base:
+        c = await connect(base)
+        await ready(c)
+        msgs = await c.drain_json(1.0)
+        assert {"type": "error", "code": "upstream_unavailable"} in msgs
+    assert len(voice.opened) == relay.MAX_REOPENS + 1
+    d = env.doc()
+    assert d.state == "live" and d.disconnected_at is not None  # re-attach stays possible
+
+
+async def test_reopen_backs_off_between_fruitless_reopens(tmp_path, monkeypatch):
+    import onolys_api.voice.relay as relay
+
+    monkeypatch.setattr(relay, "REOPEN_BACKOFF_S", 0.3)
+    voice = FakeVoice(FixtureVoice([Closed("boom")]))
+    env = Env(tmp_path, voice=voice)
+    env.interview()
+    async with serve(env.app) as base:
+        c = await connect(base)
+        await ready(c)
+        await asyncio.sleep(0.2)
+        assert len(voice.opened) <= 2  # not a hot loop: the later reopens wait
+        msgs = await c.drain_json(3.0)
+        assert {"type": "error", "code": "upstream_unavailable"} in msgs
+
+
+class _StreamVoice:
+    """Upstream that streams AI audio continuously (a send races the client drop)."""
+
+    def __init__(self):
+        self.closed = 0
+
+    async def open(self, params):
+        outer = self
+
+        class S:
+            async def send_audio(self, pcm):
+                pass
+
+            async def events(self):
+                while True:
+                    yield AudioOut(TONE)
+                    await asyncio.sleep(0.001)
+
+            async def close(self):
+                outer.closed += 1
+
+        return S()
+
+
+async def test_client_drop_seen_by_a_send_is_a_clean_disconnect(tmp_path, caplog):
+    caplog.set_level(logging.INFO)
+    env = Env(tmp_path, voice=_StreamVoice())
+    env.interview()
+    async with serve(env.app) as base:
+        c = await connect(base)
+        await ready(c)
+        await env.clock.advance(35)
+        c.ws.transport.abort()  # abrupt drop while AI audio is streaming
+        await asyncio.sleep(0.5)
+    d = env.doc()
+    assert d.state == "live" and d.disconnected_at is not None
+    assert d.duration_s == 35.0
+    assert "voice_error" not in caplog.text and "internal_error" not in caplog.text
+    assert env.voice.closed >= 1
+
+
+@pytest.mark.parametrize(
+    "exc",
+    [
+        RuntimeError("Unexpected ASGI message 'websocket.send', after sending 'websocket.close'"),
+        WebSocketDisconnect(1006),
+    ],
+)
+@pytest.mark.parametrize("kind", ["json", "audio"])
+async def test_send_on_a_dropped_client_is_a_client_drop_not_an_internal_error(exc, kind):
+    import onolys_api.voice.relay as relay
+
+    class Dead:
+        application_state = WebSocketState.CONNECTED
+
+        async def send_text(self, _):
+            raise exc
+
+        async def send_bytes(self, _):
+            raise exc
+
+    r = relay.Relay.__new__(relay.Relay)
+    r.ws, r._send_lock = Dead(), asyncio.Lock()
+    with pytest.raises(relay._Fatal) as ei:
+        await (r.send_json({"type": "x"}) if kind == "json" else r.send_audio(b"\x00\x00"))
+    assert ei.value.outcome == "client_drop"
+
+
+# ---- live-state poll (SEC1), ownership, lease ----
+
+
+async def test_poll_checkpoints_duration_and_seen_at_every_10s(tmp_path):
+    env = Env(tmp_path)
+    env.interview()
+    async with serve(env.app) as base:
+        c = await connect(base)
+        await ready(c)
+        await env.clock.advance(25)
+        d = env.doc()
+        assert d.duration_s == 20.0 and d.seen_at == T0 + timedelta(seconds=20)
+        await c.ws.close()
+
+
+async def test_rest_end_while_socket_live_closes_socket_and_charges_long_interview(tmp_path):
+    env = Env(tmp_path)
+    env.interview()
+    settings = env.app.state.settings
+    async with serve(env.app) as base:
+        c = await connect(base)
+        await ready(c)
+        await env.clock.advance(45)
+        d = settle_interview(env.repo, settings, "alice", "i1", "ended", env.clock.wall())
+        assert d.refunded is False  # 40 s recorded + 5 s since the checkpoint >= 30
+        await env.clock.advance(10)  # the next poll sees `ended`
+        msgs = await c.drain_json(0.5)
+        assert {"type": "error", "code": "interview_not_live"} in msgs
+        await expect_close(c, 4409)
+    assert env.voice._inner.sessions[0].close_calls >= 1
+    assert env.doc().duration_s == 40.0  # the relay did not rewrite a settled interview
+
+
+async def test_immediate_rest_end_gets_at_most_one_poll_interval_of_upstream(tmp_path):
+    env = Env(tmp_path)
+    env.interview()
+    settings = env.app.state.settings
+    async with serve(env.app) as base:
+        c = await connect(base)
+        await ready(c)
+        await env.clock.advance(3)
+        d = settle_interview(env.repo, settings, "alice", "i1", "ended", env.clock.wall())
+        assert d.refunded is True  # honest short interview
+        await env.clock.advance(10)
+        await expect_close(c, 4409)
+
+
+async def test_non_owner_cannot_cut_the_owners_socket(tmp_path):
+    env = Env(tmp_path)
+    env.interview("alice")
+    async with serve(env.app) as base:
+        c1 = await connect(base)
+        await ready(c1)
+        c2 = await connect(base, token="test:bob")
+        assert await c2.recv_json() == {"type": "error", "code": "interview_not_found"}
+        await expect_close(c2, 4404)
+        await asyncio.sleep(0.2)
+        assert c1.ws.close_code is None  # alice's socket was not taken over
+        await env.clock.advance(15)
+        assert c1.ws.close_code is None and len(env.voice.opened) == 1
+
+
+async def test_stale_connection_lease_closes_the_older_connection(tmp_path):
+    env = Env(tmp_path)
+    env.interview()
+    async with serve(env.app) as base:
+        c = await connect(base)
+        await ready(c)
+        env.repo.update_interview("alice", "i1", {"conn_id": "another-instance"})
+        await env.clock.advance(10)
+        msgs = await c.drain_json(0.5)
+        assert {"type": "error", "code": "interview_not_live"} in msgs
+        await expect_close(c, 4409)
+    d = env.doc()
+    assert d.conn_id == "another-instance" and d.disconnected_at is None  # newer owner untouched
 
 
 # ---- mic gate ----
