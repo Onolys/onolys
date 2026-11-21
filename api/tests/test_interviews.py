@@ -163,7 +163,7 @@ async def test_foreign_user_gets_404_everywhere(api, repo):
     for call in (
         api.get(f"/v1/interviews/{iid}", headers=B),
         api.post(f"/v1/interviews/{iid}/end", headers=B, json={}),
-        api.post("/v1/interviews/missing/end", headers=B, json={}),
+        api.post("/v1/interviews/" + "0" * 32 + "/end", headers=B, json={}),
     ):
         r = await call
         assert r.status_code == 404 and r.json()["details"][0]["code"] == "not_found"

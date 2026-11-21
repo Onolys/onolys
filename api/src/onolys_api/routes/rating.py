@@ -19,6 +19,7 @@ from onolys_api.jobs.first_run import maybe_start_first_run
 from onolys_api.rating import SCHEMA_VERSION, Issue, has_content, validate_rating
 from onolys_api.repo.base import NotFoundError
 from onolys_api.repo.models import RatingDoc, RatingDraftDoc
+from onolys_api.routes.ids import ResourceId
 
 ERRORS = {"default": {"model": ErrorResponse, "description": "Error"}}
 router = APIRouter(prefix="/sessions/{id}/rating", tags=["rating"], responses=ERRORS)
@@ -94,7 +95,7 @@ def _open_session(request: Request, user: AuthUser, id: str):
         "but `deleting`. A final card may start the first run (R4)."
     ),
 )
-def put_rating(id: str, body: RatingRequest, request: Request, user: User) -> RatingSaved:
+def put_rating(id: ResourceId, body: RatingRequest, request: Request, user: User) -> RatingSaved:
     repo = request.app.state.repo
     uid = user.uid
     _open_session(request, user, id)
@@ -155,7 +156,7 @@ def put_rating(id: str, body: RatingRequest, request: Request, user: User) -> Ra
     response_model=RatingView,
     summary="The latest final revision and, if newer, the autosaved draft",
 )
-def get_rating(id: str, request: Request, user: User) -> RatingView:
+def get_rating(id: ResourceId, request: Request, user: User) -> RatingView:
     repo = request.app.state.repo
     _open_session(request, user, id)
     final = repo.latest_rating(user.uid, id)

@@ -7,7 +7,6 @@ file so no function queries without one of the helpers.
 """
 
 import base64
-import binascii
 import hashlib
 import os
 import random
@@ -17,7 +16,7 @@ import weakref
 from datetime import datetime
 from typing import Any
 
-from google.api_core.exceptions import Aborted, AlreadyExists
+from google.api_core.exceptions import Aborted, AlreadyExists, InvalidArgument
 from google.api_core.exceptions import NotFound as GoogleNotFound
 from google.cloud import firestore
 from google.cloud.firestore_v1 import FieldFilter, Increment
@@ -95,10 +94,16 @@ def _encode_cursor(sid: str) -> str:
 
 
 def _decode_cursor(cursor: str) -> str:
+    """A cursor is a session id in urlsafe base64; malformed or empty is NotFound (-> 422)."""
     try:
-        return base64.urlsafe_b64decode(cursor + "=" * (-len(cursor) % 4)).decode()
-    except (binascii.Error, UnicodeDecodeError):
+        sid = base64.b64decode(
+            (cursor + "=" * (-len(cursor) % 4)).replace("-", "+").replace("_", "/"), validate=True
+        ).decode()
+    except ValueError:  # binascii.Error, UnicodeDecodeError and non-ASCII input
         raise NotFoundError() from None
+    if not sid:
+        raise NotFoundError()
+    return sid
 
 
 def _uid_query(source, uid: str):
@@ -108,7 +113,10 @@ def _uid_query(source, uid: str):
 
 def _owned(ref, uid: str, missing_ok: bool = False):
     """Snapshot of `ref` if it exists and belongs to `uid`; else NotFoundError (or None)."""
-    snap = ref.get()
+    try:
+        snap = ref.get()
+    except InvalidArgument:  # reserved or over-long doc id: it cannot exist
+        raise NotFoundError() from None
     if not snap.exists:
         if missing_ok:
             return None

@@ -12,6 +12,7 @@ from onolys_api.jobs.caps import release, reserve
 from onolys_api.jobs.interview_sweep import enqueue_sweep
 from onolys_api.jobs.interviews import abandon_open_interviews, settle_interview
 from onolys_api.repo.models import InterviewDoc, InterviewState
+from onolys_api.routes.ids import ResourceId
 from onolys_api.routes.scenarios import ScenarioPublic
 from onolys_api.voice.scenarios import public_view
 
@@ -107,7 +108,7 @@ def create_interview(
     "/{id}", operation_id="getInterview", response_model=InterviewResponse,
     summary="An interview's state and elapsed time",
 )  # fmt: skip
-def get_interview(request: Request, id: str, user: User) -> InterviewResponse:
+def get_interview(request: Request, id: ResourceId, user: User) -> InterviewResponse:
     return _view(request, request.app.state.repo.get_interview(user.uid, id))
 
 
@@ -120,7 +121,7 @@ def get_interview(request: Request, id: str, user: User) -> InterviewResponse:
     ),
 )  # fmt: skip
 def end_interview(
-    request: Request, id: str, user: User, body: EndInterviewRequest | None = None
+    request: Request, id: ResourceId, user: User, body: EndInterviewRequest | None = None
 ) -> InterviewResponse:
     state = request.app.state
     state.repo.get_interview(user.uid, id)  # 404 for a foreign or missing id

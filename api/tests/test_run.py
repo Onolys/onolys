@@ -435,7 +435,7 @@ async def test_run_and_report_reads_are_owner_scoped(env):
     assert (
         await env.c.post(f"/v1/sessions/{sid}/runs", json={}, headers=env.hb)
     ).status_code == 404
-    assert (await env.c.get("/v1/runs/nope", headers=env.h)).status_code == 404
+    assert (await env.c.get("/v1/runs/" + "0" * 32, headers=env.h)).status_code == 404
 
 
 async def test_no_report_text_in_session_status(env):

@@ -275,7 +275,7 @@ async def test_get_failed_session_reports_error_code_only(client, repo):
 async def test_get_foreign_or_missing_is_404(client):
     sid = (await create(client)).json()["session"]["id"]
     r1 = await client.get(f"/v1/sessions/{sid}", headers=B)
-    r2 = await client.get("/v1/sessions/nope", headers=B)
+    r2 = await client.get("/v1/sessions/" + "0" * 32, headers=B)
     assert r1.status_code == r2.status_code == 404 and r1.json()["message"] == r2.json()["message"]
 
 
@@ -284,6 +284,6 @@ async def test_errors_validate_against_public_schema(client, schema):
 
     for r in (
         await create(client, preset="nope"),
-        await client.get("/v1/sessions/nope", headers=A),
+        await client.get("/v1/sessions/" + "0" * 32, headers=A),
     ):
         jsonschema.validate(r.json(), schema)

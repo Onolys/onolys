@@ -107,7 +107,7 @@ ID_ROUTES = [
     ("get", "/v1/interviews/{x}"),
 ]
 WEIRD_IDS = [".", "%2e", "é" * 40, "0" * 5000, "\x00"]
-# Known bugs (firestore repo): reserved doc ids and over-long ids reach Firestore -> InvalidArgument.
+# Reserved doc ids and over-long ids used to reach Firestore -> InvalidArgument -> 500.
 FS_BAD_IDS = {"__x__", "%2e"}
 
 
@@ -126,12 +126,7 @@ def test_weird_path_ids_never_5xx(fake_api, method, tpl, x):
 
 @pytest.mark.parametrize("x", sorted(FS_BAD_IDS | {"0" * 5000}))
 @pytest.mark.parametrize(("method", "tpl"), ID_ROUTES[:6] + ID_ROUTES[-2:])
-def test_weird_path_ids_never_5xx_firestore(request, fs_api, method, tpl, x):
-    if (x in FS_BAD_IDS and "/runs/" not in tpl) or (x == "0" * 5000 and tpl == "/v1/runs/{x}"):
-        known_bug(
-            request,
-            "F1/A3 (F3 for 5000-char run id): reserved/over-long id -> Firestore InvalidArgument -> 500",
-        )
+def test_weird_path_ids_never_5xx_firestore(fs_api, method, tpl, x):
     r = fs_api.request(method, tpl.format(x=_seg(x)), headers=_uid())
     assert r.status_code < 500, (r.status_code, x)
 
@@ -150,13 +145,7 @@ def test_random_path_ids_are_404_not_5xx(fake_api, path, x):
 
 
 @pytest.mark.parametrize("c", ["a/b", "__x__", ".", "é", "%", "=" * 9, "e30", "!!!!"])
-def test_list_cursor_never_5xx(request, api, c):
-    bad = {"é"} if api.kind == "fake" else {".", "é", "%", "=" * 9, "!!!!"}
-    if c in bad:
-        known_bug(
-            request,
-            "F4/A3: malformed cursor -> 500 (non-ascii on both repos; dot/pct/pad on firestore)",
-        )
+def test_list_cursor_never_5xx(api, c):
     r = api.get("/v1/sessions", params={"cursor": c}, headers=_uid())
     assert r.status_code < 500, (r.status_code, c)
 

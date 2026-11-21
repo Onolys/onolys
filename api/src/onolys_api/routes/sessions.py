@@ -26,6 +26,7 @@ from onolys_api.repo.models import (
     SessionState,
     SessionStatusDoc,
 )
+from onolys_api.routes.ids import ResourceId
 
 IDEMPOTENCY_TTL = timedelta(hours=24)
 MAX_KEY_LEN = 200
@@ -288,7 +289,7 @@ def list_sessions(
     response_model=SessionDetail,
     summary="Session status snapshot (the web app uses the session_status listener instead)",
 )
-def get_session(id: str, request: Request, user: User) -> SessionDetail:
+def get_session(id: ResourceId, request: Request, user: User) -> SessionDetail:
     repo = request.app.state.repo
     s = repo.get_session(user.uid, id)
     s = settle_if_stale(repo, s, request.app.state.clock(), request.app.state.settings)
@@ -339,7 +340,7 @@ def get_session(id: str, request: Request, user: User) -> SessionDetail:
         "or wait. Deleting a finished session again answers 404. Usage counters are kept."
     ),
 )
-def delete_session(id: str, request: Request, user: User) -> Response:
+def delete_session(id: ResourceId, request: Request, user: User) -> Response:
     repo, blobs = request.app.state.repo, request.app.state.blobs
     rid = getattr(request.state, "request_id", None)
     s = repo.get_session(user.uid, id)  # 404 for another user's or an unknown session
