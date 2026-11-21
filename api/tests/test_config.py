@@ -7,7 +7,7 @@ pytestmark = pytest.mark.unit
 
 
 def test_defaults_local():
-    s = Settings.from_env({})
+    s = Settings.from_env({"ENV": "local"})
     assert (s.env, s.service_mode, s.auth_mode, s.adapters) == ("local", "combined", "fake", "stub")
     assert s.firestore_database == "(default)"
     assert (s.eval_cap_day, s.ai_cap_day) == (10, 5)
@@ -17,6 +17,7 @@ def test_parses_all_vars():
     s = Settings.from_env(
         {
             "ENV": "staging",
+            "UID_HMAC_KEY": "k",
             "SERVICE_MODE": "worker",
             "AUTH_MODE": "idp",
             "ADAPTERS": "real",
@@ -43,7 +44,7 @@ def test_parses_all_vars():
 
 
 def test_non_local_defaults_are_api_idp_real():
-    s = Settings.from_env({"ENV": "prod"})
+    s = Settings.from_env({"ENV": "prod", "UID_HMAC_KEY": "k"})
     assert (s.service_mode, s.auth_mode, s.adapters) == ("api", "idp", "real")
 
 
@@ -80,10 +81,10 @@ def test_invalid_values(bad):
 
 
 def test_stt_cap_defaults_and_overrides():
-    d = Settings.from_env({})
+    d = Settings.from_env({"ENV": "local"})
     assert (d.stt_cap_factor, d.stt_cap_min_s, d.stt_time_limit_s) == (3.0, 300.0, 1200.0)
     s = Settings.from_env(
-        {"STT_CAP_FACTOR": "2", "STT_CAP_MIN_S": "120", "STT_TIME_LIMIT_S": "900"}
+        {"ENV": "local", "STT_CAP_FACTOR": "2", "STT_CAP_MIN_S": "120", "STT_TIME_LIMIT_S": "900"}
     )
     assert (s.stt_cap_factor, s.stt_cap_min_s, s.stt_time_limit_s) == (2.0, 120.0, 900.0)
 
@@ -102,3 +103,32 @@ def test_daily_run_cap_removed_everywhere():
             continue
         text = p.read_text().lower()
         assert "daily_run_cap" not in text, p
+
+
+def test_env_is_required():
+    """A8: an unset ENV must not silently mean local (fake auth, no /tasks OIDC)."""
+    with pytest.raises(ConfigError, match="ENV is required"):
+        Settings.from_env({})
+
+
+@pytest.mark.parametrize("env", ["local", "test"])
+def test_local_env_refused_on_cloud_run(env):
+    with pytest.raises(ConfigError, match="Cloud Run"):
+        Settings.from_env({"ENV": env, "K_SERVICE": "onolys-api"})
+
+
+def test_cloud_run_with_prod_env_is_fine():
+    s = Settings.from_env({"ENV": "prod", "K_SERVICE": "onolys-api", "UID_HMAC_KEY": "k"})
+    assert s.env == "prod"
+
+
+@pytest.mark.parametrize("env", ["staging", "prod"])
+def test_uid_hmac_key_required_outside_local(env):
+    """A19: an empty key makes `uid_hash` a public, unkeyed-looking hash."""
+    with pytest.raises(ConfigError, match="UID_HMAC_KEY"):
+        Settings.from_env({"ENV": env})
+    assert Settings.from_env({"ENV": env, "UID_HMAC_KEY": "k"}).uid_hmac_key == "k"
+
+
+def test_uid_hmac_key_optional_locally():
+    assert Settings.from_env({"ENV": "local"}).uid_hmac_key == ""

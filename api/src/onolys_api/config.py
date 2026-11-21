@@ -78,8 +78,12 @@ class Settings:
     @classmethod
     def from_env(cls, environ: Mapping[str, str] | None = None) -> "Settings":
         e = os.environ if environ is None else environ
-        env = e.get("ENV", "local")
+        env = e.get("ENV")
+        if not env:  # never default to local: that means fake auth and no /tasks OIDC (A8)
+            raise ConfigError(f"ENV is required ({'|'.join(ENVS)})")
         local = env in LOCAL_ENVS
+        if local and e.get("K_SERVICE"):  # Cloud Run sets K_SERVICE
+            raise ConfigError("ENV=local|test is not allowed on Cloud Run (K_SERVICE is set)")
         active_raw = e.get("MAX_ACTIVE_RUNS", str(cls.max_active_runs))
         try:
             max_active = int(active_raw)
@@ -140,6 +144,8 @@ class Settings:
                 raise ConfigError(f"{name} must be one of {', '.join(allowed)}")
         if self.auth_mode == "fake" and self.env not in LOCAL_ENVS:
             raise ConfigError("AUTH_MODE=fake is only allowed when ENV is local or test")
+        if self.env not in LOCAL_ENVS and not self.uid_hmac_key:
+            raise ConfigError("UID_HMAC_KEY is required when ENV is staging or prod")
         for kind, day in (("EVAL", self.eval_cap_day), ("AI", self.ai_cap_day)):
             if day < 0:
                 raise ConfigError(f"{kind}_CAP_DAY must be >= 0")

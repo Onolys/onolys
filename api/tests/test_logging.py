@@ -73,7 +73,7 @@ def test_uid_hash_is_keyed_hmac_sha256_prefix():
 
 
 def test_settings_reads_uid_hmac_key_env():
-    assert Settings.from_env({"UID_HMAC_KEY": "abc"}).uid_hmac_key == "abc"
+    assert Settings.from_env({"ENV": "local", "UID_HMAC_KEY": "abc"}).uid_hmac_key == "abc"
 
 
 # ---- request logging middleware ----
