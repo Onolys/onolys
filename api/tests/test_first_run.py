@@ -284,7 +284,7 @@ def test_exempt_release_frees_the_slot_but_never_refunds(repo):
 
 def _counted_run(repo, uid, queue):
     sid = _ready(repo, uid)
-    maybe_start_first_run(repo, queue, uid, sid, mk_settings())
+    maybe_start_first_run(repo, queue, uid, sid, mk_settings(max_active_runs=2))
     (run,) = repo.list_runs(uid, sid)
     assert run.counted and not run.released
     return sid, run

@@ -52,7 +52,7 @@ class Settings:
     cors_origins: tuple[str, ...] = ()
     eval_cap_day: int = 10
     ai_cap_day: int = 5
-    max_active_runs: int = 2
+    max_active_runs: int = 1
     tasks_queue: str = ""
     tasks_sa: str = ""
     worker_url: str = ""
@@ -80,7 +80,7 @@ class Settings:
         e = os.environ if environ is None else environ
         env = e.get("ENV", "local")
         local = env in LOCAL_ENVS
-        active_raw = e.get("MAX_ACTIVE_RUNS", "2")
+        active_raw = e.get("MAX_ACTIVE_RUNS", str(cls.max_active_runs))
         try:
             max_active = int(active_raw)
         except ValueError:

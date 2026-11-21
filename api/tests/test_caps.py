@@ -321,5 +321,5 @@ def test_parallel_reserve_burst_under_contention_all_succeed(repo):
 
 
 def test_max_active_runs_setting(monkeypatch):
-    assert Settings.from_env({}).max_active_runs == 2
+    assert Settings.from_env({}).max_active_runs == 1
     assert Settings.from_env({"MAX_ACTIVE_RUNS": "3"}).max_active_runs == 3

@@ -77,7 +77,7 @@ Set by Terraform (`infra/modules/environment/services.tf`). Values below are the
 
 There are no STT env vars. No model id appears in infra.
 
-The two cap vars are integers >= 0 (0 disables that kind). There are no monthly caps: one daily limit per flow (evaluation, AI interview). The old single daily-run-cap var and the `EVAL_CAP_MONTH` / `AI_CAP_MONTH` vars were removed; a leftover value on a service is ignored. `MAX_ACTIVE_RUNS` is unchanged.
+The two cap vars are integers >= 0 (0 disables that kind). There are no monthly caps: one daily limit per flow (evaluation, AI interview). The old single daily-run-cap var and the `EVAL_CAP_MONTH` / `AI_CAP_MONTH` vars were removed; a leftover value on a service is ignored. `MAX_ACTIVE_RUNS` (concurrent evaluation runs per user) defaults to `1`: one run at a time; `users/{uid}.max_active_runs` overrides per user.
 
 ## Per-user limits (Firebase console)
 

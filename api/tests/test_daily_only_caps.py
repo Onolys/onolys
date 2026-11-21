@@ -70,3 +70,19 @@ def test_settings_have_no_monthly_caps_():
     s = Settings.from_env({})
     assert not hasattr(s, "eval_cap_month") and not hasattr(s, "ai_cap_month")
     assert Settings.from_env({"EVAL_CAP_MONTH": "1", "AI_CAP_MONTH": "1"}) == s  # ignored
+
+
+def test_one_active_run_per_user_by_default():
+    assert Settings().max_active_runs == 1
+    assert Settings.from_env({}).max_active_runs == 1
+    assert Settings.from_env({"MAX_ACTIVE_RUNS": "3"}).max_active_runs == 3  # env still overrides
+
+
+def test_second_concurrent_run_is_held_by_the_default_limit(repo):
+    u, s = _uid(), Settings(env="test", auth_mode="fake")  # default max_active_runs
+    caps.reserve(repo, s, u, "eval", NOON)
+    with pytest.raises(ApiError) as e:
+        caps.reserve(repo, s, u, "eval", NOON)
+    assert e.value.details[0]["code"] == "daily_cap_reached"
+    assert e.value.message == caps.CONCURRENT_MESSAGE
+    caps.reserve(repo, s, u, "interview", NOON)  # the AI flow is not an evaluation run
