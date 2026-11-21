@@ -34,6 +34,7 @@ async function signUp(page, email, pw = PW) {
   await page.goto("/signup");
   await field(page, "Email").fill(email);
   await field(page, "Password").fill(pw);
+  await field(page, "Confirm password").fill(pw);
   await page.getByRole("button", { name: "Create account" }).click();
 }
 async function signUpVerified(page, email = "user@example.com") {

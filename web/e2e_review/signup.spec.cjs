@@ -52,6 +52,7 @@ test.describe("signup", () => {
     await spa(page, "/signup");
     await field(page, "Email").fill("DUP@example.com");
     await field(page, "Password").fill(PW);
+    await field(page, "Confirm password").fill(PW);
     await create(page).click();
     await expect(page.getByText(/already exists/i)).toBeVisible();
     await expect(page.getByRole("link", { name: /log in instead/i })).toBeVisible();
@@ -63,6 +64,7 @@ test.describe("signup", () => {
     await page.goto("/signup");
     await field(page, "Email").fill("dbl@example.com");
     await field(page, "Password").fill(PW);
+    await field(page, "Confirm password").fill(PW);
     await create(page).dblclick();
     await expect(page).toHaveURL(/verify-email/);
     expect(c.pageerrors).toEqual([]);
@@ -70,6 +72,7 @@ test.describe("signup", () => {
     await spa(page, "/signup");
     await field(page, "Email").fill("enter@example.com");
     await field(page, "Password").fill(PW);
+    await field(page, "Confirm password").fill(PW);
     await field(page, "Password").press("Enter");
     await expect(page).toHaveURL(/verify-email/);
   });
@@ -81,6 +84,7 @@ test.describe("signup", () => {
     await spa(page, "/signup");
     await field(page, "Email").fill("üser+tag@exämple.com");
     await field(page, "Password").fill("pässwörd😀1");
+    await field(page, "Confirm password").fill("pässwörd😀1");
     await create(page).click();
     await expect(page.locator("main").getByText("üser+tag@exämple.com")).toBeVisible();
   });

@@ -7,7 +7,7 @@ export interface MappedAuthError {
   /** Email already in use: the form offers a link to log in. */
   offerLogin?: boolean;
   /** The form field the message is about, so it can be marked invalid. */
-  field?: "email" | "password";
+  field?: "email" | "password" | "confirm";
 }
 
 /** Simple shape check (something@host.tld); the server stays the authority. */

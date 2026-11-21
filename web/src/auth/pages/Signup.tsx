@@ -10,6 +10,7 @@ export function Signup() {
   const { service } = useAuth();
   const { search } = useLocation();
   const [busy, setBusy] = useState(false);
+  const [show, setShow] = useState(false);
   const form = useFormError();
 
   async function onSubmit(e: FormEvent<HTMLFormElement>) {
@@ -17,11 +18,13 @@ export function Signup() {
     const data = new FormData(e.currentTarget);
     const email = String(data.get("email") ?? "").trim();
     const password = String(data.get("password") ?? "");
+    const confirm = String(data.get("confirm") ?? "");
     if (!email) return form.failWith("Enter your email.", "email");
     if (!EMAIL_PATTERN.test(email)) return form.failWith("Enter a valid email address.", "email");
     if (password.length < MIN_PASSWORD_LENGTH) {
       return form.failWith(`Use at least ${MIN_PASSWORD_LENGTH} characters for your password.`, "password");
     }
+    if (confirm !== password) return form.failWith("Passwords don't match.", "confirm");
     form.clear();
     setBusy(true);
     try {
@@ -53,8 +56,15 @@ export function Signup() {
         </label>
         <label>
           Password
-          <input name="password" type="password" autoComplete="new-password" required minLength={MIN_PASSWORD_LENGTH} {...form.fieldProps("password")} />
+          <input name="password" type={show ? "text" : "password"} autoComplete="new-password" required minLength={MIN_PASSWORD_LENGTH} {...form.fieldProps("password")} />
         </label>
+        <label>
+          Confirm password
+          <input name="confirm" type={show ? "text" : "password"} autoComplete="new-password" required {...form.fieldProps("confirm")} />
+        </label>
+        <button type="button" className="secondary" aria-pressed={show} onClick={() => setShow((v) => !v)}>
+          Show passwords
+        </button>
         <p className="form-note">At least {MIN_PASSWORD_LENGTH} characters. No other rules.</p>
         <button type="submit" className="primary" disabled={busy}>
           Create account

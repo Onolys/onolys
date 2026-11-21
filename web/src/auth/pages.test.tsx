@@ -13,6 +13,7 @@ describe("sign up", () => {
     await h1("Sign up");
     await user.type(screen.getByLabelText("Email"), "new@clinic.org");
     await user.type(screen.getByLabelText("Password"), "longenough1");
+    await user.type(screen.getByLabelText("Confirm password"), "longenough1");
     await user.click(screen.getByRole("button", { name: "Create account" }));
     await h1("Verify your email");
     expect(service.calls.verificationEmails).toBe(1);
@@ -64,6 +65,32 @@ describe("sign up", () => {
     expect(screen.getByLabelText("Email")).not.toHaveAttribute("aria-invalid");
   });
 
+  it("requires the confirmation to match (FX20) and flags the field", async () => {
+    const user = userEvent.setup();
+    const { service } = renderApp("/signup");
+    await h1("Sign up");
+    await user.type(screen.getByLabelText("Email"), "new@clinic.org");
+    await user.type(screen.getByLabelText("Password"), "longenough1");
+    await user.type(screen.getByLabelText("Confirm password"), "longenough2");
+    await user.click(screen.getByRole("button", { name: "Create account" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Passwords don't match");
+    expect(screen.getByLabelText("Confirm password")).toHaveAttribute("aria-invalid", "true");
+    expect(service.calls.signUps).toBe(0);
+  });
+
+  it("toggles password visibility with an accessible button (FX20)", async () => {
+    const user = userEvent.setup();
+    renderApp("/signup");
+    await h1("Sign up");
+    const toggle = screen.getByRole("button", { name: "Show passwords" });
+    expect(toggle).toHaveAttribute("aria-pressed", "false");
+    expect(screen.getByLabelText("Password")).toHaveAttribute("type", "password");
+    await user.click(toggle);
+    expect(toggle).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByLabelText("Password")).toHaveAttribute("type", "text");
+    expect(screen.getByLabelText("Confirm password")).toHaveAttribute("type", "text");
+  });
+
   it("offers login when the email is already in use", async () => {
     const user = userEvent.setup();
     const service = createFakeAuthService();
@@ -73,6 +100,7 @@ describe("sign up", () => {
     await h1("Sign up");
     await user.type(screen.getByLabelText("Email"), "dup@clinic.org");
     await user.type(screen.getByLabelText("Password"), "longenough1");
+    await user.type(screen.getByLabelText("Confirm password"), "longenough1");
     await user.click(screen.getByRole("button", { name: "Create account" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("already exists");
     const link = screen.getByRole("link", { name: "Log in instead" });
