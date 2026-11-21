@@ -104,4 +104,14 @@ describe("autosaver", () => {
     expect(save).toHaveBeenCalledTimes(1);
     expect(save).toHaveBeenCalledWith(true);
   });
+
+  it("W3: cancel only stops the timer; a later flush still saves pending edits", async () => {
+    const { a, save } = make();
+    a.change();
+    a.cancel();
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(save).not.toHaveBeenCalled();
+    await a.flush();
+    expect(save).toHaveBeenCalledTimes(1);
+  });
 });

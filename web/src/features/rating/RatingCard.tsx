@@ -174,7 +174,7 @@ export function RatingCard({ sessionId, debounceMs = 2000, submitLabel = "Submit
     setBusy(true);
     saver.current?.cancel();
     try {
-      await saver.current?.flush(); // nothing pending after cancel; waits for an in-flight draft
+      await saver.current?.flush(); // saves any pending draft edit and waits for an in-flight one
       unwrap(
         await client.PUT("/sessions/{id}/rating", {
           params: { path: { id: sessionId } },

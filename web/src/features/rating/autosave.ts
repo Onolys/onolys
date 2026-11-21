@@ -68,8 +68,7 @@ export function createAutosaver(opts: AutosaverOptions): Autosaver {
     },
     flush,
     cancel() {
-      clear();
-      dirty = false;
+      clear(); // timer only: edits stay dirty so a later flush/blur/retry still saves them
     },
     dispose() {
       // Stop new edits/timers now, but let flushes already queued (unmount flush) run before gating run().
