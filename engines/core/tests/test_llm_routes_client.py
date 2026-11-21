@@ -296,3 +296,32 @@ async def test_gemini_request_builds_offline_and_reads_key_from_env(monkeypatch)
     assert seen["headers"]["x-goog-api-key"] == "gem-test-key"
     assert seen["body"]["generationConfig"]["response_mime_type"] == "application/json"
     assert "temperature" not in seen["body"]["generationConfig"]
+
+
+@pytest.mark.parametrize("model", ["gemini/gemini-4-neon", "gemini/gemini-4-hydrogen"])
+async def test_reasoning_effort_low_becomes_gemini_thinking_config(model, monkeypatch):
+    """Shipped Gemini routes -> real LiteLLM -> request body carries thinkingConfig (stubbed HTTP)."""
+    import litellm
+    from litellm.llms.custom_httpx.http_handler import AsyncHTTPHandler
+
+    from onolys_core.llm.routes import resolve_preset
+
+    monkeypatch.delenv("ROUTES_FILE", raising=False)
+    monkeypatch.setenv("GEMINI_API_KEY", "test-key")
+    shipped, _ = resolve_preset()
+    tier = "cheap" if model.endswith("hydrogen") else "mid"
+    assert shipped[tier].litellm_id == model
+    sent: list = []
+
+    async def fake_post(self, url, *args, **kwargs):
+        sent.append(kwargs.get("data") if kwargs.get("data") is not None else kwargs.get("json"))
+        raise RuntimeError("stop before network")
+
+    monkeypatch.setattr(AsyncHTTPHandler, "post", fake_post)
+    cfg = LLMConfig(llm_mode="live", routes={tier: shipped[tier]})
+    c = LiteLLMClient(cfg, acompletion=litellm.acompletion)
+    with pytest.raises(Exception):
+        await c.complete_json(req(tier=tier))
+    body = json.loads(sent[0]) if isinstance(sent[0], (str, bytes)) else sent[0]
+    thinking = body["generationConfig"]["thinkingConfig"]
+    assert thinking["thinkingLevel"] == "low"

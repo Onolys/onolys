@@ -60,10 +60,13 @@ def test_packaged_default_routes_and_alias():
         assert r.caching_mode == "provider_implicit"
         assert r.supports_temperature is False
         assert r.api_key_env == "GEMINI_API_KEY"
-        assert "thinking" not in r.extra_params
+        assert r.extra_params == LOW_THINKING
     assert routes["cheap"].litellm_id == HYDROGEN
     assert routes["mid"].litellm_id == routes["strong"].litellm_id == NEON
     assert routes["tips"] == routes["mid"]
+
+
+LOW_THINKING = {"reasoning_effort": "low"}
 
 
 @pytest.fixture(params=["packaged", "staging", "prod"])
@@ -81,6 +84,7 @@ def test_shipped_files_default_to_gemini(shipped):
     }  # fmt: skip
     assert {r.api_key_env for r in routes.values()} == {"GEMINI_API_KEY"}
     assert {r.caching_mode for r in routes.values()} == {"provider_implicit"}
+    assert all(r.extra_params == LOW_THINKING for r in routes.values())
     check_api_keys(routes, env={"GEMINI_API_KEY": "x"})  # Claude key not needed
 
 
@@ -107,6 +111,7 @@ def test_staging_forced_failure_presets_resolve_on_gemini(monkeypatch):
     assert {eaudit[n].litellm_id for n in ("cheap", "mid", "strong")} == {bad}
     assert {eaudit[n].litellm_id for n in ("paudit_code", "paudit_globals", "tips")} == {NEON}
     assert {r.api_key_env for r in (*llm.values(), *eaudit.values())} == {"GEMINI_API_KEY"}
+    assert all(r.extra_params == LOW_THINKING for r in (*llm.values(), *eaudit.values()))
 
 
 def test_prod_has_no_forced_failure_presets(monkeypatch):

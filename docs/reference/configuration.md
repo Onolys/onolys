@@ -23,7 +23,7 @@ Values here are the defaults. Tuning values (thresholds, caps, windows) are gues
 |---|---|---|
 | `IAUDIT_MODEL_CHEAP` | `gemini/gemini-4-hydrogen` | LiteLLM model id for the cheap tier (prep tagging). |
 | `IAUDIT_MODEL_MID` | `gemini/gemini-4-neon` | LiteLLM model id for the mid tier (atomize, link, check). |
-| `IAUDIT_MODEL_STRONG` | `gemini/gemini-4-carbon` | LiteLLM model id for the strong tier. Offline use only. |
+| `IAUDIT_MODEL_STRONG` | `gemini/gemini-4-neon` | LiteLLM model id for the strong tier. Offline use only. |
 | `IAUDIT_LLM_TIMEOUT_S` | `30` | Default call timeout for a stage with no `*_CALL_TIMEOUT_S` of its own, and the time a retry needs to fit. A stage cap replaces it, even when longer. |
 | `IAUDIT_AUDIT_DEADLINE_S` | `100` | Hard cap for one audit. A startup warning is logged above 100. |
 | `IAUDIT_LLM_MAX_RETRIES` | `1` | Retries of a failed model call (timeout, bad JSON, provider error). |
@@ -31,6 +31,8 @@ Values here are the defaults. Tuning values (thresholds, caps, windows) are gues
 | `IAUDIT_LLM_MODE` | `live` | `live` calls providers; `fixture` replays recordings from `fixture_dir`; `stub` makes every model call fail as unavailable. |
 | `IAUDIT_LLM_RESPONSE_FORMAT` | `json_object` | `json_object` relies on the prompt for the schema and validates replies here. `json_schema` asks the provider for strict structured output; Haiku 5.5 often returns empty claims with it. |
 | `IAUDIT_FIXTURE_DIR` | `tests/fixtures/llm` | Recordings for `fixture` mode. |
+
+Thinking is kept low on Gemini (`reasoning_effort: low`) because Gemini 4 thinks by default and thinking tokens count against the small per-stage output caps. eaudit picks caching and thinking settings from the model id prefix: `gemini/` gets implicit caching plus low thinking, `anthropic/` gets ephemeral caching plus thinking disabled. To flip back to Claude: set `DEFAULT_PRESET=claude` for the worker (shared routes), or `IAUDIT_MODEL_CHEAP/MID/STRONG=anthropic/...` for standalone eaudit/eval.
 
 ## Orchestration
 
