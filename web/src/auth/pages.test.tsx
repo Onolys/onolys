@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { here, renderApp } from "../test/renderApp";
 import { createFakeAuthService } from "./fakeService";
+import { resetResendCooldowns } from "./pages/VerifyEmail";
 
 const h1 = (name: string) => screen.findByRole("heading", { level: 1, name });
 
@@ -246,7 +247,7 @@ describe("forgot password errors (FX22)", () => {
 describe("verify email", () => {
   afterEach(() => {
     vi.useRealTimers();
-    sessionStorage.clear();
+    resetResendCooldowns();
   });
 
   it("mentions the spam folder", async () => {
@@ -316,7 +317,7 @@ describe("verify email", () => {
     expect(service.calls.verificationNexts).toEqual(["/settings"]);
   });
 
-  it("the resend cooldown survives a reload (FX24)", async () => {
+  it("the resend cooldown survives leaving and returning to the page, not stored in the browser (FX24)", async () => {
     const user = userEvent.setup();
     renderApp("/verify-email", { user: { email: "a@clinic.org", verified: false } });
     await h1("Verify your email");

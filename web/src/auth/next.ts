@@ -2,19 +2,19 @@
 
 /** Pages that are never a sensible post-login target (they would loop or dead-end). */
 const BLOCKED = new Set(["/login", "/signup", "/forgot-password", "/auth/action"]);
-const BASE = "https://next.invalid";
 
 export function readNext(search: string): string {
   const raw = new URLSearchParams(search).get("next");
   // eslint-disable-next-line no-control-regex -- control chars are stripped by URL parsers, hiding "//host"
   if (!raw || !raw.startsWith("/") || raw.startsWith("//") || raw.includes("\\") || /[\u0000-\u001f\u007f]/.test(raw)) return "/";
+  const base = window.location.origin; // parse against the page origin: no second absolute-URL literal
   let url: URL;
   try {
-    url = new URL(raw, BASE);
+    url = new URL(raw, base);
   } catch {
     return "/";
   }
-  if (url.origin !== BASE) return "/";
+  if (url.origin !== base) return "/";
   if (BLOCKED.has(url.pathname.replace(/\/+$/, ""))) return "/";
   return raw;
 }

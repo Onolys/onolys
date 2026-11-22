@@ -123,8 +123,12 @@ describe("no PHI in titles or console output", () => {
     for (const f of files) expect(read(f), rel(f)).not.toMatch(/document\.title|<title|react-helmet/);
   });
 
-  it("the only console call logs span ids, not text", () => {
+  it("the only console calls log span ids or the boot error, not text", () => {
     const calls = files.flatMap((f) => [...read(f).matchAll(/console\.\w+\([^;]*\);/g)].map((m) => `${rel(f)} ${m[0]}`));
-    expect(calls).toEqual(['src/lib/spans.ts console.warn("transcript: span does not match turn text", rejected.map((r) => r.id));']);
+    expect(calls).toEqual([
+      'src/lib/spans.ts console.warn("transcript: span does not match turn text", rejected.map((r) => r.id));',
+      // Boot failure: logs the startup Error (config/network/SDK init), which holds no user or transcript text.
+      'src/main.tsx console.error("Boot failed", err);',
+    ]);
   });
 });

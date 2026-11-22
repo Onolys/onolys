@@ -8,16 +8,22 @@ import { useFormError } from "./useFormError";
 
 export const RESEND_COOLDOWN_SECONDS = 60;
 
-const cooldownKey = (email: string | null | undefined) => `iaudit.verifyResendUntil:${email ?? ""}`;
+/**
+ * Resend cooldown end times, in memory only (the privacy policy keeps app data out of browser storage).
+ * Survives in-app navigation and remounts, not a full reload.
+ */
+const cooldownUntil = new Map<string, number>();
+const cooldownKey = (email: string | null | undefined) => email ?? "";
 
-/** Seconds left on a persisted resend cooldown (it must survive a reload). */
-function storedCooldown(email: string | null | undefined): number {
-  try {
-    const until = Number(sessionStorage.getItem(cooldownKey(email)));
-    return Math.max(0, Math.ceil((until - Date.now()) / 1000));
-  } catch {
-    return 0;
-  }
+/** Seconds left on the resend cooldown for this account. */
+function remainingCooldown(email: string | null | undefined): number {
+  const until = cooldownUntil.get(cooldownKey(email)) ?? 0;
+  return Math.max(0, Math.ceil((until - Date.now()) / 1000));
+}
+
+/** Test hook: forget all cooldowns. */
+export function resetResendCooldowns(): void {
+  cooldownUntil.clear();
 }
 
 export function VerifyEmail() {
@@ -25,7 +31,7 @@ export function VerifyEmail() {
   const { search } = useLocation();
   const next = readNext(search);
   const { signOut, error: signOutError } = useSignOut();
-  const [cooldown, setCooldown] = useState(() => storedCooldown(user?.email));
+  const [cooldown, setCooldown] = useState(() => remainingCooldown(user?.email));
   const [note, setNote] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [checkingNow, setCheckingNow] = useState(false);
@@ -76,11 +82,7 @@ export function VerifyEmail() {
       await service.sendVerificationEmail(next);
       setNote("Verification email sent.");
       setCooldown(RESEND_COOLDOWN_SECONDS);
-      try {
-        sessionStorage.setItem(cooldownKey(user?.email), String(Date.now() + RESEND_COOLDOWN_SECONDS * 1000));
-      } catch {
-        // Storage blocked: the cooldown just won't survive a reload.
-      }
+      cooldownUntil.set(cooldownKey(user?.email), Date.now() + RESEND_COOLDOWN_SECONDS * 1000);
     } catch (err) {
       form.fail(err);
     } finally {
