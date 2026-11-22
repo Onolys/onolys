@@ -48,14 +48,19 @@ def ensure(client, callback_uri=DEFAULT_CALLBACK_URI):
     if not (cfg.get("emailPrivacyConfig") or {}).get("enableImprovedEmailPrivacy"):
         body["emailPrivacyConfig"] = PRIVACY
         masks.append("emailPrivacyConfig")
-    if ((cfg.get("notification") or {}).get("sendEmail") or {}).get("callbackUri") != callback_uri:
-        body["notification"] = {"sendEmail": {"callbackUri": callback_uri}}
-        masks.append(CALLBACK_MASK)
     if body:
         client.patch(",".join(masks), body)
         print("patched: " + ", ".join(masks))
     else:
         print("already set")
+    if ((cfg.get("notification") or {}).get("sendEmail") or {}).get("callbackUri") != callback_uri:
+        # Best effort: the API answers 400 EMAIL_TEMPLATE_UPDATE_NOT_ALLOWED when email method is DEFAULT
+        # (callbackUri is immutable then); do not fail the policy/privacy settings above because of it.
+        try:
+            client.patch(CALLBACK_MASK, {"notification": {"sendEmail": {"callbackUri": callback_uri}}})
+            print("patched: " + CALLBACK_MASK)
+        except SystemExit as e:
+            print(f"warning: callbackUri not updated (immutable with default email method): {str(e)[:120]}")
 
 
 def add_domains(client, hosts):

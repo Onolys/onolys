@@ -34,8 +34,8 @@ def test_patches_when_unset():
     c = Fake({})
     ic.ensure(c)
     mask, body = c.patches[0]
-    assert set(mask.split(",")) == {"passwordPolicyConfig", "emailPrivacyConfig", "notification.sendEmail.callbackUri"}
-    assert body["notification"] == {"sendEmail": {"callbackUri": CB}}
+    assert set(mask.split(",")) == {"passwordPolicyConfig", "emailPrivacyConfig"}
+    assert c.patches[1] == ("notification.sendEmail.callbackUri", {"notification": {"sendEmail": {"callbackUri": CB}}})
     assert body["passwordPolicyConfig"]["passwordPolicyVersions"][0]["customStrengthOptions"]["minPasswordLength"] == 8
     assert body["emailPrivacyConfig"]["enableImprovedEmailPrivacy"] is True
 
@@ -66,3 +66,15 @@ def test_callback_uri_is_configurable():
     c = Fake(GOOD)
     ic.ensure(c, callback_uri="https://x.example/auth/action")
     assert c.patches[0][1]["notification"]["sendEmail"]["callbackUri"] == "https://x.example/auth/action"
+
+
+def test_callback_failure_does_not_fail_ensure():
+    class Boom(Fake):
+        def patch(self, mask, body):
+            if mask == "notification.sendEmail.callbackUri":
+                raise SystemExit("400 EMAIL_TEMPLATE_UPDATE_NOT_ALLOWED")
+            super().patch(mask, body)
+
+    c = Boom(dict(GOOD, notification={"sendEmail": {"callbackUri": "https://x/__/auth/action"}}))
+    ic.ensure(c)
+    assert c.patches == []
