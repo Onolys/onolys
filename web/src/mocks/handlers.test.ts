@@ -89,11 +89,10 @@ describe("MSW handlers over HTTP (fake auth)", () => {
     const tr = unwrap(await client.GET("/sessions/{id}/transcript", p));
     expect(tr.turns.length).toBeGreaterThan(5);
 
-    const run2 = unwrap(await client.POST("/sessions/{id}/runs", p));
-    expect(run2.run_id).toBeTruthy();
-    mockBackend.settle(sid);
-    expect(unwrap(await client.GET("/sessions/{id}/runs", p)).items).toHaveLength(2);
-    expect(unwrap(await client.GET("/runs/{run_id}", { params: { path: { run_id: run2.run_id } } })).status).toBe("done");
+    // FX45: the report is final, so a second run and a new final rating are refused
+    const again = await client.POST("/sessions/{id}/runs", p);
+    expect(again.response.status).toBe(409);
+    expect(unwrap(await client.GET("/sessions/{id}/runs", p)).items).toHaveLength(1);
 
     expect((await client.DELETE("/sessions/{id}", p)).response.status).toBe(204);
     expect((await client.GET("/sessions/{id}", p)).response.status).toBe(404);

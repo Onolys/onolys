@@ -57,6 +57,7 @@ test.describe("main flow (mock backend)", () => {
     await shot(page, "session-done");
     await page.getByRole("link", { name: "View report" }).click();
     await expect(page.getByRole("heading", { name: "Scorecard" })).toBeVisible();
+    await expect(page.getByRole("button", { name: /run again|edit my rating/i })).toHaveCount(0); // FX45: final
     await shot(page, "report");
     await page.locator("header nav a", { hasText: "Settings" }).click();
     await expect(page.getByText(/Ratings: 19 of 20 left today/)).toBeVisible();

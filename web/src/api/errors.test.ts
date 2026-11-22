@@ -146,10 +146,10 @@ describe("known-code guards (FX56 / M20)", () => {
     }
   });
 
-  it("failureAction: no code or unknown code with a transcript is run_again; without one upload_new", () => {
-    expect(failureAction(undefined, true)).toBe("run_again");
-    expect(failureAction("something_new", true)).toBe("run_again");
-    expect(failureAction("toString", true)).toBe("run_again");
+  it("failureAction: no code or unknown code with a transcript is try_again (FX45); without one upload_new", () => {
+    expect(failureAction(undefined, true)).toBe("try_again");
+    expect(failureAction("something_new", true)).toBe("try_again");
+    expect(failureAction("toString", true)).toBe("try_again");
     expect(failureAction(undefined, false)).toBe("upload_new");
     expect(failureAction("no_speech", true)).toBe("upload_new");
   });
@@ -189,9 +189,9 @@ describe("failureAction", () => {
   });
 
   it.each(["upstream_unavailable", "internal_error", "unknown", undefined])(
-    "%s offers Run again",
+    "%s offers Try again",
     (code) => {
-      expect(failureAction(code, true)).toBe("run_again");
+      expect(failureAction(code, true)).toBe("try_again");
     },
   );
 

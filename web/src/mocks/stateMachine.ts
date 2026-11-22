@@ -125,6 +125,18 @@ interface SessionRec {
   reports: ReportRec[];
 }
 
+/** Failures a retry cannot fix: the file itself is the problem (mirrors the API's BAD_FILE_CODES). */
+const BAD_FILE_CODES = new Set([
+  "unsupported_audio",
+  "audio_too_long",
+  "interview_too_long",
+  "audio_too_large",
+  "audio_unreadable",
+  "no_speech",
+  "speakers_not_separated",
+  "transcription_failed",
+]);
+
 function bad(status: number, code: string, message: string, details?: S["ErrorDetailModel"][]): never {
   throw new MockHttpError(status, code, message, details);
 }
@@ -490,6 +502,9 @@ export class MockBackend {
     if (s.state === "deleting") bad(409, "invalid_state", "Session is being deleted.");
     const card = (body.card ?? {}) as RatingCard;
     validateCard(card, body.final === true);
+    if (body.final === true && (s.state === "report_ready" || s.reports.length > 0)) {
+      bad(409, "rating_final", "The rating is final once the report is ready.");
+    }
     const seq = this.n + 1;
     this.n += 1;
     if (!body.final) {
@@ -617,7 +632,11 @@ export class MockBackend {
 
   startRun(uid: string, sid: string, body: S["RunRequest"]): S["RunStarted"] {
     const s = this.own(uid, sid);
-    const ok = s.state === "awaiting_input" || s.state === "report_ready" || s.state === "failed";
+    if (s.state === "report_ready" || s.reports.length > 0)
+      bad(409, "rating_final", "The rating is final once the report is ready.");
+    const ok = s.state === "awaiting_input" || s.state === "failed";
+    if (s.state === "failed" && s.error && BAD_FILE_CODES.has(s.error.code))
+      bad(409, "invalid_state", "A run cannot start in this state.");
     if (!ok || !s.flags.transcript_ready || !s.flags.speaker_confirmed)
       bad(409, "invalid_state", "A run cannot start in this state.");
     if (body.n_runs != null && (!Number.isInteger(body.n_runs) || body.n_runs < 1 || body.n_runs > 5))

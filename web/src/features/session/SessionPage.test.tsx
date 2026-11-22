@@ -107,6 +107,11 @@ describe("session page: status listener", () => {
     act(() => mockBackend.settle(sid));
     const link = await screen.findByRole("link", { name: /view report/i });
     expect(link).toHaveAttribute("href", `/sessions/${sid}/reports/1`);
+    // FX45: the rating is final now: read-only, no submit buttons, no Run again
+    expect(screen.getByRole("textbox", { name: "Change goal" })).toBeDisabled();
+    expect(screen.queryByRole("button", { name: /submit rating|no rating/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /run again/i })).not.toBeInTheDocument();
+    expect(screen.getByText(/Your rating is final/)).toBeInTheDocument();
   });
 
   it("does not poll GET /sessions/{id} while a session runs", async () => {
@@ -274,7 +279,7 @@ describe("session page: error cards", () => {
     ["speakers_not_separated", /couldn't tell the two speakers apart in this recording/i],
     ["transcription_failed", /Transcription didn't finish/i],
   ] as const;
-  const RUN_AGAIN = [
+  const TRY_AGAIN = [
     ["rating_invalid", /needs a change/i],
     ["upstream_unavailable", /busy right now/i],
     ["daily_cap_reached", /reached today's limit/i],
@@ -298,10 +303,10 @@ describe("session page: error cards", () => {
       "href",
       `/sessions/new?from=${sid}`,
     );
-    expect(within(card).queryByRole("button", { name: "Run again" })).not.toBeInTheDocument();
+    expect(within(card).queryByRole("button", { name: "Try again" })).not.toBeInTheDocument();
   });
 
-  it.each(RUN_AGAIN)("%s: message, reference id and Run again", async (code, message) => {
+  it.each(TRY_AGAIN)("%s: message, reference id and Try again", async (code, message) => {
     const sid = create();
     open(sid);
     await ready();
@@ -309,21 +314,21 @@ describe("session page: error cards", () => {
     const card = await screen.findByRole("alert");
     expect(card).toHaveTextContent(message);
     expect(card).toHaveTextContent(`Reference: ${sid}`);
-    expect(within(card).getByRole("button", { name: "Run again" })).toBeEnabled();
+    expect(within(card).getByRole("button", { name: "Try again" })).toBeEnabled();
     expect(within(card).queryByRole("link", { name: "Upload a different file" })).not.toBeInTheDocument();
   });
 
-  it.each(["internal_error", "upstream_unavailable"])("%s before a transcript offers a new upload, not Run again (BH2)", async (code) => {
+  it.each(["internal_error", "upstream_unavailable"])("%s before a transcript offers a new upload, not Try again (BH2)", async (code) => {
     const sid = create();
     open(sid);
     await ready();
     act(() => mockEmitter.emit(sid, { ...failedDoc(sid, code), transcript_ready: false, speaker_confirmed: false, rating_submitted: false }));
     const card = await screen.findByRole("alert");
     expect(within(card).getByRole("link", { name: "Upload a different file" })).toBeInTheDocument();
-    expect(within(card).queryByRole("button", { name: "Run again" })).not.toBeInTheDocument();
+    expect(within(card).queryByRole("button", { name: "Try again" })).not.toBeInTheDocument();
   });
 
-  it("Run again starts a new run and the timeline moves on", async () => {
+  it("Try again starts a new run and the timeline moves on", async () => {
     const user = userEvent.setup();
     const sid = create("fail-paudit");
     toAwaiting(sid);
@@ -333,12 +338,12 @@ describe("session page: error cards", () => {
     open(sid);
     const card = await screen.findByRole("alert");
     expect(card).toHaveTextContent(/something went wrong/i);
-    await user.click(within(card).getByRole("button", { name: "Run again" }));
+    await user.click(within(card).getByRole("button", { name: "Try again" }));
     await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Rating the session"));
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 
-  it("keeps Run again locked after a successful POST until the session state changes (W15)", async () => {
+  it("keeps Try again locked after a successful POST until the session state changes (W15)", async () => {
     const user = userEvent.setup();
     const sid = create();
     open(sid);
@@ -351,7 +356,7 @@ describe("session page: error cards", () => {
         return HttpResponse.json({ session_id: sid }, { status: 202 });
       }),
     );
-    const btn = await screen.findByRole("button", { name: "Run again" });
+    const btn = await screen.findByRole("button", { name: "Try again" });
     await user.click(btn);
     await waitFor(() => expect(posts).toBe(1));
     await waitFor(() => expect(btn).toBeDisabled());
@@ -359,7 +364,7 @@ describe("session page: error cards", () => {
     expect(posts).toBe(1);
   });
 
-  it("shows the API's message and request id when Run again itself fails", async () => {
+  it("shows the API's message and request id when Try again itself fails", async () => {
     const user = userEvent.setup();
     const sid = create();
     open(sid);
@@ -379,7 +384,7 @@ describe("session page: error cards", () => {
         ),
       ),
     );
-    await user.click(await screen.findByRole("button", { name: "Run again" }));
+    await user.click(await screen.findByRole("button", { name: "Try again" }));
     const alerts = await screen.findAllByRole("alert");
     const text = alerts.map((a) => a.textContent).join(" ");
     expect(text).toMatch(/busy right now/i);
@@ -399,7 +404,7 @@ describe("session page: error cards", () => {
     await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Rating the session"));
   });
 
-  it("disables Run again and Start with the reset time when today's runs are used up", async () => {
+  it("disables Try again and Start with the reset time when today's runs are used up", async () => {
     const sid = create("cap-held");
     toAwaiting(sid);
     mockBackend.confirmSpeaker(UID, sid, "spk_0");
@@ -415,7 +420,7 @@ describe("session page: error cards", () => {
     expect(screen.getByRole("status")).toHaveTextContent(/start the rating after/i);
 
     act(() => mockEmitter.emit(sid, failedDoc(sid, "internal_error")));
-    const run = await screen.findByRole("button", { name: "Run again" });
+    const run = await screen.findByRole("button", { name: "Try again" });
     await waitFor(() => expect(run).toBeDisabled());
     expect(screen.getByRole("alert")).toHaveTextContent(/after .+/i);
   });
@@ -459,14 +464,14 @@ describe("session page: interview-linked first run (free, works at a full eval c
 describe("session page: period-aware caps", () => {
   it.each([
     [{ eval: { day: 0 } }, /reached today's limit/i],
-  ] as const)("disables Run again with the matching message for caps %j", async (caps, message) => {
+  ] as const)("disables Try again with the matching message for caps %j", async (caps, message) => {
     const sid = create();
     toAwaiting(sid);
     mockBackend.configure({ caps });
     open(sid);
     await ready();
     act(() => mockEmitter.emit(sid, failedDoc(sid, "internal_error")));
-    const run = await screen.findByRole("button", { name: "Run again" });
+    const run = await screen.findByRole("button", { name: "Try again" });
     await waitFor(() => expect(run).toBeDisabled());
     expect(screen.getByRole("alert")).toHaveTextContent(message);
   });

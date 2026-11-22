@@ -102,7 +102,7 @@ describe("api/errors", () => {
   it("failureAction is total and returns one of two values", () => {
     fc.assert(
       fc.property(fc.option(fc.string(), { nil: undefined }), fc.boolean(), (c, t) => {
-        expect(["upload_new", "run_again"]).toContain(failureAction(c, t));
+        expect(["upload_new", "try_again"]).toContain(failureAction(c, t));
       }),
     );
   });

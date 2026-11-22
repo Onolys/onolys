@@ -193,7 +193,7 @@ function SessionView({ id }: { id: string }) {
               ) : (
                 <>
                   <button type="button" className="btn btn-primary" disabled={runLocked} onClick={() => run.mutate()}>
-                    Run again
+                    Try again
                   </button>
                   {blocking ? <span>{messageForCode("daily_cap_reached", { resetsAt })}</span> : null}
                 </>
@@ -204,8 +204,8 @@ function SessionView({ id }: { id: string }) {
           {runError ? <ErrorCard code={runError.code} reference={runError.requestId} resetsAt={resetsAt} /> : null}
 
           {doc.state === "created" || doc.state === "uploading" || doc.state === "upload_incomplete" ? <UploadSlot sessionId={id} doc={doc} /> : null}
-          {doc.state !== "deleting" ? <RatingCardSlot sessionId={id} doc={doc} /> : null}
-          {doc.transcript_ready && doc.state !== "deleting" && (!doc.speaker_confirmed || doc.state === "report_ready" || doc.state === "failed") ? (
+          {doc.state !== "deleting" ? <RatingCardSlot sessionId={id} doc={doc} readOnly={doc.rating_submitted || doc.state === "report_ready"} /> : null}
+          {doc.transcript_ready && doc.state !== "deleting" && (!doc.speaker_confirmed || doc.state === "failed") ? (
             <SpeakerGateSlot sessionId={id} doc={doc} />
           ) : null}
 

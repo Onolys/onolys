@@ -30,6 +30,7 @@ const MESSAGES = {
   not_found: "We couldn't find that. It may have been deleted.",
   interview_too_long:
     "This interview recording is longer than allowed. Start a new practice interview.",
+  rating_final: "Your report is ready, so the rating is final. It can't be changed or run again.",
   conflict: "That request clashes with an earlier one. Refresh and try again.",
   internal_error: GENERIC_MESSAGE,
 } as const satisfies Record<string, string>;
@@ -55,7 +56,7 @@ export function messageForCode(code: string | undefined, ctx: MessageContext = {
 }
 
 /** Which recovery the error card offers (R4 Failure). */
-export type FailureAction = "upload_new" | "run_again";
+export type FailureAction = "upload_new" | "try_again";
 
 const UPLOAD_NEW = new Set<string>([
   "unsupported_audio",
@@ -69,12 +70,12 @@ const UPLOAD_NEW = new Set<string>([
 ]);
 
 /**
- * Without a ready transcript a re-run is always rejected (409), so the only way
- * forward is a new upload; with one, bad-file codes still need a new upload.
+ * FX45: a rating is final once submitted. A system failure offers "Try again" (re-runs the same
+ * submission); a bad file, or no ready transcript (a retry is rejected with 409), needs a new upload.
  */
 export function failureAction(code: string | undefined, transcriptReady: boolean): FailureAction {
   if (!transcriptReady) return "upload_new";
-  return code !== undefined && UPLOAD_NEW.has(code) ? "upload_new" : "run_again";
+  return code !== undefined && UPLOAD_NEW.has(code) ? "upload_new" : "try_again";
 }
 
 type ErrorDetail = components["schemas"]["ErrorDetailModel"];

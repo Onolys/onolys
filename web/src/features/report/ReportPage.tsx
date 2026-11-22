@@ -2,16 +2,13 @@
  * `/sessions/:id/reports/:version` (PRD R4, D17): the evidence-linked report. Two panes on desktop
  * (report left, sticky transcript right), one column with a Transcript tab on mobile.
  */
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import { unwrap } from "../../api/client";
-import { describeError, isNotFoundError, messageForCode } from "../../api/errors";
+import { describeError, isNotFoundError } from "../../api/errors";
 import type { Report } from "../../api/report";
 import { useApiClient } from "../../auth/useApiClient";
-import { blockingPeriod, formatBlockingReset } from "../usage/usage";
-import { USAGE_KEY, useUsage } from "../usage/useUsage";
-import { RatingCard } from "../rating/RatingCard";
 import { ErrorCard } from "../session/ErrorCard";
 import { TranscriptPanel } from "../transcript/TranscriptPanel";
 import { useSelectedInstance } from "../transcript/useSelectedInstance";
@@ -47,10 +44,8 @@ function ReportView({ id, version }: { id: string; version: string }) {
 function LoadedReport({ id, version }: { id: string; version: number }) {
   const client = useApiClient();
   const navigate = useNavigate();
-  const queryClient = useQueryClient();
   const [, select] = useSelectedInstance();
   const [tab, setTab] = useState<"report" | "transcript">("report");
-  const [editingRating, setEditingRating] = useState(false);
 
   const view = useQuery({
     queryKey: ["report", id, version],
@@ -66,19 +61,6 @@ function LoadedReport({ id, version }: { id: string; version: number }) {
     gcTime: 0,
     queryFn: async () => unwrap(await client.GET("/sessions/{id}/reports", { params: { path: { id } } })),
   });
-  const usage = useUsage();
-  const blocking = blockingPeriod(usage.data, "eval");
-  const atCap = blocking !== null;
-  const resetsAt = formatBlockingReset(blocking);
-
-  const run = useMutation({
-    mutationFn: async () => unwrap(await client.POST("/sessions/{id}/runs", { params: { path: { id } } })),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: USAGE_KEY });
-      void navigate(`/sessions/${id}`);
-    },
-  });
-
   const report = view.data?.report as Report | undefined;
   const highlights = useMemo(() => (report ? reportHighlights(report) : []), [report]);
 
@@ -107,7 +89,6 @@ function LoadedReport({ id, version }: { id: string; version: number }) {
 
   const newer = Number.isFinite(major(view.data.report_schema_version)) && major(view.data.report_schema_version) !== SUPPORTED_MAJOR;
   const h = report.header;
-  const runError = run.error ? describeError(run.error, { resetsAt }) : null;
   const date = (iso: string) => new Date(iso).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
   const details = [
     h.stt ? [h.stt.provider, h.stt.model].filter(Boolean).join(" ") : null,
@@ -148,22 +129,8 @@ function LoadedReport({ id, version }: { id: string; version: number }) {
               ))}
             </select>
           </label>
-          <button type="button" className="btn btn-primary" disabled={run.isPending || run.isSuccess || atCap} onClick={() => run.mutate()}>
-            Run again
-          </button>
-          <button type="button" className="btn btn-secondary" aria-expanded={editingRating} onClick={() => setEditingRating((v) => !v)}>
-            Add or edit my rating → Run again
-          </button>
         </div>
-        {blocking ? <p className="form-note">{messageForCode("daily_cap_reached", { resetsAt })}</p> : null}
-        {runError ? <ErrorCard code={runError.code} reference={runError.requestId} resetsAt={resetsAt} /> : null}
       </header>
-
-      {editingRating ? (
-        <div className="report-rating">
-          <RatingCard sessionId={id} submitLabel="Submit and run again" onSubmitted={async () => void (await run.mutateAsync())} />
-        </div>
-      ) : null}
 
       <div className="report-tabs" role="tablist" aria-label="Report or transcript">
         <button type="button" role="tab" aria-selected={tab === "report"} onClick={() => setTab("report")}>
@@ -176,7 +143,7 @@ function LoadedReport({ id, version }: { id: string; version: number }) {
 
       <div className="report-panes" data-tab={tab}>
         <div className="report-main">
-          <ReportSections report={report} onSelect={onSelect} onRunAgain={() => run.mutate()} runAgainDisabled={run.isPending || run.isSuccess || atCap} />
+          <ReportSections report={report} onSelect={onSelect} />
         </div>
         <section className="report-transcript" aria-label="Transcript">
           <TranscriptPanel sessionId={id} highlights={highlights} />

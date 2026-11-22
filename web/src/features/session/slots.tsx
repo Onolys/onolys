@@ -13,17 +13,18 @@ export interface SlotProps {
   doc: SessionStatusDoc;
 }
 
-export function RatingCardSlot({ sessionId }: SlotProps) {
+/** `readOnly`: the rating was submitted, so it is final (FX45). */
+export function RatingCardSlot({ sessionId, readOnly = false }: SlotProps & { readOnly?: boolean }) {
   return (
     <div data-slot="rating-card" data-session={sessionId}>
-      <RatingCard sessionId={sessionId} />
+      <RatingCard sessionId={sessionId} readOnly={readOnly} />
     </div>
   );
 }
 
 export function SpeakerGateSlot({ sessionId, doc }: SlotProps) {
   const [open, setOpen] = useState(false);
-  const rerunnable = doc.state === "report_ready" || doc.state === "failed";
+  const rerunnable = doc.state === "failed"; // a ready report is final (FX45)
   return (
     <div data-slot="speaker-gate" data-session={sessionId}>
       {!doc.speaker_confirmed ? (
