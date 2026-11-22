@@ -128,8 +128,12 @@ def put_rating(id: ResourceId, body: RatingRequest, request: Request, user: User
         "has_rating": not no_rating,
     }
     span = body.card.get("coded_span")
-    if isinstance(span, dict) and "from_s" in span and "to_s" in span:
-        fields["coded_span"] = {"from_s": span["from_s"], "to_s": span["to_s"]}
+    # Always set (span or None) so a cleared span replaces the old one on the session (BH1).
+    fields["coded_span"] = (
+        {"from_s": span["from_s"], "to_s": span["to_s"]}
+        if isinstance(span, dict) and "from_s" in span and "to_s" in span
+        else None
+    )
     repo.update_session(
         uid,
         id,
