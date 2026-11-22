@@ -482,6 +482,20 @@ describe("final ratings and report versions (FX45)", () => {
     expectHttp(() => backend.startRun(U, bad, {}), 409, "invalid_state");
   });
 
+  it("Try again ignores the client's preset and n_runs and reuses the failed run's", () => {
+    const { backend } = ctx;
+    const sid = started(backend, "fail-paudit");
+    backend.settle(sid);
+    backend.confirmSpeaker(U, sid, "spk_0");
+    backend.putRating(U, sid, { final: true, card: SCORED });
+    backend.settle(sid);
+    const [first] = backend.listRuns(U, sid);
+    backend.startRun(U, sid, { preset: "fast", n_runs: 3 });
+    const second = backend.listRuns(U, sid).at(-1)!;
+    expect(second.run_id).not.toBe(first.run_id);
+    expect([second.preset, second.n_runs]).toEqual([first.preset, first.n_runs]);
+  });
+
   it("run records carry stt, preset, code_version and the rating snapshot", () => {
     const { backend, sid } = reported({ final: true, card: SCORED });
     const [run] = backend.listRuns(U, sid);

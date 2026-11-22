@@ -254,9 +254,13 @@ async def test_try_again_after_a_failure_reuses_transcript_and_stored_rating(env
             )
 
     swap_eval(env, Ok())
-    r = await env.c.post(f"/v1/sessions/{sid}/runs", json={"preset": "fast"}, headers=env.h)
+    (first,) = env.repo.list_runs(env.uid, sid)
+    # Try again re-runs the SAME submission: client-supplied preset / n_runs are ignored
+    r = await env.c.post(
+        f"/v1/sessions/{sid}/runs", json={"preset": "fast", "n_runs": 3}, headers=env.h
+    )
     assert r.status_code == 202
-    assert env.counters() == (1, 1)  # the retry takes a fresh unit
+    assert env.counters() == (1, first.n_runs)  # the retry takes a fresh unit
     assert env.repo.get_status(env.uid, sid).progress == 45  # a retry restarts at 45
     env.drain()
     assert env.repo.get_session(env.uid, sid).state == "report_ready"
@@ -264,9 +268,10 @@ async def test_try_again_after_a_failure_reuses_transcript_and_stored_rating(env
     assert env.stt.start_calls == 1  # the transcript is reused, Stt not called again
     run = env.repo.get_run(env.uid, sid, r.json()["run_id"])
     assert run.rating_id == rating_id  # the same submission
+    assert (run.preset, run.n_runs) == (first.preset, first.n_runs)
     rep = env.repo.get_report_by_version(env.uid, sid, 1).report
-    assert rep["header"]["preset"] == "fast"
-    assert env.counters() == (0, 1)  # the failed run was refunded; only the retry is counted
+    assert rep["header"]["preset"] == first.preset != "fast"
+    assert env.counters() == (0, first.n_runs)  # the failed run was refunded; only the retry counts
 
 
 async def test_eaudit_failure_ships_report_with_warning(env):

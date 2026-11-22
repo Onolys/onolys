@@ -121,6 +121,8 @@ def _open_session(request: Request, user: AuthUser, id: str) -> SessionDoc:
     description=(
         "Needs the transcript and the confirmed speaker; uses the stored final rating revision "
         "or runs as no-rating. `preset` changes LLM routes only (the transcript is reused). "
+        "On Try again (a failed session) `preset` and `n_runs` are ignored: the failed run's "
+        "values are reused. "
         "Counts against the daily cap: 429 `daily_cap_reached`; 429 `concurrent_runs` while "
         "another run is in progress. 409 `rating_final` once a report exists (the rating is "
         "final: no re-run, interview sessions included). 409 `invalid_state` while a run "
@@ -143,8 +145,13 @@ def start_run(
         s.transcript_ready and s.speaker_confirmed and s.clinician_speaker
     ):
         raise invalid_state()
-    preset = s.preset
-    if body.preset is not None:
+    preset, n_runs = s.preset, body.n_runs
+    if s.state == "failed":
+        # Try again re-runs the SAME submission: the client's `preset`/`n_runs` are ignored
+        prior = repo.list_runs(uid, id)
+        if prior:
+            preset, n_runs = prior[-1].preset, prior[-1].n_runs
+    elif body.preset is not None:
         try:
             preset, _ = app.state.presets.resolve(body.preset, s.language)
         except UnknownPreset as e:
@@ -156,7 +163,7 @@ def start_run(
     # The loser of a race gets 409 and holds no slot.
     outcome = repo.start_run(
         uid, id, run_id, date, LimitDefaults.from_settings(settings), settings.max_active_runs,
-        settings.git_sha, RUN_START_PROGRESS, RERUN_STATES, body.n_runs, preset,
+        settings.git_sha, RUN_START_PROGRESS, RERUN_STATES, n_runs, preset,
     )  # fmt: skip
     if outcome == "not_ready":
         raise invalid_state()

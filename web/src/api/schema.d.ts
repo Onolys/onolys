@@ -290,7 +290,7 @@ export interface paths {
         put?: never;
         /**
          * Start a run by hand (Try again after a system failure, or the first run held back)
-         * @description Needs the transcript and the confirmed speaker; uses the stored final rating revision or runs as no-rating. `preset` changes LLM routes only (the transcript is reused). Counts against the daily cap: 429 `daily_cap_reached`; 429 `concurrent_runs` while another run is in progress. 409 `rating_final` once a report exists (the rating is final: no re-run, interview sessions included). 409 `invalid_state` while a run is in progress, before the inputs exist, or after a bad-file failure (upload a different file instead).
+         * @description Needs the transcript and the confirmed speaker; uses the stored final rating revision or runs as no-rating. `preset` changes LLM routes only (the transcript is reused). On Try again (a failed session) `preset` and `n_runs` are ignored: the failed run's values are reused. Counts against the daily cap: 429 `daily_cap_reached`; 429 `concurrent_runs` while another run is in progress. 409 `rating_final` once a report exists (the rating is final: no re-run, interview sessions included). 409 `invalid_state` while a run is in progress, before the inputs exist, or after a bad-file failure (upload a different file instead).
          */
         post: operations["startRun"];
         delete?: never;

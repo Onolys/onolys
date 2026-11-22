@@ -651,7 +651,9 @@ export class MockBackend {
         ]);
       }
     }
-    const run = this.createRun(s, body);
+    // Try again re-runs the SAME submission: the client's preset / n_runs are ignored
+    const prior = s.state === "failed" ? s.runs.at(-1) : undefined;
+    const run = this.createRun(s, prior ? { preset: prior.preset, n_runs: prior.n_runs } : body);
     return { run_id: run.run_id, session: { id: s.id, status: s.state } };
   }
 
