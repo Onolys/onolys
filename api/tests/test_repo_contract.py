@@ -907,3 +907,53 @@ def test_interview_refund_cap_counts_on_the_reservation_day(repo):
         got.append(done.refunded)
     assert got == [True, True, True, False]
     assert repo.get_usage_doc(alice, "2026-11-21").interview_refunds == 3
+
+
+# ---- FX26 (A11, A22, A24) ----
+
+
+def test_rotate_api_key_leaves_one_active_even_under_concurrency(repo):
+    from concurrent.futures import ThreadPoolExecutor
+
+    uid, _ = new_ids()
+    now = datetime.now(UTC)
+
+    def rotate(_):
+        kid = uuid.uuid4().hex[:8]
+        repo.rotate_api_key(uid, kid, ApiKeyDoc(uid=uid, hash="h" * 64, created=now), now)
+        return kid
+
+    with ThreadPoolExecutor(6) as ex:
+        kids = list(ex.map(rotate, range(6)))
+    live = [k for k in kids if repo.get_api_key(k).revoked_at is None]
+    assert len(live) == 1 and repo.active_api_key(uid).id == live[0]
+    repo.revoke_active_api_keys(uid, now)
+    assert repo.active_api_key(uid) is None
+
+
+def test_confirm_speaker_only_in_allowed_states(repo):
+    uid, sid = seed(repo)
+    allowed = ("awaiting_input", "report_ready", "failed")
+    repo.update_session(uid, sid, {"state": "running"})
+    assert repo.confirm_speaker(uid, sid, "A", allowed) is False
+    assert repo.get_session(uid, sid).clinician_speaker is None
+    repo.update_session(uid, sid, {"state": "awaiting_input"})
+    assert repo.confirm_speaker(uid, sid, "A", allowed) is True
+    s = repo.get_session(uid, sid)
+    assert s.clinician_speaker == "A" and s.speaker_confirmed
+    assert repo.get_status(uid, sid).speaker_confirmed
+
+
+def test_txn_does_not_retry_unrelated_value_error(repo):
+    """A24: only contention is retried; a real ValueError from txn_fn surfaces at once."""
+    if isinstance(repo, FakeRepo):
+        pytest.skip("Firestore transaction retry only")
+    calls = []
+
+    def boom(txn):
+        calls.append(1)
+        raise ValueError("bad input")
+
+    with pytest.raises(ValueError, match="bad input"):
+        repo._retry_txn(boom)
+    assert len(calls) == 1

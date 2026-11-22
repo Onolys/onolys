@@ -205,6 +205,21 @@ class FakeRepo:
             self._put(f"session_status/{sid}", st)
             self._record_status(uid, sid)
 
+    def confirm_speaker(
+        self, uid: str, sid: str, clinician: str, states: tuple[str, ...]
+    ) -> bool:
+        with self._claim_lock:  # the fake's "transaction"
+            doc = self._owned(f"sessions/{sid}", uid)
+            if doc.get("state") not in states:
+                return False
+            self.update_session(
+                uid,
+                sid,
+                {"clinician_speaker": clinician, "speaker_confirmed": True},
+                status={"speaker_confirmed": True},
+            )
+            return True
+
     def list_sessions(
         self, uid: str, limit: int = 20, cursor: str | None = None
     ) -> Page[SessionDoc]:
@@ -448,6 +463,23 @@ class FakeRepo:
         if doc.uid != uid:
             raise ValueError("document uid does not match the caller")
         self._create(f"api_keys/{keyid}", doc.to_store())
+
+    def rotate_api_key(self, uid: str, keyid: str, doc: ApiKeyDoc, at: datetime) -> None:
+        if doc.uid != uid:
+            raise ValueError("document uid does not match the caller")
+        with self._claim_lock:
+            self.revoke_active_api_keys(uid, at)
+            self._create(f"api_keys/{keyid}", doc.to_store())
+
+    def revoke_active_api_keys(self, uid: str, at: datetime) -> None:
+        with self._claim_lock:
+            for path, d in list(self._docs.items()):
+                if (
+                    path.startswith("api_keys/")
+                    and d.get("uid") == uid
+                    and d.get("revoked_at") is None
+                ):
+                    self._put(path, {**d, "revoked_at": at})
 
     def active_api_key(self, uid: str) -> ApiKeyDoc | None:
         for path, d in self._docs.items():

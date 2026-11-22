@@ -130,12 +130,8 @@ def confirm_speakers(
     assert tdoc.transcript is not None
     if body.clinician_speaker not in {i.speaker for i in _speakers(tdoc.transcript)}:
         raise ApiError.of(422, "invalid_parameters", "clinician_speaker: unknown speaker")
-    repo.update_session(
-        user.uid,
-        id,
-        {"clinician_speaker": body.clinician_speaker, "speaker_confirmed": True},
-        status={"speaker_confirmed": True},
-    )
+    if not repo.confirm_speaker(user.uid, id, body.clinician_speaker, CONFIRM_STATES):
+        raise invalid_state()  # a run started between the check above and the write
     maybe_start_first_run(
         repo,
         getattr(request.app.state, "queue", None),

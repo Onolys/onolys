@@ -258,7 +258,6 @@ def test_idempotency_key_never_5xx_and_replays(fake_api, key):
 
 
 def test_idempotent_replay_after_delete_does_not_return_deleted_session(request, api):
-    known_bug(request, "A23: replay returns id of a deleted session")
     h = {**_uid(), "Idempotency-Key": "k-del"}
     sid = api.post("/v1/sessions", json={}, headers=h).json()["session"]["id"]
     assert api.delete(f"/v1/sessions/{sid}", headers=h).status_code in (200, 202, 204)
@@ -288,7 +287,6 @@ def test_concurrent_same_idempotency_key_creates_one_session(fs_api):
     assert len(ok_ids) == 1 and not losers, (len(ok_ids), losers)
 
 
-@pytest.mark.xfail(strict=False, reason="A11: concurrent POST /api-key -> two active keys (race)")
 def test_concurrent_api_key_create_leaves_single_active_key(fs_api):
     api = fs_api
     h = _uid()

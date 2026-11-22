@@ -121,6 +121,15 @@ def _body_hash(body: CreateSessionRequest) -> str:
     return hashlib.sha256(body.model_dump_json().encode()).hexdigest()
 
 
+def _replay_target_alive(repo, uid: str, doc: IdempotencyDoc) -> bool:
+    """A replay must not hand back the id of a session that has since been deleted."""
+    try:
+        sid = doc.response["session"]["id"]
+        return repo.get_session(uid, sid).state != "deleting"
+    except (NotFoundError, KeyError, TypeError):
+        return False
+
+
 def _replay(doc: IdempotencyDoc, body_hash: str, response: Response) -> CreateSessionResponse:
     if doc.body_hash != body_hash:
         raise ApiError.of(409, "conflict", "Idempotency-Key was used with a different request.")
@@ -200,8 +209,10 @@ def create_session(
     if idempotency_key:
         prior = repo.get_idempotency(uid, idempotency_key)
         if prior is not None and now - prior.created_at < IDEMPOTENCY_TTL:
-            return _replay(prior, body_hash, response)
-        if prior is not None:
+            if _replay_target_alive(repo, uid, prior):
+                return _replay(prior, body_hash, response)
+            repo.delete_idempotency(uid, idempotency_key)  # its session was deleted: start afresh
+        elif prior is not None:
             repo.delete_idempotency(uid, idempotency_key)  # expired
 
     language = body.language

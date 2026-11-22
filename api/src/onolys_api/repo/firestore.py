@@ -105,6 +105,11 @@ def _decode_cursor(cursor: str) -> str:
     return sid
 
 
+def _is_exhausted(e: ValueError) -> bool:
+    """The Firestore client's "Failed to commit transaction in N attempts" ValueError."""
+    return str(e).startswith("Failed to commit transaction")
+
+
 def _uid_query(source, uid: str):
     """The only way a collection (or collection group) is queried: always filtered by uid."""
     return source.where(filter=FieldFilter("uid", "==", uid))
@@ -262,7 +267,42 @@ class FirestoreRepo:
         if status is not None:
             stref = self._top("session_status", sid)
             batch.set(stref, {**status, "uid": uid, "updated_at": now}, merge=True)
-        batch.commit()
+        for attempt in range(_TXN_ROUNDS):  # a transaction holding the doc can time this write out
+            try:
+                batch.commit()
+                return
+            except Aborted:
+                if attempt == _TXN_ROUNDS - 1:
+                    raise
+                time.sleep(random.uniform(0.01, 0.15))
+
+    def confirm_speaker(
+        self, uid: str, sid: str, clinician: str, states: tuple[str, ...]
+    ) -> bool:
+        """Record the clinician only while the session is still in one of `states` (checked and
+        written in one transaction, so a run starting concurrently cannot be overwritten)."""
+        sref = self._top("sessions", sid)  # read inside the txn only: a plain read can abort
+        stref = self._top("session_status", sid)
+
+        @firestore.transactional
+        def txn_fn(txn) -> bool:
+            snap = sref.get(transaction=txn)
+            cur = snap.to_dict() or {}
+            if not snap.exists or cur.get("uid") != uid:
+                raise NotFoundError()
+            if cur.get("state") not in states:
+                return False
+            now = utcnow()
+            txn.update(
+                sref,
+                {"clinician_speaker": clinician, "speaker_confirmed": True, "updated_at": now},
+            )
+            txn.set(
+                stref, {"speaker_confirmed": True, "uid": uid, "updated_at": now}, merge=True
+            )
+            return True
+
+        return self._contended(txn_fn, uid)
 
     def list_sessions(
         self, uid: str, limit: int = 20, cursor: str | None = None
@@ -527,6 +567,34 @@ class FirestoreRepo:
             self._top("api_keys", keyid).create(doc.to_store())
         except AlreadyExists:
             raise ConflictError() from None
+
+    def rotate_api_key(self, uid: str, keyid: str, doc: ApiKeyDoc, at: datetime) -> None:
+        """Revoke every active key and create the new one in ONE transaction: concurrent calls
+        leave exactly one active key."""
+        if doc.uid != uid:
+            raise ValueError("document uid does not match the caller")
+        new_ref = self._top("api_keys", keyid)
+
+        @firestore.transactional
+        def txn_fn(txn) -> None:
+            if new_ref.get(transaction=txn).exists:
+                raise ConflictError()
+            self._revoke_active_in(txn, uid, at)
+            txn.create(new_ref, doc.to_store())
+
+        self._contended(txn_fn, uid)
+
+    def revoke_active_api_keys(self, uid: str, at: datetime) -> None:
+        @firestore.transactional
+        def txn_fn(txn) -> None:
+            self._revoke_active_in(txn, uid, at)
+
+        self._contended(txn_fn, uid)
+
+    def _revoke_active_in(self, txn, uid: str, at: datetime) -> None:
+        q = _uid_query(self._client.collection("api_keys"), uid)
+        for snap in q.where(filter=FieldFilter("revoked_at", "==", None)).stream(transaction=txn):
+            txn.update(snap.reference, {"revoked_at": at})
 
     def active_api_key(self, uid: str) -> ApiKeyDoc | None:
         q = _uid_query(self._client.collection("api_keys"), uid)
@@ -799,7 +867,12 @@ class FirestoreRepo:
         for round_ in range(_TXN_ROUNDS):
             try:
                 return txn_fn(self._client.transaction(max_attempts=_TXN_ATTEMPTS))
-            except (ValueError, Aborted):  # exhausted retries or a raw 409 lock timeout: contention
+            except (ValueError, Aborted) as e:
+                # contention only: the client's "exhausted attempts" ValueError (chained from the
+                # last abort) or a raw 409 lock timeout. Any other ValueError is a real bug in
+                # txn_fn: raise it at once instead of retrying under the uid lock.
+                if isinstance(e, ValueError) and not _is_exhausted(e):
+                    raise
                 if round_ == _TXN_ROUNDS - 1:
                     raise
                 time.sleep(random.uniform(0.01, 0.15))
