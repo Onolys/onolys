@@ -72,15 +72,17 @@ def make_validate_handler(
         return PermanentError(code)
 
     def find_source(ctx: TaskContext, upload_id: str | None) -> tuple[str, bool] | None:
-        """(key, already_moved): the staged object, else an original left by an earlier attempt."""
-        if upload_id:
-            staged = staging_key(ctx.uid, ctx.sid, upload_id)
-            if blobs.exists(staged):
-                return staged, False
+        """(key, already_moved): an original left by an earlier attempt, else the staged object.
+        The validated original wins: a later PUT to the (still signed) staging URL must not
+        replace audio that already passed."""
         for fmt in CANONICAL_TYPES:
             key = original_key(ctx.uid, ctx.sid, fmt)
             if blobs.exists(key):
                 return key, True
+        if upload_id:
+            staged = staging_key(ctx.uid, ctx.sid, upload_id)
+            if blobs.exists(staged):
+                return staged, False
         return None
 
     def check_duration(
@@ -134,7 +136,7 @@ def make_validate_handler(
                 raise fail(ctx, "unsupported_audio")
 
             try:
-                probe = tools.probe(local)
+                probe = tools.probe(local, fmt)
             except ToolError:
                 raise fail(ctx, "audio_unreadable") from None
             if probe.video_streams > 0:
@@ -147,7 +149,7 @@ def make_validate_handler(
 
             try:
                 cap = None if seconds is not None else limit + UNKNOWN_DURATION_MARGIN_S
-                tools.to_flac(local, flac, cap)
+                tools.to_flac(local, flac, cap, fmt)
                 if seconds is None:  # header carried no duration: measure the transcoded file
                     seconds = tools.probe(flac).duration_s
             except ToolError:
@@ -170,6 +172,7 @@ def make_validate_handler(
             except BlobNotFoundError:
                 ensure_alive(ctx)  # the DELETE swept the staged object under us
                 raise
+            blobs.delete_prefix(f"uploads/{uid}/{sid}/")  # late PUTs and stale-URL strays
             ensure_alive(ctx)  # a DELETE during the writes above must not leave audio behind
 
         if session.interview_id:

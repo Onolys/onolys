@@ -6,6 +6,7 @@ bytes, probes with ffprobe, then transcodes to the one format STT sees: FLAC, 16
 """
 
 import json
+import resource
 import subprocess
 import tempfile
 from dataclasses import dataclass
@@ -84,15 +85,44 @@ class ProbeResult:
 
 
 class AudioTools(Protocol):
-    def probe(self, path: Path) -> ProbeResult: ...
-    def to_flac(self, src: Path, dst: Path, max_seconds: float | None = None) -> None: ...
+    def probe(self, path: Path, fmt: str | None = None) -> ProbeResult: ...
+    def to_flac(
+        self, src: Path, dst: Path, max_seconds: float | None = None, fmt: str | None = None
+    ) -> None: ...
+
+
+# ffmpeg input demuxer per sniffed format: no autodetect, so a crafted header cannot pick another
+_DEMUXERS = {"wav": "wav", "mp3": "mp3", "ogg": "ogg", "m4a": "mov", "webm": "matroska,webm"}
+_CPU_LIMIT_S = 600
+_ADDRESS_SPACE_BYTES = 4 * 1024**3
+_OUTPUT_FILE_BYTES = 2 * 1024**3
+_OPEN_FILES = 256
+
+
+def _limit_child() -> None:
+    """Runs in the forked ffmpeg/ffprobe child before exec: cap CPU, memory, output, handles."""
+    for which, value in (
+        (resource.RLIMIT_CPU, _CPU_LIMIT_S),
+        (resource.RLIMIT_AS, _ADDRESS_SPACE_BYTES),
+        (resource.RLIMIT_FSIZE, _OUTPUT_FILE_BYTES),
+        (resource.RLIMIT_NOFILE, _OPEN_FILES),
+    ):
+        resource.setrlimit(which, (value, value))
+
+
+def _input_opts(fmt: str | None) -> list[str]:
+    opts = ["-protocol_whitelist", "file"]  # local files only: no http/tcp/concat redirects
+    if fmt in _DEMUXERS:
+        opts += ["-f", _DEMUXERS[fmt]]
+    return opts
 
 
 class FfmpegTools:
     """Real tools: `ffprobe` and `ffmpeg` from PATH (both are in the image)."""
 
-    def probe(self, path: Path) -> ProbeResult:
-        cmd = ["ffprobe", "-v", "error", "-show_streams", "-show_format", "-of", "json", str(path)]
+    def probe(self, path: Path, fmt: str | None = None) -> ProbeResult:
+        cmd = ["ffprobe", "-v", "error", *_input_opts(fmt)]
+        cmd += ["-show_streams", "-show_format", "-of", "json", str(path)]
         try:
             out = subprocess.run(
                 cmd,
@@ -100,6 +130,7 @@ class FfmpegTools:
                 timeout=PROBE_TIMEOUT_S,
                 check=True,
                 stdin=subprocess.DEVNULL,
+                preexec_fn=_limit_child,
             ).stdout
             info = json.loads(out)
         except (subprocess.SubprocessError, OSError, ValueError):
@@ -117,15 +148,18 @@ class FfmpegTools:
             video_streams=video,
         )
 
-    def to_flac(self, src: Path, dst: Path, max_seconds: float | None = None) -> None:
-        cmd = ["ffmpeg", "-nostdin", "-v", "error", "-y", "-i", str(src), "-map", "0:a:0", "-vn"]
+    def to_flac(
+        self, src: Path, dst: Path, max_seconds: float | None = None, fmt: str | None = None
+    ) -> None:
+        cmd = ["ffmpeg", "-nostdin", "-v", "error", "-y", *_input_opts(fmt)]
+        cmd += ["-i", str(src), "-map", "0:a:0", "-vn"]
         if max_seconds is not None:
             cmd += ["-t", f"{max_seconds:.3f}"]
         cmd += ["-ac", "1", "-ar", str(FLAC_RATE_HZ), "-c:a", "flac", str(dst)]
         try:
             subprocess.run(
                 cmd, capture_output=True, timeout=TRANSCODE_TIMEOUT_S, check=True,
-                stdin=subprocess.DEVNULL,
+                stdin=subprocess.DEVNULL, preexec_fn=_limit_child,
             )  # fmt: skip
         except (subprocess.SubprocessError, OSError):
             raise ToolError("ffmpeg failed") from None

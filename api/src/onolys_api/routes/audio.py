@@ -74,10 +74,10 @@ def request_upload(
     if body.size_bytes > MAX_UPLOAD_BYTES:
         raise ApiError.of(422, "audio_too_large", "The audio file is larger than 300 MB.")
     repo, blobs = request.app.state.repo, request.app.state.blobs
-    session = _owned_open(request, user, id)
+    _owned_open(request, user, id)
     advance(repo, user.uid, id, to="uploading")  # 409 invalid_state unless created|uploading
-    if session.upload is not None:  # a fresh URL replaces the earlier one
-        blobs.delete(staging_key(user.uid, id, session.upload.upload_id))
+    # a fresh URL replaces every earlier one: also sweeps strays a stale signed URL wrote
+    blobs.delete_prefix(f"uploads/{user.uid}/{id}/")
     upload_id = uuid4().hex
     canonical = CANONICAL_TYPES[fmt]
     signed = blobs.signed_upload(staging_key(user.uid, id, upload_id), canonical, MAX_UPLOAD_BYTES)
