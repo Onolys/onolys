@@ -61,7 +61,7 @@ function SessionView({ id }: { id: string }) {
   const firstStartHeld =
     doc !== null &&
     doc.state === "awaiting_input" &&
-    doc.error_code === "daily_cap_reached";
+    (doc.error_code === "daily_cap_reached" || doc.error_code === "concurrent_runs");
   // Try again after a failed FREE run is free too (the rating the interview paid for is owed), so it is
   // not blocked by the eval cap either: the detail's `free_run` says so.
   const failed = doc !== null && doc.state === "failed";
@@ -70,7 +70,7 @@ function SessionView({ id }: { id: string }) {
     enabled: firstStartHeld || failed,
     queryFn: async () => unwrap(await client.GET("/sessions/{id}", { params: { path: { id } } })),
   });
-  const freeFirstRun = firstStartHeld && Boolean(detail.data?.interview_id);
+  const freeFirstRun = firstStartHeld && Boolean(detail.data?.free_run);
   const freeRetry = failed && Boolean(detail.data?.free_run);
 
   const run = useMutation({

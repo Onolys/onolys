@@ -436,7 +436,7 @@ describe("session page: interview-linked first run (free, works at a full eval c
     if (linked) {
       server.use(
         http.get("*/v1/sessions/:id", ({ params }) =>
-          HttpResponse.json({ ...mockBackend.getSession(UID, String(params.id)), interview_id: "iv1" }),
+          HttpResponse.json({ ...mockBackend.getSession(UID, String(params.id)), interview_id: "iv1", free_run: true }),
         ),
       );
     }
@@ -457,6 +457,51 @@ describe("session page: interview-linked first run (free, works at a full eval c
     open(sid);
     await ready();
     const start = await screen.findByRole("button", { name: "Start" });
+    await waitFor(() => expect(start).toBeDisabled());
+  });
+});
+
+describe("session page: free_run gates Start (review round 2)", () => {
+  const detailOverride = (freeRun: boolean) =>
+    server.use(
+      http.get("*/v1/sessions/:id", ({ params }) =>
+        HttpResponse.json({
+          ...mockBackend.getSession(UID, String(params.id)),
+          interview_id: "iv1",
+          free_run: freeRun,
+        }),
+      ),
+    );
+
+  it("a free interview session held by concurrent_runs keeps Start enabled while cached usage is at the cap", async () => {
+    const sid = create();
+    toAwaiting(sid);
+    mockBackend.configure({ caps: { eval: { day: 0 } } });
+    detailOverride(true);
+    const { queryClient } = open(sid);
+    queryClient.setQueryData(["usage"], mockBackend.getUsage(UID));
+    await ready();
+    act(() =>
+      mockEmitter.emit(sid, { ...failedDoc(sid, "concurrent_runs"), state: "awaiting_input", progress: 20 }),
+    );
+    const start = await screen.findByRole("button", { name: "Start" });
+    await waitFor(() => expect(getCalls.length).toBeGreaterThan(0)); // the detail (free_run) loads
+    await waitFor(() => expect(start).toBeEnabled());
+  });
+
+  it("a voided interview session (free_run false) held at the daily cap keeps Start disabled", async () => {
+    const sid = create();
+    toAwaiting(sid);
+    mockBackend.configure({ caps: { eval: { day: 0 } } });
+    detailOverride(false);
+    const { queryClient } = open(sid);
+    queryClient.setQueryData(["usage"], mockBackend.getUsage(UID));
+    await ready();
+    act(() =>
+      mockEmitter.emit(sid, { ...failedDoc(sid, "daily_cap_reached"), state: "awaiting_input", progress: 20 }),
+    );
+    const start = await screen.findByRole("button", { name: "Start" });
+    await waitFor(() => expect(getCalls.length).toBeGreaterThan(0));
     await waitFor(() => expect(start).toBeDisabled());
   });
 });

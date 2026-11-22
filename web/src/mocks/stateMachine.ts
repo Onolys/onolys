@@ -88,7 +88,7 @@ interface Rating {
   seq: number;
 }
 
-type RunRec = S["RunView"] & { stageIdx: number };
+type RunRec = S["RunView"] & { stageIdx: number; counted: boolean };
 
 interface ReportRec {
   version: number;
@@ -433,7 +433,7 @@ export class MockBackend {
       n_runs: s.n_runs,
       preset: s.preset,
       interview_id: s.interview_id ?? null,
-      free_run: Boolean(s.interview_id),
+      free_run: Boolean(s.interview_id), // the mock has no void concept: interview_id alone
       links: { self: `/v1/sessions/${s.id}` },
     };
     if (s.error) detail.error = { ...s.error };
@@ -590,12 +590,23 @@ export class MockBackend {
 
   // ---- runs, reports, usage ----------------------------------------------
 
+  /**
+   * Mirrors the API: an interview session's run is free (not counted, no eval cap check) when it is the first run,
+   * or a Try again of a failed session whose first run was free. The mock has no void concept.
+   */
+  private isFreeRun(s: SessionRec): boolean {
+    if (!s.interview_id) return false;
+    if (!s.first_run_id) return true;
+    const first = s.runs.find((r) => r.run_id === s.first_run_id);
+    return s.state === "failed" && first?.counted === false;
+  }
+
   /** Start the first run once transcript + speaker + final rating are in (SP04 R4). */
   private maybeStartFirstRun(s: SessionRec): void {
     const f = s.flags;
     if (s.state !== "awaiting_input" || s.first_run_id) return;
     if (!(f.transcript_ready && f.speaker_confirmed && f.rating_submitted)) return;
-    const blocked = this.blocked(s.uid, "eval");
+    const blocked = this.isFreeRun(s) ? null : this.blocked(s.uid, "eval");
     // mirrors the API's held start: the day cap first, then another run in progress (max 1 active)
     const busy = [...this.sessions.values()].some((o) => o.uid === s.uid && o.state === "running");
     if (s.holdFirstStart || blocked || busy) {
@@ -607,6 +618,7 @@ export class MockBackend {
   }
 
   private createRun(s: SessionRec, p: S["RunRequest"]): RunRec {
+    const free = this.isFreeRun(s);
     const run: RunRec = {
       run_id: this.id("r"),
       session_id: s.id,
@@ -620,6 +632,7 @@ export class MockBackend {
       code_version: "mock",
       stage: "paudit",
       stageIdx: 0,
+      counted: !free,
     };
     s.runs.push(run);
     s.first_run_id ??= run.run_id;
@@ -628,7 +641,7 @@ export class MockBackend {
     s.state = "running";
     s.step = "paudit";
     s.progress = RUN_START_PROGRESS;
-    this.count(s.uid, "eval");
+    if (!free) this.count(s.uid, "eval");
     this.emit(s);
     return run;
   }
@@ -646,7 +659,7 @@ export class MockBackend {
       invalidParam("n_runs must be an integer from 1 to 5");
     if (body.preset != null && !PRESETS.includes(body.preset)) invalidParam("preset is not allowed");
     s.holdFirstStart = false; // the user pressed Start
-    this.checkCap(uid, "eval");
+    if (!this.isFreeRun(s)) this.checkCap(uid, "eval");
     for (const o of this.sessions.values()) {
       if (o.uid === uid && o.state === "running") {
         bad(429, "concurrent_runs", "A rating is already running.", [
@@ -821,8 +834,9 @@ export class MockBackend {
   }
 }
 
-function publicRun({ stageIdx: _ignored, ...run }: RunRec): S["RunView"] {
+function publicRun({ stageIdx: _ignored, counted: _counted, ...run }: RunRec): S["RunView"] {
   void _ignored;
+  void _counted;
   return { ...run };
 }
 

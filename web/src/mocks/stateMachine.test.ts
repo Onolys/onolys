@@ -377,6 +377,59 @@ describe("daily cap", () => {
   });
 });
 
+describe("free interview runs mirror the API (review round 2)", () => {
+  /** An interview-linked session, ready except the final rating. */
+  function interviewSession(backend: MockBackend, title?: string): string {
+    const iv = backend.createInterview(U, { scenario_id: "sc_anxious_parent" });
+    backend.setInterviewState(iv.interview_id, "ended", 60);
+    const { session } = backend.createSession(U, { interview_id: iv.interview_id, title });
+    backend.requestAudio(U, session.id, MP3);
+    backend.completeAudio(U, session.id);
+    backend.settle(session.id);
+    backend.confirmSpeaker(U, session.id, "spk_0");
+    return session.id;
+  }
+
+  it("an interview session at the eval cap auto-starts its first run without counting", () => {
+    const { backend } = make({ caps: { eval: { day: 0 } } });
+    const sid = interviewSession(backend);
+    backend.putRating(U, sid, { final: true, card: SCORED });
+    expect(status(backend, sid)).toMatchObject({ status: "running", free_run: true });
+    expect(backend.getUsage(U).eval.day.used).toBe(0);
+  });
+
+  it("a failed free run: Try again at the cap succeeds without counting", () => {
+    const { backend } = make({ caps: { eval: { day: 0 } } });
+    const sid = interviewSession(backend, "fail-paudit");
+    backend.putRating(U, sid, { final: true, card: SCORED });
+    backend.settle(sid);
+    expect(status(backend, sid)).toMatchObject({ status: "failed" });
+    backend.startRun(U, sid, {});
+    expect(status(backend, sid)).toMatchObject({ status: "running" });
+    expect(backend.getUsage(U).eval.day.used).toBe(0);
+  });
+
+  it("a free first run still respects max 1 active run", () => {
+    const { backend } = make({ caps: { eval: { day: 0 } } });
+    const a = interviewSession(backend);
+    backend.putRating(U, a, { final: true, card: SCORED });
+    const b = interviewSession(backend);
+    backend.putRating(U, b, { final: true, card: SCORED });
+    expect(status(backend, b)).toMatchObject({ status: "awaiting_input", error: { code: "concurrent_runs" } });
+  });
+
+  it("a non-interview Try again at the cap is still 429 daily_cap_reached", () => {
+    const { backend } = make({ caps: { eval: { day: 1 } } });
+    const sid = started(backend, "fail-paudit");
+    backend.settle(sid);
+    backend.confirmSpeaker(U, sid, "spk_0");
+    backend.putRating(U, sid, { final: true, card: SCORED });
+    backend.settle(sid);
+    expect(status(backend, sid)).toMatchObject({ status: "failed", free_run: false });
+    expectHttp(() => backend.startRun(U, sid, {}), 429, "daily_cap_reached");
+  });
+});
+
 describe("usage caps by kind and period", () => {
   function ready(backend: MockBackend): string {
     const sid = started(backend);
