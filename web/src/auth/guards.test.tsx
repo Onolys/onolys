@@ -98,7 +98,7 @@ describe("token retry and sign-out", () => {
     let n = 0;
     server.use(
       http.get(USAGE, () =>
-        ++n === 1 ? new HttpResponse(null, { status: 401 }) : HttpResponse.json({ eval: { day: { used: 0, cap: 20, resets_at: "x" }, month: { used: 1, cap: 100, resets_at: "x" } }, interview: { day: { used: 0, cap: 5, resets_at: "x" }, month: { used: 0, cap: 30, resets_at: "x" } } }),
+        ++n === 1 ? new HttpResponse(null, { status: 401 }) : HttpResponse.json({ eval: { day: { used: 0, cap: 20, resets_at: "x" } }, interview: { day: { used: 0, cap: 5, resets_at: "x" } } }),
       ),
     );
     const { router } = renderWithProbe(service, "/settings");

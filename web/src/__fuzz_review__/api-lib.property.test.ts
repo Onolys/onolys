@@ -47,7 +47,7 @@ describe("api/errors", () => {
         fc.string({ minLength: 3 }),
         (code, at) => {
           const m = messageForCode(code, { resetsAt: at });
-          if (code !== "daily_cap_reached" && code !== "monthly_cap_reached")
+          if (code !== "daily_cap_reached")
             expect(m).not.toContain(at);
         },
       ),

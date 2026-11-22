@@ -53,7 +53,6 @@ afterEach(() => {
 
 describe("report page: period-aware caps", () => {
   it.each([
-    [{ eval: { month: 0 } }, /reached this month's limit/i],
     [{ eval: { day: 0 } }, /reached today's limit/i],
   ] as const)("disables Run again with the matching message for caps %j", async (caps, message) => {
     const sid = reported({ final: true, card: SCORED });

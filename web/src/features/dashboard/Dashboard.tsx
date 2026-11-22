@@ -7,7 +7,7 @@ import { useApiClient } from "../../auth/useApiClient";
 import { interviewCapText } from "../interview/capText";
 import { ErrorCard } from "../session/ErrorCard";
 import { UsageLeft } from "../usage/UsageLeft";
-import { blockingPeriod, evalCapCode, formatBlockingReset } from "../usage/usage";
+import { blockingPeriod, formatBlockingReset } from "../usage/usage";
 import { useUsage } from "../usage/useUsage";
 import type { components } from "../../api/schema";
 import { STATUS_CHIP, sessionsRefetchInterval } from "./chips";
@@ -114,7 +114,7 @@ export function Dashboard() {
             {usage.data ? (
               <>
                 {" "}
-                <UsageLeft kind="interview" period="day" />, <UsageLeft kind="interview" period="month" />
+                <UsageLeft kind="interview" period="day" />
               </>
             ) : null}
           </p>
@@ -138,7 +138,7 @@ export function Dashboard() {
             {usage.data ? (
               <>
                 {" "}
-                <UsageLeft kind="eval" period="day" />, <UsageLeft kind="eval" period="month" />
+                <UsageLeft kind="eval" period="day" />
               </>
             ) : null}
           </p>
@@ -146,7 +146,7 @@ export function Dashboard() {
             New session
           </Link>
           {blocking ? (
-            <p className="notice">{messageForCode(evalCapCode(blocking), { resetsAt: formatBlockingReset(blocking) })}</p>
+            <p className="notice">{messageForCode("daily_cap_reached", { resetsAt: formatBlockingReset(blocking) })}</p>
           ) : null}
         </section>
       </div>

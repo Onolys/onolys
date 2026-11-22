@@ -46,15 +46,25 @@ describe("messageForCode", () => {
     expect(messageForCode("daily_cap_reached")).toContain("today's limit");
   });
 
-  it("mentions the reset date for monthly_cap_reached when known", () => {
-    expect(messageForCode("monthly_cap_reached", { resetsAt: "Dec 1" })).toBe(
-      "You've reached this month's limit. You can start the rating after Dec 1.",
+  it("has no monthly cap any more (unknown code -> generic)", () => {
+    expect(ERROR_CODES).not.toContain("monthly_cap_reached");
+    expect(messageForCode("monthly_cap_reached")).toBe(GENERIC_MESSAGE);
+  });
+
+  it("has the interview cap copy", () => {
+    expect(messageForCode("interview_cap_reached")).toBe("You've reached your AI interview limit.");
+  });
+
+  it("concurrent_runs: tells the user to wait for the running rating", () => {
+    expect(messageForCode("concurrent_runs")).toBe(
+      "You already have a rating running. Wait for it to finish.",
     );
   });
 
-  it("has the monthly and interview cap copy", () => {
-    expect(messageForCode("monthly_cap_reached")).toBe("You've reached this month's limit.");
-    expect(messageForCode("interview_cap_reached")).toBe("You've reached your AI interview limit.");
+  it("email_unverified: points the user at email verification", () => {
+    expect(messageForCode("email_unverified")).toBe(
+      "Verify your email address to continue. Open Verify email from the menu.",
+    );
   });
 
   it("falls back to the generic message for unknown codes", () => {
@@ -204,13 +214,13 @@ describe("enum parity with the public schema", () => {
 
   it("every web code is in the schema enum, including the cap codes", () => {
     for (const code of ERROR_CODES) expect(item.code.enum).toContain(code);
-    for (const code of ["daily_cap_reached", "monthly_cap_reached", "interview_cap_reached"]) {
+    for (const code of ["daily_cap_reached", "interview_cap_reached", "concurrent_runs", "email_unverified"]) {
       expect(ERROR_CODES).toContain(code);
     }
   });
 
-  it("schema period is day|month", () => {
-    expect(item.period.enum).toEqual(["day", "month"]);
+  it("schema period is day only", () => {
+    expect(item.period.enum).toEqual(["day"]);
   });
 });
 

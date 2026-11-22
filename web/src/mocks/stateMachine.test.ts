@@ -377,19 +377,21 @@ describe("usage caps by kind and period", () => {
     return undefined;
   };
 
-  it("getUsage returns per-kind day and month periods with reset times", () => {
-    const { backend } = make({ caps: { eval: { day: 3, month: 9 }, interview: { day: 2, month: 4 } } });
+  it("getUsage returns per-kind day periods only, with reset times", () => {
+    const { backend } = make({ caps: { eval: { day: 3 }, interview: { day: 2 } } });
     ready(backend);
     expect(backend.getUsage(U)).toEqual({
-      eval: {
-        day: { used: 1, cap: 3, resets_at: expect.stringMatching(/T00:00:00\.000Z$/) },
-        month: { used: 1, cap: 9, resets_at: expect.stringMatching(/-01T00:00:00\.000Z$/) },
-      },
-      interview: {
-        day: { used: 0, cap: 2, resets_at: expect.any(String) },
-        month: { used: 0, cap: 4, resets_at: expect.any(String) },
-      },
+      eval: { day: { used: 1, cap: 3, resets_at: expect.stringMatching(/T00:00:00\.000Z$/) } },
+      interview: { day: { used: 0, cap: 2, resets_at: expect.any(String) } },
     });
+  });
+
+  it("a second start while another session is running: 429 concurrent_runs", () => {
+    const { backend } = make();
+    const a = ready(backend);
+    backend.startRun(U, a, {}); // a is now running
+    const b = ready(backend);
+    expectHttp(() => backend.startRun(U, b, {}), 429, "concurrent_runs");
   });
 
   it("eval day cap: 429 daily_cap_reached with period=day", () => {
@@ -399,34 +401,13 @@ describe("usage caps by kind and period", () => {
     expect(detail(() => backend.startRun(U, sid, {}))).toMatchObject({ period: "day" });
   });
 
-  it("eval month cap: 429 monthly_cap_reached with period=month, and held auto-start uses the month code", () => {
-    const { backend } = make({ caps: { eval: { month: 1 } } });
-    const sid = ready(backend);
-    expectHttp(() => backend.startRun(U, sid, {}), 429, "monthly_cap_reached");
-    expect(detail(() => backend.startRun(U, sid, {}))).toMatchObject({ period: "month" });
-    const second = make({ caps: { eval: { month: 0 } } });
-    const sid2 = started(second.backend);
-    second.backend.settle(sid2);
-    second.backend.confirmSpeaker(U, sid2, "spk_0");
-    second.backend.putRating(U, sid2, { final: true, card: SCORED });
-    expect(status(second.backend, sid2).error).toEqual({ code: "monthly_cap_reached" });
-  });
-
-  it("both exhausted: the month code wins", () => {
-    const { backend } = make({ caps: { eval: { day: 1, month: 1 } } });
-    const sid = ready(backend);
-    expectHttp(() => backend.startRun(U, sid, {}), 429, "monthly_cap_reached");
-  });
-
   it("interview caps: 429 interview_cap_reached with the period, kinds do not share counters", () => {
-    const { backend } = make({ caps: { interview: { day: 1, month: 5 } } });
+    const { backend } = make({ caps: { interview: { day: 1 } } });
     backend.consumeInterview(U);
     expect(backend.getUsage(U).interview.day.used).toBe(1);
     expect(backend.getUsage(U).eval.day.used).toBe(0);
     expectHttp(() => backend.consumeInterview(U), 429, "interview_cap_reached");
     expect(detail(() => backend.consumeInterview(U))).toMatchObject({ period: "day" });
-    backend.configure({ caps: { interview: { month: 1 } } });
-    expect(detail(() => backend.consumeInterview(U))).toMatchObject({ code: "interview_cap_reached", period: "month" });
   });
 
   it("a refused attempt counts nothing", () => {

@@ -161,7 +161,7 @@ describe("settings: API key", () => {
     renderApp("/settings", { user: USER });
     expect(await main().findByText("20 of 20 left today")).toBeInTheDocument();
     expect(main().getByText("5 of 5 left today")).toBeInTheDocument();
-    expect(main().getByText("30 of 30 left this month")).toBeInTheDocument();
+    expect(main().queryByText(/this month/)).toBeNull();
     expect(main().getByText(/account removal/i)).toBeInTheDocument();
     expect(main().getByText(/deleting a session removes/i)).toBeInTheDocument();
   });

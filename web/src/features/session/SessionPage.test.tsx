@@ -229,6 +229,8 @@ describe("session page: error cards", () => {
     ["rating_invalid", /needs a change/i],
     ["upstream_unavailable", /busy right now/i],
     ["daily_cap_reached", /reached today's limit/i],
+    ["concurrent_runs", /already have a rating running/i],
+    ["email_unverified", /verify your email/i],
     ["invalid_state", /isn't possible at this stage/i],
     ["rate_limited", /a little fast/i],
     ["internal_error", /something went wrong/i],
@@ -374,7 +376,7 @@ describe("session page: interview-linked first run (free, works at a full eval c
   const heldAtCap = (linked: boolean) => {
     const sid = create();
     toAwaiting(sid);
-    mockBackend.configure({ caps: { eval: { day: 0, month: 0 } } });
+    mockBackend.configure({ caps: { eval: { day: 0 } } });
     mockBackend.confirmSpeaker(UID, sid, "spk_0");
     mockBackend.putRating(UID, sid, { final: true, no_rating: true, card: { change_goal: "g" } });
     if (linked) {
@@ -407,9 +409,7 @@ describe("session page: interview-linked first run (free, works at a full eval c
 
 describe("session page: period-aware caps", () => {
   it.each([
-    [{ eval: { month: 0 } }, /reached this month's limit/i],
     [{ eval: { day: 0 } }, /reached today's limit/i],
-    [{ eval: { day: 0, month: 0 } }, /reached this month's limit/i],
   ] as const)("disables Run again with the matching message for caps %j", async (caps, message) => {
     const sid = create();
     toAwaiting(sid);
@@ -420,18 +420,6 @@ describe("session page: period-aware caps", () => {
     const run = await screen.findByRole("button", { name: "Run again" });
     await waitFor(() => expect(run).toBeDisabled());
     expect(screen.getByRole("alert")).toHaveTextContent(message);
-  });
-
-  it("shows the month copy for a held monthly_cap_reached start", async () => {
-    const sid = create();
-    toAwaiting(sid);
-    mockBackend.configure({ caps: { eval: { month: 0 } } });
-    mockBackend.confirmSpeaker(UID, sid, "spk_0");
-    mockBackend.putRating(UID, sid, { final: true, no_rating: true, card: { change_goal: "g" } });
-    open(sid);
-    const status = await ready();
-    await waitFor(() => expect(status).toHaveTextContent(/reached this month's limit/i));
-    await waitFor(() => expect(screen.getByRole("button", { name: "Start" })).toBeDisabled());
   });
 });
 

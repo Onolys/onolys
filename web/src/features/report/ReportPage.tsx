@@ -9,7 +9,7 @@ import { unwrap } from "../../api/client";
 import { describeError, isNotFoundError, messageForCode } from "../../api/errors";
 import type { Report } from "../../api/report";
 import { useApiClient } from "../../auth/useApiClient";
-import { blockingPeriod, evalCapCode, formatBlockingReset } from "../usage/usage";
+import { blockingPeriod, formatBlockingReset } from "../usage/usage";
 import { USAGE_KEY, useUsage } from "../usage/useUsage";
 import { RatingCard } from "../rating/RatingCard";
 import { ErrorCard } from "../session/ErrorCard";
@@ -155,7 +155,7 @@ function LoadedReport({ id, version }: { id: string; version: number }) {
             Add or edit my rating → Run again
           </button>
         </div>
-        {blocking ? <p className="form-note">{messageForCode(evalCapCode(blocking), { resetsAt })}</p> : null}
+        {blocking ? <p className="form-note">{messageForCode("daily_cap_reached", { resetsAt })}</p> : null}
         {runError ? <ErrorCard code={runError.code} reference={runError.requestId} resetsAt={resetsAt} /> : null}
       </header>
 

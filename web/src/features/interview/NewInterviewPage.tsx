@@ -82,7 +82,7 @@ export function NewInterviewPage() {
       <h1>AI interview</h1>
       <p className="form-note">
         Practise a motivational interview with an AI client, then get it rated like any recording.{" "}
-        <UsageLeft kind="interview" period="day" />, <UsageLeft kind="interview" period="month" />
+        <UsageLeft kind="interview" period="day" />
       </p>
       <form
         className="auth-form"

@@ -115,7 +115,7 @@ describe("landing cards", () => {
     const { router } = renderApp("/", { user: USER });
     const interviewCard = within(await main().findByRole("region", { name: /Practise with an AI client/ }));
     expect(await interviewCard.findByText("5 of 5 left today")).toBeInTheDocument();
-    expect(interviewCard.getByText("30 of 30 left this month")).toBeInTheDocument();
+    expect(interviewCard.queryByText(/this month/)).toBeNull();
     const rate = within(main().getByRole("region", { name: "Rate a recording" }));
     expect(rate.getByText("20 of 20 left today")).toBeInTheDocument();
     expect(rate.getByRole("link", { name: "New session" })).toHaveAttribute("href", "/sessions/new");
@@ -125,7 +125,6 @@ describe("landing cards", () => {
 
   it.each([
     ["day", { interview: { day: 0 } }, /today's AI interview limit\. It resets at/],
-    ["month", { interview: { month: 0 } }, /this month's AI interview limit\. It resets on/],
   ])("disables Start AI Interview at the %s cap with the period message", async (_n, caps, text) => {
     mockBackend.configure({ caps });
     renderApp("/", { user: USER });

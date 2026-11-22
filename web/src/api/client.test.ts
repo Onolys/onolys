@@ -28,7 +28,7 @@ describe("bearer auth", () => {
     server.use(
       http.get(`${BASE}/usage`, ({ request }) => {
         auth = request.headers.get("authorization");
-        return HttpResponse.json({ eval: { day: { used: 1, cap: 20, resets_at: "x" }, month: { used: 1, cap: 100, resets_at: "x" } }, interview: { day: { used: 0, cap: 5, resets_at: "x" }, month: { used: 0, cap: 30, resets_at: "x" } } });
+        return HttpResponse.json({ eval: { day: { used: 1, cap: 20, resets_at: "x" } }, interview: { day: { used: 0, cap: 5, resets_at: "x" } } });
       }),
     );
     const { client, getToken } = setup();
@@ -43,7 +43,7 @@ describe("bearer auth", () => {
     server.use(
       http.get(`${BASE}/usage`, ({ request }) => {
         auth = request.headers.get("authorization");
-        return HttpResponse.json({ eval: { day: { used: 1, cap: 20, resets_at: "x" }, month: { used: 1, cap: 100, resets_at: "x" } }, interview: { day: { used: 0, cap: 5, resets_at: "x" }, month: { used: 0, cap: 30, resets_at: "x" } } });
+        return HttpResponse.json({ eval: { day: { used: 1, cap: 20, resets_at: "x" } }, interview: { day: { used: 0, cap: 5, resets_at: "x" } } });
       }),
     );
     const { client } = setup(vi.fn(async (): Promise<string | null> => null));
@@ -60,7 +60,7 @@ describe("401 handling", () => {
         const a = request.headers.get("authorization");
         seen.push(a);
         if (a === "Bearer stale") return HttpResponse.json(errBody(401, "unauthenticated"), { status: 401 });
-        return HttpResponse.json({ eval: { day: { used: 2, cap: 20, resets_at: "x" }, month: { used: 1, cap: 100, resets_at: "x" } }, interview: { day: { used: 0, cap: 5, resets_at: "x" }, month: { used: 0, cap: 30, resets_at: "x" } } });
+        return HttpResponse.json({ eval: { day: { used: 2, cap: 20, resets_at: "x" } }, interview: { day: { used: 0, cap: 5, resets_at: "x" } } });
       }),
     );
     const { client, getToken, onSessionExpired } = setup();
@@ -196,7 +196,7 @@ describe("unwrap", () => {
   it("returns data on success", async () => {
     server.use(
       http.get(`${BASE}/usage`, () =>
-        HttpResponse.json({ eval: { day: { used: 3, cap: 20, resets_at: "x" }, month: { used: 1, cap: 100, resets_at: "x" } }, interview: { day: { used: 0, cap: 5, resets_at: "x" }, month: { used: 0, cap: 30, resets_at: "x" } } }),
+        HttpResponse.json({ eval: { day: { used: 3, cap: 20, resets_at: "x" } }, interview: { day: { used: 0, cap: 5, resets_at: "x" } } }),
       ),
     );
     const { client } = setup();

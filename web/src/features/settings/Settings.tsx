@@ -135,13 +135,13 @@ export function Settings() {
         {usage.data ? (
           <>
             <p>
-              Ratings: <UsageLeft kind="eval" period="day" />, <UsageLeft kind="eval" period="month" />
+              Ratings: <UsageLeft kind="eval" period="day" />
               {formatResetTime(usage.data.eval.day.resets_at)
                 ? `. Daily limit resets at ${formatResetTime(usage.data.eval.day.resets_at)}`
                 : ""}
             </p>
             <p>
-              Interviews: <UsageLeft kind="interview" period="day" />, <UsageLeft kind="interview" period="month" />
+              Interviews: <UsageLeft kind="interview" period="day" />
             </p>
           </>
         ) : (

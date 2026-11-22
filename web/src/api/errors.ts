@@ -20,8 +20,9 @@ const MESSAGES = {
   rating_invalid: "Some of your rating needs a change. Check the highlighted fields.",
   upstream_unavailable: "A service we depend on is busy right now. Please try again in a minute.",
   daily_cap_reached: "You've reached today's limit.",
-  monthly_cap_reached: "You've reached this month's limit.",
   interview_cap_reached: "You've reached your AI interview limit.",
+  concurrent_runs: "You already have a rating running. Wait for it to finish.",
+  email_unverified: "Verify your email address to continue. Open Verify email from the menu.",
   invalid_state: "That isn't possible at this stage of the session. Refresh and try again.",
   rate_limited: "You're going a little fast. Wait a moment and try again.",
   unauthenticated: "Your sign-in has expired. Please sign in again.",
@@ -41,7 +42,7 @@ function isKnown(code: string | undefined): code is ErrorCode {
 }
 
 export interface MessageContext {
-  /** Reset time (a time of day, or a date for the month cap) for the eval cap codes, already formatted. */
+  /** Reset time (a time of day) for the eval cap code, already formatted. */
   resetsAt?: string;
 }
 
@@ -49,9 +50,6 @@ export function messageForCode(code: string | undefined, ctx: MessageContext = {
   if (!isKnown(code)) return GENERIC_MESSAGE;
   if (code === "daily_cap_reached" && ctx.resetsAt) {
     return `You've reached today's limit. You can start the rating after ${ctx.resetsAt}.`;
-  }
-  if (code === "monthly_cap_reached" && ctx.resetsAt) {
-    return `You've reached this month's limit. You can start the rating after ${ctx.resetsAt}.`;
   }
   return MESSAGES[code];
 }

@@ -135,7 +135,7 @@ export function deriveTimeline(doc: TimelineInput, opts: TimelineOptions = {}): 
       lines = ["Transcribing the recording."];
       break;
     case "awaiting_input": {
-      if (doc.error_code === "daily_cap_reached" || doc.error_code === "monthly_cap_reached") {
+      if (doc.error_code === "daily_cap_reached") {
         capReached = true;
         lines = [messageForCode(doc.error_code, { resetsAt: opts.resetsAt })];
         break;

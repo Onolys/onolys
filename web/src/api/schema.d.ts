@@ -138,7 +138,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** The caller's sessions, newest first (in-flight and failed included) */
+        /**
+         * The caller's sessions, newest first (in-flight and failed included)
+         * @description Not strictly read-only: a session whose pipeline has stalled past its deadline is marked `failed` here (lazily, in a transaction that yields to a finished task), so no sweeper job is needed. Sessions being deleted are skipped without shortening the page. `next_cursor` is an opaque position and stays valid if its session is deleted.
+         */
         get: operations["listSessions"];
         put?: never;
         /**
@@ -159,7 +162,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Session status snapshot (the web app uses the session_status listener instead) */
+        /**
+         * Session status snapshot (the web app uses the session_status listener instead)
+         * @description Not strictly read-only: a stalled session is marked `failed` on read (see `listSessions`).
+         */
         get: operations["getSession"];
         put?: never;
         post?: never;
@@ -284,7 +290,7 @@ export interface paths {
         put?: never;
         /**
          * Start a run by hand (re-run, or the first run held back by the cap)
-         * @description Needs the transcript and the confirmed speaker; uses the latest final rating revision or runs as no-rating. `preset` changes LLM routes only (the transcript is reused). Counts against the daily cap: 429 `daily_cap_reached`. 409 `invalid_state` while a run is in progress or before the inputs exist.
+         * @description Needs the transcript and the confirmed speaker; uses the latest final rating revision or runs as no-rating. `preset` changes LLM routes only (the transcript is reused). Counts against the daily cap: 429 `daily_cap_reached`; 429 `concurrent_runs` while another run is in progress. 409 `invalid_state` while a run is in progress or before the inputs exist.
          */
         post: operations["startRun"];
         delete?: never;
@@ -360,7 +366,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Usage and caps (UTC day and month) */
+        /** Usage and caps (UTC day) */
         get: operations["getUsage"];
         put?: never;
         post?: never;
@@ -529,7 +535,7 @@ export interface components {
              * Code
              * @enum {string}
              */
-            code: "invalid_json" | "unsupported_media_type" | "schema_violation" | "empty_transcript" | "empty_assessment" | "duplicate_ids" | "invalid_parameters" | "body_too_large" | "too_many_turns" | "too_many_sections" | "rate_limited" | "not_found" | "method_not_allowed" | "cors_rejected" | "request_rejected" | "upstream_unavailable" | "deadline_exceeded" | "internal_error" | "missing_parameter" | "unknown_pack" | "input_rejected" | "run_failed" | "unauthenticated" | "forbidden" | "invalid_state" | "unsupported_audio" | "audio_too_long" | "audio_too_large" | "audio_unreadable" | "no_speech" | "speakers_not_separated" | "transcription_failed" | "rating_invalid" | "daily_cap_reached" | "monthly_cap_reached" | "interview_cap_reached" | "conflict" | "interview_too_long";
+            code: "invalid_json" | "unsupported_media_type" | "schema_violation" | "empty_transcript" | "empty_assessment" | "duplicate_ids" | "invalid_parameters" | "body_too_large" | "too_many_turns" | "too_many_sections" | "rate_limited" | "not_found" | "method_not_allowed" | "cors_rejected" | "request_rejected" | "upstream_unavailable" | "deadline_exceeded" | "internal_error" | "missing_parameter" | "unknown_pack" | "input_rejected" | "run_failed" | "unauthenticated" | "forbidden" | "invalid_state" | "unsupported_audio" | "audio_too_long" | "audio_too_large" | "audio_unreadable" | "no_speech" | "speakers_not_separated" | "transcription_failed" | "rating_invalid" | "daily_cap_reached" | "interview_cap_reached" | "concurrent_runs" | "email_unverified" | "conflict" | "interview_too_long";
             /**
              * Field
              * @description `/`-joined path of the offending field in the rating card (e.g. `globals/cct/reason`); `$` is the whole card. Set on `rating_invalid`. A path only, never user text.
@@ -544,9 +550,9 @@ export interface components {
             message: string;
             /**
              * Period
-             * @description Which usage period was exhausted. Set on `daily_cap_reached`, `monthly_cap_reached` and `interview_cap_reached`.
+             * @description Which usage period was exhausted. Set on `daily_cap_reached` and `interview_cap_reached`.
              */
-            period?: ("day" | "month") | null;
+            period?: "day" | null;
         };
         /**
          * ErrorResponse
@@ -636,7 +642,6 @@ export interface components {
         /** KindUsage */
         KindUsage: {
             day: components["schemas"]["Period"];
-            month: components["schemas"]["Period"];
         };
         /** Period */
         Period: {
@@ -1031,7 +1036,16 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description `daily_cap_reached` (daily run cap or concurrent-run limit) or `rate_limited` */
+            /** @description `forbidden` (API keys cannot manage API keys) or `email_unverified` (valid sign-in, email address not verified yet) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description `daily_cap_reached` (daily run cap), `concurrent_runs` (a run is already in progress) or `rate_limited` */
             429: {
                 headers: {
                     [name: string]: unknown;
@@ -1078,7 +1092,16 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description `daily_cap_reached` (daily run cap or concurrent-run limit) or `rate_limited` */
+            /** @description `forbidden` (API keys cannot manage API keys) or `email_unverified` (valid sign-in, email address not verified yet) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description `daily_cap_reached` (daily run cap), `concurrent_runs` (a run is already in progress) or `rate_limited` */
             429: {
                 headers: {
                     [name: string]: unknown;
@@ -1123,7 +1146,16 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description `daily_cap_reached` (daily run cap or concurrent-run limit) or `rate_limited` */
+            /** @description `forbidden` (API keys cannot manage API keys) or `email_unverified` (valid sign-in, email address not verified yet) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description `daily_cap_reached` (daily run cap), `concurrent_runs` (a run is already in progress) or `rate_limited` */
             429: {
                 headers: {
                     [name: string]: unknown;
@@ -1203,7 +1235,16 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description `daily_cap_reached` (daily run cap or concurrent-run limit) or `rate_limited` */
+            /** @description `invalid_parameters` (incl. a malformed id, cursor or body), `unsupported_audio`, `audio_too_large` or `rating_invalid` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description `daily_cap_reached` (daily run cap), `concurrent_runs` (a run is already in progress) or `rate_limited` */
             429: {
                 headers: {
                     [name: string]: unknown;
@@ -1261,7 +1302,16 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description `daily_cap_reached` (daily run cap or concurrent-run limit) or `rate_limited` */
+            /** @description `invalid_parameters` (incl. a malformed id, cursor or body), `unsupported_audio`, `audio_too_large` or `rating_invalid` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description `daily_cap_reached` (daily run cap), `concurrent_runs` (a run is already in progress) or `rate_limited` */
             429: {
                 headers: {
                     [name: string]: unknown;
@@ -1323,7 +1373,16 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description `daily_cap_reached` (daily run cap or concurrent-run limit) or `rate_limited` */
+            /** @description `invalid_parameters` (incl. a malformed id, cursor or body), `unsupported_audio`, `audio_too_large` or `rating_invalid` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description `daily_cap_reached` (daily run cap), `concurrent_runs` (a run is already in progress) or `rate_limited` */
             429: {
                 headers: {
                     [name: string]: unknown;
@@ -1381,7 +1440,16 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description `daily_cap_reached` (daily run cap or concurrent-run limit) or `rate_limited` */
+            /** @description `invalid_parameters` (incl. a malformed id, cursor or body), `unsupported_audio`, `audio_too_large` or `rating_invalid` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description `daily_cap_reached` (daily run cap), `concurrent_runs` (a run is already in progress) or `rate_limited` */
             429: {
                 headers: {
                     [name: string]: unknown;
@@ -1428,7 +1496,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description `daily_cap_reached` (daily run cap or concurrent-run limit) or `rate_limited` */
+            /** @description `daily_cap_reached` (daily run cap), `concurrent_runs` (a run is already in progress) or `rate_limited` */
             429: {
                 headers: {
                     [name: string]: unknown;
@@ -1478,7 +1546,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description `invalid_parameters`, `unsupported_audio`, `audio_too_large` or `rating_invalid` */
+            /** @description `invalid_parameters` (incl. a malformed id, cursor or body), `unsupported_audio`, `audio_too_large` or `rating_invalid` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -1487,7 +1555,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description `daily_cap_reached` (daily run cap or concurrent-run limit) or `rate_limited` */
+            /** @description `daily_cap_reached` (daily run cap), `concurrent_runs` (a run is already in progress) or `rate_limited` */
             429: {
                 headers: {
                     [name: string]: unknown;
@@ -1550,7 +1618,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description `invalid_parameters`, `unsupported_audio`, `audio_too_large` or `rating_invalid` */
+            /** @description `invalid_parameters` (incl. a malformed id, cursor or body), `unsupported_audio`, `audio_too_large` or `rating_invalid` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -1559,7 +1627,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description `daily_cap_reached` (daily run cap or concurrent-run limit) or `rate_limited` */
+            /** @description `daily_cap_reached` (daily run cap), `concurrent_runs` (a run is already in progress) or `rate_limited` */
             429: {
                 headers: {
                     [name: string]: unknown;
@@ -1617,7 +1685,16 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description `daily_cap_reached` (daily run cap or concurrent-run limit) or `rate_limited` */
+            /** @description `invalid_parameters` (incl. a malformed id, cursor or body), `unsupported_audio`, `audio_too_large` or `rating_invalid` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description `daily_cap_reached` (daily run cap), `concurrent_runs` (a run is already in progress) or `rate_limited` */
             429: {
                 headers: {
                     [name: string]: unknown;
@@ -1673,7 +1750,16 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description `daily_cap_reached` (daily run cap or concurrent-run limit) or `rate_limited` */
+            /** @description `invalid_parameters` (incl. a malformed id, cursor or body), `unsupported_audio`, `audio_too_large` or `rating_invalid` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description `daily_cap_reached` (daily run cap), `concurrent_runs` (a run is already in progress) or `rate_limited` */
             429: {
                 headers: {
                     [name: string]: unknown;
@@ -1740,7 +1826,16 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description `daily_cap_reached` (daily run cap or concurrent-run limit) or `rate_limited` */
+            /** @description `invalid_parameters` (incl. a malformed id, cursor or body), `unsupported_audio`, `audio_too_large` or `rating_invalid` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description `daily_cap_reached` (daily run cap), `concurrent_runs` (a run is already in progress) or `rate_limited` */
             429: {
                 headers: {
                     [name: string]: unknown;
@@ -1811,7 +1906,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description `invalid_parameters`, `unsupported_audio`, `audio_too_large` or `rating_invalid` */
+            /** @description `invalid_parameters` (incl. a malformed id, cursor or body), `unsupported_audio`, `audio_too_large` or `rating_invalid` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -1820,7 +1915,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description `daily_cap_reached` (daily run cap or concurrent-run limit) or `rate_limited` */
+            /** @description `daily_cap_reached` (daily run cap), `concurrent_runs` (a run is already in progress) or `rate_limited` */
             429: {
                 headers: {
                     [name: string]: unknown;
@@ -1889,7 +1984,16 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description `daily_cap_reached` (daily run cap or concurrent-run limit) or `rate_limited` */
+            /** @description `invalid_parameters` (incl. a malformed id, cursor or body), `unsupported_audio`, `audio_too_large` or `rating_invalid` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description `daily_cap_reached` (daily run cap), `concurrent_runs` (a run is already in progress) or `rate_limited` */
             429: {
                 headers: {
                     [name: string]: unknown;
@@ -1956,7 +2060,16 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description `daily_cap_reached` (daily run cap or concurrent-run limit) or `rate_limited` */
+            /** @description `invalid_parameters` (incl. a malformed id, cursor or body), `unsupported_audio`, `audio_too_large` or `rating_invalid` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description `daily_cap_reached` (daily run cap), `concurrent_runs` (a run is already in progress) or `rate_limited` */
             429: {
                 headers: {
                     [name: string]: unknown;
@@ -2018,7 +2131,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description `invalid_parameters`, `unsupported_audio`, `audio_too_large` or `rating_invalid` */
+            /** @description `invalid_parameters` (incl. a malformed id, cursor or body), `unsupported_audio`, `audio_too_large` or `rating_invalid` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -2027,7 +2140,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description `daily_cap_reached` (daily run cap or concurrent-run limit) or `rate_limited` */
+            /** @description `daily_cap_reached` (daily run cap), `concurrent_runs` (a run is already in progress) or `rate_limited` */
             429: {
                 headers: {
                     [name: string]: unknown;
@@ -2085,7 +2198,16 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description `daily_cap_reached` (daily run cap or concurrent-run limit) or `rate_limited` */
+            /** @description `invalid_parameters` (incl. a malformed id, cursor or body), `unsupported_audio`, `audio_too_large` or `rating_invalid` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description `daily_cap_reached` (daily run cap), `concurrent_runs` (a run is already in progress) or `rate_limited` */
             429: {
                 headers: {
                     [name: string]: unknown;
@@ -2144,7 +2266,16 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description `daily_cap_reached` (daily run cap or concurrent-run limit) or `rate_limited` */
+            /** @description `invalid_parameters` (incl. a malformed id, cursor or body), `unsupported_audio`, `audio_too_large` or `rating_invalid` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description `daily_cap_reached` (daily run cap), `concurrent_runs` (a run is already in progress) or `rate_limited` */
             429: {
                 headers: {
                     [name: string]: unknown;
@@ -2202,7 +2333,16 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description `daily_cap_reached` (daily run cap or concurrent-run limit) or `rate_limited` */
+            /** @description `invalid_parameters` (incl. a malformed id, cursor or body), `unsupported_audio`, `audio_too_large` or `rating_invalid` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description `daily_cap_reached` (daily run cap), `concurrent_runs` (a run is already in progress) or `rate_limited` */
             429: {
                 headers: {
                     [name: string]: unknown;
@@ -2273,7 +2413,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description `invalid_parameters`, `unsupported_audio`, `audio_too_large` or `rating_invalid` */
+            /** @description `invalid_parameters` (incl. a malformed id, cursor or body), `unsupported_audio`, `audio_too_large` or `rating_invalid` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -2282,7 +2422,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description `daily_cap_reached` (daily run cap or concurrent-run limit) or `rate_limited` */
+            /** @description `daily_cap_reached` (daily run cap), `concurrent_runs` (a run is already in progress) or `rate_limited` */
             429: {
                 headers: {
                     [name: string]: unknown;
@@ -2349,7 +2489,25 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description `daily_cap_reached` (daily run cap or concurrent-run limit) or `rate_limited` */
+            /** @description `invalid_state` or `conflict`: not allowed in the session's current state */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description `invalid_parameters` (incl. a malformed id, cursor or body), `unsupported_audio`, `audio_too_large` or `rating_invalid` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description `daily_cap_reached` (daily run cap), `concurrent_runs` (a run is already in progress) or `rate_limited` */
             429: {
                 headers: {
                     [name: string]: unknown;
@@ -2420,7 +2578,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description `invalid_parameters`, `unsupported_audio`, `audio_too_large` or `rating_invalid` */
+            /** @description `invalid_parameters` (incl. a malformed id, cursor or body), `unsupported_audio`, `audio_too_large` or `rating_invalid` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -2429,7 +2587,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description `daily_cap_reached` (daily run cap or concurrent-run limit) or `rate_limited` */
+            /** @description `daily_cap_reached` (daily run cap), `concurrent_runs` (a run is already in progress) or `rate_limited` */
             429: {
                 headers: {
                     [name: string]: unknown;
@@ -2487,7 +2645,25 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description `daily_cap_reached` (daily run cap or concurrent-run limit) or `rate_limited` */
+            /** @description `invalid_state` or `conflict`: not allowed in the session's current state */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description `invalid_parameters` (incl. a malformed id, cursor or body), `unsupported_audio`, `audio_too_large` or `rating_invalid` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description `daily_cap_reached` (daily run cap), `concurrent_runs` (a run is already in progress) or `rate_limited` */
             429: {
                 headers: {
                     [name: string]: unknown;
@@ -2534,7 +2710,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description `daily_cap_reached` (daily run cap or concurrent-run limit) or `rate_limited` */
+            /** @description `daily_cap_reached` (daily run cap), `concurrent_runs` (a run is already in progress) or `rate_limited` */
             429: {
                 headers: {
                     [name: string]: unknown;

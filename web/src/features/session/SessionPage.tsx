@@ -11,7 +11,7 @@ import { describeError, failureAction, messageForCode } from "../../api/errors";
 import type { SessionStatusDoc } from "../../api/statusListener";
 import { useApiClient } from "../../auth/useApiClient";
 import { formatElapsed, formatResetTime } from "../../lib/format";
-import { blockingPeriod, evalCapCode, formatBlockingReset } from "../usage/usage";
+import { blockingPeriod, formatBlockingReset } from "../usage/usage";
 import { USAGE_KEY, useUsage } from "../usage/useUsage";
 import { DeleteDialog } from "./DeleteDialog";
 import { ErrorCard } from "./ErrorCard";
@@ -49,7 +49,7 @@ function SessionView({ id }: { id: string }) {
 
   const needsUsage =
     doc !== null &&
-    (doc.state === "failed" || doc.error_code === "daily_cap_reached" || doc.error_code === "monthly_cap_reached");
+    (doc.state === "failed" || doc.error_code === "daily_cap_reached");
   const usage = useUsage({ enabled: needsUsage });
   const blocking = blockingPeriod(usage.data, "eval");
   const atCap = blocking !== null;
@@ -61,7 +61,7 @@ function SessionView({ id }: { id: string }) {
   const firstStartHeld =
     doc !== null &&
     doc.state === "awaiting_input" &&
-    (doc.error_code === "daily_cap_reached" || doc.error_code === "monthly_cap_reached");
+    doc.error_code === "daily_cap_reached";
   const detail = useQuery({
     queryKey: ["session-detail", id],
     enabled: firstStartHeld,
@@ -195,7 +195,7 @@ function SessionView({ id }: { id: string }) {
                   <button type="button" className="btn btn-primary" disabled={runLocked} onClick={() => run.mutate()}>
                     Run again
                   </button>
-                  {blocking ? <span>{messageForCode(evalCapCode(blocking), { resetsAt })}</span> : null}
+                  {blocking ? <span>{messageForCode("daily_cap_reached", { resetsAt })}</span> : null}
                 </>
               )}
             </ErrorCard>
