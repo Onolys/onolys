@@ -1,9 +1,0 @@
-{
-  "error": {
-    "code": "run_active",
-    "message": "Fictional run active error.",
-    "detail": {
-      "run_id": "fictional-running"
-    }
-  }
-}

@@ -1,9 +1,0 @@
-{
-  "error": {
-    "code": "bad_state",
-    "message": "Fictional bad state error.",
-    "detail": {
-      "reason": "fictional offline test"
-    }
-  }
-}

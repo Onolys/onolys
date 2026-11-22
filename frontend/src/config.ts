@@ -1,19 +1,15 @@
-export interface AppConfig {
-  mock: boolean;
-  auditUrl: string | null;
-}
-
-export interface EvalConfig {
-  evalBase: string;
-  /** false only when VITE_EVAL_ENABLED is exactly "false" (deployed build, see .env.production). */
-  evalEnabled: boolean;
-}
-
 export interface FirebaseConfig {
   apiKey: string;
   authDomain: string;
   projectId: string;
   appId: string;
+}
+
+export interface AppConfig {
+  /** true only when VITE_MOCK is exactly "true": gate off, no backend call (local dev). */
+  mock: boolean;
+  /** Origin of the admin backend (VITE_ADMIN_API_URL), no path. null when unset. */
+  adminApiUrl: string | null;
 }
 
 export interface AuthConfig {
@@ -22,8 +18,8 @@ export interface AuthConfig {
   firebase: FirebaseConfig;
 }
 
-export function getConfig(): AppConfig & EvalConfig & AuthConfig {
-  const { VITE_MOCK, VITE_AUDIT_URL, VITE_EVAL_API_BASE, VITE_EVAL_ENABLED, VITE_AUTH_REQUIRED } = import.meta.env;
+export function getConfig(): AppConfig & AuthConfig {
+  const { VITE_MOCK, VITE_ADMIN_API_URL, VITE_AUTH_REQUIRED } = import.meta.env;
   const { VITE_FIREBASE_API_KEY, VITE_FIREBASE_AUTH_DOMAIN, VITE_FIREBASE_PROJECT_ID, VITE_FIREBASE_APP_ID } = import.meta.env;
   return {
     authRequired: VITE_AUTH_REQUIRED === "true",
@@ -34,8 +30,6 @@ export function getConfig(): AppConfig & EvalConfig & AuthConfig {
       appId: VITE_FIREBASE_APP_ID ?? "",
     },
     mock: VITE_MOCK === "true",
-    auditUrl: VITE_AUDIT_URL ? VITE_AUDIT_URL : null,
-    evalBase: VITE_EVAL_API_BASE || "/eval-api",
-    evalEnabled: VITE_EVAL_ENABLED !== "false",
+    adminApiUrl: VITE_ADMIN_API_URL ? VITE_ADMIN_API_URL : null,
   };
 }
