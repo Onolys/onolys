@@ -6,7 +6,7 @@
 from datetime import UTC, datetime
 from typing import Any, Literal
 
-from onolys_core.transcript import Transcript
+from onolys_miti.transcript import Transcript
 from pydantic import BaseModel, Field
 
 SessionState = Literal[

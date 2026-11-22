@@ -3,37 +3,25 @@ from pathlib import Path
 
 import pytest
 from jsonschema import Draft202012Validator
-from onolys_core.engine import RunContext
-from onolys_core.stt import AudioRef, SttParams, Word
-from onolys_core.stt.base import words_to_turns
-from onolys_core.stt.fixture import FixtureStt, uri_hash
-from onolys_core.transcript import Transcript
+from onolys_miti import miti
+from onolys_miti.context import RunContext
+from onolys_miti.stt import AudioRef, SttParams, Word
+from onolys_miti.stt.base import words_to_turns
+from onolys_miti.stt.fixture import FixtureStt, uri_hash
+from onolys_miti.transcript import Transcript
 
 from onolys_api.adapters import AdapterError, FakeEvaluation, FakeStt, build_adapters
 from onolys_api.adapters import fake as f
 from onolys_api.config import Settings
 
 pytestmark = pytest.mark.unit
-ROOT = Path(__file__).resolve().parents[2]
 HERE = Path(__file__).parent / "schemas"
 
-
-def _schema(real: str, local: str) -> dict:
-    p = ROOT / real
-    return json.loads((p if p.exists() else HERE / local).read_text())
-
-
-REPORT = Draft202012Validator(
-    _schema("engines/evaluation/schemas/report.schema.json", "report.local.schema.json")
-)
-PAUDIT = Draft202012Validator(
-    _schema("engines/paudit/schemas/paudit-result.schema.json", "paudit-result.local.schema.json")
-)
+REPORT = Draft202012Validator(json.loads((miti.DATA_DIR / "report.schema.json").read_text()))
 AUDIO = AudioRef(uri="gs://b/u/s/audio/canonical.flac", mime="audio/flac", duration_ms=1000)
 CTX = RunContext(llm=None, metrics=None, request_id="req-1")
-PARAMS = {"change_goal": "cut back", "coded_span": {"from_s": 0, "to_s": 600}, "language": "en",
+PARAMS = {"change_goal": "cut back", "seed": "sess-1", "language": "en",
           "n_runs": 2, "preset": "default", "code_version": "abc"}  # fmt: skip
-RATING = {"final": True}
 
 
 def sparams(title: str | None = None) -> SttParams:
@@ -46,12 +34,11 @@ async def transcribe(adapter: FakeStt, title: str | None = None) -> Transcript |
     return await adapter.poll(h)
 
 
-async def evaluate(title: str = "", rating=RATING, events=None, adapter=None):
+async def evaluate(title: str = "", events=None, adapter=None):
     t = await transcribe(FakeStt())
     cb = (lambda s, st: events.append((s, st))) if events is not None else None
     ev = adapter or FakeEvaluation()
-    return await ev.run(CTX, None, t, {"subject": "S1"}, {**PARAMS, f.STUB_TITLE_KEY: title},
-                        rating, cb)  # fmt: skip
+    return await ev.run(CTX, t, {"subject": "S1"}, {**PARAMS, f.STUB_TITLE_KEY: title}, cb)
 
 
 # ---- Stt ----
@@ -113,8 +100,7 @@ async def test_eval_deterministic_and_schema_valid():
     a, b = await evaluate(), await evaluate()
     assert a == b
     assert not list(REPORT.iter_errors(a.report))
-    assert not list(PAUDIT.iter_errors(a.artifacts["paudit"]))
-    assert a.report["reasons_audit"]["status"] == "ran" and a.report["warnings"] == []
+    assert a.report["reasons_audit"]["status"] == "skipped" and a.report["warnings"] == []
     assert a.report["header"]["stt"]["provider"] == "fake"
     t = await transcribe(FakeStt())
     texts = {x.id: x.text for x in t.turns}
@@ -124,7 +110,7 @@ async def test_eval_deterministic_and_schema_valid():
 
 
 async def test_eval_no_rating_valid():
-    o = await evaluate(rating=None)
+    o = await evaluate()
     assert not list(REPORT.iter_errors(o.report))
     assert o.report["reasons_audit"]["status"] == "skipped"
     assert o.report["aggregates"]["within_one_share"] is None
@@ -147,21 +133,12 @@ async def test_inject_paudit_failed():
     assert ("assemble", "started") not in ev
 
 
-async def test_inject_eaudit_failed_partial_report():
-    ev: list = []
-    o = await evaluate(f.FAIL_EAUDIT, events=ev)
-    assert not list(REPORT.iter_errors(o.report))
-    assert o.report["reasons_audit"] == {"status": "failed", "items": []}
-    assert {"code": "reasons_audit_failed"} in o.report["warnings"]
-    assert ("eaudit", "failed") in ev and o.report["tips"]
-
-
 async def test_inject_tips_failed_partial_report():
     ev: list = []
     o = await evaluate(f.FAIL_TIPS, events=ev)
     assert not list(REPORT.iter_errors(o.report))
     assert o.report["tips"] == [] and {"code": "tips_failed"} in o.report["warnings"]
-    assert ("tips", "failed") in ev and o.report["reasons_audit"]["status"] == "ran"
+    assert ("tips", "failed") in ev and o.report["reasons_audit"]["status"] == "skipped"
 
 
 async def test_no_progress_cb_ok():

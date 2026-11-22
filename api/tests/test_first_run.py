@@ -13,7 +13,7 @@ from datetime import UTC, datetime
 import httpx
 import pytest
 from cards import valid_card
-from onolys_core.transcript import Transcript, Turn
+from onolys_miti.transcript import Transcript, Turn
 from starlette.testclient import TestClient
 
 from onolys_api.app import create_app

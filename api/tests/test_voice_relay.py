@@ -8,8 +8,8 @@ from datetime import UTC, datetime, timedelta
 import pytest
 import websockets
 from leak_helpers import find_leaks
-from onolys_core.voice import AudioOut, Closed, GoAway, ResumptionHandle, TurnComplete
-from onolys_core.voice.fixture import FixtureVoice, tone_pcm24k
+from onolys_miti.voice import AudioOut, Closed, GoAway, ResumptionHandle, TurnComplete
+from onolys_miti.voice.fixture import FixtureVoice, tone_pcm24k
 from starlette.websockets import WebSocketDisconnect, WebSocketState
 from voice_helpers import ManualClock, serve
 

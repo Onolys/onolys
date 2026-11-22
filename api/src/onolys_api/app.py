@@ -10,8 +10,8 @@ from fastapi import APIRouter, FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from onolys_core.errors import ConfigError
-from onolys_core.voice.select import allowed_voices, load_voice_config
+from onolys_miti.errors import ConfigError
+from onolys_miti.voice.select import allowed_voices, load_voice_config
 from pydantic import BaseModel
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.types import ASGIApp, Message, Receive, Scope, Send

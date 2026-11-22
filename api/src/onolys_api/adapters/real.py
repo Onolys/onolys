@@ -9,10 +9,9 @@ code. A new STT provider is one core adapter plus one `DEFAULT_REGISTRY` line (a
 `{"provider", "handle"}` JSON; `stt_operation` stores that string and `poll` routes on it.
 The `Transcript` (incl. `stt_run`) from the core adapter is returned unchanged.
 
-`RealEvaluation` (SP09 R2, D5) is the single call into `onolys_evaluation.run_evaluation`; it names
-no model or provider: routes come from the run's preset (`resolve_preset`, unknown preset ->
-core `InputError`). The pack directory resolves through `PAUDIT_PROTOCOLS_DIR` (else the repo's
-`protocols/`).
+`RealEvaluation` (SP09 R2, D5) is the single call into `onolys_miti.run_miti`; it names no model
+or provider: routes come from the run's preset (`resolve_preset`, unknown preset -> `InputError`).
+It passes no pack, rating or coded span; `seed` (the session id) lets the engine pick the span.
 
 An unknown provider raises core `ConfigError` (an `OnolysError`): `error_map.to_public` maps it
 to `internal_error`, not retryable, and the worker logs the class, never the message.
@@ -23,18 +22,17 @@ import time
 from collections.abc import Callable, Mapping
 from typing import Any
 
-from onolys_core.engine import PackRef, RunContext
-from onolys_core.errors import ConfigError
-from onolys_core.llm import LiteLLMClient, LLMConfig, MetricsCollector
-from onolys_core.llm.routes import resolve_preset
-from onolys_core.stt import AudioRef, SttAdapter, SttParams
-from onolys_core.stt.fixture import FixtureStt
-from onolys_core.stt.google_chirp import GoogleChirp3
-from onolys_core.transcript import Transcript
-from onolys_core.voice import VoiceAdapter, VoiceParams, VoiceSession
-from onolys_core.voice.fixture import FixtureVoice
-from onolys_core.voice.gemini_live_vertex import GeminiLiveVertex
-from paudit.result import whole_second_span
+from onolys_miti.context import RunContext
+from onolys_miti.errors import ConfigError
+from onolys_miti.llm import LiteLLMClient, LLMConfig, MetricsCollector
+from onolys_miti.llm.routes import resolve_preset
+from onolys_miti.stt import AudioRef, SttAdapter, SttParams
+from onolys_miti.stt.fixture import FixtureStt
+from onolys_miti.stt.google_chirp import GoogleChirp3
+from onolys_miti.transcript import Transcript
+from onolys_miti.voice import VoiceAdapter, VoiceParams, VoiceSession
+from onolys_miti.voice.fixture import FixtureVoice
+from onolys_miti.voice.gemini_live_vertex import GeminiLiveVertex
 
 from onolys_api.adapters.base import EvaluationOutput, ProgressCb
 
@@ -102,9 +100,8 @@ class RealVoice:
         return await self._cache[params.provider].open(params)
 
 
-PACK_REF = "miti@4.2.1"
 RUN_DEADLINE_S = 8 * 60  # the whole evaluation; a shorter ctx.deadline (task budget) wins
-_ENGINE_PARAMS = ("change_goal", "coded_span", "language", "n_runs", "preset", "code_version")
+_ENGINE_PARAMS = ("change_goal", "seed", "language", "n_runs", "preset", "code_version")
 
 
 def _llm_from_routes(routes: dict) -> Any:
@@ -112,33 +109,27 @@ def _llm_from_routes(routes: dict) -> Any:
 
 
 class RealEvaluation:
-    """Implements `adapters.base.Evaluation`: one `run_evaluation` call, nothing else."""
+    """Implements `adapters.base.Evaluation`: one `run_miti` call, nothing else."""
 
     def __init__(
         self,
-        run_evaluation: Callable[..., Any] | None = None,
-        pack_loader: Callable[[str], Any] | None = None,
+        run_miti: Callable[..., Any] | None = None,
         llm_factory: Callable[[dict], Any] = _llm_from_routes,
     ) -> None:
-        self._run_evaluation = run_evaluation
-        self._pack_loader = pack_loader
+        self._run_miti = run_miti
         self._llm_factory = llm_factory
 
     async def run(
         self,
         ctx: RunContext,
-        pack: PackRef | None,
         transcript: Transcript,
         speaker_map: dict[str, str],
         params: dict[str, Any],
-        rating: dict[str, Any] | None,
         progress_cb: ProgressCb | None = None,
     ) -> EvaluationOutput:
-        run_evaluation, load_pack = self._run_evaluation, self._pack_loader
-        if run_evaluation is None:
-            from onolys_evaluation.api import run_evaluation
-        if load_pack is None:
-            from paudit.pack import load_pack
+        run_miti = self._run_miti
+        if run_miti is None:
+            from onolys_miti import run_miti
         routes, _ = resolve_preset(params.get("preset"))  # unknown preset: InputError
         deadline = time.monotonic() + RUN_DEADLINE_S
         if ctx.deadline is not None:
@@ -150,12 +141,7 @@ class RealEvaluation:
             deadline=deadline,
         )
         engine_params = {k: params.get(k) for k in _ENGINE_PARAMS}
-        # the session stores float seconds; the engine's CodedSpan wants whole seconds
-        engine_params["coded_span"] = whole_second_span(engine_params["coded_span"])
-        out = await run_evaluation(
-            rctx, load_pack(PACK_REF), transcript, speaker_map, engine_params, rating, None,
-            progress_cb,
-        )  # fmt: skip
+        out = await run_miti(rctx, transcript, speaker_map, engine_params, progress_cb)
         return EvaluationOutput(
             report=json.loads(out.report.model_dump_json()),
             artifacts=json.loads(out.artifacts.model_dump_json()),

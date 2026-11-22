@@ -4,7 +4,7 @@ from datetime import UTC, datetime, timedelta
 
 import httpx
 import pytest
-from onolys_core.errors import ConfigError
+from onolys_miti.errors import ConfigError
 
 from onolys_api.adapters import Adapters, build_adapters
 from onolys_api.adapters.fake import FakeVoice
@@ -266,8 +266,8 @@ def test_adapters_wiring_stub_and_real():
 
 
 async def test_real_voice_registry_routes_by_provider_and_rejects_unknown():
-    from onolys_core.voice import VoiceParams
-    from onolys_core.voice.fixture import FixtureVoice
+    from onolys_miti.voice import VoiceParams
+    from onolys_miti.voice.fixture import FixtureVoice
 
     from onolys_api.adapters.real import RealVoice
 
@@ -280,7 +280,7 @@ async def test_real_voice_registry_routes_by_provider_and_rejects_unknown():
 
 
 async def test_fake_voice_records_open():
-    from onolys_core.voice import VoiceParams
+    from onolys_miti.voice import VoiceParams
 
     fv = FakeVoice()
     sess = await fv.open(VoiceParams(provider="anything", model="m", voice="Kore"))

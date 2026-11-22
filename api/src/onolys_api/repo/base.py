@@ -9,7 +9,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from typing import Any, Literal, Protocol
 
-from onolys_core.transcript import Transcript
+from onolys_miti.transcript import Transcript
 
 from onolys_api.errors import ApiError
 from onolys_api.repo.limits import Kind, LimitDefaults, ReserveUsageOutcome

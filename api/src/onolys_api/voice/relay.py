@@ -16,7 +16,7 @@ from typing import Any
 
 import anyio
 from fastapi import APIRouter, WebSocket
-from onolys_core.voice import (
+from onolys_miti.voice import (
     AudioOut,
     Closed,
     GoAway,
@@ -26,7 +26,7 @@ from onolys_core.voice import (
     VoiceProviderError,
     VoiceSession,
 )
-from onolys_core.voice.select import load_voice_config, select_voice
+from onolys_miti.voice.select import load_voice_config, select_voice
 from starlette.websockets import WebSocketDisconnect, WebSocketState
 
 from onolys_api import logs

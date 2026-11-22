@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 
 import pytest
-from onolys_core.errors import ConfigError
+from onolys_miti.errors import ConfigError
 
 from onolys_api.voice.scenarios import load_scenarios, public_view, scenarios_dir
 

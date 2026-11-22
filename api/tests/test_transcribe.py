@@ -3,8 +3,8 @@
 from datetime import UTC, datetime, timedelta
 
 import pytest
-from onolys_core.stt import Word
-from onolys_core.stt.fixture import FixtureStt, uri_hash
+from onolys_miti.stt import Word
+from onolys_miti.stt.fixture import FixtureStt, uri_hash
 
 from onolys_api.adapters import AdapterError, FakeStt
 from onolys_api.audio import canonical_key

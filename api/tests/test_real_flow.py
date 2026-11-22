@@ -1,43 +1,34 @@
 """SP09 Task 5 / R1-R4 / D2 / AC1-AC2: the SP04 end-to-end flow with `ADAPTERS=real`.
 
-No network: the STT provider is `FixtureStt` (via the real `RealStt` registry), the LLM client is
-a `StubClient` (tips), and the engine's paudit / reasons-audit seams return canned fixture
-results (same approach as `test_run_artifacts.py`). Everything else is real: `build_adapters`,
-`RealEvaluation`, `run_evaluation`, report assembly, the worker and its `to_public` error map.
-The card is a real-shaped SP02 card with reasons, so the reasons-audit path runs.
+No network: the STT provider is `FixtureStt` (via the real `RealStt` registry), and the engine's
+coding stage and tips generator return canned fixtures (see `miti_fixtures.patch_engine`).
+Everything else is real: `build_adapters`, `RealEvaluation`, `run_miti`, report assembly, the
+worker and its `to_public` error map. A card is submitted (the first run is gated on it) but the
+engine never sees it.
 """
 
-import sys
 import uuid
 from dataclasses import replace
-from pathlib import Path
 
 import httpx
 import pytest
 from audio_helpers import MAGIC, StubTools
 from cards import valid_card
-from eaudit.models import AuditResponse, Status
 from google.api_core import exceptions as gexc
-from onolys_core.errors import InputError
-from onolys_core.llm import LLMUnavailable, StubClient
-from onolys_core.run_info import RunInfo
-from onolys_core.stt.fixture import FixtureStt, uri_hash
-from onolys_core.transcript import Transcript
-from paudit.engine import AllRunsFailed
+from miti_fixtures import TRANSCRIPT, patch_engine
+from onolys_miti.errors import InputError
+from onolys_miti.llm import LLMUnavailable, StubClient
+from onolys_miti.run import AllRunsFailed
+from onolys_miti.stt.fixture import FixtureStt, uri_hash
 from test_transcribe import words
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "engines/evaluation/tests"))
-from _make_fixtures import inputs  # noqa: E402
-from test_tips import good  # noqa: E402
-
-from onolys_api.adapters import build_adapters  # noqa: E402
-from onolys_api.adapters.real import RealEvaluation, RealStt  # noqa: E402
-from onolys_api.app import create_app  # noqa: E402
-from onolys_api.jobs.transcribe import TRANSCRIPT_ID  # noqa: E402
-from onolys_api.repo.fake import FakeRepo  # noqa: E402
+from onolys_api.adapters import build_adapters
+from onolys_api.adapters.real import RealEvaluation, RealStt
+from onolys_api.app import create_app
+from onolys_api.jobs.transcribe import TRANSCRIPT_ID
+from onolys_api.repo.fake import FakeRepo
 
 pytestmark = pytest.mark.integration
-FIX = inputs("full")
 ROUTES = (
     "cheap: &s {litellm_id: anthropic/x, api_key_env: K}\nmid: *s\nstrong: *s\n"
     "paudit_code: {alias: mid}\npaudit_globals: {alias: mid}\ntips: {alias: mid}\n"
@@ -65,34 +56,18 @@ class SpyStt(FixtureStt):
 
 
 class Engine:
-    """Canned paudit / reasons-audit seams; `paudit_failures` are raised one per call first."""
+    """Canned coding stage and tips; `code_failures` are raised one per coding call first."""
 
-    def __init__(self, monkeypatch, paudit_failures: list[BaseException]) -> None:
-        from onolys_evaluation import api
+    def __init__(self, monkeypatch, code_failures: list[BaseException]) -> None:
+        self.calls = patch_engine(monkeypatch, code_failures)
 
-        self.paudit_calls = 0
-        self.eaudit_calls = 0
-        failures = list(paudit_failures)
-
-        async def fake_paudit(transcript, pack, params, ctx, metrics):
-            self.paudit_calls += 1
-            if failures:
-                raise failures.pop(0)
-            return FIX["paudit_result"]
-
-        async def fake_eaudit(request, ctx, metrics):
-            self.eaudit_calls += 1
-            resp = AuditResponse(request_id="r", status=Status.complete, warnings=[], claims=[])
-            return resp, RunInfo(engine="eaudit", code_version="t", preset="default")
-
-        monkeypatch.setattr(api, "_run_paudit", fake_paudit)
-        monkeypatch.setattr(api, "_run_eaudit", fake_eaudit)
+    @property
+    def code_calls(self) -> int:
+        return self.calls["code"]
 
 
 def fixture_llm(routes: dict) -> StubClient:
     stub = StubClient()
-    for tag in ("tips:r0", "tips:r0:retry"):
-        stub.register(tag, {"tips": good(3)})
     return stub
 
 
@@ -135,7 +110,7 @@ class Env:
         assert r.status_code in (200, 202), r.text
         # the fixture transcript + its speaker replace the STT one before the run task executes
         self.repo.put_transcript(
-            self.uid, sid, TRANSCRIPT_ID, Transcript.model_validate(FIX["transcript"].model_dump())
+            self.uid, sid, TRANSCRIPT_ID, TRANSCRIPT
         )
         self.repo.update_session(self.uid, sid, {"clinician_speaker": "A"})
         self.app.state.queue.drain()
@@ -150,9 +125,9 @@ def make_env(settings, blobs, tmp_path, monkeypatch):
     )
     stack: list = []
 
-    async def make(paudit_failures=(), stt_failure=None) -> Env:
+    async def make(code_failures=(), stt_failure=None) -> Env:
         stt = SpyStt(stt_failure)
-        engine = Engine(monkeypatch, list(paudit_failures))
+        engine = Engine(monkeypatch, list(code_failures))
         s = replace(settings, extra_presets=("fast",), routes_file=str(routes), adapters="real")
         adapters = build_adapters(s, stt_registry={"p1": lambda: stt}, llm_factory=fixture_llm)
         repo = FakeRepo(blobs)
@@ -170,17 +145,18 @@ def test_build_adapters_real_returns_real_adapters(settings):
     assert isinstance(a.stt, RealStt) and isinstance(a.evaluation, RealEvaluation)
 
 
-async def test_real_flow_reaches_report_ready_with_reasons_audit(make_env):
+async def test_real_flow_reaches_report_ready_with_a_no_rating_report(make_env):
     env = await make_env()
     sid = await env.to_awaiting_input()
     assert (await env.status(sid))["status"] == "awaiting_input"
     await env.run(sid, valid_card())
     s = await env.status(sid)
     assert (s["status"], s["progress"], s["latest_report_version"]) == ("report_ready", 100, 1)
-    assert env.engine.paudit_calls == 1 and env.engine.eaudit_calls == 1
+    assert env.engine.code_calls == 1
     report = (await env.c.get(f"/v1/sessions/{sid}/reports/1", headers=env.h)).json()["report"]
-    assert report["reasons_audit"]["status"] == "ran"
-    assert len(report["tips"]) == 3  # from the fixture LLM client
+    assert report["reasons_audit"]["status"] == "skipped"
+    assert report["header"]["has_clinician_rating"] is False
+    assert len(report["tips"]) == 3  # from the fixture tips
 
 
 async def test_stt_start_called_once_across_forced_retry(make_env):
@@ -192,12 +168,12 @@ async def test_stt_start_called_once_across_forced_retry(make_env):
 
 
 async def test_transient_llm_failure_succeeds_on_attempt_2(make_env):
-    env = await make_env(paudit_failures=[LLMUnavailable("overloaded")])
+    env = await make_env(code_failures=[LLMUnavailable("overloaded")])
     sid = await env.to_awaiting_input()
     await env.run(sid, valid_card())
     s = await env.status(sid)
     assert s["status"] == "report_ready"
-    assert env.engine.paudit_calls == 2
+    assert env.engine.code_calls == 2
 
 
 @pytest.mark.parametrize(
@@ -208,12 +184,12 @@ async def test_transient_llm_failure_succeeds_on_attempt_2(make_env):
     ],
 )
 async def test_permanent_failure_ends_failed_with_mapped_code(make_env, failure, code):
-    env = await make_env(paudit_failures=[failure, failure])
+    env = await make_env(code_failures=[failure, failure])
     sid = await env.to_awaiting_input()
     await env.run(sid, valid_card())
     s = await env.status(sid)
     assert s["status"] == "failed" and s["error"]["code"] == code
-    assert env.engine.paudit_calls == 1  # not retried
+    assert env.engine.code_calls == 1  # not retried
 
 
 def _all_runs_failed_from(cause):
@@ -227,9 +203,9 @@ def _all_runs_failed_from(cause):
 
 
 async def test_engine_wrapped_llm_failure_is_retried_then_upstream_unavailable(make_env):
-    # paudit raises AllRunsFailed from the LLMUnavailable of its only run (broken preset model)
+    # the engine raises AllRunsFailed from the LLMUnavailable of its only run (broken preset model)
     env = await make_env(
-        paudit_failures=[
+        code_failures=[
             _all_runs_failed_from(LLMUnavailable("NotFound")),
             _all_runs_failed_from(LLMUnavailable("NotFound")),
         ]
@@ -238,13 +214,13 @@ async def test_engine_wrapped_llm_failure_is_retried_then_upstream_unavailable(m
     await env.run(sid, valid_card())
     s = await env.status(sid)
     assert s["status"] == "failed" and s["error"]["code"] == "upstream_unavailable"
-    assert env.engine.paudit_calls == 2
+    assert env.engine.code_calls == 2
 
 
 async def test_transient_failure_twice_ends_failed_upstream_unavailable(make_env):
-    env = await make_env(paudit_failures=[LLMUnavailable("x"), LLMUnavailable("x")])
+    env = await make_env(code_failures=[LLMUnavailable("x"), LLMUnavailable("x")])
     sid = await env.to_awaiting_input()
     await env.run(sid, valid_card())
     s = await env.status(sid)
     assert s["status"] == "failed" and s["error"]["code"] == "upstream_unavailable"
-    assert env.engine.paudit_calls == 2
+    assert env.engine.code_calls == 2

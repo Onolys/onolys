@@ -8,7 +8,7 @@ import subprocess
 import httpx
 import pytest
 from audio_helpers import A
-from onolys_core.stt import SttParams
+from onolys_miti.stt import SttParams
 
 from onolys_api.adapters import FakeStt
 from onolys_api.app import create_app

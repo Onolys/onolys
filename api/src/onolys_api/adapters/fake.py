@@ -9,18 +9,17 @@ adapters ignore it). Matching is by substring.
 import hashlib
 from typing import Any
 
-from onolys_core.engine import PackRef, RunContext
-from onolys_core.stt import AudioRef, SttParams, SttRun, Word
-from onolys_core.stt.base import BaseSttAdapter
-from onolys_core.transcript import Transcript
-from onolys_core.voice import VoiceParams, VoiceSession
-from onolys_core.voice.fixture import FixtureVoice
+from onolys_miti.context import RunContext
+from onolys_miti.stt import AudioRef, SttParams, SttRun, Word
+from onolys_miti.stt.base import BaseSttAdapter
+from onolys_miti.transcript import Transcript
+from onolys_miti.voice import VoiceParams, VoiceSession
+from onolys_miti.voice.fixture import FixtureVoice
 
 from onolys_api.adapters.base import AdapterError, EvaluationOutput, ProgressCb
 
 # failure injection
 FAIL_PAUDIT = "[fail:paudit]"  # run and session `failed`
-FAIL_EAUDIT = "[fail:eaudit]"  # report_ready, reasons_audit failed + warning
 FAIL_TIPS = "[fail:tips]"  # report_ready, tips=[] + warning tips_failed
 FAIL_NO_SPEECH = "[fail:no_speech]"  # transcript with 0 turns
 FAIL_SPEAKERS = "[fail:speakers_not_separated]"  # one speaker only
@@ -126,7 +125,7 @@ _GLOBALS = (
 )
 _BEHAVIOURS = (("reflection_simple", "Simple Reflection"), ("question", "Question"))
 _PROTOCOL = {"id": "fake-pack", "version": "0.0.0", "pack_hash": "0" * 16, "label": "Fake pack"}
-# Mirrors paudit.pack.PACK_FORMAT (string); api does not depend on the paudit package.
+# Mirrors the engine's pack format string.
 _PACK_FORMAT = "0.0.1"
 
 
@@ -206,7 +205,7 @@ def _paudit_result(
             "representative_run": 0,
         },
         "warnings": [],
-        "run_info": _run_info("paudit", params),
+        "run_info": _run_info("miti", params),
     }
 
 
@@ -235,11 +234,9 @@ class FakeEvaluation:
     async def run(
         self,
         ctx: RunContext,
-        pack: PackRef | None,
         transcript: Transcript,
         speaker_map: dict[str, str],
         params: dict[str, Any],
-        rating: dict[str, Any] | None,
         progress_cb: ProgressCb | None = None,
     ) -> EvaluationOutput:
         self.calls += 1
@@ -261,20 +258,10 @@ class FakeEvaluation:
         paudit = _paudit_result(transcript, subject, params, quotes)
         warnings: list[dict[str, Any]] = []
 
-        has_rating = rating is not None
-        if not has_rating:
-            reasons: dict[str, Any] = {"status": "skipped", "items": []}
-            eaudit = None
-            cb("eaudit", "done")
-        elif FAIL_EAUDIT in title:
-            reasons = {"status": "failed", "items": []}
-            eaudit = None
-            warnings.append({"code": "reasons_audit_failed"})
-            cb("eaudit", "failed")
-        else:
-            reasons = {"status": "ran", "items": []}
-            eaudit = {"status": "ran", "claims": []}
-            cb("eaudit", "done")
+        has_rating = False  # the engine never sees a rating (D1): always the no-rating report
+        reasons: dict[str, Any] = {"status": "skipped", "items": []}
+        eaudit = None
+        cb("eaudit", "done")
 
         cb("tips", "started")
         if FAIL_TIPS in title:
@@ -353,14 +340,13 @@ class FakeEvaluation:
             "warnings": warnings,
             "run_info": {
                 "evaluation": _run_info("evaluation", params),
-                "paudit": paudit["run_info"],
-                "eaudit": _run_info("eaudit", params) if eaudit else None,
+                "miti": paudit["run_info"],
             },
         }
         if ctx.request_id:
             report["request_id"] = ctx.request_id
         cb("assemble", "done")
-        artifacts = {"paudit": paudit, "eaudit": eaudit, "tips": {"valid": tips, "proposals": []}}
+        artifacts = {"code": paudit, "eaudit": eaudit, "tips": {"valid": tips, "proposals": []}}
         return EvaluationOutput(report=report, artifacts=artifacts)
 
 

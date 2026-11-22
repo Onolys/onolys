@@ -8,7 +8,7 @@ catches up. 100 belongs to `report_ready`.
 
 Outcome: the report is validated against the report schema, stored verbatim (the repo moves it to
 GCS above 500 KB) under a deterministic report id (= run id), the run artifacts go to
-`{uid}/{sid}/runs/{run_id}/{paudit,eaudit,tips}.json`, and the session moves to `report_ready`
+`{uid}/{sid}/runs/{run_id}/{code,tips}.json`, and the session moves to `report_ready`
 with the new `latest_report_version`. A paudit failure fails the run and the session; eaudit/tips
 failures arrive as report warnings and still ship (the adapter handles them). A redelivered or
 retried task finds the stored report and only finishes the bookkeeping: one report per run.
@@ -28,7 +28,7 @@ from pathlib import Path
 from typing import Any
 
 from jsonschema import Draft202012Validator
-from onolys_core.engine import RunContext
+from onolys_miti.context import RunContext
 
 from onolys_api import logs
 from onolys_api.adapters.base import Evaluation
@@ -49,13 +49,13 @@ from onolys_api.repo.models import ReportDoc
 from onolys_api.storage.base import BlobStore
 
 try:  # resolves for editable (repo) and installed (wheel package data) layouts alike
-    from onolys_evaluation.report import schema_path as _report_schema_path
+    from onolys_miti.report import schema_path as _report_schema_path
 
     REAL_REPORT_SCHEMA = _report_schema_path()
 except (ImportError, FileNotFoundError):
     REAL_REPORT_SCHEMA = Path("/nonexistent/report.schema.json")
 LOCAL_REPORT_SCHEMA = Path(__file__).resolve().parents[1] / "schemas/report.local.schema.json"
-ARTIFACTS = ("paudit", "eaudit", "tips")
+ARTIFACTS = ("code", "tips")
 MAX_PROGRESS = 99
 
 
@@ -154,13 +154,9 @@ def _evaluate(ctx, blobs, evaluation, run_doc, session) -> ReportDoc:
     transcript = repo.get_transcript(uid, sid, TRANSCRIPT_ID).transcript
     if transcript is None:
         raise PermanentError("internal_error")
-    rating_card = None
-    if run_doc.rating_id:
-        rating = repo.get_rating(uid, sid, run_doc.rating_id)
-        rating_card = rating.card if rating.has_rating and not rating.no_rating else None
     params = {
         "change_goal": session.change_goal or "",
-        "coded_span": session.coded_span.model_dump() if session.coded_span else None,
+        "seed": sid,  # the engine picks the coded window from it (no caller span)
         "language": transcript.language or session.language,
         "n_runs": run_doc.n_runs,
         "preset": run_doc.preset,
@@ -201,8 +197,7 @@ def _evaluate(ctx, blobs, evaluation, run_doc, session) -> ReportDoc:
     # no catch here: any engine exception reaches the worker, which maps it with `to_public`
     out = run_coro(
         evaluation.run(
-            rctx, None, transcript, {"subject": session.clinician_speaker}, params,
-            rating_card, progress_cb,
+            rctx, transcript, {"subject": session.clinician_speaker}, params, progress_cb,
         )
     )  # fmt: skip
 

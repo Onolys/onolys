@@ -182,7 +182,7 @@ async def test_full_stub_flow_reaches_report_ready_with_progress_table(env):
     assert (run.preset, run.code_version, run.stt.provider) == ("default", "abc123", "p1")
     assert run.rating_id and run.run_info
     assert run.artifacts_prefix
-    for name in ("paudit", "eaudit", "tips"):
+    for name in ("code", "tips"):
         assert env.blobs.exists(f"{env.uid}/{sid}/runs/{run.run_id}/{name}.json")
     assert env.counters() == (0, 1)  # released once, no refund (the LLM was called)
 
@@ -242,15 +242,9 @@ async def test_try_again_after_a_failure_reuses_transcript_and_stored_rating(env
 
     # the stub title still says fail:paudit: swap in an evaluation that ignores it
     class Ok(FakeEvaluation):
-        async def run(self, ctx, pack, transcript, speaker_map, params, rating, progress_cb=None):
+        async def run(self, ctx, transcript, speaker_map, params, progress_cb=None):
             return await super().run(
-                ctx,
-                pack,
-                transcript,
-                speaker_map,
-                {**params, "stub_title": ""},
-                rating,
-                progress_cb,
+                ctx, transcript, speaker_map, {**params, "stub_title": ""}, progress_cb
             )
 
     swap_eval(env, Ok())
@@ -272,15 +266,6 @@ async def test_try_again_after_a_failure_reuses_transcript_and_stored_rating(env
     rep = env.repo.get_report_by_version(env.uid, sid, 1).report
     assert rep["header"]["preset"] == first.preset != "fast"
     assert env.counters() == (0, first.n_runs)  # the failed run was refunded; only the retry counts
-
-
-async def test_eaudit_failure_ships_report_with_warning(env):
-    sid = await env.finished("[fail:eaudit]")
-    assert env.repo.get_session(env.uid, sid).state == "report_ready"
-    rep = env.repo.get_report_by_version(env.uid, sid, 1).report
-    assert rep["reasons_audit"]["status"] == "failed"
-    assert {"code": "reasons_audit_failed"} in rep["warnings"]
-    assert env.repo.get_status(env.uid, sid).progress == 100
 
 
 async def test_tips_failure_ships_report_with_warning(env):
@@ -348,20 +333,18 @@ async def test_retry_within_the_task_refunds_once_never_twice(env):
 
 
 class Capture(FakeEvaluation):
-    async def run(self, ctx, pack, transcript, speaker_map, params, rating, progress_cb=None):
-        self.seen = {"ctx": ctx, "params": params, "rating": rating, "map": speaker_map}
-        return await super().run(ctx, pack, transcript, speaker_map, params, rating, progress_cb)
+    async def run(self, ctx, transcript, speaker_map, params, progress_cb=None):
+        self.seen = {"ctx": ctx, "params": params, "map": speaker_map}
+        return await super().run(ctx, transcript, speaker_map, params, progress_cb)
 
 
-async def test_evaluation_gets_rating_card_coded_span_language_and_a_deadline(env):
+async def test_evaluation_gets_seed_language_and_a_deadline_but_no_rating_or_span(env):
     cap = Capture()
     swap_eval(env, cap)
     sid = await env.finished()
-    (run,) = env.repo.list_runs(env.uid, sid)
+    assert cap.seen["params"]["seed"] == sid
+    assert "coded_span" not in cap.seen["params"] and "rating" not in cap.seen["params"]
     sess = env.repo.get_session(env.uid, sid)
-    assert cap.seen["rating"] == env.repo.get_rating(env.uid, sid, run.rating_id).card
-    assert cap.seen["rating"] is not None and sess.coded_span is not None
-    assert cap.seen["params"]["coded_span"] == sess.coded_span.model_dump()
     tr = env.repo.get_transcript(env.uid, sid, "current").transcript
     assert cap.seen["params"]["language"] == (tr.language or sess.language)
     assert cap.seen["map"] == {"subject": "S1"}
@@ -369,14 +352,14 @@ async def test_evaluation_gets_rating_card_coded_span_language_and_a_deadline(en
     assert 0 < left <= 600  # derived from the task's remaining time, not unbounded
 
 
-async def test_run_without_a_usable_rating_passes_no_card(env):
+async def test_run_without_a_usable_rating_still_runs(env):
     cap = Capture()
     swap_eval(env, cap)
     sid = await env.start(rate=False)  # never rated: run has no rating_id
     assert (await env.c.post(f"/v1/sessions/{sid}/runs", json={}, headers=env.h)).status_code == 202
     env.drain()
-    assert cap.seen["rating"] is None and cap.seen["params"]["coded_span"] is None
-    # a final "no rating" revision: the run keeps its rating_id but passes no card
+    assert cap.seen["params"]["seed"] == sid
+    # a final "no rating" revision: the run keeps its rating_id (history only)
     sid2 = await env.start(rate=False)
     r = await env.c.put(
         f"/v1/sessions/{sid2}/rating",
@@ -386,7 +369,7 @@ async def test_run_without_a_usable_rating_passes_no_card(env):
     assert r.status_code in (200, 202)
     env.drain()
     (run2,) = env.repo.list_runs(env.uid, sid2)
-    assert run2.rating_id and cap.seen["rating"] is None
+    assert run2.rating_id and cap.seen["params"]["seed"] == sid2
 
 
 async def test_out_of_schema_report_fails_the_run_and_stores_nothing(env):

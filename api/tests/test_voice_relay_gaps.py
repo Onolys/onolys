@@ -5,8 +5,8 @@ import asyncio
 import logging
 
 import pytest
-from onolys_core.voice import AudioOut, Interrupted, TurnComplete
-from onolys_core.voice.fixture import FixtureVoice
+from onolys_miti.voice import AudioOut, Interrupted, TurnComplete
+from onolys_miti.voice.fixture import FixtureVoice
 from test_voice_relay import TONE, Env, SeqVoice, connect, expect_close, ready
 from voice_helpers import serve
 

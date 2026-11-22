@@ -5,7 +5,7 @@ import threading
 from datetime import datetime
 from typing import Any, Literal
 
-from onolys_core.transcript import Transcript
+from onolys_miti.transcript import Transcript
 
 from onolys_api.repo import large
 from onolys_api.repo.base import (
