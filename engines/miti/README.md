@@ -23,7 +23,14 @@ set -a; . ~/.config/onolys/keys.env; set +a
 uv run --package onolys-miti pytest engines/miti -m live -s
 ```
 
-`tests/test_live.py` runs the three synthetic fixtures against `fixtures/expected.yaml` and
+The same checks run as a module (exit non-zero on failure; `--preset` or `MITI_LIVE_PRESET` picks
+the route preset, `--skip-tips` runs only the quality part):
+
+```bash
+uv run --package onolys-miti python -m onolys_miti.check --preset <p>
+```
+
+`tests/test_live.py` calls into `onolys_miti/check.py` and runs the three synthetic fixtures against `fixtures/expected.yaml` and
 `fixtures/thresholds.yaml` (set `MITI_LIVE_PRESET` to pick a route preset), and checks that tips
 quote the transcript. `tests/test_voice_live.py` opens a real Gemini voice session.
 
