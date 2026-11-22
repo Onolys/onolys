@@ -62,6 +62,7 @@ describe("report page, rated report, flag off (default)", () => {
     expect(score.getAllByRole("columnheader").map((h) => h.textContent)).toEqual(["Item", "Onolys"]);
     expect(score.queryByText(/No rating of yours/)).toBeNull();
     expect(screen.queryByText(/differs|flagged|Same as you/)).toBeNull();
+    expect(screen.queryByText(/tally-only self-rating/)).toBeNull();
     const beh = within(section("Behaviour counts"));
     expect(beh.getAllByRole("columnheader").map((h) => h.textContent)).toEqual(["Behaviour", "Onolys", "Instances"]);
     const summaries = within(section("Summary measures"));
@@ -94,6 +95,13 @@ describe("report page, rated report", () => {
     expect(screen.queryByRole("button", { name: /run again/i })).toBeNull();
     expect(screen.queryByRole("button", { name: /edit my rating/i })).toBeNull();
     expect(screen.queryByRole("button", { name: /submit/i })).toBeNull();
+  });
+
+  it("keeps the tally-only self-rating note when the rating is on", async () => {
+    const sid = reported({ final: true, card: SCORED });
+    open(sid);
+    await screen.findByRole("region", { name: "Scorecard" });
+    expect(screen.getByText(/tally-only self-rating/)).toBeInTheDocument();
   });
 
   it("renders sections in layout order and shows the transcript pane", async () => {

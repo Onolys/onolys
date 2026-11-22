@@ -13,7 +13,7 @@ import { useAuth } from "../../auth/AuthProvider";
 import { useApiClient } from "../../auth/useApiClient";
 import { ratingEnabled } from "../../config";
 import { cardToForm } from "../rating/card";
-import { goalCard } from "../rating/SetupFields";
+import { saveGoal } from "../rating/SetupFields";
 import { Modal } from "../settings/Modal";
 import { ErrorCard } from "../session/ErrorCard";
 import { prepareUpload } from "../upload/startUpload";
@@ -147,14 +147,10 @@ function InterviewView({ id }: { id: string }) {
         const goal = cardToForm(data.draft?.card ?? data.final?.card).changeGoal;
         if (goal.trim()) {
           try {
-            unwrap(
-              await client.PUT("/sessions/{id}/rating", {
-                params: { path: { id: sessionId.current } },
-                body: { final: true, no_rating: true, card: goalCard(goal) },
-              }),
-            );
+            await saveGoal(client, sessionId.current, goal);
           } catch (e) {
-            if (!(e instanceof ApiError && e.code === "rating_final")) throw e; // already final: done
+            // 422: leave the goal unset; the session page shows the setup form while unsubmitted.
+            if (!(e instanceof ApiError && e.code === "rating_invalid")) throw e;
           }
         } // else: no draft goal, the session page shows the fallback form
         goalSaved.current = true;

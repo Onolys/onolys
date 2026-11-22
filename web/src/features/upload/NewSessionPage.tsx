@@ -11,7 +11,7 @@ import { ApiError, describeError } from "../../api/errors";
 import { useApiClient } from "../../auth/useApiClient";
 import { ratingEnabled } from "../../config";
 import { issuesFromApi } from "../rating/card";
-import { goalCard, goalIssues, SetupFields } from "../rating/SetupFields";
+import { goalIssues, saveGoal, SetupFields } from "../rating/SetupFields";
 import { ErrorCard } from "../session/ErrorCard";
 import { DEFAULT_LANGUAGE, LANGUAGES } from "./config";
 import { FileNotices } from "./FileNotices";
@@ -34,6 +34,8 @@ export function NewSessionPage() {
   const showGoal = !ratingEnabled();
   // Session ids whose final no-rating card is already stored (a retry must not PUT again).
   const goalSaved = useRef(new Set<string>());
+  // The session whose goal is stored: the field locks so a later edit can't be silently dropped.
+  const [savedId, setSavedId] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
   // One Idempotency-Key per form instance; a changed body needs a new key (and a new session).
   const created = useRef<{ key: string; body: string; id: string } | null>(null);
@@ -70,17 +72,9 @@ export function NewSessionPage() {
       }
       const id = created.current.id;
       if (showGoal && !goalSaved.current.has(id)) {
-        try {
-          unwrap(
-            await client.PUT("/sessions/{id}/rating", {
-              params: { path: { id } },
-              body: { final: true, no_rating: true, card: goalCard(goal) },
-            }),
-          );
-        } catch (e) {
-          if (!(e instanceof ApiError && e.code === "rating_final")) throw e; // already final: done
-        }
+        await saveGoal(client, id, goal);
         goalSaved.current.add(id);
+        setSavedId(id);
       }
       await prepareUpload(client, id, f);
       return id;
@@ -170,6 +164,7 @@ export function NewSessionPage() {
         {showGoal ? (
           <SetupFields
             goal={goal}
+            disabled={savedId !== null}
             onGoal={(v) => {
               setGoal(v);
               setGoalIssue(undefined);

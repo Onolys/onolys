@@ -191,7 +191,7 @@ function Behaviours({ r, title, labels, onSelect }: { r: Report; title: string; 
   return (
     <Section id="behaviours" title={title}>
       <p className="form-note">
-        These are Onolys's instances; a tally-only self-rating can't be matched line by line.
+        These are Onolys's instances{cmp ? "; a tally-only self-rating can't be matched line by line" : ""}.
         {note ? ` ${note}` : ""}
       </p>
       <table className="report-table" aria-label="Behaviour counts">

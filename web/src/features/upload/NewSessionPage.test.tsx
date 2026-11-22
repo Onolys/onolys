@@ -185,6 +185,15 @@ describe("New session form: change goal + one submit (flag off)", () => {
     expect(screen.getAllByRole("button", { name: /start|save/i })).toHaveLength(1);
   });
 
+  it("the goal is a textarea with a soft length counter", async () => {
+    await open();
+    const field = screen.getByLabelText(/change goal/i);
+    expect(field.tagName).toBe("TEXTAREA");
+    expect(screen.getByText("0 / 1,000")).toBeInTheDocument();
+    await goal("abc");
+    expect(screen.getByText("3 / 1,000")).toBeInTheDocument();
+  });
+
   it("blocks Start while the goal is blank or whitespace, and makes no request", async () => {
     await open();
     await choose(mp3());
@@ -257,6 +266,7 @@ describe("New session form: change goal + one submit (flag off)", () => {
     await userEvent.click(start());
     await waitFor(() => expect(audio()).toHaveLength(1));
     await waitFor(() => expect(start()).toBeEnabled());
+    expect(screen.getByLabelText(/change goal/i)).toBeDisabled(); // saved: an edit would be silently dropped
     fail = false;
     await userEvent.click(start());
     await waitFor(() => expect(here(router)).toMatch(/^\/sessions\/(?!new$)[^/]+$/));

@@ -265,6 +265,38 @@ describe("live interview", () => {
     expect(puts).toEqual([{ final: true, no_rating: true, card: { change_goal: "Book the follow-up visit" } }]);
   });
 
+  it("tolerates 409 rating_final on the goal PUT and goes on to upload", async () => {
+    let puts = 0;
+    server.use(
+      http.put("*/v1/sessions/:id/rating", () => {
+        puts++;
+        return HttpResponse.json({ status: 409, message: "x", request_id: "r", details: [{ code: "rating_final", message: "x" }] }, { status: 409 });
+      }),
+    );
+    const u = userEvent.setup();
+    const { router } = renderApp("/interviews/new", { user: USER });
+    await startLive(u, router);
+    await u.click(main().getByRole("button", { name: "End interview" }));
+    await waitFor(() => expect(here(router)).toMatch(/^\/sessions\/(?!new)[^/]+$/));
+    expect(puts).toBe(1);
+  });
+
+  it("422 rating_invalid on the goal PUT does not block the upload (session-page fallback handles it)", async () => {
+    server.use(
+      http.put("*/v1/sessions/:id/rating", () =>
+        HttpResponse.json(
+          { status: 422, message: "x", request_id: "r", details: [{ code: "rating_invalid", message: "x", field: "change_goal", issue: "too_long" }] },
+          { status: 422 },
+        ),
+      ),
+    );
+    const u = userEvent.setup();
+    const { router } = renderApp("/interviews/new", { user: USER });
+    await startLive(u, router);
+    await u.click(main().getByRole("button", { name: "End interview" }));
+    await waitFor(() => expect(here(router)).toMatch(/^\/sessions\/(?!new)[^/]+$/));
+  });
+
   it("resume after a failed upload tolerates 409 rating_final on the PUT", async () => {
     let audioFails = 1;
     server.use(
