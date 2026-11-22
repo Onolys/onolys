@@ -106,11 +106,18 @@ class Repo(Protocol):
     def delete_session(self, uid: str, sid: str) -> bool: ...
 
     # One transaction: if the session is still in `state` with `updated_at < before`, set it
-    # `failed` with `error` (mirrored to session_status; `steps.<error.step>` marked failed) and
-    # return True. Anything else (moved on, written to since, already failed): nothing, False.
+    # `to` (default `failed`) with `error` (mirrored to session_status; `steps.<error.step>`
+    # marked failed; `error` is None for the non-terminal `upload_incomplete`) and return True.
+    # Anything else (moved on, written to since, already failed): nothing, False.
     # Used by the lazy stale check on read; a poll that just finished wins the race.
     def fail_stale_session(
-        self, uid: str, sid: str, state: str, before: datetime, error: SessionError
+        self,
+        uid: str,
+        sid: str,
+        state: str,
+        before: datetime,
+        error: SessionError | None,
+        to: str = "failed",
     ) -> bool: ...
 
     # children of a session

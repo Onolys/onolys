@@ -18,13 +18,15 @@ STATES: tuple[str, ...] = get_args(SessionState)
 
 _NOT_DELETING = (
     "created", "uploading", "validating", "transcribing", "awaiting_input",
-    "running", "report_ready", "failed",
+    "running", "report_ready", "failed", "upload_incomplete",
 )  # fmt: skip
 
 TRANSITIONS: dict[str, frozenset[str]] = {
-    "created": frozenset({"uploading", "deleting"}),
+    "created": frozenset({"uploading", "upload_incomplete", "deleting"}),
     # uploading -> uploading: a fresh signed URL for the same session
-    "uploading": frozenset({"uploading", "validating", "deleting"}),
+    "uploading": frozenset({"uploading", "upload_incomplete", "validating", "deleting"}),
+    # never uploaded (lazy stale check): a fresh URL resumes it; a late PUT still completes
+    "upload_incomplete": frozenset({"uploading", "validating", "deleting"}),
     "validating": frozenset({"transcribing", "failed", "deleting"}),
     "transcribing": frozenset({"awaiting_input", "failed", "deleting"}),
     "awaiting_input": frozenset({"running", "deleting"}),

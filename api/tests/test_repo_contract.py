@@ -687,6 +687,15 @@ def test_fail_stale_session_marks_failed_and_mirrors_status(repo):
     assert repo.fail_stale_session(uid, sid, "transcribing", cutoff, err) is False
 
 
+def test_fail_stale_session_to_upload_incomplete_has_no_error(repo):
+    uid, sid = seed_state(repo, "uploading", T_OLD, step="upload")
+    cutoff = T_OLD + timedelta(minutes=30)
+    assert repo.fail_stale_session(uid, sid, "uploading", cutoff, None, to="upload_incomplete")
+    s, st = repo.get_session(uid, sid), repo.get_status(uid, sid)
+    assert (s.state, s.error, st.state, st.error_code) == ("upload_incomplete", None,
+                                                          "upload_incomplete", None)  # fmt: skip
+
+
 def test_fail_stale_session_skips_fresh_moved_on_and_foreign(repo):
     cutoff = T_OLD + timedelta(minutes=30)
     err = SessionError(code="transcription_failed", step="transcribe")

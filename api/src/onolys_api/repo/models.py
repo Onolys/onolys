@@ -19,6 +19,7 @@ SessionState = Literal[
     "report_ready",
     "failed",
     "deleting",
+    "upload_incomplete",
 ]
 InterviewState = Literal["created", "live", "ended", "abandoned", "uploaded"]
 RunStatus = Literal["pending", "running", "done", "failed"]

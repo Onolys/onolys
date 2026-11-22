@@ -70,8 +70,8 @@ curl -sf "$BASE/sessions/$SID/reports/$VERSION" -H "$AUTH" | jq -c .
 
 Errors share one body (`ErrorResponse`): `status`, `message`, `details[]` with a stable `code`
 (and, for `rating_invalid`, the card `field` path). Mutations return `202` immediately; the
-session `status` moves `created` → `uploading` → `validating` → `transcribing` →
-`awaiting_input` → `running` → `report_ready` (or `failed`).
+session `status` moves `created` → `uploading` (→ `upload_incomplete`, resumable) → `validating` →
+`transcribing` → `awaiting_input` → `running` → `report_ready` (or `failed`).
 """
 
 DESCRIPTION = (

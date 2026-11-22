@@ -10,6 +10,7 @@ from onolys_api.app import create_app
 from onolys_api.jobs.stale import STALE_MARGIN_S
 from onolys_api.repo.fake import FakeRepo
 from onolys_api.repo.models import RunDoc, SessionDoc, SessionStatusDoc, StepRecord
+from onolys_api.storage.base import UPLOAD_URL_TTL_S
 
 pytestmark = pytest.mark.unit
 A = {"Authorization": "Bearer test:alice"}
@@ -176,3 +177,52 @@ async def test_list_fails_stale_items_too(client, repo, clock):
     )
     assert items["new"]["status"] == "transcribing"
     assert repo.get_session("alice", "old").state == "failed"
+
+
+# ---- FX8 / AR3 / D4: abandoned uploads become `upload_incomplete` (non-terminal) ----
+
+UPLOAD_CUTOFF_S = UPLOAD_URL_TTL_S + STALE_MARGIN_S
+
+
+@pytest.mark.parametrize("state", ["created", "uploading"])
+async def test_abandoned_upload_becomes_upload_incomplete(client, repo, clock, state):
+    seed(repo, state=state)
+    clock.now = T0 + timedelta(seconds=UPLOAD_CUTOFF_S - 1)
+    assert (await get(client)).json()["status"] == state
+    clock.now = T0 + timedelta(seconds=UPLOAD_CUTOFF_S + 1)
+    body = (await get(client)).json()
+    assert (body["status"], body["error"]) == ("upload_incomplete", None)
+    st = repo.get_status("alice", S1)
+    assert (st.state, st.error_code) == ("upload_incomplete", None)  # the web listener
+    items = (await client.get("/v1/sessions", headers=A)).json()["items"]
+    assert items[0]["status"] == "upload_incomplete"
+
+
+async def test_upload_incomplete_can_resume_and_complete(client, app, repo, clock):
+    seed(repo, state="uploading")
+    clock.now = T0 + timedelta(seconds=UPLOAD_CUTOFF_S + 1)
+    assert (await get(client)).json()["status"] == "upload_incomplete"
+    r = await client.post(f"/v1/sessions/{S1}/audio", json={"size_bytes": 1000,
+                          "content_type": "audio/wav"}, headers=A)  # fmt: skip
+    assert r.status_code == 200, r.text
+    assert repo.get_session("alice", S1).state == "uploading"
+    j = r.json()
+    put = await client.put(j["upload_url"].removeprefix("http://localhost:8000"),
+                           content=b"RIFF" + b"\0" * 40, headers=j["required_headers"])  # fmt: skip
+    assert put.status_code == 200
+    r = await client.post(f"/v1/sessions/{S1}/audio/complete", headers=A)
+    assert (r.status_code, r.json()["session"]["status"]) == (202, "validating")
+
+
+async def test_late_put_on_upload_incomplete_still_completes(client, repo, clock):
+    """The slow upload finished after the cutoff: `complete` is accepted from `upload_incomplete`."""
+    seed(repo, state="uploading")
+    j = (await client.post(f"/v1/sessions/{S1}/audio", json={"size_bytes": 1000,
+                           "content_type": "audio/wav"}, headers=A)).json()  # fmt: skip
+    clock.now = T0 + timedelta(seconds=UPLOAD_CUTOFF_S + 1)
+    repo.fail_stale_session("alice", S1, "uploading", clock.now, None, to="upload_incomplete")
+    put = await client.put(j["upload_url"].removeprefix("http://localhost:8000"),
+                           content=b"RIFF" + b"\0" * 40, headers=j["required_headers"])  # fmt: skip
+    assert put.status_code == 200
+    r = await client.post(f"/v1/sessions/{S1}/audio/complete", headers=A)
+    assert r.status_code == 202

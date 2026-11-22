@@ -1,5 +1,8 @@
 """Lazy stale check (no cron): fail a session whose task chain stopped without a terminal state.
 
+A `created`|`uploading` session older than the upload URL lifetime + margin moves to the
+non-terminal `upload_incomplete` (resume or delete; no units involved).
+
 A session stuck in `transcribing` (more than its cap `steps.transcribe.stt_limit_s`, else the
 settings maximum, + 60 s), `validating` or `running` (more than every attempt's deadline + lease
 + margin) has lost its chain: Cloud Tasks gave up, a worker crashed, a task was dropped. The age
@@ -18,6 +21,7 @@ from onolys_api.jobs.run import release_once
 from onolys_api.jobs.worker import DEADLINE_S, LEASE_GRACE_S
 from onolys_api.repo.base import NotFoundError, Repo
 from onolys_api.repo.models import SessionDoc, SessionError
+from onolys_api.storage.base import UPLOAD_URL_TTL_S
 
 STALE_MARGIN_S = 60
 RETRY_SLACK_S = 300  # Cloud Tasks backoff between attempts
@@ -28,6 +32,11 @@ FAILURES = {
     "validating": ("internal_error", "validate"),
     "running": ("run_failed", "run"),
 }
+
+
+# created|uploading: no PUT finished before the signed URL (+ margin) lapsed: nothing to wait for
+UPLOAD_STATES = ("created", "uploading")
+UPLOAD_INCOMPLETE = "upload_incomplete"
 
 
 def _cutoff(s: SessionDoc, now: datetime, settings: Settings) -> datetime:
@@ -53,6 +62,16 @@ def _fail_unfinished_runs(repo: Repo, s: SessionDoc, now: datetime) -> None:
 def settle_if_stale(repo: Repo, s: SessionDoc, now: datetime, settings: Settings) -> SessionDoc:
     """`s`, or its fresh copy after trying to fail it because its chain is dead (the transaction
     may find it moved on: a finished task wins)."""
+    if s.state in UPLOAD_STATES:
+        # non-terminal and free: the user can resume (new URL + complete) or delete it
+        cutoff = now - timedelta(seconds=UPLOAD_URL_TTL_S + STALE_MARGIN_S)
+        if (s.stage_started_at or s.updated_at) >= cutoff:
+            return s
+        try:
+            repo.fail_stale_session(s.uid, s.id, s.state, cutoff, None, to=UPLOAD_INCOMPLETE)
+        except NotFoundError:
+            return s
+        return repo.get_session(s.uid, s.id)
     failure = FAILURES.get(s.state)
     if failure is None:
         return s

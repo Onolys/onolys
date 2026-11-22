@@ -341,7 +341,13 @@ class FirestoreRepo:
         return Page(items, nxt)
 
     def fail_stale_session(
-        self, uid: str, sid: str, state: str, before: datetime, error: SessionError
+        self,
+        uid: str,
+        sid: str,
+        state: str,
+        before: datetime,
+        error: SessionError | None,
+        to: str = "failed",
     ) -> bool:
         sref, _ = self._owned_session(uid, sid)
         stref = self._top("session_status", sid)
@@ -356,16 +362,21 @@ class FirestoreRepo:
             if sess.get("state") != state or started >= before:
                 return False
             now = utcnow()
-            fields: dict[str, Any] = {"state": "failed", "error": error.model_dump(),
+            fields: dict[str, Any] = {"state": to, "error": error.model_dump() if error else None,
                                       "updated_at": now}  # fmt: skip
-            if error.step and error.step in (sess.get("steps") or {}):
+            if error and error.step and error.step in (sess.get("steps") or {}):
                 fields[f"steps.{error.step}.status"] = "failed"
                 fields[f"steps.{error.step}.ended"] = now
                 fields[f"steps.{error.step}.error"] = error.code
             txn.update(sref, fields)
             txn.set(
                 stref,
-                {"state": "failed", "error_code": error.code, "uid": uid, "updated_at": now},
+                {
+                    "state": to,
+                    "error_code": error.code if error else None,
+                    "uid": uid,
+                    "updated_at": now,
+                },  # fmt: skip
                 merge=True,
             )
             return True

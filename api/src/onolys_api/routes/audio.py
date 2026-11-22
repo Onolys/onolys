@@ -62,7 +62,8 @@ def _owned_open(request: Request, user: AuthUser, id: str):
         "Maps browser aliases (`audio/x-m4a`, `audio/mp4`, `audio/mpeg`, empty type + "
         "`filename_ext`) to one canonical type, returns one signed PUT (15 min) pinned to it and "
         "to a 300 MB size range; the client sends exactly `required_headers`. Unknown type is "
-        "422 `unsupported_audio`, over 300 MB is 422 `audio_too_large`. State becomes `uploading`."
+        "422 `unsupported_audio`, over 300 MB is 422 `audio_too_large`. "
+        "State becomes `uploading` (also resumes an `upload_incomplete` session)."
     ),
 )
 def request_upload(
@@ -115,14 +116,17 @@ def complete_upload(id: ResourceId, request: Request, user: User) -> dict[str, S
         # (the bucket lifecycle rule is the backstop); `user.uid` scopes this to the caller
         blobs.delete_prefix(f"uploads/{user.uid}/{id}/")
         raise
-    if session.state not in ("uploading", "validating") or session.upload is None:
+    if (
+        session.state not in ("uploading", "upload_incomplete", "validating")
+        or session.upload is None
+    ):
         raise invalid_state()
     if not blobs.exists(staging_key(user.uid, id, session.upload.upload_id)):
         raise ApiError.of(409, "invalid_state", "No uploaded audio was found for this session.")
     queue = getattr(request.app.state, "queue", None)
     if queue is None:
         raise ApiError.of(503, "upstream_unavailable", "Service temporarily unavailable.")
-    if session.state == "uploading":
+    if session.state in ("uploading", "upload_incomplete"):
         advance(repo, user.uid, id, to="validating", step="validate")
     try:
         queue.enqueue(
