@@ -52,7 +52,7 @@ CASES = [
     ("unknown", lambda: ValueError(SECRET), "run", 1, "internal_error", False),
     ("onolys_base", lambda: OnolysError(SECRET), "run", 1, "internal_error", False),
     ("adapter_upstream", lambda: AdapterError(UPSTREAM), "run", 1, UPSTREAM, True),
-    ("adapter_paudit", lambda: AdapterError("paudit_failed"), "run", 1, "internal_error", False),
+    ("adapter_code", lambda: AdapterError("code_failed"), "run", 1, "internal_error", False),
     ("run_google_transient", lambda: ServiceUnavailable(SECRET), "run", 1, UPSTREAM, True),
     ("run_google_429", lambda: TooManyRequests(SECRET), "run", 1, UPSTREAM, True),
     ("run_google_transient_last", lambda: ServiceUnavailable(SECRET), "run", 2, UPSTREAM, True),

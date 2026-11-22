@@ -50,8 +50,8 @@ STATE_PROGRESS: dict[str, int] = {
     "report_ready": 100,
 }
 RUN_START_PROGRESS = STATE_PROGRESS["running"]
-STAGE_WEIGHTS: dict[str, int] = {"paudit": 25, "eaudit": 15, "tips": 8, "compare": 4, "assemble": 3}
-STAGES = tuple(STAGE_WEIGHTS)
+STAGE_WEIGHTS: dict[str, int] = {"code": 40, "tips": 8, "assemble": 3}
+STAGES = tuple(STAGE_WEIGHTS)  # 45 + 51 = 96: under the 99 cap
 
 # fields of session_status/{sid} (everything the web may read; no text)
 STATUS_FIELDS = frozenset(

@@ -171,11 +171,10 @@ async def test_full_stub_flow_reaches_report_ready_with_progress_table(env):
     assert (st.state, st.progress, st.latest_report_version) == ("report_ready", 100, 1)
     p = env.repo.progress
     assert p == sorted(p), "progress never goes backwards"
-    # fake order: paudit +25, eaudit +15, tips +8, compare +4, assemble +3 (capped at 99), done 100
-    assert [45 + 25, 45 + 25 + 15, 45 + 25 + 15 + 8, 97, 99, 100] == [
-        x for x in dict.fromkeys(p) if x >= 70
-    ]
-    assert {"paudit", "eaudit", "tips", "compare", "assemble"} <= set(env.repo.steps)
+    # fake order: code +40, tips +8, assemble +3 (under the 99 cap), done 100
+    assert [45 + 40, 45 + 40 + 8, 45 + 40 + 8 + 3, 100] == [x for x in dict.fromkeys(p) if x >= 70]
+    assert {"code", "tips", "assemble"} <= set(env.repo.steps)
+    assert not {"paudit", "eaudit", "compare"} & set(env.repo.steps)
 
     (run,) = env.repo.list_runs(env.uid, sid)
     assert run.status == "done" and run.error is None
@@ -223,12 +222,12 @@ async def test_no_rating_run_has_skipped_reasons_audit(env):
     assert env.repo.get_run(env.uid, sid, r.json()["run_id"]).rating_id is None
 
 
-async def test_paudit_failure_fails_run_and_session_and_refunds_the_system_failure(env):
-    sid = await env.finished("[fail:paudit]")
+async def test_code_failure_fails_run_and_session_and_refunds_the_system_failure(env):
+    sid = await env.finished("[fail:code]")
     s = env.repo.get_session(env.uid, sid)
     assert s.state == "failed" and s.error.code and s.latest_report_version is None
     st = env.repo.get_status(env.uid, sid)
-    assert st.state == "failed" and st.error_code == s.error.code and st.progress == 70
+    assert st.state == "failed" and st.error_code == s.error.code and st.progress == 85
     (run,) = env.repo.list_runs(env.uid, sid)
     assert run.status == "failed" and run.error == s.error.code
     assert env.repo.list_reports(env.uid, sid) == []
@@ -237,10 +236,10 @@ async def test_paudit_failure_fails_run_and_session_and_refunds_the_system_failu
 
 
 async def test_try_again_after_a_failure_reuses_transcript_and_stored_rating(env):
-    sid = await env.finished("[fail:paudit]")
+    sid = await env.finished("[fail:code]")
     rating_id = env.repo.latest_rating(env.uid, sid).id
 
-    # the stub title still says fail:paudit: swap in an evaluation that ignores it
+    # the stub title still says fail:code: swap in an evaluation that ignores it
     class Ok(FakeEvaluation):
         async def run(self, ctx, transcript, speaker_map, params, progress_cb=None):
             return await super().run(

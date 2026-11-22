@@ -19,7 +19,7 @@ from onolys_miti.voice.fixture import FixtureVoice
 from onolys_api.adapters.base import AdapterError, EvaluationOutput, ProgressCb
 
 # failure injection
-FAIL_PAUDIT = "[fail:paudit]"  # run and session `failed`
+FAIL_CODE = "[fail:code]"  # run and session `failed`
 FAIL_TIPS = "[fail:tips]"  # report_ready, tips=[] + warning tips_failed
 FAIL_NO_SPEECH = "[fail:no_speech]"  # transcript with 0 turns
 FAIL_SPEAKERS = "[fail:speakers_not_separated]"  # one speaker only
@@ -154,7 +154,7 @@ def _subject_quotes(transcript: Transcript, subject: str) -> list[tuple[str, str
     return out
 
 
-def _paudit_result(
+def _code_result(
     transcript: Transcript, subject: str, params: dict[str, Any], quotes: list[tuple[str, str]]
 ) -> dict[str, Any]:
     n_runs = int(params.get("n_runs") or 1)
@@ -194,7 +194,7 @@ def _paudit_result(
         },
         "language": str(params.get("language") or "en"),
         "change_goal": str(params.get("change_goal") or ""),
-        "coded_span": params.get("coded_span"),
+        "coded_span": None,  # the whole session: the engine, not the caller, picks the span
         "subject_speaker": subject,
         "n_runs": n_runs,
         "results": [{**run, "run_index": i} for i in range(n_runs)],
@@ -246,22 +246,19 @@ class FakeEvaluation:
             if progress_cb is not None:
                 progress_cb(stage, status)  # type: ignore[arg-type]
 
-        cb("paudit", "started")
-        cb("eaudit", "started")
-        if FAIL_PAUDIT in title:
-            cb("paudit", "failed")
-            raise AdapterError("paudit_failed")
-        cb("paudit", "done")
+        cb("code", "started")
+        if FAIL_CODE in title:
+            cb("code", "failed")
+            raise AdapterError("code_failed")
+        cb("code", "done")
 
         subject = speaker_map["subject"]
         quotes = _subject_quotes(transcript, subject)
-        paudit = _paudit_result(transcript, subject, params, quotes)
+        code = _code_result(transcript, subject, params, quotes)
         warnings: list[dict[str, Any]] = []
 
         has_rating = False  # the engine never sees a rating (D1): always the no-rating report
         reasons: dict[str, Any] = {"status": "skipped", "items": []}
-        eaudit = None
-        cb("eaudit", "done")
 
         cb("tips", "started")
         if FAIL_TIPS in title:
@@ -281,7 +278,6 @@ class FakeEvaluation:
                 for i, (tid, q) in enumerate(quotes)
             ]
             cb("tips", "done")
-        cb("compare", "started")
         scorecard = [
             {
                 "item_id": gid,
@@ -293,7 +289,6 @@ class FakeEvaluation:
             }
             for gid, label in _GLOBALS
         ]
-        cb("compare", "done")
         cb("assemble", "started")
         n_runs = int(params.get("n_runs") or 1)
         stt = transcript.stt_run.model_dump() if transcript.stt_run else None
@@ -304,7 +299,7 @@ class FakeEvaluation:
                 "change_goal": str(params.get("change_goal") or ""),
                 "protocol": _PROTOCOL,
                 "language": str(params.get("language") or "en"),
-                "coded_span": params.get("coded_span"),
+                "coded_span": None,  # the whole session: the engine, not the caller, picks the span
                 "subject_speaker": subject,
                 "n_runs": n_runs,
                 "models": {},
@@ -340,13 +335,13 @@ class FakeEvaluation:
             "warnings": warnings,
             "run_info": {
                 "evaluation": _run_info("evaluation", params),
-                "miti": paudit["run_info"],
+                "miti": code["run_info"],
             },
         }
         if ctx.request_id:
             report["request_id"] = ctx.request_id
         cb("assemble", "done")
-        artifacts = {"code": paudit, "eaudit": eaudit, "tips": {"valid": tips, "proposals": []}}
+        artifacts = {"code": code, "tips": {"valid": tips, "proposals": []}}
         return EvaluationOutput(report=report, artifacts=artifacts)
 
 

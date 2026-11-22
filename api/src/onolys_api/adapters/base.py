@@ -15,7 +15,7 @@ from onolys_miti.transcript import Transcript
 from onolys_miti.voice import VoiceParams, VoiceSession
 from pydantic import BaseModel, Field
 
-Stage = Literal["paudit", "eaudit", "tips", "compare", "assemble"]
+Stage = Literal["code", "tips", "assemble"]
 StageStatus = Literal["started", "done", "failed"]
 ProgressCb = Callable[[Stage, StageStatus], None]
 
@@ -33,7 +33,7 @@ class EvaluationOutput(BaseModel):
     """SP03 `EvaluationOutput`: the report JSON (incl. its `run_info`) plus run artifacts."""
 
     report: dict[str, Any]
-    artifacts: dict[str, Any] = Field(default_factory=dict)  # paudit, eaudit, tips
+    artifacts: dict[str, Any] = Field(default_factory=dict)  # code, tips
 
 
 class Stt(Protocol):

@@ -9,7 +9,7 @@ catches up. 100 belongs to `report_ready`.
 Outcome: the report is validated against the report schema, stored verbatim (the repo moves it to
 GCS above 500 KB) under a deterministic report id (= run id), the run artifacts go to
 `{uid}/{sid}/runs/{run_id}/{code,tips}.json`, and the session moves to `report_ready`
-with the new `latest_report_version`. A paudit failure fails the run and the session; eaudit/tips
+with the new `latest_report_version`. A code failure fails the run and the session; tips
 failures arrive as report warnings and still ship (the adapter handles them). A redelivered or
 retried task finds the stored report and only finishes the bookkeeping: one report per run.
 

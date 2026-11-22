@@ -111,7 +111,7 @@ CHECKLIST: dict[int, list[tuple[str, str]]] = {
         ("test_rating.py", "test_final_rating_is_refused_once_the_report_is_ready"),
     ],
     15: [
-        ("test_run.py", "test_paudit_failure_fails_run_and_session_and_refunds_the_system_failure"),
+        ("test_run.py", "test_code_failure_fails_run_and_session_and_refunds_the_system_failure"),
         ("test_run.py", "test_tips_failure_ships_report_with_warning"),
     ],
     16: [

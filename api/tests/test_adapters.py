@@ -119,17 +119,15 @@ async def test_eval_no_rating_valid():
 async def test_progress_every_stage_started_then_terminal():
     ev: list = []
     await evaluate(events=ev)
-    assert ev == [("paudit", "started"), ("eaudit", "started"), ("paudit", "done"),
-                  ("eaudit", "done"), ("tips", "started"), ("tips", "done"),
-                  ("compare", "started"), ("compare", "done"),
-                  ("assemble", "started"), ("assemble", "done")]  # fmt: skip
+    assert ev == [("code", "started"), ("code", "done"), ("tips", "started"),
+                  ("tips", "done"), ("assemble", "started"), ("assemble", "done")]  # fmt: skip
 
 
-async def test_inject_paudit_failed():
+async def test_inject_code_failed():
     ev: list = []
     with pytest.raises(AdapterError) as e:
-        await evaluate(f"t {f.FAIL_PAUDIT}", events=ev)
-    assert e.value.code == "paudit_failed" and ("paudit", "failed") in ev
+        await evaluate(f"t {f.FAIL_CODE}", events=ev)
+    assert e.value.code == "code_failed" and ("code", "failed") in ev
     assert ("assemble", "started") not in ev
 
 
@@ -138,7 +136,15 @@ async def test_inject_tips_failed_partial_report():
     o = await evaluate(f.FAIL_TIPS, events=ev)
     assert not list(REPORT.iter_errors(o.report))
     assert o.report["tips"] == [] and {"code": "tips_failed"} in o.report["warnings"]
-    assert ("tips", "failed") in ev and o.report["reasons_audit"]["status"] == "skipped"
+    assert ("tips", "failed") in ev and ("assemble", "done") in ev
+    assert set(o.artifacts) == {"code", "tips"}
+
+
+async def test_fake_report_uses_whole_session_and_engine_run_info():
+    o = await evaluate()
+    assert o.report["header"]["coded_span"] is None
+    assert set(o.report["run_info"]) == {"evaluation", "miti"} and o.report["run_info"]["miti"]
+    assert set(o.artifacts) == {"code", "tips"}
 
 
 async def test_no_progress_cb_ok():
