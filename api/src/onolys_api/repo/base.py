@@ -204,7 +204,8 @@ class Repo(Protocol):
     # the caps like `reserve_usage("eval")` (hit: "daily_cap"/"concurrent", nothing
     # written), then creates run `run_id` (snapshot: rating_id, `n_runs` or the session's,
     # `preset` or the session's, stt, code_version), counts it (day runs+1, active_runs+1;
-    # always counted), sets `first_run_id` if absent, `state=running`, the status mirror
+    # counted unless free: an interview session's free run, or Try again after a failed free
+    # run), sets `first_run_id` if absent, `state=running`, the status mirror
     # (progress `start_progress`, or the max with it when entering from `awaiting_input`) and
     # clears the error. Exactly one of two racing callers (two manual starts, or a manual start
     # and the first-run gate) wins; the loser reserved nothing, so there is nothing to release.

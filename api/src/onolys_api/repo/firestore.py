@@ -831,11 +831,19 @@ class FirestoreRepo:
             usage = usage_ref.get(transaction=txn).to_dict() or {}
             latest = [s for s in newest.get(transaction=txn) if s.id != DRAFT_ID]
             # the free first run of an interview-linked session (SP11 R5), same as start_first_run
+            first = (
+                (sref.collection("runs").document(sess["first_run_id"]).get(transaction=txn)
+                 .to_dict() or {})
+                if sess.get("first_run_id")
+                else {}
+            )
+            # Try again after a failed free run stays free (review R1): the free rating is owed
             exempt = (
                 bool(sess.get("interview_id"))
                 and not sess.get("free_run_void")
-                and not sess.get("first_run_id")
-            )
+                and (not sess.get("first_run_id")
+                     or (sess.get("state") == "failed" and first.get("counted") is False))
+            )  # fmt: skip
             units = n_runs or sess.get("n_runs", 1)
             decided = decide_start(user, usage, defaults, max_active, exempt, units)
             if decided != "ok":

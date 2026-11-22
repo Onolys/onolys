@@ -843,6 +843,12 @@ export interface components {
             created_at: string;
             error?: components["schemas"]["SessionErrorInfo"] | null;
             flags: components["schemas"]["Flags"];
+            /**
+             * Free Run
+             * @description True for an interview session whose free run stands: its run, and Try again after a failed free run, cost nothing against the daily evaluation cap.
+             * @default false
+             */
+            free_run?: boolean;
             /** Id */
             id: string;
             /**

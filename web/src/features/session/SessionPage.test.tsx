@@ -461,6 +461,45 @@ describe("session page: interview-linked first run (free, works at a full eval c
   });
 });
 
+describe("session page: Try again after a failed free interview run (review R1)", () => {
+  const failedAtCap = (freeRun: boolean) => {
+    const sid = create();
+    toAwaiting(sid);
+    mockBackend.configure({ caps: { eval: { day: 0 } } });
+    server.use(
+      http.get("*/v1/sessions/:id", ({ params }) =>
+        HttpResponse.json({
+          ...mockBackend.getSession(UID, String(params.id)),
+          interview_id: "iv1",
+          free_run: freeRun,
+        }),
+      ),
+    );
+    return sid;
+  };
+
+  it("keeps Try again enabled at a full eval cap when the failed run was free", async () => {
+    const sid = failedAtCap(true);
+    open(sid);
+    await ready();
+    act(() => mockEmitter.emit(sid, failedDoc(sid, "internal_error")));
+    const run = await screen.findByRole("button", { name: "Try again" });
+    await waitFor(() => expect(getCalls.length).toBeGreaterThan(0)); // the detail (free_run) loads
+    await waitFor(() => expect(run).toBeEnabled());
+    expect(screen.getByRole("alert")).not.toHaveTextContent(/reached today's limit/i);
+  });
+
+  it("still disables Try again at a full eval cap when the interview's free run was voided", async () => {
+    const sid = failedAtCap(false);
+    open(sid);
+    await ready();
+    act(() => mockEmitter.emit(sid, failedDoc(sid, "internal_error")));
+    const run = await screen.findByRole("button", { name: "Try again" });
+    await waitFor(() => expect(getCalls.length).toBeGreaterThan(0));
+    await waitFor(() => expect(run).toBeDisabled());
+  });
+});
+
 describe("session page: period-aware caps", () => {
   it.each([
     [{ eval: { day: 0 } }, /reached today's limit/i],

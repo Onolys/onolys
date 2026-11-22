@@ -62,12 +62,16 @@ function SessionView({ id }: { id: string }) {
     doc !== null &&
     doc.state === "awaiting_input" &&
     doc.error_code === "daily_cap_reached";
+  // Try again after a failed FREE run is free too (the rating the interview paid for is owed), so it is
+  // not blocked by the eval cap either: the detail's `free_run` says so.
+  const failed = doc !== null && doc.state === "failed";
   const detail = useQuery({
     queryKey: ["session-detail", id],
-    enabled: firstStartHeld,
+    enabled: firstStartHeld || failed,
     queryFn: async () => unwrap(await client.GET("/sessions/{id}", { params: { path: { id } } })),
   });
   const freeFirstRun = firstStartHeld && Boolean(detail.data?.interview_id);
+  const freeRetry = failed && Boolean(detail.data?.free_run);
 
   const run = useMutation({
     mutationFn: async () => unwrap(await client.POST("/sessions/{id}/runs", { params: { path: { id } } })),
@@ -116,7 +120,7 @@ function SessionView({ id }: { id: string }) {
   const timeline = doc ? deriveTimeline(doc, { resetsAt }) : null;
   const failureCode = doc?.state === "failed" ? (doc.error_code ?? undefined) : undefined;
   const runError = run.error ? describeError(run.error, { resetsAt }) : null;
-  const runLocked = run.isPending || run.isSuccess || atCap;
+  const runLocked = run.isPending || run.isSuccess || (atCap && !freeRetry);
 
   return (
     <>
@@ -195,7 +199,7 @@ function SessionView({ id }: { id: string }) {
                   <button type="button" className="btn btn-primary" disabled={runLocked} onClick={() => run.mutate()}>
                     Try again
                   </button>
-                  {blocking ? <span>{messageForCode("daily_cap_reached", { resetsAt })}</span> : null}
+                  {blocking && !freeRetry ? <span>{messageForCode("daily_cap_reached", { resetsAt })}</span> : null}
                 </>
               )}
             </ErrorCard>

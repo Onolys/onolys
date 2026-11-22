@@ -312,3 +312,60 @@ def test_linked_session_with_unmatched_audio_is_charged(repo):  # noqa: F811
     assert repo.get_session(uid, sid2).first_run_id is None
     r = _post_run(make_client(repo, mk_settings(eval_cap_day=1), RecordingQueue()), uid, sid2)
     assert r.status_code == 429
+
+
+# ---- review R1: Try again after a failed FREE interview run stays free -------------------------
+
+
+def _fail_system(repo_, uid, sid, run_id):
+    from onolys_api.jobs.run import release_once
+
+    repo_.update_run(uid, sid, run_id, {"status": "failed", "error": "upstream_unavailable"})
+    release_once(repo_, uid, sid, run_id, True, caps.utc_date())  # refund: free run, nothing given
+    repo_.update_session(uid, sid, {"state": "failed", "error": {"code": "upstream_unavailable"}})
+
+
+def test_try_again_after_failed_free_interview_run_is_free_even_at_eval_cap(repo):  # noqa: F811
+    uid = f"u{uuid.uuid4().hex[:10]}"
+    date = caps.utc_date()
+    sid = _linked_ready(repo, uid, interview_id="iv1", n_runs=2)
+    cap1 = mk_settings(eval_cap_day=1)  # 2 units would not fit: the free run is exempt
+    maybe_start_first_run(repo, RecordingQueue(), uid, sid, cap1)
+    (first,) = repo.list_runs(uid, sid)
+    assert first.counted is False
+    _fail_system(repo, uid, sid, first.run_id)
+    assert user_counters(repo, uid, date) == (0, 0)
+    queue = RecordingQueue()
+    r = _post_run(make_client(repo, cap1, queue), uid, sid)
+    assert r.status_code == 202, r.text
+    second = repo.get_run(uid, sid, r.json()["run_id"])
+    assert second.counted is False and second.n_runs == 2  # same submission, still free
+    assert user_counters(repo, uid, date) == (1, 0)  # takes the active slot, no usage
+    assert repo.get_usage_doc(uid, date).runs == 0
+    _fail_system(repo, uid, sid, second.run_id)  # fails again: still nothing to refund twice
+    assert user_counters(repo, uid, date) == (0, 0)
+    assert repo.get_usage_doc(uid, date).runs == 0
+
+
+def test_try_again_after_failed_charged_run_is_still_charged(repo):  # noqa: F811
+    uid = f"u{uuid.uuid4().hex[:10]}"
+    date = caps.utc_date()
+    sid = _linked_ready(repo, uid, interview_id="iv1", free_run_void=True)
+    maybe_start_first_run(repo, RecordingQueue(), uid, sid, mk_settings())
+    (first,) = repo.list_runs(uid, sid)
+    assert first.counted is True
+    _fail_system(repo, uid, sid, first.run_id)
+    assert repo.get_usage_doc(uid, date).runs == 0  # refunded
+    r = _post_run(make_client(repo, mk_settings(eval_cap_day=0), RecordingQueue()), uid, sid)
+    assert r.status_code == 429  # a charged run is charged again
+
+
+def test_session_detail_exposes_free_run(repo):  # noqa: F811
+    uid = f"u{uuid.uuid4().hex[:10]}"
+    free = _linked_ready(repo, uid, interview_id="iv1")
+    void = _linked_ready(repo, uid, interview_id="iv2", free_run_void=True)
+    plain = _linked_ready(repo, uid)
+    h = {"Authorization": f"Bearer test:{uid}"}
+    with TestClient(make_client(repo)) as c:
+        got = [c.get(f"/v1/sessions/{s}", headers=h).json()["free_run"] for s in (free, void, plain)]
+    assert got == [True, False, False]

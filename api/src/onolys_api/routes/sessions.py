@@ -111,6 +111,13 @@ class SessionDetail(BaseModel):
         default=None,
         description="Set when an AI interview created this session: its first run is free.",
     )
+    free_run: bool = Field(
+        default=False,
+        description=(
+            "True for an interview session whose free run stands: its run, and Try again after a "
+            "failed free run, cost nothing against the daily evaluation cap."
+        ),
+    )
     created_at: datetime
     updated_at: datetime
     links: dict[str, str]
@@ -341,6 +348,7 @@ def get_session(id: ResourceId, request: Request, user: User) -> SessionDetail:
         n_runs=s.n_runs,
         preset=s.preset,
         interview_id=s.interview_id,
+        free_run=bool(s.interview_id) and not s.free_run_void,
         created_at=s.created_at,
         updated_at=s.updated_at,
         links=links,

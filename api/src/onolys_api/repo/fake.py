@@ -642,11 +642,19 @@ class FakeRepo:
             user = self._get(f"users/{uid}") or {}
             usage = self._get(f"usage/{uid}_{date}") or {"uid": uid, "date": date, "runs": 0}
             # the free first run of an interview-linked session (SP11 R5), same as start_first_run
+            first = (
+                self._get(f"sessions/{sid}/runs/{sess['first_run_id']}")
+                if sess.get("first_run_id")
+                else None
+            )
+            # Try again after a failed free run stays free (review R1): the free rating is owed
             exempt = (
                 bool(sess.get("interview_id"))
                 and not sess.get("free_run_void")
-                and not sess.get("first_run_id")
-            )
+                and (not sess.get("first_run_id")
+                     or (sess.get("state") == "failed" and first is not None
+                         and first.get("counted") is False))
+            )  # fmt: skip
             units = n_runs or sess.get("n_runs", 1)
             decided = decide_start(user, usage, defaults, max_active, exempt, units)
             if decided != "ok":

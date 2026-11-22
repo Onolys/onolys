@@ -433,6 +433,7 @@ export class MockBackend {
       n_runs: s.n_runs,
       preset: s.preset,
       interview_id: s.interview_id ?? null,
+      free_run: Boolean(s.interview_id),
       links: { self: `/v1/sessions/${s.id}` },
     };
     if (s.error) detail.error = { ...s.error };
