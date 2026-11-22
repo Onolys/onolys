@@ -42,12 +42,19 @@ def grants_naming_voice_sa():
     return found
 
 
-def test_voice_sa_holds_only_aiplatform_user_and_firestore():
+def test_voice_sa_holds_only_expected_grants():
+    # aiplatform.user + Firestore (env DB) + secretAccessor on the uid_hmac secret only (UID_HMAC_KEY env, hashes uids in logs).
     found = grants_naming_voice_sa()
-    assert {k[1] for k in found} == {"voice_aiplatform_user", "voice_datastore_user"}, set(found)
+    assert {k[1] for k in found} == {"voice_aiplatform_user", "voice_datastore_user", "voice_hmac"}, set(found)
     assert {k[0] for k in found} == {"modules/environment/voice.tf"}
-    roles = {re.search(r'role\s*=\s*"([^"]+)"', b).group(1) for b in found.values()}
-    assert roles == {"roles/aiplatform.user", "roles/datastore.user"}
+    roles = {k[1]: re.search(r'role\s*=\s*"([^"]+)"', b).group(1) for k, b in found.items()}
+    assert roles == {
+        "voice_aiplatform_user": "roles/aiplatform.user",
+        "voice_datastore_user": "roles/datastore.user",
+        "voice_hmac": "roles/secretmanager.secretAccessor",
+    }
+    hmac = found[("modules/environment/voice.tf", "voice_hmac")]
+    assert "google_secret_manager_secret.uid_hmac.secret_id" in hmac  # that one secret, nothing else
     ds = found[("modules/environment/voice.tf", "voice_datastore_user")]
     assert "resource.name ==" in ds and "local.firestore_db_resource" in ds  # this env's database only
     assert "google_service_account_iam_member" not in VOICE  # no actAs/tokenCreator for the voice SA

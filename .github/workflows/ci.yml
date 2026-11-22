@@ -34,6 +34,8 @@ jobs:
         run: python3 scripts/ci/test_changes_deps.py
       - name: Check markdown links
         run: python3 scripts/ci/check_links.py
+      - name: Docs scope gate
+        run: bash scripts/ci/check_docs_scope.sh
       - name: No LLM/STT keys in PR workflows (guard + planted-reference check)
         run: |
           python3 scripts/ci/check_no_llm_keys_in_pr_workflows.py
@@ -492,3 +494,12 @@ jobs:
       - run: terraform fmt -check -recursive
       - run: terraform init -backend=false
       - run: terraform validate
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+      - name: Static infra tests (offline)
+        working-directory: .
+        run: |
+          uv sync --frozen --package onolys-admin-auth
+          uv run --no-sync --package onolys-admin-auth pytest infra/scripts -q
