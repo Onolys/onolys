@@ -10,12 +10,12 @@ Source of truth: /root/projects/onolys/iaudit/.worktrees/feat/miti-lean-engine/d
 | # | Task | Depends on | Status |
 |---|---|---|---|
 | 1 | Archive tag `iaudit-archive` | - | done |
-| 2 | Repoint leftovers and delete old packages | 1 | in-progress |
-| 3 | CI, scripts, workspace and lock | 2 | todo |
-| 4 | Infra cleanup and apply | 2 | todo |
-| 5 | Naming sweep | 3, 4 | todo |
-| 6 | Docs rewrite and prune | 2, 5 | todo |
-| 7 | Link check and external READMEs | 6 | todo |
+| 2 | Repoint leftovers and delete old packages | 1 | done |
+| 3 | CI, scripts, workspace and lock | 2 | done |
+| 4 | Infra cleanup and apply | 2 | done |
+| 5 | Naming sweep | 3, 4 | done |
+| 6 | Docs rewrite and prune | 2, 5 | done |
+| 7 | Link check and external READMEs | 6 | done |
 
 ## Task 1 — Archive tag `iaudit-archive`
 What it is / what it means: A permanent, pushed marker on the last commit that still holds the evidence-audit code, so SP06 can build the iaudit repo from it later. (D1, D2, R1)
