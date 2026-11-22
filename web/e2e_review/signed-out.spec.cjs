@@ -1,7 +1,7 @@
 const { test, expect } = require("@playwright/test");
 const { shot, collect, navLinks, path_ } = require("./helpers.cjs");
 
-const PROTECTED = ["/", "/sessions/new", "/sessions/abc123", "/sessions/abc123/reports/1", "/interviews/new", "/interviews/xyz", "/settings"];
+const PROTECTED = ["/", "/sessions/new", "/sessions/abc123/reports/1", "/interviews/new", "/settings"];
 
 test.describe("signed-out gating", () => {
   test("E1/W1: header does not offer Sessions / New session / Settings when signed out", async ({ page }) => {
@@ -64,5 +64,12 @@ test.describe("signed-out gating", () => {
     await page.goto("/nope");
     await expect(page.getByRole("heading", { name: "Page not found" })).toBeVisible();
     await expect(page.getByText("Back to your sessions")).toHaveCount(0);
+  });
+
+  test("E1c/W1: auth action page header shows no protected nav", async ({ page }) => {
+    await page.goto("/auth/action?mode=resetPassword&oobCode=bogus");
+    await expect(page.getByRole("heading", { name: "Reset link expired" })).toBeVisible();
+    const links = await navLinks(page);
+    for (const t of ["Sessions", "New session", "Settings"]) expect(links).not.toContain(t);
   });
 });

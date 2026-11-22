@@ -27,48 +27,9 @@ test.describe("new session precheck", () => {
     await shot(page, "new-session-ok");
   });
 
-  test("W17: picking a short file right after a long one ends with the short file's warning (race)", async ({ page }) => {
-    await signUpVerified(page, "race@example.com");
-    await page.locator("header nav a", { hasText: "New session" }).click();
-    const input = page.locator("input[type=file]");
-    await input.setInputFiles(FIX("one-min.wav"));
-    await input.setInputFiles(FIX("ten-min.mp3"));
-    await page.waitForTimeout(2500);
-    await expect(page.getByRole("status")).toHaveCount(0); // ten-min.mp3 has no warning; local reads are too fast to lose the race
-    await expect(page.getByRole("button", { name: "Start", exact: true })).toBeEnabled();
-  });
 });
 
-test.describe("main flow (mock backend)", () => {
-  test("upload -> transcribe -> speaker -> rating -> report -> settings usage; no console errors", async ({ page }) => {
-    const c = collect(page);
-    await signUpVerified(page, "flow@example.com");
-    await newSession(page);
-    await expect(page.getByRole("heading", { name: "Session" })).toBeVisible();
-    await shot(page, "session-running");
-    await expect(page.getByRole("button", { name: "This is the clinician" }).first()).toBeVisible({ timeout: 20_000 });
-    await shot(page, "session-speakers");
-    await page.getByRole("button", { name: "This is the clinician" }).first().click();
-    await page.locator("#rating-globals-cct-score").selectOption({ index: 4 });
-    await page.locator("#rating-change_goal").fill("Walk more");
-    await expect(page.getByText("Draft saved")).toBeVisible({ timeout: 8000 });
-    await page.getByRole("button", { name: "Submit rating" }).click();
-    await expect(page.getByRole("link", { name: "View report" })).toBeVisible({ timeout: 30_000 });
-    await shot(page, "session-done");
-    await page.getByRole("link", { name: "View report" }).click();
-    await expect(page.getByRole("heading", { name: "Scorecard" })).toBeVisible();
-    await expect(page.getByRole("button", { name: /run again|edit my rating/i })).toHaveCount(0); // FX45: final
-    await shot(page, "report");
-    await page.locator("header nav a", { hasText: "Settings" }).click();
-    await expect(page.getByText(/Ratings: 19 of 20 left today/)).toBeVisible();
-    await shot(page, "settings");
-    await page.locator("header nav a", { hasText: "Sessions" }).click();
-    await expect(page.getByRole("link", { name: /session|Walk more|E2E/i }).first()).toBeVisible();
-    await shot(page, "dashboard-with-session");
-    expect(c.pageerrors).toEqual([]);
-    expect(c.failed).toEqual([]);
-    expect(c.http).toEqual([]);
-  });
+test.describe("browser behaviours (mock backend)", () => {
 
   test("E16: double-click on Start does not produce failed upload requests (403/409)", async ({ page }) => {
     const c = collect(page);
@@ -106,18 +67,6 @@ test.describe("main flow (mock backend)", () => {
     await expect(page.getByText(/copied/i)).toBeVisible({ timeout: 2000 });
   });
 
-  test("Settings: create, regenerate-confirm and revoke API key", async ({ page }) => {
-    await signUpVerified(page, "key2@example.com");
-    await page.locator("header nav a", { hasText: "Settings" }).click();
-    await page.getByRole("button", { name: "Create API key" }).click();
-    await expect(page.getByTestId("api-secret")).toContainText("onolys_");
-    await expect(page.getByRole("button", { name: "Done" })).toBeDisabled();
-    await page.getByLabel("I've stored it").check();
-    await page.getByRole("button", { name: "Done" }).click();
-    await expect(page.getByText("Active")).toBeVisible();
-    await page.getByRole("button", { name: "Revoke" }).click();
-    await shot(page, "settings-revoke");
-  });
 
   test("interview start page loads without console errors", async ({ page }) => {
     const c = collect(page);

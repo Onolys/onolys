@@ -58,5 +58,4 @@ const navLinks = (page) => page.locator("header nav a").allTextContents();
 const hasHScroll = (page) => page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 1);
 const path_ = (page) => { const u = new URL(page.url()); return u.pathname + u.search; };
 
-const LIVE = process.env.E2E_MODE === "live";
-module.exports = { LIVE, SHOTS, FIX, PW, shot, collect, field, signUp, signUpVerified, spa, signOutViaSettings, navLinks, hasHScroll, path_ };
+module.exports = { SHOTS, FIX, PW, shot, collect, field, signUp, signUpVerified, spa, signOutViaSettings, navLinks, hasHScroll, path_ };
