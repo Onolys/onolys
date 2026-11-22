@@ -18,7 +18,7 @@ iaudit material is deleted after tag `iaudit-archive` and moved to a separate re
 | 03 | [03-web](03-web/PRD.md) | Rating card hidden behind `VITE_RATING_ENABLED`; session-setup form; MITI-only report; legacy stage names accepted | 02 (stage names only) | 2 | PRD draft |
 | 04 | [04-admin-shell](04-admin-shell/PRD.md) | admin backend drops engines, serves only `GET /v1/me`; frontend = sign-in + empty page | none | 1 | PRD draft |
 | 05 | [05-cleanup](05-cleanup/PRD.md) | Tag `iaudit-archive` at 1cc7321, delete eaudit/paudit/evaluation/core/protocols/eval, CI + docs rewrite, regenerate uv.lock | 01, 02, 03, 04 | 3 | PRD draft |
-| 06 | [06-iaudit-repo](06-iaudit-repo/PRD.md) | New iaudit repo from tag via git filter-repo, standalone build + trimmed CI | 05 + owner repo URL | 4 | PRD draft — BLOCKED on repo URL |
+| 06 | [06-iaudit-repo](06-iaudit-repo/PRD.md) | Code-only iaudit archive: new repo from tag via git filter-repo (no CI/build); local folder rename iaudit→onolys, new clone at iaudit | 05 + owner repo URL | 4 | PRD draft — BLOCKED on repo URL |
 
 ## Dependency graph
 
@@ -35,7 +35,9 @@ iaudit material is deleted after tag `iaudit-archive` and moved to a separate re
 - Coding goal is MITI-only.
 - One engine `engines/miti` with MITI hardcoded (reverses 2026-11-20 protocol-agnostic call); core merged into miti.
 - Rating card hidden behind `VITE_RATING_ENABLED` (default off); code kept.
-- Replaced by minimal setup form (change goal required, coded span optional) sending `PUT /rating` `no_rating`, so existing run gate works with no api change.
+- Setup fields (change goal required, coded span optional) live on the upload screen with a single submit (no separate setup form); sends `PUT /rating` `no_rating`, so existing run gate works with no api change.
+- CI job for `engines/miti` added in SP05 (SP01 writes unit tests only).
+- SP06 is a code-only archive (no CI/build/secrets); local folder renamed `iaudit`→`onolys`, then new repo cloned at `/root/projects/onolys/iaudit`.
 - Basic tips kept.
 - Admin stays as shell (`GET /v1/me`).
 - Delete only after tag `iaudit-archive` on 1cc7321.
@@ -46,7 +48,7 @@ iaudit material is deleted after tag `iaudit-archive` and moved to a separate re
 
 SP01
 - [OPEN-1] PyPI clash for name `miti` not checked (offline); `onolys_miti` avoids it.
-- [OPEN-2] CI job for `engines/miti`: add minimal job in SP01 (default if reviewers agree) vs SP05.
+- [RESOLVED: CI job added later in SP05, owner 2026-11-22]
 - [OPEN-3] `PackError`/`PackRef`: keep out unless `error_map.py` needs it.
 - [OPEN-4] `admin/backend` still imports old packages until SP04; SP05 must wait for both.
 
@@ -59,7 +61,6 @@ SP02
 - [OPEN-6] Image size/memory of dropped deps unverified; measure with `docker build`.
 
 SP03
-- [OPEN] "Start" button naming: PUT does not start run if speaker unconfirmed; default "Save setup"; button copy (owner).
 - [OPEN] Flag off locks setup after one submit (`rating_final`); mistyped goal not correctable; accepted, revisit with SP02 Option B.
 
 SP04
@@ -76,10 +77,8 @@ SP05
 
 SP06
 - [OPEN-1] New repo URL/name + push access; whole SP waits (owner).
-- [OPEN-2] Local folder; default `/root/projects/onolys/iaudit-legacy`, then repo name.
-- [OPEN-3] Keep `changes.sh` gating or run everything; default run everything.
-- [OPEN-4] Whether `engines/core` at tag carries MITI-only code needing prune; default prune only on test failures.
-- [OPEN-5] Nightly secrets; default manual-dispatch only.
+- [RESOLVED: new clone at `/root/projects/onolys/iaudit`; existing folder first renamed to `/root/projects/onolys/onolys` + `git worktree repair`, at SP06 time, READMEs updated, owner 2026-11-22]
+- [RESOLVED: not needed, code-only archive, owner 2026-11-22] OPEN-3 `changes.sh`, OPEN-4 core pruning, OPEN-5 nightly secrets.
 
 ## Next step
 

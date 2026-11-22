@@ -74,7 +74,7 @@ Stage = Literal["code", "tips", "assemble"]   # + StageStatus unchanged
 
 **R5. Workspace/CI**
 - `engines/miti/pyproject.toml`: dist `onolys-miti`, `packages=["src/onolys_miti"]` + package data; deps = union of core+paudit+evaluation used deps (pydantic, pyyaml, litellm, rapidfuzz, extras `stt-google`, `voice-gemini`, jsonschema if used); dev group same as core. Auto-joins the workspace via `engines/*`; `uv lock` updated.
-- Testable by `uv run --package onolys-miti pytest engines/miti -m "not live"`. CI job + `changes.sh` flag + `test_changes.sh` cases for `engines/miti` are added in SP05; SP01 only documents the command. [OPEN-2]
+- Testable by `uv run --package onolys-miti pytest engines/miti -m "not live"`. CI job + `changes.sh` flag + `test_changes.sh` cases for `engines/miti` are added in SP05; SP01 only documents the command. Unit tests are still written in SP01 (test-first); only the CI wiring waits. [RESOLVED: CI job added later in SP05, owner 2026-11-22]
 
 ## Architecture
 ```
@@ -101,7 +101,7 @@ MITI is data in `data/` + `rules.py`, read through the `MITI` constant; no loade
 
 ## Risks / Open Questions
 - [OPEN-1] Name check: no `miti` dir/dist in repo [verified: grep of pyproject files]; PyPI clash not checked (offline). `onolys_miti` avoids it either way.
-- [OPEN-2] CI job for `engines/miti` is in SP05 (after SP02) so the package is not CI-gated between SP01 and SP05. Alternative: add the job in SP01 (small `ci.yml`/`changes.sh` edit). Default: add a minimal job in SP01 if reviewers agree; SP05 then only removes old jobs.
+- [RESOLVED: CI job added later in SP05, owner 2026-11-22] CI job for `engines/miti` is added in SP05 (after SP02); the package is not CI-gated between SP01 and SP05. Unit tests are still written in SP01 per test-first policy; only the CI wiring waits.
 - [OPEN-3] `PackError` and `PackRef` in api: SP02 removes uses; SP01 keeps `PackError` out unless `error_map.py` needs it.
 - [OPEN-4] `admin/backend` still imports old `onolys_core`/`paudit` until SP04; fine, but SP05 must wait for both.
 - [RESOLVED: byte-identical `report_no_rating` except `run_info.evaluation.engine`; pack_hash unchanged via identical files] Parity claim, proven by the golden test.
