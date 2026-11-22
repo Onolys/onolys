@@ -331,8 +331,8 @@ compare:
 
 # Owned and filled by SP03.
 evaluation:
-  # Reasons audit (SP03 R3): eaudit audit profile for the clinician's own rating reasons.
-  # Names are eaudit ConcernType values (a test validates them). Kept types (not listed) test
+  # Reasons audit (SP03 R3): profile for the clinician's own rating reasons. Not read by engine code today (the report
+  # keeps `reasons_audit` skipped); only a pack test checks the keys. Concern names below are labels, not a live schema. Kept types (not listed) test
   # whether the cited behaviour or client statement happened as described.
   reasons_audit:
     suppress_concerns:
