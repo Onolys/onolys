@@ -1,10 +1,12 @@
 # 0018. Protocol packs: data first, three code hooks, safe formulas
 
+> Superseded by [ADR 0025](0025-miti-only-lean-engine.md) (MITI-only lean engine).
+
 **Audience:** contributors.
 
 **Status:** accepted. Measured live 2026-11-20 (Task 14); the check passes with the engine default params.
 
-**Context.** `paudit` rates a session against a protocol (first pack: MITI 4.2.1). Hard-coding MITI in the engine would block other protocols and put protocol facts in engine code. A rules language in YAML would be a second programming language to maintain. See [ADR 0005](0005-models-propose-code-decides.md): models propose, code decides.
+**Context.** `paudit` rates a session against a protocol (first pack: MITI 4.2.1). Hard-coding MITI in the engine would block other protocols and put protocol facts in engine code. A rules language in YAML would be a second programming language to maintain. See ADR 0005 (removed; see ADR 0025): models propose, code decides.
 
 **Decision.**
 
@@ -17,7 +19,7 @@
 
 **Alternatives.** All rules in Python (MITI leaks into the engine, harder to diff); all rules and predicates in YAML (a language to design and test); `eval` for formulas (code injection).
 
-**Consequences.** A new protocol is mostly a new folder plus, rarely, one new generic rule kind in the engine. Hooks run with full Python privileges, so packs must be reviewed like code. Quality is proven by `python -m paudit.cli check --pack miti@4.2.1 --preset <name>`, which runs the fixtures on the live model and exits non-zero past `fixtures/thresholds.yaml`. See [engines/paudit](../../engines/paudit/README.md).
+**Consequences.** A new protocol is mostly a new folder plus, rarely, one new generic rule kind in the engine. Hooks run with full Python privileges, so packs must be reviewed like code. Quality is proven by `python -m paudit.cli check --pack miti@4.2.1 --preset <name>`, which runs the fixtures on the live model and exits non-zero past `fixtures/thresholds.yaml`. See `engines/paudit` (removed; see ADR 0025).
 
 ## Measurements
 

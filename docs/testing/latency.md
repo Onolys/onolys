@@ -2,12 +2,12 @@
 
 **Audience:** contributors.
 
-Target 30 to 45 seconds for a typical audit, hard cap 100 (`IAUDIT_AUDIT_DEADLINE_S`), UI timeout 120. The service sends a `Server-Timing` header on 200 replies with `total` and one entry per stage that ran (`prep`, `atomize`, `link`, `check`, `assemble`), durations only. In browser devtools it shows in the network tab for the audit request; turn it off with `IAUDIT_SERVER_TIMING=false`.
+What is measured and where it is recorded. Staging numbers (upload to transcript, confirm to report, per audio second) are in [reference/staging-e2e.md](../reference/staging-e2e.md); at the time of the last staging run a 6.7 minute recording gave a report about 68 s after speaker confirm.
 
-## Offline scenarios
+## Engine limit
 
-`engines/eaudit/tests/latency/` runs the pipeline against a scripted model whose latencies are lognormal per call tag and scaled by one factor (default 1/50), so ratios hold and a minute takes about a second. It covers the baseline run, failure injection (a link timeout, a check outage, a failed atomize), deadline overrun without leaked tasks, and a check that a sentinel word never reaches logs, metrics or headers.
+`python -m onolys_miti.check` fails when the 95th percentile wall time of one run is over 90 s, or tokens per run are over 120,000 (`fixtures/thresholds.yaml`). It needs a key; run it with the live checks in [local-setup.md](local-setup.md#owner-live-checks).
 
-## Live
+## Routes
 
-Latency percentiles and cost on real providers need a key. Run `uv run python -m eval.run --mode e2e --live` and read the request p50 and max in the report. Check `cache_hit_ratio` in the metrics before enabling `IAUDIT_CACHE_LAYOUT=shared` or `IAUDIT_CACHE_WARMUP`: the provider may not share the cache across stages.
+Per-route timeouts, retries and concurrency are route data ([llm-client.md](../implementation/llm-client.md)). Check cache hit ratios on a live run before changing caching settings: the provider may not share the cache across calls.

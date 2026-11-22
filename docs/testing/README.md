@@ -4,9 +4,8 @@ How to test, and what to verify before a release.
 
 **Audience:** contributors.
 
-- [frontend.md](frontend.md): eaudit/Eval commands, offline test coverage and owner release checks.
-- [running-tests.md](running-tests.md): backend commands and test layout.
-- [evaluation.md](evaluation.md): the evaluation harness, the POC gate, replay and live.
-- [local-setup.md](local-setup.md): setup of every component, offline checks, owner live checks after taxonomy v1.
-- [latency.md](latency.md): timing targets, `Server-Timing`, scaled-time tests.
-- [pre-release-checklist.md](pre-release-checklist.md): what to verify before a backend release.
+- [local-setup.md](local-setup.md): setup of every component, offline checks, owner live checks.
+- [running-tests.md](running-tests.md): engine commands and test layout.
+- [latency.md](latency.md): timing limits and where measurements are recorded.
+- [pre-release-checklist.md](pre-release-checklist.md): what to verify before a release.
+- [fuzz-and-mutation.md](fuzz-and-mutation.md): property/fuzz tests and mutation runs.

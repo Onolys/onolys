@@ -55,7 +55,7 @@ Every non-2xx body is `ErrorResponse` ([schema](../contracts/public/public-error
                               "field": "globals/cct/reason", "issue": "too_long"}]}
 ```
 
-`details[].code` is a closed enum (a superset of the eaudit one). Messages are fixed text and paths, never user content. `field` and `issue` are set on `rating_invalid` only: `field` is the `/`-joined card path (`$` = the whole card), `issue` is one of `invalid_type`, `too_long`, `out_of_range`, `required`, `unknown_key`, `invalid`, `order`, `too_large` (the evaluation engine's `validate_rating` issues, plus the API size cap `too_large`); at most 20 issues are listed.
+`details[].code` is a closed enum. Messages are fixed text and paths, never user content. `field` and `issue` are set on `rating_invalid` only: `field` is the `/`-joined card path (`$` = the whole card), `issue` is one of `invalid_type`, `too_long`, `out_of_range`, `required`, `unknown_key`, `invalid`, `order`, `too_large` (the evaluation engine's `validate_rating` issues, plus the API size cap `too_large`); at most 20 issues are listed.
 
 | Status | Codes |
 |---|---|
@@ -114,16 +114,16 @@ What a failed run or transcription turns into (`api/src/onolys_api/adapters/erro
 
 | Code | Raised by (engines) | Retry | What the user does |
 |---|---|---|---|
-| `invalid_parameters` | `InputError`: pack input checks (too long, no change goal, too few clinician or client turns), unknown preset | no | Fix the input (e.g. change who the clinician is) and run again |
+| `invalid_parameters` | `InputError`: MITI input checks (too long, no change goal, too few clinician or client turns), unknown preset | no | Fix the input (e.g. change who the clinician is) and run again |
 | `upstream_unavailable` | LLM unavailable, timeout, rate limited or bad output after the engine's own retries; a transient STT provider error on attempt 1 | yes | Run again |
-| `deadline_exceeded` | Internal run deadline passed, `TimeoutError`, eaudit `DeadlineExceeded` | yes | Run again |
+| `deadline_exceeded` | Internal run deadline passed, `TimeoutError` | yes | Run again |
 | `transcription_failed` | STT permanent error; a second transient STT error; no result within the poll limit | no | Upload a different file |
 | `no_speech` | Transcript with 0 turns or under 50 words | no | Upload a different file |
 | `speakers_not_separated` | Fewer than 2 usable speakers | no | Upload a different file |
 | `rate_limited` | Adapter error that already carries this code | yes | Try again shortly |
 | `internal_error` | `PackError`; any other exception, including engine `run_failed` errors with no LLM cause; an adapter code outside this table | no | Run again; the owner is alerted |
 
-An eaudit or tips failure inside the evaluation is not an error: the report is made with warning `reasons_audit_failed`, `reasons_audit_partial` or `tips_failed` and the session ends `report_ready`.
+A tips failure is not an error: the report is made with warning `tips_failed` and the session ends `report_ready`.
 
 ## Quickstart
 

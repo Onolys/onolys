@@ -1,10 +1,10 @@
-# Interview Evidence Auditor
+# Onolys MITI
 
-Checks whether a written assessment faithfully represents the interview evidence. It produces an evidence audit and a basic visual review tool.
+Onolys codes a recorded counseling session against MITI 4.2.1 and gives the clinician a report with basic tips for the next session.
 
-[Mission](docs/mission.md) · [Docs](docs/) · [Review UI](frontend/README.md) · [Backend](engines/eaudit/README.md) · [Contract](docs/contracts/README.md)
+[Mission](docs/mission.md) · [Docs](docs/README.md) · [Engine](engines/miti/README.md) · [Web app](web/) · [API](api/README.md) · [Architecture](docs/architecture.md)
 
-Getting started: [local setup and live verification](docs/testing/local-setup.md).
+Getting started: [local setup](docs/testing/local-setup.md).
 
 ## Claude Code skills (thepass)
 

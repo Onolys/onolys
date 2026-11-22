@@ -12,12 +12,12 @@ Numbers only. Staging env, project `onolys`, 2026-11-20. Task 8 re-run: **the we
 
 | Check | Result |
 |---|---|
-| `onolys_core.llm.smoke` | PASS 6/6 routes; 1.1-1.2 s per route (8.5 s cold first call); 54 in / 9 out tokens |
-| `paudit.cli check --pack miti@4.2.1` | PASS; count_mae 0.30 (<=1.5), globals_within_1 1.00, bad_output_rate 0.00, p95 latency 20.3 s (<=90), 21,513 tokens/run (<=120,000); 3 runs, 46 s wall |
-| `onolys_evaluation.check` | PASS; tips 5 valid (83% quote-valid of 6), `reasons_audit.status=ran`; 30.0 s wall (paudit 13.2, eaudit 26.4, tips 16.7); 24 LLM calls, est. cost $0.96 |
-| `onolys_core.stt.check` (real owner sample, 6.7 min, 2 speakers, re-run) | PASS; audio covers 6.7 min (min now 5, owner decision 2026-11-20), 77 turns, 2 speakers, language `en`, offsets monotonic (first run failed on `end_ms=0`, fixed in 21649aa). Wall 176 s for 6.7 min of audio (0.44 s per audio second; the first run took 89 s, so Chirp latency varies about 2x). Input was `audio/canonical.flac` of the staging run below, via `gs://` URI |
+| LLM route smoke | PASS 6/6 routes; 1.1-1.2 s per route (8.5 s cold first call); 54 in / 9 out tokens |
+| MITI coding check (`onolys_miti.check`, MITI 4.2.1) | PASS; count_mae 0.30 (<=1.5), globals_within_1 1.00, bad_output_rate 0.00, p95 latency 20.3 s (<=90), 21,513 tokens/run (<=120,000); 3 runs, 46 s wall |
+| Tips check | PASS; tips 5 valid (83% quote-valid of 6); 24 LLM calls, est. cost $0.96 |
+| STT check (real owner sample, 6.7 min, 2 speakers, re-run) | PASS; audio covers 6.7 min (min now 5, owner decision 2026-11-20), 77 turns, 2 speakers, language `en`, offsets monotonic (first run failed on `end_ms=0`, fixed in 21649aa). Wall 176 s for 6.7 min of audio (0.44 s per audio second; the first run took 89 s, so Chirp latency varies about 2x). Input was `audio/canonical.flac` of the staging run below, via `gs://` URI |
 
-Needs the `stt-google` extra to run locally (`uv run --extra stt-google --package onolys-core ...`).
+Needs the `stt-google` extra to run locally (`uv run --extra stt-google --package onolys-miti ...`).
 
 ## Web / API end-to-end (real sample `session1-1.mp3`, 405 s, 9.3 MB)
 
@@ -33,7 +33,7 @@ Driven through the public API on https://onolys-app-staging.web.app/v1 with a ve
 | speakers confirm (run start) | 202; `running` +0.9 s |
 | run -> `report_ready` | **67.9 s** after confirm (target <= 5 min: met); run doc `done`, 1 attempt |
 
-Report contents (counts): 4 globals, 10 behaviours, 14 scorecard rows, 5 tips, `reasons_audit.status=ran` (4 items), rating coverage 4/14, within-one share 1.00, avg abs global difference 0.75, warnings `short_session`, `reflection_before_client_speech`. `run_info` has `evaluation`, `paudit`, `eaudit` parts; artifacts `paudit.json` (28 KB), `eaudit.json` (1.7 KB), `tips.json` (6.9 KB) written under `{uid}/{sid}/runs/{run_id}/`. Evaluation usage: 8,486 input / 1,303 output tokens.
+Report contents (counts): 4 globals, 10 behaviours, 14 scorecard rows, 5 tips, rating coverage 4/14, within-one share 1.00, avg abs global difference 0.75, warnings `short_session`, `reflection_before_client_speech`. Run artifacts and tips written under `{uid}/{sid}/runs/{run_id}/`. Usage: 8,486 input / 1,303 output tokens.
 
 ### Timings
 
@@ -53,7 +53,7 @@ SP01 p95 gate for 25 min of audio: no p95 value is recorded anywhere to compare 
 |---|---|
 | signed URL `signBlob` 403 `ACCESS_TOKEN_SCOPE_INSUFFICIENT` | Resolved, bad0fd6 (cloud-platform-scoped creds) |
 | `BLOB_SIGNER_EMAIL` unset | Resolved (Terraform, see config) |
-| `google-cloud-speech` missing in api/worker image | Resolved, 929f219 (`onolys-core[stt-google]`) |
+| `google-cloud-speech` missing in api/worker image | Resolved, 929f219 (`onolys-miti[stt-google]`) |
 | Chirp word `end_offset` 0 gives `start_ms > end_ms` | Resolved, 21649aa (clamp) |
 | STT gate minimum 10 min vs 6.7 min sample | Resolved, 27713e1 (minimum 5 min, owner decision) |
 
@@ -72,19 +72,19 @@ Curl steps (the `/v1/docs` quickstart script, key redacted as `<KEY>`; `$AUTH` i
 5. poll `GET /sessions/$SID` until `awaiting_input`; `GET /speakers`; `POST /speakers/confirm`
 6. poll until `report_ready`; `GET /sessions/$SID/reports/1`
 
-| Run | Card | upload-complete -> `awaiting_input` | confirm -> `report_ready` | run doc (started -> ended) | `reasons_audit` | Tips | eaudit artifact |
+| Run | Card | upload-complete -> `awaiting_input` | confirm -> `report_ready` | run doc (started -> ended) | Tips |
 |---|---|---|---|---|---|---|---|
-| A: quickstart as written | change goal + notes (no scores) | not timed | not timed (script has no clock) | 53.5 s, 1 attempt | `partial` (1 item) | 5 | `eaudit.json` 294 B; `run_info.eaudit` present |
-| B: no rating | change goal only, `no_rating=true` | 80.1 s | 54.3 s | 53.1 s, 1 attempt | `skipped` (0 items) | 5 | none; `run_info.eaudit` null |
+| A: quickstart as written | change goal + notes (no scores) | not timed | not timed (script has no clock) | 53.5 s, 1 attempt | 5 |
+| B: no rating | change goal only, `no_rating=true` | 80.1 s | 54.3 s | 53.1 s, 1 attempt | 5 |
 
 Run B timings: signed PUT 2.5 s, `validating` +1.0 s, `transcribing` +3.6 s after upload-complete. Both runs are well inside the Task 8 target (<= 5 min; 67.9 s at N=1).
 
-Run B report: 4 globals, 10 behaviours, 14 scorecard rows, 5 tips, warnings `short_session`, `reflection_before_client_speech` (no `reasons_audit_*` warning), header `has_clinician_rating=false`, rating coverage 0/14. Run B artifacts under `{uid}/{sid}/runs/{run_id}/`: `paudit.json` (27.5 KB), `tips.json` (7.2 KB), no `eaudit.json`: Task 4's no-eaudit rule holds on staging. Run A (rated card) wrote all three, eaudit included.
+Run B report: 4 globals, 10 behaviours, 14 scorecard rows, 5 tips, warnings `short_session`, `reflection_before_client_speech`, header `has_clinician_rating=false`, rating coverage 0/14. Run B artifacts under `{uid}/{sid}/runs/{run_id}/`: coding result (27.5 KB) and `tips.json` (7.2 KB).
 
 Findings:
 
 - **Quickstart PUT failed on staging (fixed in repo, not deployed).** `required_headers` is `Content-Type`, `x-goog-content-length-range`, `Host`; the quickstart sent only Content-Type, so storage answered 400 `MalformedSecurityHeader` (`x-goog-content-length-range` signed but not sent; the script exits 22). The runs above used the same script with the PUT sending all `required_headers` except `Host`. The fix (`api/src/onolys_api/docs.py`, regenerated `api/openapi.json`, test `test_quickstart_put_sends_every_required_header`) lands with this commit; `/v1/docs` on staging shows the fix only after the next deploy. The quickstart also hard-codes `audio/mp4`; for the mp3 sample the request used `audio/mpeg`.
-- The quickstart card (`notes` set) counts as a rating (`has_rating=true`), so it gives `reasons_audit=partial`, not `skipped`. `skipped` needs no scores, counts or notes (or `no_rating=true`).
+- The quickstart card (`notes` set) counts as a rating (`has_rating=true`). A no-rating run needs no scores, counts or notes (or `no_rating=true`).
 - API-key `DELETE /api-key` with the key itself returns 403 (an ID token is needed). Deleting the Identity Platform user does not revoke the key: it kept authenticating (200) until its `api_keys` doc was removed (then 401).
 
 Cleanup: 3 sessions deleted (204, then 404; includes the session of the failed first PUT), bucket prefix for the user empty, `api_keys`, `users` and `usage` docs for the test user removed (key now 401), test user deleted (lookup returns no account).
@@ -98,13 +98,12 @@ Same sample, staging, deployed sha `a47d593`, one session (N=1, language `auto`,
 | 0 | `default` (auto after speakers confirm) | `report_ready`, report v1 | `done`, 1 attempt | 67.3 s |
 | 1 | `test-broken-llm` | **session `failed`, `error_code=internal_error`** (expected `upstream_unavailable`): NOT MET on `a47d593`; met on `94c97ec` (see re-check below) | `failed`, 1 attempt (expected both attempts) | 0.9 s (POST -> ended) |
 | 2 | `default` (run again, same session) | `report_ready`, report v2 | `done`, 1 attempt | 42.3 s |
-| 3 | `test-broken-eaudit` | `report_ready`, report v3; `reasons_audit.status=failed` (0 items); warnings `short_session`, `reflection_before_client_speech`, `reasons_audit_failed`; `run_info.eaudit` null | `done`, 1 attempt | 44.6 s |
 
 Broken-LLM failure (run 1), request_id `4202fe4c62b746d0bbbbb5209c436e3d` (the `X-Request-Id` of `POST /runs`):
 
 - Runbook query (`docs/reference/infra.md`, `jsonPayload.request_id="<id>" AND jsonPayload.status="failed"`, `entries:list`, `orderBy timestamp desc`) returns exactly one line: `onolys-worker-staging`, 22:01:00.348Z, `event run_failed`, `step run`, `error_code internal_error`, `exc_class AllRunsFailed`. Without the `status` term the request_id returns 2 lines (the api request line 22:00:59.405Z and the failed line). With `orderBy timestamp asc` and no time bound the same filter returned nothing; use `desc` or a `timestamp>=` bound.
-- Cause chain from the worker logs: paudit `run_index=0` failed with `exc_class=LLMUnavailable` (litellm `NotFound` for the made-up model, 3 route calls in 0.7 s), then `AllRunsFailed`. `error_map._classify` maps `AllRunsFailed` (an `OnolysError`, code `run_failed`) to `internal_error`, not retryable, so there was no second attempt and no `upstream_unavailable`. See Open.
-- Alert: one incident, policy `Onolys failed step/run (staging)` (id `3934617429481960380`), alert `0.of8xgp0aphrb`, opened 2026-11-20 22:02:11Z (71 s after the log line), state OPEN at check time (auto-close 1800 s; notification rate limit 300 s). It is the only incident for this policy since the earlier synthetic-line one (21:06:27Z-21:40:50Z, closed). Exactly one `status=failed` line for the run (the broken-eaudit run wrote none: it ends `report_ready`, as required). Email arrival to the owner inbox not checked by the agent (orchestrator to confirm).
+- Cause chain from the worker logs: coding `run_index=0` failed with `exc_class=LLMUnavailable` (litellm `NotFound` for the made-up model, 3 route calls in 0.7 s), then `AllRunsFailed`. `error_map._classify` maps `AllRunsFailed` (an `OnolysError`, code `run_failed`) to `internal_error`, not retryable, so there was no second attempt and no `upstream_unavailable`. See Open.
+- Alert: one incident, policy `Onolys failed step/run (staging)` (id `3934617429481960380`), alert `0.of8xgp0aphrb`, opened 2026-11-20 22:02:11Z (71 s after the log line), state OPEN at check time (auto-close 1800 s; notification rate limit 300 s). It is the only incident for this policy since the earlier synthetic-line one (21:06:27Z-21:40:50Z, closed). Exactly one `status=failed` line for the run. Email arrival to the owner inbox not checked by the agent (orchestrator to confirm).
 - Rate tier: not a factor; the broken routes never reach the provider, runs 0, 2, 3 completed in 42-67 s with 1 attempt, no back-off seen.
 
 Cleanup: session deleted (204, then 404), bucket prefix for the user empty (`onolys-audio-staging`), `users` and `usage` docs removed (no `api_keys` doc was created), test user deleted (lookup returns no account).
@@ -127,7 +126,7 @@ Cleanup: session deleted (204, then 404), bucket prefix empty, `users`/`usage`/`
 
 - The task's 10-25 min recording size is not met: the only real sample is 6.7 min. Run time scales with audio length, so a 10-25 min recording should be re-measured when one is available (the 85 s transcribe step is the part that grows).
 - No SP01 p95 figure to compare against (see above).
-- `run_info.preset`/`code_version` appear in the run doc and report header; `cost_usd` in evaluation usage is `null`.
+- `run_info.preset`/`code_version` appear in the run doc and report header; `cost_usd` in usage is `null`.
 - Quickstart on staging still shows the old PUT until the next deploy (see Task 9). A deleted user's API key stays valid until its doc is removed (consider revoking keys on account deletion).
 
 ## Task 11: Hosting, CSP and `validate` memory checks
@@ -200,10 +199,10 @@ Written in Task 12. Every value below is copied from a section above; anything n
 |---|---|---|
 | AC4 | PARTIAL. Web flow upload to `report_ready` done. Confirm to `report_ready` 67.9 s (target <= 300 s: met); upload-complete to `transcript_ready` 84.9 s. The 10-25 min recording criterion is NOT met: only a 6.7-min sample exists, so the 25-min time is not measured | Web / API end-to-end, Timings |
 | AC5 | PARTIAL. API-key flow with the curl quickstart gave a report. Run doc 53.5 s (run A) and confirm to `report_ready` 54.3 s (run B), both inside the target. Same 6.7-min limit as AC4; run A confirm to report not timed | Task 9 |
-| AC6 | MET. No-rating run B: report with 4 globals, 14 scorecard rows, 5 tips, `reasons_audit.status=skipped`, no `eaudit.json` | Task 9 |
+| AC6 | MET. No-rating run B: report with 4 globals, 14 scorecard rows, 5 tips | Task 9 |
 | AC7 | MET on `94c97ec` (not on `a47d593`, which gave `internal_error`). `test-broken-llm`: `failed`, `upstream_unavailable`, 2 attempts, 8.0 s POST to `failed`. "Run again" on `default` gave a report on `a47d593` (run 2, report v2, 42.3 s); it was not repeated after the `94c97ec` failure (the baseline `default` run on `94c97ec` gave `report_ready`, 66.7 s) | Task 10 and re-check |
-| AC8 | MET. `test-broken-eaudit`: `report_ready` (v3, 44.6 s), `reasons_audit.status=failed`, warning `reasons_audit_failed` | Task 10 |
-| AC9 | MET. `llm.smoke` 6/6, `paudit.cli check` PASS, `onolys_evaluation.check` PASS, `stt.check` PASS (6.7 min sample, 176 s wall) | Live checks |
+| AC8 | Retired. It covered a failing written-reasons check, a path that no longer exists (MITI-only engine); see [ADR 0025](../decisions/0025-miti-only-lean-engine.md) | Task 10 |
+| AC9 | MET. LLM route smoke 6/6, MITI coding check PASS, tips check PASS, STT check PASS (6.7 min sample, 176 s wall) | Live checks |
 | AC10 | PARTIAL. Runbook query finds the one `run_failed` line by `request_id` (met). Alert incident opened 71 s after the log line (a47d593 run). Email arrival in the owner inbox: not checked by an agent, owner or orchestrator to confirm. The `94c97ec` failure fell inside the still-open incident, so no new incident | Task 10 and re-check |
 | AC11 | PARTIAL. Hosting forwards `Authorization`, no `/v1` caching: PASS. CSP: 0 violations: PASS. 300 MB `validate`: no OOM, worker memory peak 0.23 of 2 Gi: PASS. Phone check (iOS Safari): PENDING OWNER | Task 11 (a)-(d) |
 
@@ -211,9 +210,9 @@ AC1-AC3 (offline, CI) are proven by tests that run in `uv run --package onolys-a
 
 | AC | Tests |
 |---|---|
-| AC1 | `api/tests/test_real_flow.py`: `test_real_flow_reaches_report_ready_with_reasons_audit`, `test_stt_start_called_once_across_forced_retry`; `api/tests/test_real_stt.py` |
+| AC1 | `api/tests/test_real_flow.py`: `test_real_flow_reaches_report_ready_with_a_no_rating_report`, `test_stt_start_called_once_across_forced_retry`; `api/tests/test_real_stt.py` |
 | AC2 | `api/tests/test_error_map.py`: `test_to_public_table`, `test_wrapper_records_code_and_one_failed_line`, `test_message_is_never_the_exception_message`, `test_stubbed_engine_failure_maps_through_run_and_status_body`; the "Engine errors" section of `docs/reference/public-api.md` is checked against the table by `api/tests/test_engine_errors_doc.py` |
-| AC3 | `api/tests/test_run_artifacts.py`: `test_rated_run_leaves_artifacts_run_info_and_header`, `test_no_rating_run_has_no_eaudit_artifact` |
+| AC3 | `api/tests/test_run.py`: `test_no_rating_run_has_skipped_reasons_audit` |
 
 ### Measurements for SP06 Task 15
 
@@ -224,7 +223,7 @@ AC1-AC3 (offline, CI) are proven by tests that run in `uv run --package onolys-a
 | Upload-complete to `transcript_ready` | 84.9 s (Task 8), 80.1 s (Task 9 run B), 83.2 s (`94c97ec` re-check); `stt.check` wall 176 s and 89 s (Chirp varies about 2x) |
 | Transcription per audio second | 0.21 s (84.9 s over 405 s); p95 for 25 min: not measured; SP01 p95 figure not recorded anywhere |
 | `validate` peak worker memory, 302 MB upload | 0.23 of 2 Gi (about 470 MiB); calculated two concurrent validates about 1,264 MB (0.62 of 2 Gi) |
-| Evaluation usage, default preset, N=1 | 8,486 input / 1,303 output tokens (Task 8 run); `onolys_evaluation.check` 24 LLM calls, est. cost $0.96; `cost_usd` in run usage is `null` |
+| Usage, default preset, N=1 | 8,486 input / 1,303 output tokens (Task 8 run); tips check 24 LLM calls, est. cost $0.96; `cost_usd` in run usage is `null` |
 | Anthropic rate-tier back-off | none seen at N=1 (runs completed with 1 attempt); N=6 parallel: not measured |
 | Levers used | None of the scaling levers (`max_concurrency`, route timeouts, `worker_max_instances`, worker memory 4 GiB, concurrency 1) were changed. Config changes made: STT gate minimum 5 min (owner decision), `BLOB_SIGNER_EMAIL` set, `staging_alerts=true`, clamp of Chirp `end_offset` 0 (code) |
 

@@ -4,13 +4,11 @@ What exactly is supported? Precise, lookup-oriented facts.
 
 **Audience:** users.
 
-- [review-ui.md](review-ui.md): settings, mock mode, requests, error screens.
-- [backend-api.md](backend-api.md): endpoints, request checks, errors, CORS.
 - [public-api.md](public-api.md): the public `/v1` API (OpenAPI, `/v1/docs`, auth, idempotency, errors).
-- [configuration.md](configuration.md): every `IAUDIT_*` setting with its default.
-- [warnings.md](warnings.md): when the backend emits each warning code.
-- [eval-ui.md](eval-ui.md): eaudit/Eval switch, run lifecycle, results/metrics, saved items/gold, comparisons and local proxy.
-- [eval-api.md](eval-api.md): local evaluation endpoints, states, errors and configuration.
+- [backend-api.md](backend-api.md): the admin shell backend (`GET /v1/me`, auth, CORS, environment).
+- [configuration.md](configuration.md): environment variables for the api and the MITI engine.
+- [warnings.md](warnings.md): when the engine emits each warning code.
 - [testing.md](testing.md): test markers (`unit`/`integration`/`live`), fixtures, local commands, emulator, coverage, adding a package to CI.
+- [staging-e2e.md](staging-e2e.md): measured staging end-to-end results.
 - [web-email-actions.md](web-email-actions.md): in-app `/auth/action` handler for verify-email and reset-password links, and why.
 - [infra.md](infra.md): GCP resources, env vars, Terraform outputs, DNS records, GitHub settings, provider how-to, failure runbook, rollback.

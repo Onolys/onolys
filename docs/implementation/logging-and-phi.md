@@ -1,6 +1,6 @@
 # Logging and PHI
 
-The backend handles interview text that may be sensitive. Code: `engines/core/src/onolys_core/safe_log.py`.
+Session recordings and transcripts may be sensitive. Code: `engines/miti/src/onolys_miti/safe_log.py`.
 
 **Audience:** maintainers and coding agents.
 
@@ -9,4 +9,4 @@ The backend handles interview text that may be sensitive. Code: `engines/core/sr
 - **Exceptions.** Log the class name and a few frame locations, never the message, because a message can hold user data.
 - **Errors in replies.** Error bodies carry fixed messages and a request id, never instance values.
 - **Metrics.** The per-request collector holds no prompt or output text.
-- **Test.** A sentinel word placed in a transcript must never appear in logs, metrics or the `Server-Timing` header (`engines/eaudit/tests/latency/test_latency.py`, scenario S9).
+- **Test.** `engines/miti/tests/test_safe_log.py` covers the allowlist and the blocked names; the api has its own log tests under `api/tests/`.

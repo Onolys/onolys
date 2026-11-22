@@ -1,5 +1,7 @@
 # 0017. uv workspace, model routes and a shared `onolys_core`
 
+> Superseded by [ADR 0025](0025-miti-only-lean-engine.md) (MITI-only lean engine).
+
 **Audience:** contributors.
 
 **Status:** accepted. Gate run 2026-11-20; STT 20-minute file cap resolved by a launch decision, see below.

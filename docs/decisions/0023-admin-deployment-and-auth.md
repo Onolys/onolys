@@ -1,5 +1,7 @@
 # 0023. Admin deployment and auth
 
+> Superseded by [ADR 0025](0025-miti-only-lean-engine.md) (MITI-only lean engine).
+
 **Audience:** contributors.
 
 **Status:** accepted. Reference: [backend-api.md, Admin deployment](../reference/backend-api.md#admin-deployment). Built after launch (D9); verified on staging, prod stays off until launch.

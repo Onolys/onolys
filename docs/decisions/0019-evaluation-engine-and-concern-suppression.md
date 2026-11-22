@@ -1,10 +1,12 @@
 # 0019. Evaluation engine: one in-process run, concern suppression before the decision table
 
+> Superseded by [ADR 0025](0025-miti-only-lean-engine.md) (MITI-only lean engine).
+
 **Audience:** contributors.
 
 **Status:** accepted. Measurements below come from two live runs on the synthetic fixture; a full-length session is still unmeasured.
 
-**Context.** A clinician rates their own session on a card. Onolys must compare that card with its own rating (`paudit`), audit the clinician's written reasons (`eaudit`), and write tips, all into one report the web app renders. `eaudit` was built for clinical write-ups, and several of its 17 checks are noise on a self-rating. See [ADR 0005](0005-models-propose-code-decides.md) (models propose, code decides) and [ADR 0018](0018-protocol-pack-data-vs-code.md) (protocol facts live in the pack).
+**Context.** A clinician rates their own session on a card. Onolys must compare that card with its own rating (`paudit`), audit the clinician's written reasons (`eaudit`), and write tips, all into one report the web app renders. `eaudit` was built for clinical write-ups, and several of its 17 checks are noise on a self-rating. See ADR 0005 (removed; see ADR 0025) (models propose, code decides) and [ADR 0018](0018-protocol-pack-data-vs-code.md) (protocol facts live in the pack).
 
 **Decision.**
 
