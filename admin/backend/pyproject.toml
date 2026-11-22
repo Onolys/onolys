@@ -1,13 +1,10 @@
 [project]
 name = "onolys-admin-backend"
 version = "0.1.0"
-description = "Admin gateway: auth + CORS in front of the eaudit app (single Cloud Run service)"
+description = "Admin shell: auth + CORS + GET /v1/me (single Cloud Run service)"
 requires-python = ">=3.12,<3.13"
 dependencies = [
     "onolys-admin-auth",
-    "eaudit",
-    "onolys-core",
-    "onolys-paudit",
     "fastapi>=0.115",
     "uvicorn>=0.30",
 ]
@@ -24,9 +21,6 @@ packages = ["src/onolys_admin_backend"]
 
 [tool.uv.sources]
 onolys-admin-auth = { workspace = true }
-eaudit = { workspace = true }
-onolys-core = { workspace = true }
-onolys-paudit = { workspace = true }
 
 [tool.ruff]
 line-length = 100
