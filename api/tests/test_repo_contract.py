@@ -176,6 +176,25 @@ def test_list_sessions_newest_first_paged_and_uid_scoped(repo):
     assert all(s.uid == uid for s in p1.items + p2.items + p3.items)
 
 
+def test_list_sessions_pages_stay_full_around_deleting_sessions(repo):
+    """A17: `deleting` sessions never shorten a page, and a cursor whose session was since
+    deleted still resumes (the cursor carries created_at + id, not a lookup)."""
+    uid, _ = new_ids()
+    base = datetime.now(UTC)
+    sids = []
+    for i in range(6):
+        sid = f"s-{i}-{uuid.uuid4().hex[:6]}"
+        seed(repo, uid=uid, sid=sid, created_at=base + timedelta(seconds=i))
+        sids.append(sid)
+    for i in (5, 4, 2):
+        repo.update_session(uid, sids[i], {"state": "deleting"})
+    p1 = repo.list_sessions(uid, limit=2)
+    assert [s.id for s in p1.items] == [sids[3], sids[1]] and p1.next_cursor
+    repo.delete_session(uid, sids[1])  # the cursor's own session disappears
+    p2 = repo.list_sessions(uid, limit=2, cursor=p1.next_cursor)
+    assert [s.id for s in p2.items] == [sids[0]] and p2.next_cursor is None
+
+
 def test_list_sessions_bad_cursor_is_not_found(repo):
     uid, _ = new_ids()
     with pytest.raises(NotFoundError):

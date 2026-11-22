@@ -88,21 +88,25 @@ def _load[M: Doc](model: type[M], snap) -> M:
     return model.model_validate({**(snap.to_dict() or {}), "id": snap.id})
 
 
-def _encode_cursor(sid: str) -> str:
-    return base64.urlsafe_b64encode(sid.encode()).decode().rstrip("=")
+def _encode_cursor(created_at: datetime, sid: str) -> str:
+    raw = f"{created_at.isoformat()}|{sid}"
+    return base64.urlsafe_b64encode(raw.encode()).decode().rstrip("=")
 
 
-def _decode_cursor(cursor: str) -> str:
-    """A cursor is a session id in urlsafe base64; malformed or empty is NotFound (-> 422)."""
+def _decode_cursor(cursor: str) -> tuple[datetime, str]:
+    """A cursor is `created_at|id` in urlsafe base64 (a position, not a lookup, so it survives
+    its session being deleted); malformed is NotFound (-> 422)."""
     try:
-        sid = base64.b64decode(
+        raw = base64.b64decode(
             (cursor + "=" * (-len(cursor) % 4)).replace("-", "+").replace("_", "/"), validate=True
         ).decode()
-    except ValueError:  # binascii.Error, UnicodeDecodeError and non-ASCII input
+        stamp, sep, sid = raw.partition("|")
+        created_at = datetime.fromisoformat(stamp)
+    except ValueError:  # binascii.Error, UnicodeDecodeError, bad timestamp, non-ASCII input
         raise NotFoundError() from None
-    if not sid:
+    if not sep or not sid or created_at.tzinfo is None:
         raise NotFoundError()
-    return sid
+    return created_at, sid
 
 
 def _is_exhausted(e: ValueError) -> bool:
@@ -308,16 +312,33 @@ class FirestoreRepo:
         self, uid: str, limit: int = 20, cursor: str | None = None
     ) -> Page[SessionDoc]:
         limit = max(1, min(limit, MAX_LIMIT))
-        q = _uid_query(self._client.collection("sessions"), uid).order_by(
-            "created_at", direction=firestore.Query.DESCENDING
+        q = (
+            _uid_query(self._client.collection("sessions"), uid)
+            .order_by("created_at", direction=firestore.Query.DESCENDING)
+            .order_by("__name__", direction=firestore.Query.DESCENDING)
         )
+        after: Any = None
         if cursor:
-            _, snap = self._owned_session(uid, _decode_cursor(cursor))
-            q = q.start_after(snap)
-        docs = [_load(SessionDoc, s) for s in q.limit(limit + 1).stream()]
+            created_at, sid = _decode_cursor(cursor)
+            after = {"created_at": created_at, "__name__": self._top("sessions", sid)}
+        # `deleting` sessions are skipped here, not after paging, so a page is never short
+        # while more remain: keep reading until limit + 1 visible docs or the end.
+        docs: list[SessionDoc] = []
+        while len(docs) <= limit:
+            page = list((q if after is None else q.start_after(after)).limit(limit + 1).stream())
+            for snap in page:
+                after = snap
+                doc = _load(SessionDoc, snap)
+                if doc.state != "deleting":
+                    docs.append(doc)
+                    if len(docs) > limit:
+                        break
+            if len(page) < limit + 1:
+                break
         more = len(docs) > limit
         items = docs[:limit]
-        return Page(items, _encode_cursor(items[-1].id) if more and items else None)
+        nxt = _encode_cursor(items[-1].created_at, items[-1].id) if more and items else None
+        return Page(items, nxt)
 
     def fail_stale_session(
         self, uid: str, sid: str, state: str, before: datetime, error: SessionError

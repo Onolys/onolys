@@ -2326,6 +2326,7 @@
     },
     "/v1/sessions": {
       "get": {
+        "description": "Not strictly read-only: a session whose pipeline has stalled past its deadline is marked `failed` here (lazily, in a transaction that yields to a finished task), so no sweeper job is needed. Sessions being deleted are skipped without shortening the page. `next_cursor` is an opaque position and stays valid if its session is deleted.",
         "operationId": "listSessions",
         "parameters": [
           {
@@ -2629,6 +2630,7 @@
         ]
       },
       "get": {
+        "description": "Not strictly read-only: a stalled session is marked `failed` on read (see `listSessions`).",
         "operationId": "getSession",
         "parameters": [
           {

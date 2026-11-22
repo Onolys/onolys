@@ -233,15 +233,14 @@ class FakeRepo:
             key=lambda t: (t[1]["created_at"], t[0]),
             reverse=True,
         )
+        mine = [(i, d) for i, d in mine if d.get("state") != "deleting"]
         if cursor:
-            after = _decode_cursor(cursor)
-            self._owned(f"sessions/{after}", uid)
-            ids = [i for i, _ in mine]
-            mine = mine[ids.index(after) + 1 :] if after in ids else []
+            at, after = _decode_cursor(cursor)
+            mine = [(i, d) for i, d in mine if (d["created_at"], i) < (at, after)]
         page = [self._load(SessionDoc, i, copy.deepcopy(d)) for i, d in mine[: limit + 1]]
         more = len(page) > limit
         items = page[:limit]
-        return Page(items, _encode_cursor(items[-1].id) if more and items else None)
+        return Page(items, _encode_cursor(items[-1].created_at, items[-1].id) if more else None)
 
     def fail_stale_session(
         self, uid: str, sid: str, state: str, before: datetime, error: SessionError

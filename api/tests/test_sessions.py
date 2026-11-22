@@ -221,12 +221,16 @@ async def test_list_bad_params_are_422(client, q):
     assert (await client.get(f"/v1/sessions?{q}", headers=A)).status_code == 422
 
 
-async def test_list_cursor_of_another_users_session_is_422(client):
+async def test_list_cursor_of_another_users_session_leaks_nothing(client):
+    """The cursor is only a position (created_at + id); the query stays scoped to the caller."""
     sid = (await create(client, headers=B)).json()["session"]["id"]
-    import base64
-
-    cur = base64.urlsafe_b64encode(sid.encode()).decode().rstrip("=")
-    assert (await client.get(f"/v1/sessions?cursor={cur}", headers=A)).status_code == 422
+    for _ in range(3):
+        await create(client, headers=B)
+    page = (await client.get("/v1/sessions?limit=1", headers=B)).json()
+    mine = (await create(client, headers=A)).json()["session"]["id"]
+    r = await client.get(f"/v1/sessions?cursor={page['next_cursor']}", headers=A)
+    assert r.status_code == 200
+    assert sid not in str(r.json()) and mine not in [i["id"] for i in r.json()["items"]]
 
 
 async def test_list_hides_deleting_sessions(client, repo):

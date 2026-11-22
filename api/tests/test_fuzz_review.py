@@ -190,10 +190,16 @@ def test_create_session_rejects_non_public_preset(api):
     assert r.status_code == 422
 
 
-def test_create_session_rejects_unknown_language(request, api):
-    known_bug(request, "A18: language only regex-checked (zz accepted)")
-    r = api.post("/v1/sessions", json={"language": "zz"}, headers=_uid())
+@pytest.mark.parametrize("lang", ["zz", "xx-YY", "qqq"])
+def test_create_session_rejects_unknown_language(api, lang):
+    r = api.post("/v1/sessions", json={"language": lang}, headers=_uid())
     assert r.status_code == 422
+
+
+@pytest.mark.parametrize("lang", ["auto", "en", "en-US", "ja-JP", "fr", "es-419", "fil"])
+def test_create_session_accepts_supported_languages(api, lang):
+    r = api.post("/v1/sessions", json={"language": lang}, headers=_uid())
+    assert r.status_code == 202, r.text
 
 
 def test_garbage_body_is_documented_422(api):

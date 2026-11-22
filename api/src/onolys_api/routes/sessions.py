@@ -2,7 +2,6 @@
 
 import hashlib
 import logging
-import re
 from datetime import UTC, datetime, timedelta
 from typing import Annotated
 from uuid import uuid4
@@ -17,6 +16,7 @@ from onolys_api.jobs.delete import delete_session_data
 from onolys_api.jobs.machine import advance
 from onolys_api.jobs.queue import TaskPayload
 from onolys_api.jobs.stale import settle_if_stale
+from onolys_api.languages import is_supported_language
 from onolys_api.presets import UnknownPreset
 from onolys_api.repo.base import NotFoundError
 from onolys_api.repo.models import (
@@ -30,7 +30,6 @@ from onolys_api.routes.ids import ResourceId
 
 IDEMPOTENCY_TTL = timedelta(hours=24)
 MAX_KEY_LEN = 200
-_BCP47 = re.compile(r"^[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8}){0,3}$")
 
 ERRORS = {"default": {"model": ErrorResponse, "description": "Error"}}
 router = APIRouter(prefix="/sessions", tags=["sessions"], responses=ERRORS)
@@ -55,8 +54,8 @@ class CreateSessionRequest(BaseModel):
     @field_validator("language")
     @classmethod
     def _language(cls, v: str) -> str:
-        if v != "auto" and not _BCP47.match(v):
-            raise ValueError("invalid language")
+        if not is_supported_language(v):
+            raise ValueError("unsupported language")
         return v
 
 
@@ -264,6 +263,12 @@ def create_session(
     operation_id="listSessions",
     response_model=SessionList,
     summary="The caller's sessions, newest first (in-flight and failed included)",
+    description=(
+        "Not strictly read-only: a session whose pipeline has stalled past its deadline is marked "
+        "`failed` here (lazily, in a transaction that yields to a finished task), so no sweeper "
+        "job is needed. Sessions being deleted are skipped without shortening the page. "
+        "`next_cursor` is an opaque position and stays valid if its session is deleted."
+    ),
 )
 def list_sessions(
     request: Request,
@@ -289,7 +294,7 @@ def list_sessions(
             interview_id=s.interview_id,
         )
         for s in sessions
-        if s.state != "deleting"
+        if s.state != "deleting"  # one that began deleting since the page was read
     ]
     return SessionList(items=items, next_cursor=page.next_cursor)
 
@@ -299,6 +304,10 @@ def list_sessions(
     operation_id="getSession",
     response_model=SessionDetail,
     summary="Session status snapshot (the web app uses the session_status listener instead)",
+    description=(
+        "Not strictly read-only: a stalled session is marked `failed` on read (see "
+        "`listSessions`)."
+    ),
 )
 def get_session(id: ResourceId, request: Request, user: User) -> SessionDetail:
     repo = request.app.state.repo
