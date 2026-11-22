@@ -354,6 +354,16 @@ jobs:
             | jq -e --arg sha "$GITHUB_SHA" '.service_mode == "combined" and .code_version == $sha'
           docker logs onolys-api
           docker rm -f onolys-api
+      - name: Image ships only the miti engine (no old packages, no protocols)
+        run: |
+          for m in paudit onolys_core eaudit onolys_evaluation; do
+            if docker run --rm --entrypoint python onolys-api:ci -c "import $m" 2>/dev/null; then
+              echo "unexpected import $m in image"; exit 1
+            fi
+          done
+          docker run --rm --entrypoint python onolys-api:ci -c "import onolys_miti"
+          docker run --rm --entrypoint test onolys-api:ci ! -e /app/protocols
+          docker image inspect onolys-api:ci --format 'image size bytes: {{.Size}}'
 
   admin-auth:
     needs: changes

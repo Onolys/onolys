@@ -22,6 +22,7 @@ COPY engines/core/pyproject.toml engines/core/pyproject.toml
 COPY engines/eaudit/pyproject.toml engines/eaudit/pyproject.toml
 COPY engines/paudit/pyproject.toml engines/paudit/pyproject.toml
 COPY engines/evaluation/pyproject.toml engines/evaluation/pyproject.toml
+COPY engines/miti/pyproject.toml engines/miti/pyproject.toml
 COPY api/pyproject.toml api/pyproject.toml
 COPY admin/auth/pyproject.toml admin/auth/pyproject.toml
 COPY admin/backend/pyproject.toml admin/backend/pyproject.toml

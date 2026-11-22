@@ -11,18 +11,18 @@ RUN pip install --no-cache-dir uv==0.13.4
 WORKDIR /src
 # Dependency layer: manifests only (every workspace member's pyproject must exist for uv).
 COPY pyproject.toml uv.lock ./
+# core/eaudit/paudit/evaluation stay workspace members until SP05: manifests only, so uv resolves the lock.
 COPY engines/core/pyproject.toml engines/core/pyproject.toml
 COPY engines/eaudit/pyproject.toml engines/eaudit/pyproject.toml
 COPY engines/paudit/pyproject.toml engines/paudit/pyproject.toml
 COPY engines/evaluation/pyproject.toml engines/evaluation/pyproject.toml
+COPY engines/miti/pyproject.toml engines/miti/pyproject.toml
 COPY api/pyproject.toml api/pyproject.toml
+COPY admin/auth/pyproject.toml admin/auth/pyproject.toml
+COPY admin/backend/pyproject.toml admin/backend/pyproject.toml
 RUN uv sync --frozen --no-dev --package onolys-api --no-install-workspace
-# Workspace packages (core, eaudit, paudit, evaluation, api incl. the vendored Redoc bundle in static/).
-# paudit/evaluation ship their JSON schemas inside the wheel (hatch force-include of schemas/).
-COPY engines/core engines/core
-COPY engines/eaudit engines/eaudit
-COPY engines/paudit engines/paudit
-COPY engines/evaluation engines/evaluation
+# Source: miti (protocols and schemas ship inside its wheel) and api (incl. the vendored Redoc bundle in static/).
+COPY engines/miti engines/miti
 COPY api/src api/src
 RUN uv sync --frozen --no-dev --no-editable --package onolys-api
 
@@ -32,15 +32,10 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/* \
     && useradd --system --uid 10001 --create-home onolys
 COPY --from=build /opt/venv /opt/venv
-COPY protocols /app/protocols
 COPY config /app/config
-# eaudit's assembler validates every response against these schemas (IAUDIT_CONTRACTS_DIR);
-# a non-editable install cannot find them relative to the package.
-COPY docs/contracts/*.schema.json /app/contracts/
 COPY api/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 ARG GIT_SHA=dev
-ENV PATH=/opt/venv/bin:$PATH PYTHONUNBUFFERED=1 PORT=8080 GIT_SHA=${GIT_SHA} \
-    PAUDIT_PROTOCOLS_DIR=/app/protocols IAUDIT_CONTRACTS_DIR=/app/contracts
+ENV PATH=/opt/venv/bin:$PATH PYTHONUNBUFFERED=1 PORT=8080 GIT_SHA=${GIT_SHA}
 WORKDIR /app
 USER onolys
 EXPOSE 8080

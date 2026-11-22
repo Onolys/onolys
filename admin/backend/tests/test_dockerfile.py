@@ -43,3 +43,8 @@ def test_no_engine_env_vars():
 def test_safe_defaults_and_workdir():
     assert re.search(r"ENV=prod ADMIN_AUTH=on", DOCKERFILE)
     assert re.search(r"^WORKDIR\s+/app\s*$", DOCKERFILE, re.M)
+
+
+def test_every_engine_manifest_is_copied():
+    for eng in sorted(p.name for p in (ROOT / "engines").iterdir() if (p / "pyproject.toml").is_file()):
+        assert f"COPY engines/{eng}/pyproject.toml engines/{eng}/pyproject.toml" in DOCKERFILE
