@@ -18,24 +18,17 @@ from onolys_miti.report import (
 from onolys_miti.result import MitiResult, SummaryStat
 from onolys_miti.tone import ToneRules
 
-# Engine templates (neutral wording; linted against the banned list by a unit test). The rated
-# templates stay in the list so `engine:compare_templates` hashes the same as before.
-HEADLINE_AGREE = "Onolys agrees"
+# Engine templates (neutral wording; linted against the banned list by a unit test).
 HEADLINE_NEUTRAL = "Onolys's reading"
-SCORED = "Onolys scored {o}; you scored {c}."
-COUNTED = "Onolys counted {o}; you counted {c}."
 SCORED_ONLY = "Onolys scored {o}."
 COUNTED_ONLY = "Onolys counted {o}."
-NO_VALUE = "Onolys has no value for this item; you recorded {c}."
-NOTE_BOTH = "Both values use the same formula. Reference levels, not pass marks."
 NOTE_ONOLYS = "Onolys values only. Reference levels, not pass marks."
 # Appended to the method limits: the report is Onolys's reading, not an official coding.
 METHOD_LIMIT = "This is Onolys's reading of the session, not an official coding."
 
 
 def template_strings() -> list[str]:
-    return [HEADLINE_AGREE, HEADLINE_NEUTRAL, SCORED, COUNTED, SCORED_ONLY, COUNTED_ONLY,
-            NO_VALUE, NOTE_BOTH, NOTE_ONOLYS, METHOD_LIMIT]
+    return [HEADLINE_NEUTRAL, SCORED_ONLY, COUNTED_ONLY, NOTE_ONOLYS, METHOD_LIMIT]
 
 
 def not_rated_diff(onolys: float | None) -> Diff:
