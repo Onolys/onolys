@@ -21,8 +21,8 @@ export function Shell({ session }: { session: AuthSession | null }) {
     setMe("loading");
     try {
       const base = getConfig().adminApiUrl ?? "";
-      await authedFetch(`${base}/v1/me`);
-      setMe("ok");
+      const res = await authedFetch(`${base}/v1/me`);
+      setMe(res.status >= 500 ? "unreachable" : "ok");
     } catch {
       setMe("unreachable");
     }
