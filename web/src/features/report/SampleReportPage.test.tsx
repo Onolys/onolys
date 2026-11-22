@@ -1,11 +1,12 @@
 import { screen, within } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { server } from "../../mocks/server";
 import { renderApp } from "../../test/renderApp";
 
 afterEach(() => {
   server.events.removeAllListeners();
   window.location.hash = "";
+  vi.unstubAllEnvs();
 });
 
 describe("/sample-report", () => {
@@ -29,5 +30,22 @@ describe("/sample-report", () => {
     expect(main.queryByRole("button", { name: /run again/i })).toBeNull();
     expect(main.queryByRole("button", { name: /rating/i })).toBeNull();
     expect(main.queryByRole("button", { name: /delete/i })).toBeNull();
+  });
+
+  it("shows the no-rating sample (Item + Onolys only) with the flag off", async () => {
+    renderApp("/sample-report");
+    const main = within(screen.getByRole("main"));
+    const score = within(await main.findByRole("region", { name: "Scorecard" }));
+    expect(score.getAllByRole("columnheader").map((h) => h.textContent)).toEqual(["Item", "Onolys"]);
+    expect(main.queryByRole("region", { name: "Disagreements" })).toBeNull();
+  });
+
+  it("uses the no-rating fixture with the flag on too (PRD R5: unconditional): no Disagreements or reasons", async () => {
+    vi.stubEnv("VITE_RATING_ENABLED", "true");
+    renderApp("/sample-report");
+    const main = within(screen.getByRole("main"));
+    await main.findByRole("region", { name: "Scorecard" });
+    expect(main.queryByRole("region", { name: "Disagreements" })).toBeNull();
+    expect(main.queryByRole("region", { name: "Your reasons, checked" })).toBeNull();
   });
 });

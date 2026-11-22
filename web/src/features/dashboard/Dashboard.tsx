@@ -4,6 +4,7 @@ import { Link } from "react-router";
 import { unwrap } from "../../api/client";
 import { describeError, messageForCode } from "../../api/errors";
 import { useApiClient } from "../../auth/useApiClient";
+import { ratingEnabled } from "../../config";
 import { interviewCapText } from "../interview/capText";
 import { ErrorCard } from "../session/ErrorCard";
 import { UsageLeft } from "../usage/UsageLeft";
@@ -51,7 +52,11 @@ export function Dashboard() {
   } else if (items.length === 0) {
     body = (
       <div className="empty-state">
-        <p>Onolys rates a recorded session against the MITI and shows you where it agrees with your own rating, line by line.</p>
+        <p>
+          {ratingEnabled()
+            ? "Onolys rates a recorded session against the MITI and shows you where it agrees with your own rating, line by line."
+            : "Onolys codes a recorded session against the MITI, with evidence from your transcript and tips to improve."}
+        </p>
         <p>
           <Link to="/sample-report">See a sample report</Link>
         </p>

@@ -1,7 +1,7 @@
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { mockBackend, server } from "../../mocks/server";
 import { DASHBOARD_POLL_MS, sessionsRefetchInterval } from "./chips";
 import { here, renderApp } from "../../test/renderApp";
@@ -149,6 +149,8 @@ describe("dashboard: empty state", () => {
     const user = userEvent.setup();
     const { router } = renderApp("/", { user: USER });
     expect(await main().findByText(/Onolys .*MITI/i)).toBeInTheDocument();
+    expect(main().getByText(/evidence from your transcript and tips to improve/i)).toBeInTheDocument();
+    expect(main().queryByText(/your own rating/i)).toBeNull();
     expect(main().getByRole("link", { name: "New session" })).toHaveAttribute("href", "/sessions/new");
     await user.click(main().getByRole("link", { name: "See a sample report" }));
     expect(here(router)).toBe("/sample-report");
@@ -176,5 +178,14 @@ describe("dashboard: freshness (W25, D8)", () => {
     await userEvent.click(await screen.findByRole("button", { name: "Load more" }));
     expect(await screen.findByRole("alert")).toBeInTheDocument();
     expect(main().getByRole("link", { name: "Session a1" })).toBeInTheDocument();
+  });
+});
+
+describe("dashboard: empty state, rating flag on", () => {
+  afterEach(() => vi.unstubAllEnvs());
+  it("keeps the comparison sentence", async () => {
+    vi.stubEnv("VITE_RATING_ENABLED", "true");
+    renderApp("/", { user: USER });
+    expect(await main().findByText(/agrees with your own rating/i)).toBeInTheDocument();
   });
 });
