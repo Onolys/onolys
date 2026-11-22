@@ -9,11 +9,11 @@ Source of truth: /root/projects/onolys/iaudit/.worktrees/feat/miti-lean-engine/d
 
 | # | Task | Depends on | Status |
 |---|---|---|---|
-| 1 | Backend: auth + `/v1/me` only | — | todo |
-| 2 | Image: slim Dockerfile and image smoke | 1 | todo |
-| 3 | Frontend: sign-in + empty-page shell | — | todo |
-| 4 | CI and deploy scripts alignment | 1, 2, 3 | todo |
-| 5 | Terraform: drop admin LLM secrets/routes, apply | 1 | todo |
+| 1 | Backend: auth + `/v1/me` only | — | done |
+| 2 | Image: slim Dockerfile and image smoke | 1 | done |
+| 3 | Frontend: sign-in + empty-page shell | — | done |
+| 4 | CI and deploy scripts alignment | 1, 2, 3 | done |
+| 5 | Terraform: drop admin LLM secrets/routes, apply | 1 | done (apply skipped by owner) |
 
 ## Task 1 — Backend: auth + `/v1/me` only
 What it is: admin-backend stops being a gateway to eaudit/paudit and becomes a thin authenticated shell (R1, R2, R9, D1).
