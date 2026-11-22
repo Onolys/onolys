@@ -97,7 +97,7 @@ def test_unknown_speaker_treated_as_other(tmp_path, pack_data):
 def test_span_ignored_without_timestamps(tmp_path, pack_data):
     make_pack(tmp_path, pack_data, checks=[])
     t = Transcript(turns=[Turn(id=x.id, speaker=x.speaker, text=x.text) for x in convo().turns])
-    p = prepare(t, params(coded_span={"from_s": 0, "to_s": 60}))
+    p = prepare(t, params(), coded_span={"from_s": 0, "to_s": 60})
     assert [w.code for w in p.warnings] == ["span_ignored"]
     assert len(p.turns) == 10
 

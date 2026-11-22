@@ -49,6 +49,14 @@ class RunUsage(_Model):
     cost_usd: float | None = None
 
 
+class SpanInfo(_Model):
+    """How the coded span was chosen (PRD R7)."""
+
+    mode: Literal["whole", "random_window"]
+    duration_s: int | None = None
+    seed: str
+
+
 class RunInfo(_Model):
     """Provenance of one engine run (PRD R10). Never holds text or key values."""
 
@@ -61,6 +69,7 @@ class RunInfo(_Model):
     prompt_hashes: dict[str, str] = {}
     n_runs: int = 1
     usage: RunUsage = RunUsage()
+    span: SpanInfo | None = None
 
 
 def code_version() -> str:

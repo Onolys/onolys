@@ -330,6 +330,7 @@
             "insufficient_evidence",
             "capped",
             "span_ignored",
+            "coded_window",
             "unknown_speaker",
             "language_not_validated",
             "run_failed"
@@ -500,6 +501,17 @@
             "cache_write_tokens": 0,
             "cost_usd": null
           }
+        },
+        "span": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SpanInfo"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         }
       },
       "required": [
@@ -607,6 +619,42 @@
         }
       },
       "title": "RunUsage",
+      "type": "object"
+    },
+    "SpanInfo": {
+      "additionalProperties": false,
+      "description": "How the coded span was chosen (PRD R7).",
+      "properties": {
+        "mode": {
+          "enum": [
+            "whole",
+            "random_window"
+          ],
+          "title": "Mode",
+          "type": "string"
+        },
+        "duration_s": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Duration S"
+        },
+        "seed": {
+          "title": "Seed",
+          "type": "string"
+        }
+      },
+      "required": [
+        "mode",
+        "seed"
+      ],
+      "title": "SpanInfo",
       "type": "object"
     },
     "Stat": {

@@ -173,7 +173,7 @@ def test_known_and_pack_defined_warning_codes_accepted(validator):
         assert list(validator.iter_errors(doc)) == []
         MitiResult.model_validate(doc)
     assert {"short_session", "quote_not_found", "overlap", "insufficient_evidence", "capped",
-            "span_ignored", "unknown_speaker", "language_not_validated", "run_failed"} == set(
+            "span_ignored", "coded_window", "unknown_speaker", "language_not_validated", "run_failed"} == set(
         WARNING_CODES)
 
 

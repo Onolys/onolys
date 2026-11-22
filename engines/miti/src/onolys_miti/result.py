@@ -24,6 +24,7 @@ WARNING_CODES = (
     "insufficient_evidence",
     "capped",
     "span_ignored",
+    "coded_window",
     "unknown_speaker",
     "language_not_validated",
     "run_failed",

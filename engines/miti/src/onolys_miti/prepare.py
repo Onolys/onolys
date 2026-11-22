@@ -6,7 +6,7 @@ from typing import Any
 
 from onolys_miti import miti, rules
 from onolys_miti.errors import InputError
-from onolys_miti.result import ResultWarning
+from onolys_miti.result import CodedSpan, ResultWarning
 from onolys_miti.transcript import Transcript, Turn
 
 SUBJECT = "subject"
@@ -200,12 +200,16 @@ def _coerce(w: Any) -> ResultWarning:
 def prepare(
     transcript: Transcript,
     params: dict[str, Any],
+    coded_span: CodedSpan | dict[str, Any] | None = None,
 ) -> Prepared:
     """Roles -> select by span -> input checks (+ rules.check_input) -> volleys.
-    Checks run on the selected turns, so a short span counts as a short session."""
+    Checks run on the selected turns, so a short span counts as a short session.
+    `coded_span` is chosen by the engine (`span.select_coded_span`); a `coded_span` in
+    `params` is deliberately ignored: callers never pick the span (PRD R7)."""
     speaker_map = params.get("speaker_map") or {}
     role_turns, warnings = mark_roles(transcript, speaker_map)
-    coded_span = params.get("coded_span")
+    if isinstance(coded_span, CodedSpan):
+        coded_span = coded_span.model_dump()
     selected, span_warn = select_turns(role_turns, coded_span)
     warnings += span_warn
     applied = (
