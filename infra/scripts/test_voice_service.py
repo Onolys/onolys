@@ -81,6 +81,7 @@ def test_api_grants_identical_to_origin_main():
         cur = (MOD / rel).read_text()
         for t in GRANT_TYPES:
             o, c = blocks(old, t), blocks(cur, t)
+            o.pop("admin_llm", None)  # intentionally removed by 04-admin-shell Task 5 (admin uses no LLM)
             assert o == {k: c.get(k) for k in o}, f"{rel}: {t} grants changed vs origin/main"
 
 

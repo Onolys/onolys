@@ -34,3 +34,11 @@ def test_admin_service_env_satisfies_admin_auth_config():
             runtime[k] = "onolys"
     cfg = AdminAuthConfig.from_env(runtime)  # raises ConfigError if a required var is not wired
     assert cfg.enabled and cfg.project == "onolys"
+
+
+def test_admin_service_has_no_llm_or_routes_wiring():
+    b = admin_block()
+    for token in ("llm_secrets", "routes_env", "GEMINI_API_KEY", "ANTHROPIC_API_KEY", "ROUTES_FILE"):
+        assert token not in b
+    secrets = (TF.parent / "secrets.tf").read_text()
+    assert 'iam_member" "admin_llm"' not in secrets

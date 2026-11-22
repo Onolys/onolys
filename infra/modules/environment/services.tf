@@ -265,31 +265,12 @@ resource "google_cloud_run_v2_service" "admin_backend" {
         name  = "ADMIN_CORS_ORIGINS"
         value = join(",", var.admin_cors_origins)
       }
-      dynamic "env" {
-        for_each = local.routes_env
-        content {
-          name  = env.value.name
-          value = env.value.value
-        }
-      }
       env {
         name = "ADMIN_ALLOWED_EMAILS"
         value_source {
           secret_key_ref {
             secret  = google_secret_manager_secret.admin_allowed_emails[0].secret_id
             version = "latest"
-          }
-        }
-      }
-      dynamic "env" {
-        for_each = var.llm_secrets
-        content {
-          name = env.key
-          value_source {
-            secret_key_ref {
-              secret  = google_secret_manager_secret.provider[env.key].secret_id
-              version = "latest"
-            }
           }
         }
       }
@@ -312,7 +293,6 @@ resource "google_cloud_run_v2_service" "admin_backend" {
   }
 
   depends_on = [
-    google_secret_manager_secret_iam_member.admin_llm,
     google_secret_manager_secret_iam_member.admin_emails,
   ]
 }
