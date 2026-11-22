@@ -11,7 +11,7 @@ npm run e2e                      # mock mode; add args after `--`, e.g. `npm run
 ```
 
 `@playwright/test` is a web devDependency (pinned to the preinstalled 1.65.1). Chromium is preinstalled on this machine; do not run `playwright install` here (CI does). The config starts `npm run dev:mock` on :5173 itself
-(or reuses a server already there). Tests are independent and `fullyParallel`. Single spec: `npm run e2e -- login`.
+(or reuses a server already there). Tests are independent and `fullyParallel`. CI runs them in the `web-e2e` job (`CI=1`: 2 workers, no retries, `github` reporter). Single spec: `npm run e2e -- login`.
 
 ## Notes
 

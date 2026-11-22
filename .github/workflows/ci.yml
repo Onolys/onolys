@@ -492,6 +492,44 @@ jobs:
           echo "### :warning: web flaky tests failed (non-blocking)" >> "$GITHUB_STEP_SUMMARY"
       - run: npm run build
 
+  # Real-browser suite (mock mode, no backend). Runs in parallel with `web`; blocking. Config: web/e2e_review/playwright.config.cjs
+  web-e2e:
+    needs: changes
+    if: needs.changes.outputs.web == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+      - name: Read Playwright version
+        id: pw
+        run: echo "version=$(node -p "require('./package.json').devDependencies['@playwright/test']")" >> "$GITHUB_OUTPUT"
+      - name: Cache Playwright browsers
+        id: pwcache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.pw.outputs.version }}
+      - name: Install Chromium and system deps
+        run: npx playwright install --with-deps chromium
+      - name: Playwright e2e (mock mode)
+        run: npm run e2e -- --trace off
+      - name: Upload Playwright results
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-e2e-results
+          path: web/e2e_review/test-results/
+          retention-days: 3
+
   infra:
     needs: changes
     if: needs.changes.outputs.infra == 'true'
