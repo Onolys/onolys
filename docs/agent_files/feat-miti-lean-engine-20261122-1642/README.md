@@ -18,7 +18,7 @@ iaudit material is deleted after tag `iaudit-archive` and moved to a separate re
 | 03 | [03-web](03-web/PRD.md) | Rating card hidden behind `VITE_RATING_ENABLED`; session-setup form; MITI-only report; legacy stage names accepted | 02 (stage names only) | 2 | PRD draft |
 | 04 | [04-admin-shell](04-admin-shell/PRD.md) | admin backend drops engines, serves only `GET /v1/me`; frontend = sign-in + empty page | none | 1 | PRD draft |
 | 05 | [05-cleanup](05-cleanup/PRD.md) | Tag `iaudit-archive` at 1cc7321, delete eaudit/paudit/evaluation/core/protocols/eval, CI + docs rewrite, regenerate uv.lock | 01, 02, 03, 04 | 3 | PRD draft |
-| 06 | [06-iaudit-repo](06-iaudit-repo/PRD.md) | Code-only iaudit archive: new repo from tag via git filter-repo (no CI/build); local folder rename iaudit→onolys, new clone at iaudit | 05 + owner repo URL | 4 | PRD draft — BLOCKED on repo URL |
+| 06 | [06-iaudit-repo](06-iaudit-repo/PRD.md) | Code-only iaudit archive: new repo from tag via git filter-repo (no CI/build); new clone at `/root/projects/onolys/iaudit-legacy`, no local rename | 05 + owner repo URL | 4 | PRD draft — BLOCKED on repo URL |
 
 ## Dependency graph
 
@@ -37,7 +37,7 @@ iaudit material is deleted after tag `iaudit-archive` and moved to a separate re
 - Rating card hidden behind `VITE_RATING_ENABLED` (default off); code kept.
 - Setup fields (change goal required, coded span optional) live on the upload screen with a single submit (no separate setup form); sends `PUT /rating` `no_rating`, so existing run gate works with no api change.
 - CI job for `engines/miti` added in SP05 (SP01 writes unit tests only).
-- SP06 is a code-only archive (no CI/build/secrets); local folder renamed `iaudit`→`onolys`, then new repo cloned at `/root/projects/onolys/iaudit`.
+- SP06 is a code-only archive (no CI/build/secrets); new repo cloned at `/root/projects/onolys/iaudit-legacy`, no rename of existing local `iaudit` folder.
 - Basic tips kept.
 - Admin stays as shell (`GET /v1/me`).
 - Delete only after tag `iaudit-archive` on 1cc7321.
@@ -53,7 +53,7 @@ SP01
 - [OPEN-4] `admin/backend` still imports old packages until SP04; SP05 must wait for both.
 
 SP02
-- [OPEN-1] Run gate needs submitted rating + inputs only via card; default Option A (web setup form), owner to confirm before SP03 tasks; verify empty `change_goal` OK.
+- [RESOLVED: Option A — upload screen sends change goal + optional span via PUT /rating no_rating in one submit; no api change, owner 2026-11-22] (OPEN-1 run gate); verify empty `change_goal` OK.
 - [OPEN-2] SP01 interface gaps api needs (schema path accessors, `validate_rating` w/o Pack, scenarios dir, `Issue`, fixtures, `RunContext`/`whole_second_span` paths); SP01 lists them in its README.
 - [OPEN-3] In-flight runs during deploy may show stale step label; accepted.
 - [OPEN-4] `paudit_code`/`paudit_globals` route names need prod route migration; deferred.
@@ -77,7 +77,7 @@ SP05
 
 SP06
 - [OPEN-1] New repo URL/name + push access; whole SP waits (owner).
-- [RESOLVED: new clone at `/root/projects/onolys/iaudit`; existing folder first renamed to `/root/projects/onolys/onolys` + `git worktree repair`, at SP06 time, READMEs updated, owner 2026-11-22]
+- [RESOLVED: /root/projects/onolys/iaudit-legacy, no rename, owner 2026-11-22] (local folder; new `onolys/iaudit-legacy` README rows)
 - [RESOLVED: not needed, code-only archive, owner 2026-11-22] OPEN-3 `changes.sh`, OPEN-4 core pruning, OPEN-5 nightly secrets.
 
 ## Next step

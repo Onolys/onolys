@@ -9,7 +9,7 @@ Repo/branch: Onolys/onolys (local `iaudit`) / `feat/miti-lean-engine` · Depends
 Owns: `api/**` (src, tests, `pyproject.toml`, `Dockerfile`, `openapi.json`, `README.md`), root `uv.lock`. Not owned: `engines/**`, `web/`, `admin/`, `protocols/`, `config/`, CI files.
 
 ## TL;DR
-One atomic change: all `onolys_core|paudit|onolys_evaluation|eaudit` imports in `api/` (src + tests) become `onolys_miti`; `RealEvaluation` calls `run_miti` (no pack, no rating). Stages become `code|tips|assemble`. Rating endpoints/storage/gate stay byte-for-byte, but the run ignores the card. Report JSON, `openapi.json`, `report.local.schema.json` keep their shape; stored reports still serve. Image installs `onolys-miti` only. **Blocker found:** the first run is gated on a submitted rating and `change_goal`/`coded_span` only enter via that card, so SP03 "hide the rating card" would stop all runs [OPEN-1].
+One atomic change: all `onolys_core|paudit|onolys_evaluation|eaudit` imports in `api/` (src + tests) become `onolys_miti`; `RealEvaluation` calls `run_miti` (no pack, no rating). Stages become `code|tips|assemble`. Rating endpoints/storage/gate stay byte-for-byte, but the run ignores the card. Report JSON, `openapi.json`, `report.local.schema.json` keep their shape; stored reports still serve. Image installs `onolys-miti` only. **Blocker found (resolved):** the first run is gated on a submitted rating and `change_goal`/`coded_span` only enter via that card; resolved by SP03 sending them via `PUT /rating` `no_rating` from the upload screen, no api change [OPEN-1 RESOLVED].
 
 ## Problem
 - api imports 4 old packages. [verified: `git grep` in `api/src`: `onolys_core` in 17 files, `paudit` in `adapters/real.py`, `jobs/run.py` (via evaluation), `rating.py`; `onolys_evaluation` in `adapters/real.py`, `jobs/run.py`, `rating.py`; `eaudit` by name in `adapters/error_map.py`, `adapters/fake.py`, `jobs/machine.py`, `jobs/run.py`]. Tests: 31 of ~70 files touch them [grep -c].
@@ -47,7 +47,7 @@ One atomic change: all `onolys_core|paudit|onolys_evaluation|eaudit` imports in 
 **R3. Rating flow (decided: ignored by the run, never waited on by the engine)**
 - Engine never sees a rating. Rating routes, `RatingDoc`, `ratings/` Firestore docs, flags `rating_submitted`/`has_rating`, `rating_final` 409, `validate_rating` unchanged. [verified: only `jobs/run.py:157-160` reads a rating card on the run path.]
 - State machine does require it today: `start_first_run` (fake + firestore) returns `not_ready` unless `transcript_ready && speaker_confirmed && rating_submitted` [verified: `repo/fake.py:582`, `repo/firestore.py:758`]. `POST /runs` (re-run / held run) does not require a rating but 409s `rating_final` once a report exists. So no run is blocked by the engine, but the **first run is blocked until the web submits a final rating** (a "no rating" revision counts). This is also the only path that sets `change_goal` and `coded_span` on the session (`routes/rating.py:132-138`; no other writer [verified: grep]); `change_goal` is required on `final=true`.
-- SP02 default: leave the gate untouched (no API behavior change, easy to review) and hand the dependency to SP03/owner as [OPEN-1].
+- SP02 default: leave the gate untouched (no API behavior change, easy to review) and dependency handled by SP03 (Option A) [OPEN-1 RESOLVED].
 
 **R4. Report contract**
 - `ReportView.report` is `dict[str, Any]` stored verbatim and served without re-validation [verified: `routes/runs.py:96`; `report_validator` only used in `jobs/run.py` on write], so old reports with comparison fields serve unchanged.
@@ -79,7 +79,7 @@ Firestore: `session_status.step` is transient (`None` once a run ends [verified:
 ## Decisions
 | # | Decision | Choice | Alternatives considered | Why |
 |---|---|---|---|---|
-| D1 | Rating vs run | Engine ignores rating; routes/storage/gate unchanged | Remove gate now; delete rating routes | Locked: keep for later; minimal API behavior change; gate change entangles SP03 [OPEN-1] |
+| D1 | Rating vs run | Engine ignores rating; routes/storage/gate unchanged | Remove gate now; delete rating routes | Locked: keep for later; minimal API behavior change; gate change entangles SP03; see resolution of [OPEN-1] (Option A) |
 | D2 | Seam signature | Drop `pack` and `rating` from `Evaluation.run` | Keep as ignored params | Dead params invite misuse; all callers are in api |
 | D3 | Stage names | `code,tips,assemble` end-to-end (adapter, weights, fake) | Map new->old names at the seam | Honest names; no mapping layer to delete later |
 | D4 | Stage weights | 40/8/3 | Keep 25/15/8/4/3 | Old table needs stages that no longer exist; sum stays under cap |
@@ -90,7 +90,7 @@ Firestore: `session_status.step` is transient (`None` once a run ends [verified:
 | D9 | Old workspace members | Stay in lock/workspace until SP05; not deps of api | Remove now | SP04/SP05 ordering |
 
 ## Risks / Open Questions
-- [OPEN-1] **Run gate and inputs.** Hiding the rating card (SP03) stops first runs and loses `change_goal`/`coded_span` (R3). Options: (A) SP03 keeps a minimal setup form (change goal, coded span, "Skip rating") posting to the existing `PUT /rating` (`no_rating:true`); no api change. (B) SP02 relaxes the gate to `transcript_ready && speaker_confirmed` behind `REQUIRE_RATING_SUBMIT` (default true) and adds a way to set `change_goal`/`coded_span` (e.g. `PATCH /sessions/{id}`), `rating_final` still keyed on report existence. Default: A (nothing to build here); owner to confirm before SP03 task writing. Also verify `change_goal` may be empty for MITI quality.
+- [RESOLVED: Option A — upload screen sends change goal + optional span via PUT /rating no_rating in one submit; no api change (see 03-web PRD), owner 2026-11-22] (OPEN-1) **Run gate and inputs.** Original problem: hiding the rating card (SP03) stops first runs and loses `change_goal`/`coded_span` (R3). Options: (A) SP03 keeps a minimal setup form (change goal, coded span, "Skip rating") posting to the existing `PUT /rating` (`no_rating:true`); no api change. (B) SP02 relaxes the gate to `transcript_ready && speaker_confirmed` behind `REQUIRE_RATING_SUBMIT` (default true) and adds a way to set `change_goal`/`coded_span` (e.g. `PATCH /sessions/{id}`), `rating_final` still keyed on report existence. Settled on A. Also verify `change_goal` may be empty for MITI quality.
 - [OPEN-2] SP01 interface gaps api needs: accessors for report schema path, rating schema/`validate_rating(obj, final)` without a `Pack` arg, scenarios dir, `Issue`; fixtures for api tests (`_make_fixtures` replacement incl. `good_practice`); `RunContext` and `whole_second_span` import paths. Ask SP01 to list them in its README.
 - [OPEN-3] In-flight runs during deploy: a task retried on the new image after starting on the old one is safe (run restarts, report id deterministic), but the web status may show a stale step label. Accepted.
 - [OPEN-4] `paudit_code`/`paudit_globals` route names live in `config/*/routes.yaml`, staging presets and `test_staging_presets`; renaming needs a prod route migration. Deferred, outside api.
