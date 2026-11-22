@@ -83,17 +83,17 @@ def select_turns(
 ) -> tuple[list[RoleTurn], list[ResultWarning]]:
     """Keep turns overlapping the span: `start_ms < to_s*1000 and end_ms > from_s*1000`
     (a missing `end_ms` falls back to `start_ms`). Partly-inside turns are kept whole. No turn
-    has a timestamp -> span ignored + `span_ignored`. A turn without `start_ms` is kept."""
+    has a timestamp -> span ignored + `span_ignored`. A turn without `start_ms` is kept.
+    The engine's span always has both bounds; no span (or a bound missing) keeps every turn."""
     span = coded_span or {}
     from_s, to_s = span.get("from_s"), span.get("to_s")
-    if from_s is None and to_s is None:
+    if from_s is None or to_s is None:
         return list(turns), []
     if not any(rt.turn.start_ms is not None for rt in turns):
         return list(turns), [
             ResultWarning(code="span_ignored", detail="transcript has no timestamps")
         ]
-    lo = from_s * 1000 if from_s is not None else None
-    hi = to_s * 1000 if to_s is not None else None
+    lo, hi = from_s * 1000, to_s * 1000
     kept = []
     for rt in turns:
         start = rt.turn.start_ms
@@ -101,7 +101,7 @@ def select_turns(
             kept.append(rt)
             continue
         end = rt.turn.end_ms if rt.turn.end_ms is not None else start
-        if (hi is None or start < hi) and (lo is None or end > lo):
+        if start < hi and end > lo:
             kept.append(rt)
     return kept, []
 
@@ -137,6 +137,9 @@ def build_volleys(turns: list[RoleTurn], volley_cfg: dict[str, Any]) -> list[Vol
 def _duration_ms(
     transcript: Transcript, turns: list[RoleTurn], coded_span: dict[str, Any] | None, applied: bool
 ) -> int | None:
+    """Session length from the selected turns (as `span.duration_s` does), or the span length when
+    a span was applied. `transcript.duration_ms` is only the fallback for a transcript without
+    turn timestamps."""
     starts = [rt.turn.start_ms for rt in turns if rt.turn.start_ms is not None]
     ends = [
         rt.turn.end_ms if rt.turn.end_ms is not None else rt.turn.start_ms
@@ -147,14 +150,8 @@ def _duration_ms(
         return transcript.duration_ms
     lo = min(starts)
     hi = max(ends)
-    if transcript.duration_ms is not None and not applied:
-        return transcript.duration_ms
-    span = coded_span or {}
-    if applied:
-        if span.get("from_s") is not None:
-            lo = span["from_s"] * 1000
-        if span.get("to_s") is not None:
-            hi = span["to_s"] * 1000
+    if applied and coded_span:
+        lo, hi = coded_span["from_s"] * 1000, coded_span["to_s"] * 1000
     return max(hi - lo, 0)
 
 
@@ -215,7 +212,8 @@ def prepare(
     applied = (
         bool(coded_span)
         and not span_warn
-        and (coded_span.get("from_s") is not None or coded_span.get("to_s") is not None)
+        and coded_span.get("from_s") is not None
+        and coded_span.get("to_s") is not None
     )
     duration = _duration_ms(transcript, selected, coded_span, applied)
     warnings += run_input_checks(selected, params, duration)
