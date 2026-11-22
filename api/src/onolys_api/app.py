@@ -429,7 +429,12 @@ def create_app(
         ContractCORSMiddleware,
         allow_origins=list(settings.cors_origins),
         allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-        allow_headers=["Authorization", "X-API-Key", "Idempotency-Key", "Content-Type"],
+        allow_headers=[
+            "Authorization", "X-API-Key", "Idempotency-Key", "Content-Type",
+            # local Mode B only: the browser PUTs the audio to the fake blob route here with the
+            # signed upload headers; deployed, the PUT goes to GCS, which answers its own CORS
+            *(("x-goog-content-length-range",) if settings.env in LOCAL_ENVS else ()),
+        ],  # fmt: skip
         expose_headers=["X-Request-ID"],
     )
     app.add_middleware(RequestLogMiddleware)

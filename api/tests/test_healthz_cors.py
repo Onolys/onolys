@@ -68,3 +68,32 @@ async def test_oversized_json_body_is_413(client):
 async def test_normal_json_body_still_accepted(client):
     r = await client.post("/v1/sessions", json={"title": "ok"}, headers=H)
     assert r.status_code == 202
+
+
+UPLOAD_PREFLIGHT = {
+    "Origin": "https://app.onolys.com",
+    "Access-Control-Request-Method": "PUT",
+    "Access-Control-Request-Headers": "content-type,x-goog-content-length-range",
+}
+
+
+async def test_local_cors_allows_the_fake_blob_upload_headers(client):
+    """E22: local Mode B PUTs the audio to the fake blob route with the signed upload headers."""
+    r = await client.options("/v1/_fake_blob/k", headers=UPLOAD_PREFLIGHT)
+    assert r.status_code == 200
+
+
+async def test_deployed_cors_does_not_allow_the_upload_headers(settings, blobs):
+    """The extra header is dev-only: GCS answers its own preflight; the API never needs it."""
+    from dataclasses import replace
+
+    import httpx
+
+    from onolys_api.app import create_app
+    from onolys_api.repo.fake import FakeRepo
+
+    s = replace(settings, env="staging", auth_mode="firebase", uid_hmac_key="k", auth_project="p")
+    app = create_app(s, repo=FakeRepo(blobs), blobs=blobs)
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://t") as c:
+        r = await c.options("/v1/healthz", headers=UPLOAD_PREFLIGHT)
+    assert r.status_code == 400
