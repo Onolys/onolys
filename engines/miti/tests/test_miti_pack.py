@@ -34,7 +34,7 @@ def test_loads_and_has_all_items(pack):
     assert [i["id"] for i in pack.items if i["kind"] == "count"] == CODES
     assert pack.data["speaker_roles"] == {"subject": "clinician", "other": "client"}
     assert pack.data["volley"] == {"breaks_on": "other_speaker", "min_other_words": 0}
-    assert pack.hash == "18c33be711154d3d"
+    assert pack.hash == "7a8c491377b4e2dd"
 
 
 def test_prompt_files_present_and_json_valid(pack):
@@ -127,7 +127,7 @@ def test_compare_covers_every_item_with_a_kind(pack):
         assert cmp[g] == {"kind": "score_diff", "differs_at": 1, "within": 1}
     for c in CODES:
         assert cmp[c] == {"kind": "count_diff", "flag_abs": 2, "flag_rel": 0.25}
-    assert set(pack.data["evaluation"]) == {"tone", "reasons_audit"}
+    assert set(pack.data["evaluation"]) == {"tone"}
 
 
 def test_report_stub_lists_known_ids(pack):
