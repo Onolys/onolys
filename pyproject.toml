@@ -1,5 +1,4 @@
-# Virtual workspace root (no [project]). Members land over time:
-# engines/core, engines/eaudit now; paudit, evaluation, api, admin/* later.
+# Virtual workspace root (no [project]).
+# Members: engines/miti, api, admin/auth, admin/backend.
 [tool.uv.workspace]
 members = ["engines/*", "api", "admin/*"]
-exclude = ["eval"]

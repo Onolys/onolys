@@ -6,6 +6,7 @@
 import type { ReactNode } from "react";
 import type { Line, Report } from "../../api/report";
 import type { ClaimVerdict } from "../../api/types";
+import { ratingEnabled } from "../../config";
 import { diffChip } from "./chips";
 import { lineId } from "./lines";
 
@@ -32,6 +33,11 @@ const WARNING_TEXT: Record<string, string> = {
   short_session: "This was a short session, so the readings are less certain.",
 };
 const SKIPPED_WARNINGS = new Set(["reasons_audit_failed"]); // already explained inside its section
+/** Also skipped with the rating flag off: the reasons audit they refer to is not shown. */
+const RATING_ONLY_WARNINGS = new Set(["reason_withheld_tone"]);
+
+/** Comparison parts show only with the flag on AND a clinician rating on the report. */
+const isRated = (r: Report) => ratingEnabled() && r.header.has_clinician_rating;
 
 /** `below_fair|fair|good` from the report schema, as words (the report carries the level, not display text). */
 const LEVEL_TEXT: Record<string, string> = { below_fair: "below fair", fair: "fair", good: "good" };
@@ -73,19 +79,20 @@ function Section({ id, title, children }: { id: string; title: string; children:
 const runsNote = (r: Report) => (r.header.n_runs > 1 ? `Scores are based on ${r.header.n_runs} runs.` : null);
 
 function Scorecard({ r, title }: { r: Report; title: string }) {
-  const rated = r.header.has_clinician_rating;
+  const cmp = ratingEnabled();
+  const rated = isRated(r);
   const note = runsNote(r);
   return (
     <Section id="scorecard" title={title}>
-      {!rated ? <p className="form-note">No rating of yours was used for this report, so only Onolys's scores are shown.</p> : null}
+      {cmp && !rated ? <p className="form-note">No rating of yours was used for this report, so only Onolys's scores are shown.</p> : null}
       {note ? <p className="form-note">{note}</p> : null}
       <table className="report-table" aria-label="Scores per item">
         <thead>
           <tr>
             <th scope="col">Item</th>
-            <th scope="col">You</th>
+            {cmp ? <th scope="col">You</th> : null}
             <th scope="col">Onolys</th>
-            <th scope="col">Difference</th>
+            {cmp ? <th scope="col">Difference</th> : null}
           </tr>
         </thead>
         <tbody>
@@ -94,17 +101,19 @@ function Scorecard({ r, title }: { r: Report; title: string }) {
             return (
               <tr key={s.item_id}>
                 <th scope="row">{s.label}</th>
-                <td data-label="You">{rated ? num(s.clinician?.value) : "–"}</td>
+                {cmp ? <td data-label="You">{rated ? num(s.clinician?.value) : "–"}</td> : null}
                 <td data-label="Onolys">{num(s.onolys?.value)}</td>
-                <td data-label="Difference">
-                  {chip ? (
-                    <span className="chip" data-tone={chip.tone}>
-                      {chip.text}
-                    </span>
-                  ) : (
-                    "–"
-                  )}
-                </td>
+                {cmp ? (
+                  <td data-label="Difference">
+                    {chip ? (
+                      <span className="chip" data-tone={chip.tone}>
+                        {chip.text}
+                      </span>
+                    ) : (
+                      "–"
+                    )}
+                  </td>
+                ) : null}
               </tr>
             );
           })}
@@ -115,6 +124,7 @@ function Scorecard({ r, title }: { r: Report; title: string }) {
 }
 
 function Disagreements({ r, title, labels, onSelect }: { r: Report; title: string; labels: Map<string, string>; onSelect: SectionsProps["onSelect"] }) {
+  if (!ratingEnabled()) return null;
   const blocks = [
     ...(r.globals ?? []).filter((g) => g.diff?.status === "differs").map((g) => ({ id: g.item_id, e: g.explanation })),
     ...(r.behaviours ?? []).filter((b) => b.diff?.status === "flagged").map((b) => ({ id: b.item_id, e: b.explanation })),
@@ -149,7 +159,7 @@ function Disagreements({ r, title, labels, onSelect }: { r: Report; title: strin
 function Globals({ r, title, labels, onSelect }: { r: Report; title: string; labels: Map<string, string>; onSelect: SectionsProps["onSelect"] }) {
   const globals = r.globals ?? [];
   if (globals.length === 0) return null;
-  const rated = r.header.has_clinician_rating;
+  const rated = isRated(r);
   return (
     <Section id="globals" title={title}>
       {globals.map((g) => (
@@ -175,19 +185,20 @@ function Globals({ r, title, labels, onSelect }: { r: Report; title: string; lab
 function Behaviours({ r, title, labels, onSelect }: { r: Report; title: string; labels: Map<string, string>; onSelect: SectionsProps["onSelect"] }) {
   const rows = r.behaviours ?? [];
   if (rows.length === 0) return null;
-  const rated = r.header.has_clinician_rating;
+  const cmp = ratingEnabled();
+  const rated = isRated(r);
   const note = runsNote(r);
   return (
     <Section id="behaviours" title={title}>
       <p className="form-note">
-        These are Onolys's instances; a tally-only self-rating can't be matched line by line.
+        These are Onolys's instances{cmp ? "; a tally-only self-rating can't be matched line by line" : ""}.
         {note ? ` ${note}` : ""}
       </p>
       <table className="report-table" aria-label="Behaviour counts">
         <thead>
           <tr>
             <th scope="col">Behaviour</th>
-            <th scope="col">You</th>
+            {cmp ? <th scope="col">You</th> : null}
             <th scope="col">Onolys</th>
             <th scope="col">Instances</th>
           </tr>
@@ -198,7 +209,7 @@ function Behaviours({ r, title, labels, onSelect }: { r: Report; title: string; 
             return (
               <tr key={b.item_id}>
                 <th scope="row">{labels.get(b.item_id) ?? b.item_id}</th>
-                <td data-label="You">{rated ? num(b.clinician_count) : "–"}</td>
+                {cmp ? <td data-label="You">{rated ? num(b.clinician_count) : "–"}</td> : null}
                 <td data-label="Onolys">{num(b.onolys_count?.mean ?? b.onolys_count?.values?.[0])}</td>
                 <td data-label="Instances">
                   {(b.instances ?? []).map((inst) => (
@@ -220,26 +231,28 @@ function Behaviours({ r, title, labels, onSelect }: { r: Report; title: string; 
 function Summaries({ r, title }: { r: Report; title: string }) {
   const items = r.summaries ?? [];
   if (items.length === 0) return null;
+  const rated = isRated(r);
   return (
     <Section id="summaries" title={title}>
       <p className="form-note">These are reference levels, not pass marks.</p>
       <ul className="summary-list">
         {items.map((s) => {
           const ref = s.reference;
-          const top = Math.max(ref?.good ?? 0, s.onolys.value ?? 0, s.clinician?.value ?? 0) * 1.25 || 1;
+          const you = rated ? s.clinician : undefined;
+          const top = Math.max(ref?.good ?? 0, s.onolys.value ?? 0, you?.value ?? 0) * 1.25 || 1;
           const pos = (v: number) => `${Math.min(100, (v / top) * 100)}%`;
           return (
             <li key={s.id}>
               <h3>{s.label}</h3>
               <p>
                 Onolys {level(s.onolys)}
-                {s.clinician ? ` · You ${level(s.clinician)}` : ""}
+                {you ? ` · You ${level(you)}` : ""}
                 {ref ? ` · Fair ${ref.fair} · Good ${ref.good}` : ""}
               </p>
               <div className="ref-track" aria-hidden="true">
                 {ref ? <span className="ref-tick" style={{ left: pos(ref.fair) }} data-kind="fair" /> : null}
                 {ref ? <span className="ref-tick" style={{ left: pos(ref.good) }} data-kind="good" /> : null}
-                {s.clinician?.value != null ? <span className="ref-dot" style={{ left: pos(s.clinician.value) }} data-kind="you" /> : null}
+                {you?.value != null ? <span className="ref-dot" style={{ left: pos(you.value) }} data-kind="you" /> : null}
                 {s.onolys.value != null ? <span className="ref-dot" style={{ left: pos(s.onolys.value) }} data-kind="onolys" /> : null}
               </div>
               {s.note ? <p className="form-note">{s.note}</p> : null}
@@ -253,7 +266,7 @@ function Summaries({ r, title }: { r: Report; title: string }) {
 
 function Reasons({ r, title, labels, onSelect }: { r: Report; title: string; labels: Map<string, string> } & Pick<SectionsProps, "onSelect">) {
   const audit = r.reasons_audit;
-  if (!audit || audit.status === "skipped") return null;
+  if (!ratingEnabled() || !audit || audit.status === "skipped") return null;
   if (audit.status === "failed") {
     return (
       <Section id="reasons_audit" title={title}>
@@ -339,7 +352,7 @@ function Method({ r, title }: { r: Report; title: string }) {
 export function ReportSections(props: SectionsProps) {
   const { report: r, onSelect } = props;
   const labels = new Map((r.scorecard ?? []).map((s) => [s.item_id, s.label]));
-  const notices = (r.warnings ?? []).filter((w) => !SKIPPED_WARNINGS.has(w.code));
+  const notices = (r.warnings ?? []).filter((w) => !SKIPPED_WARNINGS.has(w.code) && (ratingEnabled() || !RATING_ONLY_WARNINGS.has(w.code)));
   return (
     <>
       {(r.layout ?? []).map((l) => {

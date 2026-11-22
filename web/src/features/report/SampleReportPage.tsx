@@ -3,7 +3,7 @@
  * same report components as the real page. Public, read-only, and makes no network request.
  */
 import { useMemo, useState } from "react";
-import { sampleReport, sampleTranscript } from "../../mocks/fixtures";
+import { noRatingReport, sampleTranscript } from "../../mocks/fixtures";
 import { Transcript } from "../transcript/Transcript";
 import { useSelectedInstance } from "../transcript/useSelectedInstance";
 import { reportHighlights } from "./lines";
@@ -12,8 +12,8 @@ import { ReportSections } from "./ReportSections";
 export function SampleReportPage() {
   const [selectedId, select] = useSelectedInstance();
   const [tab, setTab] = useState<"report" | "transcript">("report");
-  const highlights = useMemo(() => reportHighlights(sampleReport), []);
-  const goal = sampleReport.header.change_goal;
+  const highlights = useMemo(() => reportHighlights(noRatingReport), []);
+  const goal = noRatingReport.header.change_goal;
   return (
     <div className="report-page">
       <header className="report-header">
@@ -33,7 +33,7 @@ export function SampleReportPage() {
       <div className="report-panes" data-tab={tab}>
         <div className="report-main">
           <ReportSections
-            report={sampleReport}
+            report={noRatingReport}
             onSelect={(id) => {
               select(id);
               setTab("transcript");

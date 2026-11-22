@@ -8,7 +8,7 @@ import type { Report } from "../api/report";
 import type { components } from "../api/schema";
 import type { ErrorCode, RatingCard, SessionState } from "../api/types";
 
-type RunStage = "paudit" | "eaudit" | "tips" | "compare" | "assemble";
+type RunStage = "code" | "tips" | "assemble";
 import type { MemoryStatusEmitter, SessionStatusDoc } from "../api/statusListener";
 import {
   edgeTranscript,
@@ -63,9 +63,9 @@ export interface MockOptions {
 
 const MAX_AUDIO_BYTES = 300 * 1024 * 1024;
 const PRESETS = ["default", "fast"];
-const STAGES: RunStage[] = ["paudit", "eaudit", "tips", "compare", "assemble"];
-/** SP04 R4 progress table: weights added as each stage finishes. */
-const STAGE_WEIGHT: Record<RunStage, number> = { paudit: 25, eaudit: 15, tips: 8, compare: 4, assemble: 3 };
+const STAGES: RunStage[] = ["code", "tips", "assemble"];
+/** Progress weights added as each stage finishes (SP02 STAGE_WEIGHTS: peaks at 96, then 100 when the report is ready). */
+const STAGE_WEIGHT: Record<RunStage, number> = { code: 40, tips: 8, assemble: 3 };
 const RUN_START_PROGRESS = 45;
 
 const CANONICAL: Record<string, { ext: string; types: string[]; canonical: string }> = {
@@ -630,7 +630,7 @@ export class MockBackend {
       stt: { provider: "mock", model: "mock-stt", language: s.language === "auto" ? "en-US" : s.language },
       rating_id: s.finals.at(-1)?.rating_id ?? null,
       code_version: "mock",
-      stage: "paudit",
+      stage: "code",
       stageIdx: 0,
       counted: !free,
     };
@@ -639,7 +639,7 @@ export class MockBackend {
     s.holdFirstStart = false;
     s.error = null;
     s.state = "running";
-    s.step = "paudit";
+    s.step = "code";
     s.progress = RUN_START_PROGRESS;
     if (!free) this.count(s.uid, "eval");
     this.emit(s);
@@ -779,9 +779,9 @@ export class MockBackend {
       const run = s.runs.at(-1);
       if (!run) return false;
       const stage = STAGES[run.stageIdx];
-      if (stage === "paudit" && this.titleIs(s, "fail-paudit")) {
+      if (stage === "code" && this.titleIs(s, "fail-code")) {
         run.status = "failed";
-        this.fail(s, "internal_error", "paudit");
+        this.fail(s, "internal_error", "code");
         return true;
       }
       s.progress += STAGE_WEIGHT[stage];
@@ -806,7 +806,6 @@ export class MockBackend {
     const report = reportFor({
       edge: this.titleIs(s, "utf8-edge"),
       hasRating: rating?.has_content ?? false,
-      reasonsFailed: this.titleIs(s, "fail-eaudit"),
       tipsFailed: this.titleIs(s, "fail-tips"),
       createdAt: created_at,
     });
@@ -821,6 +820,7 @@ export class MockBackend {
     });
     s.state = "report_ready";
     s.step = null;
+    s.progress = 100;
   }
 
   /** Advance until the session stops on a human wait or a terminal state. */

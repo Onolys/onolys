@@ -12,18 +12,12 @@ concurrency:
 permissions:
   contents: read
 
-env:
-  EAUDIT_DIR: engines/eaudit
-
 jobs:
   changes:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     outputs:
-      eaudit: ${{ steps.flags.outputs.eaudit }}
-      core: ${{ steps.flags.outputs.core }}
-      paudit: ${{ steps.flags.outputs.paudit }}
-      evaluation: ${{ steps.flags.outputs.evaluation }}
+      miti: ${{ steps.flags.outputs.miti }}
       api: ${{ steps.flags.outputs.api }}
       admin-auth: ${{ steps.flags.outputs.admin-auth }}
       admin-backend: ${{ steps.flags.outputs.admin-backend }}
@@ -78,9 +72,9 @@ jobs:
           fi
           printf '%s\n' "$files" | bash scripts/ci/changes.sh
 
-  eaudit:
+  miti:
     needs: changes
-    if: needs.changes.outputs.eaudit == 'true'
+    if: needs.changes.outputs.miti == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -89,30 +83,15 @@ jobs:
         with:
           enable-cache: true
           cache-dependency-glob: uv.lock
-      - run: uv sync --frozen --package eaudit
-      - run: uv run --no-sync --package eaudit ruff check ${{ env.EAUDIT_DIR }}/src ${{ env.EAUDIT_DIR }}/tests
-      - run: uv run --no-sync --package eaudit pytest -q ${{ env.EAUDIT_DIR }}
-
-  core:
-    needs: changes
-    if: needs.changes.outputs.core == 'true'
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v5
-        with:
-          enable-cache: true
-          cache-dependency-glob: uv.lock
-      - run: uv sync --frozen --package onolys-core
-      - run: uv run --no-sync --package onolys-core ruff check engines/core
+      - run: uv sync --frozen --package onolys-miti
+      - run: uv run --no-sync --package onolys-miti ruff check engines/miti
       - name: pytest with coverage
         run: |
-          uv run --no-sync --package onolys-core pytest engines/core -m "not live" \
-            --cov=engines/core/src --cov-report=
+          uv run --no-sync --package onolys-miti pytest engines/miti -m "not live" \
+            --cov=engines/miti/src --cov-report=
           {
-            echo "### Coverage: onolys-core"
-            uv run --no-sync --package onolys-core coverage report --format=markdown
+            echo "### Coverage: onolys-miti"
+            uv run --no-sync --package onolys-miti coverage report --format=markdown
           } >> "$GITHUB_STEP_SUMMARY"
 
   # api is split so the critical path is max(api-unit, api-emulator) + api-coverage (~30s), not their sum.
@@ -354,6 +333,16 @@ jobs:
             | jq -e --arg sha "$GITHUB_SHA" '.service_mode == "combined" and .code_version == $sha'
           docker logs onolys-api
           docker rm -f onolys-api
+      - name: Image ships only the miti engine (no old packages, no protocols)
+        run: |
+          for m in paudit onolys_core eaudit onolys_evaluation; do
+            if docker run --rm --entrypoint python onolys-api:ci -c "import $m" 2>/dev/null; then
+              echo "unexpected import $m in image"; exit 1
+            fi
+          done
+          docker run --rm --entrypoint python onolys-api:ci -c "import onolys_miti"
+          docker run --rm --entrypoint test onolys-api:ci ! -e /app/protocols
+          docker image inspect onolys-api:ci --format 'image size bytes: {{.Size}}'
 
   admin-auth:
     needs: changes
@@ -386,50 +375,6 @@ jobs:
       - run: uv run --no-sync --package onolys-admin-backend pytest admin/backend
       - name: Image builds, rejects anonymous calls, refuses an empty allowlist, ships no eval data
         run: bash scripts/ci/test_admin_image.sh onolys-admin-backend:ci
-
-  paudit:
-    needs: changes
-    if: needs.changes.outputs.paudit == 'true'
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v5
-        with:
-          enable-cache: true
-          cache-dependency-glob: uv.lock
-      - run: uv sync --frozen --package onolys-paudit
-      - run: uv run --no-sync --package onolys-paudit ruff check engines/paudit
-      - name: pytest with coverage
-        run: |
-          uv run --no-sync --package onolys-paudit pytest engines/paudit -m "not live" \
-            --cov=engines/paudit/src --cov-report=
-          {
-            echo "### Coverage: onolys-paudit"
-            uv run --no-sync --package onolys-paudit coverage report --format=markdown
-          } >> "$GITHUB_STEP_SUMMARY"
-
-  evaluation:
-    needs: changes
-    if: needs.changes.outputs.evaluation == 'true'
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v5
-        with:
-          enable-cache: true
-          cache-dependency-glob: uv.lock
-      - run: uv sync --frozen --package onolys-evaluation
-      - run: uv run --no-sync --package onolys-evaluation ruff check engines/evaluation
-      - name: pytest with coverage
-        run: |
-          uv run --no-sync --package onolys-evaluation pytest engines/evaluation -m "not live" \
-            --cov=engines/evaluation/src --cov-report=
-          {
-            echo "### Coverage: onolys-evaluation"
-            uv run --no-sync --package onolys-evaluation coverage report --format=markdown
-          } >> "$GITHUB_STEP_SUMMARY"
 
   frontend:
     needs: changes

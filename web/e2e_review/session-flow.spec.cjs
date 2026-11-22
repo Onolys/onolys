@@ -3,6 +3,7 @@ const { shot, collect, FIX, signUpVerified, spa } = require("./helpers.cjs");
 
 async function newSession(page, file = "ten-min.mp3", { dbl = false } = {}) {
   await page.locator("header nav a", { hasText: "New session" }).click();
+  await page.getByLabel("Change goal").fill("Walk more");
   await page.locator("input[type=file]").setInputFiles(FIX(file));
   const start = page.getByRole("button", { name: "Start", exact: true });
   await expect(start).toBeEnabled({ timeout: 10_000 });
@@ -12,7 +13,7 @@ async function newSession(page, file = "ten-min.mp3", { dbl = false } = {}) {
 }
 
 test.describe("new session precheck", () => {
-  test("non-audio file is blocked; <10 min warns; ok file enables Start", async ({ page }) => {
+  test("non-audio file is blocked; <10 min warns; ok file + goal enables Start", async ({ page }) => {
     await signUpVerified(page, "pre@example.com");
     await page.locator("header nav a", { hasText: "New session" }).click();
     const start = page.getByRole("button", { name: "Start", exact: true });
@@ -23,6 +24,8 @@ test.describe("new session precheck", () => {
     await page.locator("input[type=file]").setInputFiles(FIX("one-min.wav"));
     await expect(page.getByRole("status")).toContainText(/under 10 minutes/);
     await page.locator("input[type=file]").setInputFiles(FIX("ten-min.mp3"));
+    await expect(start).toBeDisabled(); // the goal is still required
+    await page.getByLabel("Change goal").fill("Walk more");
     await expect(start).toBeEnabled();
     await shot(page, "new-session-ok");
   });
@@ -37,18 +40,6 @@ test.describe("browser behaviours (mock backend)", () => {
     await newSession(page, "ten-min.mp3", { dbl: true });
     await page.waitForTimeout(3000);
     expect(c.http).toEqual([]);
-  });
-
-  test("W2/E17: a rating edit made just before in-app Back navigation is not lost", async ({ page }) => {
-    await signUpVerified(page, "w2@example.com");
-    await newSession(page);
-    await expect(page.locator("#rating-change_goal")).toBeVisible();
-    await page.locator("#rating-change_goal").fill("Keep this goal");
-    await page.evaluate(() => history.back()); // no blur first
-    await expect(page.getByRole("heading", { name: "New session" })).toBeVisible();
-    await page.waitForTimeout(500);
-    await page.evaluate(() => history.forward());
-    await expect(page.locator("#rating-change_goal")).toHaveValue("Keep this goal");
   });
 
   test("E21: a missing session shows an error, not an endless 'Loading session...'", async ({ page }) => {

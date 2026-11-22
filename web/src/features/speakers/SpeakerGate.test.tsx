@@ -136,7 +136,7 @@ describe("change who the clinician is", () => {
 
   it("after a failed run, preselects the current clinician and tries the run again", async () => {
     const user = userEvent.setup();
-    const sid = reportReady("fail-paudit");
+    const sid = reportReady("fail-code");
     open(sid);
     await user.click(await screen.findByRole("button", { name: "Change who the clinician is" }));
     const list = await cards();
@@ -151,7 +151,7 @@ describe("change who the clinician is", () => {
 
   it("can be reopened by keyboard after a failed run", async () => {
     const user = userEvent.setup();
-    const sid = reportReady("fail-paudit");
+    const sid = reportReady("fail-code");
     open(sid);
     const link = await screen.findByRole("button", { name: "Change who the clinician is" });
     act(() => link.focus());

@@ -1,21 +1,18 @@
 #!/usr/bin/env bash
-# Start backend (8000), eval server (8100) and Vite (5173) together.
-# Usage: scripts/dev.sh [--check] [--stub]
+# Start admin backend (8000) and Vite (5173) together.
+# Usage: scripts/dev.sh [--check]
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BACKEND_PORT=8000
-EVAL_PORT=8100
 WEB_PORT=5173
 CHECK_ONLY=0
-STUB=0
 
 for arg in "$@"; do
   case "$arg" in
     --check) CHECK_ONLY=1 ;;
-    --stub) STUB=1 ;;
     -h|--help) sed -n '2,3p' "${BASH_SOURCE[0]}"; exit 0 ;;
-    *) echo "unknown flag: $arg (use --check, --stub)" >&2; exit 2 ;;
+    *) echo "unknown flag: $arg (use --check)" >&2; exit 2 ;;
   esac
 done
 
@@ -50,7 +47,7 @@ preflight() {
     failed=1
   fi
   local p holder
-  for p in "$BACKEND_PORT" "$EVAL_PORT" "$WEB_PORT"; do
+  for p in "$BACKEND_PORT" "$WEB_PORT"; do
     holder="$(port_holder "$p")"
     if [ -n "$holder" ]; then
       echo "preflight: port $p is in use by: $holder" >&2
@@ -61,8 +58,8 @@ preflight() {
   for k in GEMINI_API_KEY ANTHROPIC_API_KEY OPENAI_API_KEY LITELLM_API_KEY; do
     [ -n "${!k:-}" ] && have_key=1
   done
-  if [ "$have_key" -eq 0 ] && [ "$STUB" -eq 0 ]; then
-    echo "warning: none of GEMINI_API_KEY / ANTHROPIC_API_KEY / OPENAI_API_KEY / LITELLM_API_KEY is set; live runs will fail (use --stub for the stub pipeline)" >&2
+  if [ "$have_key" -eq 0 ]; then
+    echo "warning: none of GEMINI_API_KEY / ANTHROPIC_API_KEY / OPENAI_API_KEY / LITELLM_API_KEY is set; live runs will fail" >&2
   fi
   return "$failed"
 }
@@ -125,13 +122,10 @@ trap cleanup EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
 
-if [ "$STUB" -eq 1 ]; then export IAUDIT_PIPELINE=stub; fi
-
-launch backend engines/eaudit uv run uvicorn eaudit.app:app --port "$BACKEND_PORT"
-launch eval eval env "IAUDIT_BACKEND_URL=http://127.0.0.1:$BACKEND_PORT" \
-  uv run uvicorn iaudit_eval.server.app:app --no-access-log --host 127.0.0.1 --port "$EVAL_PORT"
-launch web frontend env "VITE_AUDIT_URL=http://localhost:$BACKEND_PORT/v1/audit" \
-  VITE_MOCK=false "IAUDIT_EVAL_PORT=$EVAL_PORT" npm run dev
+launch backend admin/backend env ENV=local ADMIN_AUTH=off "ADMIN_CORS_ORIGINS=http://localhost:$WEB_PORT" \
+  uv run uvicorn --factory onolys_admin_backend.app:create_app --port "$BACKEND_PORT"
+launch web frontend env "VITE_ADMIN_API_URL=http://localhost:$BACKEND_PORT" \
+  VITE_MOCK=false npm run dev
 
 any_dead() {
   local pid
@@ -150,25 +144,22 @@ healthy() { # healthy <url>
 }
 
 backend_ok=0
-eval_ok=0
 for _ in $(seq 1 30); do
   if any_dead; then
     echo "a child process exited during startup; stopping" >&2
     exit 1
   fi
-  [ "$backend_ok" -eq 1 ] || { healthy "http://127.0.0.1:$BACKEND_PORT/healthz" && backend_ok=1 || true; }
-  [ "$eval_ok" -eq 1 ] || { healthy "http://127.0.0.1:$EVAL_PORT/health" && eval_ok=1 || true; }
-  [ "$backend_ok" -eq 1 ] && [ "$eval_ok" -eq 1 ] && break
+  [ "$backend_ok" -eq 1 ] || { healthy "http://127.0.0.1:$BACKEND_PORT/v1/me" && backend_ok=1 || true; }
+  [ "$backend_ok" -eq 1 ] && break
   sleep 1
 done
-if [ "$backend_ok" -ne 1 ] || [ "$eval_ok" -ne 1 ]; then
-  echo "health wait timed out after 30s (backend ok=$backend_ok, eval ok=$eval_ok)" >&2
+if [ "$backend_ok" -ne 1 ]; then
+  echo "health wait timed out after 30s (backend ok=$backend_ok)" >&2
   exit 1
 fi
 
 echo "Ready:"
-echo "  backend  http://127.0.0.1:$BACKEND_PORT/healthz"
-echo "  eval api http://127.0.0.1:$EVAL_PORT/health"
+echo "  backend  http://127.0.0.1:$BACKEND_PORT/v1/me"
 echo "  web      http://localhost:$WEB_PORT"
 echo "Ctrl-C to stop all."
 

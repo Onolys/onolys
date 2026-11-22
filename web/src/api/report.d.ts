@@ -130,7 +130,7 @@ export type AvgAbsGlobalDifference = number | null;
 export type WithinOneShare = number | null;
 export type CountsFlagged = number | null;
 /**
- * Engine code (see WARNING_CODES), a paudit code, or a pack-defined code.
+ * Report code (see WARNING_CODES), a result warning code or a pack code.
  */
 export type Code = string;
 export type ItemId5 = string | null;
@@ -153,6 +153,9 @@ export type OutputTokens = number;
 export type CacheReadTokens = number;
 export type CacheWriteTokens = number;
 export type CostUsd = number | null;
+export type Mode = "whole" | "random_window";
+export type DurationS = number | null;
+export type Seed = string;
 
 export interface Report {
   schema_version: SchemaVersion;
@@ -382,11 +385,7 @@ export interface Warning {
 }
 export interface ReportRunInfo {
   evaluation: RunInfo;
-  paudit: RunInfo;
-  /**
-   * null when no reasons audit ran.
-   */
-  eaudit: RunInfo | null;
+  miti: RunInfo;
 }
 /**
  * Provenance of one engine run (PRD R10). Never holds text or key values.
@@ -401,6 +400,7 @@ export interface RunInfo {
   prompt_hashes?: PromptHashes;
   n_runs?: NRuns1;
   usage?: RunUsage;
+  span?: SpanInfo | null;
 }
 export interface Routes {
   [k: string]: RouteFacts;
@@ -427,4 +427,12 @@ export interface RunUsage {
   cache_read_tokens?: CacheReadTokens;
   cache_write_tokens?: CacheWriteTokens;
   cost_usd?: CostUsd;
+}
+/**
+ * How the coded span was chosen (PRD R7).
+ */
+export interface SpanInfo {
+  mode: Mode;
+  duration_s?: DurationS;
+  seed: Seed;
 }

@@ -4,7 +4,7 @@
 # The `claude` preset restores the Claude Sonnet routes (needs ANTHROPIC_API_KEY).
 # Thinking is kept low (extra_params reasoning_effort: low -> generationConfig.thinkingConfig.thinkingLevel) for parity with the
 # previous no-thinking setup: Gemini 4 thinks by default and thinking tokens count against max_tokens, so small stage caps
-# (eaudit prep/link/check) could otherwise be eaten by thinking. Tunable per route. supports_temperature is false: Gemini 3+ keeps default sampling.
+# (the old reasons-audit prep/link/check) could otherwise be eaten by thinking. Tunable per route. supports_temperature is false: Gemini 3+ keeps default sampling.
 cheap: &gemini
   litellm_id: gemini/gemini-4-hydrogen
   api_key_env: GEMINI_API_KEY
@@ -20,8 +20,8 @@ cheap: &gemini
   extra_params: {reasoning_effort: low}
 mid: &gemini_mid {<<: *gemini, litellm_id: gemini/gemini-4-neon}
 strong: *gemini_mid
-paudit_code: {alias: mid}
-paudit_globals: {alias: mid}
+miti_code: {alias: mid}
+miti_globals: {alias: mid}
 tips: {alias: mid}
 
 # Named bundles of route overrides (+ an STT key from stt_providers.yaml). DEFAULT_PRESET picks one.
@@ -55,14 +55,14 @@ presets:
       cheap: {<<: *gemini, litellm_id: gemini/gemini-does-not-exist-0}
       mid: {<<: *gemini_mid, litellm_id: gemini/gemini-does-not-exist-0}
       strong: {<<: *gemini_mid, litellm_id: gemini/gemini-does-not-exist-0}
-      paudit_code: {<<: *gemini_mid, litellm_id: gemini/gemini-does-not-exist-0}
-      paudit_globals: {<<: *gemini_mid, litellm_id: gemini/gemini-does-not-exist-0}
+      miti_code: {<<: *gemini_mid, litellm_id: gemini/gemini-does-not-exist-0}
+      miti_globals: {<<: *gemini_mid, litellm_id: gemini/gemini-does-not-exist-0}
       tips: {<<: *gemini_mid, litellm_id: gemini/gemini-does-not-exist-0}
-  test-broken-eaudit:
+  test-broken-tiers:
     routes:
       cheap: {<<: *gemini, litellm_id: gemini/gemini-does-not-exist-0}
       mid: {<<: *gemini_mid, litellm_id: gemini/gemini-does-not-exist-0}
       strong: {<<: *gemini_mid, litellm_id: gemini/gemini-does-not-exist-0}
-      paudit_code: {<<: *gemini_mid}
-      paudit_globals: {<<: *gemini_mid}
+      miti_code: {<<: *gemini_mid}
+      miti_globals: {<<: *gemini_mid}
       tips: {<<: *gemini_mid}

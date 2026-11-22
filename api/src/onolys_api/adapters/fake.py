@@ -9,18 +9,18 @@ adapters ignore it). Matching is by substring.
 import hashlib
 from typing import Any
 
-from onolys_core.engine import PackRef, RunContext
-from onolys_core.stt import AudioRef, SttParams, SttRun, Word
-from onolys_core.stt.base import BaseSttAdapter
-from onolys_core.transcript import Transcript
-from onolys_core.voice import VoiceParams, VoiceSession
-from onolys_core.voice.fixture import FixtureVoice
+from onolys_miti.context import RunContext
+from onolys_miti.span import duration_s
+from onolys_miti.stt import AudioRef, SttParams, SttRun, Word
+from onolys_miti.stt.base import BaseSttAdapter
+from onolys_miti.transcript import Transcript
+from onolys_miti.voice import VoiceParams, VoiceSession
+from onolys_miti.voice.fixture import FixtureVoice
 
 from onolys_api.adapters.base import AdapterError, EvaluationOutput, ProgressCb
 
 # failure injection
-FAIL_PAUDIT = "[fail:paudit]"  # run and session `failed`
-FAIL_EAUDIT = "[fail:eaudit]"  # report_ready, reasons_audit failed + warning
+FAIL_CODE = "[fail:code]"  # run and session `failed`
 FAIL_TIPS = "[fail:tips]"  # report_ready, tips=[] + warning tips_failed
 FAIL_NO_SPEECH = "[fail:no_speech]"  # transcript with 0 turns
 FAIL_SPEAKERS = "[fail:speakers_not_separated]"  # one speaker only
@@ -126,7 +126,7 @@ _GLOBALS = (
 )
 _BEHAVIOURS = (("reflection_simple", "Simple Reflection"), ("question", "Question"))
 _PROTOCOL = {"id": "fake-pack", "version": "0.0.0", "pack_hash": "0" * 16, "label": "Fake pack"}
-# Mirrors paudit.pack.PACK_FORMAT (string); api does not depend on the paudit package.
+# Mirrors the engine's pack format string.
 _PACK_FORMAT = "0.0.1"
 
 
@@ -155,7 +155,7 @@ def _subject_quotes(transcript: Transcript, subject: str) -> list[tuple[str, str
     return out
 
 
-def _paudit_result(
+def _code_result(
     transcript: Transcript, subject: str, params: dict[str, Any], quotes: list[tuple[str, str]]
 ) -> dict[str, Any]:
     n_runs = int(params.get("n_runs") or 1)
@@ -195,7 +195,7 @@ def _paudit_result(
         },
         "language": str(params.get("language") or "en"),
         "change_goal": str(params.get("change_goal") or ""),
-        "coded_span": params.get("coded_span"),
+        "coded_span": None,  # the whole session: the engine, not the caller, picks the span
         "subject_speaker": subject,
         "n_runs": n_runs,
         "results": [{**run, "run_index": i} for i in range(n_runs)],
@@ -206,23 +206,21 @@ def _paudit_result(
             "representative_run": 0,
         },
         "warnings": [],
-        "run_info": _run_info("paudit", params),
+        "run_info": {
+            **_run_info("miti", params),
+            # The fake always codes the whole session (never a random window).
+            "span": {
+                "mode": "whole",
+                "duration_s": duration_s(transcript),
+                "seed": params["seed"],
+            },
+        },
     }
 
 
-def _global_diff(clinician: float | None, onolys: float) -> dict[str, Any]:
-    """Minimal score_diff `Diff` (mirrors onolys_evaluation.compare.compare_item; >=1 differs)."""
-    if clinician is None:
-        return {"signed": None, "abs": None, "direction": None, "status": "not_rated"}
-    signed = onolys - clinician
-    a = abs(signed)
-    return {
-        "signed": signed,
-        "abs": a,
-        "direction": "same" if signed == 0 else "onolys_higher" if signed > 0 else "onolys_lower",
-        "status": "differs" if a >= 1 else "agree",
-        "within_one": a <= 1,
-    }
+def _global_diff() -> dict[str, Any]:
+    """score_diff `Diff` for an unrated item: the engine never sees a rating (D1)."""
+    return {"signed": None, "abs": None, "direction": None, "status": "not_rated"}
 
 
 class FakeEvaluation:
@@ -235,11 +233,9 @@ class FakeEvaluation:
     async def run(
         self,
         ctx: RunContext,
-        pack: PackRef | None,
         transcript: Transcript,
         speaker_map: dict[str, str],
         params: dict[str, Any],
-        rating: dict[str, Any] | None,
         progress_cb: ProgressCb | None = None,
     ) -> EvaluationOutput:
         self.calls += 1
@@ -249,32 +245,18 @@ class FakeEvaluation:
             if progress_cb is not None:
                 progress_cb(stage, status)  # type: ignore[arg-type]
 
-        cb("paudit", "started")
-        cb("eaudit", "started")
-        if FAIL_PAUDIT in title:
-            cb("paudit", "failed")
-            raise AdapterError("paudit_failed")
-        cb("paudit", "done")
+        cb("code", "started")
+        if FAIL_CODE in title:
+            cb("code", "failed")
+            raise AdapterError("code_failed")
+        cb("code", "done")
 
         subject = speaker_map["subject"]
         quotes = _subject_quotes(transcript, subject)
-        paudit = _paudit_result(transcript, subject, params, quotes)
+        code = _code_result(transcript, subject, params, quotes)
         warnings: list[dict[str, Any]] = []
 
-        has_rating = rating is not None
-        if not has_rating:
-            reasons: dict[str, Any] = {"status": "skipped", "items": []}
-            eaudit = None
-            cb("eaudit", "done")
-        elif FAIL_EAUDIT in title:
-            reasons = {"status": "failed", "items": []}
-            eaudit = None
-            warnings.append({"code": "reasons_audit_failed"})
-            cb("eaudit", "failed")
-        else:
-            reasons = {"status": "ran", "items": []}
-            eaudit = {"status": "ran", "claims": []}
-            cb("eaudit", "done")
+        reasons: dict[str, Any] = {"status": "skipped", "items": []}
 
         cb("tips", "started")
         if FAIL_TIPS in title:
@@ -294,19 +276,17 @@ class FakeEvaluation:
                 for i, (tid, q) in enumerate(quotes)
             ]
             cb("tips", "done")
-        cb("compare", "started")
         scorecard = [
             {
                 "item_id": gid,
                 "kind": "global",
                 "label": label,
-                "clinician": {"value": 3 if has_rating else None},
+                "clinician": {"value": None},
                 "onolys": {"value": 3, "mean": 3.0, "min": 3, "max": 3, "values": [3]},
-                "diff": _global_diff(3 if has_rating else None, 3),
+                "diff": _global_diff(),
             }
             for gid, label in _GLOBALS
         ]
-        cb("compare", "done")
         cb("assemble", "started")
         n_runs = int(params.get("n_runs") or 1)
         stt = transcript.stt_run.model_dump() if transcript.stt_run else None
@@ -317,7 +297,7 @@ class FakeEvaluation:
                 "change_goal": str(params.get("change_goal") or ""),
                 "protocol": _PROTOCOL,
                 "language": str(params.get("language") or "en"),
-                "coded_span": params.get("coded_span"),
+                "coded_span": None,  # the whole session: the engine, not the caller, picks the span
                 "subject_speaker": subject,
                 "n_runs": n_runs,
                 "models": {},
@@ -325,11 +305,8 @@ class FakeEvaluation:
                 "preset": params.get("preset"),
                 "code_version": str(params.get("code_version") or "fake"),
                 "params": {},
-                "has_clinician_rating": has_rating,
-                "rating_coverage": {
-                    "rated": len(_GLOBALS) if has_rating else 0,
-                    "total": len(_GLOBALS),
-                },
+                "has_clinician_rating": False,
+                "rating_coverage": {"rated": 0, "total": len(_GLOBALS)},
             },
             "layout": [{"section": "scorecard", "title": "Scorecard"}],
             "scorecard": scorecard,
@@ -345,22 +322,21 @@ class FakeEvaluation:
                 "citation": "n/a",
             },
             "aggregates": {
-                "globals_compared": len(_GLOBALS) if has_rating else 0,
-                "avg_abs_global_difference": 0.0 if has_rating else None,
-                "within_one_share": 1.0 if has_rating else None,
+                "globals_compared": 0,
+                "avg_abs_global_difference": None,
+                "within_one_share": None,
                 "counts_flagged": None,
             },
             "warnings": warnings,
             "run_info": {
                 "evaluation": _run_info("evaluation", params),
-                "paudit": paudit["run_info"],
-                "eaudit": _run_info("eaudit", params) if eaudit else None,
+                "miti": code["run_info"],
             },
         }
         if ctx.request_id:
             report["request_id"] = ctx.request_id
         cb("assemble", "done")
-        artifacts = {"paudit": paudit, "eaudit": eaudit, "tips": {"valid": tips, "proposals": []}}
+        artifacts = {"code": code, "tips": {"valid": tips, "proposals": []}}
         return EvaluationOutput(report=report, artifacts=artifacts)
 
 

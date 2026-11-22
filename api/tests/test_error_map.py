@@ -7,15 +7,18 @@ import pytest
 import test_run
 import test_worker
 from google.api_core.exceptions import ServiceUnavailable, TooManyRequests
-from onolys_core.errors import ConfigError, InputError, OnolysError, PackError
-from onolys_core.llm.errors import (
+from onolys_miti.code_pass import CodePassFailed
+from onolys_miti.errors import ConfigError, InputError, OnolysError
+from onolys_miti.globals_pass import GlobalsPassFailed
+from onolys_miti.llm.errors import (
     FixtureMiss,
     LLMBadOutput,
     LLMRateLimited,
     LLMTimeout,
     LLMUnavailable,
 )
-from onolys_core.stt.google_chirp import SttProviderError
+from onolys_miti.run import AllRunsFailed
+from onolys_miti.stt.google_chirp import SttProviderError
 from test_logging import failed
 from test_run import swap_eval
 from test_worker import SID, payload, runner_with
@@ -24,13 +27,6 @@ from onolys_api.adapters import AdapterError, FakeEvaluation
 from onolys_api.adapters.error_map import PUBLIC_MESSAGES, to_public
 from onolys_api.errors import ERROR_CODES
 from onolys_api.jobs.worker import MAX_ATTEMPTS
-
-paudit = pytest.importorskip("paudit")
-eaudit = pytest.importorskip("eaudit")
-from eaudit.api.errors import DeadlineExceeded as EauditDeadline  # noqa: E402
-from paudit.code_pass import CodePassFailed  # noqa: E402
-from paudit.engine import AllRunsFailed  # noqa: E402
-from paudit.globals_pass import GlobalsPassFailed  # noqa: E402
 
 # env is parametrized [fake, firestore]; [firestore] twins run only for tests/params marked
 # pytest.mark.firestore_smoke (see conftest.py).
@@ -42,7 +38,6 @@ UPSTREAM, DEADLINE, TRANSCRIBE = "upstream_unavailable", "deadline_exceeded", "t
 # (id, exception factory, stage, attempt, public code, retryable)
 CASES = [
     ("input", lambda: InputError(SECRET), "run", 1, "invalid_parameters", False),
-    ("pack", lambda: PackError(SECRET), "run", 1, "internal_error", False),
     ("config", lambda: ConfigError(SECRET), "run", 1, "internal_error", False),
     ("llm_unavailable", lambda: LLMUnavailable(SECRET), "run", 1, UPSTREAM, True),
     ("llm_timeout", lambda: LLMTimeout(SECRET), "run", 1, UPSTREAM, True),
@@ -51,14 +46,13 @@ CASES = [
     ("llm_fixture_miss", lambda: FixtureMiss(SECRET), "run", 1, "internal_error", False),
     ("llm_bad_output_a2", lambda: LLMBadOutput(SECRET), "run", 2, UPSTREAM, True),
     ("deadline_builtin", lambda: TimeoutError(SECRET), "run", 1, DEADLINE, True),
-    ("deadline_eaudit", lambda: EauditDeadline(SECRET), "run", 1, DEADLINE, True),
     ("code_pass_failed", lambda: CodePassFailed(SECRET), "run", 1, "internal_error", False),
     ("globals_pass_failed", lambda: GlobalsPassFailed(SECRET), "run", 1, "internal_error", False),
     ("all_runs_failed", lambda: AllRunsFailed(SECRET), "run", 1, "internal_error", False),
     ("unknown", lambda: ValueError(SECRET), "run", 1, "internal_error", False),
     ("onolys_base", lambda: OnolysError(SECRET), "run", 1, "internal_error", False),
     ("adapter_upstream", lambda: AdapterError(UPSTREAM), "run", 1, UPSTREAM, True),
-    ("adapter_paudit", lambda: AdapterError("paudit_failed"), "run", 1, "internal_error", False),
+    ("adapter_code", lambda: AdapterError("code_failed"), "run", 1, "internal_error", False),
     ("run_google_transient", lambda: ServiceUnavailable(SECRET), "run", 1, UPSTREAM, True),
     ("run_google_429", lambda: TooManyRequests(SECRET), "run", 1, UPSTREAM, True),
     ("run_google_transient_last", lambda: ServiceUnavailable(SECRET), "run", 2, UPSTREAM, True),
@@ -179,13 +173,13 @@ def test_wrapper_records_code_and_one_failed_line(repo, caplog, make, stage, att
     "make,code",
     [
         (lambda: InputError(SECRET), "invalid_parameters"),
-        (lambda: PackError(SECRET), "internal_error"),
+        (lambda: AllRunsFailed(SECRET), "internal_error"),
         pytest.param(lambda: LLMUnavailable(SECRET), UPSTREAM, marks=pytest.mark.firestore_smoke),
         (lambda: LLMBadOutput(SECRET), UPSTREAM),
         (lambda: CodePassFailed(SECRET), "internal_error"),
-        (lambda: EauditDeadline(SECRET), DEADLINE),
+        (lambda: TimeoutError(SECRET), DEADLINE),
     ],
-    ids=["input", "pack", "llm", "bad_output", "code_pass", "deadline"],
+    ids=["input", "all_runs", "llm", "bad_output", "code_pass", "deadline"],
 )
 async def test_stubbed_engine_failure_maps_through_run_and_status_body(env, caplog, make, code):
     class Boom(FakeEvaluation):

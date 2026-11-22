@@ -1,7 +1,7 @@
 """Scenario loader (ai-interview PRD R1): every file validated at API start, fail fast.
 
-Files live in `<pack>/scenarios/` (`scenario.schema.json` + `*.json`), baked into the image with
-`protocols/`. Only `public_view` fields ever leave the server.
+Files live in the engine's packaged `scenarios/` (`scenario.schema.json` + `*.json`).
+Only `public_view` fields ever leave the server.
 """
 
 import json
@@ -9,17 +9,16 @@ from pathlib import Path
 from typing import Any
 
 from jsonschema import Draft202012Validator
-from onolys_core.errors import ConfigError
-from onolys_core.voice.select import allowed_voices
-
-from onolys_api.rating import load_pack_cached
+from onolys_miti.errors import ConfigError
+from onolys_miti.miti import MITI
+from onolys_miti.voice.select import allowed_voices
 
 SCHEMA_NAME = "scenario.schema.json"
 PUBLIC_FIELDS = ("id", "title", "difficulty", "summary", "language", "voice")
 
 
 def scenarios_dir() -> Path:
-    return load_pack_cached().root / "scenarios"
+    return MITI.data_dir / "scenarios"
 
 
 def load_scenarios(

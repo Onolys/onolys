@@ -121,3 +121,21 @@ def test_entrypoint_defaults_and_rejects_unknown_mode(tmp_path):
     assert r.returncode == 0 and "mode=api" in r.stdout and "--port 8080" in r.stdout
     bad = run_entrypoint(tmp_path, SERVICE_MODE="both")
     assert bad.returncode == 2 and "SERVICE_MODE" in bad.stderr
+
+
+def test_dockerfile_is_slim_miti_only():
+    df = DOCKERFILE.read_text()
+    code = re.sub(r"^\s*#.*$", "", df, flags=re.M)
+    copies = re.findall(r"^COPY\s+(?:--\S+\s+)?(\S+)", code, re.M)
+    assert "protocols" not in copies and not any(c.startswith("docs/contracts") for c in copies)
+    assert not re.search(r"PROTOCOLS_DIR|CONTRACTS_DIR", code)
+    assert "COPY engines/miti engines/miti" in code
+    for member in ("engines/miti", "admin/auth", "admin/backend"):  # every workspace member manifest
+        assert f"COPY {member}/pyproject.toml {member}/pyproject.toml" in code
+
+
+def test_mutmut_copy_list_drops_protocols():
+    import tomllib
+
+    cfg = tomllib.loads((API / "pyproject.toml").read_text())["tool"]["mutmut"]
+    assert "../protocols" not in cfg["also_copy"]

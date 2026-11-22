@@ -2,7 +2,7 @@
 
 `docs/mission.md` is the governing mission statement. Read it before any work. It wins over other docs when they conflict.
 
-The platform scope covers evidence audit (`eaudit`), protocol audit with scoring and protocol review (`paudit`), and a future clinician audit (`caudit`), each in its own engine under `engines/`. Do not build outside that scope (diagnosis, clinical-correctness judgement, or file-format support) without the user's explicit approval.
+The scope is MITI 4.2.1 coding of a session plus a report and basic tips. Do not build outside that scope (diagnosis, clinical-correctness judgement, scoring other protocols, or claiming official MITI status) without the user's explicit approval.
 
 Never invent quotations, speaker identities, or timestamps.
 
@@ -11,7 +11,6 @@ Never invent quotations, speaker identities, or timestamps.
 | Path | Purpose | Audience |
 |---|---|---|
 | `docs/mission.md` | Governing mission and scope | Everyone |
-| `engines/` | Audit engines (`eaudit`, shared `core`; later `paudit`, `evaluation`); each has its own README | Contributors and coding agents |
 | `docs/architecture.md` | High-level design: how the system fits together | Everyone |
 | `docs/concepts/` | How should I think about this? Behavior that crosses components | Users and contributors |
 | `docs/implementation/` | How is this implemented? Private implementation details | Maintainers and coding agents |
@@ -19,11 +18,10 @@ Never invent quotations, speaker identities, or timestamps.
 | `docs/decisions/` | Why is it like this? Architecture decision records | Contributors |
 | `docs/testing/` | How to test, and what to verify before a release | Contributors |
 | `docs/specs/` | Normative behavior contracts with acceptance criteria | Contributors and coding agents |
-| `docs/examples/` | Runnable public-API usage examples | Users |
-| `docs/contracts/` | Machine-readable audit request and response contracts | Frontend, backend, and coding agents |
+| `docs/contracts/` | Pointer to the generated public API schemas (`public/`) | Web, api, and coding agents |
 | `docs/agent_files/` | Branch-scoped agent artifacts, one folder per branch | Coding agents |
 
-The contract's lists of verdicts and concern types mirror `docs/mission.md`. When the mission changes, update the contracts and bump `schema_version`.
+The MITI engine documents itself in `engines/miti/README.md`.
 
 ## Agent-generated files
 

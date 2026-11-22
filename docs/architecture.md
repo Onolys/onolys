@@ -4,58 +4,44 @@ High-level design: how the system fits together.
 
 **Audience:** everyone.
 
-v1 is one synchronous JSON exchange. The frontend owns the contract in [contracts/](contracts/). It sends an `AuditRequest` (transcript turns plus assessment sections). The backend returns an `AuditResponse` (claim verdicts, concern types, and positions into that same input). There is no streaming and no background job.
-
-`label` and `score` are display-only. The response locates claims and excerpts by index and character offset. It does not copy transcript text or timestamps.
-
-## Backend
-
-The backend ([../engines/eaudit/](../engines/eaudit/)) serves `POST /v1/audit` and calls model providers through LiteLLM. It reads the schemas in [contracts/](contracts/) in place. For each claim in the assessment, a model proposes evidence and a verdict, and code decides what is reported. The model never returns positions. Code computes them. Endpoint, errors, settings and warnings: [reference/backend-api.md](reference/backend-api.md).
-
-One call, one reply. The target is 30 to 45 seconds, the hard cap is 100 (`IAUDIT_AUDIT_DEADLINE_S`), and the review UI waits up to 120.
+Onolys has a web app, a public API with a background worker, one MITI engine, and a small admin shell.
 
 ```
-review UI --POST /v1/audit--> backend --LiteLLM--> model providers
+web app --/v1--> api (+ worker) --imports--> onolys_miti
+                    |                           |-- LLM (LiteLLM routes)
+                    |                           |-- speech-to-text
+                    |                           `-- voice (Gemini Live)
+                    `-- Firestore, Cloud Storage, Cloud Tasks
+admin site --/v1/me--> admin backend (login check only)
 ```
 
-Five stages, with claims streaming through stages 2 and 3 as soon as stage 1 produces them:
+## Engine: `onolys_miti`
 
-| Stage | Job | By |
-|---|---|---|
-| 0 Prep | Index the turns, tag questions, answers and corrections, pair questions with replies | Rules (a cheap model for undecided turns, off by default) |
-| 1 Atomize | Split each section into claims | Model, then code validates |
-| 2 Link | Find evidence turns for each claim | Retrieval in code, a model proposes, code validates |
-| 3 Check | Observe how the evidence relates to the claim, then pick the verdict and concerns | Model observes, code decides |
-| 4 Assemble | Turn text into positions, repair the rules, validate the reply | Code only |
+[`engines/miti/`](../engines/miti/README.md) is a Python package with MITI 4.2.1 built in. It holds the MITI definition, prompts, fixtures and report schema (`src/onolys_miti/data/`), the coding and tips passes, and the infrastructure the api needs:
 
-Where the code lives, under `engines/eaudit/`:
-
-| Path | Holds |
+| Part | Job |
 |---|---|
-| `src/eaudit/app.py`, `api/`, `config.py`, `contract.py` | The endpoint, error mapping, settings, schema loading |
-| `engines/core/src/onolys_core/llm/` | The one interface to every model call |
-| `src/eaudit/prep/`, `atomize/`, `link/`, `check/`, `assembler/` | Stages 0 to 4 |
-| `src/eaudit/pipeline/` | Orchestration, deadline, metrics |
-| `eval/`, `tests/` | The evaluation harness and the test suite |
+| `run_miti(...)` | Transcript in, no-rating report out. Passes: `code`, `tips`, `assemble`. |
+| `llm/` | The one interface to every model call: routes (model choice as data), live, fixture and failing clients. |
+| `stt/` | Speech-to-text providers (Google Chirp, fixture). |
+| `voice/` | The Gemini Live adapter for the AI practice interview. |
 
-Details: [implementation/](implementation/), [concepts/](concepts/), [decisions/](decisions/).
+Models propose; code checks quotes against the transcript and computes the scores.
 
-## Review UI
+## API and worker: `onolys_api`
 
-The frontend is a browser app (React + TypeScript, in [../frontend/](../frontend/)). It never edits the assessment. Flow:
+[`api/`](../api/README.md) serves the public `/v1` API ([reference](reference/public-api.md), [schemas](contracts/)). One image runs as `api`, `worker` or `combined` (`SERVICE_MODE`). A session goes: create, upload audio, validate, transcribe, confirm speakers, run, report. The run calls `onolys_miti`. The api also relays the AI practice interview ([ADR 0024](decisions/0024-ai-practice-interview-gemini-live-relay.md)). Auth is Identity Platform ID tokens or API keys; data is in Firestore and Cloud Storage.
 
-1. The reviewer uploads a request JSON file. The app checks it against the request schema.
-2. The app sends it to the audit endpoint with one `POST`. In mock mode it picks a bundled example reply instead.
-3. The app checks the reply against the response schema. A broken reply is rejected whole.
-4. It checks every span against the request text (a bad span flags only its claim) and counts verdicts.
-5. It shows the assessment on the left and the selected claim's detail on the right.
+## Web app: `web/`
 
-| Module | Job |
-|---|---|
-| `contract/` | Validation, span maths, claim ordering, excerpt grouping. No UI. |
-| `transport/` | Read file, POST or mock, error mapping, loading state. |
-| `app/` | Page shell, left pane, verdict navigation. |
-| `claim-detail/` | Right pane: verdict, concerns, excerpts, suggestion. |
-| `tokens/` | Verdict and evidence colours, icons, labels. |
+A React + TypeScript app. It talks to the api on the same origin (`/v1`), listens to session status in Firestore, and renders the report. Hosting and CSP: [ADR 0021](decisions/0021-web-app-hosting-and-sharing.md). It validates nothing about MITI itself; the api and engine own the report shape.
 
-More: [how to read the screen](concepts/review-ui.md), [facts and settings](reference/review-ui.md), [internals](implementation/frontend.md), [testing](testing/frontend.md), [decisions](decisions/).
+## Admin shell: `admin/` and `frontend/`
+
+An internal site behind a login. The backend (`admin/backend`) serves only `GET /v1/me`; `admin/auth` verifies the token and the email allowlist. The frontend is sign-in plus an empty page. See [ADR 0023](decisions/0023-admin-deployment-and-auth.md) and [backend-api.md](reference/backend-api.md).
+
+## Infrastructure
+
+GCP with Terraform, staging and prod: [reference/infra.md](reference/infra.md), [ADR 0022](decisions/0022-infra-gcp-terraform-two-environments.md).
+
+More: [implementation/](implementation/), [decisions/](decisions/), [testing/](testing/).

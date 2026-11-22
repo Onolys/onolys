@@ -2,8 +2,8 @@
 
 `to_public(exc, attempt=1, stage="run") -> (code, retryable)`. Codes are existing public codes
 (`onolys_api.errors.ERROR_CODES`); the user-facing text is `PUBLIC_MESSAGES[code]`, fixed text,
-never the exception message. Classes the API does not depend on (paudit, eaudit) are matched by
-module + class name or by the `code` attribute they inherit from `OnolysError`.
+never the exception message. Engine failures (`AllRunsFailed`, `CodePassFailed`,
+`GlobalsPassFailed`) are matched by the `code` attribute they inherit from `OnolysError`.
 `stage="stt"` is the transcription path, where a transient provider error is
 `upstream_unavailable` on attempt 1 and `transcription_failed` afterwards.
 """
@@ -11,9 +11,9 @@ module + class name or by the `code` attribute they inherit from `OnolysError`.
 from typing import Literal
 
 from google.api_core import exceptions as gexc
-from onolys_core.errors import InputError, OnolysError, PackError
-from onolys_core.llm.errors import LLMError
-from onolys_core.stt.google_chirp import SttProviderError
+from onolys_miti.errors import InputError, OnolysError
+from onolys_miti.llm.errors import LLMError
+from onolys_miti.stt.google_chirp import SttProviderError
 
 Stage = Literal["run", "stt"]
 
@@ -54,10 +54,6 @@ _GOOGLE_TRANSIENT = (
 )
 
 
-def _named(exc: BaseException, module: str, name: str) -> bool:
-    return any(c.__name__ == name and c.__module__.startswith(module) for c in type(exc).__mro__)
-
-
 def _stt_transient(exc: BaseException) -> bool:
     return bool(getattr(exc, "transient", False)) or isinstance(exc, _GOOGLE_TRANSIENT)
 
@@ -72,7 +68,7 @@ def to_public(exc: BaseException, attempt: int = 1, stage: Stage = "run") -> tup
 
 
 def _classify(exc: BaseException, stage: Stage) -> tuple[str, bool]:
-    # AdapterError lives in adapters.base (imports onolys_core only); import lazily: no cycle
+    # AdapterError lives in adapters.base (imports onolys_miti only); import lazily: no cycle
     from onolys_api.adapters.base import AdapterError
 
     if isinstance(exc, AdapterError):
@@ -81,8 +77,6 @@ def _classify(exc: BaseException, stage: Stage) -> tuple[str, bool]:
         return INTERNAL, False
     if isinstance(exc, InputError):
         return "invalid_parameters", False
-    if isinstance(exc, PackError):
-        return INTERNAL, False
     if stage == "stt":
         if isinstance(exc, SttProviderError):
             return (UPSTREAM, True) if _stt_transient(exc) else (TRANSCRIPTION, False)
@@ -92,15 +86,15 @@ def _classify(exc: BaseException, stage: Stage) -> tuple[str, bool]:
         return UPSTREAM, True
     if isinstance(exc, LLMError):
         return _classify_llm(exc)
-    if isinstance(exc, TimeoutError) or _named(exc, "eaudit", "DeadlineExceeded"):
+    if isinstance(exc, TimeoutError):
         return DEADLINE, True
     if isinstance(exc, OnolysError):
-        # an engine that wrapped a provider failure (paudit AllRunsFailed from LLMUnavailable)
+        # an engine that wrapped a provider failure (AllRunsFailed from LLMUnavailable)
         # keeps it as `__cause__`/`__context__`: map it like the direct LLM error
         cause = _llm_cause(exc)
         if cause is not None:
             return _classify_llm(cause)
-        # paudit CodePassFailed / GlobalsPassFailed / AllRunsFailed (`code = "run_failed"`): the
+        # CodePassFailed / GlobalsPassFailed / AllRunsFailed (`code = "run_failed"`): the
         # engine already halved/retried; R3 "anything else": not retried, owner alerted
         return INTERNAL, False
     return INTERNAL, False

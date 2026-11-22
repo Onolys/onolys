@@ -4,16 +4,6 @@ import { getConfig } from "./config";
 afterEach(() => vi.unstubAllEnvs());
 
 describe("getConfig", () => {
-  it.each([undefined, ""])("evalBase defaults to the local proxy for %j", (v) => {
-    vi.stubEnv("VITE_EVAL_API_BASE", v);
-    expect(getConfig().evalBase).toBe("/eval-api");
-  });
-
-  it("evalBase accepts a configured endpoint", () => {
-    vi.stubEnv("VITE_EVAL_API_BASE", "http://localhost:9100");
-    expect(getConfig().evalBase).toBe("http://localhost:9100");
-  });
-
   it("mock is true only for exactly 'true'", () => {
     vi.stubEnv("VITE_MOCK", "true");
     expect(getConfig().mock).toBe(true);
@@ -29,25 +19,13 @@ describe("getConfig", () => {
     expect(getConfig().mock).toBe(false);
   });
 
-  it("auditUrl is passed through when set", () => {
-    vi.stubEnv("VITE_AUDIT_URL", "http://localhost:8000/v1/audit");
-    expect(getConfig().auditUrl).toBe("http://localhost:8000/v1/audit");
+  it("adminApiUrl is passed through when set", () => {
+    vi.stubEnv("VITE_ADMIN_API_URL", "http://localhost:8000");
+    expect(getConfig().adminApiUrl).toBe("http://localhost:8000");
   });
 
-  it.each([undefined, ""])("auditUrl is null for %j", (v) => {
-    vi.stubEnv("VITE_AUDIT_URL", v);
-    expect(getConfig().auditUrl).toBeNull();
-  });
-});
-
-describe("getConfig evalEnabled", () => {
-  it.each([undefined, "", "true", "1"])("is true (local default) for %j", (v) => {
-    vi.stubEnv("VITE_EVAL_ENABLED", v);
-    expect(getConfig().evalEnabled).toBe(true);
-  });
-
-  it("is false only for exactly 'false'", () => {
-    vi.stubEnv("VITE_EVAL_ENABLED", "false");
-    expect(getConfig().evalEnabled).toBe(false);
+  it.each([undefined, ""])("adminApiUrl is null for %j", (v) => {
+    vi.stubEnv("VITE_ADMIN_API_URL", v);
+    expect(getConfig().adminApiUrl).toBeNull();
   });
 });

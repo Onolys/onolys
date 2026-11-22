@@ -11,7 +11,7 @@ import logging
 
 import pytest
 import test_run
-from onolys_core.transcript import Transcript, Turn
+from onolys_miti.transcript import Transcript, Turn
 from test_run import BigEval, Env, swap_eval
 
 from onolys_api.adapters import FakeEvaluation
@@ -64,7 +64,7 @@ def deleted_lines(caplog) -> list[dict]:
 
 async def rich_session(env: Env, title: str = "SENTINEL-TITLE") -> str:
     """Finished session with 2 runs, a >500 KB report (blob pointer), a draft rating."""
-    sid = await env.finished("[fail:paudit]")  # first run fails; "Try again" makes the second
+    sid = await env.finished("[fail:code]")  # first run fails; "Try again" makes the second
     env.repo.update_session(env.uid, sid, {"title": title})
     swap_eval(env, BigEval())
     r = await env.c.post(f"/v1/sessions/{sid}/runs", json={}, headers=env.h)

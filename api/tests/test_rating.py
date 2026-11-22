@@ -11,10 +11,8 @@ from pathlib import Path
 import httpx
 import pytest
 from cards import valid_card
-from onolys_core.errors import PackError
-from onolys_evaluation import is_no_rating
-from onolys_evaluation import validate_rating as engine_validate
-from paudit.pack import load_pack
+from onolys_miti.rating import is_no_rating
+from onolys_miti.rating import validate_rating as engine_validate
 
 from onolys_api import rating as rating_mod
 from onolys_api.app import create_app
@@ -380,10 +378,9 @@ def codes(obj, final):
 
 
 def test_validate_is_the_engine_validator_plus_size_cap():
-    pack = load_pack("miti@4.2.1")
     for c in (card(), card(change_goal=""), {"globals": {"cct": {"score": 9}}}, {"x": 1}):
         for final in (False, True):
-            assert validate_rating(c, final=final) == engine_validate(pack, c, final)
+            assert validate_rating(c, final=final) == engine_validate(c, final)
     big = {"junk": "x" * rating_mod.MAX_CARD_BYTES}
     assert ("", "too_large") in codes(big, False)
 
@@ -426,28 +423,19 @@ def test_schema_is_the_canonical_sp02_schema():
     assert not (Path(rating_mod.__file__).parent / "schemas/rating.local.schema.json").exists()
 
 
-def test_schema_missing_fails_loudly_no_fallback(tmp_path, monkeypatch):
-    monkeypatch.setenv("PAUDIT_PROTOCOLS_DIR", str(tmp_path))
-    rating_mod.load_pack_cached.cache_clear()
-    try:
-        with pytest.raises(PackError):
-            rating_mod.load_schema()
-        with pytest.raises(PackError):  # create_app loads it at startup
-            create_app(Settings(env="test", auth_mode="fake"))
-    finally:
-        monkeypatch.undo()
-        rating_mod.load_pack_cached.cache_clear()
+def test_schema_comes_from_the_engine_with_no_env_or_pack_lookup(monkeypatch):
+    monkeypatch.setenv("PROTOCOLS_DIR", "/nonexistent")
     assert rating_mod.load_schema()["properties"]
+    create_app(Settings(env="test", auth_mode="fake"))  # create_app reads it at startup
 
 
 def test_card_valid_for_web_schema_is_accepted_by_api_and_engine():
     """A card with globals/counts + reasons passes the API and the engine's validate_rating."""
-    pack = load_pack("miti@4.2.1")
     c = valid_card()
     assert validate_rating(c, final=True) == []
     assert validate_rating(c, final=False) == []
-    assert engine_validate(pack, c, True) == []
+    assert engine_validate(c, True) == []
     # unknown pack item keys are rejected by both
     bad = {**c, "globals": {"nope": {"score": 3}}}
     assert validate_rating(bad, final=False)
-    assert engine_validate(pack, bad, False)
+    assert engine_validate(bad, False)

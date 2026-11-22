@@ -1,9 +1,0 @@
-{
-  "error": {
-    "code": "data_missing",
-    "message": "Fictional data missing error.",
-    "detail": {
-      "reason": "fictional offline test"
-    }
-  }
-}

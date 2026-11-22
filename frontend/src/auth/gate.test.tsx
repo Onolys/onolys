@@ -31,15 +31,15 @@ describe("shouldGate", () => {
 });
 
 describe("Root", () => {
-  it("without a session renders the app directly and never touches auth", () => {
+  it("without a session renders the shell directly and never touches auth", () => {
     vi.stubEnv("VITE_MOCK", "true");
     render(<Root session={null} />);
-    expect(screen.getByRole("navigation", { name: "Workspace" })).toBeTruthy();
+    expect(screen.getByText("Nothing here yet.")).toBeTruthy();
   });
-  it("with a signed-out session renders login instead of the app", async () => {
+  it("with a signed-out session renders login instead of the shell", async () => {
     vi.stubEnv("VITE_MOCK", "false");
     render(<Root session={createAuthSession(createFakeProvider())} />);
     expect(await screen.findByRole("button", { name: "Sign in" })).toBeTruthy();
-    expect(screen.queryByRole("navigation", { name: "Workspace" })).toBeNull();
+    expect(screen.queryByText("Nothing here yet.")).toBeNull();
   });
 });

@@ -24,8 +24,8 @@ from collections import Counter
 from collections.abc import Callable
 from typing import Any
 
-from onolys_core.stt import SttParams
-from onolys_core.transcript import Transcript
+from onolys_miti.stt import SttParams
+from onolys_miti.transcript import Transcript
 
 from onolys_api import logs
 from onolys_api.adapters.base import AdapterError, Stt

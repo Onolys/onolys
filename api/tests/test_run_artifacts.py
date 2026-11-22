@@ -1,58 +1,36 @@
 """SP09 Task 4 / R4 / AC3: a run through the REAL `Evaluation` adapter over fixtures leaves its
-evidence where SP04 says: run artifacts in the blob store, `run_info` on the run doc, `stt` /
-`preset` / `code_version` in the report header. A no-rating run has no `eaudit.json`.
+evidence where SP04 says: run artifacts (`code.json`, `tips.json`) in the blob store, `run_info`
+on the run doc, `stt` / `preset` / `code_version` in the report header. The run has no rating
+input: a submitted card and none leave the same artifacts.
 
-No network: the engine's paudit and reasons-audit seams return canned fixture results and the
-tips generator returns the fixture tips; everything else (pack, `run_evaluation`, report
-assembly, schema validation, the run task) is real. Fake repo and, when
+No network: the engine's coding stage and tips generator return canned fixtures; everything else
+(`run_miti`, report assembly, schema validation, the run task) is real. Fake repo and, when
 `FIRESTORE_EMULATOR_HOST` is set, the emulator.
 """
 
 import os
-import sys
 import uuid
 from dataclasses import replace
-from pathlib import Path
 
 import httpx
 import pytest
 from audio_helpers import StubTools
-from eaudit.models import AuditResponse, Status
-from onolys_core.run_info import RunInfo
-from onolys_core.transcript import Transcript
+from miti_fixtures import TRANSCRIPT, patch_engine
+from test_run import CARD, ROUTES
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "engines/evaluation/tests"))
-from _make_fixtures import inputs  # noqa: E402
-from test_run import CARD, ROUTES  # noqa: E402
-
-from onolys_api.adapters import Adapters, FakeStt  # noqa: E402
-from onolys_api.adapters.real import RealEvaluation  # noqa: E402
-from onolys_api.app import create_app  # noqa: E402
-from onolys_api.jobs.transcribe import TRANSCRIPT_ID  # noqa: E402
-from onolys_api.repo.fake import FakeRepo  # noqa: E402
+from onolys_api.adapters import Adapters, FakeStt
+from onolys_api.adapters.real import RealEvaluation
+from onolys_api.app import create_app
+from onolys_api.jobs.transcribe import TRANSCRIPT_ID
+from onolys_api.repo.fake import FakeRepo
 
 pytestmark = pytest.mark.integration
-FIX = inputs("full")
-FILES = ("paudit", "eaudit", "tips")
+FILES = ("code", "tips")
 
 
 @pytest.fixture(autouse=True)
 def fixture_engine(monkeypatch):
-    from onolys_evaluation import api, tips
-
-    async def fake_paudit(transcript, pack, params, ctx, metrics):
-        return FIX["paudit_result"]
-
-    async def fake_eaudit(request, ctx, metrics):
-        resp = AuditResponse(request_id="r", status=Status.complete, warnings=[], claims=[])
-        return resp, RunInfo(engine="eaudit", code_version="t", preset="default")
-
-    async def fake_tips(*a, **kw):
-        return FIX["tips"], []
-
-    monkeypatch.setattr(api, "_run_paudit", fake_paudit)
-    monkeypatch.setattr(api, "_run_eaudit", fake_eaudit)
-    monkeypatch.setattr(tips, "generate_tips", fake_tips)
+    patch_engine(monkeypatch)
 
 
 class Env:
@@ -93,7 +71,7 @@ class Env:
             assert r.status_code == 202, r.text
         # swap in the fixture transcript + its speaker before the run task executes
         self.repo.put_transcript(
-            self.uid, sid, TRANSCRIPT_ID, Transcript.model_validate(FIX["transcript"].model_dump())
+            self.uid, sid, TRANSCRIPT_ID, TRANSCRIPT
         )
         self.repo.update_session(self.uid, sid, {"clinician_speaker": "A"})
         self.app.state.queue.drain()
@@ -132,7 +110,7 @@ async def env(request, settings, blobs, tmp_path):
         yield Env(app, c, repo, blobs)
 
 
-async def test_rated_run_leaves_artifacts_run_info_and_header(env):
+async def test_submitted_card_run_leaves_artifacts_run_info_and_header(env):
     sid = await env.run(CARD)
     assert env.repo.get_session(env.uid, sid).state == "report_ready"
     (run,) = env.repo.list_runs(env.uid, sid)
@@ -146,7 +124,7 @@ async def test_rated_run_leaves_artifacts_run_info_and_header(env):
     assert ri["evaluation"]["routes"] and ri["evaluation"]["pack"]["id"]
     assert ri["evaluation"]["pack"]["version"] and ri["evaluation"]["pack"]["hash"]
     assert ri["evaluation"]["prompt_hashes"]
-    assert ri["paudit"] and ri["eaudit"]
+    assert ri["miti"] and len(ri) == 2
 
     r = await env.c.get(f"/v1/sessions/{sid}/reports/1", headers=env.h)
     assert r.status_code == 200
@@ -156,13 +134,12 @@ async def test_rated_run_leaves_artifacts_run_info_and_header(env):
     assert r.json()["report"]["run_info"] == ri
 
 
-async def test_no_rating_run_has_no_eaudit_artifact(env):
+async def test_no_rating_run_leaves_the_same_artifacts(env):
     sid = await env.run(None)
     (run,) = env.repo.list_runs(env.uid, sid)
     assert run.status == "done"
     base = f"{env.uid}/{sid}/runs/{run.run_id}"
-    assert env.blobs.exists(f"{base}/paudit.json") and env.blobs.exists(f"{base}/tips.json")
-    assert not env.blobs.exists(f"{base}/eaudit.json")
-    assert run.run_info["eaudit"] is None
+    assert env.blobs.exists(f"{base}/code.json") and env.blobs.exists(f"{base}/tips.json")
+    assert not env.blobs.exists(f"{base}/old.json")
     report = (await env.c.get(f"/v1/sessions/{sid}/reports/1", headers=env.h)).json()["report"]
     assert report["reasons_audit"]["status"] == "skipped"

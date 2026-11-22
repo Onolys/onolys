@@ -1,6 +1,5 @@
-"""The deployed service sets ROUTES_FILE=config/<env>/routes.yaml (infra services.tf), resolved
-against the image WORKDIR (/app). paudit's live client fails with ConfigError (HTTP 500) if the
-image does not ship config/, as found on staging (SP07 task 11)."""
+"""The admin image holds python, admin/auth and admin/backend only: no engines, protocols, config
+or contract copies, and the sync targets the admin package."""
 
 import re
 from pathlib import Path
@@ -11,18 +10,45 @@ pytestmark = pytest.mark.unit
 
 ROOT = Path(__file__).resolve().parents[3]
 DOCKERFILE = (ROOT / "admin" / "backend" / "Dockerfile").read_text()
+COPY_LINES = [ln for ln in DOCKERFILE.splitlines() if re.match(r"^\s*COPY\b", ln)]
 
 
-def test_image_ships_routes_config_under_workdir():
-    assert re.search(r"^COPY\s+config\s+/app/config\s*$", DOCKERFILE, re.M)
+@pytest.mark.parametrize("forbidden", ["protocols", "config", "docs/contracts"])
+def test_no_forbidden_copies(forbidden):
+    assert not [ln for ln in COPY_LINES if re.search(rf"(^|\s){re.escape(forbidden)}", ln)]
+
+
+def test_no_engine_source_copies():
+    # Only pyproject manifests of engines (needed to resolve the workspace lock) may be copied.
+    for ln in COPY_LINES:
+        if "engines/" in ln:
+            assert ln.rstrip().endswith("pyproject.toml engines/" + ln.split("engines/")[1].split("/")[0] + "/pyproject.toml"), ln
+
+
+def test_admin_sources_are_copied():
+    assert any(re.search(r"COPY\s+admin/auth\s+admin/auth\s*$", ln) for ln in COPY_LINES)
+    assert any(re.search(r"COPY\s+admin/backend\s+admin/backend\s*$", ln) for ln in COPY_LINES)
+
+
+def test_uv_sync_targets_admin_package():
+    syncs = re.findall(r"^RUN\s+uv sync.*$", DOCKERFILE, re.M)
+    assert syncs and all("--package onolys-admin-backend" in s and "--frozen" in s for s in syncs)
+
+
+def test_no_engine_env_vars():
+    for var in ("ROUTES_FILE", "PROTOCOLS_DIR", "CONTRACTS_DIR"):
+        assert var not in re.sub(r"^#.*$", "", DOCKERFILE, flags=re.M)
+
+
+def test_safe_defaults_and_workdir():
+    assert re.search(r"ENV=prod ADMIN_AUTH=on", DOCKERFILE)
     assert re.search(r"^WORKDIR\s+/app\s*$", DOCKERFILE, re.M)
 
 
-def test_dockerignore_does_not_exclude_config():
-    lines = [ln.strip() for ln in (ROOT / ".dockerignore").read_text().splitlines()]
-    assert "config" not in lines and "**/config" not in lines
+def test_no_removed_engine_manifests():
+    assert not re.search(r"engines/(core|eaudit|paudit|evaluation)", re.sub(r"^#.*$", "", DOCKERFILE, flags=re.M))
 
 
-@pytest.mark.parametrize("env", ["staging", "prod"])
-def test_routes_file_exists_for_each_env(env):
-    assert (ROOT / "config" / env / "routes.yaml").is_file()
+def test_every_engine_manifest_is_copied():
+    for eng in sorted(p.name for p in (ROOT / "engines").iterdir() if (p / "pyproject.toml").is_file()):
+        assert f"COPY engines/{eng}/pyproject.toml engines/{eng}/pyproject.toml" in DOCKERFILE

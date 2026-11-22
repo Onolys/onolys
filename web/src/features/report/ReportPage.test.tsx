@@ -1,8 +1,8 @@
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
-import { afterEach, describe, expect, it, vi } from "vitest";
-import { sampleReport } from "../../mocks/fixtures/report";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { reasonsFailedReport, sampleReport } from "../../mocks/fixtures/report";
 import { mockBackend, server } from "../../mocks/server";
 import { here, renderApp } from "../../test/renderApp";
 
@@ -49,9 +49,37 @@ const row = (name: RegExp, sec = "Scorecard") => within(section(sec)).getByRole(
 
 afterEach(() => {
   delete (Element.prototype as { scrollIntoView?: unknown }).scrollIntoView;
+  vi.unstubAllEnvs();
+});
+
+describe("report page, rated report, flag off (default)", () => {
+  it("shows Onolys coding and tips only: no You/Difference, no Disagreements/Reasons, no withheld warning", async () => {
+    serve({ ...clone(), warnings: [{ code: "reason_withheld_tone", item_id: "cct" }] });
+    const sid = reported({ final: true, card: SCORED });
+    open(sid);
+    await screen.findByRole("region", { name: "Scorecard" });
+    const score = within(section("Scorecard"));
+    expect(score.getAllByRole("columnheader").map((h) => h.textContent)).toEqual(["Item", "Onolys"]);
+    expect(score.queryByText(/No rating of yours/)).toBeNull();
+    expect(screen.queryByText(/differs|flagged|Same as you/)).toBeNull();
+    expect(screen.queryByText(/tally-only self-rating/)).toBeNull();
+    const beh = within(section("Behaviour counts"));
+    expect(beh.getAllByRole("columnheader").map((h) => h.textContent)).toEqual(["Behaviour", "Onolys", "Instances"]);
+    const summaries = within(section("Summary measures"));
+    expect(summaries.queryByText(/You /)).toBeNull();
+    expect(document.querySelector(".ref-dot[data-kind='you']")).toBeNull();
+    expect(screen.queryByRole("region", { name: "Where Onolys disagrees" })).toBeNull();
+    expect(screen.queryByRole("region", { name: "Your reasons, checked" })).toBeNull();
+    expect(screen.queryByText(/not shown, to keep the report fair/)).toBeNull();
+    expect(screen.queryByText(/^You: /)).toBeNull();
+    expect(within(section("Tips")).getAllByRole("listitem")).toHaveLength(3);
+    expect(section("About this report")).toBeInTheDocument();
+  });
 });
 
 describe("report page, rated report", () => {
+  beforeEach(() => vi.stubEnv("VITE_RATING_ENABLED", "true"));
+
   it("shows the header with run details and version select, with no Run again or rating edit", async () => {
     const sid = reported({ final: true, card: SCORED });
     open(sid);
@@ -67,6 +95,13 @@ describe("report page, rated report", () => {
     expect(screen.queryByRole("button", { name: /run again/i })).toBeNull();
     expect(screen.queryByRole("button", { name: /edit my rating/i })).toBeNull();
     expect(screen.queryByRole("button", { name: /submit/i })).toBeNull();
+  });
+
+  it("keeps the tally-only self-rating note when the rating is on", async () => {
+    const sid = reported({ final: true, card: SCORED });
+    open(sid);
+    await screen.findByRole("region", { name: "Scorecard" });
+    expect(screen.getByText(/tally-only self-rating/)).toBeInTheDocument();
   });
 
   it("renders sections in layout order and shows the transcript pane", async () => {
@@ -159,6 +194,8 @@ describe("report page, rated report", () => {
 });
 
 describe("report page, no rating", () => {
+  beforeEach(() => vi.stubEnv("VITE_RATING_ENABLED", "true"));
+
   it("shows Onolys only, and offers no way to add a rating or run again (FX45)", async () => {
     const sid = reported({ final: true, no_rating: true, card: CARD });
     open(sid);
@@ -197,8 +234,11 @@ describe("report page, versions from earlier data", () => {
 });
 
 describe("report page, reasons audit failed", () => {
+  beforeEach(() => vi.stubEnv("VITE_RATING_ENABLED", "true"));
+
   it("replaces the section with a note (no Run again), and keeps the rest", async () => {
-    const sid = reported({ final: true, card: SCORED }, "fail-eaudit");
+    serve(reasonsFailedReport);
+    const sid = reported({ final: true, card: SCORED });
     open(sid);
     const audit = within(await screen.findByRole("region", { name: "Your reasons, checked" }));
     expect(audit.getByText("We couldn't check your reasons this time. The rest of your report is complete.")).toBeInTheDocument();

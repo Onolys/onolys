@@ -103,9 +103,9 @@ def test_error_is_cleared_when_leaving_failed(repo):
 
 
 def test_stage_weights_sum_and_never_decrease_in_any_order(repo):
-    assert sum(m.STAGE_WEIGHTS.values()) == 55 and m.RUN_START_PROGRESS + 55 == 100
+    assert m.STAGE_WEIGHTS == {"code": 40, "tips": 8, "assemble": 3} and m.RUN_START_PROGRESS + 51 < 99
     walk(repo, "uploading", "validating", "transcribing", "awaiting_input", "running")
-    order = ["eaudit", "paudit", "compare", "tips", "assemble"]
+    order = ["code", "tips", "assemble"]
     last = repo.get_status(UID, SID).progress
     for stage in order:
         m.advance(repo, UID, SID, step=stage)  # started: label only
@@ -114,7 +114,7 @@ def test_stage_weights_sum_and_never_decrease_in_any_order(repo):
         p = repo.get_status(UID, SID).progress
         assert p > last
         last = p
-    assert last == 99  # 100 only on report_ready
+    assert last == 96  # under the 99 cap; 100 only on report_ready
     m.advance(repo, UID, SID, to="report_ready")
     assert repo.get_status(UID, SID).progress == 100
 

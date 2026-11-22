@@ -1,32 +1,17 @@
 # Decisions
 
-Why is it like this? Architecture decision records.
+Why is it like this? Architecture decision records. ADRs 0001-0016 (the old evidence-audit design) were removed; see [0025](0025-miti-only-lean-engine.md).
 
 **Audience:** contributors.
 
 | ADR | Decision |
 |---|---|
-| [0001](0001-frontend-owns-the-contract.md) | The frontend owns the contract |
-| [0002](0002-offsets-count-code-points.md) | Offsets count code points |
-| [0003](0003-mock-matches-on-request-id.md) | Mock mode matches on `request_id` |
-| [0004](0004-reject-bad-replies-flag-bad-spans.md) | Reject broken replies; flag bad spans |
-| [0005](0005-models-propose-code-decides.md) | Models propose, code decides |
-| [0006](0006-excerpts-not-offsets.md) | Models return verbatim excerpts; code computes offsets |
-| [0007](0007-bm25-and-fuzzy-retrieval.md) | BM25 and fuzzy matching for retrieval, no embeddings |
-| [0008](0008-synchronous-call-sixty-second-cap.md) | One synchronous call with a 100 second cap |
-| [0009](0009-litellm-three-tiers.md) | LiteLLM with cheap, mid and strong tiers |
-| [0010](0010-understatement-reuses-inflation-concern.md) | Understatement is reported under frequency or severity inflation |
-| [0011](0011-role-optional-never-guessed.md) | Role is optional and never guessed |
-| [0012](0012-failure-policy-no-empty-audit.md) | Stalled claims degrade; an audit with nothing usable fails |
-| [0013](0013-recorded-replay-in-ci.md) | Recorded answers replay in tests; live evaluation is opt-in |
-| [0014](0014-run-info-optional-one-shared-version.md) | `run_info` is optional; one shared contract version |
-| [0015](0015-add-quantity-mismatch-widen-attribution-and-context-stripping.md) | Add `quantity_mismatch`; widen attribution and context stripping |
-| [0016](0016-contract-reset-0-0-1-groups-optional-speaker-error-details.md) | Reset the contract; group concerns; allow missing speakers; detail errors |
-| [0017](0017-workspace-routes-shared-core.md) | uv workspace, model routes and a shared `onolys_core` |
-| [0018](0018-protocol-pack-data-vs-code.md) | Protocol packs: data first, three code hooks, safe formulas |
-| [0019](0019-evaluation-engine-and-concern-suppression.md) | Evaluation engine: one in-process run, concern suppression before the decision table |
+| [0017](0017-workspace-routes-shared-core.md) | uv workspace, model routes and a shared `onolys_core` (superseded by 0025) |
+| [0018](0018-protocol-pack-data-vs-code.md) | Protocol packs: data first, three code hooks, safe formulas (superseded by 0025) |
+| [0019](0019-evaluation-engine-and-concern-suppression.md) | Evaluation engine: one in-process run, concern suppression before the decision table (superseded by 0025) |
 | [0020](0020-public-api-contract.md) | Public `/v1` API contract: generated OpenAPI, stable names, vendored Redoc |
 | [0021](0021-web-app-hosting-and-sharing.md) | Web app hosting: same-origin `/v1` rewrite, strict CSP, privacy checks as tests |
 | [0022](0022-infra-gcp-terraform-two-environments.md) | Infrastructure: one GCP project, Terraform, staging and prod, STT in `us`, no residency claims |
-| [0023](0023-admin-deployment-and-auth.md) | Admin deployment and auth: one Cloud Run service, direct calls, verified email plus allowlist, no MFA |
+| [0023](0023-admin-deployment-and-auth.md) | Admin deployment and auth: one Cloud Run service, direct calls, verified email plus allowlist, no MFA (superseded by 0025) |
 | [0024](0024-ai-practice-interview-gemini-live-relay.md) | AI practice interview: Gemini Live via a server-side relay, separate Cloud Run service |
+| [0025](0025-miti-only-lean-engine.md) | MITI-only lean engine; supersedes 0017, 0018, 0019, 0023; archive tag |

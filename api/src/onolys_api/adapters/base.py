@@ -1,21 +1,21 @@
 """The only seam to the engines (PRD R6, D2, D20): `Stt`, `Evaluation`, and (SP10 R3) `Voice`.
 
-`Stt` is the provider-neutral SP01 `SttAdapter` (`start`/`poll`); `Evaluation` wraps SP03
-`run_evaluation` (one call runs the whole `running` phase, asyncio inside). There are no
+`Stt` is the provider-neutral SP01 `SttAdapter` (`start`/`poll`); `Evaluation` wraps
+`run_miti` (one call runs the whole `running` phase, asyncio inside). There are no
 per-stage adapters. Fake implementations live in `fake.py`; real ones are SP09.
 """
 
 from collections.abc import Callable
 from typing import Any, Literal, Protocol
 
-from onolys_core.engine import PackRef, RunContext
-from onolys_core.errors import OnolysError
-from onolys_core.stt import AudioRef, SttParams
-from onolys_core.transcript import Transcript
-from onolys_core.voice import VoiceParams, VoiceSession
+from onolys_miti.context import RunContext
+from onolys_miti.errors import OnolysError
+from onolys_miti.stt import AudioRef, SttParams
+from onolys_miti.transcript import Transcript
+from onolys_miti.voice import VoiceParams, VoiceSession
 from pydantic import BaseModel, Field
 
-Stage = Literal["paudit", "eaudit", "tips", "compare", "assemble"]
+Stage = Literal["code", "tips", "assemble"]
 StageStatus = Literal["started", "done", "failed"]
 ProgressCb = Callable[[Stage, StageStatus], None]
 
@@ -33,7 +33,7 @@ class EvaluationOutput(BaseModel):
     """SP03 `EvaluationOutput`: the report JSON (incl. its `run_info`) plus run artifacts."""
 
     report: dict[str, Any]
-    artifacts: dict[str, Any] = Field(default_factory=dict)  # paudit, eaudit, tips
+    artifacts: dict[str, Any] = Field(default_factory=dict)  # code, tips
 
 
 class Stt(Protocol):
@@ -50,16 +50,14 @@ class Evaluation(Protocol):
     async def run(
         self,
         ctx: RunContext,
-        pack: PackRef | None,
         transcript: Transcript,
         speaker_map: dict[str, str],
         params: dict[str, Any],
-        rating: dict[str, Any] | None,
         progress_cb: ProgressCb | None = None,
     ) -> EvaluationOutput:
         """`speaker_map = {"subject": <transcript speaker label>}`. `params` =
-        {change_goal, coded_span{from_s,to_s}, language, n_runs, preset, code_version}.
-        Raises AdapterError when the run fails (paudit failure)."""
+        {change_goal, seed, language, n_runs, preset, code_version}.
+        Raises AdapterError when the run fails (coding failure)."""
         ...
 
 

@@ -1,31 +1,31 @@
 # Warnings
 
-When the backend emits each contract warning code. The code list and the warning shape are owned by the [contract](../contracts/README.md). Messages are fixed templates: they never contain transcript or assessment text.
+Warning codes on a MITI result and report. A warning never blocks the report; the session still ends `report_ready`. Messages are fixed templates and never contain transcript text. Sources: `engines/miti/src/onolys_miti/result.py` and `report.py`, which own the code lists and the shape (`code`, `severity`, optional `item_id` and `detail`).
 
 **Audience:** users.
 
-`status` is `partial` if and only if a `section_not_processed` warning is present. Warnings come in this order: section warnings, then claim warnings in claim order, then aggregates. The one exception is the `other` warning for a claim dropped by final validation, which is appended last.
+## Engine warnings (result and report)
 
-| Code | Carries | Emitted when |
-|---|---|---|
-| `section_not_processed` | `section_index` | A section produced no claims: the audit ran out of time for it, an internal error occurred, or no claim could be located in its text. |
-| `ambiguous_speaker` | `claim_id` | A claim relies on a turn with no `speaker` or no `role`. No speaker or role is assumed. Message: "Speaker or role was missing for turn(s) {turns}; none was assumed." It names turn indexes only. See [missing role](../concepts/missing-role.md). |
-| `input_truncated` | none | More claims were found than `IAUDIT_PIPELINE_MAX_CLAIMS`. The extra claims were not audited. |
-| `span_out_of_range` | `claim_id` | A claim or evidence span did not fit the input and was omitted. A safety net; not expected in normal runs. |
-| `other` | `claim_id` or `section_index` | See below. |
-
-## What `other` covers
-
-Each case is one fixed message, at most once per claim for the adjustments.
-
-| Case | Message says |
+| Code | Emitted when |
 |---|---|
-| The verdict changed because cited evidence could not be verified | The verdict was adjusted because cited evidence could not be verified. |
-| The verdict changed because a contradicting excerpt conflicts with it | The verdict was adjusted because a contradicting excerpt conflicts with it. |
-| Wording was replaced to avoid reproducing the transcript | The wording was adjusted to avoid reproducing transcript text. Triggered by a quoted span of four or more words, a timestamp, or a run of `IAUDIT_COPY_NGRAM` (8) words from the transcript that the assessment does not itself contain. |
-| The claim was not audited in time or the model failed | The claim could not be audited. The claim is still returned, as `insufficient_evidence`. |
-| The claim failed final validation | The claim failed final validation and was omitted. |
-| Two claims overlapped | The less severe claim was omitted, or trimmed when `IAUDIT_OVERLAP_TRIM` is on, to keep claim spans from overlapping. |
-| A claim could not be located | The claim could not be located in the section text and was omitted. |
+| `short_session` | The session is shorter than the MITI minimum, or has too few clinician or client turns (the MITI `input_checks` with severity `warn`). |
+| `quote_not_found` | A quote a model returned could not be found in the transcript, so that evidence line or code was dropped. |
+| `overlap` | A coded utterance repeats text already coded earlier in the same volley. |
+| `insufficient_evidence` | A global rating had fewer located quotes than required; it was reset to the scale default. |
+| `capped` | A MITI cap lowered a global score (`source: capped`; the raw score is kept). |
+| `span_ignored` | A coded span was requested but the transcript has no timestamps, so the whole transcript was used. |
+| `coded_window` | The session is over 20 minutes, so a reproducible 20-minute window was coded. |
+| `unknown_speaker` | A speaker could not be mapped to clinician or client and was treated as other. |
+| `language_not_validated` | The session language is not English; MITI coding is validated for English only. |
+| `run_failed` | One of several runs failed and was excluded from the result. |
 
-Failures that map to HTTP errors instead (nothing usable finished) are in [backend-api.md](backend-api.md#errors).
+## Report-only warnings
+
+| Code | Emitted when |
+|---|---|
+| `tips_failed` | The tips call failed; the report ships with no tips. |
+| `fewer_tips` | Fewer than three valid tips were produced. |
+| `reason_withheld_tone` | A model-written reason for an item failed the tone check and was withheld; the evidence lines are kept (`item_id` set). |
+| `reasons_audit_failed`, `reasons_audit_partial` | In the report schema for the written-reasons section. The engine does not emit them: a run does not compare a rating card, and that section is `skipped`. |
+
+Packs (the MITI definition) may add codes of the form `[a-z][a-z0-9_]*`; for example `session_too_long` and `missing_param` come from the input checks. Input checks with severity `error` stop the run with `invalid_parameters` instead ([public-api.md](public-api.md#engine-errors)).

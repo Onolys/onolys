@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
 
-from onolys_core.stt import AudioRef
+from onolys_miti.stt import AudioRef
 
 from onolys_api.repo.models import RecordingDoc
 from onolys_api.storage.base import BlobStore

@@ -73,7 +73,7 @@ describe("MSW handlers over HTTP (fake auth)", () => {
     expect(sp.speakers).toHaveLength(2);
     unwrap(await client.POST("/sessions/{id}/speakers/confirm", { ...p, body: { clinician_speaker: "spk_0" } }));
     unwrap(await client.PUT("/sessions/{id}/rating", { ...p, body: { final: true, card: { change_goal: "g", globals: { cct: { score: 3 } } } } }));
-    expect(unwrap(await client.GET("/sessions/{id}", p))).toMatchObject({ status: "running", step: "paudit" });
+    expect(unwrap(await client.GET("/sessions/{id}", p))).toMatchObject({ status: "running", step: "code" });
 
     mockBackend.settle(sid);
     const detail = unwrap(await client.GET("/sessions/{id}", p));

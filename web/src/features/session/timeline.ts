@@ -3,6 +3,7 @@
  * state: speaker and rating are flags, and `awaiting_input` is the one wait state.
  */
 import { messageForCode } from "../../api/errors";
+import { ratingEnabled } from "../../config";
 import type { SessionStatusDoc } from "../../api/statusListener";
 
 export type StepKey = "upload" | "validate" | "transcribe" | "speaker" | "rating" | "run" | "report";
@@ -43,12 +44,11 @@ const ORDER = Object.keys(LABELS) as StepKey[];
 export const STEP_LABELS = ORDER.map((k) => LABELS[k]);
 
 const RUN_SUBLABELS: Record<string, string> = {
-  paudit: "Rating the session",
-  eaudit: "Checking your reasons",
+  code: "Coding the session",
   tips: "Writing tips",
-  compare: "Comparing",
   assemble: "Building the report",
 };
+const DEFAULT_SUBLABEL = RUN_SUBLABELS.code;
 
 const VALIDATE_CODES = new Set(["unsupported_audio", "audio_too_long", "interview_too_long", "audio_too_large", "audio_unreadable"]);
 const TRANSCRIBE_CODES = new Set(["no_speech", "speakers_not_separated", "transcription_failed"]);
@@ -63,9 +63,12 @@ function failedAt(code: string | null, transcriptReady: boolean): StepKey {
 export interface TimelineOptions {
   /** Reset time for the cap message, already formatted for display. */
   resetsAt?: string;
+  /** Show the clinician-rating wording ("Your rating"); off says "Session setup". Defaults to the build flag. */
+  ratingEnabled?: boolean;
 }
 
 export function deriveTimeline(doc: TimelineInput, opts: TimelineOptions = {}): Timeline {
+  const rating = opts.ratingEnabled ?? ratingEnabled();
   const { state, transcript_ready: tr, speaker_confirmed: sp, rating_submitted: rt } = doc;
   const inputs = state === "awaiting_input";
   const afterTranscribe = inputs || state === "running" || state === "report_ready";
@@ -114,9 +117,9 @@ export function deriveTimeline(doc: TimelineInput, opts: TimelineOptions = {}): 
     }
   }
 
-  const steps: TimelineStep[] = ORDER.map((key) => ({ key, label: LABELS[key], status: status[key] }));
+  const steps: TimelineStep[] = ORDER.map((key) => ({ key, label: key === "rating" && !rating ? "Session setup" : LABELS[key], status: status[key] }));
   const runStep = steps.find((s) => s.key === "run")!;
-  const runLabel = state === "running" ? (RUN_SUBLABELS[doc.step ?? ""] ?? RUN_SUBLABELS.paudit) : undefined;
+  const runLabel = state === "running" ? (RUN_SUBLABELS[doc.step ?? ""] ?? DEFAULT_SUBLABEL) : undefined;
   if (runLabel) runStep.subLabel = runLabel;
 
   let capReached = false;
@@ -151,7 +154,7 @@ export function deriveTimeline(doc: TimelineInput, opts: TimelineOptions = {}): 
       }
       lines = [];
       if (!sp) lines.push("Confirm who the clinician is");
-      if (!rt) lines.push("Waiting for your rating");
+      if (!rt) lines.push(rating ? "Waiting for your rating" : "Waiting for session setup");
       if (lines.length === 0) lines.push("Starting the rating.");
       break;
     }

@@ -10,15 +10,15 @@ import os
 from collections.abc import Mapping
 from pathlib import Path
 
-from onolys_core.errors import ConfigError, InputError
-from onolys_core.llm.routes import (
+from onolys_miti.errors import ConfigError, InputError
+from onolys_miti.llm.routes import (
     DEFAULT_PRESET_ENV,
     RouteRegistry,
     default_preset_name,
     load_registry,
     resolve_preset,
 )
-from onolys_core.stt.select import STT_FILE_NAME, load_stt_config, locate_config_file, select_stt
+from onolys_miti.stt.select import STT_FILE_NAME, load_stt_config, locate_config_file, select_stt
 
 from onolys_api.audio import DEFAULT_MAX_DURATION_S
 from onolys_api.config import LOCAL_ENVS, Settings

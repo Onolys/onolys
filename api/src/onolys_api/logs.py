@@ -2,7 +2,7 @@
 
 One JSON object per line on stderr: Cloud Logging reads `severity` and `message` and exposes
 the rest as `jsonPayload.*` (SP06's alert filters on `jsonPayload.status="failed"`, the runbook on
-`jsonPayload.request_id`). Field names pass the `onolys_core.safe_log` allowlist, so text-like or
+`jsonPayload.request_id`). Field names pass the `onolys_miti.safe_log` allowlist, so text-like or
 unknown names are dropped; string values are capped. Values are ids, codes and numbers only.
 """
 
@@ -13,7 +13,7 @@ import logging
 import sys
 import threading
 
-from onolys_core.safe_log import MAX_VALUE_CHARS, register_fields, safe_fields
+from onolys_miti.safe_log import MAX_VALUE_CHARS, register_fields, safe_fields
 
 from onolys_api.config import Settings
 

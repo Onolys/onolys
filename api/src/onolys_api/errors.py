@@ -6,7 +6,7 @@ from pydantic import BaseModel, Field
 
 SCHEMA_VERSION = "0.0.1"
 
-# Superset of docs/contracts/error-response.schema.json (eaudit) + public codes.
+# Mirrors the enum of docs/contracts/public/public-error-response.schema.json.
 ERROR_CODES = (
     "invalid_json",
     "unsupported_media_type",
@@ -26,7 +26,7 @@ ERROR_CODES = (
     "upstream_unavailable",
     "deadline_exceeded",
     "internal_error",
-    # added to the eaudit contract for the admin paudit routes
+    # added to the shared contract for the admin pack routes
     "missing_parameter",
     "unknown_pack",
     "input_rejected",
