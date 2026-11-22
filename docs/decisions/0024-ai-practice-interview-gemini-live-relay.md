@@ -16,4 +16,4 @@
 - **Voices are user-selectable (D16)** from the voices the service exposes in `GET /scenarios`; the scenario's own voice is the default and the user can pick any allowed voice.
 - **Resumption.** The relay stores the Gemini resumption handle: an upstream drop or `GoAway` reopens silently; a dropped client reconnects within 60 s and the elapsed time carries over.
 
-**Consequences.** One more service and its image to deploy; Gemini is the only non-Claude model and is isolated behind `onolys_core.voice`; the persona never appears in a response, frame or log line (tests scan for it). Live items (10-minute staging session, forced 20 s drop, browser pitch checks) are recorded in the SP10 acceptance mapping.
+**Consequences.** One more service and its image to deploy; Gemini is the only non-Claude model and is isolated behind `onolys_miti.voice`; the persona never appears in a response, frame or log line (tests scan for it). Live items (10-minute staging session, forced 20 s drop, browser pitch checks) are recorded in the SP10 acceptance mapping.

@@ -1,7 +1,9 @@
 """MITI 4.2.1 coding engine.
 
-Public surface for the API: `run_miti` and its types, plus the llm, stt, voice, transcript and
-error types the API imports. Everything else is importable from its submodule."""
+Re-exports `run_miti`, its progress/stage types and the commonly used llm, stt, voice, transcript
+and error types. The API also imports submodules directly (`context`, `errors`, `miti`, `rating`,
+`report`, `safe_log`, `span`, `transcript`, `stt.*`, `voice.*`, `llm.*`), so those are part of the
+contract too (see the README)."""
 
 from onolys_miti.context import RunContext
 from onolys_miti.errors import ConfigError, InputError, OnolysError

@@ -56,4 +56,14 @@ describe("Shell", () => {
     await waitFor(() => expect(screen.getByText("Nothing here yet.")).toBeTruthy());
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
+
+  it("5xx from /v1/me: shows a retry message, not the empty page, then recovers on Retry", async () => {
+    fetchMock.mockResolvedValueOnce(json(503, { detail: "unavailable" })).mockResolvedValue(json(200, { status: "ok" }));
+    render(<Root session={signedIn()} />);
+    expect(await screen.findByRole("alert")).toBeTruthy();
+    expect(screen.queryByText("Nothing here yet.")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+    await waitFor(() => expect(screen.getByText("Nothing here yet.")).toBeTruthy());
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
 });

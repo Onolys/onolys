@@ -2,7 +2,7 @@
 
 Vite + React + strict TypeScript + Vitest. Sign-in, a 401/403 gate and one empty page ("Nothing here yet.").
 
-After sign-in the shell calls `GET {VITE_ADMIN_API_URL}/v1/me` with the Firebase ID token. 401 returns to sign-in, 403 shows "Not allowed" (account not on the admin allowlist), a network error shows a retry button.
+After sign-in the shell calls `GET {VITE_ADMIN_API_URL}/v1/me` with the Firebase ID token. 401 returns to sign-in, 403 shows "Not allowed" (account not on the admin allowlist), a network error or 5xx shows a retry button.
 
 ## Quickstart
 

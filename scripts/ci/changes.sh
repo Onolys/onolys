@@ -27,7 +27,10 @@ CI_SHARED_RE='^(\.github/workflows/|scripts/ci/)'
 # Extra paths per package: Firestore rules and their emulator tests run in the api job.
 API_EXTRA_RE='^(firestore\.rules|firebase\.json|firestore-rules-test/)'
 # The web job also runs on the contracts its generated types come from (gen:api staleness check).
-WEB_EXTRA_RE='^(api/openapi\.json|engines/miti/src/onolys_miti/data/report\.schema\.json)$'
+WEB_EXTRA_RE='^(api/openapi\.json$|engines/miti/src/onolys_miti/data/report\.schema\.json$|engines/miti/src/onolys_miti/data/fixtures/evaluation/)'
+
+# The infra job's tests import admin/auth (onolys_admin_auth), so admin/auth changes also run infra.
+INFRA_EXTRA_RE='^(admin/auth/|pyproject\.toml$|uv\.lock$)'
 
 # The admin backend serves only /v1/me via admin/auth, so it re-runs when admin/auth or .dockerignore changes.
 ADMIN_BACKEND_EXTRA_RE='^(admin/auth/|\.dockerignore)'
@@ -50,6 +53,7 @@ for entry in "${PACKAGES[@]}"; do
           ( "$kind" == python && "$f" =~ $PY_SHARED_RE ) ||
           ( "$name" == api && "$f" =~ $API_EXTRA_RE ) ||
           ( "$name" == admin-backend && "$f" =~ $ADMIN_BACKEND_EXTRA_RE ) ||
+          ( "$name" == infra && "$f" =~ $INFRA_EXTRA_RE ) ||
           ( "$name" == web && "$f" =~ $WEB_EXTRA_RE ) ]]; then
       HIT[$name]=1
       break

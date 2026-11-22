@@ -5,7 +5,7 @@ date: 2026-11-22
 ---
 # PRD: SP06 New iaudit repo from archive (Phase 4)
 
-Repo/branch: new GitHub repo (URL [OPEN-1], owner-provided) · local clone `/root/projects/onolys/iaudit-legacy` (existing `/root/projects/onolys/iaudit` stays as is, no rename) · Depends on: SP05 (tag `iaudit-archive` pushed, approved by owner 2026-11-22) + owner's repo URL · Blocks: nothing
+Repo/branch: new GitHub repo https://github.com/Onolys/iaudit.git (owner-provided) · local clone `/root/projects/onolys/iaudit-legacy` (existing `/root/projects/onolys/iaudit` stays as is, no rename) · Depends on: SP05 (tag `iaudit-archive` pushed, approved by owner 2026-11-22) + owner's repo URL · Blocks: nothing
 Owns: the new repo's pushed content; the local clone; edits to `/root/projects/README.md` and `/root/projects/onolys/README.md`. Not owned: Onolys/onolys (read-only; SP05 already deleted the code there).
 
 ## TL;DR
@@ -49,7 +49,7 @@ History evidence (`git log origin/main`, 41 commits): #1-#33 are all iaudit; aft
 2. Give URL; grant Claude/this machine push access (gh auth or deploy key).
 
 ## Risks / Open Questions
-- [OPEN-1] New repo URL/name and push access (BLOCKED on owner; whole SP waits). This is the only genuinely remaining item in the work; everything else is resolved (breaking changes fine, prod unused, owner 2026-11-22).
+- [RESOLVED: https://github.com/Onolys/iaudit.git (public, empty, viewer ADMIN), owner 2026-11-22] (OPEN-1 repo URL + push access)
 - [RESOLVED: archive tag push approved, SP05 does it; paudit/iaudit/eaudit naming sweep applies to Onolys/onolys only, the archive repo keeps its names, owner 2026-11-22]
 - [RESOLVED: /root/projects/onolys/iaudit-legacy, no rename, owner 2026-11-22] (OPEN-2 local folder; existing `/root/projects/onolys/iaudit` untouched; new row `onolys/iaudit-legacy` in `/root/projects/README.md` + `/root/projects/onolys/README.md`)
 - [RESOLVED: not needed — code-only archive, owner 2026-11-22] (OPEN-3 `changes.sh`, OPEN-4 core pruning, OPEN-5 nightly secrets)

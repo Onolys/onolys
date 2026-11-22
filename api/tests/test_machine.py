@@ -1,7 +1,11 @@
 """Job state machine core (PRD R4): transitions, progress table, status mirror."""
 
-import pytest
+import typing
 
+import pytest
+from onolys_miti import Stage as EngineStage
+
+from onolys_api.adapters.base import Stage as ApiStage
 from onolys_api.errors import ApiError
 from onolys_api.jobs import machine as m
 from onolys_api.repo.fake import FakeRepo
@@ -102,8 +106,15 @@ def test_error_is_cleared_when_leaving_failed(repo):
     assert repo.get_session(UID, SID).error is None
 
 
+def test_stage_weights_keys_match_engine_stages():
+    assert ApiStage is EngineStage
+    assert set(m.STAGE_WEIGHTS) == set(typing.get_args(EngineStage))
+
+
 def test_stage_weights_sum_and_never_decrease_in_any_order(repo):
-    assert m.STAGE_WEIGHTS == {"code": 40, "tips": 8, "assemble": 3} and m.RUN_START_PROGRESS + 51 < 99
+    assert (
+        m.STAGE_WEIGHTS == {"code": 40, "tips": 8, "assemble": 3} and m.RUN_START_PROGRESS + 51 < 99
+    )
     walk(repo, "uploading", "validating", "transcribing", "awaiting_input", "running")
     order = ["code", "tips", "assemble"]
     last = repo.get_status(UID, SID).progress

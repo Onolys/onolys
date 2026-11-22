@@ -8,7 +8,7 @@
 
 **Decision.**
 
-- **One engine, MITI hardcoded.** `engines/miti` (`onolys_miti`) holds the MITI definition, prompts, fixtures, report schema, the LLM routes, speech-to-text and the voice adapter. This reverses the protocol-agnostic design of 0017 and 0018. There are no protocol packs and no pack hooks.
+- **One engine, MITI hardcoded.** `engines/miti` (`onolys_miti`) holds the MITI definition, prompts, fixtures, report schema, the LLM routes, speech-to-text and the voice adapter. This reverses the protocol-agnostic design of 0017 and 0018. The MITI pack data (`pack.yaml`, `report.yaml`, `rating.schema.json`, prompts) is a fixed file set inside the package. It and `rules.py` are loaded once by `onolys_miti.miti` into the `MITI` constant that the passes read; there are no pluggable protocol packs and no per-protocol hooks.
 - **The api uses `onolys_miti` only.** Run stages are `code`, `tips`, `assemble`. The rating endpoints stay, but a run does not compare the rating card.
 - **Deleted:** `engines/{core,eaudit,paudit,evaluation}`, `protocols/`, `eval/` (with datasets), the old admin review and eval UI, the eaudit contracts and docs, ADRs 0001-0016 and the concept, implementation and example docs that described them.
 - **Admin is a shell.** The admin backend serves only `GET /v1/me` behind the login check. The admin frontend is sign-in plus an empty page. The auth model of 0023 is unchanged.

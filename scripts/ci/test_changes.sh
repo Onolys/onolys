@@ -35,7 +35,11 @@ run false "miti=false api=false admin-auth=false admin-backend=false frontend=fa
 # generated-type inputs (api/openapi.json, report.schema.json) trigger the web gen:api staleness check
 run false "miti=false api=true admin-auth=false admin-backend=false frontend=false web=true infra=false" api/openapi.json
 run false "miti=true api=true admin-auth=false admin-backend=false frontend=false web=true infra=false" engines/miti/src/onolys_miti/data/report.schema.json
+run false "miti=true api=true admin-auth=false admin-backend=false frontend=false web=true infra=false" engines/miti/src/onolys_miti/data/fixtures/evaluation/case1.json
 run true "miti=true api=true admin-auth=false admin-backend=false frontend=true web=true infra=true" docs/readme.md
+# web extra paths are end-anchored: a stray suffix must not trigger the web job
+run false "miti=false api=true admin-auth=false admin-backend=false frontend=false web=false infra=false" api/openapi.json.bak
+run false "miti=true api=true admin-auth=false admin-backend=false frontend=false web=false infra=false" engines/miti/src/onolys_miti/data/report.schema.json.bak
 rm -r "$T/web/package.json" "$T/infra"
 mkdir -p "$T/admin/auth"; touch "$T/admin/auth/pyproject.toml"   # admin/auth now exists
 run false "miti=false api=false admin-auth=true admin-backend=false frontend=false web=false infra=false" admin/auth/a.py
@@ -44,6 +48,11 @@ run false "miti=false api=false admin-auth=false admin-backend=true frontend=fal
 # admin-backend depends on admin-auth
 run false "miti=false api=false admin-auth=true admin-backend=true frontend=false web=false infra=false" admin/auth/a.py
 run false "miti=false api=false admin-auth=false admin-backend=true frontend=false web=false infra=false" .dockerignore
+# infra tests import admin/auth, so admin/auth changes also run infra (when infra exists)
+mkdir -p "$T/infra"
+run false "miti=false api=false admin-auth=true admin-backend=true frontend=false web=false infra=true" admin/auth/a.py
+run false "miti=true api=true admin-auth=true admin-backend=true frontend=false web=false infra=true" uv.lock
+rm -r "$T/infra"
 # api does not propagate to miti
 run false "miti=false api=true admin-auth=false admin-backend=false frontend=false web=false infra=false" api/src/x.py
 exit $fail

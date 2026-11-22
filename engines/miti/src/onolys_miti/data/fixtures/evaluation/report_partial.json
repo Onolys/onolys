@@ -7,7 +7,7 @@
     "protocol": {
       "id": "miti",
       "version": "4.2.1",
-      "pack_hash": "18c33be711154d3d",
+      "pack_hash": "7a8c491377b4e2dd",
       "label": "MITI 4.2.1"
     },
     "language": "en",
@@ -1452,12 +1452,12 @@
       "pack": {
         "id": "miti",
         "version": "4.2.1",
-        "hash": "18c33be711154d3d"
+        "hash": "7a8c491377b4e2dd"
       },
       "prompt_hashes": {
         "tips_system.md": "c8cc446d70112112",
         "engine:tips_output_format": "775e35f7eb1e7050",
-        "engine:compare_templates": "152a6200e72f1b65"
+        "engine:compare_templates": "899078a5c763eb74"
       },
       "n_runs": 1,
       "usage": {
@@ -1493,7 +1493,7 @@
       "pack": {
         "id": "miti",
         "version": "4.2.1",
-        "hash": "18c33be711154d3d"
+        "hash": "7a8c491377b4e2dd"
       },
       "prompt_hashes": {
         "code_system.md": "c2b9e2ee9ad63129",

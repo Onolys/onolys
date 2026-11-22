@@ -127,15 +127,6 @@ def test_missing_end_ms_falls_back_to_start():
     assert [r.turn.id for r in kept] == ["b"]
 
 
-def test_span_open_ended():
-    turns = [
-        Turn(id="a", speaker="A", text="x", start_ms=5000, end_ms=6000),
-        Turn(id="b", speaker="A", text="x", start_ms=15000, end_ms=16000),
-    ]
-    kept, _ = select_turns(_rt(turns), {"from_s": 10, "to_s": None})
-    assert [r.turn.id for r in kept] == ["b"]
-
-
 def _seq(spec):
     return [
         RoleTurn(Turn(id=f"t{i}", speaker=s, text=txt), "subject" if s == "A" else "other")
@@ -197,3 +188,23 @@ def test_default_rules_hook_is_miti_check_input():
     miti.MITI, rules.check_input = REAL_MITI, REAL_HOOK
     p = prepare(convo(), params())
     assert [w.code for w in p.warnings] == ["reflection_before_client_speech"]
+
+
+def test_whole_session_duration_comes_from_turns_not_transcript():
+    t = convo()  # turns span ~14 min
+    t = t.model_copy(update={"duration_ms": 40 * 60_000})  # stale header: 40 min
+    p = prepare(t, params())  # would raise session too long (25 min) if the header were used
+    assert p.duration_ms < 25 * 60_000
+
+
+def test_duration_is_max_turn_end_from_zero_not_first_to_last():
+    # 11-min recording, speech starts at 1:30: duration is 11 min, so no short_session warning
+    t = convo(step_s=120)
+    turns = [
+        x.model_copy(update={"start_ms": x.start_ms + 90_000, "end_ms": x.end_ms + 90_000})
+        for x in t.turns
+    ]
+    turns[-1] = turns[-1].model_copy(update={"end_ms": 11 * 60_000})
+    p = prepare(Transcript(turns=turns), params())
+    assert p.duration_ms == 11 * 60_000
+    assert p.warnings == []

@@ -50,7 +50,6 @@ What the api imports from this package:
   `onolys_miti.report.Issue`.
 - Rating schema: `onolys_miti.miti.MITI.rating_schema`.
 - Scenarios directory: `MITI.data_dir / "scenarios"`.
-- `onolys_miti.result.whole_second_span`.
 - Test fixtures: `miti.DATA_DIR / "fixtures" / "evaluation"`.
 - Entry: `run_miti(ctx, transcript, speaker_map, params, progress_cb)`; `params["seed"]` (the
   session id) picks the coded window.

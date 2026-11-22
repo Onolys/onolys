@@ -3,6 +3,8 @@
 set -u
 cd "$(dirname "$0")/../.."
 fail=0
+tmp=$(mktemp)
+trap 'rm -f "$tmp"' EXIT
 
 hits=$(grep -inE 'eaudit|paudit|caudit|Interview Evidence' README.md AGENTS.md docs/mission.md docs/architecture.md || true)
 if [ -n "$hits" ]; then
@@ -18,8 +20,7 @@ for readme in docs/README.md docs/*/README.md; do
     case "$target" in http*|mailto:*|"") continue;; esac
     [ -e "$dir/$target" ] || echo "FAIL: $readme lists missing $target"
   done
-done | tee /tmp/docs_scope_missing.txt
-[ -s /tmp/docs_scope_missing.txt ] && fail=1
-rm -f /tmp/docs_scope_missing.txt
+done | tee "$tmp"
+[ -s "$tmp" ] && fail=1
 [ $fail -eq 0 ] && echo "docs scope OK"
 exit $fail

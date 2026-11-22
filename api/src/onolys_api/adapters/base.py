@@ -5,9 +5,9 @@
 per-stage adapters. Fake implementations live in `fake.py`; real ones are SP09.
 """
 
-from collections.abc import Callable
-from typing import Any, Literal, Protocol
+from typing import Any, Protocol
 
+from onolys_miti import ProgressCb, Stage, StageStatus
 from onolys_miti.context import RunContext
 from onolys_miti.errors import OnolysError
 from onolys_miti.stt import AudioRef, SttParams
@@ -15,9 +15,16 @@ from onolys_miti.transcript import Transcript
 from onolys_miti.voice import VoiceParams, VoiceSession
 from pydantic import BaseModel, Field
 
-Stage = Literal["code", "tips", "assemble"]
-StageStatus = Literal["started", "done", "failed"]
-ProgressCb = Callable[[Stage, StageStatus], None]
+__all__ = [
+    "AdapterError",
+    "Evaluation",
+    "EvaluationOutput",
+    "ProgressCb",
+    "Stage",
+    "StageStatus",
+    "Stt",
+    "Voice",
+]
 
 
 class AdapterError(OnolysError):

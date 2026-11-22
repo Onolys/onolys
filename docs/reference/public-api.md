@@ -121,7 +121,7 @@ What a failed run or transcription turns into (`api/src/onolys_api/adapters/erro
 | `no_speech` | Transcript with 0 turns or under 50 words | no | Upload a different file |
 | `speakers_not_separated` | Fewer than 2 usable speakers | no | Upload a different file |
 | `rate_limited` | Adapter error that already carries this code | yes | Try again shortly |
-| `internal_error` | `PackError`; any other exception, including engine `run_failed` errors with no LLM cause; an adapter code outside this table | no | Run again; the owner is alerted |
+| `internal_error` | any other exception, including engine `run_failed` errors (`CodePassFailed`, `GlobalsPassFailed`, `AllRunsFailed`) with no LLM cause and other `OnolysError`s such as `ConfigError`; an adapter code outside this table | no | Run again; the owner is alerted |
 
 A tips failure is not an error: the report is made with warning `tips_failed` and the session ends `report_ready`.
 

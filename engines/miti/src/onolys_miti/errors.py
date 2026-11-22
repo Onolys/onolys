@@ -9,9 +9,5 @@ class InputError(OnolysError):
     """The caller supplied invalid input (bad transcript, unknown preset, ...)."""
 
 
-class PackError(OnolysError):
-    """A protocol pack is missing, malformed or incompatible."""
-
-
 class ConfigError(OnolysError):
     """Deployment configuration is invalid (bad routes file, unset API-key variable)."""
