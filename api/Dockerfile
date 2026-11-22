@@ -11,11 +11,6 @@ RUN pip install --no-cache-dir uv==0.13.4
 WORKDIR /src
 # Dependency layer: manifests only (every workspace member's pyproject must exist for uv).
 COPY pyproject.toml uv.lock ./
-# core/eaudit/paudit/evaluation stay workspace members until SP05: manifests only, so uv resolves the lock.
-COPY engines/core/pyproject.toml engines/core/pyproject.toml
-COPY engines/eaudit/pyproject.toml engines/eaudit/pyproject.toml
-COPY engines/paudit/pyproject.toml engines/paudit/pyproject.toml
-COPY engines/evaluation/pyproject.toml engines/evaluation/pyproject.toml
 COPY engines/miti/pyproject.toml engines/miti/pyproject.toml
 COPY api/pyproject.toml api/pyproject.toml
 COPY admin/auth/pyproject.toml admin/auth/pyproject.toml

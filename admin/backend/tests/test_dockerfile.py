@@ -36,13 +36,17 @@ def test_uv_sync_targets_admin_package():
 
 
 def test_no_engine_env_vars():
-    for var in ("ROUTES_FILE", "PAUDIT_PROTOCOLS_DIR", "IAUDIT_CONTRACTS_DIR"):
+    for var in ("ROUTES_FILE", "PROTOCOLS_DIR", "CONTRACTS_DIR"):
         assert var not in re.sub(r"^#.*$", "", DOCKERFILE, flags=re.M)
 
 
 def test_safe_defaults_and_workdir():
     assert re.search(r"ENV=prod ADMIN_AUTH=on", DOCKERFILE)
     assert re.search(r"^WORKDIR\s+/app\s*$", DOCKERFILE, re.M)
+
+
+def test_no_removed_engine_manifests():
+    assert not re.search(r"engines/(core|eaudit|paudit|evaluation)", re.sub(r"^#.*$", "", DOCKERFILE, flags=re.M))
 
 
 def test_every_engine_manifest_is_copied():

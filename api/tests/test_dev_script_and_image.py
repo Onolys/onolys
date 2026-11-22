@@ -130,11 +130,6 @@ def test_dockerfile_is_slim_miti_only():
     assert "protocols" not in copies and not any(c.startswith("docs/contracts") for c in copies)
     assert not re.search(r"PROTOCOLS_DIR|CONTRACTS_DIR", code)
     assert "COPY engines/miti engines/miti" in code
-    olds = sorted(p.name for p in (REPO / "engines").iterdir() if p.name != "miti")
-    assert olds
-    for old in olds:  # still workspace members: manifests only, so uv resolves the lock
-        assert f"COPY engines/{old} engines/{old}" not in code
-        assert f"COPY engines/{old}/pyproject.toml engines/{old}/pyproject.toml" in code
     for member in ("engines/miti", "admin/auth", "admin/backend"):  # every workspace member manifest
         assert f"COPY {member}/pyproject.toml {member}/pyproject.toml" in code
 
