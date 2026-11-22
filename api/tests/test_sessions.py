@@ -95,7 +95,7 @@ async def test_allowlisted_preset_applies_its_stt_key(tmp_path, blobs, settings)
     routes = tmp_path / "routes.yaml"
     routes.write_text(
         "cheap: &s {litellm_id: anthropic/x, api_key_env: K}\nmid: *s\nstrong: *s\n"
-        "paudit_code: {alias: mid}\npaudit_globals: {alias: mid}\ntips: {alias: mid}\n"
+        "miti_code: {alias: mid}\nmiti_globals: {alias: mid}\ntips: {alias: mid}\n"
         "presets:\n  default: {routes: {}}\n  fast: {routes: {}, stt: alt}\n"
     )
     (tmp_path / "stt_providers.yaml").write_text(

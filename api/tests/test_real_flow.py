@@ -31,7 +31,7 @@ from onolys_api.repo.fake import FakeRepo
 pytestmark = pytest.mark.integration
 ROUTES = (
     "cheap: &s {litellm_id: anthropic/x, api_key_env: K}\nmid: *s\nstrong: *s\n"
-    "paudit_code: {alias: mid}\npaudit_globals: {alias: mid}\ntips: {alias: mid}\n"
+    "miti_code: {alias: mid}\nmiti_globals: {alias: mid}\ntips: {alias: mid}\n"
     "presets:\n  default: {routes: {}}\n  fast: {routes: {}}\n"
 )
 

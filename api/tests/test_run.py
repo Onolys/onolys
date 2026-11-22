@@ -23,7 +23,7 @@ pytestmark = pytest.mark.integration
 CARD = valid_card()
 ROUTES = (
     "cheap: &s {litellm_id: anthropic/x, api_key_env: K}\nmid: *s\nstrong: *s\n"
-    "paudit_code: {alias: mid}\npaudit_globals: {alias: mid}\ntips: {alias: mid}\n"
+    "miti_code: {alias: mid}\nmiti_globals: {alias: mid}\ntips: {alias: mid}\n"
     "presets:\n  default: {routes: {}}\n  fast: {routes: {}}\n"
 )
 
@@ -174,7 +174,7 @@ async def test_full_stub_flow_reaches_report_ready_with_progress_table(env):
     # fake order: code +40, tips +8, assemble +3 (under the 99 cap), done 100
     assert [45 + 40, 45 + 40 + 8, 45 + 40 + 8 + 3, 100] == [x for x in dict.fromkeys(p) if x >= 70]
     assert {"code", "tips", "assemble"} <= set(env.repo.steps)
-    assert not {"paudit", "eaudit", "compare"} & set(env.repo.steps)
+    assert not {"compare"} & set(env.repo.steps)
 
     (run,) = env.repo.list_runs(env.uid, sid)
     assert run.status == "done" and run.error is None

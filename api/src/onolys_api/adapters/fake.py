@@ -210,7 +210,7 @@ def _code_result(
 
 
 def _global_diff(clinician: float | None, onolys: float) -> dict[str, Any]:
-    """Minimal score_diff `Diff` (mirrors onolys_evaluation.compare.compare_item; >=1 differs)."""
+    """Minimal score_diff `Diff` (mirrors the evaluation engine compare_item; >=1 differs)."""
     if clinician is None:
         return {"signed": None, "abs": None, "direction": None, "status": "not_rated"}
     signed = onolys - clinician

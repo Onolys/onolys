@@ -1,6 +1,6 @@
 """Generate `docs/contracts/public/*.schema.json` from the API's request/response models:
 `python -m onolys_api.contracts [--check]`. The error schema is hand-written (it is the shared
-contract with eaudit's) and checked against the model by a test."""
+contract with the engine's) and checked against the model by a test."""
 
 import argparse
 import json

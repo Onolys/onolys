@@ -7,18 +7,18 @@ from onolys_api.errors import ERROR_CODES, ApiError, error_body
 pytestmark = pytest.mark.unit
 
 
-def test_schema_enum_matches_codes_and_is_superset_of_eaudit(schema):
+def test_schema_enum_matches_codes_and_is_superset_of_shared_contract(schema):
     import json
     from pathlib import Path
 
     enum = schema["properties"]["details"]["items"]["properties"]["code"]["enum"]
     assert list(enum) == list(ERROR_CODES)
-    eaudit = json.loads(
+    shared = json.loads(
         (
             Path(__file__).resolve().parents[2] / "docs/contracts/error-response.schema.json"
         ).read_text()
     )
-    old = eaudit["properties"]["details"]["items"]["properties"]["code"]["enum"]
+    old = shared["properties"]["details"]["items"]["properties"]["code"]["enum"]
     assert set(old) <= set(enum)
     for new in (
         "unauthenticated",

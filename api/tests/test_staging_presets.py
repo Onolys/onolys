@@ -15,17 +15,17 @@ pytestmark = pytest.mark.unit
 ROOT = Path(__file__).resolve().parents[2]
 STAGING = ROOT / "config/staging/routes.yaml"
 PROD = ROOT / "config/prod/routes.yaml"
-BROKEN = ("test-broken-llm", "test-broken-eaudit")
-ALL = ("cheap", "mid", "strong", "paudit_code", "paudit_globals", "tips")
-EAUDIT = ("cheap", "mid", "strong")
-TASK = ("paudit_code", "paudit_globals", "tips")
+BROKEN = ("test-broken-llm", "test-broken-tiers")
+ALL = ("cheap", "mid", "strong", "miti_code", "miti_globals", "tips")
+TIERS = ("cheap", "mid", "strong")
+TASK = ("miti_code", "miti_globals", "tips")
 
 
 @pytest.fixture(autouse=True)
 def clean_env(monkeypatch):
     for v in (
-        "ROUTES_FILE", "DEFAULT_PRESET", "IAUDIT_MODEL_CHEAP", "IAUDIT_MODEL_MID",
-        "IAUDIT_MODEL_STRONG", "IAUDIT_LLM_RESPONSE_FORMAT",
+        "ROUTES_FILE", "DEFAULT_PRESET", "MITI_MODEL_CHEAP", "MITI_MODEL_MID",
+        "MITI_MODEL_STRONG", "MITI_LLM_RESPONSE_FORMAT",
     ):  # fmt: skip
         monkeypatch.delenv(v, raising=False)
 
@@ -47,21 +47,21 @@ def test_broken_llm_points_every_route_at_a_missing_model(staging):
         assert "does-not-exist" in routes[name].litellm_id
 
 
-def test_broken_eaudit_breaks_tiers_only(staging):
-    routes, _ = resolve_preset("test-broken-eaudit", staging, {})
+def test_broken_tiers_breaks_tiers_only(staging):
+    routes, _ = resolve_preset("test-broken-tiers", staging, {})
     good, _ = resolve_preset("default", staging, {})
-    for name in EAUDIT:
+    for name in TIERS:
         assert "does-not-exist" in routes[name].litellm_id
     for name in TASK:
         assert routes[name] == good[name]
         assert "does-not-exist" not in routes[name].litellm_id
 
 
-def test_broken_eaudit_task_routes_are_full_routes_not_aliases(staging):
-    ov = staging.presets["test-broken-eaudit"].routes
+def test_broken_tiers_task_routes_are_full_routes_not_aliases(staging):
+    ov = staging.presets["test-broken-tiers"].routes
     for name in TASK:
         assert "litellm_id" in ov[name] and "alias" not in ov[name]
-    # no alias chain from paudit/tips (in the effective table) reaches a broken route
+    # no alias chain from miti/tips (in the effective table) reaches a broken route
     eff = {**staging.raw_routes, **{k: v for k, v in ov.items()}}
     for name in TASK:
         assert "alias" not in eff[name]

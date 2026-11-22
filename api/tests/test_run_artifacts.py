@@ -124,7 +124,7 @@ async def test_submitted_card_run_leaves_artifacts_run_info_and_header(env):
     assert ri["evaluation"]["routes"] and ri["evaluation"]["pack"]["id"]
     assert ri["evaluation"]["pack"]["version"] and ri["evaluation"]["pack"]["hash"]
     assert ri["evaluation"]["prompt_hashes"]
-    assert ri["miti"] and "eaudit" not in ri
+    assert ri["miti"] and len(ri) == 2
 
     r = await env.c.get(f"/v1/sessions/{sid}/reports/1", headers=env.h)
     assert r.status_code == 200
@@ -140,6 +140,6 @@ async def test_no_rating_run_leaves_the_same_artifacts(env):
     assert run.status == "done"
     base = f"{env.uid}/{sid}/runs/{run.run_id}"
     assert env.blobs.exists(f"{base}/code.json") and env.blobs.exists(f"{base}/tips.json")
-    assert not env.blobs.exists(f"{base}/eaudit.json")
+    assert not env.blobs.exists(f"{base}/old.json")
     report = (await env.c.get(f"/v1/sessions/{sid}/reports/1", headers=env.h)).json()["report"]
     assert report["reasons_audit"]["status"] == "skipped"

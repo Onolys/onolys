@@ -1,4 +1,4 @@
-# Voice provider map (staging). Located like stt_providers.yaml; see onolys_core.voice.select.
+# Voice provider map (staging). Located like stt_providers.yaml; see the engine voice selector.
 providers:
   gemini_live:
     provider: gemini_live_vertex

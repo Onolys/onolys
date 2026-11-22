@@ -132,10 +132,47 @@
    "type": "object",
    "required": [
     "evaluation",
-    "paudit",
-    "eaudit"
+    "miti"
    ],
-   "properties": {}
+   "properties": {
+    "miti": {
+     "type": "object",
+     "properties": {
+      "span": {
+       "anyOf": [
+        {
+         "type": "object",
+         "required": [
+          "mode",
+          "seed"
+         ],
+         "additionalProperties": false,
+         "properties": {
+          "mode": {
+           "enum": [
+            "whole",
+            "random_window"
+           ]
+          },
+          "duration_s": {
+           "type": [
+            "integer",
+            "null"
+           ]
+          },
+          "seed": {
+           "type": "string"
+          }
+         }
+        },
+        {
+         "type": "null"
+        }
+       ]
+      }
+     }
+    }
+   }
   }
  },
  "$comment": "LOCAL STAND-IN from the SP03 R7 / SP02 R3 PRD shapes; used only until engines/*/schemas exist (tests prefer the real file)."
