@@ -56,7 +56,8 @@ def _fail_unfinished_runs(repo: Repo, s: SessionDoc, now: datetime) -> None:
             repo.update_run(
                 s.uid, s.id, run.run_id, {"status": "failed", "ended": now, "error": "run_failed"}
             )
-        release_once(repo, s.uid, s.id, run.run_id, False, None)
+        # a crash is a system failure: refund (a finished run is a success: no refund)
+        release_once(repo, s.uid, s.id, run.run_id, run.status != "done", None)
 
 
 def settle_if_stale(repo: Repo, s: SessionDoc, now: datetime, settings: Settings) -> SessionDoc:

@@ -14,8 +14,9 @@ failures arrive as report warnings and still ship (the adapter handles them). A 
 retried task finds the stored report and only finishes the bookkeeping: one report per run.
 
 Cap slot: every run is released exactly once (`released` flag on the run record), when the run
-ends for good: success or failure (`refund=True` only if no attempt called the evaluation:
-`llm_started` on the run record), but not on a retryable failure with an attempt left.
+ends for good: success or failure (`refund=True` for a system failure; for a bad-file code
+only if no attempt called the evaluation: `llm_started` on the run
+record), but not on a retryable failure with an attempt left.
 """
 
 import json
@@ -33,7 +34,7 @@ from onolys_api import logs
 from onolys_api.adapters.base import Evaluation
 from onolys_api.adapters.error_map import to_public
 from onolys_api.jobs.alive import ensure_alive
-from onolys_api.jobs.machine import RUN_START_PROGRESS, STAGE_WEIGHTS, advance
+from onolys_api.jobs.machine import RUN_START_PROGRESS, STAGE_WEIGHTS, advance, is_system_failure
 from onolys_api.jobs.queue import MAX_ATTEMPTS
 from onolys_api.jobs.transcribe import TRANSCRIPT_ID
 from onolys_api.jobs.transcribe import _run as run_coro
@@ -83,12 +84,17 @@ def release_once(repo, uid: str, sid: str, run_id: str, refund: bool, date: str 
         return
 
 
-def _llm_started(repo, uid: str, sid: str, run_id: str) -> bool:
-    """Whether ANY attempt called the evaluation (persisted on the run doc, not per attempt)."""
+def _refund(repo, uid: str, sid: str, run_id: str, code: str) -> bool:
+    """A run that ends in a failure refunds its units when the failure is the system's (the codes
+    that allow Try again), whether or not the LLM was called (owner decision). A bad-file code is
+    the user's: refunded only if no attempt called the evaluation (`llm_started` on the run doc,
+    persisted across attempts)."""
+    if is_system_failure(code):
+        return True
     try:
-        return repo.get_run(uid, sid, run_id).llm_started
+        return not repo.get_run(uid, sid, run_id).llm_started
     except NotFoundError:
-        return True  # nothing to refund on a vanished run
+        return False  # nothing to refund on a vanished run
 
 
 def make_run_handler(
@@ -107,11 +113,13 @@ def make_run_handler(
         except (TaskError, TimeoutError) as e:
             retryable = isinstance(e, TimeoutError) or e.retryable
             if not retryable or ctx.attempt >= MAX_ATTEMPTS:
-                release_once(repo, uid, sid, run_id, not _llm_started(repo, uid, sid, run_id), date)
+                code = e.code if isinstance(e, TaskError) else "deadline_exceeded"
+                release_once(repo, uid, sid, run_id, _refund(repo, uid, sid, run_id, code), date)
             raise
         except Exception as e:
-            if not to_public(e, ctx.attempt)[1] or ctx.attempt >= MAX_ATTEMPTS:
-                release_once(repo, uid, sid, run_id, not _llm_started(repo, uid, sid, run_id), date)
+            code, retryable = to_public(e, ctx.attempt)
+            if not retryable or ctx.attempt >= MAX_ATTEMPTS:
+                release_once(repo, uid, sid, run_id, _refund(repo, uid, sid, run_id, code), date)
             raise
         release_once(repo, uid, sid, run_id, False, date)
 

@@ -128,6 +128,23 @@ async def test_stuck_running_is_failed_and_releases_the_slot(client, repo, clock
     assert (run.status, run.released) == ("failed", True)
 
 
+async def test_worker_crash_refunds_the_unit(client, repo, clock, monkeypatch):
+    """Owner decision: a system failure (worker crash) refunds, even after the LLM started."""
+    seed(repo, state="running")
+    repo.create_run("alice", S1, "r1", RunDoc(uid="alice", session_id=S1, run_id="r1",
+                                                status="running", cap_date="2026-01-01",
+                                                llm_started=True))  # fmt: skip
+    calls = []
+    orig = repo.release_run_slot
+    monkeypatch.setattr(
+        repo, "release_run_slot",
+        lambda uid, sid, rid, refund, date: calls.append(refund) or orig(uid, sid, rid, refund, date),
+    )  # fmt: skip
+    clock.now = T0 + timedelta(hours=1)
+    await get(client)
+    assert calls == [True]
+
+
 async def test_later_writes_do_not_delay_the_stale_cutoff(client, repo, clock):
     """BH4: a rating/speaker write bumps `updated_at`, not the stage start."""
     seed(repo, state="running")

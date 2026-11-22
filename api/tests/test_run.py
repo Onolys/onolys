@@ -16,6 +16,7 @@ from cards import valid_card
 from onolys_api.adapters import AdapterError, Adapters, FakeEvaluation, FakeStt
 from onolys_api.app import create_app
 from onolys_api.jobs import caps
+from onolys_api.jobs.run import release_once
 from onolys_api.repo.fake import FakeRepo
 
 pytestmark = pytest.mark.integration
@@ -222,7 +223,7 @@ async def test_no_rating_run_has_skipped_reasons_audit(env):
     assert env.repo.get_run(env.uid, sid, r.json()["run_id"]).rating_id is None
 
 
-async def test_paudit_failure_fails_run_and_session_and_releases_without_refund(env):
+async def test_paudit_failure_fails_run_and_session_and_refunds_the_system_failure(env):
     sid = await env.finished("[fail:paudit]")
     s = env.repo.get_session(env.uid, sid)
     assert s.state == "failed" and s.error.code and s.latest_report_version is None
@@ -231,7 +232,7 @@ async def test_paudit_failure_fails_run_and_session_and_releases_without_refund(
     (run,) = env.repo.list_runs(env.uid, sid)
     assert run.status == "failed" and run.error == s.error.code
     assert env.repo.list_reports(env.uid, sid) == []
-    assert env.counters() == (0, 1)  # LLM was called: slot released, no refund
+    assert env.counters() == (0, 0)  # system failure after the LLM call: slot and unit refunded
     assert (await env.c.get(f"/v1/sessions/{sid}/reports/1", headers=env.h)).status_code == 404
 
 
@@ -255,6 +256,7 @@ async def test_try_again_after_a_failure_reuses_transcript_and_stored_rating(env
     swap_eval(env, Ok())
     r = await env.c.post(f"/v1/sessions/{sid}/runs", json={"preset": "fast"}, headers=env.h)
     assert r.status_code == 202
+    assert env.counters() == (1, 1)  # the retry takes a fresh unit
     assert env.repo.get_status(env.uid, sid).progress == 45  # a retry restarts at 45
     env.drain()
     assert env.repo.get_session(env.uid, sid).state == "report_ready"
@@ -264,7 +266,7 @@ async def test_try_again_after_a_failure_reuses_transcript_and_stored_rating(env
     assert run.rating_id == rating_id  # the same submission
     rep = env.repo.get_report_by_version(env.uid, sid, 1).report
     assert rep["header"]["preset"] == "fast"
-    assert env.counters() == (0, 2)
+    assert env.counters() == (0, 1)  # the failed run was refunded; only the retry is counted
 
 
 async def test_eaudit_failure_ships_report_with_warning(env):
@@ -318,9 +320,9 @@ async def test_retryable_failure_on_last_attempt_fails_and_releases_once(env):
     assert env.counters()[0] == 0
 
 
-async def test_retry_after_a_spent_llm_call_never_refunds(env):
+async def test_retry_within_the_task_refunds_once_never_twice(env):
     """Attempt 1 calls the evaluation and fails retryably; attempt 2 then dies before calling it.
-    The unit was spent on attempt 1, so the final release must not refund it (A20)."""
+    Both are system failures: the unit is refunded exactly once (A20, owner decision)."""
 
     class SpendThenBreak(FakeEvaluation):
         async def run(self, *a, **kw):
@@ -334,7 +336,10 @@ async def test_retry_after_a_spent_llm_call_never_refunds(env):
     assert s.state == "failed" and s.error.code == "internal_error"
     (run,) = env.repo.list_runs(env.uid, sid)
     assert run.llm_started is True and run.released is True
-    assert env.counters() == (0, 1)
+    assert env.counters() == (0, 0)  # refunded once (a double refund would clamp or go negative)
+    for _ in range(2):  # a redelivered release is a no-op
+        release_once(env.repo, env.uid, sid, run.run_id, True, run.cap_date)
+    assert env.counters() == (0, 0)
 
 
 class Capture(FakeEvaluation):
@@ -445,6 +450,18 @@ async def test_redelivered_run_task_is_a_noop(env):
     )
     assert res.outcome == "duplicate"
     assert len(env.repo.list_reports(env.uid, sid)) == 1 and env.counters() == (0, 1)
+
+
+async def test_bad_file_failure_is_not_refunded_after_the_llm_call(env):
+    class BadFile(FakeEvaluation):
+        async def run(self, *a, **kw):
+            raise AdapterError("no_speech")
+
+    swap_eval(env, BadFile())
+    sid = await env.finished()
+    s = env.repo.get_session(env.uid, sid)
+    assert s.state == "failed" and s.error.code == "no_speech"
+    assert env.counters() == (0, 1)  # user-side failure: the unit stays spent
 
 
 async def test_failure_before_the_llm_is_refunded(env):

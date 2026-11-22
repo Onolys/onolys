@@ -74,6 +74,20 @@ def rating_final() -> ApiError:
     )
 
 
+# FX45: failure codes that need a different file (no Try again); every other failure is a system
+# failure, which refunds its units (owner decision) and allows Try again.
+BAD_FILE_CODES = frozenset(
+    {
+        "unsupported_audio", "audio_too_long", "interview_too_long", "audio_too_large",
+        "audio_unreadable", "no_speech", "speakers_not_separated", "transcription_failed",
+    }
+)  # fmt: skip
+
+
+def is_system_failure(code: str | None) -> bool:
+    return code not in BAD_FILE_CODES
+
+
 def has_final_report(repo, uid: str, sid: str, state: str) -> bool:
     """FX45: a successful report (or a version from earlier data) makes the rating final."""
     return state == "report_ready" or bool(repo.list_reports(uid, sid))

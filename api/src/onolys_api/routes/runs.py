@@ -20,6 +20,7 @@ from onolys_api.auth.deps import AuthUser, current_user
 from onolys_api.errors import ApiError, ErrorResponse
 from onolys_api.jobs import caps
 from onolys_api.jobs.machine import (
+    BAD_FILE_CODES,
     RUN_START_PROGRESS,
     advance,
     has_final_report,
@@ -41,12 +42,6 @@ User = Annotated[AuthUser, Depends(current_user)]
 # FX45: no `report_ready` (the rating is final once its report is ready); a `failed` session may
 # only be retried after a system failure, never after a bad-file code.
 RERUN_STATES = ("awaiting_input", "failed")
-BAD_FILE_CODES = frozenset(
-    {
-        "unsupported_audio", "audio_too_long", "interview_too_long", "audio_too_large",
-        "audio_unreadable", "no_speech", "speakers_not_separated", "transcription_failed",
-    }
-)  # fmt: skip
 
 
 class RunRequest(BaseModel):
