@@ -1,5 +1,101 @@
 # Next context — review/full-app (updated 2026-11-22)
 
+## Fix run (dev-code light mode) — IN PROGRESS
+Owner reversed "no fixes": fix ALL bugs FX1–46, add tests FX52–56, then cleanup FX47–51.
+Plan:
+- Phase A, two parallel tracks:
+  - API track: worktree /root/projects/onolys/iaudit/.worktrees/review-full-app-api, branch review/full-app-api. Batches A1..A8 run serially:
+    - A1 FX3
+    - A2 FX4+FX53
+    - A3 FX10+FX28
+    - A4 FX11+FX12+FX54
+    - A5 FX42+FX46+FX13+FX44
+    - A6 FX43
+    - A7 FX14+FX25+FX27+FX52
+    - A8 FX26+FX29+FX30+FX31+FX41
+  - Web track: this worktree, branch review/full-app. Batches W1..W8 run serially:
+    - W1 FX1+FX55
+    - W2 FX2+FX15
+    - W3 FX6+FX23+FX35
+    - W4 FX7
+    - W5 FX16-19+FX56
+    - W6 FX20-22+FX24
+    - W7 FX32-34
+    - W8 FX36-40
+- Phase B: merge review/full-app-api into review/full-app; then cross-area FX5, FX8, FX9, FX45 one at a time.
+- Phase C: cleanup FX47–51, then dev-review, then the Ship? question.
+Done:
+- API: A1 eea5c0c; A2 ef182b9 + b305ab4; A3 fbf5542 + 1f519b9; A4 19280a9 + 2bc3ddd + 7115b7d. M16 mutant left surviving.
+- Web: W1 532cc8c; W2 3fd592a + 160fcc6; W3 b4904b9 + 3a012fd + 09ff3a0; W4 e03669a; W5 bc62d31 + 2f204a0 + 55c92c5 + 009134b; W6 6b81e85 + 160165f + 5682f97 + 8f2f425; W7 40c8d70 + 81d066e + 0d5342a.
+- W8: ffe2722 (FX34 follow-up) + 3924e7f + f36555e + 8bac9e3 + 6becdca. FX38: no change needed.
+Web track: all batches W1–W8 done.
+- 3c2be5f: outdated flow/layout tests fixed after FX20/FX32 (test-only).
+- A5: c1ac02f + 3876575 + 1d867ed + f3f4a9b.
+- A6: b7116e0 (FX43).
+- C1: 6112ddc + 96428e4 + a42fa04 + 350cb0e (FX47, FX50, FX51, e2e lint).
+Owner clarified caps (2026-11-22):
+- Each flow has ONE limit, and it is daily: the AI interview flow uses AI_CAP_DAY, the evaluation flow uses EVAL_CAP_DAY.
+- Monthly caps are removed.
+- Max 1 active run per user.
+- An interview = 1 unit from the AI budget and includes its 1 rating, which does not count toward the eval limit.
+- A5b: 1c59118 + 45b9033.
+  - Monthly caps gone, including in infra. GET /usage has no `month`; `period` is `day` only.
+  - MAX_ACTIVE_RUNS default is now 1.
+Phase B web follow-up: remove `monthly_cap_reached` and usage `month` from:
+- web/src/api/{errors.ts, errors.test.ts, schema.d.ts}
+- features/session/{timeline.ts, timeline.test.ts, SessionPage.tsx, SessionPage.test.tsx}
+- features/usage/{usage.ts, usage.test.ts}
+- mocks/stateMachine{,.test}.ts
+- __fuzz_review__/api-lib.property.test.ts
+FX45 Phase B: an interview session gets only 1 rating. POST /runs after its free run is currently charged to EVAL; FX45 "final, no run again" should reject it.
+- A7: 53f76ab (oidc tests broken by FX4's 60s floor) + 07640a5 + 8f12352 + 0263603 + d6fd08b.
+  - ENV is now required.
+  - UID_HMAC_KEY is required outside local/test.
+  - 1 MiB body limit.
+  - no-store on /v1.
+- A8: 6cfdab1 + 89db194 + d67010a + 428ec95 + 6206453 + aafdd56 + 0857079. API track: all batches done.
+For review:
+- FX29: late PUT not rejected (keeps the validated original, sweeps the rest).
+- FX30 language list is ISO 639-1 + fil/yue; does STT accept locales like en-US?
+- A23 same-key race xfail kept; it moves to @flaky in FX49.
+- Merge 90034fc, no conflicts. Contract sync 5577fae. Clock test 9a9dd42.
+- All work is now on review/full-app. The review/full-app-api worktree can be removed at the end.
+- FX5 b276297 (API only).
+- Check before ship: `ruff format --check` flags 4 api files. Check whether CI runs it and whether this branch caused it.
+- FX8 3287fba (api) + 8c6df07 (web). upload_incomplete appears after 15 min + 60 s.
+- FX9 5f736e9 (web only). The interview ends on the next page load; the sweep handles a closed tab.
+- FX45 2a8b1c0 (api) + b18d525 (web).
+- FX45 follow-ups 4835f00 + 8361e66 + 8c20400 + fa05d00.
+  - For review: the second final PUT check is read-then-write, not a txn, so concurrent double submits could slip through.
+All bugs FX1–46 are done.
+C2 DONE (2026-11-22): FX49 8d25bcb (A23 xfail dropped, 5/5 pass, both race tests @flaky); FX48 7766001 (36 e2e tests, live.spec removed); web-e2e CI job 69114ec; api worktree + branch removed. CI runs no `ruff format --check`; 7 api files unformatted, all from this branch (left as-is). `npm run lint` passes.
+Owner task: make `web-e2e` a required status check (no aggregator job / ruleset).
+Review DONE: round 1 NEEDS_CHANGES (2451e0a) → fixes 49e576c, 1986bf4, f2e9276 (privacy guard), 0cb7758 (vitest excludes e2e_review); round 2 NEEDS_CHANGES (4b502c2) → 25c1073; round 3 PASS (artifact review-2026-11-22-1700.md, to commit).
+Owner decisions pending (review notes): cap post-LLM system-failure refunds per day; force n_runs=1 on free interview run; FX44 duration-only binding; dead caps.reserve/reserve_run/release_run.
+Running: dev-ship (no Ship? per owner memory; push, CI runs tests).
+Then: FX5, FX8, FX9, FX45 serially; then FX48, FX49, the web-e2e CI job; then dev-review.
+Next: A7, A8, then merge, then Phase B.
+Owner tasks:
+- FX43: unmount ANTHROPIC_API_KEY from the worker unless claude is enabled. To enable claude, set ENABLED_EXTRA_PRESETS=claude in infra.
+Deferred to the end:
+- FX48 trim.
+- FX49 (api).
+- The web-e2e CI job.
+Owner-only tasks:
+- FX38: after deploy, confirm Google popup/redirect sign-in on staging and prod shows no CSP violation.
+Note: FX45 must rewrite the flow tests that expect "Run again" after a successful report.
+- Check in cleanup: eslint reports 21 require() errors on web/e2e_review/*.cjs. Does `npm run lint` (eslint .) fail in CI?
+Follow-ups to carry:
+- Non-hex ids now return 422 (FX10). In W8/FX40, check the web shows "not found" for a 422 on a session id.
+- A14 leftovers (concurrency-limit code, unverified-401 distinction) go in A8.
+- FX2: submit now saves the pending draft first; check this in review.
+Notes:
+- Emulator: `npx -y firebase-tools@15.37.0 emulators:exec --config api/firebase.json --only firestore --project demo-onolys '<cmd>'`.
+- e2e runs rewrite e2e-shots PNGs; revert before commit.
+- Don't `pkill -f vite`.
+- The E3/W19 test.fail stays until FX32.
+- Sample report was dropped from the verified nav (follows D1).
+
 Read this first in the next session. The owner will fix the bugs themselves. Nothing is pushed.
 
 ## State
