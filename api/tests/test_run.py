@@ -194,63 +194,21 @@ async def test_full_stub_flow_reaches_report_ready_with_progress_table(env):
     assert body["report"]["header"]["code_version"] == "abc123"
 
 
-async def test_second_run_makes_v2_keeps_v1_and_reuses_transcript_with_other_preset(env):
+async def test_a_ready_report_is_final_post_runs_is_refused(env):
     sid = await env.finished()
-    assert env.stt.start_calls == 1
     v1 = (await env.c.get(f"/v1/sessions/{sid}/reports/1", headers=env.h)).json()
-
     r = await env.c.post(f"/v1/sessions/{sid}/runs", json={"preset": "fast"}, headers=env.h)
-    assert r.status_code == 202
-    run_id = r.json()["run_id"]
-    assert (await env.c.get(f"/v1/sessions/{sid}", headers=env.h)).json()["status"] == "running"
-    assert env.repo.get_status(env.uid, sid).progress == 45  # a re-run restarts at 45
-    env.drain()
-
-    assert env.stt.start_calls == 1 and env.stt.poll_calls == 1  # Stt not called again
+    assert r.status_code == 409 and r.json()["details"][0]["code"] == "rating_final"
+    assert env.repo.get_session(env.uid, sid).state == "report_ready"
     assert (await env.c.get(f"/v1/sessions/{sid}/reports/1", headers=env.h)).json() == v1
-    v2 = (await env.c.get(f"/v1/sessions/{sid}/reports/2", headers=env.h)).json()
-    assert v2["version"] == 2 and v2["run_id"] == run_id
-    assert v2["report"]["header"]["preset"] == "fast"
-
+    assert (await env.c.get(f"/v1/sessions/{sid}/reports/2", headers=env.h)).status_code == 404
+    assert len(env.repo.list_runs(env.uid, sid)) == 1 and env.counters() == (0, 1)
     lst = (await env.c.get(f"/v1/sessions/{sid}/reports", headers=env.h)).json()
-    assert [(x["version"], x["run_id"]) for x in lst["items"]] == [(1, v1["run_id"]), (2, run_id)]
+    assert [(x["version"], x["run_id"]) for x in lst["items"]] == [(1, v1["run_id"])]
     assert {"version", "report_id", "run_id", "created_at"} <= set(lst["items"][0])
-    assert (await env.c.get(f"/v1/sessions/{sid}", headers=env.h)).json()[
-        "latest_report_version"
-    ] == 2
-    assert (await env.c.get("/v1/sessions", headers=env.h)).json()["items"][0][
-        "latest_report_version"
-    ] == 2
-    assert (await env.c.get(f"/v1/sessions/{sid}/reports/3", headers=env.h)).status_code == 404
-
-    runs = (await env.c.get(f"/v1/sessions/{sid}/runs", headers=env.h)).json()["items"]
-    assert [x["run_id"] for x in runs] == [v1["run_id"], run_id]
-    one = (await env.c.get(f"/v1/runs/{run_id}", headers=env.h)).json()
-    assert (one["status"], one["preset"], one["n_runs"], one["code_version"]) == (
-        "done", "fast", 1, "abc123",
-    )  # fmt: skip
+    one = (await env.c.get(f"/v1/runs/{v1['run_id']}", headers=env.h)).json()
+    assert (one["status"], one["n_runs"], one["code_version"]) == ("done", 1, "abc123")
     assert one["stt"]["provider"] == "p1" and one["rating_id"] and one["run_info"]
-    assert env.counters() == (0, 2)
-
-
-async def test_rerun_uses_latest_final_rating_and_n_runs(env):
-    sid = await env.finished()
-    r1 = env.repo.latest_rating(env.uid, sid).id
-    await env.c.put(
-        f"/v1/sessions/{sid}/rating",
-        json={"final": True, "card": {"change_goal": "g2", "notes": "new"}},
-        headers=env.h,
-    )
-    r2 = env.repo.latest_rating(env.uid, sid).id
-    assert r1 != r2
-    run_id = (
-        await env.c.post(f"/v1/sessions/{sid}/runs", json={"n_runs": 3}, headers=env.h)
-    ).json()["run_id"]
-    env.drain()
-    run = env.repo.get_run(env.uid, sid, run_id)
-    assert (run.rating_id, run.n_runs) == (r2, 3)
-    rep = env.repo.get_report_by_version(env.uid, sid, 2).report
-    assert rep["header"]["n_runs"] == 3 and rep["header"]["change_goal"] == "g2"
 
 
 async def test_no_rating_run_has_skipped_reasons_audit(env):
@@ -277,8 +235,9 @@ async def test_paudit_failure_fails_run_and_session_and_releases_without_refund(
     assert (await env.c.get(f"/v1/sessions/{sid}/reports/1", headers=env.h)).status_code == 404
 
 
-async def test_failed_session_can_be_rerun(env):
+async def test_try_again_after_a_failure_reuses_transcript_and_stored_rating(env):
     sid = await env.finished("[fail:paudit]")
+    rating_id = env.repo.latest_rating(env.uid, sid).id
 
     # the stub title still says fail:paudit: swap in an evaluation that ignores it
     class Ok(FakeEvaluation):
@@ -294,11 +253,17 @@ async def test_failed_session_can_be_rerun(env):
             )
 
     swap_eval(env, Ok())
-    r = await env.c.post(f"/v1/sessions/{sid}/runs", json={}, headers=env.h)
+    r = await env.c.post(f"/v1/sessions/{sid}/runs", json={"preset": "fast"}, headers=env.h)
     assert r.status_code == 202
+    assert env.repo.get_status(env.uid, sid).progress == 45  # a retry restarts at 45
     env.drain()
     assert env.repo.get_session(env.uid, sid).state == "report_ready"
     assert env.repo.get_session(env.uid, sid).latest_report_version == 1
+    assert env.stt.start_calls == 1  # the transcript is reused, Stt not called again
+    run = env.repo.get_run(env.uid, sid, r.json()["run_id"])
+    assert run.rating_id == rating_id  # the same submission
+    rep = env.repo.get_report_by_version(env.uid, sid, 1).report
+    assert rep["header"]["preset"] == "fast"
     assert env.counters() == (0, 2)
 
 
@@ -401,16 +366,16 @@ async def test_run_without_a_usable_rating_passes_no_card(env):
     assert (await env.c.post(f"/v1/sessions/{sid}/runs", json={}, headers=env.h)).status_code == 202
     env.drain()
     assert cap.seen["rating"] is None and cap.seen["params"]["coded_span"] is None
-    # a newer final "no rating" revision: the run keeps its rating_id but passes no card
+    # a final "no rating" revision: the run keeps its rating_id but passes no card
+    sid2 = await env.start(rate=False)
     r = await env.c.put(
-        f"/v1/sessions/{sid}/rating",
+        f"/v1/sessions/{sid2}/rating",
         json={"final": True, "no_rating": True, "card": {"change_goal": "g"}},
         headers=env.h,
     )
     assert r.status_code in (200, 202)
-    assert (await env.c.post(f"/v1/sessions/{sid}/runs", json={}, headers=env.h)).status_code == 202
     env.drain()
-    (_, run2) = sorted(env.repo.list_runs(env.uid, sid), key=lambda r: r.started or 0)
+    (run2,) = env.repo.list_runs(env.uid, sid2)
     assert run2.rating_id and cap.seen["rating"] is None
 
 
@@ -502,19 +467,22 @@ async def test_post_runs_state_and_input_checks(env):
     assert (
         await env.c.post(f"/v1/sessions/{fresh}/runs", json={}, headers=env.h)
     ).status_code == 409
+    done = await env.finished()  # FX45: a ready report is final
+    r = await env.c.post(f"/v1/sessions/{done}/runs", json={}, headers=env.h)
+    assert r.status_code == 409 and r.json()["details"][0]["code"] == "rating_final"
     for bad in ({"n_runs": 0}, {"n_runs": 6}, {"preset": "nope"}):
-        sid3 = await env.finished()
+        sid3 = await env.start(rate=False)
         r = await env.c.post(f"/v1/sessions/{sid3}/runs", json=bad, headers=env.h)
         assert r.status_code == 422, bad
 
 
 async def test_post_runs_cap_429_and_releases(env):
-    sid = await env.finished()
-    env.app.state.settings = replace(env.app.state.settings, eval_cap_day=1)
+    sid = await env.start(rate=False)
+    env.app.state.settings = replace(env.app.state.settings, eval_cap_day=0)
     r = await env.c.post(f"/v1/sessions/{sid}/runs", json={}, headers=env.h)
     assert r.status_code == 429 and r.json()["details"][0]["code"] == "daily_cap_reached"
-    assert env.repo.get_session(env.uid, sid).state == "report_ready"
-    assert env.repo.list_runs(env.uid, sid).__len__() == 1
+    assert env.repo.get_session(env.uid, sid).state == "awaiting_input"
+    assert env.repo.list_runs(env.uid, sid) == [] and env.counters() == (0, 0)
 
 
 async def test_cap_held_first_run_starts_with_post_runs(env):

@@ -35,6 +35,7 @@ ERROR_CODES = (
     "unauthenticated",
     "forbidden",
     "invalid_state",
+    "rating_final",
     "unsupported_audio",
     "audio_too_long",
     "audio_too_large",
@@ -136,7 +137,10 @@ _STATUS_TEXT = {
         "email address not verified yet)"
     ),
     404: "`not_found`: no such resource for this user (never 403, so ids cannot be probed)",
-    409: "`invalid_state` or `conflict`: not allowed in the session's current state",
+    409: (
+        "`invalid_state` or `conflict`: not allowed in the session's current state; "
+        "`rating_final`: the report is ready, so the rating can no longer be changed or re-run"
+    ),
     422: (
         "`invalid_parameters` (incl. a malformed id, cursor or body), `unsupported_audio`, "
         "`audio_too_large` or `rating_invalid`"

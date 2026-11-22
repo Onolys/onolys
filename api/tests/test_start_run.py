@@ -51,7 +51,7 @@ def _post(app, h, sid, barrier):
         return c.post(f"/v1/sessions/{sid}/runs", json={}, headers=h)
 
 
-@pytest.mark.parametrize("state", ["report_ready", "failed"])
+@pytest.mark.parametrize("state", ["awaiting_input", "failed"])
 def test_two_concurrent_manual_starts_exactly_one_wins(repo, state):  # noqa: F811
     _widen(repo)
     queue = RecordingQueue()
@@ -122,11 +122,11 @@ def test_refused_start_reserves_nothing(repo):  # noqa: F811
     app = make_client(repo, mk_settings(max_active_runs=2, eval_cap_day=0), queue)
     uid = f"u{uuid.uuid4().hex[:10]}"
     h = {"Authorization": f"Bearer test:{uid}"}
-    sid = new_session(repo, uid, state="report_ready", ready=True, **READY)
+    sid = new_session(repo, uid, state="failed", ready=True, **READY)
     with TestClient(app) as c:
         r = c.post(f"/v1/sessions/{sid}/runs", json={}, headers=h)
     assert r.status_code == 429 and r.json()["details"][0]["code"] == "daily_cap_reached"
-    assert repo.get_session(uid, sid).state == "report_ready"
+    assert repo.get_session(uid, sid).state == "failed"
     assert repo.list_runs(uid, sid) == []
     assert user_counters(repo, uid, caps.utc_date()) == (0, 0)
 
@@ -175,21 +175,59 @@ def test_linked_post_runs_still_obeys_the_active_limit(repo):  # noqa: F811
     assert user_counters(repo, uid, caps.utc_date()) == (0, 0)
 
 
-def test_second_post_runs_on_a_linked_session_counts_one(repo):  # noqa: F811
+# ---- FX45 (E24): a rating is final once its report is ready; only a system failure may retry
+
+
+@pytest.mark.parametrize("fields", [{}, {"interview_id": "iv1"}], ids=["upload", "interview"])
+def test_post_runs_after_a_successful_report_is_refused(repo, fields):  # noqa: F811
+    """The interview flow includes exactly one rating, so a linked session is no different."""
     from onolys_api.jobs.run import release_once
 
     uid = f"u{uuid.uuid4().hex[:10]}"
-    sid = _linked_ready(repo, uid, interview_id="iv1")
-    s = mk_settings(eval_cap_day=1)
-    app = make_client(repo, s, RecordingQueue())
-    first = _post_run(app, uid, sid).json()["run_id"]
-    release_once(repo, uid, sid, first, False, caps.utc_date())
+    sid = _linked_ready(repo, uid, **fields)
+    app = make_client(repo, mk_settings(eval_cap_day=5), RecordingQueue())
+    assert _post_run(app, uid, sid).status_code == 202
+    (run,) = repo.list_runs(uid, sid)
+    release_once(repo, uid, sid, run.run_id, False, caps.utc_date())  # the run finished
     repo.update_session(uid, sid, {"state": "report_ready"})
     r = _post_run(app, uid, sid)
+    assert r.status_code == 409 and r.json()["details"][0]["code"] == "rating_final", r.text
+    assert len(repo.list_runs(uid, sid)) == 1
+
+
+def test_post_runs_on_a_failed_session_with_an_older_report_is_refused(repo):  # noqa: F811
+    from datetime import UTC, datetime
+
+    from onolys_api.repo.models import ReportDoc
+
+    uid = f"u{uuid.uuid4().hex[:10]}"
+    sid = _linked_ready(repo, uid)
+    repo.put_report(uid, sid, "r1", ReportDoc(
+        run_id="x", version=1, report_schema_version="1", report={}, created_at=datetime.now(UTC)
+    ))  # fmt: skip
+    repo.update_session(uid, sid, {"state": "failed", "error": {"code": "internal_error"}})
+    r = _post_run(make_client(repo, mk_settings(), RecordingQueue()), uid, sid)
+    assert r.status_code == 409 and r.json()["details"][0]["code"] == "rating_final", r.text
+
+
+def test_try_again_after_a_system_failure_reuses_the_stored_rating(repo):  # noqa: F811
+    uid = f"u{uuid.uuid4().hex[:10]}"
+    sid = _linked_ready(repo, uid)
+    rid = rate(repo, uid, sid)
+    repo.update_session(uid, sid, {"state": "failed", "error": {"code": "upstream_unavailable"}})
+    r = _post_run(make_client(repo, mk_settings(), RecordingQueue()), uid, sid)
     assert r.status_code == 202, r.text
-    assert repo.get_run(uid, sid, r.json()["run_id"]).counted is True
-    assert user_counters(repo, uid, caps.utc_date())[1] == 1
-    assert repo.get_session(uid, sid).first_run_id == first
+    assert repo.get_run(uid, sid, r.json()["run_id"]).rating_id == rid
+
+
+@pytest.mark.parametrize("code", ["no_speech", "audio_unreadable", "transcription_failed"])
+def test_post_runs_after_a_bad_file_failure_is_refused(repo, code):  # noqa: F811
+    uid = f"u{uuid.uuid4().hex[:10]}"
+    sid = _linked_ready(repo, uid)
+    repo.update_session(uid, sid, {"state": "failed", "error": {"code": code}})
+    r = _post_run(make_client(repo, mk_settings(), RecordingQueue()), uid, sid)
+    assert r.status_code == 409 and r.json()["details"][0]["code"] == "invalid_state", r.text
+    assert repo.list_runs(uid, sid) == []
 
 
 def test_unlinked_post_runs_is_unchanged_counts_and_obeys_the_cap(repo):  # noqa: F811

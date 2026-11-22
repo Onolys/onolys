@@ -311,7 +311,7 @@ async def test_notes_alone_count_as_rating(env):
 
 @pytest.mark.parametrize(
     "state", ["created", "uploading", "validating", "transcribing", "awaiting_input", "running",
-              "report_ready", "failed"],
+              "failed"],
 )  # fmt: skip
 async def test_allowed_in_every_state_but_deleting(env, state):
     c, h, repo, uid, sid = env
@@ -321,6 +321,18 @@ async def test_allowed_in_every_state_but_deleting(env, state):
         assert (await put(c, h, sid, body)).status_code == 202
     assert (await c.get(f"/v1/sessions/{sid}/rating", headers=h)).status_code == 200
     assert repo.get_session(uid, sid).state == state  # the PUT never moves the state
+
+
+async def test_final_rating_is_refused_once_the_report_is_ready(env):
+    """FX45 (E24): a successful report makes the rating final; drafts are still just drafts."""
+    c, h, repo, uid, sid = env
+    first = await put(c, h, sid, {"final": True, "card": card()})
+    assert first.status_code == 202
+    repo.update_session(uid, sid, {"state": "report_ready"}, status={"state": "report_ready"})
+    r = await put(c, h, sid, {"final": True, "card": card(notes="edited")})
+    assert r.status_code == 409 and r.json()["details"][0]["code"] == "rating_final", r.text
+    assert repo.latest_rating(uid, sid).id == first.json()["rating_id"]  # nothing new written
+    assert (await put(c, h, sid, {"final": False, "card": card()})).status_code == 202
 
 
 async def test_rejected_in_deleting(env):

@@ -1,8 +1,9 @@
 """Runs and reports (PRD R2, R4, D12, D18).
 
-`POST /sessions/{id}/runs` starts a run by hand: a re-run (new report version on the same
-transcript, latest final rating, current speaker choice) or the first run when auto-start was held
-back by the cap. It reserves a cap slot (429 `daily_cap_reached`), creates the run, moves the
+`POST /sessions/{id}/runs` starts a run by hand: "Try again" after a system failure (same
+transcript, stored final rating, current speaker choice) or the first run when auto-start was
+held back by the cap. A rating is final once its report is ready (FX45): 409 `rating_final`.
+It reserves a cap slot (429 `daily_cap_reached`), creates the run, moves the
 session to `running` (clears the cap error) and enqueues the `run` task; the worker does the rest.
 `preset` changes LLM routes only: the transcript and its STT are reused.
 """
@@ -18,7 +19,13 @@ from onolys_api import logs
 from onolys_api.auth.deps import AuthUser, current_user
 from onolys_api.errors import ApiError, ErrorResponse
 from onolys_api.jobs import caps
-from onolys_api.jobs.machine import RUN_START_PROGRESS, advance, invalid_state
+from onolys_api.jobs.machine import (
+    RUN_START_PROGRESS,
+    advance,
+    has_final_report,
+    invalid_state,
+    rating_final,
+)
 from onolys_api.jobs.queue import TaskPayload
 from onolys_api.jobs.run import release_once
 from onolys_api.presets import UnknownPreset
@@ -31,7 +38,15 @@ ERRORS = {"default": {"model": ErrorResponse, "description": "Error"}}
 router = APIRouter(prefix="/sessions/{id}", tags=["runs"], responses=ERRORS)
 runs_router = APIRouter(tags=["runs"], responses=ERRORS)
 User = Annotated[AuthUser, Depends(current_user)]
-RERUN_STATES = ("awaiting_input", "report_ready", "failed")
+# FX45: no `report_ready` (the rating is final once its report is ready); a `failed` session may
+# only be retried after a system failure, never after a bad-file code.
+RERUN_STATES = ("awaiting_input", "failed")
+BAD_FILE_CODES = frozenset(
+    {
+        "unsupported_audio", "audio_too_long", "interview_too_long", "audio_too_large",
+        "audio_unreadable", "no_speech", "speakers_not_separated", "transcription_failed",
+    }
+)  # fmt: skip
 
 
 class RunRequest(BaseModel):
@@ -107,13 +122,15 @@ def _open_session(request: Request, user: AuthUser, id: str) -> SessionDoc:
     operation_id="startRun",
     status_code=202,
     response_model=RunStarted,
-    summary="Start a run by hand (re-run, or the first run held back by the cap)",
+    summary="Start a run by hand (Try again after a system failure, or the first run held back)",
     description=(
-        "Needs the transcript and the confirmed speaker; uses the latest final rating revision "
+        "Needs the transcript and the confirmed speaker; uses the stored final rating revision "
         "or runs as no-rating. `preset` changes LLM routes only (the transcript is reused). "
         "Counts against the daily cap: 429 `daily_cap_reached`; 429 `concurrent_runs` while "
-        "another run is in progress. 409 `invalid_state` while a run "
-        "is in progress or before the inputs exist."
+        "another run is in progress. 409 `rating_final` once a report exists (the rating is "
+        "final: no re-run, interview sessions included). 409 `invalid_state` while a run "
+        "is in progress, before the inputs exist, or after a bad-file failure (upload a "
+        "different file instead)."
     ),
 )
 def start_run(
@@ -123,6 +140,10 @@ def start_run(
     app = request.app
     repo, uid = app.state.repo, user.uid
     s = _open_session(request, user, id)
+    if has_final_report(repo, uid, id, s.state):
+        raise rating_final()
+    if s.state == "failed" and s.error is not None and s.error.code in BAD_FILE_CODES:
+        raise invalid_state()
     if s.state not in RERUN_STATES or not (
         s.transcript_ready and s.speaker_confirmed and s.clinician_speaker
     ):

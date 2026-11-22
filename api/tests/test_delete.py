@@ -64,8 +64,9 @@ def deleted_lines(caplog) -> list[dict]:
 
 async def rich_session(env: Env, title: str = "SENTINEL-TITLE") -> str:
     """Finished session with 2 runs, a >500 KB report (blob pointer), a draft rating."""
+    sid = await env.finished("[fail:paudit]")  # first run fails; "Try again" makes the second
+    env.repo.update_session(env.uid, sid, {"title": title})
     swap_eval(env, BigEval())
-    sid = await env.finished(title)
     r = await env.c.post(f"/v1/sessions/{sid}/runs", json={}, headers=env.h)
     assert r.status_code == 202
     env.drain()

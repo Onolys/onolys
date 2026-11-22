@@ -1,7 +1,8 @@
 """`/v1/sessions/{id}/rating`: the in-app rating card (R2, D15). Firestore only, no parsing.
 
 `final=false` overwrites the single draft doc (size limits only; never gates or starts a run).
-`final=true` validates the card and writes a new revision `ratings/{rating_id}`, copies
+`final=true` is refused (409 `rating_final`) once the session has a report; otherwise it validates
+the card and writes a new revision `ratings/{rating_id}`, copies
 `change_goal`/`coded_span` to the session, sets `rating_submitted`/`has_rating`, mirrors them to
 `session_status` and calls the first-run hook. Allowed in every state but `deleting` (404).
 """
@@ -16,6 +17,7 @@ from pydantic import BaseModel, Field
 from onolys_api.auth.deps import AuthUser, current_user
 from onolys_api.errors import ApiError, ErrorDetail, ErrorResponse
 from onolys_api.jobs.first_run import maybe_start_first_run
+from onolys_api.jobs.machine import has_final_report, rating_final
 from onolys_api.rating import SCHEMA_VERSION, Issue, has_content, validate_rating
 from onolys_api.repo.base import NotFoundError
 from onolys_api.repo.models import RatingDoc, RatingDraftDoc
@@ -92,13 +94,14 @@ def _open_session(request: Request, user: AuthUser, id: str):
         "and sets `rating_submitted`/`has_rating`; `no_rating=true`, or a card with no scores, "
         'counts or notes, is a "no rating" revision (`has_rating=false`). Over 1,000 chars per '
         "reason/note/example or 3,000 for `notes` is 422 `rating_invalid`. Allowed in every state "
-        "but `deleting`. A final card may start the first run (R4)."
+        "but `deleting`; a final card is refused with 409 `rating_final` once the report is ready "
+        "(the rating is final). A final card may start the first run (R4)."
     ),
 )
 def put_rating(id: ResourceId, body: RatingRequest, request: Request, user: User) -> RatingSaved:
     repo = request.app.state.repo
     uid = user.uid
-    _open_session(request, user, id)
+    session = _open_session(request, user, id)
     now = datetime.now(UTC)
     if not body.final:
         if issues := validate_rating(body.card, final=False):
@@ -106,6 +109,8 @@ def put_rating(id: ResourceId, body: RatingRequest, request: Request, user: User
         repo.put_rating_draft(uid, id, RatingDraftDoc(card=body.card, updated_at=now))
         return RatingSaved(final=False, updated_at=now)
 
+    if has_final_report(repo, uid, id, session.state):
+        raise rating_final()  # FX45: the rating is final once its report is ready
     if issues := validate_rating(body.card, final=True):
         raise _invalid(issues)
     no_rating = body.no_rating or not has_content(body.card)

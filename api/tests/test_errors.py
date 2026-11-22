@@ -24,6 +24,7 @@ def test_schema_enum_matches_codes_and_is_superset_of_eaudit(schema):
         "unauthenticated",
         "forbidden",
         "invalid_state",
+        "rating_final",
         "unsupported_audio",
         "audio_too_long",
         "audio_too_large",

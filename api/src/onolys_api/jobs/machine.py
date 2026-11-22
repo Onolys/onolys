@@ -68,6 +68,17 @@ def invalid_state() -> ApiError:
     return ApiError.of(409, "invalid_state", "The session is not in a state that allows this.")
 
 
+def rating_final() -> ApiError:
+    return ApiError.of(
+        409, "rating_final", "The report is ready, so the rating is final and cannot be re-run."
+    )
+
+
+def has_final_report(repo, uid: str, sid: str, state: str) -> bool:
+    """FX45: a successful report (or a version from earlier data) makes the rating final."""
+    return state == "report_ready" or bool(repo.list_reports(uid, sid))
+
+
 def check_transition(current: str, to: str) -> None:
     if to not in TRANSITIONS.get(current, frozenset()):
         raise invalid_state()

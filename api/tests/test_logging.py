@@ -179,7 +179,7 @@ async def test_failed_run_writes_one_line_with_all_required_keys(env, caplog):
 
 
 async def test_run_enqueue_failure_is_one_failed_line(env, caplog):
-    sid = await env.finished()
+    sid = await env.start(rate=False)  # a first run held back: the only manual start left (FX45)
 
     class Down:
         def enqueue(self, payload, delay_s=0.0):
