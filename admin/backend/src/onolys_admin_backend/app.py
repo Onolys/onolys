@@ -1,22 +1,18 @@
-"""Gateway app. Layer order (outermost first): CORS -> auth -> routes.
+"""Admin shell app. Layer order (outermost first): CORS -> auth -> routes.
 
 CORS is outermost so preflights are answered before auth (they carry no token) and
-CORS headers also appear on 401/403 responses. paudit routes are served by the parent app;
-eaudit is mounted unchanged at "/".
+CORS headers also appear on 401/403 responses. The only route is GET /v1/me.
 """
 
 import os
 from collections.abc import Mapping
-from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from onolys_admin_auth import AdminAuthConfig, AdminAuthMiddleware, ConfigError
 
-from onolys_admin_backend.paudit_routes import DEFAULT_MAX_BODY_BYTES, register_paudit_routes
-
 ALLOWED_HEADERS = ["authorization", "content-type"]
-ALLOWED_METHODS = ["GET", "POST", "OPTIONS"]
+ALLOWED_METHODS = ["GET", "OPTIONS"]
 
 
 def parse_cors_origins(raw: str) -> list[str]:
@@ -28,42 +24,22 @@ def parse_cors_origins(raw: str) -> list[str]:
     return origins
 
 
-def create_app(
-    eaudit_app: FastAPI | None = None,
-    env: Mapping[str, str] | None = None,
-    verifier=None,
-    paudit_client=None,
-) -> FastAPI:
+def create_app(env: Mapping[str, str] | None = None, verifier=None) -> FastAPI:
     env = os.environ if env is None else env
     config = AdminAuthConfig.from_env(env)
     origins = parse_cors_origins(env.get("ADMIN_CORS_ORIGINS", ""))
-    if eaudit_app is None:
-        from eaudit.app import create_app as create_eaudit_app
-
-        eaudit_app = create_eaudit_app()
-
-    @asynccontextmanager
-    async def lifespan(_app: FastAPI):
-        # Starlette does not run a mounted app's lifespan, so run eaudit's here.
-        async with eaudit_app.router.lifespan_context(eaudit_app):
-            yield
 
     app = FastAPI(
         title="Onolys admin backend",
-        lifespan=lifespan,
         docs_url=None,
         redoc_url=None,
         openapi_url=None,
     )
-    # paudit routes first so they win routing over the catch-all eaudit mount.
-    settings = getattr(eaudit_app.state, "settings", None)
-    register_paudit_routes(
-        app,
-        env,
-        client=paudit_client,
-        max_body_bytes=getattr(settings, "max_body_bytes", DEFAULT_MAX_BODY_BYTES),
-    )
-    app.mount("/", eaudit_app)
+
+    @app.get("/v1/me")
+    async def me() -> dict[str, str]:
+        return {"status": "ok"}
+
     # add_middleware prepends: the last one added is the outermost.
     app.add_middleware(AdminAuthMiddleware, config=config, verifier=verifier)
     app.add_middleware(

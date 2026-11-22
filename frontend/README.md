@@ -1,28 +1,26 @@
-# eaudit review UI
+# Admin frontend (admin.onolys.com)
 
-Vite + React + strict TypeScript + Vitest. Upload a request JSON, see the audit.
+Vite + React + strict TypeScript + Vitest. Sign-in, a 401/403 gate and one empty page ("Nothing here yet.").
+
+After sign-in the shell calls `GET {VITE_ADMIN_API_URL}/v1/me` with the Firebase ID token. 401 returns to sign-in, 403 shows "Not allowed" (account not on the admin allowlist), a network error shows a retry button.
 
 ## Quickstart
 
 ```bash
 npm ci
-cp .env.example .env.local   # then set VITE_AUDIT_URL, or VITE_MOCK=true
+cp .env.example .env.local
 npm run dev
 ```
 
-Other scripts: `npm run build`, `npm run preview`, `npm test`, `npm run typecheck`.
-Ajv validators are precompiled (no runtime `new Function`, so the strict CSP holds): `scripts/compile-validators.mjs` writes the gitignored `src/generated/`, run automatically by `predev`/`prebuild`/`pretest`/`pretypecheck`.
+Scripts: `npm run build`, `npm run preview`, `npm test`, `npm run typecheck`.
 
-`VITE_EVAL_ENABLED`: the Eval tab (and all eval requests) is on unless this is exactly `false`. `frontend/.env.production`
-sets it to `false`, so `npm run build` (the deployed build) never shows Eval; local `npm run dev` is unchanged.
+## Settings
 
-With `VITE_MOCK=true`, upload `../docs/contracts/examples/request.json`.
+| Variable | Meaning |
+|---|---|
+| `VITE_ADMIN_API_URL` | Admin backend origin, no path. |
+| `VITE_MOCK` | Exactly `true`: no login gate, no backend call (local dev). |
+| `VITE_AUTH_REQUIRED` | Exactly `true` (deployed build): login gate on. |
+| `VITE_FIREBASE_API_KEY`, `VITE_FIREBASE_AUTH_DOMAIN`, `VITE_FIREBASE_PROJECT_ID`, `VITE_FIREBASE_APP_ID` | Identity Platform web config. |
 
-## Docs
-
-- [Architecture](../docs/architecture.md#review-ui)
-- [How to read the screen](../docs/concepts/review-ui.md)
-- [Settings, mock mode, errors](../docs/reference/review-ui.md)
-- [Internals](../docs/implementation/frontend.md)
-- [Testing](../docs/testing/frontend.md)
-- [Contract](../docs/contracts/README.md) (imported via the `@contracts` alias, never copied)
+Hosting (`firebase.json`, `.firebaserc`) is unchanged; `src/hosting/hosting.test.ts` guards it.

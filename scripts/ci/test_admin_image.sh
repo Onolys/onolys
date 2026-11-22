@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Smoke test for admin/backend/Dockerfile (SP07 R9). Run from anywhere; builds from the repo root.
+# Smoke test for admin/backend/Dockerfile. Run from anywhere; builds from the repo root.
 #   bash scripts/ci/test_admin_image.sh [image-tag]     (SKIP_BUILD=1 to reuse an existing image)
-# Checks: (1) auth on + test allowlist -> anonymous /healthz and /v1/paudit/fixtures give 401;
+# Checks: (1) auth on + test allowlist -> anonymous /healthz and /v1/me give 401;
 # (2) empty allowlist exits non-zero; (3) image listing has no eval/datasets/transcript data.
 set -uo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
@@ -32,8 +32,8 @@ for _ in $(seq 1 40); do
   sleep 1
 done
 [[ "$code" == 401 ]] && ok "anonymous /healthz -> 401" || { bad "anonymous /healthz -> $code (want 401)"; docker logs "$NAME" 2>&1 | tail -20; }
-code="$(curl -s -o /dev/null -w '%{http_code}' "localhost:$PORT/v1/paudit/fixtures" || true)"
-[[ "$code" == 401 ]] && ok "anonymous /v1/paudit/fixtures -> 401" || bad "anonymous /v1/paudit/fixtures -> $code (want 401)"
+code="$(curl -s -o /dev/null -w '%{http_code}' "localhost:$PORT/v1/me" || true)"
+[[ "$code" == 401 ]] && ok "anonymous /v1/me -> 401" || bad "anonymous /v1/me -> $code (want 401)"
 cleanup
 
 # 2. empty allowlist: refuses to start.
@@ -41,10 +41,9 @@ timeout 60 docker run --rm -e ADMIN_ALLOWED_EMAILS= -e ADMIN_AUTH_PROJECT=demo-p
 rc=$?
 [[ $rc -ne 0 && $rc -ne 124 ]] && ok "empty allowlist exits non-zero (rc=$rc)" || bad "empty allowlist rc=$rc (want non-zero, not timeout)"
 
-# 3. listing: no eval code/datasets/transcript data; synthetic pack fixtures are expected.
+# 3. listing: no eval code/datasets/transcript data.
 found="$(docker run --rm --entrypoint sh "$IMG" -c \
-  'find / -xdev \( -name datasets -o -name eval -o -name evaluation -o -name "onolys_evaluation*" -o -name "*.jsonl" -o -name "*.vtt" -o -name "*.srt" \) -not -path "/proc/*" -not -path "/protocols/*" -not -path "/app/protocols/*" 2>/dev/null')"
+  'find / -xdev \( -name datasets -o -name eval -o -name evaluation -o -name "onolys_evaluation*" -o -name "*.jsonl" -o -name "*.vtt" -o -name "*.srt" \) -not -path "/proc/*" 2>/dev/null')"
 [[ -z "$found" ]] && ok "no eval/datasets/transcript paths in image" || { bad "unexpected paths in image:"; echo "$found"; }
-docker run --rm --entrypoint test "$IMG" -f /app/protocols/miti-4.2.1/pack.yaml && ok "protocols pack present" || bad "protocols pack missing"
 
 exit $fail

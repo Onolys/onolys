@@ -1,10 +1,8 @@
 /// <reference types="vite/client" />
 
 interface ImportMetaEnv {
-  readonly VITE_AUDIT_URL?: string;
+  readonly VITE_ADMIN_API_URL?: string;
   readonly VITE_MOCK?: string;
-  readonly VITE_EVAL_API_BASE?: string;
-  readonly VITE_EVAL_ENABLED?: string;
   readonly VITE_AUTH_REQUIRED?: string;
   readonly VITE_FIREBASE_API_KEY?: string;
   readonly VITE_FIREBASE_AUTH_DOMAIN?: string;

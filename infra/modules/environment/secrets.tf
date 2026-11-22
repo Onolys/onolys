@@ -59,14 +59,6 @@ resource "google_service_account" "admin_backend" {
   display_name = "Onolys admin-backend (${var.env})"
 }
 
-resource "google_secret_manager_secret_iam_member" "admin_llm" {
-  for_each  = var.admin_enabled ? var.llm_secrets : {}
-  project   = var.project
-  secret_id = google_secret_manager_secret.provider[each.key].secret_id
-  role      = "roles/secretmanager.secretAccessor"
-  member    = "serviceAccount:${google_service_account.admin_backend[0].email}"
-}
-
 resource "google_secret_manager_secret_iam_member" "admin_emails" {
   count     = var.admin_enabled ? 1 : 0
   project   = var.project

@@ -10,12 +10,7 @@
     "resolveJsonModule": true,
     "isolatedModules": true,
     "skipLibCheck": true,
-    "types": ["vite/client", "node"],
-    "paths": {
-      "@contracts/*": ["../docs/contracts/*"],
-      "@eval-api/*": ["../eval/api/*"],
-      "@paudit-schema/*": ["../engines/paudit/schemas/*"]
-    }
+    "types": ["vite/client", "node"]
   },
   "include": ["src", "vite.config.ts"]
 }
