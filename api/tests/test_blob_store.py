@@ -51,8 +51,8 @@ def test_fake_signed_upload_shape(store):
 
 
 @pytest.fixture
-async def fake_app_client(store):
-    app = create_app(repo=FakeRepo(store), blobs=store)
+async def fake_app_client(store, settings):
+    app = create_app(settings, repo=FakeRepo(store), blobs=store)
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app, raise_app_exceptions=False), base_url="http://t"
     ) as c:
@@ -89,8 +89,8 @@ async def test_fake_signed_url_expired(fake_app_client, store):
     assert r.status_code == 403
 
 
-async def test_fake_route_absent_for_non_fake_store():
-    app = create_app(repo=FakeRepo(MagicMock()), blobs=MagicMock())
+async def test_fake_route_absent_for_non_fake_store(settings):
+    app = create_app(settings, repo=FakeRepo(MagicMock()), blobs=MagicMock())
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://t") as c:
         assert (await c.get("/v1/_fake_blob/x?exp=1&sig=a&m=GET")).status_code == 404
 
