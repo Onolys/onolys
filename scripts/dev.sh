@@ -130,8 +130,8 @@ if [ "$STUB" -eq 1 ]; then export IAUDIT_PIPELINE=stub; fi
 launch backend engines/eaudit uv run uvicorn eaudit.app:app --port "$BACKEND_PORT"
 launch eval eval env "IAUDIT_BACKEND_URL=http://127.0.0.1:$BACKEND_PORT" \
   uv run uvicorn iaudit_eval.server.app:app --no-access-log --host 127.0.0.1 --port "$EVAL_PORT"
-launch web frontend env "VITE_AUDIT_URL=http://localhost:$BACKEND_PORT/v1/audit" \
-  VITE_MOCK=false "IAUDIT_EVAL_PORT=$EVAL_PORT" npm run dev
+launch web frontend env "VITE_ADMIN_API_URL=http://localhost:$BACKEND_PORT" \
+  VITE_MOCK=false npm run dev
 
 any_dead() {
   local pid

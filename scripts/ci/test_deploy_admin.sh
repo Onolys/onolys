@@ -13,7 +13,8 @@ hasnt() { grep -Eq -- "$2" "$WF" 2>/dev/null && bad "$1" || ok "$1"; }
 [[ -f "$WF" ]] || { bad "deploy-admin.yml exists"; exit 1; }
 ok "deploy-admin.yml exists"
 has   "push to main trigger"                 '^  push:'
-for p in 'admin/\*\*' 'frontend/\*\*' 'engines/\*\*' 'protocols/\*\*'; do has "push paths include $p" "^      - \"?$p"; done
+for p in 'admin/\*\*' 'frontend/\*\*'; do has "push paths include $p" "^      - \"?$p"; done
+for p in 'engines/' 'protocols/' 'docs/contracts/'; do hasnt "push paths exclude $p" "^      - \"?$p"; done
 has   "manual dispatch trigger"              '^  workflow_dispatch:'
 hasnt "no prod target (single staging admin env, owner 2026-11-21)" 'prod\)|ADMIN_PROD_|DEPLOYER_PROD_SA|'"'"'production'"'"'|environment: production'
 hasnt "no env dispatch input"                'options: \[staging, prod\]'
@@ -24,7 +25,10 @@ has   "image passed by digest"               'steps\.push\.outputs\.digest'
 has   "git_sha passed to the revision"       'git_sha:'
 has   "hosting target admin-staging"         'hosting_target=admin-staging'
 has   "VITE_AUTH_REQUIRED true"              'VITE_AUTH_REQUIRED: "true"'
-has   "VITE_AUDIT_URL set"                   'VITE_AUDIT_URL:'
+has   "VITE_ADMIN_API_URL set"               'VITE_ADMIN_API_URL: .*backend\.outputs\.url \}\}"?$'
+hasnt "no VITE_AUDIT_URL"                    'VITE_AUDIT_URL'
+hasnt "smoke does not hit legacy /v1/audit" '/v1/audit'
+has   "smoke hits /v1/me"                    '/v1/me'
 has   "origin substituted into firebase.json" 'set_admin_origin\.sh'
 has   "anonymous smoke expects 401"          '401'
 has   "per-env concurrency, no cancel"       'cancel-in-progress: false'

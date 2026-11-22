@@ -35,12 +35,8 @@ WEB_EXTRA_RE='^(api/openapi\.json|engines/evaluation/schemas/report\.schema\.jso
 # paudit packs are built from protocols/ (and the admin image ships it, see ADMIN_BACKEND_EXTRA_RE).
 PAUDIT_EXTRA_RE='^protocols/'
 
-# The frontend's pauditSchema.test.ts imports the paudit result schema through the @paudit-schema alias.
-FRONTEND_EXTRA_RE='^engines/paudit/schemas/'
-
-# The admin gateway mounts eaudit, uses admin/auth and paudit, and its image ships protocols/ and
-# docs/contracts/, so it re-runs when any of them (or .dockerignore) changes.
-ADMIN_BACKEND_EXTRA_RE='^(admin/auth/|engines/eaudit/|engines/paudit/|protocols/|docs/contracts/|\.dockerignore)'
+# The admin backend serves only /v1/me via admin/auth, so it re-runs when admin/auth or .dockerignore changes.
+ADMIN_BACKEND_EXTRA_RE='^(admin/auth/|\.dockerignore)'
 
 # Direct workspace dependencies (name: deps), mirrored from each pyproject [project].dependencies.
 # A change in a package also runs every package that (transitively) depends on it.
@@ -50,7 +46,7 @@ DEPS=(
   "paudit:core"
   "evaluation:core eaudit paudit"
   "api:core evaluation paudit"
-  "admin-backend:admin-auth eaudit core paudit"
+  "admin-backend:admin-auth"
 )
 
 mapfile -t FILES
@@ -64,7 +60,6 @@ for entry in "${PACKAGES[@]}"; do
           ( "$name" == api && "$f" =~ $API_EXTRA_RE ) ||
           ( "$name" == paudit && "$f" =~ $PAUDIT_EXTRA_RE ) ||
           ( "$name" == admin-backend && "$f" =~ $ADMIN_BACKEND_EXTRA_RE ) ||
-          ( "$name" == frontend && "$f" =~ $FRONTEND_EXTRA_RE ) ||
           ( "$name" == web && "$f" =~ $WEB_EXTRA_RE ) ]]; then
       HIT[$name]=1
       break

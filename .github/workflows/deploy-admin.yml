@@ -7,16 +7,12 @@ name: deploy-admin
 #   shared with SP06: WIF_PROVIDER, DEPLOYER_STAGING_SA, GCP_PROJECT (optional), GCP_REGION (optional)
 #   Terraform output web_env_admin_staging:
 #     ADMIN_STAGING_VITE_FIREBASE_{API_KEY,AUTH_DOMAIN,APP_ID}
-# VITE_EVAL_ENABLED is deliberately never set here: frontend/.env.production sets it to false (SP07 R1).
 on:
   push:
     branches: [main]
     paths:
       - "admin/**"
       - "frontend/**"
-      - "engines/**"
-      - "protocols/**"
-      - "docs/contracts/**"
       - "pyproject.toml"
       - "uv.lock"
       - ".dockerignore"
@@ -130,12 +126,12 @@ jobs:
           node-version: 22
           cache: npm
           cache-dependency-path: frontend/package-lock.json
-      - name: Build frontend (admin, auth required, eval off via .env.production)
+      - name: Build frontend (admin sign-in shell, auth required)
         working-directory: frontend
         env:
           BACKEND_URL: ${{ needs.deploy-backend.outputs.url }}
           VITE_AUTH_REQUIRED: "true"
-          VITE_AUDIT_URL: ${{ needs.deploy-backend.outputs.url }}/v1/audit
+          VITE_ADMIN_API_URL: ${{ needs.deploy-backend.outputs.url }}
           VITE_FIREBASE_PROJECT_ID: ${{ env.PROJECT }}
           VITE_FIREBASE_API_KEY: ${{ vars.ADMIN_STAGING_VITE_FIREBASE_API_KEY }}
           VITE_FIREBASE_AUTH_DOMAIN: ${{ vars.ADMIN_STAGING_VITE_FIREBASE_AUTH_DOMAIN }}
@@ -172,7 +168,7 @@ jobs:
         run: |
           origin="${BACKEND_URL%/}"
           # Not /healthz: Cloud Run reserves paths ending in z (like /healthz) and answers 404 before the app.
-          for path in /v1/audit /v1/paudit/fixtures; do
+          for path in /v1/me; do
             code=000
             for i in $(seq 1 10); do
               code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 "${origin}${path}" || true)"

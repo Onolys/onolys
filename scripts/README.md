@@ -19,8 +19,7 @@ Starts, each in its own process group with prefixed output:
 | `[web]` | `npm run dev` (in `frontend/`) | 5173 |
 
 Env set by the script: `IAUDIT_BACKEND_URL=http://127.0.0.1:8000` (eval),
-`VITE_AUDIT_URL=http://localhost:8000/v1/audit`, `VITE_MOCK=false`,
-`IAUDIT_EVAL_PORT=8100` (web).
+`VITE_ADMIN_API_URL=http://localhost:8000` (origin only), `VITE_MOCK=false` (web).
 
 Flags:
 
