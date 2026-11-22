@@ -7,10 +7,13 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { Link, useBlocker, useLocation, useNavigate, useParams } from "react-router";
 import { unwrap } from "../../api/client";
-import { describeError } from "../../api/errors";
+import { ApiError, describeError } from "../../api/errors";
 import type { Schemas } from "../../api/types";
 import { useAuth } from "../../auth/AuthProvider";
 import { useApiClient } from "../../auth/useApiClient";
+import { ratingEnabled } from "../../config";
+import { cardToForm } from "../rating/card";
+import { goalCard } from "../rating/SetupFields";
 import { Modal } from "../settings/Modal";
 import { ErrorCard } from "../session/ErrorCard";
 import { prepareUpload } from "../upload/startUpload";
@@ -76,6 +79,7 @@ function InterviewView({ id }: { id: string }) {
   const leaving = useRef(false);
   const blob = useRef<Blob | null>(null);
   const sessionId = useRef<string | null>(null);
+  const goalSaved = useRef(false);
 
   const active = live !== null && live.phase !== "idle";
   const blocker = useBlocker(
@@ -137,6 +141,24 @@ function InterviewView({ id }: { id: string }) {
       engineRef.current?.close();
       unwrap(await client.POST("/interviews/{id}/end", { params: { path: { id } }, body: { discard: false } }));
       sessionId.current ??= unwrap(await client.POST("/sessions", { body: { interview_id: id } })).session.id;
+      if (!ratingEnabled() && !goalSaved.current) {
+        // D3c: the goal is the scenario's seeded draft; set it so the first run can start.
+        const data = unwrap(await client.GET("/sessions/{id}/rating", { params: { path: { id: sessionId.current } } }));
+        const goal = cardToForm(data.draft?.card ?? data.final?.card).changeGoal;
+        if (goal.trim()) {
+          try {
+            unwrap(
+              await client.PUT("/sessions/{id}/rating", {
+                params: { path: { id: sessionId.current } },
+                body: { final: true, no_rating: true, card: goalCard(goal) },
+              }),
+            );
+          } catch (e) {
+            if (!(e instanceof ApiError && e.code === "rating_final")) throw e; // already final: done
+          }
+        } // else: no draft goal, the session page shows the fallback form
+        goalSaved.current = true;
+      }
       await prepareUpload(client, sessionId.current, recordingFile(blob.current));
       return sessionId.current;
     },

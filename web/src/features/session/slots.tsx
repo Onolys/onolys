@@ -5,7 +5,9 @@
 import { useState } from "react";
 import type { SessionStatusDoc } from "../../api/statusListener";
 import { SpeakerGate } from "../speakers/SpeakerGate";
+import { ratingEnabled } from "../../config";
 import { RatingCard } from "../rating/RatingCard";
+import { SetupFallback } from "../rating/SetupFallback";
 export { UploadSlot } from "../upload/UploadSlot";
 
 export interface SlotProps {
@@ -14,7 +16,16 @@ export interface SlotProps {
 }
 
 /** `readOnly`: the rating was submitted, so it is final (FX45). */
-export function RatingCardSlot({ sessionId, readOnly = false }: SlotProps & { readOnly?: boolean }) {
+export function RatingCardSlot({ sessionId, doc, readOnly = false }: SlotProps & { readOnly?: boolean }) {
+  if (!ratingEnabled()) {
+    // Flag off (PRD R2/R3): no card; only an unsubmitted, live session gets the goal-only fallback.
+    if (doc.rating_submitted || doc.state === "deleting") return null;
+    return (
+      <div data-slot="rating-fallback" data-session={sessionId}>
+        <SetupFallback sessionId={sessionId} />
+      </div>
+    );
+  }
   return (
     <div data-slot="rating-card" data-session={sessionId}>
       <RatingCard sessionId={sessionId} readOnly={readOnly} />

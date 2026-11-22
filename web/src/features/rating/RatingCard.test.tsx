@@ -15,6 +15,7 @@ interface Put {
 let puts: Put[] = [];
 let pending: Promise<void>[] = [];
 beforeEach(() => {
+  vi.stubEnv("VITE_RATING_ENABLED", "true"); // the card only mounts with the flag on
   puts = [];
   pending = [];
   // Spy above msw: the interceptor rebuilds requests, so `keepalive` is only visible here.
@@ -27,7 +28,10 @@ beforeEach(() => {
     return real(input, init);
   });
 });
-afterEach(() => vi.restoreAllMocks());
+afterEach(() => {
+  vi.restoreAllMocks();
+  vi.unstubAllEnvs();
+});
 
 const newSession = () => mockBackend.createSession(UID, {}).session.id;
 const open = async (sid: string) => {

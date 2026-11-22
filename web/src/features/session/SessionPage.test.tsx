@@ -107,11 +107,11 @@ describe("session page: status listener", () => {
     act(() => mockBackend.settle(sid));
     const link = await screen.findByRole("link", { name: /view report/i });
     expect(link).toHaveAttribute("href", `/sessions/${sid}/reports/1`);
-    // FX45: the rating is final now: read-only, no submit buttons, no Run again
-    expect(screen.getByRole("textbox", { name: "Change goal" })).toBeDisabled();
+    // flag off: no card, no fallback (submitted); no submit buttons, no Run again
+    expect(screen.queryByRole("textbox", { name: "Change goal" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /submit rating|no rating/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /run again/i })).not.toBeInTheDocument();
-    expect(screen.getByText(/Your rating is final/)).toBeInTheDocument();
+    expect(screen.queryByText(/Your rating is final/)).not.toBeInTheDocument();
   });
 
   it("does not poll GET /sessions/{id} while a session runs", async () => {
@@ -205,11 +205,10 @@ describe("session page: status listener", () => {
 });
 
 describe("session page: slots", () => {
-  it("renders the rating card slot always, the upload slot while uploading and the speaker gate when needed", async () => {
+  it("renders the upload slot while uploading and the speaker gate when needed, no rating card", async () => {
     const sid = create();
     open(sid);
     await ready();
-    expect(document.querySelector('[data-slot="rating-card"]')).not.toBeNull();
     expect(document.querySelector('[data-slot="upload"]')).not.toBeNull();
     expect(document.querySelector('[data-slot="speaker-gate"]')).toBeNull();
     upload(sid);
@@ -218,6 +217,61 @@ describe("session page: slots", () => {
     expect(document.querySelector('[data-slot="upload"]')).toBeNull();
     act(() => void mockBackend.confirmSpeaker(UID, sid, "spk_0"));
     await waitFor(() => expect(document.querySelector('[data-slot="speaker-gate"]')).toBeNull());
+  });
+});
+
+describe("session page: rating slot (flag off) and fallback", () => {
+  afterEach(() => vi.unstubAllEnvs());
+
+  it("renders no card and no #rating-globals-* with the flag off", async () => {
+    const sid = create();
+    open(sid);
+    await ready();
+    expect(document.querySelector('[data-slot="rating-card"]')).toBeNull();
+    expect(document.querySelector('[id^="rating-globals-"]')).toBeNull();
+    expect(screen.queryByRole("button", { name: /submit rating|no rating/i })).not.toBeInTheDocument();
+  });
+
+  it("shows the Continue fallback for an unsubmitted session, prefilled from the draft, PUT only", async () => {
+    const sid = create();
+    mockBackend.putRating(UID, sid, { final: false, card: { change_goal: "Draft goal" } }); // draft, read via GET /rating
+    open(sid);
+    const field = await screen.findByLabelText("Change goal");
+    await waitFor(() => expect(field).toHaveValue("Draft goal"));
+    expect(document.querySelector('[data-slot="rating-fallback"]')).not.toBeNull();
+    await userEvent.click(screen.getByRole("button", { name: "Continue" }));
+    await waitFor(() => expect(mockBackend.getRating(UID, sid).final).toBeTruthy());
+    await waitFor(() => expect(screen.queryByLabelText("Change goal")).not.toBeInTheDocument());
+  });
+
+  it("shows the fallback with an empty field when there is no draft, and blocks a blank goal", async () => {
+    const sid = create();
+    open(sid);
+    const field = await screen.findByLabelText("Change goal");
+    expect(field).toHaveValue("");
+    await userEvent.click(screen.getByRole("button", { name: "Continue" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(/required/i);
+    expect(mockBackend.getRating(UID, sid).final).toBeFalsy();
+  });
+
+  it("does not show the fallback once submitted", async () => {
+    const sid = create();
+    toAwaiting(sid);
+    mockBackend.putRating(UID, sid, { final: true, no_rating: true, card: { change_goal: "g" } });
+    open(sid);
+    await ready();
+    expect(document.querySelector('[data-slot="rating-fallback"]')).toBeNull();
+    expect(screen.queryByLabelText("Change goal")).not.toBeInTheDocument();
+  });
+
+  it("shows the original card with the flag on, and no fallback", async () => {
+    vi.stubEnv("VITE_RATING_ENABLED", "true");
+    const sid = create();
+    open(sid);
+    await ready();
+    expect(document.querySelector('[data-slot="rating-card"]')).not.toBeNull();
+    expect(document.querySelector('[data-slot="rating-fallback"]')).toBeNull();
+    expect(document.querySelector('[id^="rating-globals-"]')).not.toBeNull();
   });
 });
 
