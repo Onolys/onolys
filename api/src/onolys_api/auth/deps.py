@@ -10,7 +10,7 @@ from fastapi import Depends, Request
 from fastapi.security import APIKeyHeader, HTTPAuthorizationCredentials, HTTPBearer
 from onolys_core.errors import ConfigError
 
-from onolys_api.auth.idtoken import IdTokenVerifier, InvalidToken, TokenVerifier
+from onolys_api.auth.idtoken import EmailNotVerified, IdTokenVerifier, InvalidToken, TokenVerifier
 from onolys_api.auth.keys import parse_key, secret_matches
 from onolys_api.config import LOCAL_ENVS, Settings
 from onolys_api.errors import ApiError
@@ -73,6 +73,10 @@ class Authenticator:
         assert self._verifier is not None
         try:
             return AuthUser(self._verifier.verify(token), "token")
+        except EmailNotVerified:
+            raise ApiError.of(
+                403, "email_unverified", "Verify your email address to continue."
+            ) from None
         except InvalidToken:
             raise _unauthenticated() from None
 

@@ -141,7 +141,8 @@ def test_third_concurrent_active_run_is_429_and_a_finished_run_frees_a_slot(repo
     caps.reserve_run(repo, s, u, NOON)
     with pytest.raises(ApiError) as e:
         caps.reserve_run(repo, s, u, NOON)
-    assert e.value.status == 429 and code_of(e.value) == "daily_cap_reached"
+    assert e.value.status == 429 and code_of(e.value) == "concurrent_runs"
+    assert "period" not in e.value.details[0]  # not a daily-period refusal
     assert repo.get_usage(u, DAY).runs == 2  # the refused attempt is not counted
     caps.release_run(repo, u, d1, refund=False)
     caps.reserve_run(repo, s, u, NOON)
@@ -159,7 +160,7 @@ def test_concurrent_attempts_cannot_exceed_the_active_run_limit(repo):
 
     with ThreadPoolExecutor(6) as ex:
         outs = list(ex.map(attempt, range(6)))
-    assert outs.count("ok") == 2 and outs.count("daily_cap_reached") == 4
+    assert outs.count("ok") == 2 and outs.count("concurrent_runs") == 4
 
 
 def test_per_user_active_limit_override(repo):

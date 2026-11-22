@@ -77,6 +77,8 @@
               "rating_invalid",
               "daily_cap_reached",
               "interview_cap_reached",
+              "concurrent_runs",
+              "email_unverified",
               "conflict",
               "interview_too_long"
             ]

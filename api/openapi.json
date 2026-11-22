@@ -378,6 +378,8 @@
               "rating_invalid",
               "daily_cap_reached",
               "interview_cap_reached",
+              "concurrent_runs",
+              "email_unverified",
               "conflict",
               "interview_too_long"
             ],
@@ -1692,7 +1694,7 @@
                 }
               }
             },
-            "description": "`forbidden`: API keys cannot manage API keys"
+            "description": "`forbidden` (API keys cannot manage API keys) or `email_unverified` (valid sign-in, email address not verified yet)"
           },
           "429": {
             "content": {
@@ -1702,7 +1704,7 @@
                 }
               }
             },
-            "description": "`daily_cap_reached` (daily run cap or concurrent-run limit) or `rate_limited`"
+            "description": "`daily_cap_reached` (daily run cap), `concurrent_runs` (a run is already in progress) or `rate_limited`"
           },
           "500": {
             "content": {
@@ -1759,7 +1761,7 @@
                 }
               }
             },
-            "description": "`forbidden`: API keys cannot manage API keys"
+            "description": "`forbidden` (API keys cannot manage API keys) or `email_unverified` (valid sign-in, email address not verified yet)"
           },
           "429": {
             "content": {
@@ -1769,7 +1771,7 @@
                 }
               }
             },
-            "description": "`daily_cap_reached` (daily run cap or concurrent-run limit) or `rate_limited`"
+            "description": "`daily_cap_reached` (daily run cap), `concurrent_runs` (a run is already in progress) or `rate_limited`"
           },
           "500": {
             "content": {
@@ -1826,7 +1828,7 @@
                 }
               }
             },
-            "description": "`forbidden`: API keys cannot manage API keys"
+            "description": "`forbidden` (API keys cannot manage API keys) or `email_unverified` (valid sign-in, email address not verified yet)"
           },
           "429": {
             "content": {
@@ -1836,7 +1838,7 @@
                 }
               }
             },
-            "description": "`daily_cap_reached` (daily run cap or concurrent-run limit) or `rate_limited`"
+            "description": "`daily_cap_reached` (daily run cap), `concurrent_runs` (a run is already in progress) or `rate_limited`"
           },
           "500": {
             "content": {
@@ -1947,7 +1949,7 @@
                 }
               }
             },
-            "description": "`daily_cap_reached` (daily run cap or concurrent-run limit) or `rate_limited`"
+            "description": "`daily_cap_reached` (daily run cap), `concurrent_runs` (a run is already in progress) or `rate_limited`"
           },
           "500": {
             "content": {
@@ -2038,7 +2040,7 @@
                 }
               }
             },
-            "description": "`daily_cap_reached` (daily run cap or concurrent-run limit) or `rate_limited`"
+            "description": "`daily_cap_reached` (daily run cap), `concurrent_runs` (a run is already in progress) or `rate_limited`"
           },
           "500": {
             "content": {
@@ -2147,7 +2149,7 @@
                 }
               }
             },
-            "description": "`daily_cap_reached` (daily run cap or concurrent-run limit) or `rate_limited`"
+            "description": "`daily_cap_reached` (daily run cap), `concurrent_runs` (a run is already in progress) or `rate_limited`"
           },
           "500": {
             "content": {
@@ -2238,7 +2240,7 @@
                 }
               }
             },
-            "description": "`daily_cap_reached` (daily run cap or concurrent-run limit) or `rate_limited`"
+            "description": "`daily_cap_reached` (daily run cap), `concurrent_runs` (a run is already in progress) or `rate_limited`"
           },
           "500": {
             "content": {
@@ -2297,7 +2299,7 @@
                 }
               }
             },
-            "description": "`daily_cap_reached` (daily run cap or concurrent-run limit) or `rate_limited`"
+            "description": "`daily_cap_reached` (daily run cap), `concurrent_runs` (a run is already in progress) or `rate_limited`"
           },
           "500": {
             "content": {
@@ -2398,7 +2400,7 @@
                 }
               }
             },
-            "description": "`daily_cap_reached` (daily run cap or concurrent-run limit) or `rate_limited`"
+            "description": "`daily_cap_reached` (daily run cap), `concurrent_runs` (a run is already in progress) or `rate_limited`"
           },
           "500": {
             "content": {
@@ -2508,7 +2510,7 @@
                 }
               }
             },
-            "description": "`daily_cap_reached` (daily run cap or concurrent-run limit) or `rate_limited`"
+            "description": "`daily_cap_reached` (daily run cap), `concurrent_runs` (a run is already in progress) or `rate_limited`"
           },
           "500": {
             "content": {
@@ -2593,7 +2595,7 @@
                 }
               }
             },
-            "description": "`daily_cap_reached` (daily run cap or concurrent-run limit) or `rate_limited`"
+            "description": "`daily_cap_reached` (daily run cap), `concurrent_runs` (a run is already in progress) or `rate_limited`"
           },
           "500": {
             "content": {
@@ -2693,7 +2695,7 @@
                 }
               }
             },
-            "description": "`daily_cap_reached` (daily run cap or concurrent-run limit) or `rate_limited`"
+            "description": "`daily_cap_reached` (daily run cap), `concurrent_runs` (a run is already in progress) or `rate_limited`"
           },
           "500": {
             "content": {
@@ -2784,7 +2786,7 @@
                 }
               }
             },
-            "description": "`daily_cap_reached` (daily run cap or concurrent-run limit) or `rate_limited`"
+            "description": "`daily_cap_reached` (daily run cap), `concurrent_runs` (a run is already in progress) or `rate_limited`"
           },
           "500": {
             "content": {
@@ -2894,7 +2896,7 @@
                 }
               }
             },
-            "description": "`daily_cap_reached` (daily run cap or concurrent-run limit) or `rate_limited`"
+            "description": "`daily_cap_reached` (daily run cap), `concurrent_runs` (a run is already in progress) or `rate_limited`"
           },
           "500": {
             "content": {
@@ -3000,7 +3002,7 @@
                 }
               }
             },
-            "description": "`daily_cap_reached` (daily run cap or concurrent-run limit) or `rate_limited`"
+            "description": "`daily_cap_reached` (daily run cap), `concurrent_runs` (a run is already in progress) or `rate_limited`"
           },
           "500": {
             "content": {
@@ -3101,7 +3103,7 @@
                 }
               }
             },
-            "description": "`daily_cap_reached` (daily run cap or concurrent-run limit) or `rate_limited`"
+            "description": "`daily_cap_reached` (daily run cap), `concurrent_runs` (a run is already in progress) or `rate_limited`"
           },
           "500": {
             "content": {
@@ -3201,7 +3203,7 @@
                 }
               }
             },
-            "description": "`daily_cap_reached` (daily run cap or concurrent-run limit) or `rate_limited`"
+            "description": "`daily_cap_reached` (daily run cap), `concurrent_runs` (a run is already in progress) or `rate_limited`"
           },
           "500": {
             "content": {
@@ -3292,7 +3294,7 @@
                 }
               }
             },
-            "description": "`daily_cap_reached` (daily run cap or concurrent-run limit) or `rate_limited`"
+            "description": "`daily_cap_reached` (daily run cap), `concurrent_runs` (a run is already in progress) or `rate_limited`"
           },
           "500": {
             "content": {
@@ -3393,7 +3395,7 @@
                 }
               }
             },
-            "description": "`daily_cap_reached` (daily run cap or concurrent-run limit) or `rate_limited`"
+            "description": "`daily_cap_reached` (daily run cap), `concurrent_runs` (a run is already in progress) or `rate_limited`"
           },
           "500": {
             "content": {
@@ -3484,7 +3486,7 @@
                 }
               }
             },
-            "description": "`daily_cap_reached` (daily run cap or concurrent-run limit) or `rate_limited`"
+            "description": "`daily_cap_reached` (daily run cap), `concurrent_runs` (a run is already in progress) or `rate_limited`"
           },
           "500": {
             "content": {
@@ -3511,7 +3513,7 @@
         ]
       },
       "post": {
-        "description": "Needs the transcript and the confirmed speaker; uses the latest final rating revision or runs as no-rating. `preset` changes LLM routes only (the transcript is reused). Counts against the daily cap: 429 `daily_cap_reached`. 409 `invalid_state` while a run is in progress or before the inputs exist.",
+        "description": "Needs the transcript and the confirmed speaker; uses the latest final rating revision or runs as no-rating. `preset` changes LLM routes only (the transcript is reused). Counts against the daily cap: 429 `daily_cap_reached`; 429 `concurrent_runs` while another run is in progress. 409 `invalid_state` while a run is in progress or before the inputs exist.",
         "operationId": "startRun",
         "parameters": [
           {
@@ -3601,7 +3603,7 @@
                 }
               }
             },
-            "description": "`daily_cap_reached` (daily run cap or concurrent-run limit) or `rate_limited`"
+            "description": "`daily_cap_reached` (daily run cap), `concurrent_runs` (a run is already in progress) or `rate_limited`"
           },
           "500": {
             "content": {
@@ -3713,7 +3715,7 @@
                 }
               }
             },
-            "description": "`daily_cap_reached` (daily run cap or concurrent-run limit) or `rate_limited`"
+            "description": "`daily_cap_reached` (daily run cap), `concurrent_runs` (a run is already in progress) or `rate_limited`"
           },
           "500": {
             "content": {
@@ -3825,7 +3827,7 @@
                 }
               }
             },
-            "description": "`daily_cap_reached` (daily run cap or concurrent-run limit) or `rate_limited`"
+            "description": "`daily_cap_reached` (daily run cap), `concurrent_runs` (a run is already in progress) or `rate_limited`"
           },
           "500": {
             "content": {
@@ -3927,7 +3929,7 @@
                 }
               }
             },
-            "description": "`daily_cap_reached` (daily run cap or concurrent-run limit) or `rate_limited`"
+            "description": "`daily_cap_reached` (daily run cap), `concurrent_runs` (a run is already in progress) or `rate_limited`"
           },
           "500": {
             "content": {
@@ -3986,7 +3988,7 @@
                 }
               }
             },
-            "description": "`daily_cap_reached` (daily run cap or concurrent-run limit) or `rate_limited`"
+            "description": "`daily_cap_reached` (daily run cap), `concurrent_runs` (a run is already in progress) or `rate_limited`"
           },
           "500": {
             "content": {

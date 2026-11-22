@@ -2,8 +2,9 @@
 the eval concurrent-run limit (FX46: no monthly caps).
 
 `reserve(repo, settings, uid, kind)` atomically checks and counts one unit, or raises 429:
-eval day cap or concurrent limit -> `daily_cap_reached` (period=day), interview ->
-`interview_cap_reached` (period=day). Every reservation must be released exactly once with
+eval day cap -> `daily_cap_reached` (period=day), eval concurrent limit -> `concurrent_runs`,
+interview -> `interview_cap_reached` (period=day). Every reservation must be released exactly once
+with
 `release(repo, uid, reservation, refund)`: `refund=True` when it failed before any LLM call (gives
 the day count back), `refund=False` when it ended after spending. A refund hits the
 docs the reservation was made on, even if the UTC day has rolled over since.
@@ -106,8 +107,9 @@ def start_interview(
 def _refuse(kind: Kind, outcome: str) -> NoReturn:
     if kind == "interview":
         raise ApiError.of(429, "interview_cap_reached", INTERVIEW_DAILY_MESSAGE, period="day")
-    message = CONCURRENT_MESSAGE if outcome == "concurrent" else DAILY_MESSAGE
-    raise ApiError.of(429, "daily_cap_reached", message, period="day")
+    if outcome == "concurrent":
+        raise ApiError.of(429, "concurrent_runs", CONCURRENT_MESSAGE)
+    raise ApiError.of(429, "daily_cap_reached", DAILY_MESSAGE, period="day")
 
 
 def release(repo: Repo, uid: str, reservation: Reservation, refund: bool) -> None:

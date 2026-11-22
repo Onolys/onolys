@@ -101,7 +101,6 @@ async def test_valid_token_resolves_uid_and_creates_user(idp_client, repo):
     "kwargs",
     [
         {"exp_in": -3600},  # expired
-        {"verified": False},  # email not verified
         {"aud": "other-project"},
         {"iss": "https://securetoken.google.com/other"},
         {"priv": OTHER_PRIV},  # bad signature
@@ -110,6 +109,13 @@ async def test_valid_token_resolves_uid_and_creates_user(idp_client, repo):
 )
 async def test_bad_tokens_are_401(idp_client, kwargs):
     assert_401(await idp_client.get("/v1/api-key", headers=bearer(mint(**kwargs))))
+
+
+async def test_unverified_email_is_403_email_unverified_not_401(idp_client):
+    """A14: a valid token whose email is unverified is told so (403), distinct from bad creds."""
+    r = await idp_client.get("/v1/api-key", headers=bearer(mint(verified=False)))
+    assert r.status_code == 403
+    assert r.json()["details"][0]["code"] == "email_unverified"
 
 
 @pytest.mark.parametrize("uid", ["a" * 128, "a-b_C9"])

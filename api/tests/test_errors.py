@@ -34,6 +34,8 @@ def test_schema_enum_matches_codes_and_is_superset_of_eaudit(schema):
         "rating_invalid",
         "daily_cap_reached",
         "interview_cap_reached",
+        "concurrent_runs",
+        "email_unverified",
         "conflict",
         "interview_too_long",
     ):

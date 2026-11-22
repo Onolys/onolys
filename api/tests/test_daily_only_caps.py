@@ -83,6 +83,6 @@ def test_second_concurrent_run_is_held_by_the_default_limit(repo):
     caps.reserve(repo, s, u, "eval", NOON)
     with pytest.raises(ApiError) as e:
         caps.reserve(repo, s, u, "eval", NOON)
-    assert e.value.details[0]["code"] == "daily_cap_reached"
+    assert e.value.details[0]["code"] == "concurrent_runs"
     assert e.value.message == caps.CONCURRENT_MESSAGE
     caps.reserve(repo, s, u, "interview", NOON)  # the AI flow is not an evaluation run

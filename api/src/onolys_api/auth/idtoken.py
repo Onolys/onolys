@@ -36,6 +36,10 @@ class InvalidToken(Exception):
     pass
 
 
+class EmailNotVerified(InvalidToken):
+    """A genuine, correctly signed token whose email is not verified yet."""
+
+
 def fetch_google_certs() -> dict[str, str]:
     import requests
 
@@ -153,9 +157,9 @@ class IdTokenVerifier:
             raise InvalidToken from None
         if claims.get("iss") != f"https://securetoken.google.com/{self._project}":
             raise InvalidToken
-        if claims.get("email_verified") is not True:
-            raise InvalidToken
         sub = claims.get("sub")
         if not isinstance(sub, str) or not sub or len(sub) > 128 or "/" in sub:
             raise InvalidToken
+        if claims.get("email_verified") is not True:
+            raise EmailNotVerified  # only after signature, iss, aud and sub all checked out
         return sub

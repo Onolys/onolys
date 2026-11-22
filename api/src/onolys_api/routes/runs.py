@@ -111,7 +111,8 @@ def _open_session(request: Request, user: AuthUser, id: str) -> SessionDoc:
     description=(
         "Needs the transcript and the confirmed speaker; uses the latest final rating revision "
         "or runs as no-rating. `preset` changes LLM routes only (the transcript is reused). "
-        "Counts against the daily cap: 429 `daily_cap_reached`. 409 `invalid_state` while a run "
+        "Counts against the daily cap: 429 `daily_cap_reached`; 429 `concurrent_runs` while "
+        "another run is in progress. 409 `invalid_state` while a run "
         "is in progress or before the inputs exist."
     ),
 )
@@ -146,7 +147,7 @@ def start_run(
     if outcome == "daily_cap":
         raise ApiError.of(429, "daily_cap_reached", caps.DAILY_MESSAGE, period="day")
     if outcome == "concurrent":
-        raise ApiError.of(429, "daily_cap_reached", caps.CONCURRENT_MESSAGE, period="day")
+        raise ApiError.of(429, "concurrent_runs", caps.CONCURRENT_MESSAGE)
     try:
         queue = getattr(app.state, "queue", None)
         if queue is None:
