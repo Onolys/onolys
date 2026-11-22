@@ -101,13 +101,20 @@ function InterviewView({ id }: { id: string }) {
     return () => window.removeEventListener("beforeunload", h);
   }, [active]);
 
+  const [startingUi, setStartingUi] = useState(false);
+  const starting = useRef(false); // a second "Start talking" must not make a second engine/mic/socket
   const begin = async () => {
+    if (starting.current) return;
+    starting.current = true;
+    setStartingUi(true);
     setMicError(false);
     const engine = createAudioEngine({ onCaptureFrame: (f) => ctlRef.current?.sendFrame(f) });
     try {
       await engine.start(); // a user gesture: mic + audio context
     } catch {
       engine.close();
+      starting.current = false;
+      setStartingUi(false);
       setMicError(true);
       return;
     }
@@ -176,6 +183,19 @@ function InterviewView({ id }: { id: string }) {
     }
   }, [phase, timeUp, finish, discard.isPending, discard.isSuccess]);
 
+  // Owner rule D6: leaving ends the interview. A live interview found on page load was left earlier: no rejoin.
+  const staleLive = interview.data?.state === "live" && !startingUi && !active;
+  const endedStale = useRef(false);
+  const [wasStale, setWasStale] = useState(false);
+  useEffect(() => {
+    if (!staleLive || endedStale.current) return;
+    endedStale.current = true;
+    setWasStale(true);
+    void client.POST("/interviews/{id}/end", { params: { path: { id } }, body: { discard: false } }).then(() => {
+      void queryClient.invalidateQueries({ queryKey: USAGE_KEY });
+    });
+  }, [staleLive, client, id, queryClient]);
+
   if (interview.isPending) return <><h1>Interview</h1><p className="form-note">Loading…</p></>;
   if (interview.isError) {
     const e = describeError(interview.error);
@@ -189,12 +209,13 @@ function InterviewView({ id }: { id: string }) {
     );
   }
   const iv = interview.data;
-  const joinable = iv.state === "created" || iv.state === "live";
+  const joinable = iv.state === "created";
   if (!joinable && !active) {
     return (
       <>
         <h1>{iv.scenario.title}</h1>
-        <p className="notice">This interview has ended.</p>
+        <p className="notice">{iv.state === "live" || wasStale ? "Interview ended" : "This interview has ended."}</p>
+        {iv.state === "live" || wasStale ? <p className="form-note">You left this interview, so it was ended. Start a new one to practise again.</p> : null}
         <p>
           <Link to="/">Back to your sessions</Link>
         </p>
@@ -223,7 +244,7 @@ function InterviewView({ id }: { id: string }) {
             </p>
           ) : null}
           <p>
-            <button type="button" className="btn btn-primary" onClick={() => void begin()}>
+            <button type="button" className="btn btn-primary" disabled={startingUi} onClick={() => void begin()}>
               Start talking
             </button>{" "}
             <Link to="/">Not now</Link>
@@ -239,6 +260,9 @@ function InterviewView({ id }: { id: string }) {
             {live?.phase === "reconnecting" ? <p className="notice">Reconnecting… keep talking, your recording continues.</p> : null}
             {live?.phase === "live" ? <p className="form-note">{live.aiSpeaking ? "The client is speaking" : "Listening"}</p> : null}
             {live?.timeUp ? <p>Time's up. Wrapping up…</p> : null}
+            {live?.phase === "ended" && !live.timeUp && !finish.isPending ? (
+              <p className="notice">The interview has ended. Use End interview to save your recording, or Discard.</p>
+            ) : null}
             {live?.warned && !live.timeUp ? (
               <p className="notice" data-testid="warn-toast">
                 {minutesLeft} minute{minutesLeft === 1 ? "" : "s"} left. The interview ends automatically at {clock(live.maxS)}.

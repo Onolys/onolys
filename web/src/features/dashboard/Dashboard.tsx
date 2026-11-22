@@ -7,10 +7,12 @@ import { useApiClient } from "../../auth/useApiClient";
 import { interviewCapText } from "../interview/capText";
 import { ErrorCard } from "../session/ErrorCard";
 import { UsageLeft } from "../usage/UsageLeft";
-import { blockingPeriod, evalCapCode, formatBlockingReset } from "../usage/usage";
+import { blockingPeriod, formatBlockingReset } from "../usage/usage";
 import { useUsage } from "../usage/useUsage";
-import { STATUS_CHIP } from "./chips";
+import type { components } from "../../api/schema";
+import { STATUS_CHIP, sessionsRefetchInterval } from "./chips";
 
+type SessionListItem = components["schemas"]["SessionListItem"];
 const PAGE = 20;
 const date = (iso: string) => new Date(iso).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
 
@@ -21,6 +23,8 @@ export function Dashboard() {
     staleTime: 0,
     gcTime: 0,
     retry: false,
+    refetchInterval: (q: { state: { data?: { pages: { items: SessionListItem[] }[] } } }) =>
+      sessionsRefetchInterval(q.state.data?.pages.flatMap((p) => p.items)),
     initialPageParam: undefined as string | undefined,
     queryFn: async ({ pageParam }) =>
       unwrap(await client.GET("/sessions", { params: { query: { limit: PAGE, cursor: pageParam } } })),
@@ -35,7 +39,7 @@ export function Dashboard() {
   let body;
   if (sessions.isPending) {
     body = <p className="form-note">Loading your sessions…</p>;
-  } else if (sessions.isError) {
+  } else if (sessions.isError && items.length === 0) {
     const e = describeError(sessions.error);
     body = (
       <ErrorCard code={e.code} reference={e.requestId}>
@@ -81,6 +85,13 @@ export function Dashboard() {
             );
           })}
         </ul>
+        {sessions.isError ? (
+          <ErrorCard code={describeError(sessions.error).code} reference={describeError(sessions.error).requestId}>
+            <button type="button" className="link-button" onClick={() => void sessions.refetch()}>
+              Try again
+            </button>
+          </ErrorCard>
+        ) : null}
         {sessions.hasNextPage ? (
           <p>
             <button type="button" className="btn btn-secondary" disabled={sessions.isFetchingNextPage} onClick={() => void sessions.fetchNextPage()}>
@@ -103,7 +114,7 @@ export function Dashboard() {
             {usage.data ? (
               <>
                 {" "}
-                <UsageLeft kind="interview" period="day" />, <UsageLeft kind="interview" period="month" />
+                <UsageLeft kind="interview" period="day" />
               </>
             ) : null}
           </p>
@@ -127,7 +138,7 @@ export function Dashboard() {
             {usage.data ? (
               <>
                 {" "}
-                <UsageLeft kind="eval" period="day" />, <UsageLeft kind="eval" period="month" />
+                <UsageLeft kind="eval" period="day" />
               </>
             ) : null}
           </p>
@@ -135,7 +146,7 @@ export function Dashboard() {
             New session
           </Link>
           {blocking ? (
-            <p className="notice">{messageForCode(evalCapCode(blocking), { resetsAt: formatBlockingReset(blocking) })}</p>
+            <p className="notice">{messageForCode("daily_cap_reached", { resetsAt: formatBlockingReset(blocking) })}</p>
           ) : null}
         </section>
       </div>

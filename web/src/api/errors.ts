@@ -20,8 +20,9 @@ const MESSAGES = {
   rating_invalid: "Some of your rating needs a change. Check the highlighted fields.",
   upstream_unavailable: "A service we depend on is busy right now. Please try again in a minute.",
   daily_cap_reached: "You've reached today's limit.",
-  monthly_cap_reached: "You've reached this month's limit.",
   interview_cap_reached: "You've reached your AI interview limit.",
+  concurrent_runs: "You already have a rating running. Wait for it to finish.",
+  email_unverified: "Verify your email address to continue. Open Verify email from the menu.",
   invalid_state: "That isn't possible at this stage of the session. Refresh and try again.",
   rate_limited: "You're going a little fast. Wait a moment and try again.",
   unauthenticated: "Your sign-in has expired. Please sign in again.",
@@ -29,6 +30,7 @@ const MESSAGES = {
   not_found: "We couldn't find that. It may have been deleted.",
   interview_too_long:
     "This interview recording is longer than allowed. Start a new practice interview.",
+  rating_final: "Your rating is final. It can't be changed or run again.",
   conflict: "That request clashes with an earlier one. Refresh and try again.",
   internal_error: GENERIC_MESSAGE,
 } as const satisfies Record<string, string>;
@@ -41,7 +43,7 @@ function isKnown(code: string | undefined): code is ErrorCode {
 }
 
 export interface MessageContext {
-  /** Reset time (a time of day, or a date for the month cap) for the eval cap codes, already formatted. */
+  /** Reset time (a time of day) for the eval cap code, already formatted. */
   resetsAt?: string;
 }
 
@@ -50,14 +52,11 @@ export function messageForCode(code: string | undefined, ctx: MessageContext = {
   if (code === "daily_cap_reached" && ctx.resetsAt) {
     return `You've reached today's limit. You can start the rating after ${ctx.resetsAt}.`;
   }
-  if (code === "monthly_cap_reached" && ctx.resetsAt) {
-    return `You've reached this month's limit. You can start the rating after ${ctx.resetsAt}.`;
-  }
   return MESSAGES[code];
 }
 
 /** Which recovery the error card offers (R4 Failure). */
-export type FailureAction = "upload_new" | "run_again";
+export type FailureAction = "upload_new" | "try_again";
 
 const UPLOAD_NEW = new Set<string>([
   "unsupported_audio",
@@ -70,8 +69,13 @@ const UPLOAD_NEW = new Set<string>([
   "transcription_failed",
 ]);
 
-export function failureAction(code: string | undefined): FailureAction {
-  return code !== undefined && UPLOAD_NEW.has(code) ? "upload_new" : "run_again";
+/**
+ * FX45: a rating is final once submitted. A system failure offers "Try again" (re-runs the same
+ * submission); a bad file, or no ready transcript (a retry is rejected with 409), needs a new upload.
+ */
+export function failureAction(code: string | undefined, transcriptReady: boolean): FailureAction {
+  if (!transcriptReady) return "upload_new";
+  return code !== undefined && UPLOAD_NEW.has(code) ? "upload_new" : "try_again";
 }
 
 type ErrorDetail = components["schemas"]["ErrorDetailModel"];
@@ -116,6 +120,20 @@ export function parseErrorBody(status: number, body: unknown): ApiError {
   let code: string | undefined = details[0]?.code;
   if (code === undefined) code = status === 429 ? "rate_limited" : "unknown";
   return new ApiError(status, code, details, requestId);
+}
+
+/**
+ * An id in the URL that names nothing: 404, or 422 `invalid_parameters` (the API's answer for a
+ * malformed, non-32-hex id). Pages with a session or report id show the same "not found" for both.
+ */
+export function isNotFoundError(err: unknown): boolean {
+  return err instanceof ApiError && (err.status === 404 || (err.status === 422 && err.code === "invalid_parameters"));
+}
+
+/** Like `describeError`, but a not-found-style error (see `isNotFoundError`) always reads as `not_found`. */
+export function describeLookupError(err: unknown, ctx: MessageContext = {}): ErrorDescription {
+  const d = describeError(err, ctx);
+  return isNotFoundError(err) ? { ...d, code: "not_found", message: messageForCode("not_found") } : d;
 }
 
 export interface ErrorDescription {

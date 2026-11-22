@@ -6,6 +6,8 @@ import {
   ERROR_CODES,
   GENERIC_MESSAGE,
   describeError,
+  describeLookupError,
+  isNotFoundError,
   failureAction,
   messageForCode,
   parseErrorBody,
@@ -44,15 +46,25 @@ describe("messageForCode", () => {
     expect(messageForCode("daily_cap_reached")).toContain("today's limit");
   });
 
-  it("mentions the reset date for monthly_cap_reached when known", () => {
-    expect(messageForCode("monthly_cap_reached", { resetsAt: "Dec 1" })).toBe(
-      "You've reached this month's limit. You can start the rating after Dec 1.",
+  it("has no monthly cap any more (unknown code -> generic)", () => {
+    expect(ERROR_CODES).not.toContain("monthly_cap_reached");
+    expect(messageForCode("monthly_cap_reached")).toBe(GENERIC_MESSAGE);
+  });
+
+  it("has the interview cap copy", () => {
+    expect(messageForCode("interview_cap_reached")).toBe("You've reached your AI interview limit.");
+  });
+
+  it("concurrent_runs: tells the user to wait for the running rating", () => {
+    expect(messageForCode("concurrent_runs")).toBe(
+      "You already have a rating running. Wait for it to finish.",
     );
   });
 
-  it("has the monthly and interview cap copy", () => {
-    expect(messageForCode("monthly_cap_reached")).toBe("You've reached this month's limit.");
-    expect(messageForCode("interview_cap_reached")).toBe("You've reached your AI interview limit.");
+  it("email_unverified: points the user at email verification", () => {
+    expect(messageForCode("email_unverified")).toBe(
+      "Verify your email address to continue. Open Verify email from the menu.",
+    );
   });
 
   it("falls back to the generic message for unknown codes", () => {
@@ -97,6 +109,52 @@ describe("parseErrorBody", () => {
   });
 });
 
+describe("parseErrorBody malformed entries (FX56 / M19)", () => {
+  it("drops detail entries without a string code and message, keeping the valid ones", () => {
+    const err = parseErrorBody(500, {
+      details: [
+        null,
+        "x",
+        { code: "no_speech" },
+        { message: "only message" },
+        { code: 1, message: "m" },
+        { code: "c", message: 2 },
+        { code: "audio_too_long", message: "ok" },
+      ],
+    });
+    expect(err.details).toEqual([{ code: "audio_too_long", message: "ok" }]);
+    expect(err.code).toBe("audio_too_long");
+  });
+
+  it("ignores non-array details and a non-string request_id", () => {
+    const err = parseErrorBody(500, { details: "nope", request_id: 123 });
+    expect(err.details).toEqual([]);
+    expect(err.requestId).toBeUndefined();
+    expect(err.code).toBe("unknown");
+    expect(parseErrorBody(500, { request_id: "r1" }).requestId).toBe("r1");
+  });
+
+  it("treats null and primitive bodies as contract-less", () => {
+    for (const b of [null, undefined, 5, "x"]) expect(parseErrorBody(500, b).code).toBe("unknown");
+  });
+});
+
+describe("known-code guards (FX56 / M20)", () => {
+  it("does not treat inherited object keys as known codes", () => {
+    for (const c of ["toString", "constructor", "__proto__", "hasOwnProperty"]) {
+      expect(messageForCode(c)).toBe(GENERIC_MESSAGE);
+    }
+  });
+
+  it("failureAction: no code or unknown code with a transcript is try_again (FX45); without one upload_new", () => {
+    expect(failureAction(undefined, true)).toBe("try_again");
+    expect(failureAction("something_new", true)).toBe("try_again");
+    expect(failureAction("toString", true)).toBe("try_again");
+    expect(failureAction(undefined, false)).toBe("upload_new");
+    expect(failureAction("no_speech", true)).toBe("upload_new");
+  });
+});
+
 describe("describeError", () => {
   it("describes an ApiError with its reference", () => {
     const d = describeError(parseErrorBody(409, body(409, "invalid_state")));
@@ -127,13 +185,20 @@ describe("failureAction", () => {
     "speakers_not_separated",
     "transcription_failed",
   ])("%s offers a new upload", (code) => {
-    expect(failureAction(code)).toBe("upload_new");
+    expect(failureAction(code, true)).toBe("upload_new");
   });
 
   it.each(["upstream_unavailable", "internal_error", "unknown", undefined])(
-    "%s offers Run again",
+    "%s offers Try again",
     (code) => {
-      expect(failureAction(code)).toBe("run_again");
+      expect(failureAction(code, true)).toBe("try_again");
+    },
+  );
+
+  it.each(["upstream_unavailable", "internal_error", "unknown", undefined])(
+    "%s with no transcript offers a new upload (BH2)",
+    (code) => {
+      expect(failureAction(code, false)).toBe("upload_new");
     },
   );
 });
@@ -149,12 +214,24 @@ describe("enum parity with the public schema", () => {
 
   it("every web code is in the schema enum, including the cap codes", () => {
     for (const code of ERROR_CODES) expect(item.code.enum).toContain(code);
-    for (const code of ["daily_cap_reached", "monthly_cap_reached", "interview_cap_reached"]) {
+    for (const code of ["daily_cap_reached", "interview_cap_reached", "concurrent_runs", "email_unverified"]) {
       expect(ERROR_CODES).toContain(code);
     }
   });
 
-  it("schema period is day|month", () => {
-    expect(item.period.enum).toEqual(["day", "month"]);
+  it("schema period is day only", () => {
+    expect(item.period.enum).toEqual(["day"]);
+  });
+});
+
+describe("isNotFoundError / describeLookupError", () => {
+  it("treats 404 and 422 invalid_parameters (malformed id) as not found, nothing else", () => {
+    const e = (status: number, code: string) => parseErrorBody(status, body(status, code));
+    expect(isNotFoundError(e(404, "not_found"))).toBe(true);
+    expect(isNotFoundError(e(422, "invalid_parameters"))).toBe(true);
+    expect(isNotFoundError(e(422, "rating_invalid"))).toBe(false);
+    expect(isNotFoundError(e(500, "internal_error"))).toBe(false);
+    expect(describeLookupError(e(422, "invalid_parameters")).code).toBe("not_found");
+    expect(describeLookupError(e(500, "internal_error")).code).toBe("internal_error");
   });
 });

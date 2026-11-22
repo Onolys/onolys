@@ -1,8 +1,9 @@
 import { cleanup, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { http, HttpResponse } from "msw";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { here, renderApp } from "../../test/renderApp";
-import { mockBackend } from "../../mocks/server";
+import { mockBackend, server } from "../../mocks/server";
 
 const UID = "u_rater_clinic_org";
 const USER = { email: "rater@clinic.org", verified: true };
@@ -88,6 +89,39 @@ describe("settings: API key", () => {
     expect(await navigator.clipboard.readText()).toBe(secret);
   });
 
+  it("copy shows 'Copied' feedback, and a rejected clipboard write shows a failure note instead of an unhandled rejection (W26)", async () => {
+    const user = userEvent.setup();
+    renderApp("/settings", { user: USER });
+    await createKey(user);
+    await user.click(within(dialog()).getByRole("button", { name: "Copy" }));
+    expect(await within(dialog()).findByText("Copied")).toBeInTheDocument();
+    vi.spyOn(navigator.clipboard, "writeText").mockRejectedValueOnce(new Error("denied"));
+    await user.click(within(dialog()).getByRole("button", { name: "Copy" }));
+    expect(await within(dialog()).findByText(/couldn't copy/i)).toBeInTheDocument();
+  });
+
+  it("restores focus to the opener when a confirm dialog closes (W26)", async () => {
+    const user = userEvent.setup();
+    mockBackend.createApiKey(UID);
+    renderApp("/settings", { user: USER });
+    const opener = await main().findByRole("button", { name: "Revoke" });
+    await user.click(opener);
+    await user.click(within(dialog()).getByRole("button", { name: "Cancel" }));
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(opener).toHaveFocus();
+  });
+
+  it("keeps the confirm dialog open and shows the error when revoke fails (W26)", async () => {
+    const user = userEvent.setup();
+    mockBackend.createApiKey(UID);
+    server.use(http.delete("*/v1/api-key", () => HttpResponse.json({ code: "internal_error" }, { status: 500 })));
+    renderApp("/settings", { user: USER });
+    await user.click(await main().findByRole("button", { name: "Revoke" }));
+    await user.click(within(dialog()).getByRole("button", { name: "Revoke key" }));
+    expect(await within(dialog()).findByText(/something went wrong/i)).toBeInTheDocument();
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+  });
+
   it("regenerate asks to confirm that the old key stops working; cancel changes nothing", async () => {
     const user = userEvent.setup();
     mockBackend.createApiKey(UID);
@@ -127,7 +161,7 @@ describe("settings: API key", () => {
     renderApp("/settings", { user: USER });
     expect(await main().findByText("20 of 20 left today")).toBeInTheDocument();
     expect(main().getByText("5 of 5 left today")).toBeInTheDocument();
-    expect(main().getByText("30 of 30 left this month")).toBeInTheDocument();
+    expect(main().queryByText(/this month/)).toBeNull();
     expect(main().getByText(/account removal/i)).toBeInTheDocument();
     expect(main().getByText(/deleting a session removes/i)).toBeInTheDocument();
   });

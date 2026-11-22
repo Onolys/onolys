@@ -13,6 +13,7 @@ import { NewInterviewPage } from "../features/interview/NewInterviewPage";
 import { NewSessionPage } from "../features/upload/NewSessionPage";
 import { SessionPage } from "../features/session/SessionPage";
 import { Layout } from "./Layout";
+import { RouteError } from "./RouteError";
 import { Settings } from "../features/settings/Settings";
 import * as P from "./placeholders";
 
@@ -21,30 +22,35 @@ export const routes: RouteObject[] = [
     element: <Layout />,
     children: [
       {
-        element: <PublicOnly />,
+        errorElement: <RouteError />,
         children: [
-          { path: "/signup", element: <Signup /> },
-          { path: "/login", element: <Login /> },
-          { path: "/forgot-password", element: <ForgotPassword /> },
+        {
+          element: <PublicOnly />,
+          children: [
+            { path: "/signup", element: <Signup /> },
+            { path: "/login", element: <Login /> },
+            { path: "/forgot-password", element: <ForgotPassword /> },
+          ],
+        },
+        { element: <RequireUnverified />, children: [{ path: "/verify-email", element: <VerifyEmail /> }] },
+        {
+          element: <RequireVerified />,
+          children: [
+            { path: "/", element: <Dashboard /> },
+            { path: "/sessions/new", element: <NewSessionPage /> },
+            { path: "/interviews/new", element: <NewInterviewPage /> },
+            { path: "/interviews/:id", element: <InterviewPage /> },
+            { path: "/sessions/:id", element: <SessionPage /> },
+            { path: "/sessions/:id/reports/:version", element: <ReportPage /> },
+            { path: "/settings", element: <Settings /> },
+          ],
+        },
+        // Email action links (verify email, reset password): reachable in every auth state, so no guard.
+        { path: "/auth/action", element: <AuthAction /> },
+        { path: "/sample-report", element: <SampleReportPage /> },
+        { path: "*", element: <P.NotFound /> },
         ],
       },
-      { element: <RequireUnverified />, children: [{ path: "/verify-email", element: <VerifyEmail /> }] },
-      {
-        element: <RequireVerified />,
-        children: [
-          { path: "/", element: <Dashboard /> },
-          { path: "/sessions/new", element: <NewSessionPage /> },
-          { path: "/interviews/new", element: <NewInterviewPage /> },
-          { path: "/interviews/:id", element: <InterviewPage /> },
-          { path: "/sessions/:id", element: <SessionPage /> },
-          { path: "/sessions/:id/reports/:version", element: <ReportPage /> },
-          { path: "/settings", element: <Settings /> },
-        ],
-      },
-      // Email action links (verify email, reset password): reachable in every auth state, so no guard.
-      { path: "/auth/action", element: <AuthAction /> },
-      { path: "/sample-report", element: <SampleReportPage /> },
-      { path: "*", element: <P.NotFound /> },
     ],
   },
 ];

@@ -204,6 +204,15 @@ async def test_final_requires_change_goal(env):
 
 
 @pytest.mark.firestore_smoke
+async def test_final_without_coded_span_clears_the_stale_span_on_the_session(env):
+    c, h, repo, uid, sid = env  # BH1: a submitted card without a span leaves no span
+    c2 = card()
+    del c2["coded_span"]
+    assert (await put(c, h, sid, {"final": True, "card": c2})).status_code == 202
+    assert repo.get_session(uid, sid).coded_span is None
+
+
+@pytest.mark.firestore_smoke
 async def test_final_creates_revision_and_updates_session(env, hook_calls):
     c, h, repo, uid, sid = env
     r = await put(c, h, sid, {"final": True, "card": card()})
@@ -220,17 +229,17 @@ async def test_final_creates_revision_and_updates_session(env, hook_calls):
 
 
 @pytest.mark.firestore_smoke
-async def test_each_final_is_new_revision_latest_wins(env):
-    c, h, repo, uid, sid = env
+async def test_a_submitted_rating_is_final_a_second_final_is_refused(env):
+    c, h, repo, uid, sid = env  # FX45 owner decision: once submitted it is final
     r1 = (await put(c, h, sid, {"final": True, "card": card(change_goal="one")})).json()
-    r2 = (await put(c, h, sid, {"final": True, "card": card(change_goal="two")})).json()
-    assert r1["rating_id"] != r2["rating_id"]
-    assert repo.get_rating(uid, sid, r1["rating_id"]).card["change_goal"] == "one"
-    assert repo.latest_rating(uid, sid).id == r2["rating_id"]
-    assert repo.get_session(uid, sid).change_goal == "two"
+    r = await put(c, h, sid, {"final": True, "card": card(change_goal="two")})
+    assert r.status_code == 409 and r.json()["details"][0]["code"] == "rating_final"
+    assert repo.latest_rating(uid, sid).id == r1["rating_id"]
+    assert repo.get_session(uid, sid).change_goal == "one"
     g = (await c.get(f"/v1/sessions/{sid}/rating", headers=h)).json()
-    assert g["final"]["rating_id"] == r2["rating_id"] and g["final"]["card"]["change_goal"] == "two"
-    assert g.get("draft") is None
+    assert g["final"]["rating_id"] == r1["rating_id"] and g["final"]["card"]["change_goal"] == "one"
+    r = await put(c, h, sid, {"final": False, "card": {"notes": "still ok"}})  # drafts stay open
+    assert r.status_code == 202
 
 
 async def test_get_empty(env):
@@ -287,9 +296,9 @@ async def test_empty_final_card_detected_as_no_rating(env):
     assert repo.get_rating(uid, sid, r.json()["rating_id"]).no_rating is True
     s = repo.get_session(uid, sid)
     assert s.rating_submitted is True and s.has_rating is False
-    # a later rated revision flips has_rating on
-    await put(c, h, sid, {"final": True, "card": card()})
-    assert repo.get_session(uid, sid).has_rating is True
+    # FX45: a submitted rating is final, even a "no rating" one
+    assert (await put(c, h, sid, {"final": True, "card": card()})).status_code == 409
+    assert repo.get_session(uid, sid).has_rating is False
 
 
 async def test_notes_alone_count_as_rating(env):
@@ -300,7 +309,7 @@ async def test_notes_alone_count_as_rating(env):
 
 @pytest.mark.parametrize(
     "state", ["created", "uploading", "validating", "transcribing", "awaiting_input", "running",
-              "report_ready", "failed"],
+              "failed"],
 )  # fmt: skip
 async def test_allowed_in_every_state_but_deleting(env, state):
     c, h, repo, uid, sid = env
@@ -310,6 +319,18 @@ async def test_allowed_in_every_state_but_deleting(env, state):
         assert (await put(c, h, sid, body)).status_code == 202
     assert (await c.get(f"/v1/sessions/{sid}/rating", headers=h)).status_code == 200
     assert repo.get_session(uid, sid).state == state  # the PUT never moves the state
+
+
+async def test_final_rating_is_refused_once_the_report_is_ready(env):
+    """FX45 (E24): a successful report makes the rating final; drafts are still just drafts."""
+    c, h, repo, uid, sid = env
+    first = await put(c, h, sid, {"final": True, "card": card()})
+    assert first.status_code == 202
+    repo.update_session(uid, sid, {"state": "report_ready"}, status={"state": "report_ready"})
+    r = await put(c, h, sid, {"final": True, "card": card(notes="edited")})
+    assert r.status_code == 409 and r.json()["details"][0]["code"] == "rating_final", r.text
+    assert repo.latest_rating(uid, sid).id == first.json()["rating_id"]  # nothing new written
+    assert (await put(c, h, sid, {"final": False, "card": card()})).status_code == 202
 
 
 async def test_rejected_in_deleting(env):

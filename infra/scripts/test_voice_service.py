@@ -102,7 +102,7 @@ def test_voice_service_settings():
 def test_voice_env_and_defaults():
     names = set(re.findall(r'\{ name = "(\w+)"', VOICE))
     assert {"VOICE_PROVIDERS_FILE", "GOOGLE_CLOUD_PROJECT", "FIRESTORE_DATABASE", "AUTH_PROJECT", "CORS_ORIGINS", "ENV",
-            "AI_CAP_DAY", "AI_CAP_MONTH", "AI_MAX_SECONDS", "AI_WARN_SECONDS", "AI_MIN_SECONDS",
+            "AI_CAP_DAY", "AI_MAX_SECONDS", "AI_WARN_SECONDS", "AI_MIN_SECONDS",
             "AI_TOLERANCE_SECONDS", "AI_ABANDON_COUNT_SECONDS", "AI_RECONNECT_SECONDS", "AI_MIC_GATE"} <= names
     variables = (MOD / "variables.tf").read_text()
     for var, default in {"ai_max_seconds": 600, "ai_warn_seconds": 480, "ai_min_seconds": 300, "ai_tolerance_seconds": 30,

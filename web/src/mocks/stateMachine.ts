@@ -37,13 +37,13 @@ export class MockHttpError extends Error {
 }
 
 export type CapKind = "eval" | "interview";
-export type CapPeriod = "day" | "month";
+export type CapPeriod = "day";
 export type Caps = Record<CapKind, Record<CapPeriod, number>>;
 export type CapsOverride = { [K in CapKind]?: Partial<Record<CapPeriod, number>> };
 
-const DEFAULT_CAPS: Caps = { eval: { day: 20, month: 100 }, interview: { day: 5, month: 30 } };
+const DEFAULT_CAPS: Caps = { eval: { day: 20 }, interview: { day: 5 } };
 const CAP_CODE: Record<CapKind, (p: CapPeriod) => ErrorCode> = {
-  eval: (p) => (p === "month" ? "monthly_cap_reached" : "daily_cap_reached"),
+  eval: () => "daily_cap_reached",
   interview: () => "interview_cap_reached",
 };
 
@@ -56,7 +56,7 @@ function mergeCaps(base: Caps, o: CapsOverride = {}): Caps {
 
 export interface MockOptions {
   emitter: MemoryStatusEmitter;
-  /** Per-kind day/month caps; unset values use the defaults. */
+  /** Per-kind daily caps; unset values use the defaults. */
   caps?: CapsOverride;
   now?: () => Date;
 }
@@ -88,7 +88,7 @@ interface Rating {
   seq: number;
 }
 
-type RunRec = S["RunView"] & { stageIdx: number };
+type RunRec = S["RunView"] & { stageIdx: number; counted: boolean };
 
 interface ReportRec {
   version: number;
@@ -124,6 +124,18 @@ interface SessionRec {
   runs: RunRec[];
   reports: ReportRec[];
 }
+
+/** Failures a retry cannot fix: the file itself is the problem (mirrors the API's BAD_FILE_CODES). */
+const BAD_FILE_CODES = new Set([
+  "unsupported_audio",
+  "audio_too_long",
+  "interview_too_long",
+  "audio_too_large",
+  "audio_unreadable",
+  "no_speech",
+  "speakers_not_separated",
+  "transcription_failed",
+]);
 
 function bad(status: number, code: string, message: string, details?: S["ErrorDetailModel"][]): never {
   throw new MockHttpError(status, code, message, details);
@@ -202,22 +214,21 @@ export class MockBackend {
 
   private counterKey(uid: string, kind: CapKind, period: CapPeriod): string {
     const iso = this.now().toISOString();
-    return `${kind}:${uid}:${period === "day" ? iso.slice(0, 10) : iso.slice(0, 7)}`;
+    return `${kind}:${uid}:${period}:${iso.slice(0, 10)}`;
   }
 
   private used(uid: string, kind: CapKind, period: CapPeriod): number {
     return this.counters.get(this.counterKey(uid, kind, period)) ?? 0;
   }
 
-  private resetsAt(period: CapPeriod): string {
+  private resetsAt(): string {
     const d = this.now();
-    const [y, m, day] = [d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()];
-    return new Date(period === "day" ? Date.UTC(y, m, day + 1) : Date.UTC(y, m + 1, 1)).toISOString();
+    return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() + 1)).toISOString();
   }
 
-  /** The exhausted period for a kind, month first (as the API does), or null. */
+  /** The exhausted period for a kind, or null. */
   private blocked(uid: string, kind: CapKind): CapPeriod | null {
-    for (const p of ["month", "day"] as const) if (this.used(uid, kind, p) >= this.caps[kind][p]) return p;
+    for (const p of ["day"] as const) if (this.used(uid, kind, p) >= this.caps[kind][p]) return p;
     return null;
   }
 
@@ -231,7 +242,7 @@ export class MockBackend {
 
   /** Count one use of a kind. Callers check the cap first. */
   private count(uid: string, kind: CapKind): void {
-    for (const p of ["day", "month"] as const) {
+    for (const p of ["day"] as const) {
       const key = this.counterKey(uid, kind, p);
       this.counters.set(key, (this.counters.get(key) ?? 0) + 1);
     }
@@ -422,6 +433,7 @@ export class MockBackend {
       n_runs: s.n_runs,
       preset: s.preset,
       interview_id: s.interview_id ?? null,
+      free_run: Boolean(s.interview_id), // the mock has no void concept: interview_id alone
       links: { self: `/v1/sessions/${s.id}` },
     };
     if (s.error) detail.error = { ...s.error };
@@ -440,7 +452,8 @@ export class MockBackend {
 
   requestAudio(uid: string, sid: string, body: S["AudioUploadRequest"]): S["AudioUploadResponse"] {
     const s = this.own(uid, sid);
-    if (s.state !== "created" && s.state !== "uploading") bad(409, "invalid_state", "Audio can no longer be uploaded.");
+    if (s.state !== "created" && s.state !== "uploading" && s.state !== "upload_incomplete")
+      bad(409, "invalid_state", "Audio can no longer be uploaded.");
     const ext = (body.filename_ext ?? "").replace(/^\./, "").toLowerCase();
     const type = (body.content_type ?? "").toLowerCase();
     const byType = Object.values(CANONICAL).find((f) => f.types.includes(type));
@@ -474,7 +487,8 @@ export class MockBackend {
 
   completeAudio(uid: string, sid: string): S["CreateSessionResponse"] {
     const s = this.own(uid, sid);
-    if (s.state !== "uploading") bad(409, "invalid_state", "No upload is in progress.");
+    if (s.state !== "uploading" && s.state !== "upload_incomplete")
+      bad(409, "invalid_state", "No upload is in progress.");
     s.state = "validating";
     s.step = "validate";
     s.progress = 10;
@@ -489,6 +503,9 @@ export class MockBackend {
     if (s.state === "deleting") bad(409, "invalid_state", "Session is being deleted.");
     const card = (body.card ?? {}) as RatingCard;
     validateCard(card, body.final === true);
+    if (body.final === true && (s.flags.rating_submitted || s.state === "report_ready" || s.reports.length > 0)) {
+      bad(409, "rating_final", "The rating is final once submitted.");
+    }
     const seq = this.n + 1;
     this.n += 1;
     if (!body.final) {
@@ -573,14 +590,27 @@ export class MockBackend {
 
   // ---- runs, reports, usage ----------------------------------------------
 
+  /**
+   * Mirrors the API: an interview session's run is free (not counted, no eval cap check) when it is the first run,
+   * or a Try again of a failed session whose first run was free. The mock has no void concept.
+   */
+  private isFreeRun(s: SessionRec): boolean {
+    if (!s.interview_id) return false;
+    if (!s.first_run_id) return true;
+    const first = s.runs.find((r) => r.run_id === s.first_run_id);
+    return s.state === "failed" && first?.counted === false;
+  }
+
   /** Start the first run once transcript + speaker + final rating are in (SP04 R4). */
   private maybeStartFirstRun(s: SessionRec): void {
     const f = s.flags;
     if (s.state !== "awaiting_input" || s.first_run_id) return;
     if (!(f.transcript_ready && f.speaker_confirmed && f.rating_submitted)) return;
-    const blocked = this.blocked(s.uid, "eval");
-    if (s.holdFirstStart || blocked) {
-      s.error = { code: blocked ? CAP_CODE.eval(blocked) : "daily_cap_reached" };
+    const blocked = this.isFreeRun(s) ? null : this.blocked(s.uid, "eval");
+    // mirrors the API's held start: the day cap first, then another run in progress (max 1 active)
+    const busy = [...this.sessions.values()].some((o) => o.uid === s.uid && o.state === "running");
+    if (s.holdFirstStart || blocked || busy) {
+      s.error = { code: blocked ? CAP_CODE.eval(blocked) : s.holdFirstStart ? "daily_cap_reached" : "concurrent_runs" };
       this.emit(s);
       return;
     }
@@ -588,6 +618,7 @@ export class MockBackend {
   }
 
   private createRun(s: SessionRec, p: S["RunRequest"]): RunRec {
+    const free = this.isFreeRun(s);
     const run: RunRec = {
       run_id: this.id("r"),
       session_id: s.id,
@@ -601,6 +632,7 @@ export class MockBackend {
       code_version: "mock",
       stage: "paudit",
       stageIdx: 0,
+      counted: !free,
     };
     s.runs.push(run);
     s.first_run_id ??= run.run_id;
@@ -609,22 +641,35 @@ export class MockBackend {
     s.state = "running";
     s.step = "paudit";
     s.progress = RUN_START_PROGRESS;
-    this.count(s.uid, "eval");
+    if (!free) this.count(s.uid, "eval");
     this.emit(s);
     return run;
   }
 
   startRun(uid: string, sid: string, body: S["RunRequest"]): S["RunStarted"] {
     const s = this.own(uid, sid);
-    const ok = s.state === "awaiting_input" || s.state === "report_ready" || s.state === "failed";
+    if (s.state === "report_ready" || s.reports.length > 0)
+      bad(409, "rating_final", "The rating is final once the report is ready.");
+    const ok = s.state === "awaiting_input" || s.state === "failed";
+    if (s.state === "failed" && s.error && BAD_FILE_CODES.has(s.error.code))
+      bad(409, "invalid_state", "A run cannot start in this state.");
     if (!ok || !s.flags.transcript_ready || !s.flags.speaker_confirmed)
       bad(409, "invalid_state", "A run cannot start in this state.");
     if (body.n_runs != null && (!Number.isInteger(body.n_runs) || body.n_runs < 1 || body.n_runs > 5))
       invalidParam("n_runs must be an integer from 1 to 5");
     if (body.preset != null && !PRESETS.includes(body.preset)) invalidParam("preset is not allowed");
     s.holdFirstStart = false; // the user pressed Start
-    this.checkCap(uid, "eval");
-    const run = this.createRun(s, body);
+    if (!this.isFreeRun(s)) this.checkCap(uid, "eval");
+    for (const o of this.sessions.values()) {
+      if (o.uid === uid && o.state === "running") {
+        bad(429, "concurrent_runs", "A rating is already running.", [
+          { code: "concurrent_runs", message: "A rating is already running." },
+        ]);
+      }
+    }
+    // Try again re-runs the SAME submission: the client's preset / n_runs are ignored
+    const prior = s.state === "failed" ? s.runs.at(-1) : undefined;
+    const run = this.createRun(s, prior ? { preset: prior.preset, n_runs: prior.n_runs } : body);
     return { run_id: run.run_id, session: { id: s.id, status: s.state } };
   }
 
@@ -691,9 +736,9 @@ export class MockBackend {
     const period = (kind: CapKind, p: CapPeriod) => ({
       used: this.used(uid, kind, p),
       cap: this.caps[kind][p],
-      resets_at: this.resetsAt(p),
+      resets_at: this.resetsAt(),
     });
-    const kindUsage = (kind: CapKind) => ({ day: period(kind, "day"), month: period(kind, "month") });
+    const kindUsage = (kind: CapKind) => ({ day: period(kind, "day") });
     return { eval: kindUsage("eval"), interview: kindUsage("interview") };
   }
 
@@ -789,8 +834,9 @@ export class MockBackend {
   }
 }
 
-function publicRun({ stageIdx: _ignored, ...run }: RunRec): S["RunView"] {
+function publicRun({ stageIdx: _ignored, counted: _counted, ...run }: RunRec): S["RunView"] {
   void _ignored;
+  void _counted;
   return { ...run };
 }
 

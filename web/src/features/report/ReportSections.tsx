@@ -12,9 +12,6 @@ import { lineId } from "./lines";
 export interface SectionsProps {
   report: Report;
   onSelect: (id: string) => void;
-  /** Runs again (reasons_audit failed note). Omit to hide the button (sample report). */
-  onRunAgain?: () => void;
-  runAgainDisabled?: boolean;
 }
 
 const VERDICT: Record<Exclude<ClaimVerdict, "out_of_scope">, string> = {
@@ -202,7 +199,7 @@ function Behaviours({ r, title, labels, onSelect }: { r: Report; title: string; 
               <tr key={b.item_id}>
                 <th scope="row">{labels.get(b.item_id) ?? b.item_id}</th>
                 <td data-label="You">{rated ? num(b.clinician_count) : "–"}</td>
-                <td data-label="Onolys">{num(b.onolys_count?.values?.[0] ?? b.onolys_count?.mean)}</td>
+                <td data-label="Onolys">{num(b.onolys_count?.mean ?? b.onolys_count?.values?.[0])}</td>
                 <td data-label="Instances">
                   {(b.instances ?? []).map((inst) => (
                     <button key={inst.id} type="button" className="line-chip" title={inst.rationale} onClick={() => onSelect(inst.id)}>
@@ -254,18 +251,13 @@ function Summaries({ r, title }: { r: Report; title: string }) {
   );
 }
 
-function Reasons({ r, title, labels, onSelect, onRunAgain, runAgainDisabled }: { r: Report; title: string; labels: Map<string, string> } & Pick<SectionsProps, "onSelect" | "onRunAgain" | "runAgainDisabled">) {
+function Reasons({ r, title, labels, onSelect }: { r: Report; title: string; labels: Map<string, string> } & Pick<SectionsProps, "onSelect">) {
   const audit = r.reasons_audit;
   if (!audit || audit.status === "skipped") return null;
   if (audit.status === "failed") {
     return (
       <Section id="reasons_audit" title={title}>
         <p>We couldn't check your reasons this time. The rest of your report is complete.</p>
-        {onRunAgain ? (
-          <button type="button" className="btn btn-secondary" disabled={runAgainDisabled} onClick={onRunAgain}>
-            Run again
-          </button>
-        ) : null}
       </Section>
     );
   }
@@ -363,7 +355,7 @@ export function ReportSections(props: SectionsProps) {
           case "summaries":
             return <Summaries key={l.section} r={r} title={l.title} />;
           case "reasons_audit":
-            return <Reasons key={l.section} r={r} title={l.title} labels={labels} onSelect={onSelect} onRunAgain={props.onRunAgain} runAgainDisabled={props.runAgainDisabled} />;
+            return <Reasons key={l.section} r={r} title={l.title} labels={labels} onSelect={onSelect} />;
           case "tips":
             return <Tips key={l.section} r={r} title={l.title} labels={labels} onSelect={onSelect} />;
           case "method":

@@ -12,19 +12,21 @@ from typing import Any, get_args
 
 from onolys_api.errors import ApiError
 from onolys_api.repo.base import Repo
-from onolys_api.repo.models import SessionError, SessionState
+from onolys_api.repo.models import SessionError, SessionState, utcnow
 
 STATES: tuple[str, ...] = get_args(SessionState)
 
 _NOT_DELETING = (
     "created", "uploading", "validating", "transcribing", "awaiting_input",
-    "running", "report_ready", "failed",
+    "running", "report_ready", "failed", "upload_incomplete",
 )  # fmt: skip
 
 TRANSITIONS: dict[str, frozenset[str]] = {
-    "created": frozenset({"uploading", "deleting"}),
+    "created": frozenset({"uploading", "upload_incomplete", "deleting"}),
     # uploading -> uploading: a fresh signed URL for the same session
-    "uploading": frozenset({"uploading", "validating", "deleting"}),
+    "uploading": frozenset({"uploading", "upload_incomplete", "validating", "deleting"}),
+    # never uploaded (lazy stale check): a fresh URL resumes it; a late PUT still completes
+    "upload_incomplete": frozenset({"uploading", "validating", "deleting"}),
     "validating": frozenset({"transcribing", "failed", "deleting"}),
     "transcribing": frozenset({"awaiting_input", "failed", "deleting"}),
     "awaiting_input": frozenset({"running", "deleting"}),
@@ -64,6 +66,31 @@ _KEEP: Any = object()
 
 def invalid_state() -> ApiError:
     return ApiError.of(409, "invalid_state", "The session is not in a state that allows this.")
+
+
+def rating_final() -> ApiError:
+    return ApiError.of(
+        409, "rating_final", "The rating is final once submitted and cannot be changed or re-run."
+    )
+
+
+# FX45: failure codes that need a different file (no Try again); every other failure is a system
+# failure, which refunds its units (owner decision) and allows Try again.
+BAD_FILE_CODES = frozenset(
+    {
+        "unsupported_audio", "audio_too_long", "interview_too_long", "audio_too_large",
+        "audio_unreadable", "no_speech", "speakers_not_separated", "transcription_failed",
+    }
+)  # fmt: skip
+
+
+def is_system_failure(code: str | None) -> bool:
+    return code not in BAD_FILE_CODES
+
+
+def has_final_report(repo, uid: str, sid: str, state: str) -> bool:
+    """FX45: a successful report (or a version from earlier data) makes the rating final."""
+    return state == "report_ready" or bool(repo.list_reports(uid, sid))
 
 
 def check_transition(current: str, to: str) -> None:
@@ -124,6 +151,8 @@ def advance(
     if error is _KEEP and to is not None and to != "failed":
         error = None
     s_fields: dict[str, Any] = {"state": new_state}
+    if to is not None:
+        s_fields["stage_started_at"] = utcnow()  # the stale check keys off this, not updated_at
     st_fields: dict[str, Any] = {"state": new_state, "progress": progress}
     if step is not _KEEP:
         s_fields["step"] = step

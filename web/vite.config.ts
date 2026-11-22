@@ -23,8 +23,9 @@ export default defineConfig(({ mode }) => ({
     setupFiles: ["./src/test/setup.ts"],
     globals: false,
     // `*.flaky.test.ts(x)` are excluded here; `npm run test:flaky` (FLAKY=1) runs only them (non-blocking CI step).
+    // `e2e_review/**` holds Playwright specs (run via `npm run e2e`), never vitest.
     ...(process.env.FLAKY
       ? { include: ["src/**/*.flaky.test.{ts,tsx}"] }
-      : { exclude: [...configDefaults.exclude, "**/*.flaky.test.{ts,tsx}"] }),
+      : { exclude: [...configDefaults.exclude, "e2e_review/**", "**/*.flaky.test.{ts,tsx}"] }),
   },
 }));

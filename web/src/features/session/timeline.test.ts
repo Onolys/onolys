@@ -207,10 +207,14 @@ describe("deriveTimeline: extras", () => {
     expect(t.lines[0]).toBe("You've reached today's limit.");
   });
 
-  it("renders monthly_cap_reached with a Start action", () => {
-    const t = deriveTimeline({ ...base, state: "awaiting_input", error_code: "monthly_cap_reached" }, { resetsAt: "Dec 1" });
+  it("a start held by an active run offers Start with the concurrent message, not the reset time", () => {
+    const t = deriveTimeline(
+      { ...base, state: "awaiting_input", error_code: "concurrent_runs" },
+      { resetsAt: "3:00 PM" },
+    );
     expect(t.capReached).toBe(true);
-    expect(t.lines).toEqual(["You've reached this month's limit. You can start the rating after Dec 1."]);
+    expect(t.lines).toEqual(["You already have a rating running. Wait for it to finish."]);
+    expect(t.lines.join(" ")).not.toMatch(/limit|3:00/i);
   });
 
   it("does not offer Start for a cap code outside awaiting_input", () => {

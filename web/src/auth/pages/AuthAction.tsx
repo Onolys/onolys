@@ -1,9 +1,10 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { Link, useLocation, useNavigate } from "react-router";
 import { useAuth } from "../AuthProvider";
-import { MIN_PASSWORD_LENGTH, errorCode } from "../errors";
+import { MIN_PASSWORD_LENGTH, errorCode, mapAuthError } from "../errors";
 import type { EmailChangeInfo, EmailChangeKind } from "../types";
 import { ErrorSummary } from "./parts";
+import type { LoginState } from "./Login";
 import { useFormError } from "./useFormError";
 
 /**
@@ -12,13 +13,24 @@ import { useFormError } from "./useFormError";
  * and the page uses our own auth instance. The `apiKey` query param is ignored.
  */
 
-/** Hosts a continue link may send the user back to: this origin plus the app's own sites (staging shares the auth project). */
-const APP_HOSTS = new Set(["app.onolys.com", "onolys-app.web.app", "onolys-app-staging.web.app"]);
+const DEFAULT_APP_HOSTS = ["app.onolys.com", "onolys-app.web.app", "onolys-app-staging.web.app"];
+
+/**
+ * Hosts (besides this origin) a continue link may send the user back to: the Firebase auth domain plus any
+ * comma-separated hostnames in `VITE_APP_HOSTS` (default: the three Onolys app hosts when unset) (e.g. a sibling environment that shares the auth project).
+ */
+export function appHosts(env: Record<string, string | undefined> = import.meta.env): Set<string> {
+  const configured = (env.VITE_APP_HOSTS ?? "").split(",").map((h) => h.trim().toLowerCase()).filter(Boolean);
+  // Deploy workflows do not set VITE_APP_HOSTS, so fall back to the known app hosts.
+  const extra = configured.length > 0 ? configured : DEFAULT_APP_HOSTS;
+  const list = [env.VITE_FIREBASE_AUTH_DOMAIN, ...extra];
+  return new Set(list.map((h) => (h ?? "").trim().toLowerCase()).filter(Boolean));
+}
 
 export type Continue = { kind: "path"; path: string } | { kind: "external"; href: string };
 
-/** Never an open redirect: same-origin path, or an https URL on a known app host, else `/`. */
-export function resolveContinue(raw: string | null, origin: string = window.location.origin): Continue {
+/** Never an open redirect: same-origin path, or an https URL on a configured app host, else `/`. */
+export function resolveContinue(raw: string | null, origin: string = window.location.origin, hosts: Set<string> = appHosts()): Continue {
   const home: Continue = { kind: "path", path: "/" };
   if (!raw) return home;
   let url: URL;
@@ -28,7 +40,7 @@ export function resolveContinue(raw: string | null, origin: string = window.loca
     return home;
   }
   if (url.origin === origin) return { kind: "path", path: url.pathname + url.search + url.hash };
-  if (url.protocol === "https:" && !url.username && !url.password && APP_HOSTS.has(url.hostname)) {
+  if (url.protocol === "https:" && !url.username && !url.password && hosts.has(url.hostname)) {
     return { kind: "external", href: url.href };
   }
   return home;
@@ -91,6 +103,18 @@ function VerifyEmailAction({ oobCode, continueUrl }: { oobCode: string; continue
     else void navigate(next.path);
   }
 
+  if (user?.emailVerified && !done) {
+    return (
+      <>
+        <h1>Already verified</h1>
+        <p role="status">Your email address is already verified.</p>
+        <button type="button" className="primary" onClick={carryOn}>
+          Continue
+        </button>
+      </>
+    );
+  }
+
   if (done) {
     return (
       <>
@@ -108,7 +132,7 @@ function VerifyEmailAction({ oobCode, continueUrl }: { oobCode: string; continue
       <h1>Verify your email</h1>
       <div className="auth-form">
         {form.error && <ErrorSummary error={form.error} search="" />}
-        {failure && (
+        {failure ? (
           <div role="alert" className="form-error">
             <p>This verification link is invalid, has expired, or was already used.</p>
             <p>
@@ -117,12 +141,28 @@ function VerifyEmailAction({ oobCode, continueUrl }: { oobCode: string; continue
               </Link>
             </p>
           </div>
+        ) : (
+          <>
+            <p>Confirm your email address to finish setting up your account.</p>
+            <button type="button" className="primary" disabled={busy} onClick={() => void verify()}>
+              Verify my email
+            </button>
+          </>
         )}
-        <p>Confirm your email address to finish setting up your account.</p>
-        <button type="button" className="primary" disabled={busy} onClick={() => void verify()}>
-          Verify my email
-        </button>
       </div>
+    </>
+  );
+}
+
+/** The pre-check failed for a reason other than an invalid/expired code (network, throttling): the link may still be fine. */
+function CheckFailed({ message, onRetry }: { message: string; onRetry: () => void }) {
+  return (
+    <>
+      <h1>Couldn't check your link</h1>
+      <p role="alert">{message}</p>
+      <button type="button" className="primary" onClick={onRetry}>
+        Try again
+      </button>
     </>
   );
 }
@@ -131,8 +171,10 @@ function ResetPasswordAction({ oobCode }: { oobCode: string }) {
   const { service } = useAuth();
   const [email, setEmail] = useState<string | null>(null);
   const [invalid, setInvalid] = useState(false);
+  const [checkError, setCheckError] = useState<string | null>(null);
+  const [attempt, setAttempt] = useState(0);
   const [busy, setBusy] = useState(false);
-  const [done, setDone] = useState(false);
+  const navigate = useNavigate();
   const form = useFormError();
 
   // Checking the code does not consume it, so this is safe on load.
@@ -140,12 +182,21 @@ function ResetPasswordAction({ oobCode }: { oobCode: string }) {
     let live = true;
     service.verifyPasswordResetCode(oobCode).then(
       (e) => live && setEmail(e),
-      () => live && setInvalid(true),
+      (err) => {
+        if (!live) return;
+        if (EXPIRED.has(errorCode(err) ?? "")) setInvalid(true);
+        else setCheckError(mapAuthError(errorCode(err)).message);
+      },
     );
     return () => {
       live = false;
     };
-  }, [service, oobCode]);
+  }, [service, oobCode, attempt]);
+
+  function retryCheck() {
+    setCheckError(null);
+    setAttempt((n) => n + 1);
+  }
 
   async function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -158,7 +209,8 @@ function ResetPasswordAction({ oobCode }: { oobCode: string }) {
     setBusy(true);
     try {
       await service.confirmPasswordReset(oobCode, password);
-      setDone(true);
+      // Login shows "Password updated" and prefills the email.
+      void navigate("/login", { replace: true, state: { email: email ?? undefined, passwordUpdated: true } satisfies LoginState });
     } catch (err) {
       if (EXPIRED.has(errorCode(err) ?? "")) setInvalid(true);
       else form.fail(err);
@@ -167,17 +219,6 @@ function ResetPasswordAction({ oobCode }: { oobCode: string }) {
     }
   }
 
-  if (done) {
-    return (
-      <>
-        <h1>Password updated</h1>
-        <p role="status">Your password has been changed.</p>
-        <p>
-          <Link to="/login">Log in</Link>
-        </p>
-      </>
-    );
-  }
   if (invalid) {
     return (
       <>
@@ -189,6 +230,7 @@ function ResetPasswordAction({ oobCode }: { oobCode: string }) {
       </>
     );
   }
+  if (checkError) return <CheckFailed message={checkError} onRetry={retryCheck} />;
   if (!email) return <h1>Checking your link…</h1>;
 
   return (
@@ -222,6 +264,8 @@ function EmailChangeAction({ mode, oobCode, continueUrl }: { mode: EmailChangeKi
   const navigate = useNavigate();
   const [info, setInfo] = useState<EmailChangeInfo | null>(null);
   const [invalid, setInvalid] = useState(false);
+  const [checkError, setCheckError] = useState<string | null>(null);
+  const [attempt, setAttempt] = useState(0);
   const [busy, setBusy] = useState(false);
   const [signedIn, setSignedIn] = useState<boolean | null>(null); // null until applied
   const [resetSent, setResetSent] = useState(false);
@@ -234,12 +278,21 @@ function EmailChangeAction({ mode, oobCode, continueUrl }: { mode: EmailChangeKi
     let live = true;
     service.checkEmailChangeCode(oobCode, mode).then(
       (i) => live && setInfo(i),
-      () => live && setInvalid(true),
+      (err) => {
+        if (!live) return;
+        if (EXPIRED.has(errorCode(err) ?? "")) setInvalid(true);
+        else setCheckError(mapAuthError(errorCode(err)).message);
+      },
     );
     return () => {
       live = false;
     };
-  }, [service, oobCode, mode]);
+  }, [service, oobCode, mode, attempt]);
+
+  function retryCheck() {
+    setCheckError(null);
+    setAttempt((n) => n + 1);
+  }
 
   async function apply() {
     form.clear();
@@ -282,6 +335,7 @@ function EmailChangeAction({ mode, oobCode, continueUrl }: { mode: EmailChangeKi
       </>
     );
   }
+  if (checkError) return <CheckFailed message={checkError} onRetry={retryCheck} />;
   if (!info) return <h1>Checking your link…</h1>;
 
   if (signedIn !== null) {

@@ -24,6 +24,7 @@ export function createAutosaver(opts: AutosaverOptions): Autosaver {
   let timer: ReturnType<typeof setTimeout> | undefined;
   let chain: Promise<void> = Promise.resolve();
   let disposed = false;
+  let closing = false;
 
   const clear = () => {
     if (timer !== undefined) clearTimeout(timer);
@@ -49,7 +50,7 @@ export function createAutosaver(opts: AutosaverOptions): Autosaver {
       }
       dirty = true;
       onStatus("error");
-      arm(retryMs);
+      if (!closing) arm(retryMs);
     }
   }
 
@@ -61,18 +62,21 @@ export function createAutosaver(opts: AutosaverOptions): Autosaver {
 
   return {
     change() {
-      if (disposed) return;
+      if (closing) return;
       dirty = true;
       arm(delayMs);
     },
     flush,
     cancel() {
-      clear();
-      dirty = false;
+      clear(); // timer only: edits stay dirty so a later flush/blur/retry still saves them
     },
     dispose() {
-      disposed = true;
+      // Stop new edits/timers now, but let flushes already queued (unmount flush) run before gating run().
+      closing = true;
       clear();
+      chain = chain.then(() => {
+        disposed = true;
+      });
     },
   };
 }

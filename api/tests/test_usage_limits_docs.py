@@ -1,12 +1,12 @@
 """Doc consistency (11-usage-limits T9): the removed `DAILY_RUN_CAP` is gone from current docs, and
-the infra runbook and public API doc both list the three cap codes and the limits runbook."""
+the infra runbook and public API doc both list the cap codes and the limits runbook."""
 
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 INFRA = ROOT / "docs/reference/infra.md"
 PUBLIC_API = ROOT / "docs/reference/public-api.md"
-CODES = ("daily_cap_reached", "monthly_cap_reached", "interview_cap_reached")
+CODES = ("daily_cap_reached", "interview_cap_reached")
 STALE = ("DAILY_RUN_CAP", "daily_run_cap", "runs_today")
 
 
@@ -30,7 +30,7 @@ def test_removed_daily_run_cap_is_gone_from_current_docs():
     assert not hits, hits
 
 
-def test_infra_and_public_api_list_the_three_cap_codes():
+def test_infra_and_public_api_list_the_cap_codes():
     for doc in (INFRA, PUBLIC_API):
         text = doc.read_text()
         for code in CODES:
@@ -40,7 +40,7 @@ def test_infra_and_public_api_list_the_three_cap_codes():
 def test_infra_has_limits_runbook_and_new_env_vars():
     text = INFRA.read_text()
     assert "## Per-user limits (Firebase console)" in text
-    for var in ("EVAL_CAP_DAY", "EVAL_CAP_MONTH", "AI_CAP_DAY", "AI_CAP_MONTH"):
+    for var in ("EVAL_CAP_DAY", "AI_CAP_DAY"):
         assert f"`{var}`" in text, var
     assert "`users/{uid}`" in text and "`limits`" in text and "`usage`" in text
 

@@ -140,7 +140,7 @@ describe("session_status mirror", () => {
     expect(JSON.stringify(docs[0])).not.toContain("My private title");
   });
 
-  it("never lets progress decrease within a run; a re-run restarts at 45", () => {
+  it("never lets progress decrease within a run", () => {
     const { backend, emitter } = ctx;
     const sid = started(backend);
     const progress: number[] = [];
@@ -151,8 +151,6 @@ describe("session_status mirror", () => {
     backend.settle(sid);
     for (let i = 1; i < progress.length; i++) expect(progress[i]).toBeGreaterThanOrEqual(progress[i - 1]);
     expect(progress.at(-1)).toBe(100);
-    backend.startRun(U, sid, {});
-    expect(status(backend, sid).progress).toBe(45);
   });
 });
 
@@ -192,8 +190,8 @@ describe("first-run gate (any order, exactly one run)", () => {
     backend.completeAudio(U, session.id);
     backend.advance(session.id);
     expect(status(backend, session.id).status).toBe("transcribing");
-    backend.putRating(U, session.id, { final: true, card: SCORED });
-    expect(status(backend, session.id).flags.has_rating).toBe(true);
+    expectHttp(() => backend.putRating(U, session.id, { final: true, card: SCORED }), 409, "rating_final");
+    expect(status(backend, session.id).flags.has_rating).toBe(false);
   });
 
   it("a draft never satisfies the gate", () => {
@@ -296,12 +294,13 @@ describe("failure injection by title", () => {
     return { backend, sid };
   }
 
-  it("fail-paudit fails the run and the session (can Run again)", () => {
+  it("fail-paudit fails the run and the session (can Try again)", () => {
     const { backend, sid } = ready("fail-paudit");
     expect(status(backend, sid)).toMatchObject({ status: "failed", error: { code: "internal_error", step: "paudit" } });
     expect(status(backend, sid).latest_report_version).toBeNull();
-    backend.startRun(U, sid, {}); // later failures offer Run again
-    expect(status(backend, sid).status).toBe("running");
+    backend.startRun(U, sid, {}); // a system failure offers Try again (same stored rating)
+    expect(status(backend, sid)).toMatchObject({ status: "running", progress: 45 });
+    expect(backend.listRuns(U, sid)[1].rating_id).toBe(backend.listRuns(U, sid)[0].rating_id);
   });
 
   it("fail-eaudit still produces a report with reasons_audit failed + warning", () => {
@@ -338,6 +337,22 @@ describe("daily cap", () => {
     expect(status(backend, sid).error).toBeUndefined();
   });
 
+  it("auto-start held by another running session reports concurrent_runs, not the daily cap (review R2)", () => {
+    const { backend } = ctx;
+    const first = started(backend);
+    backend.settle(first);
+    backend.confirmSpeaker(U, first, "spk_0");
+    backend.putRating(U, first, { final: true, card: SCORED });
+    expect(status(backend, first)).toMatchObject({ status: "running" });
+    const second = started(backend);
+    backend.settle(second);
+    backend.confirmSpeaker(U, second, "spk_0");
+    backend.putRating(U, second, { final: true, card: SCORED });
+    expect(status(backend, second)).toMatchObject({ status: "awaiting_input", error: { code: "concurrent_runs" } });
+    expect(backend.listRuns(U, second)).toHaveLength(0);
+    expectHttp(() => backend.startRun(U, second, {}), 429, "concurrent_runs");
+  });
+
   it("a real cap: POST /runs over the cap is 429 daily_cap_reached; usage reports it", () => {
     const { backend } = make({ caps: { eval: { day: 1 } } });
     const sid = started(backend);
@@ -346,7 +361,10 @@ describe("daily cap", () => {
     backend.putRating(U, sid, { final: true, card: SCORED });
     backend.settle(sid);
     expect(backend.getUsage(U).eval.day).toMatchObject({ used: 1, cap: 1 });
-    expectHttp(() => backend.startRun(U, sid, {}), 429, "daily_cap_reached");
+    const next = started(backend);
+    backend.settle(next);
+    backend.confirmSpeaker(U, next, "spk_0");
+    expectHttp(() => backend.startRun(U, next, {}), 429, "daily_cap_reached");
   });
 
   it("the auto-start also stops at a real cap", () => {
@@ -359,6 +377,59 @@ describe("daily cap", () => {
   });
 });
 
+describe("free interview runs mirror the API (review round 2)", () => {
+  /** An interview-linked session, ready except the final rating. */
+  function interviewSession(backend: MockBackend, title?: string): string {
+    const iv = backend.createInterview(U, { scenario_id: "sc_anxious_parent" });
+    backend.setInterviewState(iv.interview_id, "ended", 60);
+    const { session } = backend.createSession(U, { interview_id: iv.interview_id, title });
+    backend.requestAudio(U, session.id, MP3);
+    backend.completeAudio(U, session.id);
+    backend.settle(session.id);
+    backend.confirmSpeaker(U, session.id, "spk_0");
+    return session.id;
+  }
+
+  it("an interview session at the eval cap auto-starts its first run without counting", () => {
+    const { backend } = make({ caps: { eval: { day: 0 } } });
+    const sid = interviewSession(backend);
+    backend.putRating(U, sid, { final: true, card: SCORED });
+    expect(status(backend, sid)).toMatchObject({ status: "running", free_run: true });
+    expect(backend.getUsage(U).eval.day.used).toBe(0);
+  });
+
+  it("a failed free run: Try again at the cap succeeds without counting", () => {
+    const { backend } = make({ caps: { eval: { day: 0 } } });
+    const sid = interviewSession(backend, "fail-paudit");
+    backend.putRating(U, sid, { final: true, card: SCORED });
+    backend.settle(sid);
+    expect(status(backend, sid)).toMatchObject({ status: "failed" });
+    backend.startRun(U, sid, {});
+    expect(status(backend, sid)).toMatchObject({ status: "running" });
+    expect(backend.getUsage(U).eval.day.used).toBe(0);
+  });
+
+  it("a free first run still respects max 1 active run", () => {
+    const { backend } = make({ caps: { eval: { day: 0 } } });
+    const a = interviewSession(backend);
+    backend.putRating(U, a, { final: true, card: SCORED });
+    const b = interviewSession(backend);
+    backend.putRating(U, b, { final: true, card: SCORED });
+    expect(status(backend, b)).toMatchObject({ status: "awaiting_input", error: { code: "concurrent_runs" } });
+  });
+
+  it("a non-interview Try again at the cap is still 429 daily_cap_reached", () => {
+    const { backend } = make({ caps: { eval: { day: 1 } } });
+    const sid = started(backend, "fail-paudit");
+    backend.settle(sid);
+    backend.confirmSpeaker(U, sid, "spk_0");
+    backend.putRating(U, sid, { final: true, card: SCORED });
+    backend.settle(sid);
+    expect(status(backend, sid)).toMatchObject({ status: "failed", free_run: false });
+    expectHttp(() => backend.startRun(U, sid, {}), 429, "daily_cap_reached");
+  });
+});
+
 describe("usage caps by kind and period", () => {
   function ready(backend: MockBackend): string {
     const sid = started(backend);
@@ -366,6 +437,12 @@ describe("usage caps by kind and period", () => {
     backend.confirmSpeaker(U, sid, "spk_0");
     backend.putRating(U, sid, { final: true, card: SCORED });
     backend.settle(sid);
+    return sid;
+  }
+  function awaiting(backend: MockBackend): string {
+    const sid = started(backend);
+    backend.settle(sid);
+    backend.confirmSpeaker(U, sid, "spk_0");
     return sid;
   }
   const detail = (fn: () => unknown) => {
@@ -377,67 +454,50 @@ describe("usage caps by kind and period", () => {
     return undefined;
   };
 
-  it("getUsage returns per-kind day and month periods with reset times", () => {
-    const { backend } = make({ caps: { eval: { day: 3, month: 9 }, interview: { day: 2, month: 4 } } });
+  it("getUsage returns per-kind day periods only, with reset times", () => {
+    const { backend } = make({ caps: { eval: { day: 3 }, interview: { day: 2 } } });
     ready(backend);
     expect(backend.getUsage(U)).toEqual({
-      eval: {
-        day: { used: 1, cap: 3, resets_at: expect.stringMatching(/T00:00:00\.000Z$/) },
-        month: { used: 1, cap: 9, resets_at: expect.stringMatching(/-01T00:00:00\.000Z$/) },
-      },
-      interview: {
-        day: { used: 0, cap: 2, resets_at: expect.any(String) },
-        month: { used: 0, cap: 4, resets_at: expect.any(String) },
-      },
+      eval: { day: { used: 1, cap: 3, resets_at: expect.stringMatching(/T00:00:00\.000Z$/) } },
+      interview: { day: { used: 0, cap: 2, resets_at: expect.any(String) } },
     });
+  });
+
+  it("a second start while another session is running: 429 concurrent_runs", () => {
+    const { backend } = make();
+    const a = awaiting(backend);
+    backend.startRun(U, a, {}); // a is now running
+    const b = awaiting(backend);
+    expectHttp(() => backend.startRun(U, b, {}), 429, "concurrent_runs");
   });
 
   it("eval day cap: 429 daily_cap_reached with period=day", () => {
     const { backend } = make({ caps: { eval: { day: 1 } } });
-    const sid = ready(backend);
+    ready(backend); // uses the one run
+    const sid = awaiting(backend);
     expectHttp(() => backend.startRun(U, sid, {}), 429, "daily_cap_reached");
     expect(detail(() => backend.startRun(U, sid, {}))).toMatchObject({ period: "day" });
   });
 
-  it("eval month cap: 429 monthly_cap_reached with period=month, and held auto-start uses the month code", () => {
-    const { backend } = make({ caps: { eval: { month: 1 } } });
-    const sid = ready(backend);
-    expectHttp(() => backend.startRun(U, sid, {}), 429, "monthly_cap_reached");
-    expect(detail(() => backend.startRun(U, sid, {}))).toMatchObject({ period: "month" });
-    const second = make({ caps: { eval: { month: 0 } } });
-    const sid2 = started(second.backend);
-    second.backend.settle(sid2);
-    second.backend.confirmSpeaker(U, sid2, "spk_0");
-    second.backend.putRating(U, sid2, { final: true, card: SCORED });
-    expect(status(second.backend, sid2).error).toEqual({ code: "monthly_cap_reached" });
-  });
-
-  it("both exhausted: the month code wins", () => {
-    const { backend } = make({ caps: { eval: { day: 1, month: 1 } } });
-    const sid = ready(backend);
-    expectHttp(() => backend.startRun(U, sid, {}), 429, "monthly_cap_reached");
-  });
-
   it("interview caps: 429 interview_cap_reached with the period, kinds do not share counters", () => {
-    const { backend } = make({ caps: { interview: { day: 1, month: 5 } } });
+    const { backend } = make({ caps: { interview: { day: 1 } } });
     backend.consumeInterview(U);
     expect(backend.getUsage(U).interview.day.used).toBe(1);
     expect(backend.getUsage(U).eval.day.used).toBe(0);
     expectHttp(() => backend.consumeInterview(U), 429, "interview_cap_reached");
     expect(detail(() => backend.consumeInterview(U))).toMatchObject({ period: "day" });
-    backend.configure({ caps: { interview: { month: 1 } } });
-    expect(detail(() => backend.consumeInterview(U))).toMatchObject({ code: "interview_cap_reached", period: "month" });
   });
 
   it("a refused attempt counts nothing", () => {
     const { backend } = make({ caps: { eval: { day: 1 } } });
-    const sid = ready(backend);
+    ready(backend);
+    const sid = awaiting(backend);
     expect(() => backend.startRun(U, sid, {})).toThrow();
     expect(backend.getUsage(U).eval.day.used).toBe(1);
   });
 });
 
-describe("re-runs and report versions", () => {
+describe("final ratings and report versions (FX45)", () => {
   function reported(rating: object) {
     const { backend } = ctx;
     const sid = started(backend);
@@ -448,26 +508,61 @@ describe("re-runs and report versions", () => {
     return { backend, sid };
   }
 
-  it("Run again creates v2 and keeps v1", () => {
+  it("a ready report is final: POST /runs and a final PUT /rating are 409 rating_final", () => {
     const { backend, sid } = reported({ final: true, card: SCORED });
-    backend.startRun(U, sid, {});
-    expect(status(backend, sid).status).toBe("running");
-    backend.settle(sid);
-    expect(backend.listReports(U, sid).map((r) => r.version)).toEqual([1, 2]);
-    expect(backend.getReport(U, sid, 1).header.has_clinician_rating).toBe(true);
-    expect(status(backend, sid).latest_report_version).toBe(2);
+    expectHttp(() => backend.startRun(U, sid, {}), 409, "rating_final");
+    expectHttp(() => backend.putRating(U, sid, { final: true, card: CARD }), 409, "rating_final");
+    backend.putRating(U, sid, { final: false, card: CARD }); // a draft is only a draft
+    expect(backend.listReports(U, sid).map((r) => r.version)).toEqual([1]);
+    expect(backend.listRuns(U, sid)).toHaveLength(1);
+    expect(status(backend, sid).latest_report_version).toBe(1);
   });
 
-  it("no-rating run, then add a rating and run again gives a rated v2", () => {
+  it("a submitted rating is final before any report exists (FX45 follow-up)", () => {
+    const { backend } = ctx;
+    const sid = started(backend);
+    backend.settle(sid);
+    backend.confirmSpeaker(U, sid, "spk_0");
+    backend.putRating(U, sid, { final: true, card: CARD });
+    expectHttp(() => backend.putRating(U, sid, { final: true, card: SCORED }), 409, "rating_final");
+    backend.putRating(U, sid, { final: false, card: SCORED }); // a draft is only a draft
+  });
+
+  it("a no-rating report is final too", () => {
     const { backend, sid } = reported({ final: true, no_rating: true, card: CARD });
     const v1 = backend.getReport(U, sid, 1);
     expect(v1.header.has_clinician_rating).toBe(false);
     expect(v1.reasons_audit.status).toBe("skipped");
-    backend.putRating(U, sid, { final: true, card: SCORED }); // allowed in report_ready
-    backend.startRun(U, sid, {});
+    expectHttp(() => backend.putRating(U, sid, { final: true, card: SCORED }), 409, "rating_final");
+    expectHttp(() => backend.startRun(U, sid, {}), 409, "rating_final");
+  });
+
+  it("a bad-file failure is not retryable (invalid_state); a system failure is", () => {
+    const { backend } = ctx;
+    const sid = started(backend, "fail-paudit");
     backend.settle(sid);
-    expect(backend.getReport(U, sid, 2).header.has_clinician_rating).toBe(true);
-    expect(backend.getReport(U, sid, 1).header.has_clinician_rating).toBe(false);
+    backend.confirmSpeaker(U, sid, "spk_0");
+    backend.putRating(U, sid, { final: true, card: SCORED });
+    backend.settle(sid);
+    expect(status(backend, sid).error?.code).toBe("internal_error");
+    backend.startRun(U, sid, {}); // internal_error: Try again
+    const bad = started(backend, "fail-no_speech");
+    backend.settle(bad);
+    expectHttp(() => backend.startRun(U, bad, {}), 409, "invalid_state");
+  });
+
+  it("Try again ignores the client's preset and n_runs and reuses the failed run's", () => {
+    const { backend } = ctx;
+    const sid = started(backend, "fail-paudit");
+    backend.settle(sid);
+    backend.confirmSpeaker(U, sid, "spk_0");
+    backend.putRating(U, sid, { final: true, card: SCORED });
+    backend.settle(sid);
+    const [first] = backend.listRuns(U, sid);
+    backend.startRun(U, sid, { preset: "fast", n_runs: 3 });
+    const second = backend.listRuns(U, sid).at(-1)!;
+    expect(second.run_id).not.toBe(first.run_id);
+    expect([second.preset, second.n_runs]).toEqual([first.preset, first.n_runs]);
   });
 
   it("run records carry stt, preset, code_version and the rating snapshot", () => {
@@ -480,18 +575,13 @@ describe("re-runs and report versions", () => {
     expect(backend.getRun(U, run.run_id).run_id).toBe(run.run_id);
   });
 
-  it("a re-run in report_ready needs no new transcript; a run while running is 409", () => {
-    const { backend, sid } = reported({ final: true, card: SCORED });
+  it("a run while running is 409", () => {
+    const { backend } = ctx;
+    const sid = started(backend);
+    backend.settle(sid);
+    backend.confirmSpeaker(U, sid, "spk_0");
     backend.startRun(U, sid, {});
     expectHttp(() => backend.startRun(U, sid, {}), 409, "invalid_state");
-  });
-
-  it("changing the clinician in report_ready applies to the next run only", () => {
-    const { backend, sid } = reported({ final: true, card: SCORED });
-    backend.confirmSpeaker(U, sid, "spk_1");
-    expect(status(backend, sid).status).toBe("report_ready");
-    expect(backend.getTranscript(U, sid).clinician_speaker).toBe("spk_1");
-    expect(backend.listReports(U, sid)).toHaveLength(1);
   });
 
   it("unknown report version is 404", () => {
@@ -517,13 +607,13 @@ describe("rating draft vs final", () => {
     expect(backend.getRating(U, sid).final).toBeDefined();
   });
 
-  it("each final PUT is a new revision", () => {
+  it("the final PUT is a new revision; a second final is 409 rating_final", () => {
     const { backend } = ctx;
     const { session } = backend.createSession(U, {});
     const a = backend.putRating(U, session.id, { final: true, card: CARD });
-    const b = backend.putRating(U, session.id, { final: true, card: SCORED });
     expect(a.rating_id).toBeTruthy();
-    expect(b.rating_id).not.toBe(a.rating_id);
+    expectHttp(() => backend.putRating(U, session.id, { final: true, card: SCORED }), 409, "rating_final");
+    expect(backend.getRating(U, session.id).final?.rating_id).toBe(a.rating_id);
   });
 
   it.each([

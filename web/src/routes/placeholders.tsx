@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { Link } from "react-router";
+import { useAuth } from "../auth/AuthProvider";
 
 function Page({ title, children }: { title: string; children?: ReactNode }) {
   return (
@@ -10,10 +11,25 @@ function Page({ title, children }: { title: string; children?: ReactNode }) {
   );
 }
 
-export const NotFound = () => (
-  <Page title="Page not found">
-    <p>
-      <Link to="/">Back to your sessions</Link>
-    </p>
-  </Page>
-);
+export function NotFound() {
+  const { phase } = useAuth();
+  return (
+    <Page title="Page not found">
+      {phase === "verified" && (
+        <p>
+          <Link to="/">Back to your sessions</Link>
+        </p>
+      )}
+      {phase === "unverified" && (
+        <p>
+          <Link to="/verify-email">Verify your email</Link>
+        </p>
+      )}
+      {phase === "signedOut" && (
+        <p>
+          <Link to="/login">Log in</Link>
+        </p>
+      )}
+    </Page>
+  );
+}

@@ -22,5 +22,10 @@ export default tseslint.config(
         },
       ],
     },
+  },  {
+    // Playwright e2e specs are CommonJS (.cjs) run by node.
+    files: ["e2e_review/**/*.cjs"],
+    languageOptions: { sourceType: "commonjs", globals: globals.node },
+    rules: { "@typescript-eslint/no-require-imports": "off" },
   },
 );

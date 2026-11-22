@@ -1,7 +1,8 @@
 """`/v1/sessions/{id}/rating`: the in-app rating card (R2, D15). Firestore only, no parsing.
 
 `final=false` overwrites the single draft doc (size limits only; never gates or starts a run).
-`final=true` validates the card and writes a new revision `ratings/{rating_id}`, copies
+`final=true` is refused (409 `rating_final`) once a rating was submitted or a report exists;
+otherwise it validates the card and writes a new revision `ratings/{rating_id}`, copies
 `change_goal`/`coded_span` to the session, sets `rating_submitted`/`has_rating`, mirrors them to
 `session_status` and calls the first-run hook. Allowed in every state but `deleting` (404).
 """
@@ -16,9 +17,11 @@ from pydantic import BaseModel, Field
 from onolys_api.auth.deps import AuthUser, current_user
 from onolys_api.errors import ApiError, ErrorDetail, ErrorResponse
 from onolys_api.jobs.first_run import maybe_start_first_run
+from onolys_api.jobs.machine import has_final_report, rating_final
 from onolys_api.rating import SCHEMA_VERSION, Issue, has_content, validate_rating
 from onolys_api.repo.base import NotFoundError
 from onolys_api.repo.models import RatingDoc, RatingDraftDoc
+from onolys_api.routes.ids import ResourceId
 
 ERRORS = {"default": {"model": ErrorResponse, "description": "Error"}}
 router = APIRouter(prefix="/sessions/{id}/rating", tags=["rating"], responses=ERRORS)
@@ -91,13 +94,15 @@ def _open_session(request: Request, user: AuthUser, id: str):
         "and sets `rating_submitted`/`has_rating`; `no_rating=true`, or a card with no scores, "
         'counts or notes, is a "no rating" revision (`has_rating=false`). Over 1,000 chars per '
         "reason/note/example or 3,000 for `notes` is 422 `rating_invalid`. Allowed in every state "
-        "but `deleting`. A final card may start the first run (R4)."
+        "but `deleting`; a final card is refused with 409 `rating_final` once a rating was "
+        "submitted (or a report exists): the rating is final, only drafts stay open. A final card "
+        "may start the first run (R4)."
     ),
 )
-def put_rating(id: str, body: RatingRequest, request: Request, user: User) -> RatingSaved:
+def put_rating(id: ResourceId, body: RatingRequest, request: Request, user: User) -> RatingSaved:
     repo = request.app.state.repo
     uid = user.uid
-    _open_session(request, user, id)
+    session = _open_session(request, user, id)
     now = datetime.now(UTC)
     if not body.final:
         if issues := validate_rating(body.card, final=False):
@@ -105,6 +110,8 @@ def put_rating(id: str, body: RatingRequest, request: Request, user: User) -> Ra
         repo.put_rating_draft(uid, id, RatingDraftDoc(card=body.card, updated_at=now))
         return RatingSaved(final=False, updated_at=now)
 
+    if session.rating_submitted or has_final_report(repo, uid, id, session.state):
+        raise rating_final()  # FX45: once submitted (or a report exists) the rating is final
     if issues := validate_rating(body.card, final=True):
         raise _invalid(issues)
     no_rating = body.no_rating or not has_content(body.card)
@@ -127,8 +134,12 @@ def put_rating(id: str, body: RatingRequest, request: Request, user: User) -> Ra
         "has_rating": not no_rating,
     }
     span = body.card.get("coded_span")
-    if isinstance(span, dict) and "from_s" in span and "to_s" in span:
-        fields["coded_span"] = {"from_s": span["from_s"], "to_s": span["to_s"]}
+    # Always set (span or None) so a cleared span replaces the old one on the session (BH1).
+    fields["coded_span"] = (
+        {"from_s": span["from_s"], "to_s": span["to_s"]}
+        if isinstance(span, dict) and "from_s" in span and "to_s" in span
+        else None
+    )
     repo.update_session(
         uid,
         id,
@@ -155,7 +166,7 @@ def put_rating(id: str, body: RatingRequest, request: Request, user: User) -> Ra
     response_model=RatingView,
     summary="The latest final revision and, if newer, the autosaved draft",
 )
-def get_rating(id: str, request: Request, user: User) -> RatingView:
+def get_rating(id: ResourceId, request: Request, user: User) -> RatingView:
     repo = request.app.state.repo
     _open_session(request, user, id)
     final = repo.latest_rating(user.uid, id)

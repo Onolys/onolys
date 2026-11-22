@@ -1,8 +1,9 @@
-import { act, cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { here, renderApp } from "../test/renderApp";
 import { createFakeAuthService } from "./fakeService";
+import { resetResendCooldowns } from "./pages/VerifyEmail";
 
 const h1 = (name: string) => screen.findByRole("heading", { level: 1, name });
 
@@ -13,10 +14,12 @@ describe("sign up", () => {
     await h1("Sign up");
     await user.type(screen.getByLabelText("Email"), "new@clinic.org");
     await user.type(screen.getByLabelText("Password"), "longenough1");
+    await user.type(screen.getByLabelText("Confirm password"), "longenough1");
     await user.click(screen.getByRole("button", { name: "Create account" }));
     await h1("Verify your email");
     expect(service.calls.verificationEmails).toBe(1);
     expect(here(router)).toBe("/verify-email?next=%2Fsettings");
+    expect(service.calls.verificationNexts).toEqual(["/settings"]);
   });
 
   it("blocks passwords under 8 characters with an error summary and does not call the service", async () => {
@@ -32,6 +35,64 @@ describe("sign up", () => {
     expect(service.calls.signUps).toBe(0);
   });
 
+  it("asks for an email (no service call) when it is empty or malformed, and marks the field invalid", async () => {
+    const user = userEvent.setup();
+    const { service } = renderApp("/signup");
+    await h1("Sign up");
+    await user.type(screen.getByLabelText("Password"), "longenough1");
+    await user.click(screen.getByRole("button", { name: "Create account" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(/enter your email/i);
+    const email = screen.getByLabelText("Email");
+    expect(email).toHaveAttribute("aria-invalid", "true");
+    expect(email.getAttribute("aria-describedby")).toBe(screen.getByRole("alert").id);
+    expect(screen.getByLabelText("Password")).not.toHaveAttribute("aria-invalid");
+    for (const bad of ["foo", "a@b"]) {
+      await user.clear(email);
+      await user.type(email, bad);
+      await user.click(screen.getByRole("button", { name: "Create account" }));
+      expect(await screen.findByRole("alert")).toHaveTextContent(/valid email/i);
+    }
+    expect(service.calls.signUps).toBe(0);
+  });
+
+  it("marks the password field invalid for a short password", async () => {
+    const user = userEvent.setup();
+    renderApp("/signup");
+    await h1("Sign up");
+    await user.type(screen.getByLabelText("Email"), "new@clinic.org");
+    await user.type(screen.getByLabelText("Password"), "short");
+    await user.click(screen.getByRole("button", { name: "Create account" }));
+    await screen.findByRole("alert");
+    expect(screen.getByLabelText("Password")).toHaveAttribute("aria-invalid", "true");
+    expect(screen.getByLabelText("Email")).not.toHaveAttribute("aria-invalid");
+  });
+
+  it("requires the confirmation to match (FX20) and flags the field", async () => {
+    const user = userEvent.setup();
+    const { service } = renderApp("/signup");
+    await h1("Sign up");
+    await user.type(screen.getByLabelText("Email"), "new@clinic.org");
+    await user.type(screen.getByLabelText("Password"), "longenough1");
+    await user.type(screen.getByLabelText("Confirm password"), "longenough2");
+    await user.click(screen.getByRole("button", { name: "Create account" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Passwords don't match");
+    expect(screen.getByLabelText("Confirm password")).toHaveAttribute("aria-invalid", "true");
+    expect(service.calls.signUps).toBe(0);
+  });
+
+  it("toggles password visibility with an accessible button (FX20)", async () => {
+    const user = userEvent.setup();
+    renderApp("/signup");
+    await h1("Sign up");
+    const toggle = screen.getByRole("button", { name: "Show passwords" });
+    expect(toggle).toHaveAttribute("aria-pressed", "false");
+    expect(screen.getByLabelText("Password")).toHaveAttribute("type", "password");
+    await user.click(toggle);
+    expect(toggle).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByLabelText("Password")).toHaveAttribute("type", "text");
+    expect(screen.getByLabelText("Confirm password")).toHaveAttribute("type", "text");
+  });
+
   it("offers login when the email is already in use", async () => {
     const user = userEvent.setup();
     const service = createFakeAuthService();
@@ -41,6 +102,7 @@ describe("sign up", () => {
     await h1("Sign up");
     await user.type(screen.getByLabelText("Email"), "dup@clinic.org");
     await user.type(screen.getByLabelText("Password"), "longenough1");
+    await user.type(screen.getByLabelText("Confirm password"), "longenough1");
     await user.click(screen.getByRole("button", { name: "Create account" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("already exists");
     const link = screen.getByRole("link", { name: "Log in instead" });
@@ -86,6 +148,27 @@ describe("log in", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent("That email and password don't match");
   });
 
+  it("asks for email, then password, instead of calling the service on an empty form", async () => {
+    const user = userEvent.setup();
+    const { service } = renderApp("/login");
+    await h1("Log in");
+    await user.click(screen.getByRole("button", { name: "Log in" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(/enter your email/i);
+    expect(screen.getByLabelText("Email")).toHaveAttribute("aria-invalid", "true");
+    await user.type(screen.getByLabelText("Email"), "a@clinic.org");
+    await user.click(screen.getByRole("button", { name: "Log in" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(/enter your password/i);
+    expect(screen.getByLabelText("Password")).toHaveAttribute("aria-invalid", "true");
+    expect(service.calls.signIns).toBe(0);
+  });
+
+  it("shows the error of a failed Google redirect sign-in", async () => {
+    const service = createFakeAuthService();
+    vi.spyOn(service, "consumeRedirectError").mockResolvedValue("auth/account-exists-with-different-credential");
+    renderApp("/login", { service });
+    expect(await screen.findByRole("alert")).toHaveTextContent("This email has a password account. Sign in with your password.");
+  });
+
   it("links to sign up and forgot password, carrying ?next=", async () => {
     renderApp("/login?next=%2Fsettings");
     await h1("Log in");
@@ -123,14 +206,55 @@ describe("forgot password", () => {
   });
 });
 
+describe("forgot password errors (FX22)", () => {
+  it("clears the confirmation when a later submit fails, so success and error never show together", async () => {
+    const user = userEvent.setup();
+    const { service } = renderApp("/forgot-password");
+    await h1("Reset your password");
+    await user.type(screen.getByLabelText("Email"), "nobody@clinic.org");
+    await user.click(screen.getByRole("button", { name: "Send reset link" }));
+    await screen.findByRole("status");
+    vi.spyOn(service, "sendPasswordReset").mockRejectedValueOnce({ code: "auth/network-request-failed" });
+    await user.click(screen.getByRole("button", { name: "Send reset link" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Can't reach the server");
+    expect(screen.queryByRole("status")).toBeNull();
+  });
+
+  it("rejects a malformed email on the client without the confirmation or a service call", async () => {
+    const user = userEvent.setup();
+    const { service } = renderApp("/forgot-password");
+    await h1("Reset your password");
+    await user.type(screen.getByLabelText("Email"), "foo");
+    await user.click(screen.getByRole("button", { name: "Send reset link" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Enter a valid email");
+    expect(screen.getByLabelText("Email")).toHaveAttribute("aria-invalid", "true");
+    expect(screen.queryByRole("status")).toBeNull();
+    expect(service.calls.resets).toEqual([]);
+  });
+
+  it("shows the valid-email message when the provider says invalid-email, not the confirmation", async () => {
+    const user = userEvent.setup();
+    const { service } = renderApp("/forgot-password");
+    await h1("Reset your password");
+    vi.spyOn(service, "sendPasswordReset").mockRejectedValueOnce({ code: "auth/invalid-email" });
+    await user.type(screen.getByLabelText("Email"), "a@b.co");
+    await user.click(screen.getByRole("button", { name: "Send reset link" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Enter a valid email");
+    expect(screen.queryByRole("status")).toBeNull();
+  });
+});
+
 describe("verify email", () => {
-  afterEach(() => vi.useRealTimers());
+  afterEach(() => {
+    vi.useRealTimers();
+    resetResendCooldowns();
+  });
 
   it("mentions the spam folder", async () => {
     renderApp("/verify-email", { user: { email: "a@clinic.org", verified: false } });
     await h1("Verify your email");
     expect(screen.getByText(/spam folder/i)).toBeInTheDocument();
-    expect(screen.getByText(/a@clinic\.org/)).toBeInTheDocument();
+    expect(within(screen.getByRole("main")).getByText(/a@clinic\.org/)).toBeInTheDocument();
   });
 
   it("Resend sends mail then locks for 60 seconds with a countdown", async () => {
@@ -183,4 +307,80 @@ describe("verify email", () => {
     await h1("Sessions");
     expect(service.calls.forcedRefreshes).toBe(1);
   });
+
+  it("Resend asks the email link to come back to ?next= (FX24)", async () => {
+    const user = userEvent.setup();
+    const { service } = renderApp("/verify-email?next=%2Fsettings", { user: { email: "a@clinic.org", verified: false } });
+    await h1("Verify your email");
+    await user.click(screen.getByRole("button", { name: "Resend email" }));
+    await screen.findByRole("button", { name: /Resend in/ });
+    expect(service.calls.verificationNexts).toEqual(["/settings"]);
+  });
+
+  it("the resend cooldown survives leaving and returning to the page, not stored in the browser (FX24)", async () => {
+    const user = userEvent.setup();
+    renderApp("/verify-email", { user: { email: "a@clinic.org", verified: false } });
+    await h1("Verify your email");
+    await user.click(screen.getByRole("button", { name: "Resend email" }));
+    await screen.findByRole("button", { name: /Resend in/ });
+    cleanup();
+    renderApp("/verify-email", { user: { email: "a@clinic.org", verified: false } });
+    await h1("Verify your email");
+    expect(screen.getByRole("button", { name: /Resend in/ })).toBeDisabled();
+  });
+
+  it("\"I've verified\" is busy while checking (FX24)", async () => {
+    const user = userEvent.setup();
+    const { service } = renderApp("/verify-email", { user: { email: "a@clinic.org", verified: false } });
+    await h1("Verify your email");
+    let release!: () => void;
+    vi.spyOn(service, "refreshUser").mockImplementationOnce(() => new Promise((r) => (release = () => r(null))));
+    await user.click(screen.getByRole("button", { name: "I've verified" }));
+    expect(await screen.findByRole("button", { name: "Checking…" })).toBeDisabled();
+    release();
+    expect(await screen.findByRole("button", { name: "I've verified" })).toBeEnabled();
+  });
+
+  it("clears the old note on the next action (FX24)", async () => {
+    const user = userEvent.setup();
+    const { service } = renderApp("/verify-email", { user: { email: "a@clinic.org", verified: false } });
+    await h1("Verify your email");
+    await user.click(screen.getByRole("button", { name: "I've verified" }));
+    expect(await screen.findByRole("status")).toHaveTextContent("haven't seen your verification");
+    vi.spyOn(service, "sendVerificationEmail").mockRejectedValueOnce({ code: "auth/too-many-requests" });
+    await user.click(screen.getByRole("button", { name: "Resend email" }));
+    expect(await screen.findByRole("alert")).toBeInTheDocument();
+    expect(screen.queryByRole("status")).toBeNull();
+  });
+});
+
+describe("Google button busy and cancel handling (FX33)", () => {
+  for (const [path, title] of [["/login", "Log in"], ["/signup", "Sign up"]] as const) {
+    it(`${path}: disables both buttons while Google is pending`, async () => {
+      const user = userEvent.setup();
+      const { service } = renderApp(path);
+      await h1(title);
+      let release: () => void = () => {};
+      service.signInWithGoogle = vi.fn(() => new Promise<void>((r) => (release = r)));
+      const google = screen.getByRole("button", { name: "Continue with Google" });
+      await user.click(google);
+      expect(google).toBeDisabled();
+      expect(screen.getByRole("button", { name: path === "/login" ? "Log in" : "Create account" })).toBeDisabled();
+      release();
+      await waitFor(() => expect(google).toBeEnabled());
+    });
+
+    it(`${path}: a closed or cancelled popup shows no error`, async () => {
+      const user = userEvent.setup();
+      const { service } = renderApp(path);
+      await h1(title);
+      for (const code of ["auth/popup-closed-by-user", "auth/cancelled-popup-request"]) {
+        service.signInWithGoogle = vi.fn(() => Promise.reject({ code }));
+        await user.click(screen.getByRole("button", { name: "Continue with Google" }));
+        await waitFor(() => expect(service.signInWithGoogle).toHaveBeenCalled());
+        await waitFor(() => expect(screen.getByRole("button", { name: "Continue with Google" })).toBeEnabled());
+        expect(screen.queryByRole("alert")).toBeNull();
+      }
+    });
+  }
 });

@@ -126,30 +126,37 @@ describe("speaker gate", () => {
 });
 
 describe("change who the clinician is", () => {
-  it("is offered when the report is ready, preselects the current clinician and starts a new run", async () => {
-    const user = userEvent.setup();
+  it("is not offered once the report is ready: the rating is final (FX45)", async () => {
     const sid = reportReady();
+    open(sid);
+    expect(await screen.findByRole("link", { name: "View report" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Change who the clinician is" })).not.toBeInTheDocument();
     expect(mockBackend.listRuns(UID, sid)).toHaveLength(1);
+  });
+
+  it("after a failed run, preselects the current clinician and tries the run again", async () => {
+    const user = userEvent.setup();
+    const sid = reportReady("fail-paudit");
     open(sid);
     await user.click(await screen.findByRole("button", { name: "Change who the clinician is" }));
     const list = await cards();
     const radios = list.map((c) => within(c).getByRole("radio", { name: "This is the clinician" }));
     expect(radios[0]).toBeChecked();
     await user.click(radios[1]);
-    await user.click(screen.getByRole("button", { name: "Save and run again" }));
+    await user.click(screen.getByRole("button", { name: "Save and try again" }));
     await waitFor(() => expect(mockBackend.listRuns(UID, sid)).toHaveLength(2));
     expect(mockBackend.getSpeakers(UID, sid).clinician_speaker).toBe("spk_1");
     await waitFor(() => expect(screen.queryByRole("list", { name: "Speakers" })).not.toBeInTheDocument());
   });
 
-  it("is offered after a failed run, and can be reopened by keyboard", async () => {
+  it("can be reopened by keyboard after a failed run", async () => {
     const user = userEvent.setup();
     const sid = reportReady("fail-paudit");
     open(sid);
     const link = await screen.findByRole("button", { name: "Change who the clinician is" });
     act(() => link.focus());
     await user.keyboard("{Enter}");
-    expect(await screen.findByRole("button", { name: "Save and run again" })).toBeEnabled();
+    expect(await screen.findByRole("button", { name: "Save and try again" })).toBeEnabled();
   });
 
   it("is not offered while the first gate is showing or while running", async () => {

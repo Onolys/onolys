@@ -1,10 +1,27 @@
 import { useEffect, useRef } from "react";
 import { Link, NavLink, Outlet, useLocation } from "react-router";
-import { useAuth } from "../auth/AuthProvider";
+import { useAuth, type AuthPhase } from "../auth/AuthProvider";
+import { useSignOut } from "../auth/useSignOut";
+
+const NAV: Record<AuthPhase, { to: string; label: string }[]> = {
+  loading: [],
+  signedOut: [
+    { to: "/login", label: "Log in" },
+    { to: "/signup", label: "Sign up" },
+    { to: "/sample-report", label: "Sample report" },
+  ],
+  unverified: [{ to: "/verify-email", label: "Verify email" }],
+  verified: [
+    { to: "/", label: "Sessions" },
+    { to: "/sessions/new", label: "New session" },
+    { to: "/settings", label: "Settings" },
+  ],
+};
 
 export function Layout() {
   const { pathname } = useLocation();
-  const { status } = useAuth();
+  const { status, phase, user } = useAuth();
+  const { signOut, error: signOutError } = useSignOut();
   const mainRef = useRef<HTMLElement>(null);
 
   // A11y (R8): after each route change move focus to the page h1.
@@ -26,12 +43,22 @@ export function Layout() {
           Onolys
         </Link>
         <nav aria-label="Main">
-          <NavLink to="/">Sessions</NavLink>
-          <NavLink to="/sessions/new">New session</NavLink>
-          <NavLink to="/sample-report">Sample report</NavLink>
-          <NavLink to="/settings">Settings</NavLink>
+          {NAV[phase].map((l) => (
+            <NavLink key={l.to} to={l.to} end={l.to === "/"}>
+              {l.label}
+            </NavLink>
+          ))}
+          {(phase === "verified" || phase === "unverified") && (
+            <>
+              {user?.email && <span className="nav-user">{user.email}</span>}
+              <button type="button" className="btn btn-secondary" onClick={() => void signOut()}>
+                Sign out
+              </button>
+            </>
+          )}
         </nav>
       </header>
+      {signOutError && <p role="alert">{signOutError}</p>}
       <main id="main" ref={mainRef}>
         <Outlet />
       </main>

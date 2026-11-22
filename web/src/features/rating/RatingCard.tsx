@@ -74,13 +74,11 @@ function Text({ path, label, value, limit, error, rows = 3, hint, onChange }: { 
 export interface RatingCardProps {
   sessionId: string;
   debounceMs?: number;
-  /** Label of the main submit button (the report page uses "Submit and run again"). */
-  submitLabel?: string;
-  /** Called after a final rating is saved (e.g. to start a new run). A throw shows as a form error. */
-  onSubmitted?: () => Promise<void> | void;
+  /** The rating is final (FX45): fields are shown but cannot change, and nothing is submitted. */
+  readOnly?: boolean;
 }
 
-export function RatingCard({ sessionId, debounceMs = 2000, submitLabel = "Submit rating", onSubmitted }: RatingCardProps) {
+export function RatingCard({ sessionId, debounceMs = 2000, readOnly = false }: RatingCardProps) {
   const client = useApiClient();
   const [load, setLoad] = useState<Load>("loading");
   const [attempt, setAttempt] = useState(0);
@@ -100,10 +98,12 @@ export function RatingCard({ sessionId, debounceMs = 2000, submitLabel = "Submit
       try {
         const data = unwrap(await client.GET("/sessions/{id}/rating", { params: { path: { id: sessionId } } }));
         if (!live) return;
-        const next = cardToForm(data.draft?.card ?? data.final?.card);
+        // A final rating shows what was submitted, never a stale draft (FX45).
+        const draft = readOnly ? undefined : data.draft;
+        const next = cardToForm(draft?.card ?? data.final?.card);
         formRef.current = next;
         setForm(next);
-        setSubmitted(data.draft ? null : data.final ? (data.final.no_rating ? "no_rating" : "submitted") : null);
+        setSubmitted(draft ? null : data.final ? (data.final.no_rating ? "no_rating" : "submitted") : null);
         setLoad("ready");
       } catch {
         if (live) setLoad("error");
@@ -112,7 +112,7 @@ export function RatingCard({ sessionId, debounceMs = 2000, submitLabel = "Submit
     return () => {
       live = false;
     };
-  }, [client, sessionId, attempt]);
+  }, [client, sessionId, attempt, readOnly]);
 
   // Autosave controller: debounce, blur and page-hide flushes all go through it.
   useEffect(() => {
@@ -174,7 +174,7 @@ export function RatingCard({ sessionId, debounceMs = 2000, submitLabel = "Submit
     setBusy(true);
     saver.current?.cancel();
     try {
-      await saver.current?.flush(); // nothing pending after cancel; waits for an in-flight draft
+      await saver.current?.flush(); // saves any pending draft edit and waits for an in-flight one
       unwrap(
         await client.PUT("/sessions/{id}/rating", {
           params: { path: { id: sessionId } },
@@ -182,7 +182,6 @@ export function RatingCard({ sessionId, debounceMs = 2000, submitLabel = "Submit
         }),
       );
       setSubmitted(noRating ? "no_rating" : "submitted");
-      await onSubmitted?.();
     } catch (e) {
       if (e instanceof ApiError && e.code === "rating_invalid") {
         setIssues(issuesFromApi(e));
@@ -223,12 +222,26 @@ export function RatingCard({ sessionId, debounceMs = 2000, submitLabel = "Submit
       onBlur={() => void saver.current?.flush()}
     >
       <h2 id="rating-heading">Your rating</h2>
-      <p className="form-note">
-        Fill this in while we transcribe. It saves as you type. Onolys compares it with its own reading of the session.
-      </p>
-      <p className="form-note" aria-live="polite">
-        {STATUS_TEXT[status]}
-      </p>
+      {readOnly ? (
+        <p className="form-note">
+          {submitted === "no_rating"
+            ? "Saved without a rating — Onolys will score the session on its own. "
+            : submitted === "submitted"
+              ? "Rating submitted. "
+              : ""}
+          Your rating is final: it can't be changed or run again.
+        </p>
+      ) : (
+        <>
+          <p className="form-note">
+            Fill this in while we transcribe. It saves as you type. Onolys compares it with its own reading of the session.
+          </p>
+          <p className="form-note" aria-live="polite">
+            {STATUS_TEXT[status]}
+          </p>
+        </>
+      )}
+      <fieldset className="rating-fields" disabled={readOnly}>
 
       <Field path="change_goal" label="Change goal" error={err("change_goal")}>
         {(p) => <input {...p} type="text" value={form.changeGoal} onChange={(e) => edit((f) => ({ ...f, changeGoal: e.target.value }))} />}
@@ -298,24 +311,28 @@ export function RatingCard({ sessionId, debounceMs = 2000, submitLabel = "Submit
         onChange={(v) => edit((f) => ({ ...f, notes: v }))}
       />
 
+      </fieldset>
+
       {formError ? (
         <p className="form-error" role="alert">
           {formError}
         </p>
       ) : null}
-      {submitted ? (
+      {submitted && !readOnly ? (
         <p className="form-note">
-          {submitted === "submitted" ? "Rating submitted." : "Saved without a rating — Onolys will score the session on its own."} Changes you make now apply to your next run.
+          {submitted === "submitted" ? "Rating submitted." : "Saved without a rating — Onolys will score the session on its own."}
         </p>
       ) : null}
-      <div className="rating-actions">
-        <button type="submit" className="btn btn-primary" disabled={busy}>
-          {submitLabel}
-        </button>
-        <button type="button" className="btn btn-secondary" disabled={busy} onClick={() => void submit(true)}>
-          No rating — just rate my session
-        </button>
-      </div>
+      {readOnly ? null : (
+        <div className="rating-actions">
+          <button type="submit" className="btn btn-primary" disabled={busy}>
+            Submit rating
+          </button>
+          <button type="button" className="btn btn-secondary" disabled={busy} onClick={() => void submit(true)}>
+            No rating — just rate my session
+          </button>
+        </div>
+      )}
     </form>
   );
 }

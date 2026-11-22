@@ -14,8 +14,9 @@ failures arrive as report warnings and still ship (the adapter handles them). A 
 retried task finds the stored report and only finishes the bookkeeping: one report per run.
 
 Cap slot: every run is released exactly once (`released` flag on the run record), when the run
-ends for good: success or failure (`refund=True` only if it failed before the evaluation was
-called), but not on a retryable failure with an attempt left.
+ends for good: success or failure (`refund=True` for a system failure; for a bad-file code
+only if no attempt called the evaluation: `llm_started` on the run
+record), but not on a retryable failure with an attempt left.
 """
 
 import json
@@ -32,9 +33,8 @@ from onolys_core.engine import RunContext
 from onolys_api import logs
 from onolys_api.adapters.base import Evaluation
 from onolys_api.adapters.error_map import to_public
-from onolys_api.jobs import caps
 from onolys_api.jobs.alive import ensure_alive
-from onolys_api.jobs.machine import RUN_START_PROGRESS, STAGE_WEIGHTS, advance
+from onolys_api.jobs.machine import RUN_START_PROGRESS, STAGE_WEIGHTS, advance, is_system_failure
 from onolys_api.jobs.queue import MAX_ATTEMPTS
 from onolys_api.jobs.transcribe import TRANSCRIPT_ID
 from onolys_api.jobs.transcribe import _run as run_coro
@@ -75,17 +75,26 @@ def _dumps(obj: Any) -> bytes:
 
 
 def release_once(repo, uid: str, sid: str, run_id: str, refund: bool, date: str | None) -> None:
-    """Hand the cap slot back at most once per run (flag first: never twice)."""
+    """Hand the cap slot back at most once per run: one repo transaction checks and sets the
+    `released` flag and moves the counters, so a crash or a concurrent caller can neither leak
+    the slot nor refund twice."""
     try:
-        run = repo.get_run(uid, sid, run_id)
-        if run.released:
-            return
-        date = run.cap_date or date
-        repo.update_run(uid, sid, run_id, {"released": True})
+        repo.release_run_slot(uid, sid, run_id, refund, date)
     except NotFoundError:  # session deleted under the run: the delete already freed the slot
         return
-    if date:
-        caps.release_run(repo, uid, date, refund and run.counted)
+
+
+def _refund(repo, uid: str, sid: str, run_id: str, code: str) -> bool:
+    """A run that ends in a failure refunds its units when the failure is the system's (the codes
+    that allow Try again), whether or not the LLM was called (owner decision). A bad-file code is
+    the user's: refunded only if no attempt called the evaluation (`llm_started` on the run doc,
+    persisted across attempts)."""
+    if is_system_failure(code):
+        return True
+    try:
+        return not repo.get_run(uid, sid, run_id).llm_started
+    except NotFoundError:
+        return False  # nothing to refund on a vanished run
 
 
 def make_run_handler(
@@ -97,26 +106,27 @@ def make_run_handler(
         uid, sid, run_id = ctx.uid, ctx.sid, ctx.payload.run_id
         assert run_id
         repo = ctx.repo
-        started = {"llm": False}
         run_doc = repo.get_run(uid, sid, run_id)
         date = run_doc.cap_date
         try:
-            _execute(ctx, blobs, get_evaluation(), run_doc, started)
+            _execute(ctx, blobs, get_evaluation(), run_doc)
         except (TaskError, TimeoutError) as e:
             retryable = isinstance(e, TimeoutError) or e.retryable
             if not retryable or ctx.attempt >= MAX_ATTEMPTS:
-                release_once(repo, uid, sid, run_id, not started["llm"], date)
+                code = e.code if isinstance(e, TaskError) else "deadline_exceeded"
+                release_once(repo, uid, sid, run_id, _refund(repo, uid, sid, run_id, code), date)
             raise
         except Exception as e:
-            if not to_public(e, ctx.attempt)[1] or ctx.attempt >= MAX_ATTEMPTS:
-                release_once(repo, uid, sid, run_id, not started["llm"], date)
+            code, retryable = to_public(e, ctx.attempt)
+            if not retryable or ctx.attempt >= MAX_ATTEMPTS:
+                release_once(repo, uid, sid, run_id, _refund(repo, uid, sid, run_id, code), date)
             raise
         release_once(repo, uid, sid, run_id, False, date)
 
     return run
 
 
-def _execute(ctx, blobs, evaluation, run_doc, started: dict[str, bool]) -> None:
+def _execute(ctx, blobs, evaluation, run_doc) -> None:
     uid, sid, run_id, repo = ctx.uid, ctx.sid, run_doc.run_id, ctx.repo
     session = repo.get_session(uid, sid)
     if session.state == "deleting":
@@ -127,7 +137,7 @@ def _execute(ctx, blobs, evaluation, run_doc, started: dict[str, bool]) -> None:
     except NotFoundError:
         existing = None
     if existing is None:
-        existing = _evaluate(ctx, blobs, evaluation, run_doc, session, started)
+        existing = _evaluate(ctx, blobs, evaluation, run_doc, session)
 
     repo.update_run(uid, sid, run_id, {"stage": None})
     if repo.get_session(uid, sid).state != "report_ready":
@@ -137,7 +147,7 @@ def _execute(ctx, blobs, evaluation, run_doc, started: dict[str, bool]) -> None:
         )  # fmt: skip
 
 
-def _evaluate(ctx, blobs, evaluation, run_doc, session, started) -> ReportDoc:
+def _evaluate(ctx, blobs, evaluation, run_doc, session) -> ReportDoc:
     uid, sid, run_id, repo = ctx.uid, ctx.sid, run_doc.run_id, ctx.repo
     if session.clinician_speaker is None:
         raise PermanentError("internal_error")
@@ -187,7 +197,7 @@ def _evaluate(ctx, blobs, evaluation, run_doc, session, started) -> ReportDoc:
         llm=None, metrics=None, request_id=ctx.request_id or "",
         deadline=time.monotonic() + max(0.0, ctx.remaining_s()),
     )  # fmt: skip
-    started["llm"] = True
+    repo.update_run(uid, sid, run_id, {"llm_started": True})  # survives retries: a unit is spent
     # no catch here: any engine exception reaches the worker, which maps it with `to_public`
     out = run_coro(
         evaluation.run(

@@ -84,13 +84,13 @@ export function deriveTimeline(doc: TimelineInput, opts: TimelineOptions = {}): 
 
   if (!deleting) {
     // Upload / Check audio / Transcribe follow the pipeline state.
-    status.upload = state === "created" || state === "uploading" ? "current" : "done";
-    status.validate =
-      state === "validating" ? "current" : state === "created" || state === "uploading" ? "pending" : "done";
+    const uploadPhase = state === "created" || state === "uploading" || state === "upload_incomplete";
+    status.upload = uploadPhase ? "current" : "done";
+    status.validate = state === "validating" ? "current" : uploadPhase ? "pending" : "done";
     status.transcribe =
       state === "transcribing"
         ? "current"
-        : state === "created" || state === "uploading" || state === "validating"
+        : uploadPhase || state === "validating"
           ? "pending"
           : tr || afterTranscribe
             ? "done"
@@ -128,6 +128,9 @@ export function deriveTimeline(doc: TimelineInput, opts: TimelineOptions = {}): 
     case "uploading":
       lines = ["Uploading your recording."];
       break;
+    case "upload_incomplete":
+      lines = ["Your upload didn't finish. Pick the file again to resume, or delete this session."];
+      break;
     case "validating":
       lines = ["Checking your audio."];
       break;
@@ -135,7 +138,13 @@ export function deriveTimeline(doc: TimelineInput, opts: TimelineOptions = {}): 
       lines = ["Transcribing the recording."];
       break;
     case "awaiting_input": {
-      if (doc.error_code === "daily_cap_reached" || doc.error_code === "monthly_cap_reached") {
+      if (doc.error_code === "concurrent_runs") {
+        // held by another running rating: Start is offered, and no reset time applies
+        capReached = true;
+        lines = [messageForCode(doc.error_code)];
+        break;
+      }
+      if (doc.error_code === "daily_cap_reached") {
         capReached = true;
         lines = [messageForCode(doc.error_code, { resetsAt: opts.resetsAt })];
         break;

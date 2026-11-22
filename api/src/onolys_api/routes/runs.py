@@ -1,8 +1,9 @@
 """Runs and reports (PRD R2, R4, D12, D18).
 
-`POST /sessions/{id}/runs` starts a run by hand: a re-run (new report version on the same
-transcript, latest final rating, current speaker choice) or the first run when auto-start was held
-back by the cap. It reserves a cap slot (429 `daily_cap_reached`), creates the run, moves the
+`POST /sessions/{id}/runs` starts a run by hand: "Try again" after a system failure (same
+transcript, stored final rating, current speaker choice) or the first run when auto-start was
+held back by the cap. A rating is final once its report is ready (FX45): 409 `rating_final`.
+It reserves a cap slot (429 `daily_cap_reached`), creates the run, moves the
 session to `running` (clears the cap error) and enqueues the `run` task; the worker does the rest.
 `preset` changes LLM routes only: the transcript and its STT are reused.
 """
@@ -18,19 +19,29 @@ from onolys_api import logs
 from onolys_api.auth.deps import AuthUser, current_user
 from onolys_api.errors import ApiError, ErrorResponse
 from onolys_api.jobs import caps
-from onolys_api.jobs.machine import RUN_START_PROGRESS, advance, invalid_state
+from onolys_api.jobs.machine import (
+    BAD_FILE_CODES,
+    RUN_START_PROGRESS,
+    advance,
+    has_final_report,
+    invalid_state,
+    rating_final,
+)
 from onolys_api.jobs.queue import TaskPayload
 from onolys_api.jobs.run import release_once
 from onolys_api.presets import UnknownPreset
 from onolys_api.repo.base import NotFoundError
 from onolys_api.repo.limits import LimitDefaults
 from onolys_api.repo.models import RunDoc, SessionDoc, SessionError, SessionState, SttInfo
+from onolys_api.routes.ids import ResourceId
 
 ERRORS = {"default": {"model": ErrorResponse, "description": "Error"}}
 router = APIRouter(prefix="/sessions/{id}", tags=["runs"], responses=ERRORS)
 runs_router = APIRouter(tags=["runs"], responses=ERRORS)
 User = Annotated[AuthUser, Depends(current_user)]
-RERUN_STATES = ("awaiting_input", "report_ready", "failed")
+# FX45: no `report_ready` (the rating is final once its report is ready); a `failed` session may
+# only be retried after a system failure, never after a bad-file code.
+RERUN_STATES = ("awaiting_input", "failed")
 
 
 class RunRequest(BaseModel):
@@ -106,29 +117,45 @@ def _open_session(request: Request, user: AuthUser, id: str) -> SessionDoc:
     operation_id="startRun",
     status_code=202,
     response_model=RunStarted,
-    summary="Start a run by hand (re-run, or the first run held back by the cap)",
+    summary="Start a run by hand (Try again after a system failure, or the first run held back)",
     description=(
-        "Needs the transcript and the confirmed speaker; uses the latest final rating revision "
+        "Needs the transcript and the confirmed speaker; uses the stored final rating revision "
         "or runs as no-rating. `preset` changes LLM routes only (the transcript is reused). "
-        "Counts against the daily cap: 429 `daily_cap_reached`. 409 `invalid_state` while a run "
-        "is in progress or before the inputs exist."
+        "On Try again (a failed session) `preset` and `n_runs` are ignored: the failed run's "
+        "values are reused. "
+        "Counts against the daily cap: 429 `daily_cap_reached`; 429 `concurrent_runs` while "
+        "another run is in progress. 409 `rating_final` once a report exists (the rating is "
+        "final: no re-run, interview sessions included). 409 `invalid_state` while a run "
+        "is in progress, before the inputs exist, or after a bad-file failure (upload a "
+        "different file instead)."
     ),
 )
-def start_run(id: str, request: Request, user: User, body: RunRequest | None = None) -> RunStarted:
+def start_run(
+    id: ResourceId, request: Request, user: User, body: RunRequest | None = None
+) -> RunStarted:
     body = body or RunRequest()
     app = request.app
     repo, uid = app.state.repo, user.uid
     s = _open_session(request, user, id)
+    if has_final_report(repo, uid, id, s.state):
+        raise rating_final()
+    if s.state == "failed" and s.error is not None and s.error.code in BAD_FILE_CODES:
+        raise invalid_state()
     if s.state not in RERUN_STATES or not (
         s.transcript_ready and s.speaker_confirmed and s.clinician_speaker
     ):
         raise invalid_state()
-    preset = s.preset
-    if body.preset is not None:
+    preset, n_runs = s.preset, body.n_runs
+    if s.state == "failed":
+        # Try again re-runs the SAME submission: the client's `preset`/`n_runs` are ignored
+        prior = repo.list_runs(uid, id)
+        if prior:
+            preset, n_runs = prior[-1].preset, prior[-1].n_runs
+    elif body.preset is not None:
         try:
             preset, _ = app.state.presets.resolve(body.preset, s.language)
-        except UnknownPreset:
-            raise ApiError.of(422, "invalid_parameters", "preset: unknown preset") from None
+        except UnknownPreset as e:
+            raise ApiError.of(422, "invalid_parameters", f"preset: {e}") from None
     settings = app.state.settings
     run_id = uuid4().hex
     date = caps.utc_date()
@@ -136,16 +163,14 @@ def start_run(id: str, request: Request, user: User, body: RunRequest | None = N
     # The loser of a race gets 409 and holds no slot.
     outcome = repo.start_run(
         uid, id, run_id, date, LimitDefaults.from_settings(settings), settings.max_active_runs,
-        settings.git_sha, RUN_START_PROGRESS, RERUN_STATES, body.n_runs, preset,
+        settings.git_sha, RUN_START_PROGRESS, RERUN_STATES, n_runs, preset,
     )  # fmt: skip
     if outcome == "not_ready":
         raise invalid_state()
     if outcome == "daily_cap":
         raise ApiError.of(429, "daily_cap_reached", caps.DAILY_MESSAGE, period="day")
-    if outcome == "month_cap":
-        raise ApiError.of(429, "monthly_cap_reached", caps.MONTHLY_MESSAGE, period="month")
     if outcome == "concurrent":
-        raise ApiError.of(429, "daily_cap_reached", caps.CONCURRENT_MESSAGE, period="day")
+        raise ApiError.of(429, "concurrent_runs", caps.CONCURRENT_MESSAGE)
     try:
         queue = getattr(app.state, "queue", None)
         if queue is None:
@@ -186,7 +211,7 @@ def _compensate(repo, uid: str, sid: str, run_id: str, date: str) -> None:
     response_model=RunList,
     summary="The session's runs, oldest first",
 )
-def list_runs(id: str, request: Request, user: User) -> RunList:
+def list_runs(id: ResourceId, request: Request, user: User) -> RunList:
     _open_session(request, user, id)
     return RunList(items=[_view(r) for r in request.app.state.repo.list_runs(user.uid, id)])
 
@@ -197,7 +222,7 @@ def list_runs(id: str, request: Request, user: User) -> RunList:
     response_model=RunView,
     summary="One run: status, params, run_info",
 )
-def get_run(run_id: str, request: Request, user: User) -> RunView:
+def get_run(run_id: ResourceId, request: Request, user: User) -> RunView:
     repo = request.app.state.repo
     run = repo.get_run_by_id(user.uid, run_id)
     _open_session(request, user, run.session_id)
@@ -210,7 +235,7 @@ def get_run(run_id: str, request: Request, user: User) -> RunView:
     response_model=ReportList,
     summary="Report versions, oldest first",
 )
-def list_reports(id: str, request: Request, user: User) -> ReportList:
+def list_reports(id: ResourceId, request: Request, user: User) -> ReportList:
     _open_session(request, user, id)
     docs = request.app.state.repo.list_reports(user.uid, id)
     return ReportList(
@@ -229,7 +254,7 @@ def list_reports(id: str, request: Request, user: User) -> ReportList:
     summary="One report by integer version (the public report address)",
     description="`Cache-Control: private, no-store`: the report carries PHI.",
 )
-def get_report(id: str, version: int, request: Request, response: Response, user: User):
+def get_report(id: ResourceId, version: int, request: Request, response: Response, user: User):
     _open_session(request, user, id)
     d = request.app.state.repo.get_report_by_version(user.uid, id, version)
     response.headers["Cache-Control"] = "private, no-store"

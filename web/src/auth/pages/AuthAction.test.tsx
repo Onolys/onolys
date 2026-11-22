@@ -1,9 +1,9 @@
-import { screen, waitFor } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { here, renderApp } from "../../test/renderApp";
 import { createFakeAuthService } from "../fakeService";
-import { resolveContinue } from "./AuthAction";
+import { appHosts, resolveContinue } from "./AuthAction";
 
 const h1 = (name: string) => screen.findByRole("heading", { level: 1, name });
 
@@ -55,6 +55,9 @@ describe("/auth/action verifyEmail", () => {
     await userEvent.setup().click(await screen.findByRole("button", { name: "Verify my email" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("invalid, has expired, or was already used");
     expect(screen.getByRole("link", { name: /new verification email/ })).toHaveAttribute("href", "/login");
+    // the dead code is no longer offered again (E14)
+    expect(screen.queryByRole("button", { name: "Verify my email" })).toBeNull();
+    expect(screen.queryByText(/Confirm your email address/)).toBeNull();
   });
 
   it("links to /verify-email for a new link when signed in", async () => {
@@ -74,17 +77,61 @@ describe("/auth/action verifyEmail", () => {
   });
 });
 
+describe("/auth/action pre-check failures and already verified (FX17)", () => {
+  it("verifyEmail: a signed-in verified user sees Already verified + Continue, not invalid-link copy", async () => {
+    const service = createFakeAuthService();
+    service.signedInAs("a@clinic.org", { verified: true });
+    renderApp("/auth/action?mode=verifyEmail&oobCode=used", { service, user: { email: "a@clinic.org", verified: true } });
+    await h1("Already verified");
+    expect(screen.getByRole("button", { name: "Continue" })).toBeInTheDocument();
+    expect(screen.queryByText(/invalid/)).toBeNull();
+  });
+
+  it("resetPassword: a network failure of the pre-check shows the network message and Try again, then recovers", async () => {
+    const service = await svc();
+    const code = service.issueActionCode("resetPassword", "a@clinic.org");
+    const spy = vi.spyOn(service, "verifyPasswordResetCode").mockRejectedValueOnce({ code: "auth/network-request-failed" });
+    renderApp(`/auth/action?mode=resetPassword&oobCode=${code}`, { service });
+    expect(await screen.findByRole("alert")).toHaveTextContent("Can't reach the server");
+    expect(screen.queryByText(/Reset link expired/)).toBeNull();
+    await userEvent.setup().click(screen.getByRole("button", { name: "Try again" }));
+    await h1("Choose a new password");
+    expect(spy).toHaveBeenCalledTimes(2);
+  });
+
+  it("change email: a network failure of the pre-check shows the network message and Try again", async () => {
+    const service = await svc();
+    const code = service.issueActionCode("verifyAndChangeEmail", "a@clinic.org", { newEmail: "b@clinic.org" });
+    vi.spyOn(service, "checkEmailChangeCode").mockRejectedValueOnce({ code: "auth/network-request-failed" });
+    renderApp(`/auth/action?mode=verifyAndChangeEmail&oobCode=${code}`, { service });
+    expect(await screen.findByRole("alert")).toHaveTextContent("Can't reach the server");
+    await userEvent.setup().click(screen.getByRole("button", { name: "Try again" }));
+    await h1("Confirm your new email");
+  });
+});
+
 describe("resolveContinue", () => {
   const o = "https://app.onolys.com";
   it("allows same-origin paths", () => {
     expect(resolveContinue("https://app.onolys.com/verify-email?x=1", o)).toEqual({ kind: "path", path: "/verify-email?x=1" });
     expect(resolveContinue("/settings", o)).toEqual({ kind: "path", path: "/settings" });
   });
-  it("allows known app hosts (staging shares the project) as external", () => {
-    expect(resolveContinue("https://onolys-app-staging.web.app/verify-email", o)).toEqual({
+  it("allows only configured app hosts as external (FX34)", () => {
+    expect(resolveContinue("https://evil.example/verify-email", o)).toEqual({ kind: "path", path: "/" });
+    expect(appHosts({ VITE_APP_HOSTS: " Staging.Example , other.example", VITE_FIREBASE_AUTH_DOMAIN: "auth.example" })).toEqual(
+      new Set(["staging.example", "other.example", "auth.example"]),
+    );
+    expect(resolveContinue("https://onolys-app-staging.web.app/verify-email", o, new Set(["onolys-app-staging.web.app"]))).toEqual({
       kind: "external",
       href: "https://onolys-app-staging.web.app/verify-email",
     });
+  });
+  it("falls back to the default app hosts when VITE_APP_HOSTS is unset or empty (FX34 follow-up)", () => {
+    for (const v of [undefined, "", " , "]) {
+      const hosts = appHosts({ VITE_APP_HOSTS: v, VITE_FIREBASE_AUTH_DOMAIN: "auth.example" });
+      expect(hosts).toEqual(new Set(["auth.example", "app.onolys.com", "onolys-app.web.app", "onolys-app-staging.web.app"]));
+    }
+    expect(appHosts({ VITE_APP_HOSTS: "x.example" }).has("app.onolys.com")).toBe(false);
   });
   it("never redirects to other origins or odd schemes", () => {
     for (const bad of ["https://evil.example/x", "//evil.example", "javascript:alert(1)", "http://onolys-app.web.app/", "https://app.onolys.com@evil.example/", null, "http://[bad"]) {
@@ -97,7 +144,7 @@ describe("/auth/action resetPassword", () => {
   it("shows the email, rejects short passwords, then resets", async () => {
     const service = await svc();
     const code = service.issueActionCode("resetPassword", "a@clinic.org");
-    renderApp(`/auth/action?mode=resetPassword&oobCode=${code}`, { service });
+    const { router } = renderApp(`/auth/action?mode=resetPassword&oobCode=${code}`, { service });
     const user = userEvent.setup();
     await h1("Choose a new password");
     expect(screen.getByText("a@clinic.org")).toBeInTheDocument();
@@ -108,9 +155,11 @@ describe("/auth/action resetPassword", () => {
     await user.clear(screen.getByLabelText("New password"));
     await user.type(screen.getByLabelText("New password"), "longenough1");
     await user.click(screen.getByRole("button", { name: "Update password" }));
-    await h1("Password updated");
+    await h1("Log in");
     expect(service.calls.passwordResets).toBe(1);
-    expect(screen.getByRole("link", { name: "Log in" })).toHaveAttribute("href", "/login");
+    expect(here(router)).toBe("/login");
+    expect(within(screen.getByRole("main")).getByRole("status")).toHaveTextContent("Password updated");
+    expect(screen.getByLabelText("Email")).toHaveValue("a@clinic.org");
     await service.signIn("a@clinic.org", "longenough1");
   });
 
@@ -134,7 +183,7 @@ describe("/auth/action verifyAndChangeEmail", () => {
     expect(service.calls.emailChanges).toBe(1);
     expect(screen.getByRole("status")).toHaveTextContent("b@clinic.org");
     expect(screen.getByRole("status")).toHaveTextContent("Log in again with your new email");
-    expect(screen.getByRole("link", { name: "Log in" })).toHaveAttribute("href", "/login");
+    expect(within(screen.getByRole("main")).getByRole("link", { name: "Log in" })).toHaveAttribute("href", "/login");
     await service.signIn("b@clinic.org", "password1");
   });
 
@@ -198,7 +247,7 @@ describe("/auth/action recoverEmail", () => {
     await user.click(screen.getByRole("button", { name: "Reset my password" }));
     expect(await screen.findByText(/reset email sent/i)).toBeInTheDocument();
     expect(service.calls.resets).toEqual(["old@clinic.org"]);
-    expect(screen.getByRole("link", { name: "Log in" })).toHaveAttribute("href", "/login");
+    expect(within(screen.getByRole("main")).getByRole("link", { name: "Log in" })).toHaveAttribute("href", "/login");
   });
 
   it("explains an invalid/expired code", async () => {

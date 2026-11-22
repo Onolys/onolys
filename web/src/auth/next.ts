@@ -1,8 +1,21 @@
 /** `?next=` handling: same-origin paths only (no open redirects). */
 
+/** Pages that are never a sensible post-login target (they would loop or dead-end). */
+const BLOCKED = new Set(["/login", "/signup", "/forgot-password", "/auth/action"]);
+
 export function readNext(search: string): string {
   const raw = new URLSearchParams(search).get("next");
-  if (!raw || !raw.startsWith("/") || raw.startsWith("//") || raw.includes("\\")) return "/";
+  // eslint-disable-next-line no-control-regex -- control chars are stripped by URL parsers, hiding "//host"
+  if (!raw || !raw.startsWith("/") || raw.startsWith("//") || raw.includes("\\") || /[\u0000-\u001f\u007f]/.test(raw)) return "/";
+  const base = window.location.origin; // parse against the page origin: no second absolute-URL literal
+  let url: URL;
+  try {
+    url = new URL(raw, base);
+  } catch {
+    return "/";
+  }
+  if (url.origin !== base) return "/";
+  if (BLOCKED.has(url.pathname.replace(/\/+$/, ""))) return "/";
   return raw;
 }
 
@@ -24,4 +37,9 @@ export function loginUrl(pathname: string, search: string): string {
 export function verifyUrl(pathname: string, search: string): string {
   const target = pathname + search;
   return target === "/" ? "/verify-email" : `/verify-email?next=${encodeURIComponent(target)}`;
+}
+
+/** Where the verification email's link returns after verifying; keeps `next` so the user lands where they were going. */
+export function verifyContinueUrl(origin: string, next = "/"): string {
+  return `${origin}/verify-email${next === "/" ? "" : `?next=${encodeURIComponent(next)}`}`;
 }

@@ -80,7 +80,7 @@ async def flow(settings, blobs, tmp_path):
         "providers:\n  base: {provider: p1, model: m1}\ndefault: base\nby_language: {}\n"
     )
     app = create_app(
-        replace(settings, routes_file=str(routes), adapters="stub"),
+        replace(settings, extra_presets=("fast",), routes_file=str(routes), adapters="stub"),
         repo=FakeRepo(blobs),
         blobs=blobs,
         audio_tools=StubTools(),
@@ -119,19 +119,17 @@ async def test_complete_flow_over_http_both_rating_orders(flow):
     flow.drain()
     assert (await flow.get(f"/sessions/{s2}"))["status"] == "report_ready"
 
-    # Second POST /runs creates v2 and keeps v1; both resolve.
+    # FX45: a ready report makes the rating final: no re-run, no new final rating.
     r = await flow.c.post(f"/v1/sessions/{s1}/runs", json={}, headers=flow.h)
-    assert r.status_code == 202
-    assert (await flow.get(f"/sessions/{s1}"))["status"] == "running"
-    flow.drain()
-    v1 = await flow.get(f"/sessions/{s1}/reports/1")
-    v2 = await flow.get(f"/sessions/{s1}/reports/2")
-    assert (v1["version"], v2["version"]) == (1, 2) and v1["run_id"] != v2["run_id"]
-    assert v2["run_id"] == r.json()["run_id"]
-    assert (await flow.get(f"/sessions/{s1}"))["latest_report_version"] == 2
+    assert (r.status_code, r.json()["details"][0]["code"]) == (409, "rating_final")
+    r = await flow.c.put(
+        f"/v1/sessions/{s1}/rating", json={"final": True, "card": CARD}, headers=flow.h
+    )
+    assert (r.status_code, r.json()["details"][0]["code"]) == (409, "rating_final")
+    assert (await flow.get(f"/sessions/{s1}"))["latest_report_version"] == 1
+    assert (await flow.c.get(f"/v1/sessions/{s1}/reports/2", headers=flow.h)).status_code == 404
     listed = {i["id"]: i for i in (await flow.get("/sessions"))["items"]}
-    assert listed[s1]["latest_report_version"] == 2
-    assert listed[s2]["latest_report_version"] == 1
+    assert listed[s1]["latest_report_version"] == listed[s2]["latest_report_version"] == 1
 
 
 async def test_list_shows_done_failed_and_inflight(flow):
@@ -140,9 +138,6 @@ async def test_list_shows_done_failed_and_inflight(flow):
     flow.drain()
     await flow.confirm(done)
     await flow.rate(done)
-    flow.drain()
-    r = await flow.c.post(f"/v1/sessions/{done}/runs", json={}, headers=flow.h)
-    assert r.status_code == 202
     flow.drain()
 
     failed = await flow.create("bad [fail:no_speech]")  # FakeStt magic title
@@ -155,7 +150,7 @@ async def test_list_shows_done_failed_and_inflight(flow):
     items = (await flow.get("/sessions"))["items"]
     by_id = {i["id"]: i for i in items}
     assert set(by_id) == {done, failed, inflight}
-    assert (by_id[done]["status"], by_id[done]["latest_report_version"]) == ("report_ready", 2)
+    assert (by_id[done]["status"], by_id[done]["latest_report_version"]) == ("report_ready", 1)
     assert (by_id[failed]["status"], by_id[failed]["error_code"]) == ("failed", "no_speech")
     assert by_id[inflight]["status"] == "validating"
     assert by_id[inflight]["error_code"] is None
@@ -182,7 +177,7 @@ async def test_combined_staging_auto_runs_stub_flow_to_report(blobs, tmp_path, m
             return token.removeprefix("test:")
 
     s = Settings(env="staging", service_mode="combined", auth_mode="idp", adapters="stub",
-                 auth_project="onolys", gcp_project="onolys", routes_file=str(routes))  # fmt: skip
+                 auth_project="onolys", gcp_project="onolys", routes_file=str(routes), extra_presets=("fast",))  # fmt: skip
     app = create_app(s, repo=FakeRepo(blobs), blobs=blobs, audio_tools=StubTools(),
                      token_verifier=Verifier())  # fmt: skip
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://t") as c:

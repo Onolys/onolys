@@ -26,12 +26,14 @@ export interface EmailChangeInfo {
 export interface AuthService {
   /** Fires once with the initial state, then on every change. `null` = signed out. */
   onAuthStateChanged(cb: (user: AuthUser | null) => void): () => void;
-  /** Creates the account and sends the verification email. */
-  signUp(email: string, password: string): Promise<void>;
+  /** Creates the account and sends the verification email; its link returns to /verify-email, keeping `next` (a validated same-origin path). */
+  signUp(email: string, password: string, next?: string): Promise<void>;
   signIn(email: string, password: string): Promise<void>;
   signInWithGoogle(): Promise<void>;
+  /** Error code of a failed redirect sign-in (mobile Google), reported once; undefined if none. */
+  consumeRedirectError(): Promise<string | undefined>;
   sendPasswordReset(email: string): Promise<void>;
-  sendVerificationEmail(): Promise<void>;
+  sendVerificationEmail(next?: string): Promise<void>;
   /** Reload the user and force-refresh the ID token (the cached one lacks `email_verified`). */
   refreshUser(): Promise<AuthUser | null>;
   /** Consumes a verifyEmail action code; if signed in, refreshes the user so guards see `emailVerified`. */

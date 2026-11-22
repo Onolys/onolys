@@ -11,6 +11,7 @@ export interface StatusChip {
 export const STATUS_CHIP: Record<State, StatusChip> = {
   created: { text: "Uploading", tone: "progress" },
   uploading: { text: "Uploading", tone: "progress" },
+  upload_incomplete: { text: "Upload incomplete", tone: "wait" },
   validating: { text: "Checking audio", tone: "progress" },
   transcribing: { text: "Transcribing", tone: "progress" },
   awaiting_input: { text: "Needs your input", tone: "wait" },
@@ -19,3 +20,9 @@ export const STATUS_CHIP: Record<State, StatusChip> = {
   failed: { text: "Failed", tone: "failed" },
   deleting: { text: "Deleting", tone: "progress" },
 };
+
+/** Dashboard auto-refresh (D8): poll while any listed session is still moving. */
+export const DASHBOARD_POLL_MS = 10_000;
+export function sessionsRefetchInterval(items: { status: State }[] | undefined): number | false {
+  return items?.some((s) => STATUS_CHIP[s.status].tone === "progress") ? DASHBOARD_POLL_MS : false;
+}

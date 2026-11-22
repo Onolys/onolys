@@ -19,6 +19,7 @@ import {
   verifyPasswordResetCode as fbVerifyPasswordResetCode,
   type User,
 } from "firebase/auth";
+import { verifyContinueUrl } from "./next";
 import { AuthError, type AuthService, type AuthUser, type EmailChangeKind } from "./types";
 
 const OPERATION: Record<EmailChangeKind, string> = {
@@ -54,7 +55,10 @@ export function createFirebaseAuthService(config: FirebaseWebConfig): AuthServic
   };
 
   // Completes a redirect sign-in; the token listener below reports the user.
-  void getRedirectResult(auth).catch(() => undefined);
+  let redirectError: Promise<string | undefined> | undefined = getRedirectResult(auth).then(
+    () => undefined,
+    (err: unknown) => (err as { code?: string } | null)?.code ?? "auth/unknown",
+  );
   onIdTokenChanged(auth, emit);
 
   const need = (): User => {
@@ -71,10 +75,19 @@ export function createFirebaseAuthService(config: FirebaseWebConfig): AuthServic
       });
       return () => void listeners.delete(cb);
     },
-    async signUp(email, password) {
+    async signUp(email, password, next) {
       const cred = await createUserWithEmailAndPassword(auth, email, password);
-      await sendEmailVerification(cred.user, { url: `${window.location.origin}/verify-email` });
+      try {
+        await sendEmailVerification(cred.user, { url: verifyContinueUrl(window.location.origin, next) });
+      } catch {
+        // The account exists and the user is signed in; the verify page offers Resend and shows its own error.
+      }
       emit();
+    },
+    async consumeRedirectError() {
+      const pending = redirectError;
+      redirectError = undefined;
+      return pending;
     },
     async signIn(email, password) {
       await signInWithEmailAndPassword(auth, email, password);
@@ -93,8 +106,8 @@ export function createFirebaseAuthService(config: FirebaseWebConfig): AuthServic
     async sendPasswordReset(email) {
       await sendPasswordResetEmail(auth, email);
     },
-    async sendVerificationEmail() {
-      await sendEmailVerification(need(), { url: `${window.location.origin}/verify-email` });
+    async sendVerificationEmail(next) {
+      await sendEmailVerification(need(), { url: verifyContinueUrl(window.location.origin, next) });
     },
     async refreshUser() {
       const user = auth.currentUser;
@@ -126,14 +139,29 @@ export function createFirebaseAuthService(config: FirebaseWebConfig): AuthServic
       return { email, previousEmail: info.data.previousEmail ?? null };
     },
     async applyEmailChange(oobCode) {
+      // Which account the code belongs to (best effort: applyActionCode below reports invalid codes).
+      let info: Awaited<ReturnType<typeof checkActionCode>> | undefined;
+      try {
+        info = await checkActionCode(auth, oobCode);
+      } catch {
+        info = undefined;
+      }
+      const emails = [info?.data?.email, info?.data?.previousEmail].filter(Boolean).map((e) => e!.toLowerCase());
+      const before = auth.currentUser;
       await applyActionCode(auth, oobCode);
       const user = auth.currentUser;
       if (!user) return { signedIn: false };
+      if (emails.length > 0 && !emails.includes((before?.email ?? "").toLowerCase())) return { signedIn: false }; // someone else's link
       try {
         await reload(user);
         await user.getIdToken(true);
       } catch {
-        return { signedIn: false }; // the email change revoked this session's tokens
+        try {
+          await fbSignOut(auth);
+        } catch {
+          /* already signed out */
+        } // the email change revoked this session's tokens: do not rely on the SDK
+        return { signedIn: false };
       }
       emit();
       return { signedIn: true };

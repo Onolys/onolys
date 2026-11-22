@@ -18,6 +18,7 @@ from onolys_api.errors import ApiError, ErrorResponse
 from onolys_api.jobs.machine import advance, invalid_state
 from onolys_api.jobs.queue import TaskPayload
 from onolys_api.repo.base import NotFoundError
+from onolys_api.routes.ids import ResourceId
 from onolys_api.routes.sessions import SessionRef
 from onolys_api.storage.base import MAX_UPLOAD_BYTES, READ_URL_TTL_S, BlobNotFoundError
 
@@ -61,11 +62,12 @@ def _owned_open(request: Request, user: AuthUser, id: str):
         "Maps browser aliases (`audio/x-m4a`, `audio/mp4`, `audio/mpeg`, empty type + "
         "`filename_ext`) to one canonical type, returns one signed PUT (15 min) pinned to it and "
         "to a 300 MB size range; the client sends exactly `required_headers`. Unknown type is "
-        "422 `unsupported_audio`, over 300 MB is 422 `audio_too_large`. State becomes `uploading`."
+        "422 `unsupported_audio`, over 300 MB is 422 `audio_too_large`. "
+        "State becomes `uploading` (also resumes an `upload_incomplete` session)."
     ),
 )
 def request_upload(
-    id: str, body: AudioUploadRequest, request: Request, user: User
+    id: ResourceId, body: AudioUploadRequest, request: Request, user: User
 ) -> AudioUploadResponse:
     fmt = resolve_format(body.content_type, body.filename_ext)
     if fmt is None:
@@ -73,10 +75,10 @@ def request_upload(
     if body.size_bytes > MAX_UPLOAD_BYTES:
         raise ApiError.of(422, "audio_too_large", "The audio file is larger than 300 MB.")
     repo, blobs = request.app.state.repo, request.app.state.blobs
-    session = _owned_open(request, user, id)
+    _owned_open(request, user, id)
     advance(repo, user.uid, id, to="uploading")  # 409 invalid_state unless created|uploading
-    if session.upload is not None:  # a fresh URL replaces the earlier one
-        blobs.delete(staging_key(user.uid, id, session.upload.upload_id))
+    # a fresh URL replaces every earlier one: also sweeps strays a stale signed URL wrote
+    blobs.delete_prefix(f"uploads/{user.uid}/{id}/")
     upload_id = uuid4().hex
     canonical = CANONICAL_TYPES[fmt]
     signed = blobs.signed_upload(staging_key(user.uid, id, upload_id), canonical, MAX_UPLOAD_BYTES)
@@ -105,7 +107,7 @@ def request_upload(
     summary="Tell the server the PUT finished",
     description="Returns 202 and enqueues `validate`; transcription starts after it passes.",
 )
-def complete_upload(id: str, request: Request, user: User) -> dict[str, SessionRef]:
+def complete_upload(id: ResourceId, request: Request, user: User) -> dict[str, SessionRef]:
     repo, blobs = request.app.state.repo, request.app.state.blobs
     try:
         session = _owned_open(request, user, id)
@@ -114,23 +116,30 @@ def complete_upload(id: str, request: Request, user: User) -> dict[str, SessionR
         # (the bucket lifecycle rule is the backstop); `user.uid` scopes this to the caller
         blobs.delete_prefix(f"uploads/{user.uid}/{id}/")
         raise
-    if session.state not in ("uploading", "validating") or session.upload is None:
+    if (
+        session.state not in ("uploading", "upload_incomplete", "validating")
+        or session.upload is None
+    ):
         raise invalid_state()
     if not blobs.exists(staging_key(user.uid, id, session.upload.upload_id)):
         raise ApiError.of(409, "invalid_state", "No uploaded audio was found for this session.")
     queue = getattr(request.app.state, "queue", None)
     if queue is None:
         raise ApiError.of(503, "upstream_unavailable", "Service temporarily unavailable.")
-    if session.state == "uploading":
+    if session.state in ("uploading", "upload_incomplete"):
         advance(repo, user.uid, id, to="validating", step="validate")
-    queue.enqueue(
-        TaskPayload(
-            kind="validate",
-            uid=user.uid,
-            sid=id,
-            request_id=getattr(request.state, "request_id", None),
-        )
-    )  # name-deduplicated: a repeated `complete` is harmless
+    try:
+        queue.enqueue(
+            TaskPayload(
+                kind="validate",
+                uid=user.uid,
+                sid=id,
+                request_id=getattr(request.state, "request_id", None),
+            )
+        )  # name-deduplicated: a repeated `complete` is harmless
+    except Exception:
+        # state stays `validating`, so the client can simply call `complete` again
+        raise ApiError.of(503, "upstream_unavailable", "Service temporarily unavailable.") from None
     if (
         session.interview_id
     ):  # the interview's audio is in: `ended` -> `uploaded` (once, idempotent)
@@ -144,7 +153,7 @@ def complete_upload(id: str, request: Request, user: User) -> dict[str, SessionR
     response_model=AudioReadResponse,
     summary="Short-lived signed read URL for the original upload",
 )
-def get_audio(id: str, request: Request, user: User) -> AudioReadResponse:
+def get_audio(id: ResourceId, request: Request, user: User) -> AudioReadResponse:
     repo, blobs = request.app.state.repo, request.app.state.blobs
     _owned_open(request, user, id)
     recording = next((r for r in repo.list_recordings(user.uid, id) if r.format), None)

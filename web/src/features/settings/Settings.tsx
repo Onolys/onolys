@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { unwrap } from "../../api/client";
 import { describeError } from "../../api/errors";
-import { useAuth } from "../../auth/AuthProvider";
+import { useSignOut } from "../../auth/useSignOut";
 import { useApiClient } from "../../auth/useApiClient";
 import { CONTACT_EMAIL, HAS_CONTACT_EMAIL } from "../../config";
 import { formatResetTime } from "../../lib/format";
@@ -20,7 +20,7 @@ type Confirm = "regenerate" | "revoke" | null;
 export function Settings() {
   const client = useApiClient();
   const queryClient = useQueryClient();
-  const { signOut } = useAuth();
+  const { signOut, error: signOutError } = useSignOut();
   const key = useQuery({ queryKey: ["api-key"], queryFn: async () => unwrap(await client.GET("/api-key")) });
   const usage = useUsage();
 
@@ -30,17 +30,28 @@ export function Settings() {
   // The one-time secret lives only here (dialog state): not in the query cache, storage or logs.
   const [secret, setSecret] = useState<string | null>(null);
   const [stored, setStored] = useState(false);
+  const [copy, setCopy] = useState<"idle" | "copied" | "failed">("idle");
+
+  const copySecret = async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopy("copied");
+    } catch {
+      setCopy("failed");
+    }
+  };
 
   const run = async (fn: () => Promise<void>) => {
     setBusy(true);
     setError(null);
     try {
       await fn();
+      setConfirm(null);
     } catch (e) {
+      // Keep the confirm dialog open so the error is seen where the user acted.
       setError(e);
     } finally {
       setBusy(false);
-      setConfirm(null);
     }
   };
   const create = () =>
@@ -58,6 +69,11 @@ export function Settings() {
   const dismissSecret = () => {
     setSecret(null);
     setStored(false);
+    setCopy("idle");
+  };
+  const closeConfirm = () => {
+    setConfirm(null);
+    setError(null);
   };
 
   const info = key.data;
@@ -72,7 +88,7 @@ export function Settings() {
         <h2 id="key-h">API key</h2>
         {key.isPending ? <p className="form-note">Loading…</p> : null}
         {key.isError ? <ErrorCard code={describeError(key.error).code} reference={describeError(key.error).requestId} /> : null}
-        {err ? <ErrorCard code={err.code} reference={err.requestId} /> : null}
+        {err && !confirm ? <ErrorCard code={err.code} reference={err.requestId} /> : null}
         {info && !info.active ? (
           <>
             <p>No API key yet.</p>
@@ -119,13 +135,13 @@ export function Settings() {
         {usage.data ? (
           <>
             <p>
-              Ratings: <UsageLeft kind="eval" period="day" />, <UsageLeft kind="eval" period="month" />
+              Ratings: <UsageLeft kind="eval" period="day" />
               {formatResetTime(usage.data.eval.day.resets_at)
                 ? `. Daily limit resets at ${formatResetTime(usage.data.eval.day.resets_at)}`
                 : ""}
             </p>
             <p>
-              Interviews: <UsageLeft kind="interview" period="day" />, <UsageLeft kind="interview" period="month" />
+              Interviews: <UsageLeft kind="interview" period="day" />
             </p>
           </>
         ) : (
@@ -141,14 +157,16 @@ export function Settings() {
         <button type="button" className="btn btn-secondary" onClick={() => void signOut()}>
           Sign out
         </button>
+        {signOutError && <p role="alert">{signOutError}</p>}
       </section>
 
       {confirm === "regenerate" ? (
-        <Modal titleId="regen-title" onEscape={() => setConfirm(null)}>
+        <Modal titleId="regen-title" onEscape={closeConfirm}>
           <h2 id="regen-title">Regenerate API key?</h2>
           <p>The old key stops working immediately. Anything using it must be updated with the new key.</p>
+          {err ? <ErrorCard code={err.code} reference={err.requestId} /> : null}
           <div className="dialog-actions">
-            <button type="button" className="btn btn-secondary" onClick={() => setConfirm(null)}>
+            <button type="button" className="btn btn-secondary" onClick={closeConfirm}>
               Cancel
             </button>
             <button type="button" className="btn btn-primary" disabled={busy} onClick={() => void create()}>
@@ -158,11 +176,12 @@ export function Settings() {
         </Modal>
       ) : null}
       {confirm === "revoke" ? (
-        <Modal titleId="revoke-title" onEscape={() => setConfirm(null)}>
+        <Modal titleId="revoke-title" onEscape={closeConfirm}>
           <h2 id="revoke-title">Revoke API key?</h2>
           <p>The key stops working immediately. You can create a new one later.</p>
+          {err ? <ErrorCard code={err.code} reference={err.requestId} /> : null}
           <div className="dialog-actions">
-            <button type="button" className="btn btn-secondary" onClick={() => setConfirm(null)}>
+            <button type="button" className="btn btn-secondary" onClick={closeConfirm}>
               Cancel
             </button>
             <button type="button" className="btn btn-danger" disabled={busy} onClick={() => void revoke()}>
@@ -180,9 +199,12 @@ export function Settings() {
               {secret}
             </code>
           </p>
-          <button type="button" className="btn btn-secondary" onClick={() => void navigator.clipboard.writeText(secret)}>
+          <button type="button" className="btn btn-secondary" onClick={() => void copySecret(secret)}>
             Copy
           </button>
+          <span role="status" className="form-note">
+            {copy === "copied" ? "Copied" : copy === "failed" ? "Couldn't copy. Select the key and copy it by hand." : ""}
+          </span>
           <p>
             <label>
               <input type="checkbox" checked={stored} onChange={(e) => setStored(e.target.checked)} /> I've stored it

@@ -117,12 +117,13 @@ async function confirmSpeakerViaUi(u: ReturnType<typeof user>, sid: string) {
 }
 
 describe("flow: sign-up, verify, upload, speaker + rating during transcription, report (AC2, AC9)", () => {
-  it("runs end to end and Run again makes v2 with both versions in the select", async () => {
+  it("runs end to end, and the submitted rating is final (no edit, no Run again)", async () => {
     const u = user();
     const { router, service } = renderApp("/signup");
     await h1("Sign up");
     await u.type(screen.getByLabelText("Email"), EMAIL);
     await u.type(screen.getByLabelText("Password"), "longenough1");
+    await u.type(screen.getByLabelText("Confirm password"), "longenough1");
     await u.click(screen.getByRole("button", { name: "Create account" }));
     await h1("Verify your email");
     expect(screen.getByText(/spam/i)).toBeInTheDocument();
@@ -156,21 +157,22 @@ describe("flow: sign-up, verify, upload, speaker + rating during transcription, 
     expect(within(scorecard).getByRole("row", { name: /Cultivating Change Talk/ })).toHaveTextContent("Onolys -2 (differs)");
     expect(screen.getByRole("region", { name: "Where Onolys disagrees" })).toBeInTheDocument();
 
-    // Run again from the report -> v2 -> version select shows both
-    await u.click(screen.getByRole("button", { name: "Add or edit my rating → Run again" }));
-    await u.click(await screen.findByRole("button", { name: "Submit and run again" }));
-    await waitFor(() => expect(here(router)).toBe(`/sessions/${sid}`));
-    settle(sid);
-    await u.click(await screen.findByRole("link", { name: "View report" }));
-    await waitFor(() => expect(here(router)).toBe(`/sessions/${sid}/reports/2`));
-    const select = await screen.findByLabelText("Version");
-    expect(within(select).getAllByRole("option")).toHaveLength(2);
-    expect(select).toHaveValue("2");
+    // FX45: the report is final: no Run again, no rating edit, a single version
+    expect(screen.queryByRole("button", { name: /run again|edit my rating|submit/i })).toBeNull();
+    const select = screen.getByLabelText("Version");
+    expect(within(select).getAllByRole("option")).toHaveLength(1);
+    await u.click(nav("Sessions"));
+    await u.click(await screen.findByRole("link", { name: /Visit 3/ }));
+    await h1("Session");
+    expect(await screen.findByRole("textbox", { name: "Change goal" })).toBeDisabled();
+    expect(screen.getByText(/Your rating is final/)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /run again|submit rating|no rating/i })).toBeNull();
+    expect(mockBackend.listRuns(UID, sid)).toHaveLength(1);
   });
 });
 
-describe("flow: no-rating run, add a rating, run again (AC3)", () => {
-  it("shows an Onolys-only v1, then a rated v2", async () => {
+describe("flow: no-rating run is final too (AC3)", () => {
+  it("shows an Onolys-only report and offers no way to add a rating or run again", async () => {
     const u = user();
     const { router } = renderApp("/", { user: USER });
     await h1("Sessions");
@@ -187,20 +189,13 @@ describe("flow: no-rating run, add a rating, run again (AC3)", () => {
     expect(within(cct).queryByText(/differs/)).toBeNull();
     expect(screen.queryByRole("region", { name: "Where Onolys disagrees" })).toBeNull();
 
-    await u.click(screen.getByRole("button", { name: "Add or edit my rating → Run again" }));
-    await u.selectOptions(await screen.findByLabelText("Cultivating Change Talk score"), "3");
-    await u.click(screen.getByRole("button", { name: "Submit and run again" }));
-    await waitFor(() => expect(here(router)).toBe(`/sessions/${sid}`));
-    settle(sid);
-    await u.click(await screen.findByRole("link", { name: "View report" }));
-    await waitFor(() => expect(here(router)).toBe(`/sessions/${sid}/reports/2`));
-    const rated = within(await screen.findByRole("region", { name: "Scorecard" })).getByRole("row", { name: /Cultivating Change Talk/ });
-    expect(within(rated).getByText("Onolys -2 (differs)")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /run again|edit my rating/i })).toBeNull();
+    expect(mockBackend.listRuns(UID, sid)).toHaveLength(1);
   });
 });
 
-describe("flow: failure, then Run again (AC6a)", () => {
-  it("shows the failure card with a reference id, Run again resumes the timeline", async () => {
+describe("flow: system failure, then Try again (AC6a)", () => {
+  it("shows the failure card with a reference id, Try again re-runs the same rating", async () => {
     const u = user();
     const { router } = renderApp("/", { user: USER });
     await h1("Sessions");
@@ -212,15 +207,17 @@ describe("flow: failure, then Run again (AC6a)", () => {
     const card = await screen.findByRole("alert");
     expect(card).toHaveTextContent(/something went wrong/i);
     expect(card).toHaveTextContent(`Reference: ${sid}`);
-    await u.click(within(card).getByRole("button", { name: "Run again" }));
+    await u.click(within(card).getByRole("button", { name: "Try again" }));
     await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Rating the session"));
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
-    expect(mockBackend.listRuns(UID, sid)).toHaveLength(2);
+    const runs = mockBackend.listRuns(UID, sid);
+    expect(runs).toHaveLength(2);
+    expect(runs[1].rating_id).toBe(runs[0].rating_id); // the same submission
   });
 });
 
 describe("flow: reasons audit failed (AC3, D17)", () => {
-  it("the report carries the note with Run again and keeps the rest", async () => {
+  it("the report carries the note (no Run again) and keeps the rest", async () => {
     const u = user();
     const { router } = renderApp("/", { user: USER });
     await h1("Sessions");
@@ -233,9 +230,8 @@ describe("flow: reasons audit failed (AC3, D17)", () => {
     expect(audit.getByText("We couldn't check your reasons this time. The rest of your report is complete.")).toBeInTheDocument();
     expect(screen.getByRole("region", { name: "Scorecard" })).toBeInTheDocument();
     expect(screen.getByRole("region", { name: "Tips" })).toBeInTheDocument();
-    await u.click(audit.getByRole("button", { name: "Run again" }));
-    await waitFor(() => expect(here(router)).toBe(`/sessions/${sid}`));
-    expect(mockBackend.listRuns(UID, sid)).toHaveLength(2);
+    expect(screen.queryByRole("button", { name: /run again/i })).toBeNull();
+    expect(mockBackend.listRuns(UID, sid)).toHaveLength(1);
   });
 });
 

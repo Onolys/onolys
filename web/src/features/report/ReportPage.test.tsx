@@ -1,4 +1,4 @@
-import { act, screen, waitFor, within } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -49,24 +49,10 @@ const row = (name: RegExp, sec = "Scorecard") => within(section(sec)).getByRole(
 
 afterEach(() => {
   delete (Element.prototype as { scrollIntoView?: unknown }).scrollIntoView;
-  window.location.hash = "";
-});
-
-describe("report page: period-aware caps", () => {
-  it.each([
-    [{ eval: { month: 0 } }, /reached this month's limit/i],
-    [{ eval: { day: 0 } }, /reached today's limit/i],
-  ] as const)("disables Run again with the matching message for caps %j", async (caps, message) => {
-    const sid = reported({ final: true, card: SCORED });
-    mockBackend.configure({ caps });
-    open(sid);
-    expect(await screen.findByText(message)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Run again" })).toBeDisabled();
-  });
 });
 
 describe("report page, rated report", () => {
-  it("shows the header with run details, version select and actions", async () => {
+  it("shows the header with run details and version select, with no Run again or rating edit", async () => {
     const sid = reported({ final: true, card: SCORED });
     open(sid);
     expect(await screen.findByText("Walk more in the evenings")).toBeInTheDocument();
@@ -77,8 +63,10 @@ describe("report page, rated report", () => {
     expect(details).toHaveTextContent(/mock/);
     const select = screen.getByLabelText("Version");
     expect(within(select).getAllByRole("option").map((o) => o.textContent)).toEqual([expect.stringMatching(/^v1/)]);
-    expect(screen.getByRole("button", { name: "Run again" })).toBeEnabled();
-    expect(screen.getByRole("button", { name: "Add or edit my rating → Run again" })).toBeInTheDocument();
+    // FX45: the rating is final: nothing to run again or edit
+    expect(screen.queryByRole("button", { name: /run again/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /edit my rating/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /submit/i })).toBeNull();
   });
 
   it("renders sections in layout order and shows the transcript pane", async () => {
@@ -145,14 +133,14 @@ describe("report page, rated report", () => {
     const scroll = vi.fn();
     Element.prototype.scrollIntoView = scroll;
     const sid = reported({ final: true, card: SCORED });
-    open(sid);
+    const { router } = open(sid);
     await screen.findByRole("list", { name: "Transcript" });
     await screen.findByRole("region", { name: "Behaviour counts" });
     const chip = within(row(/Complex Reflection/, "Behaviour counts")).getByRole("button", {
       name: /part of you still wants to get out there/,
     });
     await userEvent.click(chip);
-    expect(window.location.hash).toBe("#i=cr-1");
+    expect(router.state.location.hash).toBe("#i=cr-1");
     await waitFor(() => expect(scroll).toHaveBeenCalled());
     const mark = within(screen.getByRole("list", { name: "Transcript" })).getByText(/part of you still wants to get out there/);
     expect(mark.tagName).toBe("MARK");
@@ -161,64 +149,62 @@ describe("report page, rated report", () => {
 
   it("a tip quote highlights in the transcript", async () => {
     const sid = reported({ final: true, card: SCORED });
-    open(sid);
+    const { router } = open(sid);
     await screen.findByRole("list", { name: "Transcript" });
     const tips = within(await screen.findByRole("region", { name: "Tips" }));
     await userEvent.click(tips.getAllByRole("button", { name: /You'd like to walk more in the evenings\./ })[0]);
-    expect(window.location.hash).toMatch(/^#i=/);
+    expect(router.state.location.hash).toMatch(/^#i=/);
     await waitFor(() => expect(document.querySelector("mark.pulse")).not.toBeNull());
   });
 });
 
-describe("report page, no rating, then add a rating and run again", () => {
-  it("shows Onolys only, then a rated v2 after 'Submit and run again'", async () => {
+describe("report page, no rating", () => {
+  it("shows Onolys only, and offers no way to add a rating or run again (FX45)", async () => {
     const sid = reported({ final: true, no_rating: true, card: CARD });
-    const { router } = open(sid);
+    open(sid);
     await screen.findByRole("region", { name: "Scorecard" });
     const cct = row(/Cultivating Change Talk/);
     expect(within(cct).getAllByText("–").length).toBeGreaterThan(0);
     expect(within(cct).queryByText(/differs/)).toBeNull();
     expect(screen.queryByRole("region", { name: "Where Onolys disagrees" })).toBeNull();
     expect(screen.queryByRole("region", { name: "Your reasons, checked" })).toBeNull();
-
-    await userEvent.click(screen.getByRole("button", { name: "Add or edit my rating → Run again" }));
-    const score = await screen.findByLabelText("Cultivating Change Talk score");
-    await userEvent.selectOptions(score, "3");
-    await userEvent.click(screen.getByRole("button", { name: "Submit and run again" }));
-    await waitFor(() => expect(here(router)).toBe(`/sessions/${sid}`));
-
-    act(() => mockBackend.settle(sid));
-    await userEvent.click(await screen.findByRole("link", { name: "View report" }));
-    await waitFor(() => expect(here(router)).toBe(`/sessions/${sid}/reports/2`));
-    await screen.findByRole("region", { name: "Scorecard" });
-    const rated = row(/Cultivating Change Talk/);
-    expect(within(rated).getByText("Onolys -2 (differs)")).toBeInTheDocument(); // rated v2: chips are back
-    const select = screen.getByLabelText("Version");
-    expect(within(select).getAllByRole("option")).toHaveLength(2);
-    expect(select).toHaveValue("2");
+    expect(screen.queryByRole("button", { name: /run again|edit my rating/i })).toBeNull();
   });
+});
 
+describe("report page, versions from earlier data", () => {
   it("switching the version select goes to that version's route", async () => {
     const sid = reported({ final: true, no_rating: true, card: CARD });
-    mockBackend.startRun(UID, sid, {});
-    mockBackend.settle(sid);
+    serve(clone());
+    server.use(
+      http.get("*/v1/sessions/:id/reports", () =>
+        HttpResponse.json({
+          items: [1, 2].map((version) => ({
+            version,
+            report_id: `rep_${version}`,
+            run_id: `run_${version}`,
+            created_at: "2026-11-20T09:30:00.000Z",
+          })),
+        }),
+      ),
+    );
     const { router } = open(sid, 2);
     const select = await screen.findByLabelText("Version");
+    await waitFor(() => expect(within(select).getAllByRole("option")).toHaveLength(2));
     await userEvent.selectOptions(select, "1");
     await waitFor(() => expect(here(router)).toBe(`/sessions/${sid}/reports/1`));
   });
 });
 
 describe("report page, reasons audit failed", () => {
-  it("replaces the section with a note and Run again, and keeps the rest", async () => {
+  it("replaces the section with a note (no Run again), and keeps the rest", async () => {
     const sid = reported({ final: true, card: SCORED }, "fail-eaudit");
-    const { router } = open(sid);
+    open(sid);
     const audit = within(await screen.findByRole("region", { name: "Your reasons, checked" }));
     expect(audit.getByText("We couldn't check your reasons this time. The rest of your report is complete.")).toBeInTheDocument();
     expect(within(section("Tips")).getAllByRole("listitem").length).toBeGreaterThan(0);
     expect(screen.getByRole("region", { name: "Scorecard" })).toBeInTheDocument();
-    await userEvent.click(audit.getByRole("button", { name: "Run again" }));
-    await waitFor(() => expect(here(router)).toBe(`/sessions/${sid}`));
+    expect(screen.queryByRole("button", { name: /run again/i })).toBeNull();
   });
 });
 
@@ -254,6 +240,32 @@ describe("report page, tolerance", () => {
     open(sid);
     await screen.findByRole("region", { name: "Scorecard" });
     expect(screen.getAllByText(/based on 3 runs/).length).toBeGreaterThan(0);
+  });
+
+  it("behaviour table shows the mean across runs, not run 1 (W28)", async () => {
+    const r = clone();
+    r.header.n_runs = 3;
+    const b = r.behaviours.find((x: { item_id: string }) => x.item_id === "cr")!;
+    b.onolys_count = { mean: 4, min: 2, max: 6, values: [2, 4, 6] };
+    serve(r);
+    const sid = reported({ final: true, card: SCORED });
+    open(sid);
+    const table = within(await screen.findByRole("region", { name: "Behaviour counts" }));
+    const cell = within(table.getByRole("row", { name: /Complex Reflection/ })).getByText("4");
+    expect(cell).toHaveAttribute("data-label", "Onolys");
+  });
+
+  it("a malformed session id (422 invalid_parameters) shows the same not-found page as 404 (E21)", async () => {
+    server.use(
+      http.get("*/v1/sessions/:id/reports/:version", () =>
+        HttpResponse.json(
+          { schema_version: "0.0.1", status: 422, message: "x", details: [{ code: "invalid_parameters", message: "x" }], request_id: "req_422" },
+          { status: 422 },
+        ),
+      ),
+    );
+    open("not-hex");
+    expect(await screen.findByText("We couldn't find that report.")).toBeInTheDocument();
   });
 
   it("hides empty tips and shows warnings as quiet notices", async () => {

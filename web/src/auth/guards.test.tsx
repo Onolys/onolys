@@ -98,7 +98,7 @@ describe("token retry and sign-out", () => {
     let n = 0;
     server.use(
       http.get(USAGE, () =>
-        ++n === 1 ? new HttpResponse(null, { status: 401 }) : HttpResponse.json({ eval: { day: { used: 0, cap: 20, resets_at: "x" }, month: { used: 1, cap: 100, resets_at: "x" } }, interview: { day: { used: 0, cap: 5, resets_at: "x" }, month: { used: 0, cap: 30, resets_at: "x" } } }),
+        ++n === 1 ? new HttpResponse(null, { status: 401 }) : HttpResponse.json({ eval: { day: { used: 0, cap: 20, resets_at: "x" } }, interview: { day: { used: 0, cap: 5, resets_at: "x" } } }),
       ),
     );
     const { router } = renderWithProbe(service, "/settings");
@@ -121,5 +121,48 @@ describe("token retry and sign-out", () => {
     expect(here(router)).toBe("/login?next=%2Fsettings");
     expect(queryClient.getQueryData(["secret"])).toBeUndefined();
     expect(await service.getToken()).toBeNull();
+  });
+});
+
+describe("guards while auth is loading (no SDK report yet)", () => {
+  it.each(["/settings", "/login", "/verify-email"])("%s shows Loading and neither redirects nor renders content", async (path) => {
+    const service = createFakeAuthService();
+    service.onAuthStateChanged = () => () => {};
+    const { router } = renderApp(path, { service });
+    expect(await screen.findByRole("status")).toHaveTextContent("Loading…");
+    expect(here(router)).toBe(path);
+    expect(screen.queryByRole("heading", { level: 1 })).not.toBeInTheDocument();
+  });
+});
+
+describe("guard redirects carry next", () => {
+  it("signed-out /verify-email?next= goes to /login keeping next", async () => {
+    const { router } = renderApp("/verify-email?next=%2Fsettings");
+    await h1("Log in");
+    expect(here(router)).toBe("/login?next=%2Fsettings");
+  });
+
+  it("verified /verify-email?next= goes to next", async () => {
+    const { router } = renderApp("/verify-email?next=%2Fsettings", { user: { email: "a@clinic.org", verified: true } });
+    await h1("Settings");
+    expect(here(router)).toBe("/settings");
+  });
+
+  it("unverified /login?next= goes to /verify-email keeping next", async () => {
+    const { router } = renderApp("/login?next=%2Fsettings", { user: { email: "a@clinic.org", verified: false } });
+    await h1("Verify your email");
+    expect(here(router)).toBe("/verify-email?next=%2Fsettings");
+  });
+
+  it("verified /login?next= goes to next", async () => {
+    const { router } = renderApp("/login?next=%2Fsettings", { user: { email: "a@clinic.org", verified: true } });
+    await h1("Settings");
+    expect(here(router)).toBe("/settings");
+  });
+
+  it("a signed-out deep link on / goes to plain /login", async () => {
+    const { router } = renderApp("/");
+    await h1("Log in");
+    expect(here(router)).toBe("/login");
   });
 });

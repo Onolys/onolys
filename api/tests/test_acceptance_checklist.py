@@ -24,7 +24,7 @@ CHECKLIST: dict[int, list[tuple[str, str]]] = {
         ("test_acceptance_flow.py", "test_list_shows_done_failed_and_inflight"),
         (
             "test_run.py",
-            "test_second_run_makes_v2_keeps_v1_and_reuses_transcript_with_other_preset",
+            "test_try_again_after_a_failure_reuses_transcript_and_stored_rating",
         ),
         ("test_sessions_integration.py", "test_list_shows_inflight_failed_and_done"),
     ],
@@ -105,13 +105,13 @@ CHECKLIST: dict[int, list[tuple[str, str]]] = {
     ],
     14: [
         ("test_rating.py", "test_draft_stored_never_submits_or_starts_run"),
-        ("test_rating.py", "test_each_final_is_new_revision_latest_wins"),
+        ("test_rating.py", "test_a_submitted_rating_is_final_a_second_final_is_refused"),
         ("test_rating.py", "test_rejected_in_deleting"),
         ("test_rating.py", "test_no_object_written_to_blob_store"),
-        ("test_run.py", "test_rerun_uses_latest_final_rating_and_n_runs"),
+        ("test_rating.py", "test_final_rating_is_refused_once_the_report_is_ready"),
     ],
     15: [
-        ("test_run.py", "test_paudit_failure_fails_run_and_session_and_releases_without_refund"),
+        ("test_run.py", "test_paudit_failure_fails_run_and_session_and_refunds_the_system_failure"),
         ("test_run.py", "test_eaudit_failure_ships_report_with_warning"),
         ("test_run.py", "test_tips_failure_ships_report_with_warning"),
     ],
@@ -120,7 +120,7 @@ CHECKLIST: dict[int, list[tuple[str, str]]] = {
         ("test_run.py", "test_report_over_500kb_is_served_unchanged_from_gcs"),
         (
             "test_run.py",
-            "test_second_run_makes_v2_keeps_v1_and_reuses_transcript_with_other_preset",
+            "test_try_again_after_a_failure_reuses_transcript_and_stored_rating",
         ),
     ],
     17: [

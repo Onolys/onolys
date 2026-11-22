@@ -35,6 +35,7 @@ ERROR_CODES = (
     "unauthenticated",
     "forbidden",
     "invalid_state",
+    "rating_final",
     "unsupported_audio",
     "audio_too_long",
     "audio_too_large",
@@ -44,8 +45,9 @@ ERROR_CODES = (
     "transcription_failed",
     "rating_invalid",
     "daily_cap_reached",
-    "monthly_cap_reached",
     "interview_cap_reached",
+    "concurrent_runs",
+    "email_unverified",
     "conflict",
     "interview_too_long",
 )
@@ -57,7 +59,7 @@ class ErrorDetail(TypedDict):
     message: str
     field: NotRequired[str]
     issue: NotRequired[str]
-    period: NotRequired[Literal["day", "month"]]
+    period: NotRequired[Literal["day"]]
 
 
 class ErrorDetailModel(BaseModel):
@@ -84,11 +86,11 @@ class ErrorDetailModel(BaseModel):
         ]
         | None
     ) = Field(None, description="What is wrong at `field`. Set on `rating_invalid`.")
-    period: Literal["day", "month"] | None = Field(
+    period: Literal["day"] | None = Field(
         None,
         description=(
-            "Which usage period was exhausted. Set on `daily_cap_reached`, `monthly_cap_reached` "
-            "and `interview_cap_reached`."
+            "Which usage period was exhausted. Set on `daily_cap_reached` and "
+            "`interview_cap_reached`."
         ),
     )
 
@@ -115,7 +117,7 @@ class ApiError(Exception):
 
     @classmethod
     def of(
-        cls, status: int, code: str, message: str, period: Literal["day", "month"] | None = None
+        cls, status: int, code: str, message: str, period: Literal["day"] | None = None
     ) -> "ApiError":
         detail: ErrorDetail = {"code": code, "message": message}
         if period is not None:
@@ -130,10 +132,23 @@ def error_responses(*statuses: int) -> dict[int | str, dict]:
 
 _STATUS_TEXT = {
     401: "`unauthenticated`: missing, invalid or revoked credentials",
+    403: (
+        "`forbidden` (API keys cannot manage API keys) or `email_unverified` (valid sign-in, "
+        "email address not verified yet)"
+    ),
     404: "`not_found`: no such resource for this user (never 403, so ids cannot be probed)",
-    409: "`invalid_state` or `conflict`: not allowed in the session's current state",
-    422: "`invalid_parameters`, `unsupported_audio`, `audio_too_large` or `rating_invalid`",
-    429: "`daily_cap_reached` (daily run cap or concurrent-run limit) or `rate_limited`",
+    409: (
+        "`invalid_state` or `conflict`: not allowed in the session's current state; "
+        "`rating_final`: the report is ready, so the rating can no longer be changed or re-run"
+    ),
+    422: (
+        "`invalid_parameters` (incl. a malformed id, cursor or body), `unsupported_audio`, "
+        "`audio_too_large` or `rating_invalid`"
+    ),
+    429: (
+        "`daily_cap_reached` (daily run cap), `concurrent_runs` (a run is already in progress) "
+        "or `rate_limited`"
+    ),
     500: "`internal_error`",
     503: "`upstream_unavailable`: retry shortly",
 }

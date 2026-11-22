@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import { describe, expect, it } from "vitest";
 import { mockBackend, server } from "../../mocks/server";
+import { DASHBOARD_POLL_MS, sessionsRefetchInterval } from "./chips";
 import { here, renderApp } from "../../test/renderApp";
 
 const UID = "u_rater_clinic_org";
@@ -31,6 +32,7 @@ describe("dashboard: session list", () => {
     const cases: [string, string][] = [
       ["created", "Uploading"],
       ["uploading", "Uploading"],
+      ["upload_incomplete", "Upload incomplete"],
       ["validating", "Checking audio"],
       ["transcribing", "Transcribing"],
       ["awaiting_input", "Needs your input"],
@@ -107,20 +109,8 @@ describe("dashboard: session list", () => {
     upload(sid);
     renderApp("/", { user: USER });
     expect(await main().findByText("20 of 20 left today")).toBeInTheDocument();
-    expect(main().getByText("100 of 100 left this month")).toBeInTheDocument();
     expect(main().getByText("5 of 5 left today")).toBeInTheDocument();
-    expect(main().getByText("30 of 30 left this month")).toBeInTheDocument();
     expect(main().getByRole("link", { name: "New session" })).toHaveAttribute("href", "/sessions/new");
-  });
-
-  it("over the month cap: says so with the reset date", async () => {
-    mockBackend.configure({ caps: { eval: { month: 0 } } });
-    server.use(
-      http.get("*/v1/sessions", () => HttpResponse.json({ items: [item("a", "report_ready", { latest_report_version: 1 })] })),
-    );
-    renderApp("/", { user: USER });
-    expect(await main().findByText("0 of 0 left this month")).toBeInTheDocument();
-    expect(main().getByText(/reached this month's limit/i)).toHaveTextContent(/after .+/);
   });
 
   it("over the cap: says so with the reset time", async () => {
@@ -162,5 +152,29 @@ describe("dashboard: empty state", () => {
     expect(main().getByRole("link", { name: "New session" })).toHaveAttribute("href", "/sessions/new");
     await user.click(main().getByRole("link", { name: "See a sample report" }));
     expect(here(router)).toBe("/sample-report");
+  });
+});
+
+describe("dashboard: freshness (W25, D8)", () => {
+  it("polls every 10 s only while a session is in progress", () => {
+    expect(sessionsRefetchInterval([{ status: "report_ready" }, { status: "running" }])).toBe(DASHBOARD_POLL_MS);
+    expect(DASHBOARD_POLL_MS).toBe(10_000);
+    expect(sessionsRefetchInterval([{ status: "report_ready" }, { status: "failed" }, { status: "awaiting_input" }])).toBe(false);
+    expect(sessionsRefetchInterval(undefined)).toBe(false);
+  });
+
+  it("keeps the loaded list and shows an inline error when Load more fails", async () => {
+    let calls = 0;
+    server.use(
+      http.get("*/v1/sessions", () => {
+        calls++;
+        if (calls === 1) return HttpResponse.json({ items: [item("a1", "report_ready")], next_cursor: "c2" });
+        return HttpResponse.json({ error: { code: "internal", message: "x" } }, { status: 500 });
+      }),
+    );
+    renderApp("/", { user: USER });
+    await userEvent.click(await screen.findByRole("button", { name: "Load more" }));
+    expect(await screen.findByRole("alert")).toBeInTheDocument();
+    expect(main().getByRole("link", { name: "Session a1" })).toBeInTheDocument();
   });
 });

@@ -176,6 +176,25 @@ def test_list_sessions_newest_first_paged_and_uid_scoped(repo):
     assert all(s.uid == uid for s in p1.items + p2.items + p3.items)
 
 
+def test_list_sessions_pages_stay_full_around_deleting_sessions(repo):
+    """A17: `deleting` sessions never shorten a page, and a cursor whose session was since
+    deleted still resumes (the cursor carries created_at + id, not a lookup)."""
+    uid, _ = new_ids()
+    base = datetime.now(UTC)
+    sids = []
+    for i in range(6):
+        sid = f"s-{i}-{uuid.uuid4().hex[:6]}"
+        seed(repo, uid=uid, sid=sid, created_at=base + timedelta(seconds=i))
+        sids.append(sid)
+    for i in (5, 4, 2):
+        repo.update_session(uid, sids[i], {"state": "deleting"})
+    p1 = repo.list_sessions(uid, limit=2)
+    assert [s.id for s in p1.items] == [sids[3], sids[1]] and p1.next_cursor
+    repo.delete_session(uid, sids[1])  # the cursor's own session disappears
+    p2 = repo.list_sessions(uid, limit=2, cursor=p1.next_cursor)
+    assert [s.id for s in p2.items] == [sids[0]] and p2.next_cursor is None
+
+
 def test_list_sessions_bad_cursor_is_not_found(repo):
     uid, _ = new_ids()
     with pytest.raises(NotFoundError):
@@ -668,6 +687,15 @@ def test_fail_stale_session_marks_failed_and_mirrors_status(repo):
     assert repo.fail_stale_session(uid, sid, "transcribing", cutoff, err) is False
 
 
+def test_fail_stale_session_to_upload_incomplete_has_no_error(repo):
+    uid, sid = seed_state(repo, "uploading", T_OLD, step="upload")
+    cutoff = T_OLD + timedelta(minutes=30)
+    assert repo.fail_stale_session(uid, sid, "uploading", cutoff, None, to="upload_incomplete")
+    s, st = repo.get_session(uid, sid), repo.get_status(uid, sid)
+    assert (s.state, s.error, st.state, st.error_code) == ("upload_incomplete", None,
+                                                          "upload_incomplete", None)  # fmt: skip
+
+
 def test_fail_stale_session_skips_fresh_moved_on_and_foreign(repo):
     cutoff = T_OLD + timedelta(minutes=30)
     err = SessionError(code="transcription_failed", step="transcribe")
@@ -705,14 +733,14 @@ def test_cap_txns_survive_contention(repo, monkeypatch, exc):
         return real(*a, **kw)
 
     monkeypatch.setattr(repo._client, "transaction", flaky)
-    assert repo.reserve_usage(u, "eval", day, LimitDefaults(5, 50, 5, 30), 2) == "ok"
+    assert repo.reserve_usage(u, "eval", day, LimitDefaults(5, 5), 2) == "ok"
     assert len(calls) == 3
     calls.clear()
     repo.release_usage(u, "eval", day, refund=True)
     assert len(calls) == 3
 
 
-# ---- SP11 reserve_usage / release_usage / get_usage_docs ----
+# ---- SP11 reserve_usage / release_usage / get_usage_doc ----
 
 
 def _reserve_in_parallel(repo, u, kinds, defaults, max_active=1000):
@@ -727,39 +755,29 @@ def _reserve_in_parallel(repo, u, kinds, defaults, max_active=1000):
 @pytest.mark.parametrize("kind", ["eval", "interview"])
 def test_parallel_reserve_day_cap_3_per_kind(repo, kind):
     u = f"u-{uuid.uuid4().hex[:8]}"
-    outs = _reserve_in_parallel(repo, u, [kind] * 6, LimitDefaults(3, 50, 3, 50))
+    outs = _reserve_in_parallel(repo, u, [kind] * 6, LimitDefaults(3, 3))
     assert outs.count("ok") == 3 and outs.count("day_cap") == 3
-    day, month = repo.get_usage_docs(u, "2026-11-20")
-    assert day.runs + day.interviews == 3 and month.runs + month.interviews == 3
-
-
-@pytest.mark.parametrize("kind", ["eval", "interview"])
-def test_parallel_reserve_month_cap_3_per_kind(repo, kind):
-    u = f"u-{uuid.uuid4().hex[:8]}"
-    outs = _reserve_in_parallel(repo, u, [kind] * 6, LimitDefaults(50, 3, 50, 3))
-    assert outs.count("ok") == 3 and outs.count("month_cap") == 3
+    day = repo.get_usage_doc(u, "2026-11-20")
+    assert day.runs + day.interviews == 3
 
 
 def test_parallel_reserve_mixed_kinds(repo):
     u = f"u-{uuid.uuid4().hex[:8]}"
-    outs = _reserve_in_parallel(
-        repo, u, ["eval"] * 3 + ["interview"] * 3, LimitDefaults(2, 50, 2, 50)
-    )
+    outs = _reserve_in_parallel(repo, u, ["eval"] * 3 + ["interview"] * 3, LimitDefaults(2, 2))
     assert outs.count("ok") == 4 and outs.count("day_cap") == 2
-    day, month = repo.get_usage_docs(u, "2026-11-20")
-    assert (day.runs, day.interviews, month.runs, month.interviews) == (2, 2, 2, 2)
+    day = repo.get_usage_doc(u, "2026-11-20")
+    assert (day.runs, day.interviews) == (2, 2)
 
 
 def test_reserve_usage_refusal_writes_nothing_and_release_floors_at_zero(repo):
     u, day = f"u-{uuid.uuid4().hex[:8]}", "2026-11-20"
-    d = LimitDefaults(1, 1, 1, 1)
+    d = LimitDefaults(1, 1)
     assert repo.reserve_usage(u, "eval", day, d, 5) == "ok"
-    assert repo.reserve_usage(u, "eval", day, d, 5) == "month_cap"
-    assert repo.get_usage_docs(u, day)[1].runs == 1
+    assert repo.reserve_usage(u, "eval", day, d, 5) == "day_cap"
+    assert repo.get_usage_doc(u, day).runs == 1
     repo.release_usage(u, "eval", day, refund=True)
     repo.release_usage(u, "eval", day, refund=True)
-    day_doc, month_doc = repo.get_usage_docs(u, day)
-    assert (day_doc.runs, month_doc.runs, month_doc.month) == (0, 0, "2026-11")
+    assert repo.get_usage_doc(u, day).runs == 0
     assert repo.get_user(u).active_runs == 0
 
 
@@ -877,3 +895,93 @@ def test_create_session_for_interview_links_atomically_once(repo):
     assert link(alice, iid, sid2) == "already_linked"
     with pytest.raises(NotFoundError):
         repo.get_session(alice, sid2)
+
+
+def test_concurrent_interview_creates_reserve_exactly_once(repo):
+    from concurrent.futures import ThreadPoolExecutor
+
+    from onolys_api.repo.limits import LimitDefaults
+
+    alice = f"alice-{uuid.uuid4().hex[:8]}"
+    d = LimitDefaults(10, 5)
+    day = "2026-11-21"
+
+    def go(_):
+        doc = _iv(alice)
+        return repo.create_interview_reserved(alice, uuid.uuid4().hex, doc, d, 2)
+
+    with ThreadPoolExecutor(8) as ex:
+        outs = list(ex.map(go, range(8)))
+    assert sorted(outs) == ["ok"] + ["open_exists"] * 7
+    assert len(repo.list_open_interviews(alice)) == 1
+    assert repo.get_usage_doc(alice, day).interviews == 1
+    # a capped user: nothing written
+    bob = f"bob-{uuid.uuid4().hex[:8]}"
+    assert repo.create_interview_reserved(bob, uuid.uuid4().hex, _iv(bob),
+                                          LimitDefaults(10, 0), 2) == "day_cap"  # fmt: skip
+    assert repo.list_open_interviews(bob) == []
+
+
+def test_interview_refund_cap_counts_on_the_reservation_day(repo):
+    alice = f"alice-{uuid.uuid4().hex[:8]}"
+    now = datetime(2026, 11, 21, 12, 0, tzinfo=UTC)
+    got = []
+    for _ in range(4):
+        iid = uuid.uuid4().hex
+        repo.create_interview(alice, iid, _iv(alice))
+        done = repo.transition_interview(
+            alice, iid, ("created", "live"), "abandoned", None, (now, 30.0, 3)
+        )
+        got.append(done.refunded)
+    assert got == [True, True, True, False]
+    assert repo.get_usage_doc(alice, "2026-11-21").interview_refunds == 3
+
+
+# ---- FX26 (A11, A22, A24) ----
+
+
+def test_rotate_api_key_leaves_one_active_even_under_concurrency(repo):
+    from concurrent.futures import ThreadPoolExecutor
+
+    uid, _ = new_ids()
+    now = datetime.now(UTC)
+
+    def rotate(_):
+        kid = uuid.uuid4().hex[:8]
+        repo.rotate_api_key(uid, kid, ApiKeyDoc(uid=uid, hash="h" * 64, created=now), now)
+        return kid
+
+    with ThreadPoolExecutor(6) as ex:
+        kids = list(ex.map(rotate, range(6)))
+    live = [k for k in kids if repo.get_api_key(k).revoked_at is None]
+    assert len(live) == 1 and repo.active_api_key(uid).id == live[0]
+    repo.revoke_active_api_keys(uid, now)
+    assert repo.active_api_key(uid) is None
+
+
+def test_confirm_speaker_only_in_allowed_states(repo):
+    uid, sid = seed(repo)
+    allowed = ("awaiting_input", "report_ready", "failed")
+    repo.update_session(uid, sid, {"state": "running"})
+    assert repo.confirm_speaker(uid, sid, "A", allowed) is False
+    assert repo.get_session(uid, sid).clinician_speaker is None
+    repo.update_session(uid, sid, {"state": "awaiting_input"})
+    assert repo.confirm_speaker(uid, sid, "A", allowed) is True
+    s = repo.get_session(uid, sid)
+    assert s.clinician_speaker == "A" and s.speaker_confirmed
+    assert repo.get_status(uid, sid).speaker_confirmed
+
+
+def test_txn_does_not_retry_unrelated_value_error(repo):
+    """A24: only contention is retried; a real ValueError from txn_fn surfaces at once."""
+    if isinstance(repo, FakeRepo):
+        pytest.skip("Firestore transaction retry only")
+    calls = []
+
+    def boom(txn):
+        calls.append(1)
+        raise ValueError("bad input")
+
+    with pytest.raises(ValueError, match="bad input"):
+        repo._retry_txn(boom)
+    assert len(calls) == 1

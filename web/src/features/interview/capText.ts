@@ -1,11 +1,10 @@
 import { formatBlockingReset, type Blocking } from "../usage/usage";
 
-/** The message under a disabled "Start AI Interview": which cap is spent and when it resets. */
+/** The message under a disabled "Start AI Interview": the daily cap is spent and when it resets. */
 export function interviewCapText(b: Blocking): string {
   const reset = formatBlockingReset(b);
-  const when = b.name === "day" ? "today's" : "this month's";
-  const tail = reset ? ` It resets ${b.name === "day" ? "at" : "on"} ${reset}.` : "";
-  return `You've reached ${when} AI interview limit.${tail}`;
+  const tail = reset ? ` It resets at ${reset}.` : "";
+  return `You've reached today's AI interview limit.${tail}`;
 }
 
 /** `m:ss`. */

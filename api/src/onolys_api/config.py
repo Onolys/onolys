@@ -51,15 +51,15 @@ class Settings:
     audio_bucket: str = ""
     cors_origins: tuple[str, ...] = ()
     eval_cap_day: int = 10
-    eval_cap_month: int = 100
     ai_cap_day: int = 5
-    ai_cap_month: int = 30
-    max_active_runs: int = 2
+    max_active_runs: int = 1
     tasks_queue: str = ""
     tasks_sa: str = ""
     worker_url: str = ""
     routes_file: str = ""
     default_preset: str = ""
+    # Presets beyond the default that users may pick (FX43): empty in prod unless the owner opts in
+    extra_presets: tuple[str, ...] = ()
     git_sha: str = "dev"
     stt_cap_factor: float = 3.0  # STT poll cap = factor x audio duration ...
     stt_cap_min_s: float = 300.0  # ... but never under this
@@ -70,16 +70,27 @@ class Settings:
     ai_min_seconds: int = 300  # shortest recording worth sending to the audit
     ai_tolerance_seconds: int = 30
     ai_abandon_count_seconds: int = 30  # ended/abandoned under this: the usage unit is refunded
+    ai_refunds_per_day: int = 3  # at most this many such refunds per user per UTC day (A9)
     ai_reconnect_seconds: int = 60  # relay waits this long for a dropped client
     ai_mic_gate: bool = False
+    # relay abuse caps (A21): one client audio frame, bytes per second of audio (PCM16 16 kHz is
+    # 32000 B/s, so the default tolerates 4x real time for buffered bursts), and how many times
+    # one interview may (re)connect before it is ended.
+    ai_max_frame_bytes: int = 65536
+    ai_max_audio_bytes_per_s: int = 128000
+    ai_max_connects: int = 30
     uid_hmac_key: str = ""  # keys the `uid_hash` log field (Secret Manager `uid-hmac-key-{env}`)
 
     @classmethod
     def from_env(cls, environ: Mapping[str, str] | None = None) -> "Settings":
         e = os.environ if environ is None else environ
-        env = e.get("ENV", "local")
+        env = e.get("ENV")
+        if not env:  # never default to local: that means fake auth and no /tasks OIDC (A8)
+            raise ConfigError(f"ENV is required ({'|'.join(ENVS)})")
         local = env in LOCAL_ENVS
-        active_raw = e.get("MAX_ACTIVE_RUNS", "2")
+        if local and e.get("K_SERVICE"):  # Cloud Run sets K_SERVICE
+            raise ConfigError("ENV=local|test is not allowed on Cloud Run (K_SERVICE is set)")
+        active_raw = e.get("MAX_ACTIVE_RUNS", str(cls.max_active_runs))
         try:
             max_active = int(active_raw)
         except ValueError:
@@ -101,15 +112,16 @@ class Settings:
                 o.strip() for o in e.get("CORS_ORIGINS", "").split(",") if o.strip()
             ),
             eval_cap_day=_int(e, "EVAL_CAP_DAY", cls.eval_cap_day),
-            eval_cap_month=_int(e, "EVAL_CAP_MONTH", cls.eval_cap_month),
             ai_cap_day=_int(e, "AI_CAP_DAY", cls.ai_cap_day),
-            ai_cap_month=_int(e, "AI_CAP_MONTH", cls.ai_cap_month),
             max_active_runs=max_active,
             tasks_queue=e.get("TASKS_QUEUE", ""),
             tasks_sa=e.get("TASKS_SA", ""),
             worker_url=e.get("WORKER_URL", ""),
             routes_file=e.get("ROUTES_FILE", ""),
             default_preset=e.get("DEFAULT_PRESET", ""),
+            extra_presets=tuple(
+                p.strip() for p in e.get("ENABLED_EXTRA_PRESETS", "").split(",") if p.strip()
+            ),
             git_sha=e.get("GIT_SHA", "dev"),
             voice_url=e.get("VOICE_URL", cls.voice_url if local else ""),
             ai_max_seconds=_int(e, "AI_MAX_SECONDS", cls.ai_max_seconds),
@@ -119,8 +131,14 @@ class Settings:
             ai_abandon_count_seconds=_int(
                 e, "AI_ABANDON_COUNT_SECONDS", cls.ai_abandon_count_seconds
             ),
+            ai_refunds_per_day=_int(e, "AI_REFUNDS_PER_DAY", cls.ai_refunds_per_day),
             ai_reconnect_seconds=_int(e, "AI_RECONNECT_SECONDS", cls.ai_reconnect_seconds),
             ai_mic_gate=_bool(e, "AI_MIC_GATE", cls.ai_mic_gate),
+            ai_max_frame_bytes=_int(e, "AI_MAX_FRAME_BYTES", cls.ai_max_frame_bytes),
+            ai_max_audio_bytes_per_s=_int(
+                e, "AI_MAX_AUDIO_BYTES_PER_S", cls.ai_max_audio_bytes_per_s
+            ),
+            ai_max_connects=_int(e, "AI_MAX_CONNECTS", cls.ai_max_connects),
             uid_hmac_key=e.get("UID_HMAC_KEY", ""),
         )
         s.validate()
@@ -137,14 +155,11 @@ class Settings:
                 raise ConfigError(f"{name} must be one of {', '.join(allowed)}")
         if self.auth_mode == "fake" and self.env not in LOCAL_ENVS:
             raise ConfigError("AUTH_MODE=fake is only allowed when ENV is local or test")
-        for kind, day, month in (
-            ("EVAL", self.eval_cap_day, self.eval_cap_month),
-            ("AI", self.ai_cap_day, self.ai_cap_month),
-        ):
-            if day < 0 or month < 0:
-                raise ConfigError(f"{kind}_CAP_DAY and {kind}_CAP_MONTH must be >= 0")
-            if month < day:
-                raise ConfigError(f"{kind}_CAP_MONTH must be >= {kind}_CAP_DAY")
+        if self.env not in LOCAL_ENVS and not self.uid_hmac_key:
+            raise ConfigError("UID_HMAC_KEY is required when ENV is staging or prod")
+        for kind, day in (("EVAL", self.eval_cap_day), ("AI", self.ai_cap_day)):
+            if day < 0:
+                raise ConfigError(f"{kind}_CAP_DAY must be >= 0")
         if self.max_active_runs < 0:
             raise ConfigError("MAX_ACTIVE_RUNS must be >= 0")
         if self.stt_cap_factor <= 0 or self.stt_cap_min_s <= 0:
@@ -157,10 +172,18 @@ class Settings:
             ("AI_MIN_SECONDS", self.ai_min_seconds),
             ("AI_TOLERANCE_SECONDS", self.ai_tolerance_seconds),
             ("AI_ABANDON_COUNT_SECONDS", self.ai_abandon_count_seconds),
+            ("AI_REFUNDS_PER_DAY", self.ai_refunds_per_day),
             ("AI_RECONNECT_SECONDS", self.ai_reconnect_seconds),
         ):
             if v < 0:
                 raise ConfigError(f"{name} must be >= 0")
+        for name, v in (
+            ("AI_MAX_FRAME_BYTES", self.ai_max_frame_bytes),
+            ("AI_MAX_AUDIO_BYTES_PER_S", self.ai_max_audio_bytes_per_s),
+            ("AI_MAX_CONNECTS", self.ai_max_connects),
+        ):
+            if v <= 0:
+                raise ConfigError(f"{name} must be > 0")
         if self.ai_max_seconds <= 0 or self.ai_warn_seconds >= self.ai_max_seconds:
             raise ConfigError("AI_WARN_SECONDS must be < AI_MAX_SECONDS (> 0)")
         if self.voice_url:

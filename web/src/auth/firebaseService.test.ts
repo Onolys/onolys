@@ -8,26 +8,30 @@ const m = {
   verifyPasswordResetCode: vi.fn(),
   confirmPasswordReset: vi.fn(),
   reload: vi.fn(),
+  getRedirectResult: vi.fn(),
+  createUser: vi.fn(),
+  sendEmailVerification: vi.fn(),
+  signOut: vi.fn(),
 };
 
 vi.mock("firebase/app", () => ({ initializeApp: () => ({}) }));
 vi.mock("firebase/auth", () => ({
   GoogleAuthProvider: class {},
   getAuth: () => auth,
-  getRedirectResult: () => Promise.resolve(null),
+  getRedirectResult: (...a: unknown[]) => m.getRedirectResult(...a),
   onIdTokenChanged: vi.fn(),
   applyActionCode: (...a: unknown[]) => m.applyActionCode(...a),
   checkActionCode: (...a: unknown[]) => m.checkActionCode(...a),
   verifyPasswordResetCode: (...a: unknown[]) => m.verifyPasswordResetCode(...a),
   confirmPasswordReset: (...a: unknown[]) => m.confirmPasswordReset(...a),
   reload: (...a: unknown[]) => m.reload(...a),
-  createUserWithEmailAndPassword: vi.fn(),
-  sendEmailVerification: vi.fn(),
+  createUserWithEmailAndPassword: (...a: unknown[]) => m.createUser(...a),
+  sendEmailVerification: (...a: unknown[]) => m.sendEmailVerification(...a),
   sendPasswordResetEmail: vi.fn(),
   signInWithEmailAndPassword: vi.fn(),
   signInWithPopup: vi.fn(),
   signInWithRedirect: vi.fn(),
-  signOut: vi.fn(),
+  signOut: (...a: unknown[]) => m.signOut(...a),
 }));
 
 import { createFirebaseAuthService } from "./firebaseService";
@@ -38,6 +42,7 @@ beforeEach(() => {
   vi.resetAllMocks();
   auth.currentUser = currentUser;
   currentUser.getIdToken.mockResolvedValue("t");
+  m.getRedirectResult.mockResolvedValue(null);
 });
 
 describe("firebase action-code methods", () => {
@@ -93,6 +98,21 @@ describe("firebase email-change action codes", () => {
     expect(await make().applyEmailChange("oob")).toEqual({ signedIn: false });
     expect(m.applyActionCode).toHaveBeenCalledOnce();
   });
+  it("applyEmailChange signs out when the session cannot be refreshed (FX34)", async () => {
+    m.reload.mockRejectedValue({ code: "auth/user-token-expired" });
+    await make().applyEmailChange("oob");
+    expect(m.signOut).toHaveBeenCalledWith(auth);
+  });
+  it("applyEmailChange does not claim signedIn for a different account than the code's (FX34)", async () => {
+    m.checkActionCode.mockResolvedValue({ operation: "VERIFY_AND_CHANGE_EMAIL", data: { email: "new@x.co", previousEmail: "other@x.co" } });
+    expect(await make().applyEmailChange("oob")).toEqual({ signedIn: false });
+    expect(m.applyActionCode).toHaveBeenCalledOnce();
+    expect(m.reload).not.toHaveBeenCalled();
+  });
+  it("applyEmailChange stays signedIn when the current user matches the code's account (FX34)", async () => {
+    m.checkActionCode.mockResolvedValue({ operation: "VERIFY_AND_CHANGE_EMAIL", data: { email: "new@b.co", previousEmail: "A@b.co" } });
+    expect(await make().applyEmailChange("oob")).toEqual({ signedIn: true });
+  });
   it("applyEmailChange with nobody signed in is signedIn false", async () => {
     auth.currentUser = null;
     expect(await make().applyEmailChange("oob")).toEqual({ signedIn: false });
@@ -100,5 +120,30 @@ describe("firebase email-change action codes", () => {
   it("applyEmailChange propagates apply errors", async () => {
     m.applyActionCode.mockRejectedValue({ code: "auth/invalid-action-code" });
     await expect(make().applyEmailChange("oob")).rejects.toMatchObject({ code: "auth/invalid-action-code" });
+  });
+});
+
+describe("firebase signUp", () => {
+  it("still resolves when the verification email cannot be sent (VerifyEmail has Resend)", async () => {
+    m.createUser.mockResolvedValue({ user: currentUser });
+    m.sendEmailVerification.mockRejectedValue({ code: "auth/too-many-requests" });
+    await expect(make().signUp("a@b.co", "password1")).resolves.toBeUndefined();
+    expect(m.sendEmailVerification).toHaveBeenCalledOnce();
+  });
+  it("still rejects when the account cannot be created", async () => {
+    m.createUser.mockRejectedValue({ code: "auth/email-already-in-use" });
+    await expect(make().signUp("a@b.co", "password1")).rejects.toMatchObject({ code: "auth/email-already-in-use" });
+  });
+});
+
+describe("firebase redirect sign-in result", () => {
+  it("reports the failure code once instead of swallowing it", async () => {
+    m.getRedirectResult.mockRejectedValue({ code: "auth/account-exists-with-different-credential" });
+    const svc = make();
+    expect(await svc.consumeRedirectError()).toBe("auth/account-exists-with-different-credential");
+    expect(await svc.consumeRedirectError()).toBeUndefined();
+  });
+  it("reports nothing when there was no redirect or it succeeded", async () => {
+    expect(await make().consumeRedirectError()).toBeUndefined();
   });
 });

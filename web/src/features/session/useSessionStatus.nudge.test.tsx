@@ -1,11 +1,13 @@
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { renderHook, act } from "@testing-library/react";
+import { createElement, type ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   createMemoryStatusEmitter,
   setStatusListener,
   type SessionStatusDoc,
 } from "../../api/statusListener";
-import { useSessionStatus } from "./useSessionStatus";
+import { RESUBSCRIBE_DELAYS_MS, useSessionStatus } from "./useSessionStatus";
 
 const get = vi.fn();
 vi.mock("../../auth/useApiClient", () => {
@@ -29,10 +31,13 @@ const doc = (state: SessionStatusDoc["state"], updated_at = new Date().toISOStri
   has_rating: false,
 });
 const quiet = { current: false };
-const mount = () => renderHook(() => useSessionStatus("s1", quiet));
+let queryClient: QueryClient;
+const wrapper = ({ children }: { children: ReactNode }) => createElement(QueryClientProvider, { client: queryClient }, children);
+const mount = () => renderHook(() => useSessionStatus("s1", quiet), { wrapper });
 const advance = (ms: number) => act(() => void vi.advanceTimersByTime(ms));
 
 beforeEach(() => {
+  queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   vi.useFakeTimers();
   vi.setSystemTime(new Date("2026-11-20T10:00:00Z"));
   get.mockReset();
@@ -113,5 +118,47 @@ describe("useSessionStatus: stale transcribing nudge", () => {
     act(() => emitter.emit("s1", doc("running")));
     advance(20 * MIN);
     expect(get).not.toHaveBeenCalled();
+  });
+});
+
+const detail = { status: "awaiting_input", progress: 50, flags: { transcript_ready: true } };
+const flush = () => act(async () => void (await vi.advanceTimersByTimeAsync(0)));
+
+describe("useSessionStatus: listener drop (W16, AR2, D7)", () => {
+  it("polls the detail while down, resubscribes with backoff, and goes live again", async () => {
+    get.mockResolvedValue({ data: detail, response: { ok: true } });
+    const subscribe = vi.spyOn(emitter, "subscribe");
+    const { result } = mount();
+    act(() => emitter.emit("s1", doc("awaiting_input")));
+    act(() => emitter.emitError("s1", new Error("blip")));
+    await flush();
+    expect(result.current.phase).toBe("fallback");
+    expect(subscribe).toHaveBeenCalledTimes(1);
+    advance(1_000); // first resubscribe: the emitter replays the doc, so the listener is live again
+    expect(subscribe).toHaveBeenCalledTimes(2);
+    expect(result.current.phase).toBe("live");
+    const calls = get.mock.calls.length;
+    advance(20_000);
+    expect(get.mock.calls.length).toBe(calls); // polling stopped
+  });
+
+  it("after the last retry keeps polling and reports exhausted; unmount stops it", async () => {
+    get.mockResolvedValue({ data: detail, response: { ok: true } });
+    const subscribe = vi.spyOn(emitter, "subscribe");
+    const { result, unmount } = mount();
+    for (let i = 0; i <= RESUBSCRIBE_DELAYS_MS.length; i++) {
+      act(() => emitter.emitError("s1", new Error("down")));
+      await flush();
+      advance(16_000);
+    }
+    expect(subscribe).toHaveBeenCalledTimes(1 + RESUBSCRIBE_DELAYS_MS.length);
+    expect(result.current).toMatchObject({ phase: "fallback", exhausted: true });
+    const calls = get.mock.calls.length;
+    await act(async () => void (await vi.advanceTimersByTimeAsync(5_100)));
+    expect(get.mock.calls.length).toBeGreaterThan(calls);
+    unmount();
+    const after = get.mock.calls.length;
+    advance(30_000);
+    expect(get.mock.calls.length).toBe(after);
   });
 });

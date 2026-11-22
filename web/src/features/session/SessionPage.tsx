@@ -11,7 +11,7 @@ import { describeError, failureAction, messageForCode } from "../../api/errors";
 import type { SessionStatusDoc } from "../../api/statusListener";
 import { useApiClient } from "../../auth/useApiClient";
 import { formatElapsed, formatResetTime } from "../../lib/format";
-import { blockingPeriod, evalCapCode, formatBlockingReset } from "../usage/usage";
+import { blockingPeriod, formatBlockingReset } from "../usage/usage";
 import { USAGE_KEY, useUsage } from "../usage/useUsage";
 import { DeleteDialog } from "./DeleteDialog";
 import { ErrorCard } from "./ErrorCard";
@@ -49,7 +49,7 @@ function SessionView({ id }: { id: string }) {
 
   const needsUsage =
     doc !== null &&
-    (doc.state === "failed" || doc.error_code === "daily_cap_reached" || doc.error_code === "monthly_cap_reached");
+    (doc.state === "failed" || doc.error_code === "daily_cap_reached");
   const usage = useUsage({ enabled: needsUsage });
   const blocking = blockingPeriod(usage.data, "eval");
   const atCap = blocking !== null;
@@ -61,19 +61,28 @@ function SessionView({ id }: { id: string }) {
   const firstStartHeld =
     doc !== null &&
     doc.state === "awaiting_input" &&
-    (doc.error_code === "daily_cap_reached" || doc.error_code === "monthly_cap_reached");
+    (doc.error_code === "daily_cap_reached" || doc.error_code === "concurrent_runs");
+  // Try again after a failed FREE run is free too (the rating the interview paid for is owed), so it is
+  // not blocked by the eval cap either: the detail's `free_run` says so.
+  const failed = doc !== null && doc.state === "failed";
   const detail = useQuery({
     queryKey: ["session-detail", id],
-    enabled: firstStartHeld,
+    enabled: firstStartHeld || failed,
     queryFn: async () => unwrap(await client.GET("/sessions/{id}", { params: { path: { id } } })),
   });
-  const freeFirstRun = firstStartHeld && Boolean(detail.data?.interview_id);
+  const freeFirstRun = firstStartHeld && Boolean(detail.data?.free_run);
+  const freeRetry = failed && Boolean(detail.data?.free_run);
 
   const run = useMutation({
     mutationFn: async () => unwrap(await client.POST("/sessions/{id}/runs", { params: { path: { id } } })),
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: USAGE_KEY }),
     onError: () => void queryClient.invalidateQueries({ queryKey: USAGE_KEY }),
   });
+
+  // A successful POST keeps the buttons locked until the status doc moves on (else a second POST races it).
+  const { reset: resetRun } = run;
+  const docState = doc?.state;
+  useEffect(() => resetRun(), [docState, resetRun]);
 
   const remove = useMutation({
     mutationFn: async () => {
@@ -111,7 +120,7 @@ function SessionView({ id }: { id: string }) {
   const timeline = doc ? deriveTimeline(doc, { resetsAt }) : null;
   const failureCode = doc?.state === "failed" ? (doc.error_code ?? undefined) : undefined;
   const runError = run.error ? describeError(run.error, { resetsAt }) : null;
-  const runLocked = run.isPending || atCap;
+  const runLocked = run.isPending || run.isSuccess || (atCap && !freeRetry);
 
   return (
     <>
@@ -123,7 +132,7 @@ function SessionView({ id }: { id: string }) {
 
       {!doc || !timeline ? null : (
         <>
-          {view.phase === "fallback" ? (
+          {view.phase === "fallback" && view.exhausted ? (
             <p className="notice" role="alert">
               Live updates stopped. This is the latest we could load.{" "}
               <button type="button" className="link-button" onClick={() => window.location.reload()}>
@@ -163,7 +172,7 @@ function SessionView({ id }: { id: string }) {
               <button
                 type="button"
                 className="btn btn-primary"
-                disabled={run.isPending || (atCap && !freeFirstRun)}
+                disabled={run.isPending || run.isSuccess || (atCap && !freeFirstRun)}
                 onClick={() => run.mutate()}
               >
                 Start
@@ -181,16 +190,16 @@ function SessionView({ id }: { id: string }) {
 
           {doc.state === "failed" ? (
             <ErrorCard code={failureCode} reference={id} resetsAt={resetsAt}>
-              {failureAction(failureCode) === "upload_new" ? (
+              {failureAction(failureCode, doc.transcript_ready) === "upload_new" ? (
                 <Link className="btn btn-primary" to={`/sessions/new?from=${encodeURIComponent(id)}`}>
                   Upload a different file
                 </Link>
               ) : (
                 <>
                   <button type="button" className="btn btn-primary" disabled={runLocked} onClick={() => run.mutate()}>
-                    Run again
+                    Try again
                   </button>
-                  {blocking ? <span>{messageForCode(evalCapCode(blocking), { resetsAt })}</span> : null}
+                  {blocking && !freeRetry ? <span>{messageForCode("daily_cap_reached", { resetsAt })}</span> : null}
                 </>
               )}
             </ErrorCard>
@@ -198,9 +207,9 @@ function SessionView({ id }: { id: string }) {
 
           {runError ? <ErrorCard code={runError.code} reference={runError.requestId} resetsAt={resetsAt} /> : null}
 
-          {doc.state === "created" || doc.state === "uploading" ? <UploadSlot sessionId={id} doc={doc} /> : null}
-          {doc.state !== "deleting" ? <RatingCardSlot sessionId={id} doc={doc} /> : null}
-          {doc.transcript_ready && doc.state !== "deleting" && (!doc.speaker_confirmed || doc.state === "report_ready" || doc.state === "failed") ? (
+          {doc.state === "created" || doc.state === "uploading" || doc.state === "upload_incomplete" ? <UploadSlot sessionId={id} doc={doc} /> : null}
+          {doc.state !== "deleting" ? <RatingCardSlot sessionId={id} doc={doc} readOnly={doc.rating_submitted || doc.state === "report_ready"} /> : null}
+          {doc.transcript_ready && doc.state !== "deleting" && (!doc.speaker_confirmed || doc.state === "failed") ? (
             <SpeakerGateSlot sessionId={id} doc={doc} />
           ) : null}
 

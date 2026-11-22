@@ -8,10 +8,12 @@ from pydantic import BaseModel, Field
 
 from onolys_api.auth.deps import AuthUser, current_user
 from onolys_api.errors import ApiError, ErrorResponse
-from onolys_api.jobs.caps import release, reserve
+from onolys_api.jobs import caps
+from onolys_api.jobs.caps import release, start_interview
 from onolys_api.jobs.interview_sweep import enqueue_sweep
 from onolys_api.jobs.interviews import abandon_open_interviews, settle_interview
 from onolys_api.repo.models import InterviewDoc, InterviewState
+from onolys_api.routes.ids import ResourceId
 from onolys_api.routes.scenarios import ScenarioPublic
 from onolys_api.voice.scenarios import public_view
 
@@ -85,19 +87,20 @@ def create_interview(
 
     now = state.clock()
     abandon_open_interviews(repo, settings, uid, now)
-    reservation = reserve(repo, settings, uid, "interview", now)  # 429 passes through
     iid = uuid4().hex
+    # one transaction: no open interview left, the cap holds, the unit is counted, the doc exists
+    reservation = start_interview(
+        repo, settings, uid, iid,
+        InterviewDoc(
+            uid=uid, scenario_id=body.scenario_id, voice=voice, created_at=now,
+            reservation_date=caps.utc_date(now),
+        ),
+    )  # fmt: skip
     try:
-        # before the doc: a failed enqueue refunds and fails the create (no unswept interview)
+        # a failed enqueue gives the unit back and closes the doc (no unswept interview)
         enqueue_sweep(getattr(state, "queue", None), settings, uid, iid)
-        repo.create_interview(
-            uid, iid,
-            InterviewDoc(
-                uid=uid, scenario_id=body.scenario_id, voice=voice, created_at=now,
-                reservation_date=reservation.date,
-            ),
-        )  # fmt: skip
     except Exception:
+        repo.transition_interview(uid, iid, ("created", "live"), "abandoned")
         release(repo, uid, reservation, refund=True)
         raise
     return _view(request, repo.get_interview(uid, iid))
@@ -107,7 +110,7 @@ def create_interview(
     "/{id}", operation_id="getInterview", response_model=InterviewResponse,
     summary="An interview's state and elapsed time",
 )  # fmt: skip
-def get_interview(request: Request, id: str, user: User) -> InterviewResponse:
+def get_interview(request: Request, id: ResourceId, user: User) -> InterviewResponse:
     return _view(request, request.app.state.repo.get_interview(user.uid, id))
 
 
@@ -120,7 +123,7 @@ def get_interview(request: Request, id: str, user: User) -> InterviewResponse:
     ),
 )  # fmt: skip
 def end_interview(
-    request: Request, id: str, user: User, body: EndInterviewRequest | None = None
+    request: Request, id: ResourceId, user: User, body: EndInterviewRequest | None = None
 ) -> InterviewResponse:
     state = request.app.state
     state.repo.get_interview(user.uid, id)  # 404 for a foreign or missing id

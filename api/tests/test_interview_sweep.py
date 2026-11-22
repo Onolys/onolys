@@ -35,7 +35,7 @@ def repo(tmp_path):
 def app(tmp_path, repo):
     a = create_app(
         Settings(
-            env="test", auth_mode="fake", service_mode="combined", ai_cap_day=5, ai_cap_month=10,
+            env="test", auth_mode="fake", service_mode="combined", ai_cap_day=5,
             voice_url="wss://voice.example",
         ),
         repo=repo,
@@ -80,7 +80,7 @@ async def test_sweep_abandons_stuck_interview_and_refunds_when_short(api, app, r
     app.state.queue.drain()
     assert repo.get_interview("alice", iid).state == "abandoned"
     assert releases(repo) == [True]
-    assert repo.get_usage_docs("alice", "2026-11-21")[0].interviews == 0
+    assert repo.get_usage_doc("alice", "2026-11-21").interviews == 0
 
 
 async def _setup_live(api, app, repo, at_s, **fields):
@@ -195,7 +195,7 @@ async def test_sweep_keeps_the_unit_at_or_above_threshold(api, app, repo):
     app.state.queue.drain()
     assert repo.get_interview("alice", iid).state == "abandoned"
     assert releases(repo) == [False]
-    assert repo.get_usage_docs("alice", "2026-11-21")[0].interviews == 1
+    assert repo.get_usage_doc("alice", "2026-11-21").interviews == 1
 
 
 async def test_sweep_is_idempotent_on_redelivery(api, app, repo):
@@ -254,8 +254,10 @@ async def test_enqueue_failure_fails_create_with_refund_and_no_interview(api, ap
     app.state.queue.enqueue = boom
     r = await api.post("/v1/interviews", headers=A, json={"scenario_id": SCENARIO})
     assert r.status_code == 500
-    assert [c[0] for c in repo.calls] == ["reserve", "release"] and releases(repo) == [True]
-    assert repo.get_usage_docs("alice", "2026-11-21")[0].interviews == 0
+    assert [c[0] for c in repo.calls] == ["reserve", "create", "release"] and releases(repo) == [
+        True
+    ]
+    assert repo.get_usage_doc("alice", "2026-11-21").interviews == 0
     assert repo.list_open_interviews("alice") == []
 
 

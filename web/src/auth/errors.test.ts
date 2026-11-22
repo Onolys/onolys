@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { MIN_PASSWORD_LENGTH, mapAuthError } from "./errors";
+import { MIN_PASSWORD_LENGTH, errorCode, mapAuthError } from "./errors";
 
 describe("mapAuthError", () => {
   it("asks for a fresh login when the session was revoked", () => {
@@ -34,5 +34,35 @@ describe("action-code errors", () => {
     for (const c of ["auth/invalid-action-code", "auth/expired-action-code"]) {
       expect(mapAuthError(c).message).toMatch(/invalid, has expired, or was already used/);
     }
+  });
+});
+
+describe("per-code messages (FX19/FX56)", () => {
+  const GENERIC = "Something went wrong. Please try again.";
+  it.each([
+    ["auth/missing-email", /enter your email/i, "email"],
+    ["auth/missing-password", /enter your password/i, "password"],
+    ["auth/invalid-email", /valid email/i, "email"],
+    ["auth/weak-password", /at least 8 characters/i, "password"],
+    ["auth/account-exists-with-different-credential", /has a password account\. Sign in with your password\./, undefined],
+    ["auth/popup-blocked", /pop-?ups?/i, undefined],
+    ["auth/operation-not-allowed", /isn't available/i, undefined],
+    ["auth/internal-error", /having trouble/i, undefined],
+    ["auth/quota-exceeded", /having trouble/i, undefined],
+    ["auth/web-storage-unsupported", /cookies/i, undefined],
+    ["auth/cancelled-popup-request", /cancelled/i, undefined],
+    ["auth/requires-recent-login", /log in again/i, undefined],
+    ["auth/user-disabled", /disabled/i, undefined],
+  ])("%s has its own message", (code, re, field) => {
+    const m = mapAuthError(code);
+    expect(m.message).toMatch(re);
+    expect(m.message).not.toBe(GENERIC);
+    expect(m.field).toBe(field);
+  });
+  it("errorCode ignores a non-string code and non-objects", () => {
+    expect(errorCode({ code: 42 })).toBeUndefined();
+    expect(errorCode("auth/x")).toBeUndefined();
+    expect(errorCode(null)).toBeUndefined();
+    expect(errorCode({ code: "auth/x" })).toBe("auth/x");
   });
 });

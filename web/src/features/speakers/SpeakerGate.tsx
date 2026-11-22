@@ -13,7 +13,7 @@ import { ErrorCard } from "../session/ErrorCard";
 
 export interface SpeakerGateProps {
   sessionId: string;
-  /** `first`: pick and go. `rerun`: preselect the current clinician; save, then start a new run. */
+  /** `first`: pick and go. `rerun`: after a failure, preselect the current clinician; save, then try the run again. */
   mode: "first" | "rerun";
   onDone?: () => void;
 }
@@ -109,7 +109,7 @@ export function SpeakerGate({ sessionId, mode, onDone }: SpeakerGateProps) {
             disabled={busy || selected === null}
             onClick={() => selected !== null && void confirm(selected, true)}
           >
-            Save and run again
+            Save and try again
           </button>{" "}
           <button type="button" className="btn btn-secondary" disabled={busy} onClick={onDone}>
             Cancel

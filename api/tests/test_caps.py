@@ -141,7 +141,8 @@ def test_third_concurrent_active_run_is_429_and_a_finished_run_frees_a_slot(repo
     caps.reserve_run(repo, s, u, NOON)
     with pytest.raises(ApiError) as e:
         caps.reserve_run(repo, s, u, NOON)
-    assert e.value.status == 429 and code_of(e.value) == "daily_cap_reached"
+    assert e.value.status == 429 and code_of(e.value) == "concurrent_runs"
+    assert "period" not in e.value.details[0]  # not a daily-period refusal
     assert repo.get_usage(u, DAY).runs == 2  # the refused attempt is not counted
     caps.release_run(repo, u, d1, refund=False)
     caps.reserve_run(repo, s, u, NOON)
@@ -159,7 +160,7 @@ def test_concurrent_attempts_cannot_exceed_the_active_run_limit(repo):
 
     with ThreadPoolExecutor(6) as ex:
         outs = list(ex.map(attempt, range(6)))
-    assert outs.count("ok") == 2 and outs.count("daily_cap_reached") == 4
+    assert outs.count("ok") == 2 and outs.count("concurrent_runs") == 4
 
 
 def test_per_user_active_limit_override(repo):
@@ -175,16 +176,13 @@ def test_usage_view_and_reset_time(repo):
     v = caps.usage_view(repo, s, u, NOON)
     assert (v.eval.day.used, v.eval.day.cap) == (0, 20)
     assert v.eval.day.resets_at == datetime(2026, 11, 21, tzinfo=UTC)
-    assert v.eval.month.resets_at == datetime(2026, 12, 1, tzinfo=UTC)
     caps.reserve_run(repo, s, u, NOON)
     set_user_fields(repo, u, daily_cap=7)
     v = caps.usage_view(repo, s, u, NOON)
-    assert (v.eval.day.used, v.eval.day.cap, v.eval.month.used) == (1, 7, 1)
+    assert (v.eval.day.used, v.eval.day.cap) == (1, 7)
 
 
-# ---- SP11: reserve/release/usage_view (kinds, periods) ----
-
-DEC = datetime(2026, 12, 31, 12, 0, tzinfo=UTC)
+# ---- SP11: reserve/release/usage_view (kinds) ----
 
 
 def fill(repo, s, u, kind, n, now=NOON):
@@ -208,53 +206,7 @@ def test_11th_eval_is_daily_cap_period_day(repo):
     fill(repo, s, u, "eval", 10)
     e = refused(repo, s, u, "eval")
     assert code_of(e) == "daily_cap_reached" and period_of(e) == "day"
-    day, month = repo.get_usage_docs(u, DAY)
-    assert (day.runs, month.runs) == (10, 10)  # refused attempt counted nothing
-
-
-def test_101st_eval_is_monthly_cap_period_month(repo):
-    u, s = uid(), settings(max_active_runs=1000)
-    for i in range(10):  # 10 days x 10 = 100
-        fill(repo, s, u, "eval", 10, NOON + timedelta(days=i - 9))
-    e = refused(repo, s, u, "eval", NOON + timedelta(days=1))
-    assert code_of(e) == "monthly_cap_reached" and period_of(e) == "month"
-
-
-def test_6th_interview_is_day_and_31st_is_month(repo):
-    u, s = uid(), settings()
-    fill(repo, s, u, "interview", 5)
-    e = refused(repo, s, u, "interview")
-    assert code_of(e) == "interview_cap_reached" and period_of(e) == "day"
-    for i in range(1, 6):
-        fill(repo, s, u, "interview", 5, NOON - timedelta(days=i))
-    e = refused(repo, s, u, "interview", NOON - timedelta(days=6))
-    assert code_of(e) == "interview_cap_reached" and period_of(e) == "month"
-
-
-def test_month_wins_when_both_exhausted(repo):
-    u, s = uid(), settings(eval_cap_day=1, eval_cap_month=1, max_active_runs=1000)
-    caps.reserve(repo, s, u, "eval", NOON)
-    e = refused(repo, s, u, "eval")
-    assert code_of(e) == "monthly_cap_reached" and period_of(e) == "month"
-    s2 = settings(ai_cap_day=1, ai_cap_month=1)
-    caps.reserve(repo, s2, u, "interview", NOON)
-    e = refused(repo, s2, u, "interview")
-    assert code_of(e) == "interview_cap_reached" and period_of(e) == "month"
-
-
-def test_day_rolls_over_but_month_persists(repo):
-    u, s = uid(), settings(eval_cap_day=1, eval_cap_month=2, max_active_runs=1000)
-    caps.reserve(repo, s, u, "eval", NOON)
-    caps.reserve(repo, s, u, "eval", NOON + timedelta(days=1))  # new day: fresh day count
-    e = refused(repo, s, u, "eval", NOON + timedelta(days=2))  # month spent
-    assert period_of(e) == "month"
-
-
-def test_month_rolls_over(repo):
-    u, s = uid(), settings(eval_cap_day=5, eval_cap_month=1, max_active_runs=1000)
-    caps.reserve(repo, s, u, "eval", DEC)
-    refused(repo, s, u, "eval", DEC)
-    caps.reserve(repo, s, u, "eval", DEC + timedelta(days=1))  # 2027-01-01
+    assert repo.get_usage_doc(u, DAY).runs == 10  # refused attempt counted nothing
 
 
 def test_kinds_are_independent(repo):
@@ -263,8 +215,8 @@ def test_kinds_are_independent(repo):
     caps.reserve(repo, s, u, "interview", NOON)
     refused(repo, s, u, "eval")
     refused(repo, s, u, "interview")
-    day, month = repo.get_usage_docs(u, DAY)
-    assert (day.runs, day.interviews, month.runs, month.interviews) == (1, 1, 1, 1)
+    day = repo.get_usage_doc(u, DAY)
+    assert (day.runs, day.interviews) == (1, 1)
 
 
 def test_interview_ignores_concurrent_limit_and_active_runs(repo):
@@ -274,29 +226,26 @@ def test_interview_ignores_concurrent_limit_and_active_runs(repo):
     assert repo.get_user(u).active_runs == 1
 
 
-def test_refund_decrements_day_and_month_and_frees_active_slot(repo):
+def test_refund_decrements_day_and_frees_active_slot(repo):
     u, s = uid(), settings(max_active_runs=1)
     r = caps.reserve(repo, s, u, "eval", NOON)
     assert repo.get_user(u).active_runs == 1
     caps.release(repo, u, r, refund=True)
-    day, month = repo.get_usage_docs(u, DAY)
-    assert (day.runs, month.runs, repo.get_user(u).active_runs) == (0, 0, 0)
+    assert (repo.get_usage_doc(u, DAY).runs, repo.get_user(u).active_runs) == (0, 0)
 
 
-def test_refund_interview_decrements_both(repo):
+def test_refund_interview_decrements_day(repo):
     u, s = uid(), settings()
     r = caps.reserve(repo, s, u, "interview", NOON)
     caps.release(repo, u, r, refund=True)
-    day, month = repo.get_usage_docs(u, DAY)
-    assert (day.interviews, month.interviews) == (0, 0)
+    assert repo.get_usage_doc(u, DAY).interviews == 0
 
 
 def test_no_refund_keeps_counts_but_frees_active_runs(repo):
     u, s = uid(), settings(max_active_runs=1)
     r = caps.reserve(repo, s, u, "eval", NOON)
     caps.release(repo, u, r, refund=False)
-    day, month = repo.get_usage_docs(u, DAY)
-    assert (day.runs, month.runs, repo.get_user(u).active_runs) == (1, 1, 0)
+    assert (repo.get_usage_doc(u, DAY).runs, repo.get_user(u).active_runs) == (1, 0)
     caps.reserve(repo, s, u, "eval", NOON)  # slot is free again
 
 
@@ -305,26 +254,14 @@ def test_refund_after_day_rollover_hits_the_reserved_docs(repo):
     r = caps.reserve(repo, s, u, "eval", NOON)
     caps.reserve(repo, s, u, "eval", NOON + timedelta(days=1))
     caps.release(repo, u, r, refund=True)  # released "tomorrow"
-    d1, m = repo.get_usage_docs(u, DAY)
-    d2, _ = repo.get_usage_docs(u, "2026-11-21")
-    assert (d1.runs, d2.runs, m.runs) == (0, 1, 1)
-
-
-def test_refund_after_month_rollover_hits_the_old_month(repo):
-    u, s = uid(), settings(max_active_runs=1000)
-    r = caps.reserve(repo, s, u, "eval", DEC)
-    caps.reserve(repo, s, u, "eval", DEC + timedelta(days=1))
-    caps.release(repo, u, r, refund=True)
-    _, dec = repo.get_usage_docs(u, "2026-12-31")
-    _, jan = repo.get_usage_docs(u, "2027-01-01")
-    assert (dec.runs, jan.runs) == (0, 1)
+    d1, d2 = repo.get_usage_doc(u, DAY), repo.get_usage_doc(u, "2026-11-21")
+    assert (d1.runs, d2.runs) == (0, 1)
 
 
 def test_interview_release_floor_zero(repo):
     u = uid()
     caps.release(repo, u, caps.Reservation("interview", DAY), refund=True)
-    day, month = repo.get_usage_docs(u, DAY)
-    assert (day.interviews, month.interviews) == (0, 0)
+    assert repo.get_usage_doc(u, DAY).interviews == 0
 
 
 def test_user_limits_override_applies_per_kind_period(repo):
@@ -334,16 +271,12 @@ def test_user_limits_override_applies_per_kind_period(repo):
     assert period_of(refused(repo, s, u, "interview")) == "day"
 
 
-def test_usage_view_interview_and_month_fields(repo):
+def test_usage_view_interview_fields(repo):
     u, s = uid(), settings()
     caps.reserve(repo, s, u, "interview", NOON)
     v = caps.usage_view(repo, s, u, NOON)
     assert (v.interview.day.used, v.interview.day.cap) == (1, 5)
-    assert (v.interview.month.used, v.interview.month.cap) == (1, 30)
-    assert (v.eval.month.used, v.eval.month.cap) == (0, 100)
-    assert caps.usage_view(repo, s, u, DEC).interview.month.resets_at == datetime(
-        2027, 1, 1, tzinfo=UTC
-    )
+    assert (v.eval.day.used, v.eval.day.cap) == (0, 10)
 
 
 def _parallel(repo, s, u, kinds, now=NOON, workers=6):
@@ -366,18 +299,8 @@ def test_parallel_reserve_day_cap_3(repo, kind, code):
     s = settings(eval_cap_day=3, ai_cap_day=3, max_active_runs=1000)
     outs = _parallel(repo, s, u, [kind] * 6)
     assert outs.count("ok") == 3 and outs.count(code) == 3
-    day, month = repo.get_usage_docs(u, DAY)
-    assert (day.runs + day.interviews, month.runs + month.interviews) == (3, 3)
-
-
-@pytest.mark.parametrize(
-    "kind,code", [("eval", "monthly_cap_reached"), ("interview", "interview_cap_reached")]
-)
-def test_parallel_reserve_month_cap_3(repo, kind, code):
-    u = uid()
-    s = settings(eval_cap_month=3, ai_cap_month=3, max_active_runs=1000)
-    outs = _parallel(repo, s, u, [kind] * 6)
-    assert outs.count("ok") == 3 and outs.count(code) == 3
+    day = repo.get_usage_doc(u, DAY)
+    assert day.runs + day.interviews == 3
 
 
 def test_parallel_reserve_mixed_kinds_each_capped_independently(repo):
@@ -385,7 +308,7 @@ def test_parallel_reserve_mixed_kinds_each_capped_independently(repo):
     s = settings(eval_cap_day=3, ai_cap_day=3, max_active_runs=1000)
     outs = _parallel(repo, s, u, ["eval"] * 4 + ["interview"] * 4)
     assert outs.count("ok") == 6
-    day, _ = repo.get_usage_docs(u, DAY)
+    day = repo.get_usage_doc(u, DAY)
     assert (day.runs, day.interviews) == (3, 3)
 
 
@@ -394,11 +317,10 @@ def test_parallel_reserve_burst_under_contention_all_succeed(repo):
     s = settings(eval_cap_day=100, ai_cap_day=100, max_active_runs=1000)
     outs = _parallel(repo, s, u, ["eval"] * 10 + ["interview"] * 10, workers=20)
     assert outs == ["ok"] * 20
-    day, month = repo.get_usage_docs(u, DAY)
+    day = repo.get_usage_doc(u, DAY)
     assert (day.runs, day.interviews) == (10, 10)
-    assert (month.runs, month.interviews) == (10, 10)
 
 
 def test_max_active_runs_setting(monkeypatch):
-    assert Settings.from_env({}).max_active_runs == 2
-    assert Settings.from_env({"MAX_ACTIVE_RUNS": "3"}).max_active_runs == 3
+    assert Settings.from_env({"ENV": "local"}).max_active_runs == 1
+    assert Settings.from_env({"ENV": "local", "MAX_ACTIVE_RUNS": "3"}).max_active_runs == 3

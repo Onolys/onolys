@@ -1,7 +1,14 @@
-/** Upload progress, cancel and "Retry upload" on the session page (PRD R3). */
-import { useSyncExternalStore } from "react";
+/** Upload progress, cancel, "Retry upload" and "Resume upload" on the session page (PRD R3, D4). */
+import { useMutation } from "@tanstack/react-query";
+import { useRef, useSyncExternalStore } from "react";
+import { describeError } from "../../api/errors";
 import type { SessionStatusDoc } from "../../api/statusListener";
+import { useApiClient } from "../../auth/useApiClient";
+import { ErrorCard } from "../session/ErrorCard";
+import { FileNotices } from "./FileNotices";
+import { prepareUpload } from "./startUpload";
 import { getJob, subscribeRegistry, type UploadJob } from "./uploader";
+import { useFilePick } from "./useFilePick";
 
 const NO_STATE = { phase: "idle", loaded: 0, total: 0, attempt: 0 } as const;
 const mb = (n: number) => (n / (1024 * 1024)).toFixed(1);
@@ -10,13 +17,65 @@ function useJob(sessionId: string): UploadJob | undefined {
   return useSyncExternalStore(subscribeRegistry, () => getJob(sessionId));
 }
 
-export function UploadSlot({ sessionId }: { sessionId: string; doc: SessionStatusDoc }) {
+/** Never-uploaded session: pick the file again, get a fresh URL, upload, complete. */
+function ResumeUpload({ sessionId }: { sessionId: string }) {
+  const client = useApiClient();
+  const filePick = useFilePick();
+  const busy = useRef(false); // sync guard: a double-click must not request two URLs
+  const resume = useMutation({
+    mutationFn: async (f: File) => {
+      await prepareUpload(client, sessionId, f);
+      void getJob(sessionId)?.start();
+    },
+    onError: () => {
+      busy.current = false;
+    },
+  });
+  const err = resume.error ? describeError(resume.error) : null;
+  return (
+    <>
+      <label>
+        Audio recording
+        <input
+          type="file"
+          accept=".mp3,.wav,.m4a,.webm,.ogg,audio/*"
+          onChange={(e) => void filePick.pick(e.target.files?.[0])}
+        />
+      </label>
+      <FileNotices pick={filePick} />
+      {err ? <ErrorCard code={err.code} reference={err.requestId} /> : null}
+      <button
+        type="button"
+        className="btn btn-primary"
+        disabled={!filePick.ready || resume.isPending}
+        onClick={() => {
+          if (!filePick.file || busy.current) return;
+          busy.current = true;
+          resume.mutate(filePick.file);
+        }}
+      >
+        {resume.isPending ? "Resuming…" : "Resume upload"}
+      </button>
+    </>
+  );
+}
+
+export function UploadSlot({ sessionId, doc }: { sessionId: string; doc: SessionStatusDoc }) {
   const job = useJob(sessionId);
   const state = useSyncExternalStore(
     (fn) => (job ? job.subscribe(fn) : () => undefined),
     () => (job ? job.getState() : NO_STATE),
   );
 
+  const running = job !== undefined && (state.phase === "uploading" || state.phase === "completing");
+  if (doc.state === "upload_incomplete" && !running) {
+    return (
+      <div data-slot="upload" data-session={sessionId}>
+        <p className="notice">Pick the same recording again to resume the upload.</p>
+        <ResumeUpload sessionId={sessionId} />
+      </div>
+    );
+  }
   if (!job) {
     return (
       <div data-slot="upload" data-session={sessionId}>

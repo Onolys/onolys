@@ -29,7 +29,6 @@ class SpyRepo(FakeRepo):
     def __init__(self, blobs):
         super().__init__(blobs)
         self.calls: list[tuple] = []
-        self.fail_create = False
 
     def reserve_usage(self, uid, kind, date, defaults, max_active):
         self.calls.append(("reserve", uid, kind, date))
@@ -39,11 +38,11 @@ class SpyRepo(FakeRepo):
         self.calls.append(("release", uid, kind, date, refund))
         return super().release_usage(uid, kind, date, refund)
 
-    def create_interview(self, uid, iid, doc):
-        self.calls.append(("create", uid))
-        if self.fail_create:
-            raise RuntimeError("boom")
-        return super().create_interview(uid, iid, doc)
+    def create_interview_reserved(self, uid, iid, doc, defaults, max_active):
+        out = super().create_interview_reserved(uid, iid, doc, defaults, max_active)
+        if out == "ok":
+            self.calls.append(("create", uid))
+        return out
 
 
 @pytest.fixture
@@ -59,7 +58,6 @@ def app(tmp_path, repo):
             auth_mode="fake",
             service_mode="combined",
             ai_cap_day=2,
-            ai_cap_month=10,
             voice_url="wss://voice.example",
         ),
         repo=repo,
@@ -78,8 +76,7 @@ async def api(app):
 
 
 def usage(repo, uid="alice"):
-    day, month = repo.get_usage_docs(uid, "2026-11-21")
-    return day.interviews, month.interviews
+    return repo.get_usage_doc(uid, "2026-11-21").interviews
 
 
 async def create(api, headers=A, **body):
@@ -106,7 +103,7 @@ async def test_create_reserves_first_then_creates_doc(api, repo):
     assert b["voice_url"] == f"wss://voice.example/v1/voice/{b['interview_id']}"
     assert b["limits"] == {"max_s": 600, "warn_s": 480}
     assert set(b["scenario"]) == {"id", "title", "difficulty", "summary", "language", "voice"}
-    assert usage(repo) == (1, 1)
+    assert usage(repo) == 1
     doc = repo.get_interview("alice", b["interview_id"])
     assert (doc.uid, doc.scenario_id, doc.state, doc.reservation_date) == (
         "alice", SCENARIO, "created", "2026-11-21",
@@ -120,7 +117,7 @@ async def test_voice_choice_validated_server_side(api, repo):
     assert bad.status_code == 422 and bad.json()["details"][0]["code"] == "invalid_parameters"
     unknown = await create(api, scenario_id="nope")
     assert unknown.status_code == 422
-    assert usage(repo) == (1, 1)  # rejected requests reserved nothing
+    assert usage(repo) == 1  # rejected requests reserved nothing
 
 
 async def test_response_leaks_no_persona_text(api):
@@ -129,13 +126,18 @@ async def test_response_leaks_no_persona_text(api):
         assert hidden not in text
 
 
-async def test_failed_create_releases_with_refund(api, repo):
-    repo.fail_create = True
+class _FailingQueue:
+    def enqueue(self, *a, **k):
+        raise RuntimeError("queue down")
+
+
+async def test_failed_create_releases_with_refund(api, repo, app):
+    app.state.queue = _FailingQueue()
     r = await create(api)
     assert r.status_code == 500
     assert [c[0] for c in repo.calls] == ["reserve", "create", "release"]
     assert repo.calls[-1][-1] is True  # refund
-    assert usage(repo) == (0, 0)
+    assert usage(repo) == 0
 
 
 async def test_cap_reached_passes_through_and_creates_nothing(api, repo):
@@ -148,7 +150,7 @@ async def test_cap_reached_passes_through_and_creates_nothing(api, repo):
     d = r.json()["details"][0]
     assert d["code"] == "interview_cap_reached" and d["period"] == "day"
     assert len([c for c in repo.calls if c[0] == "create"]) == 2  # none for the refused call
-    assert usage(repo) == (2, 2)
+    assert usage(repo) == 2
 
 
 async def test_get_returns_state_and_elapsed(api, repo):
@@ -163,7 +165,7 @@ async def test_foreign_user_gets_404_everywhere(api, repo):
     for call in (
         api.get(f"/v1/interviews/{iid}", headers=B),
         api.post(f"/v1/interviews/{iid}/end", headers=B, json={}),
-        api.post("/v1/interviews/missing/end", headers=B, json={}),
+        api.post("/v1/interviews/" + "0" * 32 + "/end", headers=B, json={}),
     ):
         r = await call
         assert r.status_code == 404 and r.json()["details"][0]["code"] == "not_found"
@@ -177,7 +179,7 @@ async def test_end_short_refunds_once_and_is_idempotent(api, repo):
         r = await api.post(f"/v1/interviews/{iid}/end", headers=A, json={})
         assert r.status_code == 200 and r.json()["state"] == "ended"
     assert [c[-1] for c in repo.calls if c[0] == "release"] == [True]
-    assert usage(repo) == (0, 0)
+    assert usage(repo) == 0
 
 
 async def test_end_long_keeps_the_unit_no_refund(api, repo):
@@ -186,7 +188,7 @@ async def test_end_long_keeps_the_unit_no_refund(api, repo):
     await api.post(f"/v1/interviews/{iid}/end", headers=A)  # no body at all
     await api.post(f"/v1/interviews/{iid}/end", headers=A)
     assert [c[-1] for c in repo.calls if c[0] == "release"] == [False]
-    assert usage(repo) == (1, 1)
+    assert usage(repo) == 1
 
 
 async def test_discard_abandons_and_end_after_discard_changes_nothing(api, repo):
@@ -198,19 +200,19 @@ async def test_discard_abandons_and_end_after_discard_changes_nothing(api, repo)
     again = await api.post(f"/v1/interviews/{iid}/end", headers=A, json={"discard": True})
     assert again.json()["state"] == "abandoned"
     assert len([c for c in repo.calls if c[0] == "release"]) == 1
-    assert usage(repo) == (0, 0)  # never recorded -> under 30 s -> refunded
+    assert usage(repo) == 0  # never recorded -> under 30 s -> refunded
 
 
 async def test_lazy_abandon_refund_rule(api, repo):
     short = (await create(api)).json()["interview_id"]  # duration None -> refund
     assert (await create(api)).status_code == 201
     assert repo.get_interview("alice", short).state == "abandoned"
-    assert usage(repo) == (1, 1)  # short refunded, new one counted
+    assert usage(repo) == 1  # short refunded, new one counted
     long_ = [d for d in repo.list_open_interviews("alice")][0]
     repo.update_interview("alice", long_.id, {"state": "live", "duration_s": 200})
     assert (await create(api)).status_code == 201
     assert repo.get_interview("alice", long_.id).state == "abandoned"
-    assert usage(repo) == (2, 2)  # 200 s stays counted
+    assert usage(repo) == 2  # 200 s stays counted
 
 
 async def test_lazy_abandon_does_not_touch_other_users_or_settled(api, repo):
@@ -246,14 +248,14 @@ def test_state_table(repo, start, to_end, expect):
 
 
 def test_refund_hits_the_reservation_day_after_rollover(repo):
-    s = Settings(env="test", ai_cap_day=5, ai_cap_month=30)
+    s = Settings(env="test", ai_cap_day=5)
     r = caps.reserve(repo, s, "alice", "interview", NOW)
     repo.create_interview(
         "alice", "i1",
         InterviewDoc(uid="alice", scenario_id=SCENARIO, voice="Kore", reservation_date=r.date),
     )  # fmt: skip
     settle_interview(repo, s, "alice", "i1", "abandoned", NOW + timedelta(days=1))
-    assert repo.get_usage_docs("alice", "2026-11-21")[0].interviews == 0
+    assert repo.get_usage_doc("alice", "2026-11-21").interviews == 0
 
 
 def test_adapters_wiring_stub_and_real():
@@ -287,7 +289,7 @@ async def test_fake_voice_records_open():
 
 
 def test_settings_ai_and_voice_url():
-    s = Settings.from_env({})
+    s = Settings.from_env({"ENV": "local"})
     assert (s.ai_max_seconds, s.ai_warn_seconds, s.ai_min_seconds) == (600, 480, 300)
     assert (s.ai_tolerance_seconds, s.ai_abandon_count_seconds) == (30, 30)
     assert (s.ai_reconnect_seconds, s.ai_mic_gate, s.voice_url) == (
@@ -295,7 +297,7 @@ def test_settings_ai_and_voice_url():
         False,
         "ws://localhost:8081",
     )
-    t = Settings.from_env({"ENV": "prod", "VOICE_URL": "wss://v.x", "AI_MIC_GATE": "true",
+    t = Settings.from_env({"ENV": "prod", "UID_HMAC_KEY": "k", "VOICE_URL": "wss://v.x", "AI_MIC_GATE": "true",
                            "AI_MAX_SECONDS": "300", "AI_WARN_SECONDS": "200"})  # fmt: skip
     assert (t.voice_url, t.ai_mic_gate, t.ai_max_seconds) == ("wss://v.x", True, 300)
     for bad in (
@@ -308,3 +310,27 @@ def test_settings_ai_and_voice_url():
     ):
         with pytest.raises(ConfigError):
             Settings.from_env(bad)
+
+
+async def test_short_interview_refunds_are_capped_per_day(api, repo):
+    """A9: only the first 3 short (<30 s) interviews of a user per day get the unit back."""
+    for i in range(5):
+        iid = (await create(api)).json()["interview_id"]
+        assert (await api.post(f"/v1/interviews/{iid}/end", headers=A)).status_code == 200
+        assert repo.get_interview("alice", iid).refunded is (i < 3)
+        assert usage(repo) == max(0, i + 1 - 3)  # 4th and 5th stay counted
+
+
+async def test_second_create_while_one_is_open_is_a_conflict_not_a_second_unit(api, repo):
+    # a still-open interview is abandoned by the next create; a racing create must not reserve
+    first = await create(api)
+    assert first.status_code == 201
+    repo.update_interview("alice", first.json()["interview_id"], {"state": "live"})
+    from onolys_api.repo.limits import LimitDefaults
+
+    doc = InterviewDoc(
+        uid="alice", scenario_id=SCENARIO, voice="Kore", reservation_date="2026-11-21"
+    )
+    out = repo.create_interview_reserved("alice", "b" * 32, doc, LimitDefaults(10, 5), 2)
+    assert out == "open_exists"
+    assert usage(repo) == 1

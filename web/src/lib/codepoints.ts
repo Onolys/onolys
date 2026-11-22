@@ -18,8 +18,10 @@ export function buildIndexMap(text: string): number[] {
   return map;
 }
 
-/** Slice by code point, end exclusive. */
+/** Slice by code point, end exclusive. Negative, reversed or non-integer offsets give ""; `end` past the text is clamped. */
 export function sliceCodePoints(text: string, start: number, end: number): string {
+  if (!Number.isInteger(start) || !Number.isInteger(end) || start < 0 || end < start) return "";
   const map = buildIndexMap(text);
-  return text.slice(map[start], map[end]);
+  if (start >= map.length) return "";
+  return text.slice(map[start], map[Math.min(end, map.length - 1)]);
 }

@@ -196,7 +196,8 @@
               "running",
               "report_ready",
               "failed",
-              "deleting"
+              "deleting",
+              "upload_incomplete"
             ],
             "title": "Status",
             "type": "string"
@@ -368,6 +369,7 @@
               "unauthenticated",
               "forbidden",
               "invalid_state",
+              "rating_final",
               "unsupported_audio",
               "audio_too_long",
               "audio_too_large",
@@ -377,8 +379,9 @@
               "transcription_failed",
               "rating_invalid",
               "daily_cap_reached",
-              "monthly_cap_reached",
               "interview_cap_reached",
+              "concurrent_runs",
+              "email_unverified",
               "conflict",
               "interview_too_long"
             ],
@@ -426,17 +429,14 @@
           "period": {
             "anyOf": [
               {
-                "enum": [
-                  "day",
-                  "month"
-                ],
+                "const": "day",
                 "type": "string"
               },
               {
                 "type": "null"
               }
             ],
-            "description": "Which usage period was exhausted. Set on `daily_cap_reached`, `monthly_cap_reached` and `interview_cap_reached`.",
+            "description": "Which usage period was exhausted. Set on `daily_cap_reached` and `interview_cap_reached`.",
             "title": "Period"
           }
         },
@@ -644,14 +644,10 @@
         "properties": {
           "day": {
             "$ref": "#/components/schemas/Period"
-          },
-          "month": {
-            "$ref": "#/components/schemas/Period"
           }
         },
         "required": [
-          "day",
-          "month"
+          "day"
         ],
         "title": "KindUsage",
         "type": "object"
@@ -937,7 +933,8 @@
               "running",
               "report_ready",
               "failed",
-              "deleting"
+              "deleting",
+              "upload_incomplete"
             ],
             "title": "Status",
             "type": "string"
@@ -1179,6 +1176,12 @@
           "flags": {
             "$ref": "#/components/schemas/Flags"
           },
+          "free_run": {
+            "default": false,
+            "description": "True for an interview session whose free run stands: its run, and Try again after a failed free run, cost nothing against the daily evaluation cap.",
+            "title": "Free Run",
+            "type": "boolean"
+          },
           "id": {
             "title": "Id",
             "type": "string"
@@ -1246,7 +1249,8 @@
               "running",
               "report_ready",
               "failed",
-              "deleting"
+              "deleting",
+              "upload_incomplete"
             ],
             "title": "Status",
             "type": "string"
@@ -1396,7 +1400,8 @@
               "running",
               "report_ready",
               "failed",
-              "deleting"
+              "deleting",
+              "upload_incomplete"
             ],
             "title": "Status",
             "type": "string"
@@ -1437,7 +1442,8 @@
               "running",
               "report_ready",
               "failed",
-              "deleting"
+              "deleting",
+              "upload_incomplete"
             ],
             "title": "Status",
             "type": "string"
@@ -1669,7 +1675,7 @@
     }
   },
   "info": {
-    "description": "Public API of Onolys (`/v1`, JSON, scoped to the calling user). The contract is this document; the machine-readable schemas live in `docs/contracts/public/`.\n\n## Quickstart\n\nCreate a session, upload audio, submit the rating card, confirm the speaker, wait for the\nreport. Every call needs credentials: an `X-API-Key: onolys_<id>_<secret>` header (create a key\nin the web app or with `POST /v1/api-key`) or an `Authorization: Bearer <ID token>` header.\n\n```bash\nset -euo pipefail\nBASE=${BASE:-https://app.onolys.com/v1}\nAUTH=${AUTH:-\"X-API-Key: onolys_<id>_<secret>\"}\nAUDIO=${AUDIO:-session.m4a}\nJSON='Content-Type: application/json'\n\n# 1. Create the session (the Idempotency-Key makes a retried POST safe for 24 h)\nSID=$(curl -sf -X POST \"$BASE/sessions\" -H \"$AUTH\" -H \"$JSON\" \\\n  -H \"Idempotency-Key: quickstart-$(date +%s)-$$\" \\\n  -d '{\"language\":\"auto\",\"n_runs\":1,\"title\":\"Quickstart\"}' | jq -r .session.id)\n\n# 2. Ask for a signed upload URL, then PUT the file straight to storage\nUP=$(curl -sf -X POST \"$BASE/sessions/$SID/audio\" -H \"$AUTH\" -H \"$JSON\" \\\n  -d \"{\\\"content_type\\\":\\\"audio/mp4\\\",\\\"size_bytes\\\":$(wc -c < \"$AUDIO\" | tr -d ' ')}\")\n# send every required header (not Host: curl sets it); the signed URL rejects a PUT without them\nmapfile -t HDRS < <(echo \"$UP\" | jq -r '.required_headers | to_entries[]\n  | select(.key != \"Host\") | \"-H\\n\\(.key): \\(.value)\"')\ncurl -sf -X PUT \"$(echo \"$UP\" | jq -r .upload_url)\" \"${HDRS[@]}\" --data-binary @\"$AUDIO\"\n\n# 3. Tell the API the upload is done; validation and transcription start\ncurl -sf -X POST \"$BASE/sessions/$SID/audio/complete\" -H \"$AUTH\" > /dev/null\n\n# wait until the session reaches a status (fails the script on `failed`)\nwait_for() {\n  for _ in $(seq 1 120); do\n    STATUS=$(curl -sf \"$BASE/sessions/$SID\" -H \"$AUTH\" | jq -r .status)\n    [ \"$STATUS\" = \"$1\" ] && return 0\n    [ \"$STATUS\" = \"failed\" ] && { echo \"session failed\" >&2; return 1; }\n    sleep 1\n  done\n  echo \"timed out waiting for $1\" >&2; return 1\n}\n\n# 4. Submit the rating card (final=true; use final=false for draft autosaves)\ncurl -sf -X PUT \"$BASE/sessions/$SID/rating\" -H \"$AUTH\" -H \"$JSON\" \\\n  -d '{\"final\":true,\"card\":{\"change_goal\":\"Reduce evening drinking\",\"notes\":\"Quickstart\"}}' \\\n  > /dev/null\n\n# 5. Confirm which speaker is the clinician once the transcript is ready\nwait_for awaiting_input\nCLINICIAN=$(curl -sf \"$BASE/sessions/$SID/speakers\" -H \"$AUTH\" | jq -r '.speakers[0].speaker')\ncurl -sf -X POST \"$BASE/sessions/$SID/speakers/confirm\" -H \"$AUTH\" -H \"$JSON\" \\\n  -d \"{\\\"clinician_speaker\\\":\\\"$CLINICIAN\\\"}\" > /dev/null\n\n# 6. Poll the session, then fetch the report\nwait_for report_ready\nVERSION=$(curl -sf \"$BASE/sessions/$SID\" -H \"$AUTH\" | jq -r .latest_report_version)\ncurl -sf \"$BASE/sessions/$SID/reports/$VERSION\" -H \"$AUTH\" | jq -c .\n```\n\nErrors share one body (`ErrorResponse`): `status`, `message`, `details[]` with a stable `code`\n(and, for `rating_invalid`, the card `field` path). Mutations return `202` immediately; the\nsession `status` moves `created` → `uploading` → `validating` → `transcribing` →\n`awaiting_input` → `running` → `report_ready` (or `failed`).\n",
+    "description": "Public API of Onolys (`/v1`, JSON, scoped to the calling user). The contract is this document; the machine-readable schemas live in `docs/contracts/public/`.\n\n## Quickstart\n\nCreate a session, upload audio, submit the rating card, confirm the speaker, wait for the\nreport. Every call needs credentials: an `X-API-Key: onolys_<id>_<secret>` header (create a key\nin the web app or with `POST /v1/api-key`) or an `Authorization: Bearer <ID token>` header.\n\n```bash\nset -euo pipefail\nBASE=${BASE:-https://app.onolys.com/v1}\nAUTH=${AUTH:-\"X-API-Key: onolys_<id>_<secret>\"}\nAUDIO=${AUDIO:-session.m4a}\nJSON='Content-Type: application/json'\n\n# 1. Create the session (the Idempotency-Key makes a retried POST safe for 24 h)\nSID=$(curl -sf -X POST \"$BASE/sessions\" -H \"$AUTH\" -H \"$JSON\" \\\n  -H \"Idempotency-Key: quickstart-$(date +%s)-$$\" \\\n  -d '{\"language\":\"auto\",\"n_runs\":1,\"title\":\"Quickstart\"}' | jq -r .session.id)\n\n# 2. Ask for a signed upload URL, then PUT the file straight to storage\nUP=$(curl -sf -X POST \"$BASE/sessions/$SID/audio\" -H \"$AUTH\" -H \"$JSON\" \\\n  -d \"{\\\"content_type\\\":\\\"audio/mp4\\\",\\\"size_bytes\\\":$(wc -c < \"$AUDIO\" | tr -d ' ')}\")\n# send every required header (not Host: curl sets it); the signed URL rejects a PUT without them\nmapfile -t HDRS < <(echo \"$UP\" | jq -r '.required_headers | to_entries[]\n  | select(.key != \"Host\") | \"-H\\n\\(.key): \\(.value)\"')\ncurl -sf -X PUT \"$(echo \"$UP\" | jq -r .upload_url)\" \"${HDRS[@]}\" --data-binary @\"$AUDIO\"\n\n# 3. Tell the API the upload is done; validation and transcription start\ncurl -sf -X POST \"$BASE/sessions/$SID/audio/complete\" -H \"$AUTH\" > /dev/null\n\n# wait until the session reaches a status (fails the script on `failed`)\nwait_for() {\n  for _ in $(seq 1 120); do\n    STATUS=$(curl -sf \"$BASE/sessions/$SID\" -H \"$AUTH\" | jq -r .status)\n    [ \"$STATUS\" = \"$1\" ] && return 0\n    [ \"$STATUS\" = \"failed\" ] && { echo \"session failed\" >&2; return 1; }\n    sleep 1\n  done\n  echo \"timed out waiting for $1\" >&2; return 1\n}\n\n# 4. Submit the rating card (final=true; use final=false for draft autosaves)\ncurl -sf -X PUT \"$BASE/sessions/$SID/rating\" -H \"$AUTH\" -H \"$JSON\" \\\n  -d '{\"final\":true,\"card\":{\"change_goal\":\"Reduce evening drinking\",\"notes\":\"Quickstart\"}}' \\\n  > /dev/null\n\n# 5. Confirm which speaker is the clinician once the transcript is ready\nwait_for awaiting_input\nCLINICIAN=$(curl -sf \"$BASE/sessions/$SID/speakers\" -H \"$AUTH\" | jq -r '.speakers[0].speaker')\ncurl -sf -X POST \"$BASE/sessions/$SID/speakers/confirm\" -H \"$AUTH\" -H \"$JSON\" \\\n  -d \"{\\\"clinician_speaker\\\":\\\"$CLINICIAN\\\"}\" > /dev/null\n\n# 6. Poll the session, then fetch the report\nwait_for report_ready\nVERSION=$(curl -sf \"$BASE/sessions/$SID\" -H \"$AUTH\" | jq -r .latest_report_version)\ncurl -sf \"$BASE/sessions/$SID/reports/$VERSION\" -H \"$AUTH\" | jq -c .\n```\n\nErrors share one body (`ErrorResponse`): `status`, `message`, `details[]` with a stable `code`\n(and, for `rating_invalid`, the card `field` path). Mutations return `202` immediately; the\nsession `status` moves `created` → `uploading` (→ `upload_incomplete`, resumable) → `validating` →\n`transcribing` → `awaiting_input` → `running` → `report_ready` (or `failed`).\n",
     "title": "Onolys API",
     "version": "0.1.0"
   },
@@ -1692,6 +1698,16 @@
             },
             "description": "`unauthenticated`: missing, invalid or revoked credentials"
           },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "`forbidden` (API keys cannot manage API keys) or `email_unverified` (valid sign-in, email address not verified yet)"
+          },
           "429": {
             "content": {
               "application/json": {
@@ -1700,7 +1716,7 @@
                 }
               }
             },
-            "description": "`daily_cap_reached` (daily run cap or concurrent-run limit) or `rate_limited`"
+            "description": "`daily_cap_reached` (daily run cap), `concurrent_runs` (a run is already in progress) or `rate_limited`"
           },
           "500": {
             "content": {
@@ -1749,6 +1765,16 @@
             },
             "description": "`unauthenticated`: missing, invalid or revoked credentials"
           },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "`forbidden` (API keys cannot manage API keys) or `email_unverified` (valid sign-in, email address not verified yet)"
+          },
           "429": {
             "content": {
               "application/json": {
@@ -1757,7 +1783,7 @@
                 }
               }
             },
-            "description": "`daily_cap_reached` (daily run cap or concurrent-run limit) or `rate_limited`"
+            "description": "`daily_cap_reached` (daily run cap), `concurrent_runs` (a run is already in progress) or `rate_limited`"
           },
           "500": {
             "content": {
@@ -1806,6 +1832,16 @@
             },
             "description": "`unauthenticated`: missing, invalid or revoked credentials"
           },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "`forbidden` (API keys cannot manage API keys) or `email_unverified` (valid sign-in, email address not verified yet)"
+          },
           "429": {
             "content": {
               "application/json": {
@@ -1814,7 +1850,7 @@
                 }
               }
             },
-            "description": "`daily_cap_reached` (daily run cap or concurrent-run limit) or `rate_limited`"
+            "description": "`daily_cap_reached` (daily run cap), `concurrent_runs` (a run is already in progress) or `rate_limited`"
           },
           "500": {
             "content": {
@@ -1907,6 +1943,16 @@
             },
             "description": "`unauthenticated`: missing, invalid or revoked credentials"
           },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "`invalid_parameters` (incl. a malformed id, cursor or body), `unsupported_audio`, `audio_too_large` or `rating_invalid`"
+          },
           "429": {
             "content": {
               "application/json": {
@@ -1915,7 +1961,7 @@
                 }
               }
             },
-            "description": "`daily_cap_reached` (daily run cap or concurrent-run limit) or `rate_limited`"
+            "description": "`daily_cap_reached` (daily run cap), `concurrent_runs` (a run is already in progress) or `rate_limited`"
           },
           "500": {
             "content": {
@@ -1951,6 +1997,7 @@
             "name": "id",
             "required": true,
             "schema": {
+              "pattern": "^[0-9a-f]{32}$",
               "title": "Id",
               "type": "string"
             }
@@ -1987,6 +2034,16 @@
             },
             "description": "`not_found`: no such resource for this user (never 403, so ids cannot be probed)"
           },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "`invalid_parameters` (incl. a malformed id, cursor or body), `unsupported_audio`, `audio_too_large` or `rating_invalid`"
+          },
           "429": {
             "content": {
               "application/json": {
@@ -1995,7 +2052,7 @@
                 }
               }
             },
-            "description": "`daily_cap_reached` (daily run cap or concurrent-run limit) or `rate_limited`"
+            "description": "`daily_cap_reached` (daily run cap), `concurrent_runs` (a run is already in progress) or `rate_limited`"
           },
           "500": {
             "content": {
@@ -2032,6 +2089,7 @@
             "name": "id",
             "required": true,
             "schema": {
+              "pattern": "^[0-9a-f]{32}$",
               "title": "Id",
               "type": "string"
             }
@@ -2085,6 +2143,16 @@
             },
             "description": "`not_found`: no such resource for this user (never 403, so ids cannot be probed)"
           },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "`invalid_parameters` (incl. a malformed id, cursor or body), `unsupported_audio`, `audio_too_large` or `rating_invalid`"
+          },
           "429": {
             "content": {
               "application/json": {
@@ -2093,7 +2161,7 @@
                 }
               }
             },
-            "description": "`daily_cap_reached` (daily run cap or concurrent-run limit) or `rate_limited`"
+            "description": "`daily_cap_reached` (daily run cap), `concurrent_runs` (a run is already in progress) or `rate_limited`"
           },
           "500": {
             "content": {
@@ -2129,6 +2197,7 @@
             "name": "run_id",
             "required": true,
             "schema": {
+              "pattern": "^[0-9a-f]{32}$",
               "title": "Run Id",
               "type": "string"
             }
@@ -2165,6 +2234,16 @@
             },
             "description": "`not_found`: no such resource for this user (never 403, so ids cannot be probed)"
           },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "`invalid_parameters` (incl. a malformed id, cursor or body), `unsupported_audio`, `audio_too_large` or `rating_invalid`"
+          },
           "429": {
             "content": {
               "application/json": {
@@ -2173,7 +2252,7 @@
                 }
               }
             },
-            "description": "`daily_cap_reached` (daily run cap or concurrent-run limit) or `rate_limited`"
+            "description": "`daily_cap_reached` (daily run cap), `concurrent_runs` (a run is already in progress) or `rate_limited`"
           },
           "500": {
             "content": {
@@ -2232,7 +2311,7 @@
                 }
               }
             },
-            "description": "`daily_cap_reached` (daily run cap or concurrent-run limit) or `rate_limited`"
+            "description": "`daily_cap_reached` (daily run cap), `concurrent_runs` (a run is already in progress) or `rate_limited`"
           },
           "500": {
             "content": {
@@ -2261,6 +2340,7 @@
     },
     "/v1/sessions": {
       "get": {
+        "description": "Not strictly read-only: a session whose pipeline has stalled past its deadline is marked `failed` here (lazily, in a transaction that yields to a finished task), so no sweeper job is needed. Sessions being deleted are skipped without shortening the page. `next_cursor` is an opaque position and stays valid if its session is deleted.",
         "operationId": "listSessions",
         "parameters": [
           {
@@ -2322,7 +2402,7 @@
                 }
               }
             },
-            "description": "`invalid_parameters`, `unsupported_audio`, `audio_too_large` or `rating_invalid`"
+            "description": "`invalid_parameters` (incl. a malformed id, cursor or body), `unsupported_audio`, `audio_too_large` or `rating_invalid`"
           },
           "429": {
             "content": {
@@ -2332,7 +2412,7 @@
                 }
               }
             },
-            "description": "`daily_cap_reached` (daily run cap or concurrent-run limit) or `rate_limited`"
+            "description": "`daily_cap_reached` (daily run cap), `concurrent_runs` (a run is already in progress) or `rate_limited`"
           },
           "500": {
             "content": {
@@ -2422,7 +2502,7 @@
                 }
               }
             },
-            "description": "`invalid_state` or `conflict`: not allowed in the session's current state"
+            "description": "`invalid_state` or `conflict`: not allowed in the session's current state; `rating_final`: the report is ready, so the rating can no longer be changed or re-run"
           },
           "422": {
             "content": {
@@ -2432,7 +2512,7 @@
                 }
               }
             },
-            "description": "`invalid_parameters`, `unsupported_audio`, `audio_too_large` or `rating_invalid`"
+            "description": "`invalid_parameters` (incl. a malformed id, cursor or body), `unsupported_audio`, `audio_too_large` or `rating_invalid`"
           },
           "429": {
             "content": {
@@ -2442,7 +2522,7 @@
                 }
               }
             },
-            "description": "`daily_cap_reached` (daily run cap or concurrent-run limit) or `rate_limited`"
+            "description": "`daily_cap_reached` (daily run cap), `concurrent_runs` (a run is already in progress) or `rate_limited`"
           },
           "500": {
             "content": {
@@ -2479,6 +2559,7 @@
             "name": "id",
             "required": true,
             "schema": {
+              "pattern": "^[0-9a-f]{32}$",
               "title": "Id",
               "type": "string"
             }
@@ -2508,6 +2589,16 @@
             },
             "description": "`not_found`: no such resource for this user (never 403, so ids cannot be probed)"
           },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "`invalid_parameters` (incl. a malformed id, cursor or body), `unsupported_audio`, `audio_too_large` or `rating_invalid`"
+          },
           "429": {
             "content": {
               "application/json": {
@@ -2516,7 +2607,7 @@
                 }
               }
             },
-            "description": "`daily_cap_reached` (daily run cap or concurrent-run limit) or `rate_limited`"
+            "description": "`daily_cap_reached` (daily run cap), `concurrent_runs` (a run is already in progress) or `rate_limited`"
           },
           "500": {
             "content": {
@@ -2553,6 +2644,7 @@
         ]
       },
       "get": {
+        "description": "Not strictly read-only: a stalled session is marked `failed` on read (see `listSessions`).",
         "operationId": "getSession",
         "parameters": [
           {
@@ -2560,6 +2652,7 @@
             "name": "id",
             "required": true,
             "schema": {
+              "pattern": "^[0-9a-f]{32}$",
               "title": "Id",
               "type": "string"
             }
@@ -2596,6 +2689,16 @@
             },
             "description": "`not_found`: no such resource for this user (never 403, so ids cannot be probed)"
           },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "`invalid_parameters` (incl. a malformed id, cursor or body), `unsupported_audio`, `audio_too_large` or `rating_invalid`"
+          },
           "429": {
             "content": {
               "application/json": {
@@ -2604,7 +2707,7 @@
                 }
               }
             },
-            "description": "`daily_cap_reached` (daily run cap or concurrent-run limit) or `rate_limited`"
+            "description": "`daily_cap_reached` (daily run cap), `concurrent_runs` (a run is already in progress) or `rate_limited`"
           },
           "500": {
             "content": {
@@ -2640,6 +2743,7 @@
             "name": "id",
             "required": true,
             "schema": {
+              "pattern": "^[0-9a-f]{32}$",
               "title": "Id",
               "type": "string"
             }
@@ -2676,6 +2780,16 @@
             },
             "description": "`not_found`: no such resource for this user (never 403, so ids cannot be probed)"
           },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "`invalid_parameters` (incl. a malformed id, cursor or body), `unsupported_audio`, `audio_too_large` or `rating_invalid`"
+          },
           "429": {
             "content": {
               "application/json": {
@@ -2684,7 +2798,7 @@
                 }
               }
             },
-            "description": "`daily_cap_reached` (daily run cap or concurrent-run limit) or `rate_limited`"
+            "description": "`daily_cap_reached` (daily run cap), `concurrent_runs` (a run is already in progress) or `rate_limited`"
           },
           "500": {
             "content": {
@@ -2711,7 +2825,7 @@
         ]
       },
       "post": {
-        "description": "Maps browser aliases (`audio/x-m4a`, `audio/mp4`, `audio/mpeg`, empty type + `filename_ext`) to one canonical type, returns one signed PUT (15 min) pinned to it and to a 300 MB size range; the client sends exactly `required_headers`. Unknown type is 422 `unsupported_audio`, over 300 MB is 422 `audio_too_large`. State becomes `uploading`.",
+        "description": "Maps browser aliases (`audio/x-m4a`, `audio/mp4`, `audio/mpeg`, empty type + `filename_ext`) to one canonical type, returns one signed PUT (15 min) pinned to it and to a 300 MB size range; the client sends exactly `required_headers`. Unknown type is 422 `unsupported_audio`, over 300 MB is 422 `audio_too_large`. State becomes `uploading` (also resumes an `upload_incomplete` session).",
         "operationId": "requestAudioUpload",
         "parameters": [
           {
@@ -2719,6 +2833,7 @@
             "name": "id",
             "required": true,
             "schema": {
+              "pattern": "^[0-9a-f]{32}$",
               "title": "Id",
               "type": "string"
             }
@@ -2773,7 +2888,7 @@
                 }
               }
             },
-            "description": "`invalid_state` or `conflict`: not allowed in the session's current state"
+            "description": "`invalid_state` or `conflict`: not allowed in the session's current state; `rating_final`: the report is ready, so the rating can no longer be changed or re-run"
           },
           "422": {
             "content": {
@@ -2783,7 +2898,7 @@
                 }
               }
             },
-            "description": "`invalid_parameters`, `unsupported_audio`, `audio_too_large` or `rating_invalid`"
+            "description": "`invalid_parameters` (incl. a malformed id, cursor or body), `unsupported_audio`, `audio_too_large` or `rating_invalid`"
           },
           "429": {
             "content": {
@@ -2793,7 +2908,7 @@
                 }
               }
             },
-            "description": "`daily_cap_reached` (daily run cap or concurrent-run limit) or `rate_limited`"
+            "description": "`daily_cap_reached` (daily run cap), `concurrent_runs` (a run is already in progress) or `rate_limited`"
           },
           "500": {
             "content": {
@@ -2830,6 +2945,7 @@
             "name": "id",
             "required": true,
             "schema": {
+              "pattern": "^[0-9a-f]{32}$",
               "title": "Id",
               "type": "string"
             }
@@ -2878,7 +2994,17 @@
                 }
               }
             },
-            "description": "`invalid_state` or `conflict`: not allowed in the session's current state"
+            "description": "`invalid_state` or `conflict`: not allowed in the session's current state; `rating_final`: the report is ready, so the rating can no longer be changed or re-run"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "`invalid_parameters` (incl. a malformed id, cursor or body), `unsupported_audio`, `audio_too_large` or `rating_invalid`"
           },
           "429": {
             "content": {
@@ -2888,7 +3014,7 @@
                 }
               }
             },
-            "description": "`daily_cap_reached` (daily run cap or concurrent-run limit) or `rate_limited`"
+            "description": "`daily_cap_reached` (daily run cap), `concurrent_runs` (a run is already in progress) or `rate_limited`"
           },
           "500": {
             "content": {
@@ -2934,6 +3060,7 @@
             "name": "id",
             "required": true,
             "schema": {
+              "pattern": "^[0-9a-f]{32}$",
               "title": "Id",
               "type": "string"
             }
@@ -2970,6 +3097,16 @@
             },
             "description": "`not_found`: no such resource for this user (never 403, so ids cannot be probed)"
           },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "`invalid_parameters` (incl. a malformed id, cursor or body), `unsupported_audio`, `audio_too_large` or `rating_invalid`"
+          },
           "429": {
             "content": {
               "application/json": {
@@ -2978,7 +3115,7 @@
                 }
               }
             },
-            "description": "`daily_cap_reached` (daily run cap or concurrent-run limit) or `rate_limited`"
+            "description": "`daily_cap_reached` (daily run cap), `concurrent_runs` (a run is already in progress) or `rate_limited`"
           },
           "500": {
             "content": {
@@ -3005,7 +3142,7 @@
         ]
       },
       "put": {
-        "description": "`final=false`: overwrites the draft; the shape and size limits are checked (an unset `change_goal` is fine) and nothing else changes. `final=true`: validates the card (`change_goal` required), writes a new revision and sets `rating_submitted`/`has_rating`; `no_rating=true`, or a card with no scores, counts or notes, is a \"no rating\" revision (`has_rating=false`). Over 1,000 chars per reason/note/example or 3,000 for `notes` is 422 `rating_invalid`. Allowed in every state but `deleting`. A final card may start the first run (R4).",
+        "description": "`final=false`: overwrites the draft; the shape and size limits are checked (an unset `change_goal` is fine) and nothing else changes. `final=true`: validates the card (`change_goal` required), writes a new revision and sets `rating_submitted`/`has_rating`; `no_rating=true`, or a card with no scores, counts or notes, is a \"no rating\" revision (`has_rating=false`). Over 1,000 chars per reason/note/example or 3,000 for `notes` is 422 `rating_invalid`. Allowed in every state but `deleting`; a final card is refused with 409 `rating_final` once a rating was submitted (or a report exists): the rating is final, only drafts stay open. A final card may start the first run (R4).",
         "operationId": "putRating",
         "parameters": [
           {
@@ -3013,6 +3150,7 @@
             "name": "id",
             "required": true,
             "schema": {
+              "pattern": "^[0-9a-f]{32}$",
               "title": "Id",
               "type": "string"
             }
@@ -3067,7 +3205,7 @@
                 }
               }
             },
-            "description": "`invalid_parameters`, `unsupported_audio`, `audio_too_large` or `rating_invalid`"
+            "description": "`invalid_parameters` (incl. a malformed id, cursor or body), `unsupported_audio`, `audio_too_large` or `rating_invalid`"
           },
           "429": {
             "content": {
@@ -3077,7 +3215,7 @@
                 }
               }
             },
-            "description": "`daily_cap_reached` (daily run cap or concurrent-run limit) or `rate_limited`"
+            "description": "`daily_cap_reached` (daily run cap), `concurrent_runs` (a run is already in progress) or `rate_limited`"
           },
           "500": {
             "content": {
@@ -3113,6 +3251,7 @@
             "name": "id",
             "required": true,
             "schema": {
+              "pattern": "^[0-9a-f]{32}$",
               "title": "Id",
               "type": "string"
             }
@@ -3149,6 +3288,16 @@
             },
             "description": "`not_found`: no such resource for this user (never 403, so ids cannot be probed)"
           },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "`invalid_parameters` (incl. a malformed id, cursor or body), `unsupported_audio`, `audio_too_large` or `rating_invalid`"
+          },
           "429": {
             "content": {
               "application/json": {
@@ -3157,7 +3306,7 @@
                 }
               }
             },
-            "description": "`daily_cap_reached` (daily run cap or concurrent-run limit) or `rate_limited`"
+            "description": "`daily_cap_reached` (daily run cap), `concurrent_runs` (a run is already in progress) or `rate_limited`"
           },
           "500": {
             "content": {
@@ -3194,6 +3343,7 @@
             "name": "id",
             "required": true,
             "schema": {
+              "pattern": "^[0-9a-f]{32}$",
               "title": "Id",
               "type": "string"
             }
@@ -3239,6 +3389,16 @@
             },
             "description": "`not_found`: no such resource for this user (never 403, so ids cannot be probed)"
           },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "`invalid_parameters` (incl. a malformed id, cursor or body), `unsupported_audio`, `audio_too_large` or `rating_invalid`"
+          },
           "429": {
             "content": {
               "application/json": {
@@ -3247,7 +3407,7 @@
                 }
               }
             },
-            "description": "`daily_cap_reached` (daily run cap or concurrent-run limit) or `rate_limited`"
+            "description": "`daily_cap_reached` (daily run cap), `concurrent_runs` (a run is already in progress) or `rate_limited`"
           },
           "500": {
             "content": {
@@ -3283,6 +3443,7 @@
             "name": "id",
             "required": true,
             "schema": {
+              "pattern": "^[0-9a-f]{32}$",
               "title": "Id",
               "type": "string"
             }
@@ -3319,6 +3480,16 @@
             },
             "description": "`not_found`: no such resource for this user (never 403, so ids cannot be probed)"
           },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "`invalid_parameters` (incl. a malformed id, cursor or body), `unsupported_audio`, `audio_too_large` or `rating_invalid`"
+          },
           "429": {
             "content": {
               "application/json": {
@@ -3327,7 +3498,7 @@
                 }
               }
             },
-            "description": "`daily_cap_reached` (daily run cap or concurrent-run limit) or `rate_limited`"
+            "description": "`daily_cap_reached` (daily run cap), `concurrent_runs` (a run is already in progress) or `rate_limited`"
           },
           "500": {
             "content": {
@@ -3354,7 +3525,7 @@
         ]
       },
       "post": {
-        "description": "Needs the transcript and the confirmed speaker; uses the latest final rating revision or runs as no-rating. `preset` changes LLM routes only (the transcript is reused). Counts against the daily cap: 429 `daily_cap_reached`. 409 `invalid_state` while a run is in progress or before the inputs exist.",
+        "description": "Needs the transcript and the confirmed speaker; uses the stored final rating revision or runs as no-rating. `preset` changes LLM routes only (the transcript is reused). On Try again (a failed session) `preset` and `n_runs` are ignored: the failed run's values are reused. Counts against the daily cap: 429 `daily_cap_reached`; 429 `concurrent_runs` while another run is in progress. 409 `rating_final` once a report exists (the rating is final: no re-run, interview sessions included). 409 `invalid_state` while a run is in progress, before the inputs exist, or after a bad-file failure (upload a different file instead).",
         "operationId": "startRun",
         "parameters": [
           {
@@ -3362,6 +3533,7 @@
             "name": "id",
             "required": true,
             "schema": {
+              "pattern": "^[0-9a-f]{32}$",
               "title": "Id",
               "type": "string"
             }
@@ -3423,7 +3595,7 @@
                 }
               }
             },
-            "description": "`invalid_state` or `conflict`: not allowed in the session's current state"
+            "description": "`invalid_state` or `conflict`: not allowed in the session's current state; `rating_final`: the report is ready, so the rating can no longer be changed or re-run"
           },
           "422": {
             "content": {
@@ -3433,7 +3605,7 @@
                 }
               }
             },
-            "description": "`invalid_parameters`, `unsupported_audio`, `audio_too_large` or `rating_invalid`"
+            "description": "`invalid_parameters` (incl. a malformed id, cursor or body), `unsupported_audio`, `audio_too_large` or `rating_invalid`"
           },
           "429": {
             "content": {
@@ -3443,7 +3615,7 @@
                 }
               }
             },
-            "description": "`daily_cap_reached` (daily run cap or concurrent-run limit) or `rate_limited`"
+            "description": "`daily_cap_reached` (daily run cap), `concurrent_runs` (a run is already in progress) or `rate_limited`"
           },
           "500": {
             "content": {
@@ -3474,7 +3646,7 @@
             "APIKeyHeader": []
           }
         ],
-        "summary": "Start a run by hand (re-run, or the first run held back by the cap)",
+        "summary": "Start a run by hand (Try again after a system failure, or the first run held back)",
         "tags": [
           "runs"
         ]
@@ -3490,6 +3662,7 @@
             "name": "id",
             "required": true,
             "schema": {
+              "pattern": "^[0-9a-f]{32}$",
               "title": "Id",
               "type": "string"
             }
@@ -3526,6 +3699,26 @@
             },
             "description": "`not_found`: no such resource for this user (never 403, so ids cannot be probed)"
           },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "`invalid_state` or `conflict`: not allowed in the session's current state; `rating_final`: the report is ready, so the rating can no longer be changed or re-run"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "`invalid_parameters` (incl. a malformed id, cursor or body), `unsupported_audio`, `audio_too_large` or `rating_invalid`"
+          },
           "429": {
             "content": {
               "application/json": {
@@ -3534,7 +3727,7 @@
                 }
               }
             },
-            "description": "`daily_cap_reached` (daily run cap or concurrent-run limit) or `rate_limited`"
+            "description": "`daily_cap_reached` (daily run cap), `concurrent_runs` (a run is already in progress) or `rate_limited`"
           },
           "500": {
             "content": {
@@ -3571,6 +3764,7 @@
             "name": "id",
             "required": true,
             "schema": {
+              "pattern": "^[0-9a-f]{32}$",
               "title": "Id",
               "type": "string"
             }
@@ -3625,7 +3819,7 @@
                 }
               }
             },
-            "description": "`invalid_state` or `conflict`: not allowed in the session's current state"
+            "description": "`invalid_state` or `conflict`: not allowed in the session's current state; `rating_final`: the report is ready, so the rating can no longer be changed or re-run"
           },
           "422": {
             "content": {
@@ -3635,7 +3829,7 @@
                 }
               }
             },
-            "description": "`invalid_parameters`, `unsupported_audio`, `audio_too_large` or `rating_invalid`"
+            "description": "`invalid_parameters` (incl. a malformed id, cursor or body), `unsupported_audio`, `audio_too_large` or `rating_invalid`"
           },
           "429": {
             "content": {
@@ -3645,7 +3839,7 @@
                 }
               }
             },
-            "description": "`daily_cap_reached` (daily run cap or concurrent-run limit) or `rate_limited`"
+            "description": "`daily_cap_reached` (daily run cap), `concurrent_runs` (a run is already in progress) or `rate_limited`"
           },
           "500": {
             "content": {
@@ -3682,6 +3876,7 @@
             "name": "id",
             "required": true,
             "schema": {
+              "pattern": "^[0-9a-f]{32}$",
               "title": "Id",
               "type": "string"
             }
@@ -3718,6 +3913,26 @@
             },
             "description": "`not_found`: no such resource for this user (never 403, so ids cannot be probed)"
           },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "`invalid_state` or `conflict`: not allowed in the session's current state; `rating_final`: the report is ready, so the rating can no longer be changed or re-run"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "`invalid_parameters` (incl. a malformed id, cursor or body), `unsupported_audio`, `audio_too_large` or `rating_invalid`"
+          },
           "429": {
             "content": {
               "application/json": {
@@ -3726,7 +3941,7 @@
                 }
               }
             },
-            "description": "`daily_cap_reached` (daily run cap or concurrent-run limit) or `rate_limited`"
+            "description": "`daily_cap_reached` (daily run cap), `concurrent_runs` (a run is already in progress) or `rate_limited`"
           },
           "500": {
             "content": {
@@ -3785,7 +4000,7 @@
                 }
               }
             },
-            "description": "`daily_cap_reached` (daily run cap or concurrent-run limit) or `rate_limited`"
+            "description": "`daily_cap_reached` (daily run cap), `concurrent_runs` (a run is already in progress) or `rate_limited`"
           },
           "500": {
             "content": {
@@ -3806,7 +4021,7 @@
             "APIKeyHeader": []
           }
         ],
-        "summary": "Usage and caps (UTC day and month)",
+        "summary": "Usage and caps (UTC day)",
         "tags": [
           "usage"
         ]
