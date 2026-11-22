@@ -1,14 +1,17 @@
 /**
- * `/sessions/new` (PRD R3): audio, language, optional title; advisory pre-checks; then
- * `POST /sessions` → `POST …/audio` → hand the file to the app-level uploader and open the
+ * `/sessions/new` (PRD R3): audio, language, optional title, change goal (flag off); advisory pre-checks; then
+ * `POST /sessions` → `PUT …/rating` (final no-rating card, goal only; flag off) → `POST …/audio` → hand the file to the app-level uploader and open the
  * session page at once.
  */
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useEffect, useRef, useState, type DragEvent } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 import { unwrap } from "../../api/client";
-import { describeError } from "../../api/errors";
+import { ApiError, describeError } from "../../api/errors";
 import { useApiClient } from "../../auth/useApiClient";
+import { ratingEnabled } from "../../config";
+import { issuesFromApi } from "../rating/card";
+import { goalCard, goalIssues, SetupFields } from "../rating/SetupFields";
 import { ErrorCard } from "../session/ErrorCard";
 import { DEFAULT_LANGUAGE, LANGUAGES } from "./config";
 import { FileNotices } from "./FileNotices";
@@ -26,6 +29,11 @@ export function NewSessionPage() {
   const { file, pick } = filePick;
   const [language, setLanguage] = useState<string>(DEFAULT_LANGUAGE);
   const [typedTitle, setTypedTitle] = useState<string | null>(null);
+  const [goal, setGoal] = useState("");
+  const [goalIssue, setGoalIssue] = useState<string | undefined>();
+  const showGoal = !ratingEnabled();
+  // Session ids whose final no-rating card is already stored (a retry must not PUT again).
+  const goalSaved = useRef(new Set<string>());
   const [dragging, setDragging] = useState(false);
   // One Idempotency-Key per form instance; a changed body needs a new key (and a new session).
   const created = useRef<{ key: string; body: string; id: string } | null>(null);
@@ -61,6 +69,19 @@ export function NewSessionPage() {
         created.current = { key, body: bodyKey, id: res.session.id };
       }
       const id = created.current.id;
+      if (showGoal && !goalSaved.current.has(id)) {
+        try {
+          unwrap(
+            await client.PUT("/sessions/{id}/rating", {
+              params: { path: { id } },
+              body: { final: true, no_rating: true, card: goalCard(goal) },
+            }),
+          );
+        } catch (e) {
+          if (!(e instanceof ApiError && e.code === "rating_final")) throw e; // already final: done
+        }
+        goalSaved.current.add(id);
+      }
       await prepareUpload(client, id, f);
       return id;
     },
@@ -68,8 +89,11 @@ export function NewSessionPage() {
       void getJob(id)?.start(); // the upload runs app-level even if the form is gone
       if (mounted.current) void navigate(`/sessions/${id}`);
     },
-    onError: () => {
+    onError: (e) => {
       submitting.current = false;
+      if (e instanceof ApiError && e.code === "rating_invalid") {
+        setGoalIssue(issuesFromApi(e).change_goal ?? "Check this field.");
+      }
     },
   });
 
@@ -79,8 +103,10 @@ export function NewSessionPage() {
     void pick(e.dataTransfer.files[0]);
   };
 
-  const err = submit.error ? describeError(submit.error) : null;
-  const canSubmit = filePick.ready && !submit.isPending;
+  const invalidGoal = submit.error instanceof ApiError && submit.error.code === "rating_invalid";
+  const err = submit.error && !invalidGoal ? describeError(submit.error) : null;
+  const goalOk = !showGoal || Object.keys(goalIssues(goal)).length === 0;
+  const canSubmit = filePick.ready && goalOk && !submit.isPending;
 
   return (
     <>
@@ -140,6 +166,17 @@ export function NewSessionPage() {
             onChange={(e) => setTypedTitle(e.target.value)}
           />
         </label>
+
+        {showGoal ? (
+          <SetupFields
+            goal={goal}
+            onGoal={(v) => {
+              setGoal(v);
+              setGoalIssue(undefined);
+            }}
+            issue={invalidGoal ? goalIssue : undefined}
+          />
+        ) : null}
 
         {err ? <ErrorCard code={err.code} reference={err.requestId} /> : null}
 
