@@ -65,6 +65,8 @@ async def test_rating_ignored(env):  # noqa: F811
         rep = dict(env.repo.get_report_by_version(env.uid, sid, 1).report)
         rep.pop("request_id", None)
         rep["header"] = {**rep["header"], "change_goal": ""}  # only the card carries a goal
+        for info in rep["run_info"].values():
+            (info.get("span") or {}).pop("seed", None)  # the seed is the session id
         return rep
 
     assert body(rated) == body(unrated)

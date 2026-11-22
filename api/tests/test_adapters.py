@@ -1,5 +1,4 @@
 import json
-from pathlib import Path
 
 import pytest
 from jsonschema import Draft202012Validator
@@ -15,7 +14,6 @@ from onolys_api.adapters import fake as f
 from onolys_api.config import Settings
 
 pytestmark = pytest.mark.unit
-HERE = Path(__file__).parent / "schemas"
 
 REPORT = Draft202012Validator(json.loads((miti.DATA_DIR / "report.schema.json").read_text()))
 AUDIO = AudioRef(uri="gs://b/u/s/audio/canonical.flac", mime="audio/flac", duration_ms=1000)

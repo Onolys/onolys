@@ -10,6 +10,7 @@ import hashlib
 from typing import Any
 
 from onolys_miti.context import RunContext
+from onolys_miti.span import duration_s
 from onolys_miti.stt import AudioRef, SttParams, SttRun, Word
 from onolys_miti.stt.base import BaseSttAdapter
 from onolys_miti.transcript import Transcript
@@ -205,23 +206,21 @@ def _code_result(
             "representative_run": 0,
         },
         "warnings": [],
-        "run_info": _run_info("miti", params),
+        "run_info": {
+            **_run_info("miti", params),
+            # The fake always codes the whole session (never a random window).
+            "span": {
+                "mode": "whole",
+                "duration_s": duration_s(transcript),
+                "seed": params["seed"],
+            },
+        },
     }
 
 
-def _global_diff(clinician: float | None, onolys: float) -> dict[str, Any]:
-    """Minimal score_diff `Diff` (mirrors the evaluation engine compare_item; >=1 differs)."""
-    if clinician is None:
-        return {"signed": None, "abs": None, "direction": None, "status": "not_rated"}
-    signed = onolys - clinician
-    a = abs(signed)
-    return {
-        "signed": signed,
-        "abs": a,
-        "direction": "same" if signed == 0 else "onolys_higher" if signed > 0 else "onolys_lower",
-        "status": "differs" if a >= 1 else "agree",
-        "within_one": a <= 1,
-    }
+def _global_diff() -> dict[str, Any]:
+    """score_diff `Diff` for an unrated item: the engine never sees a rating (D1)."""
+    return {"signed": None, "abs": None, "direction": None, "status": "not_rated"}
 
 
 class FakeEvaluation:
@@ -257,7 +256,6 @@ class FakeEvaluation:
         code = _code_result(transcript, subject, params, quotes)
         warnings: list[dict[str, Any]] = []
 
-        has_rating = False  # the engine never sees a rating (D1): always the no-rating report
         reasons: dict[str, Any] = {"status": "skipped", "items": []}
 
         cb("tips", "started")
@@ -283,9 +281,9 @@ class FakeEvaluation:
                 "item_id": gid,
                 "kind": "global",
                 "label": label,
-                "clinician": {"value": 3 if has_rating else None},
+                "clinician": {"value": None},
                 "onolys": {"value": 3, "mean": 3.0, "min": 3, "max": 3, "values": [3]},
-                "diff": _global_diff(3 if has_rating else None, 3),
+                "diff": _global_diff(),
             }
             for gid, label in _GLOBALS
         ]
@@ -307,11 +305,8 @@ class FakeEvaluation:
                 "preset": params.get("preset"),
                 "code_version": str(params.get("code_version") or "fake"),
                 "params": {},
-                "has_clinician_rating": has_rating,
-                "rating_coverage": {
-                    "rated": len(_GLOBALS) if has_rating else 0,
-                    "total": len(_GLOBALS),
-                },
+                "has_clinician_rating": False,
+                "rating_coverage": {"rated": 0, "total": len(_GLOBALS)},
             },
             "layout": [{"section": "scorecard", "title": "Scorecard"}],
             "scorecard": scorecard,
@@ -327,9 +322,9 @@ class FakeEvaluation:
                 "citation": "n/a",
             },
             "aggregates": {
-                "globals_compared": len(_GLOBALS) if has_rating else 0,
-                "avg_abs_global_difference": 0.0 if has_rating else None,
-                "within_one_share": 1.0 if has_rating else None,
+                "globals_compared": 0,
+                "avg_abs_global_difference": None,
+                "within_one_share": None,
                 "counts_flagged": None,
             },
             "warnings": warnings,

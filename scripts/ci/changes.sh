@@ -16,6 +16,7 @@ PACKAGES=(
   "core:engines/core:python"
   "paudit:engines/paudit:python"
   "evaluation:engines/evaluation:python"
+  "miti:engines/miti:python"
   "api:api:python"
   "admin-auth:admin/auth:python"
   "admin-backend:admin/backend:python"
@@ -45,7 +46,7 @@ DEPS=(
   "eaudit:core"
   "paudit:core"
   "evaluation:core eaudit paudit"
-  "api:core evaluation paudit"
+  "api:miti"
   "admin-backend:admin-auth"
 )
 

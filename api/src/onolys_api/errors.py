@@ -6,7 +6,7 @@ from pydantic import BaseModel, Field
 
 SCHEMA_VERSION = "0.0.1"
 
-# Superset of docs/contracts/error-response.schema.json (shared contract) + public codes.
+# Mirrors the enum of docs/contracts/public/public-error-response.schema.json.
 ERROR_CODES = (
     "invalid_json",
     "unsupported_media_type",

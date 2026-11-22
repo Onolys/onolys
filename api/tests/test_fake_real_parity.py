@@ -8,6 +8,7 @@ import pytest
 from jsonschema import Draft202012Validator
 from onolys_miti import miti
 from onolys_miti.context import RunContext
+from onolys_miti.run_info import SpanInfo
 
 from onolys_api.adapters import FakeEvaluation
 from onolys_api.adapters.real import RealEvaluation
@@ -38,3 +39,9 @@ async def test_fake_and_real_agree_on_shape(monkeypatch):
     assert set(fo.artifacts) == set(ro.artifacts) == {"code", "tips"}
     assert not list(REPORT.iter_errors(fo.report)) and not list(REPORT.iter_errors(ro.report))
     assert set(fo.report["run_info"]) == set(ro.report["run_info"]) == {"evaluation", "miti"}
+    assert set(fo.report["run_info"]["miti"]) == set(ro.report["run_info"]["miti"])
+    # The patched engine returns a fixture result without a span, so compare the fake's span to
+    # what the real engine emits (SpanInfo).
+    fspan = fo.report["run_info"]["miti"]["span"]
+    assert set(fspan) == set(SpanInfo.model_fields)
+    assert fspan["mode"] == "whole" and fspan["seed"] == PARAMS["seed"]

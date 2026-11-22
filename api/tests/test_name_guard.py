@@ -1,4 +1,4 @@
-"""No old engine names survive in api/src, api/tests or config (SP02 D6/D11)."""
+"""No old engine names survive in api/src, api/tests, api/README.md or config (SP02 D6/D11)."""
 
 import re
 from pathlib import Path
@@ -15,6 +15,7 @@ TEXT = {".py", ".yaml", ".yml", ".json", ".md", ".toml", ".txt", ".sh", ".cfg", 
 
 
 def _files():
+    yield ROOT / "api/README.md"
     for sub in ("api/src", "api/tests", "config"):
         for p in (ROOT / sub).rglob("*"):
             if p.is_file() and p.suffix in TEXT and "__pycache__" not in p.parts:
