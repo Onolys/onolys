@@ -8,11 +8,11 @@ Source of truth: 02-api-switch/PRD.md. Depends on SP01 (`onolys_miti` interface 
 
 | # | Task | Depends on | Status |
 |---|---|---|---|
-| 1 | Atomic import swap and engine seam | SP01 | todo |
-| 2 | Stages, fake adapter, artifacts, parity | 1 | todo |
-| 3 | Rename old names and report contract | 2 | todo |
-| 4 | Packaging and slim image | 3 | todo |
-| 5 | Old env var cleanup on infra and Cloud Run | 4 | todo |
+| 1 | Atomic import swap and engine seam | SP01 | done |
+| 2 | Stages, fake adapter, artifacts, parity | 1 | done |
+| 3 | Rename old names and report contract | 2 | done |
+| 4 | Packaging and slim image | 3 | done |
+| 5 | Old env var cleanup on infra and Cloud Run | 4 | done (no changes needed) |
 
 ## Task 1 — Atomic import swap and engine seam
 What it is / what it means: Every api import of the old core, paudit and evaluation packages becomes `onolys_miti` in one pass, src and tests together, never mixed (PRD R1, D2). The engine is now called without a pack or rating.

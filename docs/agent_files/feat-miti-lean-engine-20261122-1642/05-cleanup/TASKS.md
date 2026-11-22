@@ -9,8 +9,8 @@ Source of truth: /root/projects/onolys/iaudit/.worktrees/feat/miti-lean-engine/d
 
 | # | Task | Depends on | Status |
 |---|---|---|---|
-| 1 | Archive tag `iaudit-archive` | - | todo |
-| 2 | Repoint leftovers and delete old packages | 1 | todo |
+| 1 | Archive tag `iaudit-archive` | - | done |
+| 2 | Repoint leftovers and delete old packages | 1 | in-progress |
 | 3 | CI, scripts, workspace and lock | 2 | todo |
 | 4 | Infra cleanup and apply | 2 | todo |
 | 5 | Naming sweep | 3, 4 | todo |

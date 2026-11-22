@@ -8,12 +8,12 @@ Source of truth: /root/projects/onolys/iaudit/.worktrees/feat/miti-lean-engine/d
 
 | # | Task | Depends on | Status |
 |---|---|---|---|
-| 1 | Rating flag, timeline copy, mock stage names | - | todo |
-| 2 | Upload screen: change goal + one submit | 1 | todo |
-| 3 | Interview End flow and session-page fallback | 2 | todo |
-| 4 | Report shows Onolys coding + tips only | 1 | todo |
-| 5 | Dashboard copy and sample report | 4 | todo |
-| 6 | Update affected tests and e2e, full web gate | 2, 3, 5 | todo |
+| 1 | Rating flag, timeline copy, mock stage names | - | done |
+| 2 | Upload screen: change goal + one submit | 1 | done |
+| 3 | Interview End flow and session-page fallback | 2 | done |
+| 4 | Report shows Onolys coding + tips only | 1 | done |
+| 5 | Dashboard copy and sample report | 4 | done |
+| 6 | Update affected tests and e2e, full web gate | 2, 3, 5 | done |
 
 ## Task 1 — Rating flag, timeline copy, mock stage names
 What it is / what it means: A single build-time switch `VITE_RATING_ENABLED` (absent = off) decides whether any clinician-rating UI exists. This task also moves the progress labels and the mock worker onto the new stage names only (D2, D5, R1, R4, R7).
