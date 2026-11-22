@@ -40,3 +40,20 @@ quote the transcript. `tests/test_voice_live.py` opens a real Gemini voice sessi
 request (route, call tag, prompts, schema name). Any change to a prompt, route name or template
 changes the key and makes `tests/test_golden.py` fail with `FixtureMiss`; re-record with
 `MITI_LLM_RECORD=1` on a live run.
+
+## API integration
+
+What the api imports from this package:
+
+- Report schema: `onolys_miti.report.schema_path()`.
+- Rating card: `onolys_miti.rating.validate_rating(obj, final)`, `onolys_miti.rating.is_no_rating`,
+  `onolys_miti.report.Issue`.
+- Rating schema: `onolys_miti.miti.MITI.rating_schema`.
+- Scenarios directory: `MITI.data_dir / "scenarios"`.
+- `onolys_miti.result.whole_second_span`.
+- Test fixtures: `miti.DATA_DIR / "fixtures" / "evaluation"`.
+- Entry: `run_miti(ctx, transcript, speaker_map, params, progress_cb)`; `params["seed"]` (the
+  session id) picks the coded window.
+- Env vars: `MITI_MODEL_CHEAP`, `MITI_MODEL_MID`, `MITI_MODEL_STRONG`, `MITI_LLM_RESPONSE_FORMAT`,
+  `MITI_LLM_RECORD`.
+- LLM routes: `miti_code`, `miti_globals`, `tips`.

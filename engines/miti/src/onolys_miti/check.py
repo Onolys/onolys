@@ -23,6 +23,7 @@ from typing import Any
 import yaml
 
 from onolys_miti import miti
+from onolys_miti import tips as tips_mod
 from onolys_miti.context import RunContext
 from onolys_miti.llm import LLMConfig, MetricsCollector, make_client
 from onolys_miti.run import run_miti
@@ -73,9 +74,31 @@ def bad_call(rec: dict[str, Any]) -> bool:
     return rec["error_kind"] == "bad_output" or rec["attempts"] > 1
 
 
+def coding_records(metrics: MetricsCollector) -> list[dict[str, Any]]:
+    """Call records of the coding run only: the tips call is not what thresholds.yaml limits."""
+    return [r for r in metrics.records if r.get("tier") != tips_mod.ROUTE]
+
+
 def tokens(metrics: MetricsCollector) -> int:
     keys = ("input_tokens", "output_tokens", "cache_read_tokens", "cache_write_tokens")
-    return sum(r[k] for r in metrics.records for k in keys)
+    return sum(r[k] for r in coding_records(metrics) for k in keys)
+
+
+class CodeTimer:
+    """Progress callback timing only the `code` stage (start to done)."""
+
+    def __init__(self, clock=time.monotonic) -> None:
+        self._clock = clock
+        self._t0: float | None = None
+        self.elapsed = 0.0
+
+    def __call__(self, stage: str, status: str) -> None:
+        if stage != "code":
+            return
+        if status == "started":
+            self._t0 = self._clock()
+        elif status == "done" and self._t0 is not None:
+            self.elapsed = self._clock() - self._t0
 
 
 def evaluate(metrics: dict[str, float], thresholds: dict[str, Any]) -> list[Failure]:
@@ -131,12 +154,13 @@ async def run_quality(client, thresholds: dict[str, Any] | None = None) -> Quali
         tr, params = load_fixture(name)
         metrics = MetricsCollector()
         ctx = RunContext(llm=client, metrics=metrics, request_id=f"check-{name}")
-        t0 = time.monotonic()
-        out = await run_miti(ctx, tr, params["speaker_map"], {**params, "n_runs": 1})
-        latencies.append(time.monotonic() - t0)
+        timer = CodeTimer()
+        out = await run_miti(ctx, tr, params["speaker_map"], {**params, "n_runs": 1}, timer)
+        latencies.append(timer.elapsed)
         toks.append(tokens(metrics))
-        calls += len(metrics.records)
-        bad += sum(bad_call(r) for r in metrics.records)
+        code_recs = coding_records(metrics)
+        calls += len(code_recs)
+        bad += sum(bad_call(r) for r in code_recs)
         run = out.artifacts.code.results[0]
         errors += [abs(run.counts.get(c, 0) - n) for c, n in exp["counts"].items()]
         within += [

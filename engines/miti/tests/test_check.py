@@ -106,3 +106,35 @@ def test_main_help_exits_zero(capsys):
         check.main(["--help"])
     assert e.value.code == 0
     assert "--preset" in capsys.readouterr().out
+
+
+def _rec(tier, tok, **kw):
+    return {
+        "tier": tier,
+        "input_tokens": tok,
+        "output_tokens": 0,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0,
+        "error_kind": None,
+        "attempts": 1,
+        **kw,
+    }
+
+
+def test_coding_records_exclude_tips_usage():
+    class M:
+        records = [_rec("tips", 1000, attempts=2), _rec("mid", 10), _rec("cheap", 5)]
+
+    assert [r["tier"] for r in check.coding_records(M())] == ["mid", "cheap"]
+    assert check.tokens(M()) == 15
+    assert not any(check.bad_call(r) for r in check.coding_records(M()))
+
+
+def test_code_timer_measures_only_code_stage():
+    clock = iter([100.0, 130.0, 131.0, 500.0])
+    t = check.CodeTimer(clock=lambda: next(clock))
+    t("code", "started")
+    t("code", "done")
+    t("tips", "started")
+    t("tips", "done")
+    assert t.elapsed == 30.0
