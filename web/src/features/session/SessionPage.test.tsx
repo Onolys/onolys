@@ -1,9 +1,10 @@
 import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { getStatusListener, setStatusListener, type SessionStatusDoc } from "../../api/statusListener";
 import { mockBackend, mockEmitter, server } from "../../mocks/server";
+import { getJob } from "../upload/uploader";
 import { here, renderApp } from "../../test/renderApp";
 
 const EMAIL = "rater@clinic.org";
@@ -212,6 +213,54 @@ describe("session page: slots", () => {
     expect(document.querySelector('[data-slot="upload"]')).toBeNull();
     act(() => void mockBackend.confirmSpeaker(UID, sid, "spk_0"));
     await waitFor(() => expect(document.querySelector('[data-slot="speaker-gate"]')).toBeNull());
+  });
+});
+
+describe("session page: upload incomplete (D4)", () => {
+  const incompleteDoc = (): SessionStatusDoc => ({
+    ...failedDoc("x", "x"),
+    state: "upload_incomplete",
+    error_code: null,
+    transcript_ready: false,
+    speaker_confirmed: false,
+    rating_submitted: false,
+    has_rating: false,
+    progress: 5,
+  });
+
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("offers Resume upload (pick the file again) and Delete; resuming registers a new upload", async () => {
+    vi.stubGlobal(
+      "Audio",
+      class {
+        duration = 15 * 60;
+        onloadedmetadata: (() => void) | null = null;
+        onerror: (() => void) | null = null;
+        preload = "";
+        set src(_: string) {
+          queueMicrotask(() => this.onloadedmetadata?.());
+        }
+        removeAttribute() {}
+      },
+    );
+    vi.stubGlobal("URL", Object.assign(URL, { createObjectURL: () => "blob:x", revokeObjectURL: () => {} }));
+    const sid = create();
+    open(sid);
+    await ready();
+    act(() => mockEmitter.emit(sid, incompleteDoc()));
+    expect(await screen.findByText(/upload didn't finish/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Delete session" })).toBeInTheDocument();
+    const resume = screen.getByRole("button", { name: "Resume upload" });
+    expect(resume).toBeDisabled();
+    await userEvent.upload(
+      screen.getByLabelText(/audio recording/i),
+      new File([new Uint8Array(10)], "visit.mp3", { type: "audio/mpeg" }),
+    );
+    await waitFor(() => expect(resume).toBeEnabled());
+    await userEvent.click(resume);
+    await waitFor(() => expect(getJob(sid)).toBeDefined());
+    expect(mockBackend.getSession(UID, sid).status).toBe("uploading");
   });
 });
 

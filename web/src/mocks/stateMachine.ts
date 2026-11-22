@@ -439,7 +439,8 @@ export class MockBackend {
 
   requestAudio(uid: string, sid: string, body: S["AudioUploadRequest"]): S["AudioUploadResponse"] {
     const s = this.own(uid, sid);
-    if (s.state !== "created" && s.state !== "uploading") bad(409, "invalid_state", "Audio can no longer be uploaded.");
+    if (s.state !== "created" && s.state !== "uploading" && s.state !== "upload_incomplete")
+      bad(409, "invalid_state", "Audio can no longer be uploaded.");
     const ext = (body.filename_ext ?? "").replace(/^\./, "").toLowerCase();
     const type = (body.content_type ?? "").toLowerCase();
     const byType = Object.values(CANONICAL).find((f) => f.types.includes(type));
@@ -473,7 +474,8 @@ export class MockBackend {
 
   completeAudio(uid: string, sid: string): S["CreateSessionResponse"] {
     const s = this.own(uid, sid);
-    if (s.state !== "uploading") bad(409, "invalid_state", "No upload is in progress.");
+    if (s.state !== "uploading" && s.state !== "upload_incomplete")
+      bad(409, "invalid_state", "No upload is in progress.");
     s.state = "validating";
     s.step = "validate";
     s.progress = 10;

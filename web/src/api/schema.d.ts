@@ -191,7 +191,7 @@ export interface paths {
         put?: never;
         /**
          * Get a signed PUT URL for the recording
-         * @description Maps browser aliases (`audio/x-m4a`, `audio/mp4`, `audio/mpeg`, empty type + `filename_ext`) to one canonical type, returns one signed PUT (15 min) pinned to it and to a 300 MB size range; the client sends exactly `required_headers`. Unknown type is 422 `unsupported_audio`, over 300 MB is 422 `audio_too_large`. State becomes `uploading`.
+         * @description Maps browser aliases (`audio/x-m4a`, `audio/mp4`, `audio/mpeg`, empty type + `filename_ext`) to one canonical type, returns one signed PUT (15 min) pinned to it and to a 300 MB size range; the client sends exactly `required_headers`. Unknown type is 422 `unsupported_audio`, over 300 MB is 422 `audio_too_large`. State becomes `uploading` (also resumes an `upload_incomplete` session).
          */
         post: operations["requestAudioUpload"];
         delete?: never;
@@ -466,7 +466,7 @@ export interface components {
              * Status
              * @enum {string}
              */
-            status: "created" | "uploading" | "validating" | "transcribing" | "awaiting_input" | "running" | "report_ready" | "failed" | "deleting";
+            status: "created" | "uploading" | "validating" | "transcribing" | "awaiting_input" | "running" | "report_ready" | "failed" | "deleting" | "upload_incomplete";
         };
         /** CreateInterviewRequest */
         CreateInterviewRequest: {
@@ -766,7 +766,7 @@ export interface components {
              * Status
              * @enum {string}
              */
-            status: "created" | "uploading" | "validating" | "transcribing" | "awaiting_input" | "running" | "report_ready" | "failed" | "deleting";
+            status: "created" | "uploading" | "validating" | "transcribing" | "awaiting_input" | "running" | "report_ready" | "failed" | "deleting" | "upload_incomplete";
         };
         /** RunStarted */
         RunStarted: {
@@ -868,7 +868,7 @@ export interface components {
              * Status
              * @enum {string}
              */
-            status: "created" | "uploading" | "validating" | "transcribing" | "awaiting_input" | "running" | "report_ready" | "failed" | "deleting";
+            status: "created" | "uploading" | "validating" | "transcribing" | "awaiting_input" | "running" | "report_ready" | "failed" | "deleting" | "upload_incomplete";
             /** Step */
             step?: string | null;
             /** Title */
@@ -915,7 +915,7 @@ export interface components {
              * Status
              * @enum {string}
              */
-            status: "created" | "uploading" | "validating" | "transcribing" | "awaiting_input" | "running" | "report_ready" | "failed" | "deleting";
+            status: "created" | "uploading" | "validating" | "transcribing" | "awaiting_input" | "running" | "report_ready" | "failed" | "deleting" | "upload_incomplete";
             /** Title */
             title?: string | null;
         };
@@ -927,7 +927,7 @@ export interface components {
              * Status
              * @enum {string}
              */
-            status: "created" | "uploading" | "validating" | "transcribing" | "awaiting_input" | "running" | "report_ready" | "failed" | "deleting";
+            status: "created" | "uploading" | "validating" | "transcribing" | "awaiting_input" | "running" | "report_ready" | "failed" | "deleting" | "upload_incomplete";
         };
         /** SpeakerInfo */
         SpeakerInfo: {

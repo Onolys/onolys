@@ -70,7 +70,6 @@ test.describe("main flow (mock backend)", () => {
   });
 
   test("E16: double-click on Start does not produce failed upload requests (403/409)", async ({ page }) => {
-    test.fail(true, "E16: second submit PUTs a stale signed URL -> 403, /audio/complete -> 409 (console errors)");
     const c = collect(page);
     await signUpVerified(page, "dbl@example.com");
     await newSession(page, "ten-min.mp3", { dbl: true });

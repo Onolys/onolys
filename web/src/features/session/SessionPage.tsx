@@ -203,7 +203,7 @@ function SessionView({ id }: { id: string }) {
 
           {runError ? <ErrorCard code={runError.code} reference={runError.requestId} resetsAt={resetsAt} /> : null}
 
-          {doc.state === "created" || doc.state === "uploading" ? <UploadSlot sessionId={id} doc={doc} /> : null}
+          {doc.state === "created" || doc.state === "uploading" || doc.state === "upload_incomplete" ? <UploadSlot sessionId={id} doc={doc} /> : null}
           {doc.state !== "deleting" ? <RatingCardSlot sessionId={id} doc={doc} /> : null}
           {doc.transcript_ready && doc.state !== "deleting" && (!doc.speaker_confirmed || doc.state === "report_ready" || doc.state === "failed") ? (
             <SpeakerGateSlot sessionId={id} doc={doc} />

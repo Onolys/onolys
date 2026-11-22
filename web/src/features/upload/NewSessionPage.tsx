@@ -4,16 +4,17 @@
  * session page at once.
  */
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { useRef, useState, type DragEvent } from "react";
+import { useEffect, useRef, useState, type DragEvent } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 import { unwrap } from "../../api/client";
 import { describeError } from "../../api/errors";
 import { useApiClient } from "../../auth/useApiClient";
 import { ErrorCard } from "../session/ErrorCard";
 import { DEFAULT_LANGUAGE, LANGUAGES } from "./config";
-import { checkFile, readDuration, type PrecheckResult } from "./precheck";
+import { FileNotices } from "./FileNotices";
 import { prepareUpload } from "./startUpload";
 import { getJob } from "./uploader";
+import { useFilePick } from "./useFilePick";
 
 export function NewSessionPage() {
   const client = useApiClient();
@@ -21,8 +22,8 @@ export function NewSessionPage() {
   const [params] = useSearchParams();
   const from = params.get("from");
 
-  const [file, setFile] = useState<File | null>(null);
-  const [check, setCheck] = useState<PrecheckResult | null>(null);
+  const filePick = useFilePick();
+  const { file, pick } = filePick;
   const [language, setLanguage] = useState<string>(DEFAULT_LANGUAGE);
   const [typedTitle, setTypedTitle] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
@@ -37,15 +38,15 @@ export function NewSessionPage() {
   });
   const title = typedTitle ?? previous.data?.title ?? "";
 
-  const pick = async (f: File | undefined) => {
-    setFile(f ?? null);
-    setCheck(null);
-    if (!f) return;
-    const quick = checkFile(f, null);
-    if (quick.blocked) return setCheck(quick);
-    const duration = await readDuration(f);
-    setCheck(checkFile(f, duration));
-  };
+  // Set synchronously on submit: `isPending` lags a render, so a fast double-click got through.
+  const submitting = useRef(false);
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
 
   const submit = useMutation({
     mutationFn: async (f: File) => {
@@ -64,8 +65,11 @@ export function NewSessionPage() {
       return id;
     },
     onSuccess: (id) => {
-      void getJob(id)?.start();
-      void navigate(`/sessions/${id}`);
+      void getJob(id)?.start(); // the upload runs app-level even if the form is gone
+      if (mounted.current) void navigate(`/sessions/${id}`);
+    },
+    onError: () => {
+      submitting.current = false;
     },
   });
 
@@ -76,7 +80,7 @@ export function NewSessionPage() {
   };
 
   const err = submit.error ? describeError(submit.error) : null;
-  const canSubmit = file !== null && check !== null && check.blocked === null && !submit.isPending;
+  const canSubmit = filePick.ready && !submit.isPending;
 
   return (
     <>
@@ -85,7 +89,10 @@ export function NewSessionPage() {
         className="auth-form upload-form"
         onSubmit={(e) => {
           e.preventDefault();
-          if (file && canSubmit) submit.mutate(file);
+          if (file && canSubmit && !submitting.current) {
+            submitting.current = true;
+            submit.mutate(file);
+          }
         }}
       >
         <div
@@ -111,16 +118,7 @@ export function NewSessionPage() {
           {file ? <p className="form-note">{file.name}</p> : null}
         </div>
 
-        {check?.blocked ? (
-          <p className="form-error" role="alert">
-            {check.blocked}
-          </p>
-        ) : null}
-        {check?.warning ? (
-          <p className="notice" role="status">
-            {check.warning}
-          </p>
-        ) : null}
+        <FileNotices pick={filePick} />
 
         <label>
           Language

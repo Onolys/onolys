@@ -11,6 +11,7 @@ export interface StatusChip {
 export const STATUS_CHIP: Record<State, StatusChip> = {
   created: { text: "Uploading", tone: "progress" },
   uploading: { text: "Uploading", tone: "progress" },
+  upload_incomplete: { text: "Upload incomplete", tone: "wait" },
   validating: { text: "Checking audio", tone: "progress" },
   transcribing: { text: "Transcribing", tone: "progress" },
   awaiting_input: { text: "Needs your input", tone: "wait" },

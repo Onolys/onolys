@@ -32,6 +32,7 @@ describe("dashboard: session list", () => {
     const cases: [string, string][] = [
       ["created", "Uploading"],
       ["uploading", "Uploading"],
+      ["upload_incomplete", "Upload incomplete"],
       ["validating", "Checking audio"],
       ["transcribing", "Transcribing"],
       ["awaiting_input", "Needs your input"],
