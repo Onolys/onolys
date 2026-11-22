@@ -12,10 +12,6 @@ OUT="${GITHUB_OUTPUT:-/dev/stdout}"
 
 # name:dir:kind (kind python => also triggered by Python-shared paths; node => needs package.json)
 PACKAGES=(
-  "eaudit:engines/eaudit:python"
-  "core:engines/core:python"
-  "paudit:engines/paudit:python"
-  "evaluation:engines/evaluation:python"
   "miti:engines/miti:python"
   "api:api:python"
   "admin-auth:admin/auth:python"
@@ -26,15 +22,12 @@ PACKAGES=(
 )
 
 # Shared paths: Python-shared hit python packages; CI-shared hits everything.
-PY_SHARED_RE='^(pyproject\.toml|uv\.lock|engines/core/)'
+PY_SHARED_RE='^(pyproject\.toml|uv\.lock)'
 CI_SHARED_RE='^(\.github/workflows/|scripts/ci/)'
 # Extra paths per package: Firestore rules and their emulator tests run in the api job.
 API_EXTRA_RE='^(firestore\.rules|firebase\.json|firestore-rules-test/)'
 # The web job also runs on the contracts its generated types come from (gen:api staleness check).
-WEB_EXTRA_RE='^(api/openapi\.json|engines/evaluation/schemas/report\.schema\.json)$'
-
-# paudit packs are built from protocols/ (and the admin image ships it, see ADMIN_BACKEND_EXTRA_RE).
-PAUDIT_EXTRA_RE='^protocols/'
+WEB_EXTRA_RE='^(api/openapi\.json|engines/miti/schemas/report\.schema\.json)$'
 
 # The admin backend serves only /v1/me via admin/auth, so it re-runs when admin/auth or .dockerignore changes.
 ADMIN_BACKEND_EXTRA_RE='^(admin/auth/|\.dockerignore)'
@@ -43,9 +36,6 @@ ADMIN_BACKEND_EXTRA_RE='^(admin/auth/|\.dockerignore)'
 # A change in a package also runs every package that (transitively) depends on it.
 # test_changes_deps.py fails if this drifts from the pyprojects.
 DEPS=(
-  "eaudit:core"
-  "paudit:core"
-  "evaluation:core eaudit paudit"
   "api:miti"
   "admin-backend:admin-auth"
 )
@@ -59,7 +49,6 @@ for entry in "${PACKAGES[@]}"; do
     if [[ "$f" == "$dir/"* || "$f" =~ $CI_SHARED_RE ||
           ( "$kind" == python && "$f" =~ $PY_SHARED_RE ) ||
           ( "$name" == api && "$f" =~ $API_EXTRA_RE ) ||
-          ( "$name" == paudit && "$f" =~ $PAUDIT_EXTRA_RE ) ||
           ( "$name" == admin-backend && "$f" =~ $ADMIN_BACKEND_EXTRA_RE ) ||
           ( "$name" == web && "$f" =~ $WEB_EXTRA_RE ) ]]; then
       HIT[$name]=1

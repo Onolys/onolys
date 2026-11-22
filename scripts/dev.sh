@@ -1,20 +1,18 @@
 #!/usr/bin/env bash
 # Start admin backend (8000) and Vite (5173) together.
-# Usage: scripts/dev.sh [--check] [--stub]
+# Usage: scripts/dev.sh [--check]
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BACKEND_PORT=8000
 WEB_PORT=5173
 CHECK_ONLY=0
-STUB=0
 
 for arg in "$@"; do
   case "$arg" in
     --check) CHECK_ONLY=1 ;;
-    --stub) STUB=1 ;;
     -h|--help) sed -n '2,3p' "${BASH_SOURCE[0]}"; exit 0 ;;
-    *) echo "unknown flag: $arg (use --check, --stub)" >&2; exit 2 ;;
+    *) echo "unknown flag: $arg (use --check)" >&2; exit 2 ;;
   esac
 done
 
@@ -60,8 +58,8 @@ preflight() {
   for k in GEMINI_API_KEY ANTHROPIC_API_KEY OPENAI_API_KEY LITELLM_API_KEY; do
     [ -n "${!k:-}" ] && have_key=1
   done
-  if [ "$have_key" -eq 0 ] && [ "$STUB" -eq 0 ]; then
-    echo "warning: none of GEMINI_API_KEY / ANTHROPIC_API_KEY / OPENAI_API_KEY / LITELLM_API_KEY is set; live runs will fail (use --stub for the stub pipeline)" >&2
+  if [ "$have_key" -eq 0 ]; then
+    echo "warning: none of GEMINI_API_KEY / ANTHROPIC_API_KEY / OPENAI_API_KEY / LITELLM_API_KEY is set; live runs will fail" >&2
   fi
   return "$failed"
 }
@@ -123,8 +121,6 @@ cleanup() {
 trap cleanup EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
-
-if [ "$STUB" -eq 1 ]; then export IAUDIT_PIPELINE=stub; fi
 
 launch backend admin/backend env ENV=local ADMIN_AUTH=off "ADMIN_CORS_ORIGINS=http://localhost:$WEB_PORT" \
   uv run uvicorn --factory onolys_admin_backend.app:create_app --port "$BACKEND_PORT"

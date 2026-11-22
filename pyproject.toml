@@ -1,4 +1,4 @@
-# Virtual workspace root (no [project]). Members land over time:
-# Workspace: engines/miti, api, admin/auth, admin/backend.
+# Virtual workspace root (no [project]).
+# Members: engines/miti, api, admin/auth, admin/backend.
 [tool.uv.workspace]
 members = ["engines/*", "api", "admin/*"]
