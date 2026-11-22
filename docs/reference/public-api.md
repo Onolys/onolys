@@ -106,6 +106,7 @@ Validation of interview audio: longer than `AI_MAX_SECONDS` + `AI_TOLERANCE_SECO
 - Client to server: binary frames of PCM16 mono 16 kHz audio; text `{"type": "end"}` to finish.
 - Server to client: binary frames of PCM16 mono 24 kHz audio, and text messages `ready` (`resumed`, `elapsed_s`, `max_s`, `warn_s`), `ai_speaking` (`on`), `interrupted` (drop queued AI audio), `warn` (`at_s`, 480 s), `time_up` (600 s; the relay ends the interview), `error` (`code`).
 - A dropped client can reconnect to the same URL within 60 s (`AI_RECONNECT_SECONDS`): the interview resumes with elapsed time carried over (`ready.resumed` is true). After 60 s it cannot.
+- Abuse caps: one audio frame over `AI_MAX_FRAME_BYTES` (64 KiB) or a text frame over 4 KiB closes the socket with 1009 (`error` code `frame_too_large`); more than `AI_MAX_AUDIO_BYTES_PER_S` (128000, 4x real time) in a second closes it with 1008 (`rate_limited`); an interview may connect at most `AI_MAX_CONNECTS` (30) times, then it ends as it stands.
 
 ## Engine errors
 

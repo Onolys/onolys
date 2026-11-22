@@ -42,6 +42,8 @@ AUTH_TIMEOUT_S = 10.0
 MAX_REOPENS = 3  # consecutive upstream reopens without any content event (audio, turn, handle)
 REOPEN_BACKOFF_S = 0.25  # real-time wait before the 2nd, 3rd... consecutive fruitless reopen
 POLL_INTERVAL_S = 10.0  # live-state poll + checkpoint cadence: bounds free time after an End
+MAX_TEXT_FRAME_BYTES = 4096  # control frames are tiny `{type: ...}` objects
+CLOSE_POLICY, CLOSE_TOO_BIG = 1008, 1009
 CLOSE_UNAUTH, CLOSE_FORBIDDEN, CLOSE_NOT_FOUND, CLOSE_NOT_LIVE = 4401, 4403, 4404, 4409
 
 
@@ -207,6 +209,13 @@ class Relay:
                 )  # fmt: skip
                 await self.fail("interview_not_live", CLOSE_NOT_LIVE)
                 return
+        if doc.connects >= settings.ai_max_connects:  # a reconnect loop: end it as it stands
+            await _io(
+                settle_interview, self.repo, settings, self.uid, self.iid, "ended",
+                self.clock.wall(),
+            )  # fmt: skip
+            await self.fail("interview_not_live", CLOSE_NOT_LIVE)
+            return
         carried = doc.duration_s or 0.0
         if carried >= settings.ai_max_seconds:
             await self._finish(carried)
@@ -220,6 +229,7 @@ class Relay:
             "conn_id": self.conn_id,
             "duration_s": carried,
             "seen_at": self.clock.wall(),
+            "connects": doc.connects + 1,
         }
         if not resumed:
             live_fields["live_at"] = self.clock.wall()  # the sweep's ceiling counts from here
@@ -341,12 +351,25 @@ class Relay:
 
     async def _pump_up(self) -> str | None:
         gate = self.settings.ai_mic_gate
+        max_frame = self.settings.ai_max_frame_bytes
+        max_rate = self.settings.ai_max_audio_bytes_per_s
+        window_start, window_bytes = self.clock.monotonic(), 0
         while True:
             msg = await self.ws.receive()
             if msg["type"] == "websocket.disconnect":
                 return "client_drop"
             data = msg.get("bytes")
             if data is not None:
+                if len(data) > max_frame:
+                    await self.fail("frame_too_large", CLOSE_TOO_BIG)
+                    return "frame_too_large"
+                now = self.clock.monotonic()
+                if now - window_start >= 1.0:
+                    window_start, window_bytes = now, 0
+                window_bytes += len(data)
+                if window_bytes > max_rate:
+                    await self.fail("rate_limited", CLOSE_POLICY)
+                    return "rate_limited"
                 if gate and self.ai_speaking:
                     continue
                 s = self.session
@@ -357,6 +380,9 @@ class Relay:
             text = msg.get("text")
             if text is None:
                 continue
+            if len(text) > MAX_TEXT_FRAME_BYTES:
+                await self.fail("frame_too_large", CLOSE_TOO_BIG)
+                return "frame_too_large"
             try:
                 obj = json.loads(text)
             except ValueError:

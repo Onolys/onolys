@@ -73,6 +73,12 @@ class Settings:
     ai_refunds_per_day: int = 3  # at most this many such refunds per user per UTC day (A9)
     ai_reconnect_seconds: int = 60  # relay waits this long for a dropped client
     ai_mic_gate: bool = False
+    # relay abuse caps (A21): one client audio frame, bytes per second of audio (PCM16 16 kHz is
+    # 32000 B/s, so the default tolerates 4x real time for buffered bursts), and how many times
+    # one interview may (re)connect before it is ended.
+    ai_max_frame_bytes: int = 65536
+    ai_max_audio_bytes_per_s: int = 128000
+    ai_max_connects: int = 30
     uid_hmac_key: str = ""  # keys the `uid_hash` log field (Secret Manager `uid-hmac-key-{env}`)
 
     @classmethod
@@ -128,6 +134,11 @@ class Settings:
             ai_refunds_per_day=_int(e, "AI_REFUNDS_PER_DAY", cls.ai_refunds_per_day),
             ai_reconnect_seconds=_int(e, "AI_RECONNECT_SECONDS", cls.ai_reconnect_seconds),
             ai_mic_gate=_bool(e, "AI_MIC_GATE", cls.ai_mic_gate),
+            ai_max_frame_bytes=_int(e, "AI_MAX_FRAME_BYTES", cls.ai_max_frame_bytes),
+            ai_max_audio_bytes_per_s=_int(
+                e, "AI_MAX_AUDIO_BYTES_PER_S", cls.ai_max_audio_bytes_per_s
+            ),
+            ai_max_connects=_int(e, "AI_MAX_CONNECTS", cls.ai_max_connects),
             uid_hmac_key=e.get("UID_HMAC_KEY", ""),
         )
         s.validate()
@@ -166,6 +177,13 @@ class Settings:
         ):
             if v < 0:
                 raise ConfigError(f"{name} must be >= 0")
+        for name, v in (
+            ("AI_MAX_FRAME_BYTES", self.ai_max_frame_bytes),
+            ("AI_MAX_AUDIO_BYTES_PER_S", self.ai_max_audio_bytes_per_s),
+            ("AI_MAX_CONNECTS", self.ai_max_connects),
+        ):
+            if v <= 0:
+                raise ConfigError(f"{name} must be > 0")
         if self.ai_max_seconds <= 0 or self.ai_warn_seconds >= self.ai_max_seconds:
             raise ConfigError("AI_WARN_SECONDS must be < AI_MAX_SECONDS (> 0)")
         if self.voice_url:

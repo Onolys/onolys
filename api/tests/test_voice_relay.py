@@ -634,3 +634,55 @@ async def test_voice_service_mode_is_accepted_and_serves_only_health(tmp_path):
         body = (await c.get("/v1/healthz")).json()
         gone = [(await c.get(p)).status_code for p in ("/v1/interviews/x", "/v1/scenarios")]
     assert body["service_mode"] == "voice" and gone == [404, 404]
+
+
+# ---- A21: frame size / rate caps and a reconnect cap ----
+
+
+async def test_oversized_audio_frame_closes_1009_and_is_not_forwarded(tmp_path):
+    env = Env(tmp_path, ai_max_frame_bytes=1000)
+    env.interview()
+    async with serve(env.app) as base:
+        c = await connect(base)
+        await ready(c)
+        await c.ws.send(b"\x01\x02" * 501)  # 1002 bytes
+        out = await c.drain_json()
+        assert {"type": "error", "code": "frame_too_large"} in out
+        await expect_close(c, 1009)
+    assert env.doc().state == "live"  # the client may re-attach; the interview is not settled
+
+
+async def test_audio_faster_than_the_rate_cap_closes_1008(tmp_path):
+    env = Env(tmp_path, ai_max_frame_bytes=600, ai_max_audio_bytes_per_s=1000)
+    env.interview()
+    async with serve(env.app) as base:
+        c = await connect(base)
+        await ready(c)
+        await c.ws.send(b"\x01\x02" * 250)  # 500 B, within the 1000 B window
+        await c.ws.send(b"\x01\x02" * 250)  # 1000 B
+        await c.ws.send(b"\x01\x02" * 250)  # 1500 B > cap
+        out = await c.drain_json()
+        assert {"type": "error", "code": "rate_limited"} in out
+        await expect_close(c, 1008)
+
+
+async def test_oversized_text_frame_closes_1009(tmp_path):
+    env = Env(tmp_path)
+    env.interview()
+    async with serve(env.app) as base:
+        c = await connect(base)
+        await ready(c)
+        await c.ws.send(json.dumps({"type": "end", "pad": "x" * 10_000}))
+        out = await c.drain_json()
+        assert {"type": "error", "code": "frame_too_large"} in out
+        await expect_close(c, 1009)
+
+
+async def test_reconnect_cap_ends_the_interview(tmp_path):
+    env = Env(tmp_path, ai_max_connects=3)
+    env.interview(state="live", connects=3, disconnected_at=T0, duration_s=100.0, conn_id="old")
+    async with serve(env.app) as base:
+        c = await connect(base)
+        assert await c.recv_json() == {"type": "error", "code": "interview_not_live"}
+        await expect_close(c, 4409)
+    assert env.doc().state == "ended" and len(env.voice.opened) == 0

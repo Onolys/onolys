@@ -246,6 +246,7 @@ class InterviewDoc(Doc):
     live_at: datetime | None = None  # first created -> live transition (the sweep ceiling's start)
     conn_id: str | None = None  # connection lease: the newest relay connection owns the interview
     refunded: bool = False  # set with the settle transition: a refunded interview never links
+    connects: int = 0  # relay connections that went live; capped by AI_MAX_CONNECTS
 
 
 def interview_refundable(data: dict[str, Any], now: datetime, threshold_s: float) -> bool:
