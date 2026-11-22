@@ -193,7 +193,7 @@ function build(turns: Turn[], picks: Picks): Report {
       coded_span: null,
       subject_speaker: "spk_0",
       n_runs: 1,
-      models: { paudit: "mock-model-a", eaudit: "mock-model-b", tips: "mock-model-a" },
+      models: { miti_code: "mock-model-a", miti_globals: "mock-model-b", tips: "mock-model-a" },
       stt: {
         provider: "mock",
         model: "mock-stt",
@@ -315,8 +315,7 @@ function build(turns: Turn[], picks: Picks): Report {
     warnings: [],
     run_info: {
       evaluation: { engine: "evaluation", code_version: "mock" },
-      paudit: { engine: "paudit", code_version: "mock" },
-      eaudit: { engine: "eaudit", code_version: "mock" },
+      miti: { engine: "miti", code_version: "mock", span: null },
     },
   };
 }
@@ -370,7 +369,6 @@ export const edgeReport: Report = build(edgeTranscript, EDGE_PICKS);
 export interface ReportOptions {
   edge?: boolean;
   hasRating: boolean;
-  reasonsFailed?: boolean;
   tipsFailed?: boolean;
   createdAt?: string;
 }
@@ -379,10 +377,6 @@ export interface ReportOptions {
 export function reportFor(o: ReportOptions): Report {
   let r = structuredClone(o.edge ? edgeReport : sampleReport);
   if (!o.hasRating) r = noRating(r);
-  if (o.reasonsFailed && o.hasRating) {
-    r.reasons_audit = { status: "failed", items: [] };
-    r.warnings.push({ code: "reasons_audit_failed" });
-  }
   if (o.tipsFailed) {
     r.tips = [];
     r.warnings.push({ code: "tips_failed" });

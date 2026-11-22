@@ -84,11 +84,11 @@ describe("session page: status listener", () => {
     const status = await ready();
     await waitFor(() => {
       expect(status).toHaveTextContent("Confirm who the clinician is");
-      expect(status).toHaveTextContent("Waiting for your rating");
+      expect(status).toHaveTextContent("Waiting for session setup");
     });
     act(() => void mockBackend.confirmSpeaker(UID, sid, "spk_0"));
     await waitFor(() => expect(status).not.toHaveTextContent("Confirm who the clinician is"));
-    expect(status).toHaveTextContent("Waiting for your rating");
+    expect(status).toHaveTextContent("Waiting for session setup");
   });
 
   it("shows run sub-labels, the stay-or-leave copy and elapsed time, then links the report", async () => {
@@ -99,11 +99,11 @@ describe("session page: status listener", () => {
     await ready();
     expect(screen.queryByText(/Usually under 5 minutes/)).not.toBeInTheDocument();
     act(() => void mockBackend.putRating(UID, sid, { final: true, no_rating: true, card: { change_goal: "g" } }));
-    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Rating the session"));
+    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Coding the session"));
     expect(screen.getByText(/Usually under 5 minutes/)).toBeInTheDocument();
     expect(screen.getByText(/Elapsed \d+:\d\d/)).toBeInTheDocument();
     tick(sid);
-    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Checking your reasons"));
+    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Writing tips"));
     act(() => mockBackend.settle(sid));
     const link = await screen.findByRole("link", { name: /view report/i });
     expect(link).toHaveAttribute("href", `/sessions/${sid}/reports/1`);
@@ -120,7 +120,7 @@ describe("session page: status listener", () => {
     mockBackend.confirmSpeaker(UID, sid, "spk_0");
     mockBackend.putRating(UID, sid, { final: true, no_rating: true, card: { change_goal: "g" } });
     open(sid);
-    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Rating the session"));
+    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Coding the session"));
     for (let i = 0; i < 3; i++) {
       tick(sid);
       await new Promise((r) => setTimeout(r, 60));
@@ -330,7 +330,7 @@ describe("session page: error cards", () => {
 
   it("Try again starts a new run and the timeline moves on", async () => {
     const user = userEvent.setup();
-    const sid = create("fail-paudit");
+    const sid = create("fail-code");
     toAwaiting(sid);
     mockBackend.confirmSpeaker(UID, sid, "spk_0");
     mockBackend.putRating(UID, sid, { final: true, no_rating: true, card: { change_goal: "g" } });
@@ -339,7 +339,7 @@ describe("session page: error cards", () => {
     const card = await screen.findByRole("alert");
     expect(card).toHaveTextContent(/something went wrong/i);
     await user.click(within(card).getByRole("button", { name: "Try again" }));
-    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Rating the session"));
+    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Coding the session"));
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 
@@ -401,7 +401,7 @@ describe("session page: error cards", () => {
     const status = await ready();
     await waitFor(() => expect(status).toHaveTextContent(/You've reached today's limit\. You can start the rating after .+\./));
     await user.click(screen.getByRole("button", { name: "Start" }));
-    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Rating the session"));
+    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Coding the session"));
   });
 
   it("disables Try again and Start with the reset time when today's runs are used up", async () => {

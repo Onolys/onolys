@@ -148,7 +148,7 @@ describe("flow: sign-up, verify, upload, speaker + rating during transcription, 
     await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent(/transcrib/i));
 
     await confirmSpeakerViaUi(u, sid); // run starts by itself once speaker + rating are in
-    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Rating the session"));
+    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Coding the session"));
     settle(sid);
     await u.click(await screen.findByRole("link", { name: "View report" }));
     await waitFor(() => expect(here(router)).toBe(`/sessions/${sid}/reports/1`));
@@ -181,7 +181,7 @@ describe("flow: no-rating run is final too (AC3)", () => {
     await u.type(await screen.findByLabelText("Change goal"), "Walk more in the evenings");
     await u.click(screen.getByRole("button", { name: /No rating/ }));
     await screen.findByText(/Saved without a rating/);
-    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Rating the session"));
+    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Coding the session"));
     settle(sid);
     await u.click(await screen.findByRole("link", { name: "View report" }));
     await h1("Report");
@@ -199,39 +199,20 @@ describe("flow: system failure, then Try again (AC6a)", () => {
     const u = user();
     const { router } = renderApp("/", { user: USER });
     await h1("Sessions");
-    const sid = await uploadViaUi(u, router, "fail-paudit");
+    const sid = await uploadViaUi(u, router, "fail-code");
     await confirmSpeakerViaUi(u, sid);
     await rateViaUi(u);
-    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Rating the session"));
-    settle(sid); // paudit stage fails
+    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Coding the session"));
+    settle(sid); // code stage fails
     const card = await screen.findByRole("alert");
     expect(card).toHaveTextContent(/something went wrong/i);
     expect(card).toHaveTextContent(`Reference: ${sid}`);
     await u.click(within(card).getByRole("button", { name: "Try again" }));
-    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Rating the session"));
+    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Coding the session"));
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
     const runs = mockBackend.listRuns(UID, sid);
     expect(runs).toHaveLength(2);
     expect(runs[1].rating_id).toBe(runs[0].rating_id); // the same submission
-  });
-});
-
-describe("flow: reasons audit failed (AC3, D17)", () => {
-  it("the report carries the note (no Run again) and keeps the rest", async () => {
-    const u = user();
-    const { router } = renderApp("/", { user: USER });
-    await h1("Sessions");
-    const sid = await uploadViaUi(u, router, "fail-eaudit");
-    await confirmSpeakerViaUi(u, sid);
-    await rateViaUi(u, "3");
-    settle(sid);
-    await u.click(await screen.findByRole("link", { name: "View report" }));
-    const audit = within(await screen.findByRole("region", { name: "Your reasons, checked" }));
-    expect(audit.getByText("We couldn't check your reasons this time. The rest of your report is complete.")).toBeInTheDocument();
-    expect(screen.getByRole("region", { name: "Scorecard" })).toBeInTheDocument();
-    expect(screen.getByRole("region", { name: "Tips" })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /run again/i })).toBeNull();
-    expect(mockBackend.listRuns(UID, sid)).toHaveLength(1);
   });
 });
 
@@ -248,7 +229,7 @@ describe("flow: daily cap reached at auto-start, then Start (AC6a)", () => {
     );
     expect(mockBackend.listRuns(UID, sid)).toHaveLength(0);
     await u.click(screen.getByRole("button", { name: "Start" }));
-    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Rating the session"));
+    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Coding the session"));
     settle(sid);
     await u.click(await screen.findByRole("link", { name: "View report" }));
     await waitFor(() => expect(here(router)).toBe(`/sessions/${sid}/reports/1`));

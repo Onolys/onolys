@@ -2,7 +2,7 @@ import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { sampleReport } from "../../mocks/fixtures/report";
+import { reasonsFailedReport, sampleReport } from "../../mocks/fixtures/report";
 import { mockBackend, server } from "../../mocks/server";
 import { here, renderApp } from "../../test/renderApp";
 
@@ -198,7 +198,8 @@ describe("report page, versions from earlier data", () => {
 
 describe("report page, reasons audit failed", () => {
   it("replaces the section with a note (no Run again), and keeps the rest", async () => {
-    const sid = reported({ final: true, card: SCORED }, "fail-eaudit");
+    serve(reasonsFailedReport);
+    const sid = reported({ final: true, card: SCORED });
     open(sid);
     const audit = within(await screen.findByRole("region", { name: "Your reasons, checked" }));
     expect(audit.getByText("We couldn't check your reasons this time. The rest of your report is complete.")).toBeInTheDocument();

@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { SessionState } from "../../api/types";
 import { deriveTimeline, STEP_LABELS } from "./timeline";
 
@@ -62,13 +62,12 @@ const ROWS: Row[] = [
     "dddddpp",
     ["You've reached today's limit. You can start the rating after 9:00 AM."],
   ],
-  ["running, paudit", "running", { ...T, ...S, ...R }, { step: "paudit" }, "dddddcp", ["Rating the session"]],
-  ["running, eaudit", "running", { ...T, ...S, ...R }, { step: "eaudit" }, "dddddcp", ["Checking your reasons"]],
+  ["running, code", "running", { ...T, ...S, ...R }, { step: "code" }, "dddddcp", ["Coding the session"]],
   ["running, tips", "running", { ...T, ...S, ...R }, { step: "tips" }, "dddddcp", ["Writing tips"]],
-  ["running, compare", "running", { ...T, ...S, ...R }, { step: "compare" }, "dddddcp", ["Comparing"]],
   ["running, assemble", "running", { ...T, ...S, ...R }, { step: "assemble" }, "dddddcp", ["Building the report"]],
-  ["running, no step yet", "running", { ...T, ...S, ...R }, { step: null }, "dddddcp", ["Rating the session"]],
-  ["running, unknown step", "running", { ...T, ...S, ...R }, { step: "zzz" }, "dddddcp", ["Rating the session"]],
+  ["running, no step yet", "running", { ...T, ...S, ...R }, { step: null }, "dddddcp", ["Coding the session"]],
+  ["running, unknown step", "running", { ...T, ...S, ...R }, { step: "zzz" }, "dddddcp", ["Coding the session"]],
+  ["running, legacy step name", "running", { ...T, ...S, ...R }, { step: "paudit" }, "dddddcp", ["Coding the session"]],
   ["report_ready", "report_ready", { ...T, ...S, ...R }, {}, "ddddddd", ["Your report is ready."]],
   [
     "failed at validate",
@@ -113,11 +112,11 @@ const ROWS: Row[] = [
   ["deleting", "deleting", { ...T, ...S, ...R }, {}, "ppppppp", ["Deleting this session."]],
 ];
 
-describe("deriveTimeline: table", () => {
+describe("deriveTimeline: table (rating flag on)", () => {
   it.each(ROWS)("%s", (_name, state, flags, extra, statuses, lines) => {
     const t = deriveTimeline(
       { state, step: extra.step ?? null, error_code: extra.error_code ?? null, ...none, ...flags },
-      { resetsAt: "9:00 AM" },
+      { resetsAt: "9:00 AM", ratingEnabled: true },
     );
     expect(t.steps.map((s) => s.key)).toEqual([
       "upload",
@@ -154,6 +153,31 @@ describe("deriveTimeline: table", () => {
   });
 });
 
+describe("deriveTimeline: table (rating flag off)", () => {
+  afterEach(() => vi.unstubAllEnvs());
+  const OFF_LABELS = ["Upload", "Check audio", "Transcribe", "Confirm speaker", "Session setup", "Rate session", "Report"];
+
+  it.each(ROWS)("%s", (_name, state, flags, extra, statuses, lines) => {
+    const t = deriveTimeline(
+      { state, step: extra.step ?? null, error_code: extra.error_code ?? null, ...none, ...flags },
+      { resetsAt: "9:00 AM", ratingEnabled: false },
+    );
+    expect(t.steps.map((s) => s.label)).toEqual(OFF_LABELS);
+    expect(t.steps.map((s) => s.status[0]).join("")).toBe(statuses);
+    expect(t.lines).toEqual(lines.map((l) => (l === "Waiting for your rating" ? "Waiting for session setup" : l)));
+  });
+
+  it("defaults to the env flag: off when absent, on when VITE_RATING_ENABLED=true", () => {
+    const doc = { state: "awaiting_input" as const, step: null, error_code: null, ...none, ...T, ...S };
+    vi.stubEnv("VITE_RATING_ENABLED", "");
+    expect(deriveTimeline(doc).lines).toEqual(["Waiting for session setup"]);
+    expect(deriveTimeline(doc).steps[4].label).toBe("Session setup");
+    vi.stubEnv("VITE_RATING_ENABLED", "true");
+    expect(deriveTimeline(doc).lines).toEqual(["Waiting for your rating"]);
+    expect(deriveTimeline(doc).steps[4].label).toBe("Your rating");
+  });
+});
+
 describe("deriveTimeline: every state x flag combination", () => {
   const bools = [false, true];
   const combos = STATES.flatMap((state) =>
@@ -181,17 +205,17 @@ describe("deriveTimeline: every state x flag combination", () => {
     const copy = t.lines.join(" ");
     if (c.state === "awaiting_input") {
       expect(copy.includes("Confirm who the clinician is")).toBe(!c.speaker_confirmed);
-      expect(copy.includes("Waiting for your rating")).toBe(!c.rating_submitted);
+      expect(copy.includes("Waiting for session setup")).toBe(!c.rating_submitted);
     }
   });
 });
 
 describe("deriveTimeline: extras", () => {
-  const base = { state: "running" as const, step: "eaudit", error_code: null, ...none, ...T, ...S, ...R };
+  const base = { state: "running" as const, step: "tips", error_code: null, ...none, ...T, ...S, ...R };
 
   it("puts the sub-label from step on the running step only", () => {
     const t = deriveTimeline(base);
-    expect(t.steps.find((s) => s.key === "run")?.subLabel).toBe("Checking your reasons");
+    expect(t.steps.find((s) => s.key === "run")?.subLabel).toBe("Writing tips");
     expect(t.steps.filter((s) => s.subLabel)).toHaveLength(1);
   });
 

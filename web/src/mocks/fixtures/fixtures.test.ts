@@ -6,6 +6,7 @@ import {
   edgeTranscript,
   noRatingReport,
   noTipsReport,
+  reportFor,
   reasonsFailedReport,
   sampleReport,
   sampleTranscript,
@@ -147,5 +148,24 @@ describe("transcripts", () => {
   it("turn ids are unique and sequential", () => {
     for (const ts of [sampleTranscript, edgeTranscript, threeSpeakerTranscript])
       expect(new Set(ts.map((t) => t.id)).size).toBe(ts.length);
+  });
+});
+
+describe("run_info names the lean engine (no paudit/eaudit)", () => {
+  it.each([
+    ["sample", sampleReport],
+    ["no-rating", noRatingReport],
+    ["reasons failed", reasonsFailedReport],
+    ["no tips", noTipsReport],
+    ["edge", edgeReport],
+  ])("%s", (_n, r) => {
+    expect(Object.keys(r.run_info).sort()).toEqual(["evaluation", "miti"]);
+    expect(r.run_info.miti.span).toBeNull();
+  });
+
+  it("reportFor defaults to the no-rating fixture", () => {
+    const r = reportFor({ hasRating: false });
+    expect(r.header.has_clinician_rating).toBe(false);
+    expect(r.run_info.miti.engine).toBe("miti");
   });
 });

@@ -75,7 +75,7 @@ describe("happy path walks every state", () => {
     expect(status(backend, sid).flags.speaker_confirmed).toBe(true);
 
     backend.putRating(U, sid, { final: true, card: SCORED });
-    expect(status(backend, sid)).toMatchObject({ status: "running", progress: 45, step: "paudit" });
+    expect(status(backend, sid)).toMatchObject({ status: "running", progress: 45, step: "code" });
 
     const progress: number[] = [];
     const steps: (string | null)[] = [];
@@ -84,8 +84,8 @@ describe("happy path walks every state", () => {
       progress.push(status(backend, sid).progress);
       steps.push(status(backend, sid).step ?? null);
     }
-    expect(progress).toEqual([70, 85, 93, 97, 100]);
-    expect(steps.slice(0, 4)).toEqual(["eaudit", "tips", "compare", "assemble"]);
+    expect(progress).toEqual([85, 93, 100]);
+    expect(steps).toEqual(["tips", "assemble", null]);
     expect(status(backend, sid)).toMatchObject({
       status: "report_ready",
       latest_report_version: 1,
@@ -294,22 +294,38 @@ describe("failure injection by title", () => {
     return { backend, sid };
   }
 
-  it("fail-paudit fails the run and the session (can Try again)", () => {
-    const { backend, sid } = ready("fail-paudit");
-    expect(status(backend, sid)).toMatchObject({ status: "failed", error: { code: "internal_error", step: "paudit" } });
+  it("fail-code fails the run and the session (can Try again)", () => {
+    const { backend, sid } = ready("fail-code");
+    expect(status(backend, sid)).toMatchObject({ status: "failed", error: { code: "internal_error", step: "code" } });
     expect(status(backend, sid).latest_report_version).toBeNull();
     backend.startRun(U, sid, {}); // a system failure offers Try again (same stored rating)
     expect(status(backend, sid)).toMatchObject({ status: "running", progress: 45 });
     expect(backend.listRuns(U, sid)[1].rating_id).toBe(backend.listRuns(U, sid)[0].rating_id);
   });
 
-  it("fail-eaudit still produces a report with reasons_audit failed + warning", () => {
-    const { backend, sid } = ready("fail-eaudit");
-    expect(status(backend, sid).status).toBe("report_ready");
+  it("the old fail-paudit / fail-eaudit markers are plain titles now (no failure, no reasons audit)", () => {
+    for (const t of ["fail-paudit", "fail-eaudit"]) {
+      const { backend, sid } = ready(t);
+      expect(status(backend, sid).status).toBe("report_ready");
+      expect(backend.getReport(U, sid, 1).warnings.map((w) => w.code)).not.toContain("reasons_audit_failed");
+    }
+  });
+
+  it("walks code, tips, assemble only (weights 40/8/3) and the report names run_info.miti", () => {
+    const { backend } = ctx;
+    const sid = started(backend, "plain");
+    backend.settle(sid);
+    backend.confirmSpeaker(U, sid, "spk_0");
+    backend.putRating(U, sid, { final: true, no_rating: true, card: { change_goal: "Walk more" } });
+    const steps: (string | null)[] = [];
+    while (status(backend, sid).status === "running") {
+      backend.advance(sid);
+      steps.push(status(backend, sid).step ?? null);
+    }
+    expect(steps).toEqual(["tips", "assemble", null]);
     const r = backend.getReport(U, sid, 1);
-    expect(r.reasons_audit.status).toBe("failed");
-    expect(r.warnings.map((w) => w.code)).toContain("reasons_audit_failed");
-    expect(r.tips.length).toBeGreaterThan(0);
+    expect(Object.keys(r.run_info).sort()).toEqual(["evaluation", "miti"]);
+    expect(r.header.has_clinician_rating).toBe(false);
   });
 
   it("fail-tips produces a report with no tips + warning", () => {
@@ -400,7 +416,7 @@ describe("free interview runs mirror the API (review round 2)", () => {
 
   it("a failed free run: Try again at the cap succeeds without counting", () => {
     const { backend } = make({ caps: { eval: { day: 0 } } });
-    const sid = interviewSession(backend, "fail-paudit");
+    const sid = interviewSession(backend, "fail-code");
     backend.putRating(U, sid, { final: true, card: SCORED });
     backend.settle(sid);
     expect(status(backend, sid)).toMatchObject({ status: "failed" });
@@ -420,7 +436,7 @@ describe("free interview runs mirror the API (review round 2)", () => {
 
   it("a non-interview Try again at the cap is still 429 daily_cap_reached", () => {
     const { backend } = make({ caps: { eval: { day: 1 } } });
-    const sid = started(backend, "fail-paudit");
+    const sid = started(backend, "fail-code");
     backend.settle(sid);
     backend.confirmSpeaker(U, sid, "spk_0");
     backend.putRating(U, sid, { final: true, card: SCORED });
@@ -539,7 +555,7 @@ describe("final ratings and report versions (FX45)", () => {
 
   it("a bad-file failure is not retryable (invalid_state); a system failure is", () => {
     const { backend } = ctx;
-    const sid = started(backend, "fail-paudit");
+    const sid = started(backend, "fail-code");
     backend.settle(sid);
     backend.confirmSpeaker(U, sid, "spk_0");
     backend.putRating(U, sid, { final: true, card: SCORED });
@@ -553,7 +569,7 @@ describe("final ratings and report versions (FX45)", () => {
 
   it("Try again ignores the client's preset and n_runs and reuses the failed run's", () => {
     const { backend } = ctx;
-    const sid = started(backend, "fail-paudit");
+    const sid = started(backend, "fail-code");
     backend.settle(sid);
     backend.confirmSpeaker(U, sid, "spk_0");
     backend.putRating(U, sid, { final: true, card: SCORED });
