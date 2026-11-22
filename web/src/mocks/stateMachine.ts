@@ -502,8 +502,8 @@ export class MockBackend {
     if (s.state === "deleting") bad(409, "invalid_state", "Session is being deleted.");
     const card = (body.card ?? {}) as RatingCard;
     validateCard(card, body.final === true);
-    if (body.final === true && (s.state === "report_ready" || s.reports.length > 0)) {
-      bad(409, "rating_final", "The rating is final once the report is ready.");
+    if (body.final === true && (s.flags.rating_submitted || s.state === "report_ready" || s.reports.length > 0)) {
+      bad(409, "rating_final", "The rating is final once submitted.");
     }
     const seq = this.n + 1;
     this.n += 1;

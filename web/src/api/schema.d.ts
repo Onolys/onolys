@@ -231,7 +231,7 @@ export interface paths {
         get: operations["getRating"];
         /**
          * Save the rating card (draft autosave or final revision)
-         * @description `final=false`: overwrites the draft; the shape and size limits are checked (an unset `change_goal` is fine) and nothing else changes. `final=true`: validates the card (`change_goal` required), writes a new revision and sets `rating_submitted`/`has_rating`; `no_rating=true`, or a card with no scores, counts or notes, is a "no rating" revision (`has_rating=false`). Over 1,000 chars per reason/note/example or 3,000 for `notes` is 422 `rating_invalid`. Allowed in every state but `deleting`; a final card is refused with 409 `rating_final` once the report is ready (the rating is final). A final card may start the first run (R4).
+         * @description `final=false`: overwrites the draft; the shape and size limits are checked (an unset `change_goal` is fine) and nothing else changes. `final=true`: validates the card (`change_goal` required), writes a new revision and sets `rating_submitted`/`has_rating`; `no_rating=true`, or a card with no scores, counts or notes, is a "no rating" revision (`has_rating=false`). Over 1,000 chars per reason/note/example or 3,000 for `notes` is 422 `rating_invalid`. Allowed in every state but `deleting`; a final card is refused with 409 `rating_final` once a rating was submitted (or a report exists): the rating is final, only drafts stay open. A final card may start the first run (R4).
          */
         put: operations["putRating"];
         post?: never;

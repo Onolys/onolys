@@ -70,7 +70,7 @@ def invalid_state() -> ApiError:
 
 def rating_final() -> ApiError:
     return ApiError.of(
-        409, "rating_final", "The report is ready, so the rating is final and cannot be re-run."
+        409, "rating_final", "The rating is final once submitted and cannot be changed or re-run."
     )
 
 

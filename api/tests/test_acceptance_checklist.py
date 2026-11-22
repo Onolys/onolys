@@ -105,7 +105,7 @@ CHECKLIST: dict[int, list[tuple[str, str]]] = {
     ],
     14: [
         ("test_rating.py", "test_draft_stored_never_submits_or_starts_run"),
-        ("test_rating.py", "test_each_final_is_new_revision_latest_wins"),
+        ("test_rating.py", "test_a_submitted_rating_is_final_a_second_final_is_refused"),
         ("test_rating.py", "test_rejected_in_deleting"),
         ("test_rating.py", "test_no_object_written_to_blob_store"),
         ("test_rating.py", "test_final_rating_is_refused_once_the_report_is_ready"),

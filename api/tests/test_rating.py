@@ -204,10 +204,8 @@ async def test_final_requires_change_goal(env):
 
 
 @pytest.mark.firestore_smoke
-async def test_final_without_coded_span_clears_the_old_session_span(env):
-    c, h, repo, uid, sid = env  # BH1: re-runs must not score a stale span
-    await put(c, h, sid, {"final": True, "card": card()})
-    assert repo.get_session(uid, sid).coded_span.to_s == 600
+async def test_final_without_coded_span_clears_the_stale_span_on_the_session(env):
+    c, h, repo, uid, sid = env  # BH1: a submitted card without a span leaves no span
     c2 = card()
     del c2["coded_span"]
     assert (await put(c, h, sid, {"final": True, "card": c2})).status_code == 202
@@ -231,17 +229,17 @@ async def test_final_creates_revision_and_updates_session(env, hook_calls):
 
 
 @pytest.mark.firestore_smoke
-async def test_each_final_is_new_revision_latest_wins(env):
-    c, h, repo, uid, sid = env
+async def test_a_submitted_rating_is_final_a_second_final_is_refused(env):
+    c, h, repo, uid, sid = env  # FX45 owner decision: once submitted it is final
     r1 = (await put(c, h, sid, {"final": True, "card": card(change_goal="one")})).json()
-    r2 = (await put(c, h, sid, {"final": True, "card": card(change_goal="two")})).json()
-    assert r1["rating_id"] != r2["rating_id"]
-    assert repo.get_rating(uid, sid, r1["rating_id"]).card["change_goal"] == "one"
-    assert repo.latest_rating(uid, sid).id == r2["rating_id"]
-    assert repo.get_session(uid, sid).change_goal == "two"
+    r = await put(c, h, sid, {"final": True, "card": card(change_goal="two")})
+    assert r.status_code == 409 and r.json()["details"][0]["code"] == "rating_final"
+    assert repo.latest_rating(uid, sid).id == r1["rating_id"]
+    assert repo.get_session(uid, sid).change_goal == "one"
     g = (await c.get(f"/v1/sessions/{sid}/rating", headers=h)).json()
-    assert g["final"]["rating_id"] == r2["rating_id"] and g["final"]["card"]["change_goal"] == "two"
-    assert g.get("draft") is None
+    assert g["final"]["rating_id"] == r1["rating_id"] and g["final"]["card"]["change_goal"] == "one"
+    r = await put(c, h, sid, {"final": False, "card": {"notes": "still ok"}})  # drafts stay open
+    assert r.status_code == 202
 
 
 async def test_get_empty(env):
@@ -298,9 +296,9 @@ async def test_empty_final_card_detected_as_no_rating(env):
     assert repo.get_rating(uid, sid, r.json()["rating_id"]).no_rating is True
     s = repo.get_session(uid, sid)
     assert s.rating_submitted is True and s.has_rating is False
-    # a later rated revision flips has_rating on
-    await put(c, h, sid, {"final": True, "card": card()})
-    assert repo.get_session(uid, sid).has_rating is True
+    # FX45: a submitted rating is final, even a "no rating" one
+    assert (await put(c, h, sid, {"final": True, "card": card()})).status_code == 409
+    assert repo.get_session(uid, sid).has_rating is False
 
 
 async def test_notes_alone_count_as_rating(env):

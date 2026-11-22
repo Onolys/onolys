@@ -190,8 +190,8 @@ describe("first-run gate (any order, exactly one run)", () => {
     backend.completeAudio(U, session.id);
     backend.advance(session.id);
     expect(status(backend, session.id).status).toBe("transcribing");
-    backend.putRating(U, session.id, { final: true, card: SCORED });
-    expect(status(backend, session.id).flags.has_rating).toBe(true);
+    expectHttp(() => backend.putRating(U, session.id, { final: true, card: SCORED }), 409, "rating_final");
+    expect(status(backend, session.id).flags.has_rating).toBe(false);
   });
 
   it("a draft never satisfies the gate", () => {
@@ -449,6 +449,16 @@ describe("final ratings and report versions (FX45)", () => {
     expect(status(backend, sid).latest_report_version).toBe(1);
   });
 
+  it("a submitted rating is final before any report exists (FX45 follow-up)", () => {
+    const { backend } = ctx;
+    const sid = started(backend);
+    backend.settle(sid);
+    backend.confirmSpeaker(U, sid, "spk_0");
+    backend.putRating(U, sid, { final: true, card: CARD });
+    expectHttp(() => backend.putRating(U, sid, { final: true, card: SCORED }), 409, "rating_final");
+    backend.putRating(U, sid, { final: false, card: SCORED }); // a draft is only a draft
+  });
+
   it("a no-rating report is final too", () => {
     const { backend, sid } = reported({ final: true, no_rating: true, card: CARD });
     const v1 = backend.getReport(U, sid, 1);
@@ -514,13 +524,13 @@ describe("rating draft vs final", () => {
     expect(backend.getRating(U, sid).final).toBeDefined();
   });
 
-  it("each final PUT is a new revision", () => {
+  it("the final PUT is a new revision; a second final is 409 rating_final", () => {
     const { backend } = ctx;
     const { session } = backend.createSession(U, {});
     const a = backend.putRating(U, session.id, { final: true, card: CARD });
-    const b = backend.putRating(U, session.id, { final: true, card: SCORED });
     expect(a.rating_id).toBeTruthy();
-    expect(b.rating_id).not.toBe(a.rating_id);
+    expectHttp(() => backend.putRating(U, session.id, { final: true, card: SCORED }), 409, "rating_final");
+    expect(backend.getRating(U, session.id).final?.rating_id).toBe(a.rating_id);
   });
 
   it.each([

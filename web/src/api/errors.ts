@@ -30,7 +30,7 @@ const MESSAGES = {
   not_found: "We couldn't find that. It may have been deleted.",
   interview_too_long:
     "This interview recording is longer than allowed. Start a new practice interview.",
-  rating_final: "Your report is ready, so the rating is final. It can't be changed or run again.",
+  rating_final: "Your rating is final. It can't be changed or run again.",
   conflict: "That request clashes with an earlier one. Refresh and try again.",
   internal_error: GENERIC_MESSAGE,
 } as const satisfies Record<string, string>;
