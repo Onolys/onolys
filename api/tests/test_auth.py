@@ -9,7 +9,7 @@ import pytest
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 from fastapi.security import HTTPAuthorizationCredentials
-from google.auth import crypt, jwt
+from google.auth import _helpers, crypt, jwt
 from onolys_core.errors import ConfigError
 
 from onolys_api.app import create_app
@@ -44,9 +44,18 @@ OTHER_PRIV, _ = _keypair()
 
 
 def mint(
-    uid="u1", *, verified=True, aud=PROJECT, iss=None, exp_in=3600, priv=PRIV, kid=KID, iat_in=-5
+    uid="u1",
+    *,
+    verified=True,
+    aud=PROJECT,
+    iss=None,
+    exp_in=3600,
+    priv=PRIV,
+    kid=KID,
+    iat_in=-5,
+    now=None,
 ):
-    now = int(time.time())
+    now = int(time.time()) if now is None else now
     claims = {
         "sub": uid,
         "aud": aud,
@@ -140,13 +149,18 @@ def test_sub_rejected(uid):
         ({"iat_in": 11}, False),
     ],
 )
-def test_clock_skew_window(kwargs, ok):
+def test_clock_skew_window(kwargs, ok, monkeypatch):
+    # Freeze the clock the JWT library reads, and mint against the same instant, so the
+    # +-9/+-11s boundary cannot straddle a real second tick (FX53).
+    frozen = datetime(2026, 1, 1, 12, 0, 0)
+    monkeypatch.setattr(_helpers, "utcnow", lambda: frozen)
+    now = _helpers.datetime_to_secs(frozen)
     v = IdTokenVerifier(PROJECT, fetch_certs=lambda: {KID: PUB})
     if ok:
-        assert v.verify(mint("u1", **kwargs)) == "u1"
+        assert v.verify(mint("u1", now=now, **kwargs)) == "u1"
     else:
         with pytest.raises(InvalidToken):
-            v.verify(mint("u1", **kwargs))
+            v.verify(mint("u1", now=now, **kwargs))
 
 
 async def test_garbage_and_missing_credentials_are_401(idp_client):
