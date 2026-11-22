@@ -8,7 +8,7 @@ import yaml
 
 PKG = Path(__file__).resolve().parents[1] / "src" / "onolys_miti"
 DATA = PKG / "data"
-# pack_hash of protocols/miti-4.2.1 at the time of the copy (also in the golden report fixture).
+# Current pack_hash (re-pinned in SP05 after comment edits; also in the golden report fixture).
 KNOWN_PACK_HASH = "18c33be711154d3d"
 
 

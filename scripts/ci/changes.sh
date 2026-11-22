@@ -27,7 +27,7 @@ CI_SHARED_RE='^(\.github/workflows/|scripts/ci/)'
 # Extra paths per package: Firestore rules and their emulator tests run in the api job.
 API_EXTRA_RE='^(firestore\.rules|firebase\.json|firestore-rules-test/)'
 # The web job also runs on the contracts its generated types come from (gen:api staleness check).
-WEB_EXTRA_RE='^(api/openapi\.json|engines/miti/schemas/report\.schema\.json)$'
+WEB_EXTRA_RE='^(api/openapi\.json|engines/miti/src/onolys_miti/data/report\.schema\.json)$'
 
 # The admin backend serves only /v1/me via admin/auth, so it re-runs when admin/auth or .dockerignore changes.
 ADMIN_BACKEND_EXTRA_RE='^(admin/auth/|\.dockerignore)'

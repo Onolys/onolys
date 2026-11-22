@@ -184,7 +184,7 @@ class _Cfg:
 
 @pytest.fixture(autouse=True)
 def fake_genai_types(monkeypatch):
-    """The core CI job installs onolys-core without the `voice-gemini` extra: fake the SDK."""
+    """The `miti` CI job installs onolys-miti without the `voice-gemini` extra: fake the SDK."""
     names = (
         "SpeechConfig VoiceConfig PrebuiltVoiceConfig SessionResumptionConfig "
         "ContextWindowCompressionConfig SlidingWindow LiveConnectConfig Blob"
@@ -353,7 +353,8 @@ async def test_system_prompt_never_logged():
 
 
 def test_provider_name_only_in_adapter_and_config():
-    root = REPO / "engines" / "core" / "src" / "onolys_miti"
+    root = REPO / "engines" / "miti" / "src" / "onolys_miti"
+    assert root.is_dir(), root
     allowed = {"gemini_live_vertex.py", "voice_providers.default.yaml"}
     for f in root.rglob("*"):
         if f.suffix not in (".py", ".yaml") or "__pycache__" in f.parts or f.name in allowed:

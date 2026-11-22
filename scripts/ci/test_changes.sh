@@ -34,7 +34,7 @@ run false "miti=false api=false admin-auth=false admin-backend=false frontend=fa
 run false "miti=false api=false admin-auth=false admin-backend=false frontend=false web=false infra=true" infra/main.tf
 # generated-type inputs (api/openapi.json, report.schema.json) trigger the web gen:api staleness check
 run false "miti=false api=true admin-auth=false admin-backend=false frontend=false web=true infra=false" api/openapi.json
-run false "miti=true api=true admin-auth=false admin-backend=false frontend=false web=true infra=false" engines/miti/schemas/report.schema.json
+run false "miti=true api=true admin-auth=false admin-backend=false frontend=false web=true infra=false" engines/miti/src/onolys_miti/data/report.schema.json
 run true "miti=true api=true admin-auth=false admin-backend=false frontend=true web=true infra=true" docs/readme.md
 rm -r "$T/web/package.json" "$T/infra"
 mkdir -p "$T/admin/auth"; touch "$T/admin/auth/pyproject.toml"   # admin/auth now exists

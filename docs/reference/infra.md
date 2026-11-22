@@ -152,7 +152,7 @@ Environments: create `production` with Tejit as required reviewer (all prod jobs
 
 Secrets: the only one is `GEMINI_API_KEY`, read by `nightly.yml` (job `api-real-mode`, a live Gemini run); it should hold the staging/test key, never the prod key (prod's key lives only in Secret Manager as `gemini-api-key-prod`). Deploys use WIF, so no JSON key and no deploy secret exists. Do not add a GCP key.
 
-Workflows: `deploy-staging.yml` runs after the `CI` workflow succeeds on `main` (also manual). `deploy-prod.yml` is manual (`workflow_dispatch`, input `sha` or `version`) or on a `v*` tag. `deploy-admin.yml` deploys the staging admin only (backend + `onolys-admin-staging` site): automatically on push to `main` touching `admin/`, `frontend/`, `engines/`, `protocols/`, contracts or deps; also manual. There is no prod admin. `nightly.yml` runs 06:17 UTC daily.
+Workflows: `deploy-staging.yml` runs after the `CI` workflow succeeds on `main` (also manual). `deploy-prod.yml` is manual (`workflow_dispatch`, input `sha` or `version`) or on a `v*` tag. `deploy-admin.yml` deploys the staging admin only (backend + `onolys-admin-staging` site): automatically on push to `main` touching `admin/`, `frontend/`, root `pyproject.toml`/`uv.lock`, `.dockerignore`, or `deploy-admin.yml`/`_deploy-cloudrun.yml`; also manual. There is no prod admin. `nightly.yml` runs 06:17 UTC daily.
 
 ## Operating Terraform
 
