@@ -30,7 +30,7 @@ API_EXTRA_RE='^(firestore\.rules|firebase\.json|firestore-rules-test/)'
 WEB_EXTRA_RE='^(api/openapi\.json$|engines/miti/src/onolys_miti/data/report\.schema\.json$|engines/miti/src/onolys_miti/data/fixtures/evaluation/)'
 
 # The infra job's tests import admin/auth (onolys_admin_auth), so admin/auth changes also run infra.
-INFRA_EXTRA_RE='^admin/auth/'
+INFRA_EXTRA_RE='^(admin/auth/|pyproject\.toml$|uv\.lock$)'
 
 # The admin backend serves only /v1/me via admin/auth, so it re-runs when admin/auth or .dockerignore changes.
 ADMIN_BACKEND_EXTRA_RE='^(admin/auth/|\.dockerignore)'

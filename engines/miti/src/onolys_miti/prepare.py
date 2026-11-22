@@ -137,22 +137,20 @@ def build_volleys(turns: list[RoleTurn], volley_cfg: dict[str, Any]) -> list[Vol
 def _duration_ms(
     transcript: Transcript, turns: list[RoleTurn], coded_span: dict[str, Any] | None, applied: bool
 ) -> int | None:
-    """Session length from the selected turns (as `span.duration_s` does), or the span length when
-    a span was applied. `transcript.duration_ms` is only the fallback for a transcript without
+    """Session length: the span length (to - from) when a span was applied, else the max turn
+    `end_ms` (fallback `start_ms`) measured from 0, as `span.duration_s` does. Turns without any
+    timestamp are ignored. `transcript.duration_ms` is only the fallback for a transcript without
     turn timestamps."""
-    starts = [rt.turn.start_ms for rt in turns if rt.turn.start_ms is not None]
     ends = [
         rt.turn.end_ms if rt.turn.end_ms is not None else rt.turn.start_ms
         for rt in turns
-        if rt.turn.start_ms is not None
+        if rt.turn.end_ms is not None or rt.turn.start_ms is not None
     ]
-    if not starts:
+    if not ends:
         return transcript.duration_ms
-    lo = min(starts)
-    hi = max(ends)
     if applied and coded_span:
-        lo, hi = coded_span["from_s"] * 1000, coded_span["to_s"] * 1000
-    return max(hi - lo, 0)
+        return max(coded_span["to_s"] * 1000 - coded_span["from_s"] * 1000, 0)
+    return max(ends)
 
 
 def run_input_checks(

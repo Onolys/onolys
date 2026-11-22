@@ -51,6 +51,7 @@ run false "miti=false api=false admin-auth=false admin-backend=true frontend=fal
 # infra tests import admin/auth, so admin/auth changes also run infra (when infra exists)
 mkdir -p "$T/infra"
 run false "miti=false api=false admin-auth=true admin-backend=true frontend=false web=false infra=true" admin/auth/a.py
+run false "miti=true api=true admin-auth=true admin-backend=true frontend=false web=false infra=true" uv.lock
 rm -r "$T/infra"
 # api does not propagate to miti
 run false "miti=false api=true admin-auth=false admin-backend=false frontend=false web=false infra=false" api/src/x.py

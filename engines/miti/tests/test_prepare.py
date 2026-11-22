@@ -195,3 +195,16 @@ def test_whole_session_duration_comes_from_turns_not_transcript():
     t = t.model_copy(update={"duration_ms": 40 * 60_000})  # stale header: 40 min
     p = prepare(t, params())  # would raise session too long (25 min) if the header were used
     assert p.duration_ms < 25 * 60_000
+
+
+def test_duration_is_max_turn_end_from_zero_not_first_to_last():
+    # 11-min recording, speech starts at 1:30: duration is 11 min, so no short_session warning
+    t = convo(step_s=120)
+    turns = [
+        x.model_copy(update={"start_ms": x.start_ms + 90_000, "end_ms": x.end_ms + 90_000})
+        for x in t.turns
+    ]
+    turns[-1] = turns[-1].model_copy(update={"end_ms": 11 * 60_000})
+    p = prepare(Transcript(turns=turns), params())
+    assert p.duration_ms == 11 * 60_000
+    assert p.warnings == []
