@@ -44,7 +44,7 @@ ROUTES = [
     ("GET", "/docs"),
     ("GET", "/openapi.json"),
     ("POST", "/v1/audit"),
-    ("POST", "/v1/paudit/run"),
+    ("POST", "/v1/run"),
 ]
 
 
@@ -82,10 +82,10 @@ def test_allowlist_case_insensitive(secured, keys):
     assert secured.get("/v1/me", headers=auth(tok)).status_code == 200
 
 
-# --- only /v1/me exists: no eaudit/paudit routes ---
+# --- only /v1/me exists: no legacy engine routes ---
 @pytest.mark.parametrize(
     ("method", "path"),
-    [("POST", "/v1/audit"), ("GET", "/healthz"), ("POST", "/v1/paudit/run"), ("GET", "/docs")],
+    [("POST", "/v1/audit"), ("GET", "/healthz"), ("GET", "/docs")],
 )
 def test_legacy_routes_absent(secured, keys, method, path):
     assert secured.request(method, path, headers=auth(keys.mint())).status_code in (404, 405)
