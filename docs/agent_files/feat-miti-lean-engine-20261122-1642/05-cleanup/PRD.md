@@ -1,12 +1,12 @@
 ---
-status: draft
-summary: Phase 3 cleanup - tag `iaudit-archive` at 1cc7321, then delete eaudit/paudit/evaluation/core, protocols/, eval/, backend/ and their CI/docs; rewrite mission/AGENTS/README/architecture to MITI-only; regenerate uv.lock.
+status: approved
+summary: Phase 3 cleanup (breaking changes fine, prod unused) - tag `iaudit-archive` at 1cc7321, then delete eaudit/paudit/evaluation/core, protocols/, eval/, backend/ and their CI/docs; rewrite mission/AGENTS/README/architecture to MITI-only; regenerate uv.lock.
 date: 2026-11-22
 ---
 # PRD: SP05 Cleanup + docs (Phase 3)
 
 Repo/branch: Onolys/onolys (local `iaudit`) / `feat/miti-lean-engine` · Depends on: SP02 (api on `onolys_miti`), SP04 (admin shell), SP01, SP03 (web path fixes) · Blocks: SP06
-Owns: deletions below; `pyproject.toml`, `uv.lock`, `.github/workflows/{ci,nightly}.yml`, `scripts/ci/{changes.sh,test_changes.sh,check_config.sh,test_check_config.sh}`, `scripts/{dev.sh,README.md}`, `.dockerignore`, root docs (`AGENTS.md`, `README.md`, `docs/{mission,architecture}.md`, `docs/{concepts,implementation,reference,decisions,testing,examples,contracts}/**`). Not owned: `engines/miti`, `api/src`, `web/src` features, `admin/**`, `frontend/**`, `infra/` (read-only here).
+Owns: deletions below; `pyproject.toml`, `uv.lock`, `.github/workflows/{ci,nightly}.yml`, `scripts/ci/{changes.sh,test_changes.sh,check_config.sh,test_check_config.sh}`, `scripts/{dev.sh,README.md}`, `.dockerignore`, root docs (`AGENTS.md`, `README.md`, `docs/{mission,architecture}.md`, `docs/{concepts,implementation,reference,decisions,testing,examples,contracts}/**`). Not owned: `engines/miti`, `api/src`, `web/src` features, `admin/**`, `frontend/**`. `infra/` is owned here for the cleanup in R7 (admin-only parts stay with SP04).
 
 ## TL;DR
 Tag first, delete second. `git tag iaudit-archive 1cc7321` (current `origin/main` = merge base of this branch, [verified: `git rev-list 1cc7321..origin/main` = 0]), push to origin, then remove everything that is not MITI. One PR commit per step so a revert is easy. The deletion is gated by greps proving nothing kept imports the removed paths; SP02/SP03/SP04 must have landed on the branch. Docs are rewritten to a MITI-only scope; eaudit-only docs are deleted, mixed docs are trimmed.
@@ -17,12 +17,12 @@ Tag first, delete second. `git tag iaudit-archive 1cc7321` (current `origin/main
 - Kept code still names the old layout in comments/paths (see R2 sweep), which would dangle after deletion.
 
 ## Goals / Non-Goals
-**Goals:** archive tag pushed; removed dirs gone; CI/workspace/lock consistent and green; docs describe only MITI coding; `check_links.py` green; kept-part references to removed paths = 0.
-**Non-Goals:** building the iaudit repo (SP06, blocked on owner's GitHub link); code changes in api/web/admin/engines/miti beyond path fixes below; rewriting `docs/agent_files/` history; infra changes; renaming this repo/folder.
+**Goals:** nobody uses prod, so breaking changes are fine (owner 2026-11-22): no backward-compat, no deploy ordering. Archive tag pushed; removed dirs gone; CI/workspace/lock consistent and green; docs describe only MITI coding; `check_links.py` green; kept-part references to removed paths = 0.
+**Non-Goals:** building the iaudit repo (SP06, blocked on owner's GitHub link); code changes in api/web/admin/engines/miti beyond path fixes below; rewriting `docs/agent_files/` history; renaming GCP projects or the buckets holding Terraform state; renaming this repo/folder on GitHub.
 
 ## Requirements
 **R1. Archive tag (first commit-free step).**
-- `git fetch origin && git tag -a iaudit-archive 1cc7321 -m "Last commit holding eaudit, paudit, evaluation, core, protocols/, eval/, old admin UI; source for the iaudit repo"` then `git push origin iaudit-archive`. If `origin/main` moved before SP05 runs, still tag `1cc7321` unless the extra commits matter to iaudit (default: no). Verify `git ls-remote --tags origin iaudit-archive` and that the tag holds `engines/eaudit`, `eval/`, `frontend/src/eval`. Never move the tag; tags are immutable by convention (an existing tag blocks the step, [OPEN-1]).
+- `git fetch origin && git tag -a iaudit-archive 1cc7321 -m "Last commit holding eaudit, paudit, evaluation, core, protocols/, eval/, old admin UI; source for the iaudit repo"` then `git push origin iaudit-archive`. If `origin/main` moved before SP05 runs, still tag `1cc7321` unless the extra commits matter to iaudit (default: no). Verify `git ls-remote --tags origin iaudit-archive` and that the tag holds `engines/eaudit`, `eval/`, `frontend/src/eval`. Never move the tag; tags are immutable by convention. Owner approved tagging and pushing `iaudit-archive` (2026-11-22). If the push is refused (permission/protection) or the tag already exists on another commit, record BLOCKED and continue.
 - Tag, not a branch: a branch invites commits and is deleted by `dev-cleanup`; the tag survives squash merge.
 
 **R2. Delete list + reference evidence** (all `[verified]` at 1cc7321; implementer re-runs the greps, which must be empty before each `git rm`).
@@ -37,6 +37,7 @@ Tag first, delete second. `git tag iaudit-archive 1cc7321` (current `origin/main
 | `engines/*/README.md`, `eval/README.md` | go with their dirs |
 
 - Order: (1) repoint residual kept-side refs, (2) `git rm -r`, (3) `rg -n "engines/(core|paudit|eaudit|evaluation)|protocols/|PAUDIT_PROTOCOLS|onolys_core|onolys_evaluation|\beaudit\b|\bpaudit\b|iaudit_eval|eval/" -g '!docs/agent_files/**' -g '!uv.lock' .` -> hits only in historical ADRs (R5) and `README`-style lines being rewritten. `docs/agent_files/**` is excluded from the grep and from `check_links.py` [verified: skips `docs/agent_files/`].
+- `api/Dockerfile`: implementer verifies at coding time which `COPY` lines (`protocols`, `docs/contracts/*.schema.json`, `config`) still resolve after SP02 and removes only dangling ones, plus old `PAUDIT_PROTOCOLS_DIR` / `IAUDIT_CONTRACTS_DIR` `ENV` lines (SP04 does the same in the admin Dockerfile).
 - `.dockerignore`: drop `eval`, `**/eval`, `**/datasets`; keep `!docs/contracts` only if api still copies it (R4 default: api copies `docs/contracts/public`? decide with SP02; else drop).
 - `.claude/` and thepass plugin lines in README stay.
 
@@ -45,12 +46,17 @@ Tag first, delete second. `git tag iaudit-archive 1cc7321` (current `origin/main
 - `changes.sh`: PACKAGES = `miti:engines/miti:python`, `api`, `admin-auth`, `admin-backend`, `frontend`, `web`, `infra`. `PY_SHARED_RE='^(pyproject\.toml|uv\.lock)'` (drop `engines/core/`). Delete `PAUDIT_EXTRA_RE`. `WEB_EXTRA_RE` -> `engines/miti/schemas/report\.schema\.json`. DEPS: `api:miti`, `admin-backend:admin-auth` (SP04 already sets the latter; reconcile, don't duplicate). Comments updated. `FRONTEND_EXTRA_RE`/admin extras: SP04 owns; just verify.
 - `test_changes.sh`: rewrite cases for the new flag list (`miti=…`); keep the shared-path, FORCE_ALL, and dependent-propagation cases (api reruns when `engines/miti` changes). `test_changes_deps.py` needs no logic change (reads pyprojects) [verified: SP04].
 - `nightly.yml`: delete job `eval-oracle` (eaudit eval, `python -m eval.run`); **keep** `api-real-mode` (uses `GEMINI_API_KEY`, api only). File stays; no empty workflow.
+- Branch protection does not require checks by name (owner 2026-11-22): nothing to update in GitHub settings for the removed jobs.
 - `ANTHROPIC_API_KEY`: used by no workflow; only infra `llm_secrets` default, `seed-secrets.py`, `check-staging.py` and `scripts/dev.sh` warning [verified]. It feeds the `claude` routes preset, so **leave it** (not a repo secret to remove). Nothing to delete in GitHub settings.
 - Deploy workflows: `deploy-admin.yml` path triggers handled by SP04. `deploy-staging/prod`, `_deploy-cloudrun`, `pr-preview*` contain no `engines/`, `protocols/`, `eval` refs [verified: grep]; no change.
 - `check_config.sh`/`test_check_config.sh`: drop the `audit-request audit-response error-response` loop and its image check (R2); keep `config/*/{routes,stt_providers}.yaml` checks.
 - `scripts/dev.sh`: drop the `backend` launch (`engines/eaudit`, line 130) and `eval` entry; `scripts/README.md` table updated. Keep api/web/admin launchers.
 
 **R4. Workspace.** Root `pyproject.toml`: members `["engines/*","api","admin/*"]` resolves to `engines/miti`, `api`, `admin/auth`, `admin/backend` once old engines are gone, so only the stale header comment changes; drop `exclude = ["eval"]` (dir gone). `uv lock` regenerated (never hand-merge), `uv sync --frozen` per package in CI proves it; lock must not mention `onolys-core|paudit|evaluation|eaudit|iaudit-eval`. `api/Dockerfile` workspace manifest layer: SP02 owns the switch; SP05 verifies the image still builds (CI `api-image`).
+
+**R4b. Infra cleanup now (owner 2026-11-22).** (a) Verify `infra/` has no `engines/`, `protocols/`, `PAUDIT_*`, `IAUDIT_*` refs and no `paudit`/`iaudit`/`eaudit` in resource names, labels, descriptions, comments (today: none except the admin bits SP04 removes; `ROUTES_FILE`/`DEFAULT_PRESET` stay for api+worker). (b) Anything else found: rename/remove in Terraform, including renames that force resource replacement (prod unused); do NOT rename GCP projects or the buckets holding Terraform state. (c) Old Cloud Run env vars `PAUDIT_PROTOCOLS_DIR` / `IAUDIT_CONTRACTS_DIR` are not set in Terraform [verified: no hits in `infra/`]; they only come from Dockerfile `ENV` lines (removed per R2/SP04), so they disappear at next image deploy. (d) `terraform apply` for staging and prod run by the agent (allowed, owner 2026-11-22); `terraform plan` clean afterwards. If credentials are missing at run time, record BLOCKED, keep going. SP04 owns the admin LLM secret env, `ROUTES_FILE`, and `admin_llm` IAM removal.
+
+**R4c. Naming sweep (owner 2026-11-22).** Remove `paudit`/`iaudit`/`eaudit` naming from kept files: `scripts/dev.sh` (`IAUDIT_PIPELINE`, `IAUDIT_BACKEND_URL`, `IAUDIT_EVAL_PORT`), `scripts/README.md`, CI (`ci.yml`, `nightly.yml`, `changes.sh`, `test_changes.sh`, `check_config.sh`), `config/*/routes.yaml` + `stt_providers.yaml` comments (route names `paudit_code`/`paudit_globals` -> `miti_code`/`miti_globals` are SP02; SP05 only sweeps comments and verifies configs match), infra names/labels (R4b), docs, root `README.md` (title "Interview Evidence Auditor" -> "Onolys MITI"), `.dockerignore`, package metadata. Historical text allowed only in `docs/agent_files/**`, superseded ADR banners, ADR 0025 and the archive note. Final grep: `rg -ni "iaudit|paudit|eaudit|interview evidence"` excluding `docs/agent_files/**`, `uv.lock` hits only the allowed places.
 
 **R5. Docs** (judgment by grep counts above; "eaudit-ish" = mentions of eaudit/paudit/evaluation/core/eval/protocols).
 
@@ -92,26 +98,30 @@ Sequence: tag -> repoint residual refs -> delete dirs -> CI/scripts -> `uv lock`
 | D9 | Commit granularity | One commit per R (tag step has no commit) | One big commit | Revertable; matches commit discipline |
 
 ## Manual steps (owner)
-- None blocking. If branch protection requires status checks by name (`eaudit`, `core`, `paudit`, `evaluation`): replace with `miti` in GitHub Settings after merge, else PRs stay "pending" [OPEN-2].
+- None. (Tag push approved; branch protection does not require checks by name; terraform apply is agent-run.)
 - SP06 needs the owner's GitHub link (not this SP).
 
 ## Risks / Open Questions
-- [OPEN-1] Tag push permission/protection on origin and whether `iaudit-archive` already exists (`git ls-remote` showed only `prod-*` tags). Default: push; stop and report if refused.
-- [OPEN-2] Required status checks in repo settings may name removed jobs; owner-only check. Default: note in PR.
-- [OPEN-3] `api/Dockerfile` COPY of `docs/contracts/*.schema.json` / `config`: which survive depends on SP02; SP05 verifies image build, fixes only dangling COPY lines.
-- [OPEN-4] `infra/` mentions (`check-staging.py` LLM keys) are about secrets, not packages; assumed untouched [verified: no `engines/`, `protocols/` hits in `infra/`].
+- [RESOLVED: archive tag `iaudit-archive` on 1cc7321 push to origin approved; `git ls-remote` showed only `prod-*` tags; record BLOCKED if push refused, owner 2026-11-22] (OPEN-1)
+- [RESOLVED: branch protection does not require checks by name; no manual step, owner 2026-11-22] (OPEN-2)
+- [RESOLVED: implementer verifies at coding time; default: remove only dangling `api/Dockerfile` COPY lines after SP02 and verify image build, owner 2026-11-22] (OPEN-3)
+- [RESOLVED: implementer verifies at coding time; default: `infra/` has no package/path refs [verified today: none]; cleanup per R4b is now in scope, owner 2026-11-22] (OPEN-4)
+- [RESOLVED: infra cleanup happens now; agent runs `terraform apply` staging+prod; BLOCKED only if credentials missing, owner 2026-11-22]
+- [RESOLVED: full rename sweep away from paudit/iaudit/eaudit across repo, R4c; infra renames forcing replacement fine; keep GCP projects and state buckets, owner 2026-11-22]
+- [RESOLVED: prod unused, breaking changes fine, no compat or deploy ordering, owner 2026-11-22]
 - [RESOLVED: keep `docs/agent_files/`, D3]
 - [RESOLVED: `ANTHROPIC_API_KEY` not nightly-only, D6]
-- [DEFERRED] Renaming local folder `iaudit` / repo; rewriting `web` docs; trimming `Report` model.
+- [DEFERRED] Renaming local folder `iaudit` / GitHub repo; rewriting `web` docs; trimming `Report` model.
 - Risk: deleting before SP02/03/04 land breaks the branch. Mitigation: precondition grep in R2; SP05 runs last.
 - Risk: `uv.lock` drift/rebase conflicts. Mitigation: D8.
 - Risk: docs deletion leaves dangling inbound links. Mitigation: `check_links.py` in CI and locally.
 
 ## Acceptance Criteria
 1. `git ls-remote --tags origin iaudit-archive` shows a tag resolving to `1cc7321`; `git ls-tree -r --name-only iaudit-archive | rg "^(engines/eaudit|eval|protocols)/"` non-empty.
-2. `engines/{eaudit,paudit,evaluation,core}`, `protocols/`, `eval/`, `backend/` absent; `rg` from R2 returns hits only in `docs/agent_files/**`, superseded ADR banners and ADR 0025.
+2. `engines/{eaudit,paudit,evaluation,core}`, `protocols/`, `eval/`, `backend/` absent; `rg` from R2 returns hits only in `docs/agent_files/**`, superseded ADR banners and ADR 0025. R4c final grep (`iaudit|paudit|eaudit|interview evidence`) hits only those same places.
 3. `uv lock --check` passes; lock has no `onolys-core|onolys-paudit|onolys-evaluation|eaudit|iaudit-eval`; workspace members = `engines/miti`, `api`, `admin/auth`, `admin/backend`.
 4. `bash scripts/ci/test_changes.sh`, `python3 scripts/ci/test_changes_deps.py`, `bash scripts/ci/test_check_config.sh`, `python3 scripts/ci/check_links.py` pass; actionlint clean; ci.yml has job `miti` and none of the four removed.
 5. CI on the PR green (miti, api*, admin-*, web, frontend); `nightly.yml` has only `api-real-mode`.
 6. `README.md`, `AGENTS.md`, `docs/mission.md`, `docs/architecture.md` contain no `eaudit|paudit|caudit|Interview Evidence`; docs READMEs list only existing files.
-7. `/root/projects/README.md` and `/root/projects/onolys/README.md` descriptions updated.
+7. `terraform plan` clean for staging and prod after the agent-run apply (or recorded BLOCKED on missing credentials); no `PAUDIT_*`/`IAUDIT_*` env in Dockerfiles or Cloud Run.
+8. `/root/projects/README.md` and `/root/projects/onolys/README.md` descriptions updated.

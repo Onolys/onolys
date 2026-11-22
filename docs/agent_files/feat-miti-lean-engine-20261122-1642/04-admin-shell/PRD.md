@@ -1,5 +1,5 @@
 ---
-status: draft
+status: approved
 summary: Strip admin.onolys.com to sign-in + an empty page; admin-backend drops eaudit/paudit and serves only GET /v1/me behind the existing allowlist auth; deploy pipeline, hosting and allowlist unchanged in shape.
 date: 2026-11-22
 ---
@@ -8,7 +8,7 @@ date: 2026-11-22
 Repo/branch: Onolys/onolys (local `iaudit`) / `feat/miti-lean-engine` · Depends on: none (SP05 depends on this) · Owns: `admin/backend/**`, `frontend/**`, `.github/workflows/deploy-admin.yml`, `scripts/ci/{test_admin_image.sh,test_deploy_admin.sh,changes.sh,test_changes.sh,test_changes_deps.py}`, admin jobs in `.github/workflows/ci.yml`, `infra/modules/environment/{services,secrets}.tf` (admin parts only)
 
 ## TL;DR
-admin.onolys.com keeps deploying and signing allowlisted users in, then shows "Nothing here yet". `admin-backend` loses eaudit, paudit, core and every engine dependency; it keeps auth + CORS and gains one route, `GET /v1/me` (auth-gated, returns `{"status":"ok"}`), which the shell calls so a non-allowlisted account still gets the "Not allowed" screen. `frontend/` keeps its name; everything except sign-in, the 401/403 plumbing and one empty page is deleted. The Cloud Run service, Hosting site, allowlist secret and deploy workflow stay. LLM secrets/routes on the admin service are removed from Terraform.
+admin.onolys.com keeps deploying and signing allowlisted users in, then shows "Nothing here yet". `admin-backend` loses eaudit, paudit, core and every engine dependency; it keeps auth + CORS and gains one route, `GET /v1/me` (auth-gated, returns `{"status":"ok"}`), which the shell calls so a non-allowlisted account still gets the "Not allowed" screen. `frontend/` keeps its name; everything except sign-in, the 401/403 plumbing and one empty page is deleted. The Cloud Run service, Hosting site, allowlist secret and deploy workflow stay. LLM secrets/routes on the admin service are removed from Terraform and the agent runs `terraform apply` (staging and prod) in this work. Nobody uses prod, so breaking changes are fine (owner 2026-11-22): no backward-compat, no deploy ordering.
 
 ## Problem
 - Admin still mounts eaudit at `/` and serves `/v1/paudit*`; it imports `eaudit`, `onolys-core`, `onolys-paudit` [verified: `admin/backend/pyproject.toml`, `app.py`]. SP05 cannot delete those packages while admin depends on them (and `uv sync --frozen` in the Dockerfile would break).
@@ -30,7 +30,7 @@ admin.onolys.com keeps deploying and signing allowlisted users in, then shows "N
 **R8 Image smoke.** `test_admin_image.sh`: anonymous `/healthz` stays 401; second probe becomes `/v1/me` -> 401; empty-allowlist refusal unchanged; no-eval-data `find` kept (drop the `/protocols` exclusions); delete the "protocols pack present" check.
 **R9 Tests.** Backend: `/v1/me` 401 without token, 403 non-allowlisted/unverified, 200 allowlisted (reuse `keys` fixture), preflight allowed origin / rejected origin, `ADMIN_AUTH=off` refused outside local/test, empty allowlist fails startup, no `/v1/audit` or `/v1/paudit*` route (404/401). `test_dockerfile.py` becomes: no `COPY engines|protocols|config|docs/contracts`, `uv sync` targets `onolys-admin-backend`. Frontend: Shell renders for 200, forbidden on 403, no fetch when gate off.
 **R10 CI scripts.** `changes.sh`: `DEPS` `admin-backend:admin-auth`; `ADMIN_BACKEND_EXTRA_RE='^(admin/auth/|\.dockerignore)'`; delete `FRONTEND_EXTRA_RE` and its use. `test_changes.sh` expectations updated (admin-backend no longer fires on eaudit/paudit/protocols paths; frontend no longer fires on `engines/paudit/schemas/**`). `test_changes_deps.py` needs no logic change (it reads pyprojects). `ci.yml` job definitions for admin-auth/admin-backend/frontend unchanged; `npm run typecheck`/`npm test` still exist.
-**R11 Infra (Terraform).** Remove from `admin_backend` service the `routes_env` and `llm_secrets` env blocks; remove `admin_llm` IAM bindings and its `depends_on`. Keep `ADMIN_ALLOWED_EMAILS` secret + `admin_emails` IAM, `ADMIN_AUTH*`, CORS, `allUsers` invoker, SA, Hosting site/domain, Firebase web app, authorized domains. Optional trim (timeout 130s, 1Gi) left alone.
+**R11 Infra (Terraform), done now.** Remove from `admin_backend` service the `routes_env` (`ROUTES_FILE`, `DEFAULT_PRESET`) and `llm_secrets` env blocks; remove the `admin_llm` IAM binding (`secrets.tf`) and its `depends_on` entry (`services.tf`). `routes_env`/`llm_secrets` stay for api and worker. After the code lands, the agent runs `terraform apply` for staging and prod (allowed, owner 2026-11-22); if credentials are missing at run time, record as BLOCKED and continue. Keep `ADMIN_ALLOWED_EMAILS` secret + `admin_emails` IAM, `ADMIN_AUTH*`, CORS, `allUsers` invoker, SA, Hosting site/domain, Firebase web app, authorized domains. Optional trim (timeout 130s, 1Gi) left alone.
 
 ## Architecture
 ```
@@ -50,19 +50,20 @@ Shared files touched by other SPs: `uv.lock` and root `pyproject.toml` (SP01 add
 | D3 | Frontend strip | Delete code, rely on git history/`iaudit-archive` tag (SP05) | Keep behind a flag; move to `legacy/` | Locked decision; flags keep Ajv, aliases and cross-folder imports alive and block SP05 |
 | D4 | Env var | Rename `VITE_AUDIT_URL` -> `VITE_ADMIN_API_URL`, origin only | Keep old name | Old name meant the eaudit endpoint; the variable is internal to the workflow, cheap |
 | D5 | Infra LLM secrets/routes | Remove from admin service now | Leave until later | Least privilege; unused after R1; small diff. `llm_secrets` variable itself stays (api/worker use it) |
-| D6 | Order of infra vs code | Merge/deploy code first, `terraform apply` after | Apply first | Old image still reads `ANTHROPIC_API_KEY`/routes until replaced; applying first could crash it |
+| D6 | Order of infra vs code | No ordering required; apply whenever (owner 2026-11-22: nobody uses prod, breaking changes fine) | Code first, apply after | A briefly broken admin service is acceptable |
 | D7 | Prod admin | Unchanged (off) | Remove prod admin TF | Out of scope; already gated by `admin_enabled` |
 
 ## Manual steps (owner)
-- `terraform apply` for R11 after the deploy-admin run on `main` succeeds (affects only the staging admin service; no secret values change).
-- Confirm one allowlisted login and one non-allowlisted login on admin.onolys.com after deploy (no new repo variables are needed; existing `ADMIN_STAGING_VITE_FIREBASE_*` stay).
+- None. The agent runs `terraform apply` (R11); the deploy-admin smoke (anonymous `/v1/me` 401) is the automated check. Login checks with real accounts are optional, not required (no new repo variables needed; existing `ADMIN_STAGING_VITE_FIREBASE_*` stay).
 
 ## Risks / Open Questions
 - [RESOLVED: keep `frontend/` name, D2]
 - [RESOLVED: `/v1/me` returns no email; no `admin/auth` change, D1]
-- [OPEN] Does `infra/scripts/check-staging.py` or its tests assert admin env contains LLM keys/`ROUTES_FILE`? Grep showed LLM keys only for the worker (`worker_env_problems`); implementer must confirm before R11.
-- [OPEN] Other uv workspace manifests the Dockerfile layer must still COPY (`uv sync --frozen` needs every member's pyproject). Depends on whether SP01 lands first; implementer re-reads root `pyproject.toml` at coding time.
-- [OPEN] `uv.lock` will change (admin-backend deps shrink); rebase conflicts with SP01 likely. Mitigation: regenerate with `uv lock` after rebase, never hand-merge.
+- [RESOLVED: implementer verifies at coding time; default: `check-staging.py` asserts LLM keys only for the worker (`worker_env_problems`), so no change expected; grep before R11, owner 2026-11-22]
+- [RESOLVED: implementer verifies at coding time; default: copy every workspace member pyproject listed in root `pyproject.toml` at that time, owner 2026-11-22]
+- [RESOLVED: implementer verifies at coding time; default: regenerate with `uv lock` after rebase, never hand-merge, owner 2026-11-22]
+- [RESOLVED: infra edit and `terraform apply` happen now, agent-run for staging and prod; blocked only if credentials are missing at run time, owner 2026-11-22]
+- [RESOLVED: prod unused, breaking changes fine, no compat or deploy ordering, owner 2026-11-22]
 - [DEFERRED] Trim Cloud Run timeout/memory of admin service; rename `frontend/`; session email display; prod admin.
 - Risk: removing `docs/contracts` copy while web/api still use it is safe (only the admin image drops it); `.dockerignore` stays shared.
 
@@ -73,4 +74,4 @@ Shared files touched by other SPs: `uv.lock` and root `pyproject.toml` (SP01 add
 4. `cd frontend && npm ci && npm run typecheck && npm test && npm run build` pass; `dist` contains no eval/paudit/review strings (grep the bundle for `Eval`, `paudit`, `claim`).
 5. `bash scripts/ci/test_changes.sh`, `python3 scripts/ci/test_changes_deps.py`, `bash scripts/ci/test_deploy_admin.sh`, `bash scripts/ci/test_hosting_targets.sh` pass.
 6. Staging after merge: deploy-admin green (build, smoke, site, anonymous `/v1/me` 401); allowlisted account sees "Nothing here yet"; non-allowlisted sees "Not allowed"; anonymous visitor sees sign-in.
-7. After the infra apply, `admin_backend` has no LLM/`ROUTES_FILE` env and no `admin_llm` IAM; allowlist access still works.
+7. After the agent-run `terraform apply` (staging and prod), `admin_backend` has no LLM/`ROUTES_FILE`/`DEFAULT_PRESET` env and no `admin_llm` IAM; `terraform plan` is then clean; allowlist access still works (deploy-admin smoke). If credentials are missing, the step is recorded BLOCKED.
