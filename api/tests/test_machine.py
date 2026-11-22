@@ -112,7 +112,9 @@ def test_stage_weights_keys_match_engine_stages():
 
 
 def test_stage_weights_sum_and_never_decrease_in_any_order(repo):
-    assert m.STAGE_WEIGHTS == {"code": 40, "tips": 8, "assemble": 3} and m.RUN_START_PROGRESS + 51 < 99
+    assert (
+        m.STAGE_WEIGHTS == {"code": 40, "tips": 8, "assemble": 3} and m.RUN_START_PROGRESS + 51 < 99
+    )
     walk(repo, "uploading", "validating", "transcribing", "awaiting_input", "running")
     order = ["code", "tips", "assemble"]
     last = repo.get_status(UID, SID).progress
