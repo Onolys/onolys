@@ -116,5 +116,5 @@ def decide_start(
 START_OUTCOME = {"day_cap": "daily_cap", "concurrent": "concurrent"}
 HELD_ERROR_CODE = {
     "daily_cap": "daily_cap_reached",
-    "concurrent": "daily_cap_reached",
+    "concurrent": "concurrent_runs",
 }

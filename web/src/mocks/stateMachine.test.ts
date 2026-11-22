@@ -337,6 +337,22 @@ describe("daily cap", () => {
     expect(status(backend, sid).error).toBeUndefined();
   });
 
+  it("auto-start held by another running session reports concurrent_runs, not the daily cap (review R2)", () => {
+    const { backend } = ctx;
+    const first = started(backend);
+    backend.settle(first);
+    backend.confirmSpeaker(U, first, "spk_0");
+    backend.putRating(U, first, { final: true, card: SCORED });
+    expect(status(backend, first)).toMatchObject({ status: "running" });
+    const second = started(backend);
+    backend.settle(second);
+    backend.confirmSpeaker(U, second, "spk_0");
+    backend.putRating(U, second, { final: true, card: SCORED });
+    expect(status(backend, second)).toMatchObject({ status: "awaiting_input", error: { code: "concurrent_runs" } });
+    expect(backend.listRuns(U, second)).toHaveLength(0);
+    expectHttp(() => backend.startRun(U, second, {}), 429, "concurrent_runs");
+  });
+
   it("a real cap: POST /runs over the cap is 429 daily_cap_reached; usage reports it", () => {
     const { backend } = make({ caps: { eval: { day: 1 } } });
     const sid = started(backend);

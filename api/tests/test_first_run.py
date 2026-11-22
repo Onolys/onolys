@@ -191,16 +191,19 @@ def test_second_call_is_a_noop(repo):
     assert user_counters(repo, uid, caps.utc_date()) == (1, 1)
 
 
-@pytest.mark.parametrize("kw", [{"eval_cap_day": 0}, {"max_active_runs": 0}])
-def test_cap_hit_leaves_awaiting_input_with_error_code_and_leaks_nothing(repo, kw):
+@pytest.mark.parametrize(
+    ("kw", "code"),
+    [({"eval_cap_day": 0}, "daily_cap_reached"), ({"max_active_runs": 0}, "concurrent_runs")],
+)
+def test_cap_hit_leaves_awaiting_input_with_error_code_and_leaks_nothing(repo, kw, code):
     uid, queue = "u5" + uuid.uuid4().hex[:6], RecordingQueue()
     sid = new_session(repo, uid, state="awaiting_input", ready=True)
     set_flags(repo, uid, sid, speaker_confirmed=True, rating_submitted=True)
     maybe_start_first_run(repo, queue, uid, sid, mk_settings(**kw))
     sess = repo.get_session(uid, sid)
     assert sess.state == "awaiting_input" and sess.first_run_id is None
-    assert sess.error is not None and sess.error.code == "daily_cap_reached"
-    assert repo.get_status(uid, sid).error_code == "daily_cap_reached"
+    assert sess.error is not None and sess.error.code == code
+    assert repo.get_status(uid, sid).error_code == code
     assert repo.list_runs(uid, sid) == [] and queue.calls == []
     assert user_counters(repo, uid, caps.utc_date()) == (0, 0)
     # the cap clears: the next trigger starts the run and clears the code
@@ -234,7 +237,7 @@ def test_linked_first_run_is_blocked_by_max_active_runs(repo):
     maybe_start_first_run(repo, queue, uid, sid, mk_settings(max_active_runs=0))
     sess = repo.get_session(uid, sid)
     assert sess.state == "awaiting_input" and sess.first_run_id is None
-    assert sess.error is not None and sess.error.code == "daily_cap_reached"
+    assert sess.error is not None and sess.error.code == "concurrent_runs"
     assert repo.list_runs(uid, sid) == [] and queue.calls == []
     assert user_counters(repo, uid, caps.utc_date()) == (0, 0)
 

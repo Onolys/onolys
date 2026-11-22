@@ -596,8 +596,10 @@ export class MockBackend {
     if (s.state !== "awaiting_input" || s.first_run_id) return;
     if (!(f.transcript_ready && f.speaker_confirmed && f.rating_submitted)) return;
     const blocked = this.blocked(s.uid, "eval");
-    if (s.holdFirstStart || blocked) {
-      s.error = { code: blocked ? CAP_CODE.eval(blocked) : "daily_cap_reached" };
+    // mirrors the API's held start: the day cap first, then another run in progress (max 1 active)
+    const busy = [...this.sessions.values()].some((o) => o.uid === s.uid && o.state === "running");
+    if (s.holdFirstStart || blocked || busy) {
+      s.error = { code: blocked ? CAP_CODE.eval(blocked) : s.holdFirstStart ? "daily_cap_reached" : "concurrent_runs" };
       this.emit(s);
       return;
     }

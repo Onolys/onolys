@@ -369,3 +369,24 @@ def test_session_detail_exposes_free_run(repo):  # noqa: F811
     with TestClient(make_client(repo)) as c:
         got = [c.get(f"/v1/sessions/{s}", headers=h).json()["free_run"] for s in (free, void, plain)]
     assert got == [True, False, False]
+
+
+# ---- review R2: an auto-start held by an active run says so, not "daily cap" -------------------
+
+
+def test_auto_start_held_by_active_run_records_concurrent_runs(repo):  # noqa: F811
+    uid = f"u{uuid.uuid4().hex[:10]}"
+    sid = _linked_ready(repo, uid)
+    maybe_start_first_run(repo, RecordingQueue(), uid, sid, mk_settings(max_active_runs=0))
+    sess = repo.get_session(uid, sid)
+    assert sess.first_run_id is None and sess.state == "awaiting_input"
+    assert sess.error is not None and sess.error.code == "concurrent_runs"
+    assert repo.get_status(uid, sid).error_code == "concurrent_runs"
+
+
+def test_auto_start_held_by_day_cap_still_records_daily_cap_reached(repo):  # noqa: F811
+    uid = f"u{uuid.uuid4().hex[:10]}"
+    sid = _linked_ready(repo, uid)
+    maybe_start_first_run(repo, RecordingQueue(), uid, sid, mk_settings(eval_cap_day=0))
+    assert repo.get_session(uid, sid).error.code == "daily_cap_reached"
+    assert repo.get_status(uid, sid).error_code == "daily_cap_reached"

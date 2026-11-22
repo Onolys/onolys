@@ -189,7 +189,7 @@ class Repo(Protocol):
     # like `reserve_usage("eval")`, then creates run `run_id` (snapshot: rating_id, n_runs, preset,
     # stt, code_version), counts it (day runs+1, active_runs+1), sets `first_run_id`,
     # `state=running`, the status mirror and clears the error. Cap/concurrent hit: writes
-    # `error=daily_cap_reached` (day, or concurrent) (state
+    # `error=daily_cap_reached` (day) or `concurrent_runs` (concurrent) (state
     # unchanged) and nothing else. Anything not ready: nothing written.
     # Exempt (SP11 R5): when the session has `interview_id` the first run skips the day
     # check and counters (still takes an `active_runs` slot and obeys the concurrent limit); the

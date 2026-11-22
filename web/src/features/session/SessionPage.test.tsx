@@ -461,6 +461,30 @@ describe("session page: interview-linked first run (free, works at a full eval c
   });
 });
 
+describe("session page: start held by an active run (review R2)", () => {
+  it("shows the concurrent message with Start enabled, not the daily limit or reset time", async () => {
+    const sid = create();
+    toAwaiting(sid);
+    open(sid);
+    await ready();
+    act(() =>
+      mockEmitter.emit(sid, {
+        ...failedDoc(sid, "concurrent_runs"),
+        state: "awaiting_input",
+        progress: 20,
+        has_rating: true,
+      }),
+    );
+    await waitFor(() =>
+      expect(screen.getByRole("status")).toHaveTextContent(
+        "You already have a rating running. Wait for it to finish.",
+      ),
+    );
+    expect(screen.getByRole("status")).not.toHaveTextContent(/limit|start the rating after/i);
+    expect(await screen.findByRole("button", { name: "Start" })).toBeEnabled();
+  });
+});
+
 describe("session page: Try again after a failed free interview run (review R1)", () => {
   const failedAtCap = (freeRun: boolean) => {
     const sid = create();

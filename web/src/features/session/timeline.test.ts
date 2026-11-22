@@ -207,6 +207,16 @@ describe("deriveTimeline: extras", () => {
     expect(t.lines[0]).toBe("You've reached today's limit.");
   });
 
+  it("a start held by an active run offers Start with the concurrent message, not the reset time", () => {
+    const t = deriveTimeline(
+      { ...base, state: "awaiting_input", error_code: "concurrent_runs" },
+      { resetsAt: "3:00 PM" },
+    );
+    expect(t.capReached).toBe(true);
+    expect(t.lines).toEqual(["You already have a rating running. Wait for it to finish."]);
+    expect(t.lines.join(" ")).not.toMatch(/limit|3:00/i);
+  });
+
   it("does not offer Start for a cap code outside awaiting_input", () => {
     expect(deriveTimeline({ ...base, state: "failed", error_code: "daily_cap_reached" }).capReached).toBe(false);
   });
