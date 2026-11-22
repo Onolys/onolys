@@ -2,7 +2,7 @@
  * SP10 Task 11: landing cards, picker, live page, End -> upload -> session, warn toast, reconnect, discard (AC9).
  * MSW serves /v1, the fake relay plays the socket, the audio engine is a stub (no browser audio in jsdom).
  */
-import { act, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -26,6 +26,7 @@ class FakeEngine {
     engines.push(this);
   }
   async start() {
+    if (slowMic) await new Promise((r) => setTimeout(r, 50));
     if (denyMic) throw new Error("denied");
     this.started = true;
   }
@@ -50,6 +51,7 @@ class FakeEngine {
   }
 }
 let denyMic = false;
+let slowMic = false;
 vi.mock("./audio/engine", () => ({ createAudioEngine: (o: { onCaptureFrame: (f: ArrayBuffer) => void }) => new FakeEngine(o) }));
 
 class FetchXhr {
@@ -87,6 +89,7 @@ const main = () => within(screen.getByRole("main"));
 
 beforeEach(() => {
   denyMic = false;
+  slowMic = false;
   engines.length = 0;
   vi.stubEnv("VITE_USE_MOCKS", "true"); // createRelaySocket -> the fake relay
   vi.stubGlobal("XMLHttpRequest", FetchXhr);
@@ -329,5 +332,52 @@ describe("discard and leave prompt (AC9)", () => {
     await u.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "Evaluate what I have" }));
     await waitFor(() => expect(here(router)).toMatch(/^\/sessions\/(?!new)[^/]+$/));
     expect(mockBackend.getSession(UID, here(router).split("/")[2]!).interview_id).toBe(iid);
+  });
+});
+
+describe("leaving ends the interview (D6)", () => {
+  it("warns on tab close/reload while live", async () => {
+    const u = userEvent.setup();
+    const { router } = renderApp("/interviews/new", { user: USER });
+    await startLive(u, router);
+    const ev = new Event("beforeunload", { cancelable: true });
+    window.dispatchEvent(ev);
+    expect(ev.defaultPrevented).toBe(true);
+  });
+
+  it("a fresh page load of a live interview shows Interview ended, ends it, and does not reconnect", async () => {
+    const u = userEvent.setup();
+    const first = renderApp("/interviews/new", { user: USER });
+    const iid = await startLive(u, first.router);
+    mockBackend.setInterviewState(iid, "live"); // the relay marked it live before the page went away
+    cleanup();
+    resetFakeRelay();
+    engines.length = 0;
+    renderApp(`/interviews/${iid}`, { user: USER });
+    expect(await main().findByText("Interview ended")).toBeInTheDocument();
+    await waitFor(() => expect(mockBackend.getInterview(UID, iid).state).toBe("ended"));
+    expect(main().queryByRole("button", { name: "Start talking" })).toBeNull();
+    expect(lastFakeRelay()).toBeUndefined();
+    expect(engines).toHaveLength(0);
+  });
+
+  it("double Start talking makes one engine and one socket", async () => {
+    slowMic = true;
+    const u = userEvent.setup();
+    const { router } = renderApp("/interviews/new", { user: USER });
+    await u.click(await main().findByRole("radio", { name: /Reluctant patient/ }));
+    await u.click(main().getByRole("button", { name: "Start interview" }));
+    await waitFor(() => expect(here(router)).toMatch(/^\/interviews\/iv_/));
+    await u.dblClick(await main().findByRole("button", { name: "Start talking" }));
+    await waitFor(() => expect(lastFakeRelay()?.readyState).toBe(1));
+    expect(engines).toHaveLength(1);
+  });
+
+  it("says so when the relay ends it without time up", async () => {
+    const u = userEvent.setup();
+    const { router } = renderApp("/interviews/new", { user: USER });
+    await startLive(u, router);
+    act(() => lastFakeRelay()!.close(1000));
+    expect(await main().findByText(/interview has ended/i)).toBeInTheDocument();
   });
 });
