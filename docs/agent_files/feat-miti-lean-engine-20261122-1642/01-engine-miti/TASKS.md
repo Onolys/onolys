@@ -12,9 +12,9 @@ Source of truth: docs/agent_files/feat-miti-lean-engine-20261122-1642/01-engine-
 | 2 | Copy infra (llm, stt, voice, transcript, errors, utils) | 1 | done |
 | 3 | Port coding passes and MITI constant | 1, 2 | done |
 | 4 | Automatic coded span | 3 | done |
-| 5 | Report model, builder, tips, rating validation | 2, 3 | in-progress |
-| 6 | `run_miti` entry point, stages, n_runs | 4, 5 | todo |
-| 7 | Golden parity proof, live check, acceptance | 6 | todo |
+| 5 | Report model, builder, tips, rating validation | 2, 3 | done |
+| 6 | `run_miti` entry point, stages, n_runs | 4, 5 | done |
+| 7 | Golden parity proof, live check, acceptance | 6 | done |
 
 ## Task 1 — Scaffold package, MITI data, naming guard
 What it is / what it means: The empty shell of `onolys-miti` plus the MITI protocol data, so later tasks have a place to land. Covers R1 (data), R5, R6 and D1, D3, D4.
