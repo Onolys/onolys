@@ -79,6 +79,12 @@ afterEach(() => {
   sessionStorage.clear();
 });
 
+/** Turn the rating UI on for a describe block (the card, the "Rating the session" copy and the comparison report). */
+const withRatingOn = () => {
+  beforeEach(() => vi.stubEnv("VITE_RATING_ENABLED", "true"));
+  afterEach(() => vi.unstubAllEnvs());
+};
+
 const user = () => userEvent.setup();
 const h1 = (name: string) => screen.findByRole("heading", { level: 1, name });
 const nav = (name: string) => within(screen.getByRole("navigation")).getByRole("link", { name });
@@ -92,6 +98,9 @@ async function uploadViaUi(u: ReturnType<typeof user>, router: Parameters<typeof
   await u.click(nav("New session"));
   await h1("New session");
   if (title) await u.type(screen.getByLabelText(/title/i), title);
+  // default (flag off): the one required setup field; with the rating UI on it lives on the session card instead
+  const goal = screen.queryByLabelText("Change goal");
+  if (goal) await u.type(goal, "Walk more in the evenings");
   await u.upload(screen.getByLabelText(/audio recording/i), mp3());
   await u.click(screen.getByRole("button", { name: /start/i }));
   await waitFor(() => expect(here(router)).toMatch(/^\/sessions\/(?!new)[^/]+$/));
@@ -116,7 +125,59 @@ async function confirmSpeakerViaUi(u: ReturnType<typeof user>, sid: string) {
   await waitFor(() => expect(screen.queryByRole("list", { name: "Speakers" })).not.toBeInTheDocument());
 }
 
-describe("flow: sign-up, verify, upload, speaker + rating during transcription, report (AC2, AC9)", () => {
+describe("flow: one submit, no rating card (default)", () => {
+  it("sign-up, verify, goal + audio, Start, confirm speaker, coding, then a report without comparison", async () => {
+    const u = user();
+    const { router, service } = renderApp("/signup");
+    await h1("Sign up");
+    await u.type(screen.getByLabelText("Email"), EMAIL);
+    await u.type(screen.getByLabelText("Password"), "longenough1");
+    await u.type(screen.getByLabelText("Confirm password"), "longenough1");
+    await u.click(screen.getByRole("button", { name: "Create account" }));
+    await h1("Verify your email");
+    service.markVerified(EMAIL);
+    await u.click(screen.getByRole("button", { name: "I've verified" }));
+    await h1("Sessions");
+
+    const sid = await uploadViaUi(u, router, "Visit 3");
+    expect(screen.queryByLabelText("Cultivating Change Talk score")).toBeNull();
+    expect(screen.queryByRole("button", { name: /submit rating|no rating/i })).toBeNull();
+    expect(mockBackend.getSession(UID, sid).flags.rating_submitted).toBe(true);
+    step(sid);
+    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent(/transcrib/i));
+    await confirmSpeakerViaUi(u, sid);
+    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Coding the session"));
+    expect(screen.getByRole("status")).not.toHaveTextContent(/rating the session/i);
+    settle(sid);
+    await u.click(await screen.findByRole("link", { name: "View report" }));
+    await waitFor(() => expect(here(router)).toBe(`/sessions/${sid}/reports/1`));
+    await h1("Report");
+    const scorecard = await screen.findByRole("region", { name: "Scorecard" });
+    expect(within(scorecard).queryByText(/differs|Difference/)).toBeNull();
+    expect(within(scorecard).queryByRole("columnheader", { name: /^You$/ })).toBeNull();
+    expect(screen.queryByRole("region", { name: "Where Onolys disagrees" })).toBeNull();
+    expect(screen.queryByRole("button", { name: /run again|edit my rating|submit/i })).toBeNull();
+    expect(mockBackend.listRuns(UID, sid)).toHaveLength(1);
+  });
+
+  it("system failure, then Try again re-runs", async () => {
+    const u = user();
+    const { router } = renderApp("/", { user: USER });
+    await h1("Sessions");
+    const sid = await uploadViaUi(u, router, "fail-code");
+    await confirmSpeakerViaUi(u, sid);
+    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Coding the session"));
+    settle(sid);
+    const card = await screen.findByRole("alert");
+    expect(card).toHaveTextContent(`Reference: ${sid}`);
+    await u.click(within(card).getByRole("button", { name: "Try again" }));
+    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Coding the session"));
+    expect(mockBackend.listRuns(UID, sid)).toHaveLength(2);
+  });
+});
+
+describe("flow (rating on): sign-up, verify, upload, speaker + rating during transcription, report (AC2, AC9)", () => {
+  withRatingOn();
   it("runs end to end, and the submitted rating is final (no edit, no Run again)", async () => {
     const u = user();
     const { router, service } = renderApp("/signup");
@@ -171,7 +232,8 @@ describe("flow: sign-up, verify, upload, speaker + rating during transcription, 
   });
 });
 
-describe("flow: no-rating run is final too (AC3)", () => {
+describe("flow (rating on): no-rating run is final too (AC3)", () => {
+  withRatingOn();
   it("shows an Onolys-only report and offers no way to add a rating or run again", async () => {
     const u = user();
     const { router } = renderApp("/", { user: USER });
@@ -194,7 +256,8 @@ describe("flow: no-rating run is final too (AC3)", () => {
   });
 });
 
-describe("flow: system failure, then Try again (AC6a)", () => {
+describe("flow (rating on): system failure, then Try again (AC6a)", () => {
+  withRatingOn();
   it("shows the failure card with a reference id, Try again re-runs the same rating", async () => {
     const u = user();
     const { router } = renderApp("/", { user: USER });
@@ -216,7 +279,8 @@ describe("flow: system failure, then Try again (AC6a)", () => {
   });
 });
 
-describe("flow: daily cap reached at auto-start, then Start (AC6a)", () => {
+describe("flow (rating on): daily cap reached at auto-start, then Start (AC6a)", () => {
+  withRatingOn();
   it("says so with the reset time; Start runs once allowed", async () => {
     const u = user();
     const { router } = renderApp("/", { user: USER });
@@ -248,7 +312,7 @@ describe("flow: delete a session (AC2)", () => {
     await u.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "Delete permanently" }));
     await h1("Sessions");
     expect(here(router)).toBe("/");
-    await screen.findByText(/Onolys rates a recorded session/i); // the empty state (the cards also say "New session")
+    await screen.findByText(/Onolys codes a recorded session/i); // the empty state (the cards also say "New session")
     expect(screen.queryByRole("link", { name: /Doomed visit/ })).toBeNull();
     expect(() => mockBackend.getSession(UID, sid)).toThrow();
   });
