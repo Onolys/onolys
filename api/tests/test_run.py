@@ -4,6 +4,7 @@
 
 import json
 import os
+import time
 import uuid
 from dataclasses import replace
 
@@ -141,7 +142,7 @@ async def env(request, settings, blobs, tmp_path):
     spy(repo)
     stt, ev = FakeStt(), FakeEvaluation()
     app = create_app(
-        replace(settings, routes_file=str(routes)),
+        replace(settings, extra_presets=("fast",), routes_file=str(routes)),
         repo=repo,
         blobs=blobs,
         audio_tools=StubTools(),
@@ -352,6 +353,123 @@ async def test_retryable_failure_on_last_attempt_fails_and_releases_once(env):
     assert env.counters()[0] == 0
 
 
+async def test_retry_after_a_spent_llm_call_never_refunds(env):
+    """Attempt 1 calls the evaluation and fails retryably; attempt 2 then dies before calling it.
+    The unit was spent on attempt 1, so the final release must not refund it (A20)."""
+
+    class SpendThenBreak(FakeEvaluation):
+        async def run(self, *a, **kw):
+            env.repo.update_session(env.uid, sid, {"clinician_speaker": None})
+            raise AdapterError("upstream_unavailable")
+
+    swap_eval(env, SpendThenBreak())
+    sid = await env.start()
+    env.drain()
+    s = env.repo.get_session(env.uid, sid)
+    assert s.state == "failed" and s.error.code == "internal_error"
+    (run,) = env.repo.list_runs(env.uid, sid)
+    assert run.llm_started is True and run.released is True
+    assert env.counters() == (0, 1)
+
+
+class Capture(FakeEvaluation):
+    async def run(self, ctx, pack, transcript, speaker_map, params, rating, progress_cb=None):
+        self.seen = {"ctx": ctx, "params": params, "rating": rating, "map": speaker_map}
+        return await super().run(ctx, pack, transcript, speaker_map, params, rating, progress_cb)
+
+
+async def test_evaluation_gets_rating_card_coded_span_language_and_a_deadline(env):
+    cap = Capture()
+    swap_eval(env, cap)
+    sid = await env.finished()
+    (run,) = env.repo.list_runs(env.uid, sid)
+    sess = env.repo.get_session(env.uid, sid)
+    assert cap.seen["rating"] == env.repo.get_rating(env.uid, sid, run.rating_id).card
+    assert cap.seen["rating"] is not None and sess.coded_span is not None
+    assert cap.seen["params"]["coded_span"] == sess.coded_span.model_dump()
+    tr = env.repo.get_transcript(env.uid, sid, "current").transcript
+    assert cap.seen["params"]["language"] == (tr.language or sess.language)
+    assert cap.seen["map"] == {"subject": "S1"}
+    left = cap.seen["ctx"].deadline - time.monotonic()
+    assert 0 < left <= 600  # derived from the task's remaining time, not unbounded
+
+
+async def test_run_without_a_usable_rating_passes_no_card(env):
+    cap = Capture()
+    swap_eval(env, cap)
+    sid = await env.start(rate=False)  # never rated: run has no rating_id
+    assert (await env.c.post(f"/v1/sessions/{sid}/runs", json={}, headers=env.h)).status_code == 202
+    env.drain()
+    assert cap.seen["rating"] is None and cap.seen["params"]["coded_span"] is None
+    # a newer final "no rating" revision: the run keeps its rating_id but passes no card
+    r = await env.c.put(
+        f"/v1/sessions/{sid}/rating",
+        json={"final": True, "no_rating": True, "card": {"change_goal": "g"}},
+        headers=env.h,
+    )
+    assert r.status_code in (200, 202)
+    assert (await env.c.post(f"/v1/sessions/{sid}/runs", json={}, headers=env.h)).status_code == 202
+    env.drain()
+    (_, run2) = sorted(env.repo.list_runs(env.uid, sid), key=lambda r: r.started or 0)
+    assert run2.rating_id and cap.seen["rating"] is None
+
+
+async def test_out_of_schema_report_fails_the_run_and_stores_nothing(env):
+    class BadReport(FakeEvaluation):
+        async def run(self, *a, **kw):
+            out = await super().run(*a, **kw)
+            out.report.pop("schema_version", None)
+            out.report["unexpected"] = {"x": 1}
+            out.report["method"] = "not-an-object"
+            return out
+
+    swap_eval(env, BadReport())
+    sid = await env.finished()
+    s = env.repo.get_session(env.uid, sid)
+    assert s.state == "failed" and s.error.code == "internal_error"
+    assert env.repo.list_reports(env.uid, sid) == []
+
+
+async def test_slot_is_kept_while_a_retry_is_pending_and_released_after(env):
+    seen = {}
+
+    class DownOnce(FakeEvaluation):
+        async def run(self, *a, **kw):
+            if self.calls == 0:
+                self.calls += 1
+                raise AdapterError("upstream_unavailable")
+            (run,) = env.repo.list_runs(env.uid, sid)
+            seen["released"], seen["counters"] = run.released, env.counters()
+            return await super().run(*a, **kw)
+
+    swap_eval(env, DownOnce())
+    sid = await env.start()
+    env.drain()
+    assert seen == {"released": False, "counters": (1, 1)}  # attempt 1 left it held
+    assert env.counters() == (0, 1)
+
+
+async def test_retry_after_the_report_was_stored_only_finishes_the_bookkeeping(env):
+    ev = Capture()
+    swap_eval(env, ev)
+    orig, boom = env.repo.update_run, []
+
+    def update_run(uid, sid, run_id, fields):
+        if "artifacts_prefix" in fields and not boom:  # report stored, then the worker dies
+            boom.append(1)
+            raise AdapterError("upstream_unavailable")
+        orig(uid, sid, run_id, fields)
+
+    env.repo.update_run = update_run
+    sid = await env.finished()
+    assert ev.calls == 1  # the retry did not evaluate again
+    assert len(env.repo.list_reports(env.uid, sid)) == 1
+    s = env.repo.get_session(env.uid, sid)
+    assert s.state == "report_ready" and s.latest_report_version == 1
+    (run,) = env.repo.list_runs(env.uid, sid)
+    assert run.stage is None and run.status == "done" and env.counters() == (0, 1)
+
+
 async def test_redelivered_run_task_is_a_noop(env):
     sid = await env.finished()
     (run,) = env.repo.list_runs(env.uid, sid)
@@ -399,15 +517,6 @@ async def test_post_runs_cap_429_and_releases(env):
     assert env.repo.list_runs(env.uid, sid).__len__() == 1
 
 
-async def test_post_runs_month_cap_429_monthly_cap_reached(env):
-    sid = await env.finished()
-    env.app.state.settings = replace(env.app.state.settings, eval_cap_month=1)
-    r = await env.c.post(f"/v1/sessions/{sid}/runs", json={}, headers=env.h)
-    d = r.json()["details"][0]
-    assert r.status_code == 429 and d["code"] == "monthly_cap_reached" and d["period"] == "month"
-    assert env.repo.get_session(env.uid, sid).state == "report_ready"
-
-
 async def test_cap_held_first_run_starts_with_post_runs(env):
     env.app.state.settings = replace(env.app.state.settings, eval_cap_day=0)
     sid = await env.start()
@@ -435,7 +544,7 @@ async def test_run_and_report_reads_are_owner_scoped(env):
     assert (
         await env.c.post(f"/v1/sessions/{sid}/runs", json={}, headers=env.hb)
     ).status_code == 404
-    assert (await env.c.get("/v1/runs/nope", headers=env.h)).status_code == 404
+    assert (await env.c.get("/v1/runs/" + "0" * 32, headers=env.h)).status_code == 404
 
 
 async def test_no_report_text_in_session_status(env):

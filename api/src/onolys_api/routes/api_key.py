@@ -50,11 +50,8 @@ def get_api_key(request: Request, user: TokenUser) -> ApiKeyInfo:
 def create_api_key(request: Request, user: TokenUser) -> ApiKeyCreated:
     repo = request.app.state.repo
     now = datetime.now(UTC)
-    old = repo.active_api_key(user.uid)
-    if old is not None:
-        repo.revoke_api_key(user.uid, old.id, now)
     key_id, full, digest = new_key()
-    repo.create_api_key(user.uid, key_id, ApiKeyDoc(uid=user.uid, hash=digest, created=now))
+    repo.rotate_api_key(user.uid, key_id, ApiKeyDoc(uid=user.uid, hash=digest, created=now), now)
     return ApiKeyCreated(key_id=key_id, api_key=full, created=now)
 
 
@@ -63,7 +60,5 @@ def create_api_key(request: Request, user: TokenUser) -> ApiKeyCreated:
 )
 def delete_api_key(request: Request, user: TokenUser) -> Response:
     repo = request.app.state.repo
-    old = repo.active_api_key(user.uid)
-    if old is not None:
-        repo.revoke_api_key(user.uid, old.id, datetime.now(UTC))
+    repo.revoke_active_api_keys(user.uid, datetime.now(UTC))
     return Response(status_code=204)

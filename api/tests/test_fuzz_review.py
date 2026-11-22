@@ -107,7 +107,7 @@ ID_ROUTES = [
     ("get", "/v1/interviews/{x}"),
 ]
 WEIRD_IDS = [".", "%2e", "é" * 40, "0" * 5000, "\x00"]
-# Known bugs (firestore repo): reserved doc ids and over-long ids reach Firestore -> InvalidArgument.
+# Reserved doc ids and over-long ids used to reach Firestore -> InvalidArgument -> 500.
 FS_BAD_IDS = {"__x__", "%2e"}
 
 
@@ -126,12 +126,7 @@ def test_weird_path_ids_never_5xx(fake_api, method, tpl, x):
 
 @pytest.mark.parametrize("x", sorted(FS_BAD_IDS | {"0" * 5000}))
 @pytest.mark.parametrize(("method", "tpl"), ID_ROUTES[:6] + ID_ROUTES[-2:])
-def test_weird_path_ids_never_5xx_firestore(request, fs_api, method, tpl, x):
-    if (x in FS_BAD_IDS and "/runs/" not in tpl) or (x == "0" * 5000 and tpl == "/v1/runs/{x}"):
-        known_bug(
-            request,
-            "F1/A3 (F3 for 5000-char run id): reserved/over-long id -> Firestore InvalidArgument -> 500",
-        )
+def test_weird_path_ids_never_5xx_firestore(fs_api, method, tpl, x):
     r = fs_api.request(method, tpl.format(x=_seg(x)), headers=_uid())
     assert r.status_code < 500, (r.status_code, x)
 
@@ -150,13 +145,7 @@ def test_random_path_ids_are_404_not_5xx(fake_api, path, x):
 
 
 @pytest.mark.parametrize("c", ["a/b", "__x__", ".", "é", "%", "=" * 9, "e30", "!!!!"])
-def test_list_cursor_never_5xx(request, api, c):
-    bad = {"é"} if api.kind == "fake" else {".", "é", "%", "=" * 9, "!!!!"}
-    if c in bad:
-        known_bug(
-            request,
-            "F4/A3: malformed cursor -> 500 (non-ascii on both repos; dot/pct/pad on firestore)",
-        )
+def test_list_cursor_never_5xx(api, c):
     r = api.get("/v1/sessions", params={"cursor": c}, headers=_uid())
     assert r.status_code < 500, (r.status_code, c)
 
@@ -196,20 +185,24 @@ def test_create_session_body_never_5xx(fake_api, body):
     assert r.status_code < 500, (r.status_code, body, r.text)
 
 
-def test_create_session_rejects_non_public_preset(request, api):
-    known_bug(request, "A6: any preset is user-selectable")
+def test_create_session_rejects_non_public_preset(api):
     r = api.post("/v1/sessions", json={"preset": "claude"}, headers=_uid())
     assert r.status_code == 422
 
 
-def test_create_session_rejects_unknown_language(request, api):
-    known_bug(request, "A18: language only regex-checked (zz accepted)")
-    r = api.post("/v1/sessions", json={"language": "zz"}, headers=_uid())
+@pytest.mark.parametrize("lang", ["zz", "xx-YY", "qqq"])
+def test_create_session_rejects_unknown_language(api, lang):
+    r = api.post("/v1/sessions", json={"language": lang}, headers=_uid())
     assert r.status_code == 422
 
 
-def test_garbage_body_is_documented_422(request, api):
-    known_bug(request, "F2/A14: undecodable JSON body -> 400 request_rejected, not in openapi")
+@pytest.mark.parametrize("lang", ["auto", "en", "en-US", "ja-JP", "fr", "es-419", "fil"])
+def test_create_session_accepts_supported_languages(api, lang):
+    r = api.post("/v1/sessions", json={"language": lang}, headers=_uid())
+    assert r.status_code == 202, r.text
+
+
+def test_garbage_body_is_documented_422(api):
     r = api.post(
         "/v1/sessions", content=b"\xff", headers={**_uid(), "content-type": "application/json"}
     )
@@ -271,7 +264,6 @@ def test_idempotency_key_never_5xx_and_replays(fake_api, key):
 
 
 def test_idempotent_replay_after_delete_does_not_return_deleted_session(request, api):
-    known_bug(request, "A23: replay returns id of a deleted session")
     h = {**_uid(), "Idempotency-Key": "k-del"}
     sid = api.post("/v1/sessions", json={}, headers=h).json()["session"]["id"]
     assert api.delete(f"/v1/sessions/{sid}", headers=h).status_code in (200, 202, 204)
@@ -301,7 +293,6 @@ def test_concurrent_same_idempotency_key_creates_one_session(fs_api):
     assert len(ok_ids) == 1 and not losers, (len(ok_ids), losers)
 
 
-@pytest.mark.xfail(strict=False, reason="A11: concurrent POST /api-key -> two active keys (race)")
 def test_concurrent_api_key_create_leaves_single_active_key(fs_api):
     api = fs_api
     h = _uid()
@@ -313,13 +304,15 @@ def test_concurrent_api_key_create_leaves_single_active_key(fs_api):
     assert live == [], f"{len(live)} key(s) still valid after DELETE"
 
 
-def test_concurrent_session_create_is_bounded_per_user(request, fake_api):
+def test_session_create_is_free_and_uncapped(fake_api):
+    """FX46 (A4, owner decision): creating a session costs nothing and has no cap; only POST /runs
+    (and starting an AI interview) uses a unit."""
     api = fake_api
-    known_bug(request, "A4: no open-session cap (product call on the limit)")
     h = _uid()
     rs = _concurrently(api, [lambda: api.post("/v1/sessions", json={}, headers=h)] * 20)
-    assert all(r.status_code < 500 for r in rs)
-    assert not all(r.status_code == 202 for r in rs), "20 concurrent creates all accepted"
+    assert all(r.status_code == 202 for r in rs), [r.status_code for r in rs]
+    usage = api.get("/v1/usage", headers=h).json()
+    assert usage["eval"]["day"]["used"] == 0 and usage["interview"]["day"]["used"] == 0
 
 
 def test_isolation_random_ids_between_users(api):
@@ -339,7 +332,6 @@ def test_isolation_random_ids_between_users(api):
 
 
 def test_phi_responses_are_no_store(request, api):
-    known_bug(request, "A12: PHI responses lack Cache-Control: no-store")
     h = _uid()
     sid = api.post("/v1/sessions", json={}, headers=h).json()["session"]["id"]
     r = api.get(f"/v1/sessions/{sid}/speakers", headers=h)

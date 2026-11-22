@@ -153,7 +153,7 @@ def make_env(settings, blobs, tmp_path, monkeypatch):
     async def make(paudit_failures=(), stt_failure=None) -> Env:
         stt = SpyStt(stt_failure)
         engine = Engine(monkeypatch, list(paudit_failures))
-        s = replace(settings, routes_file=str(routes), adapters="real")
+        s = replace(settings, extra_presets=("fast",), routes_file=str(routes), adapters="real")
         adapters = build_adapters(s, stt_registry={"p1": lambda: stt}, llm_factory=fixture_llm)
         repo = FakeRepo(blobs)
         app = create_app(s, repo=repo, blobs=blobs, audio_tools=StubTools(), adapters=adapters)

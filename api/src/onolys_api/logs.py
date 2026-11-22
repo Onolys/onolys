@@ -48,8 +48,34 @@ class _StderrHandler(logging.StreamHandler):
         pass
 
 
+class _NoTraceback(logging.Filter):
+    """Reduce a record carrying an exception to its class name (S1).
+
+    uvicorn logs `Exception in ASGI application` with the full traceback, and a FastAPI
+    ResponseValidationError's text embeds the offending `input` (transcript/rating/report PHI).
+    """
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        exc = record.exc_info
+        if exc or record.exc_text:
+            name = exc[0].__name__ if exc and exc[0] else "Exception"
+            record.msg = f"Unhandled exception in ASGI application: {name} (details suppressed)"
+            record.args = None
+            record.exc_info = record.exc_text = None
+            record.stack_info = None
+        return True
+
+
+def _guard_uvicorn() -> None:
+    for name in ("uvicorn", "uvicorn.error"):
+        lg = logging.getLogger(name)
+        if not any(isinstance(f, _NoTraceback) for f in lg.filters):
+            lg.addFilter(_NoTraceback())
+
+
 def configure(settings: Settings) -> None:
     """Set the HMAC key and code version, and attach the stderr handler once."""
+    _guard_uvicorn()
     with _lock:
         _state["key"] = settings.uid_hmac_key.encode()
         _state["code_version"] = settings.git_sha

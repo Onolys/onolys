@@ -104,6 +104,15 @@ async def test_second_request_gets_fresh_url_and_drops_old_staged_object(client,
     assert blobs.list_keys(f"uploads/alice/{sid}/") == []
 
 
+async def test_reissue_sweeps_every_earlier_staged_object(client, blobs):
+    """A15: an object a stale signed URL wrote after an earlier reissue is swept too."""
+    sid = await new_session(client)
+    await request_upload(client, sid, content_type="audio/wav")
+    blobs.put_bytes(f"uploads/alice/{sid}/stray-from-old-url", MAGIC["wav"])
+    await request_upload(client, sid, content_type="audio/wav")
+    assert blobs.list_keys(f"uploads/alice/{sid}/") == []
+
+
 async def test_upload_not_allowed_once_validating(client):
     sid = await new_session(client)
     await request_upload(client, sid, content_type="audio/wav")
@@ -167,6 +176,23 @@ async def test_complete_twice_is_idempotent(client, app):
             await client.post(f"/v1/sessions/{sid}/audio/complete", headers=A)
         ).status_code == 202
     assert len(app.state.queue.pending) == 1  # task-name dedup
+
+
+async def test_complete_enqueue_failure_is_503_and_retryable(client, app):
+    sid = await new_session(client)
+    j = (await request_upload(client, sid, content_type="audio/wav")).json()
+    app.state.blobs.put_bytes(f"uploads/alice/{sid}/{j['upload_id']}", MAGIC["wav"])
+    real = app.state.queue.enqueue
+
+    def boom(*a, **k):
+        raise RuntimeError("queue down")
+
+    app.state.queue.enqueue = boom
+    r = await client.post(f"/v1/sessions/{sid}/audio/complete", headers=A)
+    assert r.status_code == 503 and r.json()["details"][0]["code"] == "upstream_unavailable"
+    app.state.queue.enqueue = real
+    r = await client.post(f"/v1/sessions/{sid}/audio/complete", headers=A)
+    assert r.status_code == 202
 
 
 async def test_complete_without_upload_request_is_409(client):

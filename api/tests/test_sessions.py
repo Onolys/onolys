@@ -105,7 +105,7 @@ async def test_allowlisted_preset_applies_its_stt_key(tmp_path, blobs, settings)
     from dataclasses import replace
 
     repo = FakeRepo(blobs)
-    app = create_app(replace(settings, routes_file=str(routes)), repo=repo, blobs=blobs)
+    app = create_app(replace(settings, extra_presets=("fast",), routes_file=str(routes)), repo=repo, blobs=blobs)
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://t") as c:
         sid = (await create(c, preset="fast", language="en")).json()["session"]["id"]
         sid2 = (await create(c)).json()["session"]["id"]
@@ -221,12 +221,16 @@ async def test_list_bad_params_are_422(client, q):
     assert (await client.get(f"/v1/sessions?{q}", headers=A)).status_code == 422
 
 
-async def test_list_cursor_of_another_users_session_is_422(client):
+async def test_list_cursor_of_another_users_session_leaks_nothing(client):
+    """The cursor is only a position (created_at + id); the query stays scoped to the caller."""
     sid = (await create(client, headers=B)).json()["session"]["id"]
-    import base64
-
-    cur = base64.urlsafe_b64encode(sid.encode()).decode().rstrip("=")
-    assert (await client.get(f"/v1/sessions?cursor={cur}", headers=A)).status_code == 422
+    for _ in range(3):
+        await create(client, headers=B)
+    page = (await client.get("/v1/sessions?limit=1", headers=B)).json()
+    mine = (await create(client, headers=A)).json()["session"]["id"]
+    r = await client.get(f"/v1/sessions?cursor={page['next_cursor']}", headers=A)
+    assert r.status_code == 200
+    assert sid not in str(r.json()) and mine not in [i["id"] for i in r.json()["items"]]
 
 
 async def test_list_hides_deleting_sessions(client, repo):
@@ -275,7 +279,7 @@ async def test_get_failed_session_reports_error_code_only(client, repo):
 async def test_get_foreign_or_missing_is_404(client):
     sid = (await create(client)).json()["session"]["id"]
     r1 = await client.get(f"/v1/sessions/{sid}", headers=B)
-    r2 = await client.get("/v1/sessions/nope", headers=B)
+    r2 = await client.get("/v1/sessions/" + "0" * 32, headers=B)
     assert r1.status_code == r2.status_code == 404 and r1.json()["message"] == r2.json()["message"]
 
 
@@ -284,6 +288,6 @@ async def test_errors_validate_against_public_schema(client, schema):
 
     for r in (
         await create(client, preset="nope"),
-        await client.get("/v1/sessions/nope", headers=A),
+        await client.get("/v1/sessions/" + "0" * 32, headers=A),
     ):
         jsonschema.validate(r.json(), schema)

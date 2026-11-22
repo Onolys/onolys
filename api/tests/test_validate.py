@@ -180,6 +180,22 @@ async def test_redelivery_after_move_resumes_from_original(settings, repo, blobs
     assert blobs.exists(f"alice/{sid}/audio/original.wav")
 
 
+async def test_late_put_after_validation_is_ignored_and_swept(settings, repo, blobs):
+    """A15: a PUT landing after the audio was validated (signed URL still live) must neither
+    replace the validated original on a redelivery nor survive the step."""
+    app, sid = await run_validate(settings, repo, blobs, MAGIC["wav"], StubTools(probe=OK))
+    upload_id = repo.get_session("alice", sid).upload.upload_id
+    blobs.put_bytes(f"uploads/alice/{sid}/{upload_id}", b"not audio at all")  # late PUT
+    repo.update_session("alice", sid, {"steps.validate.status": "pending", "state": "validating"})
+    from onolys_api.jobs.queue import TaskPayload
+
+    res = app.state.runner.handle(TaskPayload(kind="validate", uid="alice", sid=sid))
+    assert res.status_code == 200
+    assert repo.get_session("alice", sid).state != "failed"
+    assert blobs.get_bytes(f"alice/{sid}/audio/original.wav") == MAGIC["wav"]
+    assert blobs.list_keys(f"uploads/alice/{sid}/") == []
+
+
 async def test_missing_object_audio_unreadable(settings, repo, blobs):
     app, sid = await run_validate(settings, repo, blobs, MAGIC["wav"], StubTools(probe=OK))
     # a second session whose staged object vanished before validate ran
@@ -230,8 +246,8 @@ class DeletingTools(StubTools):
         super().__init__(**kw)
         self.on_transcode = on_transcode
 
-    def to_flac(self, src, dst, max_seconds=None) -> None:
-        super().to_flac(src, dst, max_seconds)
+    def to_flac(self, src, dst, max_seconds=None, fmt=None) -> None:
+        super().to_flac(src, dst, max_seconds, fmt)
         self.on_transcode()
 
 

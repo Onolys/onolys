@@ -50,7 +50,7 @@ class UserDoc(Doc):
     expiry_days: int | None = None
     # Raw console values: any shape loads (never a 500, SP11 D6); `effective_cap` validates.
     daily_cap: Any = None  # legacy eval day override (D5, deprecated)
-    limits: Any = None  # {eval|interview: {day|month: int}} (SP11 R3)
+    limits: Any = None  # {eval|interview: {day: int}} (SP11 R3)
     max_active_runs: int | None = None  # per-user override of MAX_ACTIVE_RUNS (R8)
     active_runs: int = 0  # runs reserved and not yet released (R8 concurrent limit)
 
@@ -109,12 +109,16 @@ class SessionDoc(Doc):
     has_rating: bool = False
     first_run_id: str | None = None
     interview_id: str | None = None  # set by the AI interview (SP10): its first run is free (SP11)
+    # set by `validate`: the upload is not the audio the interview's relay recorded, so the free
+    # first run is void (A10); an unset flag on an interview session means the free run stands
+    free_run_void: bool = False
     upload: UploadInfo | None = None
     steps: dict[str, StepRecord] = Field(default_factory=dict)
     warnings: list[str] = Field(default_factory=list)
     error: SessionError | None = None
     created_at: datetime = Field(default_factory=utcnow)
     updated_at: datetime = Field(default_factory=utcnow)
+    stage_started_at: datetime | None = None  # entered this state; other writes never bump it
     latest_report_version: int | None = None
 
 
@@ -184,7 +188,9 @@ class RunDoc(Doc):
     artifacts_prefix: str | None = None
     cap_date: str | None = None  # UTC day the cap slot was reserved on (R8)
     counted: bool = True  # False: run did not consume an eval slot (exempt first run, SP11 R5)
+    units: int = 1  # usage units charged when `counted` (= n_runs); a refund gives all back
     released: bool = False  # the cap slot was handed back: guards double release
+    llm_started: bool = False  # the evaluation was called on some attempt: a unit is spent
 
 
 class ReportDoc(Doc):
@@ -209,16 +215,8 @@ class UsageDoc(Doc):
     date: str = ""
     runs: int = 0  # eval count (name kept: old docs hold it)
     interviews: int = 0  # missing on old docs reads 0
+    interview_refunds: int = 0  # short-interview refunds given this day (capped, A9)
     tokens: int = 0
-
-
-class UsageMonthDoc(Doc):
-    """`usage/{uid}_{YYYY-MM}`: per-month counters (SP11 D1)."""
-
-    uid: str = ""
-    month: str = ""
-    runs: int = 0
-    interviews: int = 0
 
 
 class IdempotencyDoc(Doc):
@@ -248,6 +246,7 @@ class InterviewDoc(Doc):
     live_at: datetime | None = None  # first created -> live transition (the sweep ceiling's start)
     conn_id: str | None = None  # connection lease: the newest relay connection owns the interview
     refunded: bool = False  # set with the settle transition: a refunded interview never links
+    connects: int = 0  # relay connections that went live; capped by AI_MAX_CONNECTS
 
 
 def interview_refundable(data: dict[str, Any], now: datetime, threshold_s: float) -> bool:

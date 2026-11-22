@@ -150,8 +150,8 @@ def _linked_ready(repo, uid, **fields):  # noqa: F811
 def test_linked_first_run_held_by_active_limit_starts_free_via_post_runs(repo):  # noqa: F811
     uid = f"u{uuid.uuid4().hex[:10]}"
     sid = _linked_ready(repo, uid, interview_id="iv1")
-    full = mk_settings(eval_cap_day=0, eval_cap_month=0)
-    held = mk_settings(eval_cap_day=0, eval_cap_month=0, max_active_runs=0)
+    full = mk_settings(eval_cap_day=0)
+    held = mk_settings(eval_cap_day=0, max_active_runs=0)
     maybe_start_first_run(repo, RecordingQueue(), uid, sid, held)  # held by MAX_ACTIVE_RUNS
     assert repo.get_session(uid, sid).first_run_id is None
     queue = RecordingQueue()
@@ -163,7 +163,7 @@ def test_linked_first_run_held_by_active_limit_starts_free_via_post_runs(repo): 
     assert run.counted is False and len(queue.runs) == 1
     date = caps.utc_date()
     assert user_counters(repo, uid, date) == (1, 0)  # a slot, but no usage
-    assert repo.get_usage_docs(uid, date)[1].runs == 0
+    assert repo.get_usage_doc(uid, date).runs == 0
 
 
 def test_linked_post_runs_still_obeys_the_active_limit(repo):  # noqa: F811
@@ -180,7 +180,7 @@ def test_second_post_runs_on_a_linked_session_counts_one(repo):  # noqa: F811
 
     uid = f"u{uuid.uuid4().hex[:10]}"
     sid = _linked_ready(repo, uid, interview_id="iv1")
-    s = mk_settings(eval_cap_day=1, eval_cap_month=1)
+    s = mk_settings(eval_cap_day=1)
     app = make_client(repo, s, RecordingQueue())
     first = _post_run(app, uid, sid).json()["run_id"]
     release_once(repo, uid, sid, first, False, caps.utc_date())
@@ -210,3 +210,67 @@ def test_session_detail_exposes_interview_id(repo):  # noqa: F811
     with TestClient(make_client(repo)) as c:
         assert c.get(f"/v1/sessions/{linked}", headers=h).json()["interview_id"] == "iv1"
         assert c.get(f"/v1/sessions/{plain}", headers=h).json()["interview_id"] is None
+
+
+# ---- FX42 (A5): a run costs n_runs units ---------------------------------------------------
+
+
+def test_n_runs_costs_n_units_and_refunds_all(repo):  # noqa: F811
+    from onolys_api.jobs.run import release_once
+
+    uid = f"u{uuid.uuid4().hex[:10]}"
+    sid = _linked_ready(repo, uid)
+    app = make_client(repo, mk_settings(eval_cap_day=5), RecordingQueue())
+    with TestClient(app) as c:
+        r = c.post(f"/v1/sessions/{sid}/runs", json={"n_runs": 3},
+                   headers={"Authorization": f"Bearer test:{uid}"})  # fmt: skip
+    assert r.status_code == 202, r.text
+    date = caps.utc_date()
+    assert user_counters(repo, uid, date) == (1, 3)  # one slot, three units
+    assert repo.get_usage_doc(uid, date).runs == 3
+    release_once(repo, uid, sid, r.json()["run_id"], True, date)
+    assert user_counters(repo, uid, date) == (0, 0)
+    assert repo.get_usage_doc(uid, date).runs == 0
+
+
+def test_n_runs_beyond_the_units_left_is_refused_and_reserves_nothing(repo):  # noqa: F811
+    uid = f"u{uuid.uuid4().hex[:10]}"
+    sid = _linked_ready(repo, uid)
+    r = _post_run_n(make_client(repo, mk_settings(eval_cap_day=2)), uid, sid, 3)
+    assert r.status_code == 429, r.text
+    assert r.json()["details"][0]["code"] == "daily_cap_reached"
+    assert repo.list_runs(uid, sid) == []
+    assert user_counters(repo, uid, caps.utc_date()) == (0, 0)
+    ok = _post_run_n(make_client(repo, mk_settings(eval_cap_day=3), RecordingQueue()), uid, sid, 3)
+    assert ok.status_code == 202  # exactly the units left fit
+
+
+def _post_run_n(app, uid, sid, n):
+    with TestClient(app) as c:
+        return c.post(f"/v1/sessions/{sid}/runs", json={"n_runs": n},
+                      headers={"Authorization": f"Bearer test:{uid}"})  # fmt: skip
+
+
+def test_auto_first_run_costs_the_session_n_runs(repo):  # noqa: F811
+    uid = f"u{uuid.uuid4().hex[:10]}"
+    sid = _linked_ready(repo, uid, n_runs=2)
+    maybe_start_first_run(repo, RecordingQueue(), uid, sid, mk_settings())
+    assert user_counters(repo, uid, caps.utc_date()) == (1, 2)
+
+
+# ---- FX44 (A10): an interview session whose audio is not the relay's recording pays -----------
+
+
+def test_linked_session_with_unmatched_audio_is_charged(repo):  # noqa: F811
+    uid = f"u{uuid.uuid4().hex[:10]}"
+    sid = _linked_ready(repo, uid, interview_id="iv1", free_run_void=True)
+    maybe_start_first_run(repo, RecordingQueue(), uid, sid, mk_settings())
+    (run,) = repo.list_runs(uid, sid)
+    assert run.counted is True
+    assert user_counters(repo, uid, caps.utc_date()) == (1, 1)
+    # and it is held by the cap like any upload
+    sid2 = _linked_ready(repo, uid, interview_id="iv2", free_run_void=True)
+    maybe_start_first_run(repo, RecordingQueue(), uid, sid2, mk_settings(eval_cap_day=1))
+    assert repo.get_session(uid, sid2).first_run_id is None
+    r = _post_run(make_client(repo, mk_settings(eval_cap_day=1), RecordingQueue()), uid, sid2)
+    assert r.status_code == 429

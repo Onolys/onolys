@@ -18,6 +18,7 @@ from onolys_api.jobs.machine import invalid_state
 from onolys_api.jobs.transcribe import TRANSCRIPT_ID
 from onolys_api.repo.base import NotFoundError
 from onolys_api.repo.models import SessionDoc, SessionState
+from onolys_api.routes.ids import ResourceId
 
 SAMPLES_PER_SPEAKER = 3
 SAMPLE_MAX_CHARS = 300
@@ -100,7 +101,7 @@ def _speakers(transcript) -> list[SpeakerInfo]:
         "`invalid_state` until the transcript is ready."
     ),
 )
-def get_speakers(id: str, request: Request, user: User) -> SpeakersView:
+def get_speakers(id: ResourceId, request: Request, user: User) -> SpeakersView:
     s = _ready_session(request, user, id)
     tdoc = request.app.state.repo.get_transcript(user.uid, id, TRANSCRIPT_ID)
     assert tdoc.transcript is not None
@@ -119,7 +120,7 @@ def get_speakers(id: str, request: Request, user: User) -> SpeakersView:
     ),
 )
 def confirm_speakers(
-    id: str, body: ConfirmRequest, request: Request, user: User
+    id: ResourceId, body: ConfirmRequest, request: Request, user: User
 ) -> ConfirmResponse:
     repo = request.app.state.repo
     s = _ready_session(request, user, id)
@@ -129,12 +130,8 @@ def confirm_speakers(
     assert tdoc.transcript is not None
     if body.clinician_speaker not in {i.speaker for i in _speakers(tdoc.transcript)}:
         raise ApiError.of(422, "invalid_parameters", "clinician_speaker: unknown speaker")
-    repo.update_session(
-        user.uid,
-        id,
-        {"clinician_speaker": body.clinician_speaker, "speaker_confirmed": True},
-        status={"speaker_confirmed": True},
-    )
+    if not repo.confirm_speaker(user.uid, id, body.clinician_speaker, CONFIRM_STATES):
+        raise invalid_state()  # a run started between the check above and the write
     maybe_start_first_run(
         repo,
         getattr(request.app.state, "queue", None),
@@ -159,7 +156,9 @@ def confirm_speakers(
         "`turn.text`. 409 `invalid_state` before transcription finishes."
     ),
 )
-def get_transcript(id: str, request: Request, response: Response, user: User) -> TranscriptView:
+def get_transcript(
+    id: ResourceId, request: Request, response: Response, user: User
+) -> TranscriptView:
     s = _ready_session(request, user, id)
     tdoc = request.app.state.repo.get_transcript(user.uid, id, TRANSCRIPT_ID)
     assert tdoc.transcript is not None

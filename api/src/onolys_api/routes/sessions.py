@@ -2,7 +2,6 @@
 
 import hashlib
 import logging
-import re
 from datetime import UTC, datetime, timedelta
 from typing import Annotated
 from uuid import uuid4
@@ -17,6 +16,7 @@ from onolys_api.jobs.delete import delete_session_data
 from onolys_api.jobs.machine import advance
 from onolys_api.jobs.queue import TaskPayload
 from onolys_api.jobs.stale import settle_if_stale
+from onolys_api.languages import is_supported_language
 from onolys_api.presets import UnknownPreset
 from onolys_api.repo.base import NotFoundError
 from onolys_api.repo.models import (
@@ -26,10 +26,10 @@ from onolys_api.repo.models import (
     SessionState,
     SessionStatusDoc,
 )
+from onolys_api.routes.ids import ResourceId
 
 IDEMPOTENCY_TTL = timedelta(hours=24)
 MAX_KEY_LEN = 200
-_BCP47 = re.compile(r"^[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8}){0,3}$")
 
 ERRORS = {"default": {"model": ErrorResponse, "description": "Error"}}
 router = APIRouter(prefix="/sessions", tags=["sessions"], responses=ERRORS)
@@ -54,8 +54,8 @@ class CreateSessionRequest(BaseModel):
     @field_validator("language")
     @classmethod
     def _language(cls, v: str) -> str:
-        if v != "auto" and not _BCP47.match(v):
-            raise ValueError("invalid language")
+        if not is_supported_language(v):
+            raise ValueError("unsupported language")
         return v
 
 
@@ -118,6 +118,15 @@ class SessionDetail(BaseModel):
 
 def _body_hash(body: CreateSessionRequest) -> str:
     return hashlib.sha256(body.model_dump_json().encode()).hexdigest()
+
+
+def _replay_target_alive(repo, uid: str, doc: IdempotencyDoc) -> bool:
+    """A replay must not hand back the id of a session that has since been deleted."""
+    try:
+        sid = doc.response["session"]["id"]
+        return repo.get_session(uid, sid).state != "deleting"
+    except (NotFoundError, KeyError, TypeError):
+        return False
 
 
 def _replay(doc: IdempotencyDoc, body_hash: str, response: Response) -> CreateSessionResponse:
@@ -199,8 +208,10 @@ def create_session(
     if idempotency_key:
         prior = repo.get_idempotency(uid, idempotency_key)
         if prior is not None and now - prior.created_at < IDEMPOTENCY_TTL:
-            return _replay(prior, body_hash, response)
-        if prior is not None:
+            if _replay_target_alive(repo, uid, prior):
+                return _replay(prior, body_hash, response)
+            repo.delete_idempotency(uid, idempotency_key)  # its session was deleted: start afresh
+        elif prior is not None:
             repo.delete_idempotency(uid, idempotency_key)  # expired
 
     language = body.language
@@ -211,8 +222,8 @@ def create_session(
         language = scenario["language"]
     try:
         preset, stt = request.app.state.presets.resolve(body.preset, language)
-    except UnknownPreset:
-        raise ApiError.of(422, "invalid_parameters", "preset: unknown preset") from None
+    except UnknownPreset as e:
+        raise ApiError.of(422, "invalid_parameters", f"preset: {e}") from None
 
     sid = uuid4().hex
     session = SessionDoc(
@@ -252,6 +263,12 @@ def create_session(
     operation_id="listSessions",
     response_model=SessionList,
     summary="The caller's sessions, newest first (in-flight and failed included)",
+    description=(
+        "Not strictly read-only: a session whose pipeline has stalled past its deadline is marked "
+        "`failed` here (lazily, in a transaction that yields to a finished task), so no sweeper "
+        "job is needed. Sessions being deleted are skipped without shortening the page. "
+        "`next_cursor` is an opaque position and stays valid if its session is deleted."
+    ),
 )
 def list_sessions(
     request: Request,
@@ -277,7 +294,7 @@ def list_sessions(
             interview_id=s.interview_id,
         )
         for s in sessions
-        if s.state != "deleting"
+        if s.state != "deleting"  # one that began deleting since the page was read
     ]
     return SessionList(items=items, next_cursor=page.next_cursor)
 
@@ -287,8 +304,12 @@ def list_sessions(
     operation_id="getSession",
     response_model=SessionDetail,
     summary="Session status snapshot (the web app uses the session_status listener instead)",
+    description=(
+        "Not strictly read-only: a stalled session is marked `failed` on read (see "
+        "`listSessions`)."
+    ),
 )
-def get_session(id: str, request: Request, user: User) -> SessionDetail:
+def get_session(id: ResourceId, request: Request, user: User) -> SessionDetail:
     repo = request.app.state.repo
     s = repo.get_session(user.uid, id)
     s = settle_if_stale(repo, s, request.app.state.clock(), request.app.state.settings)
@@ -339,7 +360,7 @@ def get_session(id: str, request: Request, user: User) -> SessionDetail:
         "or wait. Deleting a finished session again answers 404. Usage counters are kept."
     ),
 )
-def delete_session(id: str, request: Request, user: User) -> Response:
+def delete_session(id: ResourceId, request: Request, user: User) -> Response:
     repo, blobs = request.app.state.repo, request.app.state.blobs
     rid = getattr(request.state, "request_id", None)
     s = repo.get_session(user.uid, id)  # 404 for another user's or an unknown session

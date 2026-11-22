@@ -122,7 +122,7 @@ async def test_delete_is_404_for_other_users_and_unknown_sessions(env):
     sid = await env.finished()
     r = await env.c.delete(f"/v1/sessions/{sid}", headers=env.hb)
     assert r.status_code == 404
-    assert (await env.c.delete("/v1/sessions/nope", headers=env.h)).status_code == 404
+    assert (await env.c.delete("/v1/sessions/" + "0" * 32, headers=env.h)).status_code == 404
     assert env.repo.get_session(env.uid, sid).state == "report_ready"
     assert session_blob_keys(env, sid)
 
@@ -228,13 +228,15 @@ async def test_stuck_cleanup_survives_both_attempts_failing_without_leaking_slot
 
 def count_releases(env: Env) -> list:
     calls: list = []
-    orig = env.repo.release_usage
+    orig = env.repo.release_run_slot
 
-    def release_usage(uid, kind, date, refund):
-        calls.append(refund)
-        orig(uid, kind, date, refund)
+    def release_run_slot(uid, sid, run_id, refund, date):
+        released = orig(uid, sid, run_id, refund, date)
+        if released:  # only a real release counts: a repeat is a no-op
+            calls.append(refund)
+        return released
 
-    env.repo.release_usage = release_usage
+    env.repo.release_run_slot = release_run_slot
     return calls
 
 

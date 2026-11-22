@@ -25,6 +25,7 @@ from onolys_api.presets import UnknownPreset
 from onolys_api.repo.base import NotFoundError
 from onolys_api.repo.limits import LimitDefaults
 from onolys_api.repo.models import RunDoc, SessionDoc, SessionError, SessionState, SttInfo
+from onolys_api.routes.ids import ResourceId
 
 ERRORS = {"default": {"model": ErrorResponse, "description": "Error"}}
 router = APIRouter(prefix="/sessions/{id}", tags=["runs"], responses=ERRORS)
@@ -110,11 +111,14 @@ def _open_session(request: Request, user: AuthUser, id: str) -> SessionDoc:
     description=(
         "Needs the transcript and the confirmed speaker; uses the latest final rating revision "
         "or runs as no-rating. `preset` changes LLM routes only (the transcript is reused). "
-        "Counts against the daily cap: 429 `daily_cap_reached`. 409 `invalid_state` while a run "
+        "Counts against the daily cap: 429 `daily_cap_reached`; 429 `concurrent_runs` while "
+        "another run is in progress. 409 `invalid_state` while a run "
         "is in progress or before the inputs exist."
     ),
 )
-def start_run(id: str, request: Request, user: User, body: RunRequest | None = None) -> RunStarted:
+def start_run(
+    id: ResourceId, request: Request, user: User, body: RunRequest | None = None
+) -> RunStarted:
     body = body or RunRequest()
     app = request.app
     repo, uid = app.state.repo, user.uid
@@ -127,8 +131,8 @@ def start_run(id: str, request: Request, user: User, body: RunRequest | None = N
     if body.preset is not None:
         try:
             preset, _ = app.state.presets.resolve(body.preset, s.language)
-        except UnknownPreset:
-            raise ApiError.of(422, "invalid_parameters", "preset: unknown preset") from None
+        except UnknownPreset as e:
+            raise ApiError.of(422, "invalid_parameters", f"preset: {e}") from None
     settings = app.state.settings
     run_id = uuid4().hex
     date = caps.utc_date()
@@ -142,10 +146,8 @@ def start_run(id: str, request: Request, user: User, body: RunRequest | None = N
         raise invalid_state()
     if outcome == "daily_cap":
         raise ApiError.of(429, "daily_cap_reached", caps.DAILY_MESSAGE, period="day")
-    if outcome == "month_cap":
-        raise ApiError.of(429, "monthly_cap_reached", caps.MONTHLY_MESSAGE, period="month")
     if outcome == "concurrent":
-        raise ApiError.of(429, "daily_cap_reached", caps.CONCURRENT_MESSAGE, period="day")
+        raise ApiError.of(429, "concurrent_runs", caps.CONCURRENT_MESSAGE)
     try:
         queue = getattr(app.state, "queue", None)
         if queue is None:
@@ -186,7 +188,7 @@ def _compensate(repo, uid: str, sid: str, run_id: str, date: str) -> None:
     response_model=RunList,
     summary="The session's runs, oldest first",
 )
-def list_runs(id: str, request: Request, user: User) -> RunList:
+def list_runs(id: ResourceId, request: Request, user: User) -> RunList:
     _open_session(request, user, id)
     return RunList(items=[_view(r) for r in request.app.state.repo.list_runs(user.uid, id)])
 
@@ -197,7 +199,7 @@ def list_runs(id: str, request: Request, user: User) -> RunList:
     response_model=RunView,
     summary="One run: status, params, run_info",
 )
-def get_run(run_id: str, request: Request, user: User) -> RunView:
+def get_run(run_id: ResourceId, request: Request, user: User) -> RunView:
     repo = request.app.state.repo
     run = repo.get_run_by_id(user.uid, run_id)
     _open_session(request, user, run.session_id)
@@ -210,7 +212,7 @@ def get_run(run_id: str, request: Request, user: User) -> RunView:
     response_model=ReportList,
     summary="Report versions, oldest first",
 )
-def list_reports(id: str, request: Request, user: User) -> ReportList:
+def list_reports(id: ResourceId, request: Request, user: User) -> ReportList:
     _open_session(request, user, id)
     docs = request.app.state.repo.list_reports(user.uid, id)
     return ReportList(
@@ -229,7 +231,7 @@ def list_reports(id: str, request: Request, user: User) -> ReportList:
     summary="One report by integer version (the public report address)",
     description="`Cache-Control: private, no-store`: the report carries PHI.",
 )
-def get_report(id: str, version: int, request: Request, response: Response, user: User):
+def get_report(id: ResourceId, version: int, request: Request, response: Response, user: User):
     _open_session(request, user, id)
     d = request.app.state.repo.get_report_by_version(user.uid, id, version)
     response.headers["Cache-Control"] = "private, no-store"

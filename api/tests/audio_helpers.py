@@ -47,13 +47,15 @@ class StubTools:
         self.probed: list[str] = []
         self.transcoded: list[tuple[str, float | None]] = []
 
-    def probe(self, path: Path) -> ProbeResult:
+    def probe(self, path: Path, fmt: str | None = None) -> ProbeResult:
         self.probed.append(path.name)
         if self.probe_error:
             raise ToolError("ffprobe failed")
         return self.flac_result if path.suffix == ".flac" else self.result
 
-    def to_flac(self, src: Path, dst: Path, max_seconds: float | None = None) -> None:
+    def to_flac(
+        self, src: Path, dst: Path, max_seconds: float | None = None, fmt: str | None = None
+    ) -> None:
         self.transcoded.append((src.name, max_seconds))
         if self.transcode_error:
             raise ToolError("ffmpeg failed")

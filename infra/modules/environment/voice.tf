@@ -15,7 +15,6 @@ locals {
     { name = "VOICE_PROVIDERS_FILE", value = "config/${var.env}/voice_providers.yaml" },
     { name = "ADAPTERS", value = "real" },
     { name = "AI_CAP_DAY", value = tostring(var.ai_cap_day) },
-    { name = "AI_CAP_MONTH", value = tostring(var.ai_cap_month) },
     { name = "AI_MAX_SECONDS", value = tostring(var.ai_max_seconds) },
     { name = "AI_WARN_SECONDS", value = tostring(var.ai_warn_seconds) },
     { name = "AI_MIN_SECONDS", value = tostring(var.ai_min_seconds) },
@@ -51,6 +50,13 @@ resource "google_project_iam_member" "voice_datastore_user" {
   }
 
   depends_on = [google_firestore_database.db]
+}
+
+resource "google_secret_manager_secret_iam_member" "voice_hmac" {
+  project   = var.project
+  secret_id = google_secret_manager_secret.uid_hmac.secret_id
+  role      = "roles/secretmanager.secretAccessor"
+  member    = "serviceAccount:${google_service_account.voice.email}"
 }
 
 resource "google_cloud_run_v2_service" "voice" {
@@ -90,6 +96,15 @@ resource "google_cloud_run_v2_service" "voice" {
         name  = "SERVICE_MODE"
         value = "voice"
       }
+      env {
+        name = "UID_HMAC_KEY"
+        value_source {
+          secret_key_ref {
+            secret  = google_secret_manager_secret.uid_hmac.secret_id
+            version = "latest"
+          }
+        }
+      }
       dynamic "env" {
         for_each = local.voice_env
         content {
@@ -116,6 +131,7 @@ resource "google_cloud_run_v2_service" "voice" {
   }
 
   depends_on = [
+    google_secret_manager_secret_iam_member.voice_hmac,
     google_project_iam_member.voice_aiplatform_user,
     google_project_iam_member.voice_datastore_user,
   ]

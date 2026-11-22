@@ -7,7 +7,6 @@ file so no function queries without one of the helpers.
 """
 
 import base64
-import binascii
 import hashlib
 import os
 import random
@@ -15,9 +14,9 @@ import threading
 import time
 import weakref
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 
-from google.api_core.exceptions import Aborted, AlreadyExists
+from google.api_core.exceptions import Aborted, AlreadyExists, InvalidArgument
 from google.api_core.exceptions import NotFound as GoogleNotFound
 from google.cloud import firestore
 from google.cloud.firestore_v1 import FieldFilter, Increment
@@ -60,7 +59,6 @@ from onolys_api.repo.models import (
     SessionStatusDoc,
     TranscriptDoc,
     UsageDoc,
-    UsageMonthDoc,
     UserDoc,
     interview_refundable,
     utcnow,
@@ -90,15 +88,30 @@ def _load[M: Doc](model: type[M], snap) -> M:
     return model.model_validate({**(snap.to_dict() or {}), "id": snap.id})
 
 
-def _encode_cursor(sid: str) -> str:
-    return base64.urlsafe_b64encode(sid.encode()).decode().rstrip("=")
+def _encode_cursor(created_at: datetime, sid: str) -> str:
+    raw = f"{created_at.isoformat()}|{sid}"
+    return base64.urlsafe_b64encode(raw.encode()).decode().rstrip("=")
 
 
-def _decode_cursor(cursor: str) -> str:
+def _decode_cursor(cursor: str) -> tuple[datetime, str]:
+    """A cursor is `created_at|id` in urlsafe base64 (a position, not a lookup, so it survives
+    its session being deleted); malformed is NotFound (-> 422)."""
     try:
-        return base64.urlsafe_b64decode(cursor + "=" * (-len(cursor) % 4)).decode()
-    except (binascii.Error, UnicodeDecodeError):
+        raw = base64.b64decode(
+            (cursor + "=" * (-len(cursor) % 4)).replace("-", "+").replace("_", "/"), validate=True
+        ).decode()
+        stamp, sep, sid = raw.partition("|")
+        created_at = datetime.fromisoformat(stamp)
+    except ValueError:  # binascii.Error, UnicodeDecodeError, bad timestamp, non-ASCII input
         raise NotFoundError() from None
+    if not sep or not sid or created_at.tzinfo is None:
+        raise NotFoundError()
+    return created_at, sid
+
+
+def _is_exhausted(e: ValueError) -> bool:
+    """The Firestore client's "Failed to commit transaction in N attempts" ValueError."""
+    return str(e).startswith("Failed to commit transaction")
 
 
 def _uid_query(source, uid: str):
@@ -108,7 +121,10 @@ def _uid_query(source, uid: str):
 
 def _owned(ref, uid: str, missing_ok: bool = False):
     """Snapshot of `ref` if it exists and belongs to `uid`; else NotFoundError (or None)."""
-    snap = ref.get()
+    try:
+        snap = ref.get()
+    except InvalidArgument:  # reserved or over-long doc id: it cannot exist
+        raise NotFoundError() from None
     if not snap.exists:
         if missing_ok:
             return None
@@ -255,22 +271,74 @@ class FirestoreRepo:
         if status is not None:
             stref = self._top("session_status", sid)
             batch.set(stref, {**status, "uid": uid, "updated_at": now}, merge=True)
-        batch.commit()
+        for attempt in range(_TXN_ROUNDS):  # a transaction holding the doc can time this write out
+            try:
+                batch.commit()
+                return
+            except Aborted:
+                if attempt == _TXN_ROUNDS - 1:
+                    raise
+                time.sleep(random.uniform(0.01, 0.15))
+
+    def confirm_speaker(
+        self, uid: str, sid: str, clinician: str, states: tuple[str, ...]
+    ) -> bool:
+        """Record the clinician only while the session is still in one of `states` (checked and
+        written in one transaction, so a run starting concurrently cannot be overwritten)."""
+        sref = self._top("sessions", sid)  # read inside the txn only: a plain read can abort
+        stref = self._top("session_status", sid)
+
+        @firestore.transactional
+        def txn_fn(txn) -> bool:
+            snap = sref.get(transaction=txn)
+            cur = snap.to_dict() or {}
+            if not snap.exists or cur.get("uid") != uid:
+                raise NotFoundError()
+            if cur.get("state") not in states:
+                return False
+            now = utcnow()
+            txn.update(
+                sref,
+                {"clinician_speaker": clinician, "speaker_confirmed": True, "updated_at": now},
+            )
+            txn.set(
+                stref, {"speaker_confirmed": True, "uid": uid, "updated_at": now}, merge=True
+            )
+            return True
+
+        return self._contended(txn_fn, uid)
 
     def list_sessions(
         self, uid: str, limit: int = 20, cursor: str | None = None
     ) -> Page[SessionDoc]:
         limit = max(1, min(limit, MAX_LIMIT))
-        q = _uid_query(self._client.collection("sessions"), uid).order_by(
-            "created_at", direction=firestore.Query.DESCENDING
+        q = (
+            _uid_query(self._client.collection("sessions"), uid)
+            .order_by("created_at", direction=firestore.Query.DESCENDING)
+            .order_by("__name__", direction=firestore.Query.DESCENDING)
         )
+        after: Any = None
         if cursor:
-            _, snap = self._owned_session(uid, _decode_cursor(cursor))
-            q = q.start_after(snap)
-        docs = [_load(SessionDoc, s) for s in q.limit(limit + 1).stream()]
+            created_at, sid = _decode_cursor(cursor)
+            after = {"created_at": created_at, "__name__": self._top("sessions", sid)}
+        # `deleting` sessions are skipped here, not after paging, so a page is never short
+        # while more remain: keep reading until limit + 1 visible docs or the end.
+        docs: list[SessionDoc] = []
+        while len(docs) <= limit:
+            page = list((q if after is None else q.start_after(after)).limit(limit + 1).stream())
+            for snap in page:
+                after = snap
+                doc = _load(SessionDoc, snap)
+                if doc.state != "deleting":
+                    docs.append(doc)
+                    if len(docs) > limit:
+                        break
+            if len(page) < limit + 1:
+                break
         more = len(docs) > limit
         items = docs[:limit]
-        return Page(items, _encode_cursor(items[-1].id) if more and items else None)
+        nxt = _encode_cursor(items[-1].created_at, items[-1].id) if more and items else None
+        return Page(items, nxt)
 
     def fail_stale_session(
         self, uid: str, sid: str, state: str, before: datetime, error: SessionError
@@ -284,7 +352,8 @@ class FirestoreRepo:
             sess = snap.to_dict() or {}
             if sess.get("uid") != uid:
                 raise NotFoundError()
-            if sess.get("state") != state or sess["updated_at"] >= before:
+            started = sess.get("stage_started_at") or sess["updated_at"]
+            if sess.get("state") != state or started >= before:
                 return False
             now = utcnow()
             fields: dict[str, Any] = {"state": "failed", "error": error.model_dump(),
@@ -520,6 +589,34 @@ class FirestoreRepo:
         except AlreadyExists:
             raise ConflictError() from None
 
+    def rotate_api_key(self, uid: str, keyid: str, doc: ApiKeyDoc, at: datetime) -> None:
+        """Revoke every active key and create the new one in ONE transaction: concurrent calls
+        leave exactly one active key."""
+        if doc.uid != uid:
+            raise ValueError("document uid does not match the caller")
+        new_ref = self._top("api_keys", keyid)
+
+        @firestore.transactional
+        def txn_fn(txn) -> None:
+            if new_ref.get(transaction=txn).exists:
+                raise ConflictError()
+            self._revoke_active_in(txn, uid, at)
+            txn.create(new_ref, doc.to_store())
+
+        self._contended(txn_fn, uid)
+
+    def revoke_active_api_keys(self, uid: str, at: datetime) -> None:
+        @firestore.transactional
+        def txn_fn(txn) -> None:
+            self._revoke_active_in(txn, uid, at)
+
+        self._contended(txn_fn, uid)
+
+    def _revoke_active_in(self, txn, uid: str, at: datetime) -> None:
+        q = _uid_query(self._client.collection("api_keys"), uid)
+        for snap in q.where(filter=FieldFilter("revoked_at", "==", None)).stream(transaction=txn):
+            txn.update(snap.reference, {"revoked_at": at})
+
     def active_api_key(self, uid: str) -> ApiKeyDoc | None:
         q = _uid_query(self._client.collection("api_keys"), uid)
         for snap in q.where(filter=FieldFilter("revoked_at", "==", None)).limit(1).stream():
@@ -554,7 +651,6 @@ class FirestoreRepo:
         self, uid: str, kind: Kind, date: str, defaults: LimitDefaults, max_active: int
     ) -> ReserveUsageOutcome:
         day_ref = self._top("usage", f"{uid}_{date}")
-        month_ref = self._top("usage", f"{uid}_{date[:7]}")
         user_ref = self._top("users", uid)
         field = KIND_FIELD[kind]
 
@@ -562,25 +658,18 @@ class FirestoreRepo:
         def txn_fn(txn) -> ReserveUsageOutcome:
             user = user_ref.get(transaction=txn).to_dict() or {}
             day = day_ref.get(transaction=txn).to_dict() or {}
-            month = month_ref.get(transaction=txn).to_dict() or {}
-            outcome = decide_reserve(user, day, month, kind, defaults, max_active)
+            outcome = decide_reserve(user, day, kind, defaults, max_active)
             if outcome != "ok":
                 return outcome
             txn.set(day_ref, {"uid": uid, "date": date, field: day.get(field, 0) + 1}, merge=True)
-            txn.set(
-                month_ref,
-                {"uid": uid, "month": date[:7], field: month.get(field, 0) + 1},
-                merge=True,
-            )
             if kind == "eval":
                 txn.set(user_ref, {"active_runs": user.get("active_runs", 0) + 1}, merge=True)
             return "ok"
 
         return self._contended(txn_fn, uid)
 
-    def release_usage(self, uid: str, kind: Kind, date: str, refund: bool) -> None:
+    def release_usage(self, uid: str, kind: Kind, date: str, refund: bool, units: int = 1) -> None:
         day_ref = self._top("usage", f"{uid}_{date}")
-        month_ref = self._top("usage", f"{uid}_{date[:7]}")
         user_ref = self._top("users", uid)
         field = KIND_FIELD[kind]
 
@@ -588,24 +677,51 @@ class FirestoreRepo:
         def txn_fn(txn) -> None:
             user = user_ref.get(transaction=txn).to_dict() or {}
             day = day_ref.get(transaction=txn).to_dict() or {}
-            month = month_ref.get(transaction=txn).to_dict() or {}
             if kind == "eval" and user.get("active_runs", 0) > 0:
                 txn.set(user_ref, {"active_runs": user["active_runs"] - 1}, merge=True)
             if refund:
                 if day.get(field, 0) > 0:
-                    txn.set(day_ref, {field: day[field] - 1}, merge=True)
-                if month.get(field, 0) > 0:
-                    txn.set(month_ref, {field: month[field] - 1}, merge=True)
+                    txn.set(day_ref, {field: max(0, day[field] - units)}, merge=True)
 
         self._contended(txn_fn, uid)
 
-    def get_usage_docs(self, uid: str, date: str) -> tuple[UsageDoc, UsageMonthDoc]:
+    def release_run_slot(
+        self, uid: str, sid: str, run_id: str, refund: bool, date: str | None
+    ) -> bool:
+        run_ref = self._run_ref(uid, sid, run_id)
+        user_ref = self._top("users", uid)
+
+        @firestore.transactional
+        def txn_fn(txn) -> bool:
+            run_snap = run_ref.get(transaction=txn)
+            if not run_snap.exists:
+                raise NotFoundError()
+            run = run_snap.to_dict() or {}
+            if run.get("released"):
+                return False
+            day_key = run.get("cap_date") or date
+            user = user_ref.get(transaction=txn).to_dict() or {}
+            day_ref = self._top("usage", f"{uid}_{day_key}") if day_key else None
+            day = (day_ref.get(transaction=txn).to_dict() or {}) if day_ref else {}
+            txn.update(run_ref, {"released": True})
+            if day_key:
+                if user.get("active_runs", 0) > 0:
+                    txn.set(user_ref, {"active_runs": user["active_runs"] - 1}, merge=True)
+                if refund and run.get("counted", True):
+                    field = KIND_FIELD["eval"]
+                    units = run.get("units", 1)
+                    if day.get(field, 0) > 0:
+                        txn.set(day_ref, {field: max(0, day[field] - units)}, merge=True)
+            return True
+
+        try:
+            return self._contended(txn_fn, uid)
+        except GoogleNotFound:  # the run's session was deleted under it
+            raise NotFoundError() from None
+
+    def get_usage_doc(self, uid: str, date: str) -> UsageDoc:
         day = self._top("usage", f"{uid}_{date}").get()
-        month = self._top("usage", f"{uid}_{date[:7]}").get()
-        return (
-            _load(UsageDoc, day) if day.exists else UsageDoc(uid=uid, date=date),
-            _load(UsageMonthDoc, month) if month.exists else UsageMonthDoc(uid=uid, month=date[:7]),
-        )
+        return _load(UsageDoc, day) if day.exists else UsageDoc(uid=uid, date=date)
 
     def start_first_run(
         self, uid: str, sid: str, run_id: str, date: str, defaults: LimitDefaults, max_active: int,
@@ -614,7 +730,6 @@ class FirestoreRepo:
         sref = self._session_ref(uid, sid)
         stref = self._top("session_status", sid)
         usage_ref = self._top("usage", f"{uid}_{date}")
-        month_ref = self._top("usage", f"{uid}_{date[:7]}")
         user_ref = self._top("users", uid)
         run_ref = sref.collection("runs").document(run_id)
         ratings = sref.collection("ratings")
@@ -635,11 +750,11 @@ class FirestoreRepo:
             status = stref.get(transaction=txn).to_dict() or {}
             user = user_ref.get(transaction=txn).to_dict() or {}
             usage = usage_ref.get(transaction=txn).to_dict() or {}
-            month = month_ref.get(transaction=txn).to_dict() or {}
             latest = [s for s in newest.get(transaction=txn) if s.id != DRAFT_ID]
             now = utcnow()
-            exempt = bool(sess.get("interview_id"))
-            decided = decide_start(user, usage, month, defaults, max_active, exempt)
+            exempt = bool(sess.get("interview_id")) and not sess.get("free_run_void")
+            units = sess.get("n_runs", 1)
+            decided = decide_start(user, usage, defaults, max_active, exempt, units)
             if decided != "ok":
                 outcome: StartOutcome = START_OUTCOME[decided]  # type: ignore[assignment]
                 code = HELD_ERROR_CODE[outcome]
@@ -650,25 +765,20 @@ class FirestoreRepo:
                 uid=uid, session_id=sid, run_id=run_id, n_runs=sess.get("n_runs", 1),
                 preset=sess.get("preset"), rating_id=latest[0].id if latest else None,
                 stt=sess.get("stt"), code_version=code_version, cap_date=date,
-                counted=not exempt,
+                counted=not exempt, units=units,
             )  # fmt: skip
             txn.create(run_ref, run.to_store())
             if not exempt:
                 txn.set(
                     usage_ref,
-                    {"uid": uid, "date": date, "runs": usage.get("runs", 0) + 1},
-                    merge=True,
-                )
-                txn.set(
-                    month_ref,
-                    {"uid": uid, "month": date[:7], "runs": month.get("runs", 0) + 1},
+                    {"uid": uid, "date": date, "runs": usage.get("runs", 0) + units},
                     merge=True,
                 )
             txn.set(user_ref, {"active_runs": user.get("active_runs", 0) + 1}, merge=True)
             txn.update(
                 sref,
                 {"first_run_id": run_id, "state": "running", "step": None, "error": None,
-                 "updated_at": now},
+                 "updated_at": now, "stage_started_at": now},
             )  # fmt: skip
             txn.set(
                 stref,
@@ -688,7 +798,6 @@ class FirestoreRepo:
         sref = self._session_ref(uid, sid)
         stref = self._top("session_status", sid)
         usage_ref = self._top("usage", f"{uid}_{date}")
-        month_ref = self._top("usage", f"{uid}_{date[:7]}")
         user_ref = self._top("users", uid)
         run_ref = sref.collection("runs").document(run_id)
         ratings = sref.collection("ratings")
@@ -709,37 +818,43 @@ class FirestoreRepo:
             status = stref.get(transaction=txn).to_dict() or {}
             user = user_ref.get(transaction=txn).to_dict() or {}
             usage = usage_ref.get(transaction=txn).to_dict() or {}
-            month = month_ref.get(transaction=txn).to_dict() or {}
             latest = [s for s in newest.get(transaction=txn) if s.id != DRAFT_ID]
             # the free first run of an interview-linked session (SP11 R5), same as start_first_run
-            exempt = bool(sess.get("interview_id")) and not sess.get("first_run_id")
-            decided = decide_start(user, usage, month, defaults, max_active, exempt)
+            exempt = (
+                bool(sess.get("interview_id"))
+                and not sess.get("free_run_void")
+                and not sess.get("first_run_id")
+            )
+            units = n_runs or sess.get("n_runs", 1)
+            decided = decide_start(user, usage, defaults, max_active, exempt, units)
             if decided != "ok":
                 return START_OUTCOME[decided]  # type: ignore[return-value]
             run = RunDoc(
                 uid=uid, session_id=sid, run_id=run_id, n_runs=n_runs or sess.get("n_runs", 1),
                 preset=preset or sess.get("preset"), rating_id=latest[0].id if latest else None,
                 stt=sess.get("stt"), code_version=code_version, cap_date=date,
-                counted=not exempt,
+                counted=not exempt, units=units,
             )  # fmt: skip
             progress = (
                 start_progress
                 if sess["state"] in ("report_ready", "failed")
                 else max(status.get("progress", 0), start_progress)
             )
-            fields = {"state": "running", "step": None, "error": None, "updated_at": utcnow()}
+            now_ = utcnow()
+            fields = {
+                "state": "running",
+                "step": None,
+                "error": None,
+                "updated_at": now_,
+                "stage_started_at": now_,
+            }
             if not sess.get("first_run_id"):
                 fields["first_run_id"] = run_id
             txn.create(run_ref, run.to_store())
             if not exempt:
                 txn.set(
                     usage_ref,
-                    {"uid": uid, "date": date, "runs": usage.get("runs", 0) + 1},
-                    merge=True,
-                )
-                txn.set(
-                    month_ref,
-                    {"uid": uid, "month": date[:7], "runs": month.get("runs", 0) + 1},
+                    {"uid": uid, "date": date, "runs": usage.get("runs", 0) + units},
                     merge=True,
                 )
             txn.set(user_ref, {"active_runs": user.get("active_runs", 0) + 1}, merge=True)
@@ -773,7 +888,12 @@ class FirestoreRepo:
         for round_ in range(_TXN_ROUNDS):
             try:
                 return txn_fn(self._client.transaction(max_attempts=_TXN_ATTEMPTS))
-            except (ValueError, Aborted):  # exhausted retries or a raw 409 lock timeout: contention
+            except (ValueError, Aborted) as e:
+                # contention only: the client's "exhausted attempts" ValueError (chained from the
+                # last abort) or a raw 409 lock timeout. Any other ValueError is a real bug in
+                # txn_fn: raise it at once instead of retrying under the uid lock.
+                if isinstance(e, ValueError) and not _is_exhausted(e):
+                    raise
                 if round_ == _TXN_ROUNDS - 1:
                     raise
                 time.sleep(random.uniform(0.01, 0.15))
@@ -788,6 +908,35 @@ class FirestoreRepo:
         except AlreadyExists:
             raise ConflictError() from None
 
+    def create_interview_reserved(
+        self, uid: str, iid: str, doc: InterviewDoc, defaults: LimitDefaults, max_active: int
+    ) -> ReserveUsageOutcome | Literal["open_exists"]:
+        if doc.uid != uid:
+            raise ValueError("document uid does not match the caller")
+        date = doc.reservation_date
+        day_ref = self._top("usage", f"{uid}_{date}")
+        user_ref = self._top("users", uid)
+        iv_ref = self._top("interviews", iid)
+        open_q = _uid_query(self._client.collection("interviews"), uid).where(
+            filter=FieldFilter("state", "in", ["created", "live"])
+        )
+
+        @firestore.transactional
+        def txn_fn(txn):
+            if any(True for _ in open_q.get(transaction=txn)):
+                return "open_exists"
+            user = user_ref.get(transaction=txn).to_dict() or {}
+            day = day_ref.get(transaction=txn).to_dict() or {}
+            outcome = decide_reserve(user, day, "interview", defaults, max_active)
+            if outcome != "ok":
+                return outcome
+            field = KIND_FIELD["interview"]
+            txn.set(day_ref, {"uid": uid, "date": date, field: day.get(field, 0) + 1}, merge=True)
+            txn.create(iv_ref, doc.to_store())
+            return "ok"
+
+        return self._contended(txn_fn, uid)
+
     def get_interview(self, uid: str, iid: str) -> InterviewDoc:
         return _load(InterviewDoc, _owned(self._top("interviews", iid), uid))
 
@@ -800,7 +949,7 @@ class FirestoreRepo:
     def transition_interview(
         self, uid: str, iid: str, from_states: tuple[InterviewState, ...],
         to_state: InterviewState, fields: dict[str, Any] | None = None,
-        refund_rule: tuple[datetime, float] | None = None,
+        refund_rule: tuple[datetime, float] | tuple[datetime, float, int] | None = None,
     ) -> InterviewDoc | None:  # fmt: skip
         ref = self._top("interviews", iid)
         _owned(ref, uid)
@@ -814,7 +963,21 @@ class FirestoreRepo:
                 return None
             data = {**data, **(fields or {}), "state": to_state}
             if refund_rule is not None:
-                data["refunded"] = interview_refundable(data, *refund_rule)
+                data["refunded"] = interview_refundable(data, *refund_rule[:2])
+                if data["refunded"] and len(refund_rule) > 2:
+                    day_ref = self._top("usage", f"{uid}_{data['reservation_date']}")
+                    given = (day_ref.get(transaction=txn).to_dict() or {}).get(
+                        "interview_refunds", 0
+                    )
+                    if given >= refund_rule[2]:
+                        data["refunded"] = False
+                    else:
+                        txn.set(
+                            day_ref,
+                            {"uid": uid, "date": data["reservation_date"],
+                             "interview_refunds": given + 1},
+                            merge=True,
+                        )  # fmt: skip
             txn.set(ref, data)
             return data
 

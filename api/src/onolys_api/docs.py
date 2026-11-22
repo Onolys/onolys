@@ -90,6 +90,12 @@ EXTRA: dict[str, tuple[int, ...]] = {
     "confirmSpeakers": (409, 422),
     "putRating": (422,),
     "startRun": (409, 422, 429, 503),
+    "getTranscript": (409,),
+    "getSpeakers": (409,),
+    "createInterview": (422,),
+    "getApiKey": (403,),
+    "createApiKey": (403,),
+    "deleteApiKey": (403,),
 }
 _REF = {"$ref": "#/components/schemas/ErrorResponse"}
 
@@ -106,8 +112,8 @@ def add_error_responses(schema: dict[str, Any]) -> dict[str, Any]:
                 statuses: tuple[int, ...] = (500,)
             else:
                 statuses = COMMON + EXTRA.get(op["operationId"], ())
-                if "{" in path:
-                    statuses += (404,)
+                if "{" in path:  # ids are pattern-checked: a malformed one is a 422
+                    statuses += (404, 422)
             for status in sorted(set(statuses)):
                 responses[str(status)] = {
                     "description": _STATUS_TEXT[status],

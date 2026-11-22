@@ -1,4 +1,4 @@
-"""`GET /v1/usage`: eval + interview used/cap/resets_at for the UTC day and month (R8, D3)."""
+"""`GET /v1/usage`: eval + interview used/cap/resets_at for the UTC day (R8, D3)."""
 
 from datetime import datetime
 from typing import Annotated
@@ -23,7 +23,6 @@ class Period(BaseModel):
 
 class KindUsage(BaseModel):
     day: Period
-    month: Period
 
 
 class Usage(BaseModel):
@@ -34,13 +33,10 @@ class Usage(BaseModel):
 def _kind(k: caps.KindUsage) -> KindUsage:
     return KindUsage(
         day=Period(used=k.day.used, cap=k.day.cap, resets_at=k.day.resets_at),
-        month=Period(used=k.month.used, cap=k.month.cap, resets_at=k.month.resets_at),
     )
 
 
-@router.get(
-    "", operation_id="getUsage", response_model=Usage, summary="Usage and caps (UTC day and month)"
-)
+@router.get("", operation_id="getUsage", response_model=Usage, summary="Usage and caps (UTC day)")
 def get_usage(request: Request, user: User) -> Usage:
     view = caps.usage_view(request.app.state.repo, request.app.state.settings, user.uid)
     return Usage(eval=_kind(view.eval), interview=_kind(view.interview))

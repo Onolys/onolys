@@ -80,7 +80,7 @@ async def flow(settings, blobs, tmp_path):
         "providers:\n  base: {provider: p1, model: m1}\ndefault: base\nby_language: {}\n"
     )
     app = create_app(
-        replace(settings, routes_file=str(routes), adapters="stub"),
+        replace(settings, extra_presets=("fast",), routes_file=str(routes), adapters="stub"),
         repo=FakeRepo(blobs),
         blobs=blobs,
         audio_tools=StubTools(),
@@ -182,7 +182,7 @@ async def test_combined_staging_auto_runs_stub_flow_to_report(blobs, tmp_path, m
             return token.removeprefix("test:")
 
     s = Settings(env="staging", service_mode="combined", auth_mode="idp", adapters="stub",
-                 auth_project="onolys", gcp_project="onolys", routes_file=str(routes))  # fmt: skip
+                 auth_project="onolys", gcp_project="onolys", routes_file=str(routes), extra_presets=("fast",))  # fmt: skip
     app = create_app(s, repo=FakeRepo(blobs), blobs=blobs, audio_tools=StubTools(),
                      token_verifier=Verifier())  # fmt: skip
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://t") as c:

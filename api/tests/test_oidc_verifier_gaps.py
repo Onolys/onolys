@@ -79,7 +79,7 @@ def test_unknown_kid_triggers_one_cert_refresh_then_succeeds():
         calls.append(1)
         return {"k1": PUB1} if len(calls) == 1 else {"k1": PUB1, "k2": PUB2}
 
-    v = OidcVerifier(AUD, SA, fetch_certs=fetch)
+    v = OidcVerifier(AUD, SA, fetch_certs=fetch, min_refresh_s=0)  # refresh floor off (FX4)
     assert v.verify(_mint(PRIV1, "k1")) == SA
     assert v.verify(_mint(PRIV2, "k2")) == SA  # rotated key: forced refetch
     assert len(calls) == 2
@@ -87,10 +87,19 @@ def test_unknown_kid_triggers_one_cert_refresh_then_succeeds():
 
 def test_unknown_kid_after_refresh_still_rejected():
     fetch = MagicMock(return_value={"k1": PUB1})
-    v = OidcVerifier(AUD, SA, fetch_certs=fetch)
+    v = OidcVerifier(AUD, SA, fetch_certs=fetch, min_refresh_s=0)
     with pytest.raises(InvalidToken):
         v.verify(_mint(PRIV2, "k-unknown"))
     assert fetch.call_count == 2  # initial + one forced refresh, no loop
+
+
+def test_unknown_kid_refresh_is_rate_limited_by_default():
+    fetch = MagicMock(return_value={"k1": PUB1})
+    v = OidcVerifier(AUD, SA, fetch_certs=fetch)
+    for _ in range(3):
+        with pytest.raises(InvalidToken):
+            v.verify(_mint(PRIV2, "k-unknown"))
+    assert fetch.call_count == 1  # FX4: forced refresh floored at MIN_REFRESH_S
 
 
 def test_cert_fetch_failure_is_503_not_invalid_token():
@@ -123,3 +132,95 @@ def test_fetch_oidc_certs_propagates_http_errors(monkeypatch):
     monkeypatch.setattr(requests, "get", MagicMock(return_value=resp))
     with pytest.raises(requests.HTTPError):
         oidc.fetch_oidc_certs()
+
+
+# ---- claim checks (M8): each case must be refused, and only by the intended claim -------------
+
+
+def _mint_claims(priv=PRIV1, kid="k1", header=None, **over):
+    now = int(time.time())
+    claims = {"aud": AUD, "iss": "https://accounts.google.com", "email": SA,
+              "email_verified": True, "sub": "1", "iat": now - 5, "exp": now + 600}  # fmt: skip
+    claims.update(over)
+    claims = {k: v for k, v in claims.items() if v is not _MISSING}
+    hdr = {"kid": kid, **(header or {})}
+    return jwt.encode(crypt.RSASigner.from_string(priv, kid), claims, header=hdr).decode()
+
+
+_MISSING = object()
+
+
+def _v():
+    return OidcVerifier(AUD, SA, fetch_certs=lambda: {"k1": PUB1})
+
+
+def test_good_token_returns_the_invoker_email():
+    assert _v().verify(_mint_claims()) == SA
+
+
+@pytest.mark.parametrize(
+    "over",
+    [
+        {"aud": "https://other.run.app"},
+        {"aud": AUD + "/"},
+        {"aud": _MISSING},
+        {"aud": ["https://other.run.app"]},
+        {"iss": "https://evil.example"},
+        {"iss": "https://accounts.google.com/"},
+        {"iss": "http://accounts.google.com"},
+        {"iss": _MISSING},
+        {"email": "someone@else.com"},
+        {"email": SA.upper()},
+        {"email": SA + " "},
+        {"email": ""},
+        {"email": None},
+        {"email": _MISSING},
+        {"email_verified": False},
+        {"email_verified": "true"},
+        {"email_verified": 1},
+        {"email_verified": None},
+        {"email_verified": _MISSING},
+        {"exp": int(time.time()) - 3600},
+        {"exp": _MISSING},
+        {"iat": int(time.time()) + 3600},
+    ],
+    ids=lambda o: "-".join(f"{k}={'missing' if x is _MISSING else x}" for k, x in o.items()),
+)
+def test_bad_claims_are_rejected(over):
+    with pytest.raises(InvalidToken):
+        _v().verify(_mint_claims(**over))
+
+
+def test_wrong_signing_key_rejected():
+    with pytest.raises(InvalidToken):
+        _v().verify(_mint_claims(priv=PRIV2))  # signed by another key, kid claims k1
+
+
+@pytest.mark.parametrize("token", ["", " ", ".", "..", "a.b", "a.b.c", "Bearer x", "\x00"])
+def test_garbage_tokens_rejected_without_touching_anything_else(token):
+    with pytest.raises(InvalidToken):
+        _v().verify(token)
+
+
+def test_non_rs256_alg_rejected_even_with_valid_claims():
+    import base64
+    import json
+
+    def b64(o):
+        return base64.urlsafe_b64encode(json.dumps(o).encode()).rstrip(b"=").decode()
+
+    good = _mint_claims()
+    _, payload, sig = good.split(".")
+    for alg in ("HS256", "ES256", "none", "rs256", None):
+        hdr = {"kid": "k1", **({"alg": alg} if alg else {})}
+        with pytest.raises(InvalidToken):
+            _v().verify(f"{b64(hdr)}.{payload}.{sig}")
+
+
+def test_clock_skew_is_tolerated_but_bounded():
+    from onolys_api.auth.idtoken import CLOCK_SKEW_S
+
+    now = int(time.time())
+    assert _v().verify(_mint_claims(exp=now - 1)) == SA  # inside the skew window
+    with pytest.raises(InvalidToken):
+        _v().verify(_mint_claims(exp=now - CLOCK_SKEW_S - 30))

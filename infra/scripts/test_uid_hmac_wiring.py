@@ -17,3 +17,10 @@ def test_api_and_worker_wire_uid_hmac_key():
     for svc in ("api", "worker"):
         b = resource_block(text, svc)
         assert re.search(r'name\s*=\s*"UID_HMAC_KEY"\s*\n\s*value_source \{\s*secret_key_ref \{\s*secret\s*=\s*google_secret_manager_secret\.uid_hmac\.secret_id\s*version\s*=\s*"latest"', b), svc
+
+
+def test_voice_wires_uid_hmac_key():
+    text = (TF.parent / "voice.tf").read_text()
+    b = resource_block(text, "voice")
+    assert re.search(r'name\s*=\s*"UID_HMAC_KEY"\s*\n\s*value_source \{\s*secret_key_ref \{\s*secret\s*=\s*google_secret_manager_secret\.uid_hmac\.secret_id\s*version\s*=\s*"latest"', b)
+    assert 'name = "ENV"' in text

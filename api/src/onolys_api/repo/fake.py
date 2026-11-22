@@ -3,7 +3,7 @@
 import copy
 import threading
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 
 from onolys_core.transcript import Transcript
 
@@ -50,7 +50,6 @@ from onolys_api.repo.models import (
     SessionStatusDoc,
     TranscriptDoc,
     UsageDoc,
-    UsageMonthDoc,
     UserDoc,
     interview_refundable,
     utcnow,
@@ -70,7 +69,7 @@ class FakeRepo:
         self._blobs = blobs
         self._docs: dict[str, dict[str, Any]] = {}  # full path -> stored dict
         self.status_writes: list[tuple[str, str, dict[str, Any]]] = []
-        self._claim_lock = threading.Lock()
+        self._claim_lock = threading.RLock()  # reentrant: release_run_slot calls release_usage
 
     # ---- storage primitives ----
 
@@ -206,6 +205,21 @@ class FakeRepo:
             self._put(f"session_status/{sid}", st)
             self._record_status(uid, sid)
 
+    def confirm_speaker(
+        self, uid: str, sid: str, clinician: str, states: tuple[str, ...]
+    ) -> bool:
+        with self._claim_lock:  # the fake's "transaction"
+            doc = self._owned(f"sessions/{sid}", uid)
+            if doc.get("state") not in states:
+                return False
+            self.update_session(
+                uid,
+                sid,
+                {"clinician_speaker": clinician, "speaker_confirmed": True},
+                status={"speaker_confirmed": True},
+            )
+            return True
+
     def list_sessions(
         self, uid: str, limit: int = 20, cursor: str | None = None
     ) -> Page[SessionDoc]:
@@ -219,15 +233,14 @@ class FakeRepo:
             key=lambda t: (t[1]["created_at"], t[0]),
             reverse=True,
         )
+        mine = [(i, d) for i, d in mine if d.get("state") != "deleting"]
         if cursor:
-            after = _decode_cursor(cursor)
-            self._owned(f"sessions/{after}", uid)
-            ids = [i for i, _ in mine]
-            mine = mine[ids.index(after) + 1 :] if after in ids else []
+            at, after = _decode_cursor(cursor)
+            mine = [(i, d) for i, d in mine if (d["created_at"], i) < (at, after)]
         page = [self._load(SessionDoc, i, copy.deepcopy(d)) for i, d in mine[: limit + 1]]
         more = len(page) > limit
         items = page[:limit]
-        return Page(items, _encode_cursor(items[-1].id) if more and items else None)
+        return Page(items, _encode_cursor(items[-1].created_at, items[-1].id) if more else None)
 
     def fail_stale_session(
         self, uid: str, sid: str, state: str, before: datetime, error: SessionError
@@ -235,7 +248,8 @@ class FakeRepo:
         with self._claim_lock:  # the fake's "transaction"
             sess = self._owned(f"sessions/{sid}", uid)
             assert sess is not None
-            if sess.get("state") != state or sess["updated_at"] >= before:
+            started = sess.get("stage_started_at") or sess["updated_at"]
+            if sess.get("state") != state or started >= before:
                 return False
             now = utcnow()
             sess.update(state="failed", error=error.model_dump(), updated_at=now)
@@ -449,6 +463,23 @@ class FakeRepo:
             raise ValueError("document uid does not match the caller")
         self._create(f"api_keys/{keyid}", doc.to_store())
 
+    def rotate_api_key(self, uid: str, keyid: str, doc: ApiKeyDoc, at: datetime) -> None:
+        if doc.uid != uid:
+            raise ValueError("document uid does not match the caller")
+        with self._claim_lock:
+            self.revoke_active_api_keys(uid, at)
+            self._create(f"api_keys/{keyid}", doc.to_store())
+
+    def revoke_active_api_keys(self, uid: str, at: datetime) -> None:
+        with self._claim_lock:
+            for path, d in list(self._docs.items()):
+                if (
+                    path.startswith("api_keys/")
+                    and d.get("uid") == uid
+                    and d.get("revoked_at") is None
+                ):
+                    self._put(path, {**d, "revoked_at": at})
+
     def active_api_key(self, uid: str) -> ApiKeyDoc | None:
         for path, d in self._docs.items():
             if path.startswith("api_keys/") and d.get("uid") == uid and d.get("revoked_at") is None:
@@ -487,37 +518,48 @@ class FakeRepo:
         with self._claim_lock:
             user = self._get(f"users/{uid}") or {}
             day = self._get(f"usage/{uid}_{date}") or {"uid": uid, "date": date}
-            month = self._get(f"usage/{uid}_{date[:7]}") or {"uid": uid, "month": date[:7]}
-            outcome = decide_reserve(user, day, month, kind, defaults, max_active)
+            outcome = decide_reserve(user, day, kind, defaults, max_active)
             if outcome != "ok":
                 return outcome
             self._put(f"usage/{uid}_{date}", {**day, field: day.get(field, 0) + 1})
-            self._put(f"usage/{uid}_{date[:7]}", {**month, field: month.get(field, 0) + 1})
             if kind == "eval":
                 self._put(f"users/{uid}", {**user, "active_runs": user.get("active_runs", 0) + 1})
             return "ok"
 
-    def release_usage(self, uid: str, kind: Kind, date: str, refund: bool) -> None:
+    def release_usage(self, uid: str, kind: Kind, date: str, refund: bool, units: int = 1) -> None:
         field = KIND_FIELD[kind]
         with self._claim_lock:
             user = self._get(f"users/{uid}") or {}
             if kind == "eval" and user.get("active_runs", 0) > 0:
                 self._put(f"users/{uid}", {**user, "active_runs": user["active_runs"] - 1})
             if refund:
-                for path in (f"usage/{uid}_{date}", f"usage/{uid}_{date[:7]}"):
-                    doc = self._get(path)
-                    if doc and doc.get(field, 0) > 0:
-                        self._put(path, {**doc, field: doc[field] - 1})
+                path = f"usage/{uid}_{date}"
+                doc = self._get(path)
+                if doc and doc.get(field, 0) > 0:
+                    self._put(path, {**doc, field: max(0, doc[field] - units)})
 
-    def get_usage_docs(self, uid: str, date: str) -> tuple[UsageDoc, UsageMonthDoc]:
+    def release_run_slot(
+        self, uid: str, sid: str, run_id: str, refund: bool, date: str | None
+    ) -> bool:
+        with self._claim_lock:  # the fake's "transaction"
+            self._own(uid, sid)
+            path = f"sessions/{sid}/runs/{run_id}"
+            d = self._get(path)
+            if d is None:
+                raise NotFoundError()
+            if d.get("released"):
+                return False
+            self._put(path, {**d, "released": True})
+            date = d.get("cap_date") or date
+            if date:
+                self.release_usage(
+                    uid, "eval", date, refund and d.get("counted", True), d.get("units", 1)
+                )
+            return True
+
+    def get_usage_doc(self, uid: str, date: str) -> UsageDoc:
         day = self._get(f"usage/{uid}_{date}")
-        month = self._get(f"usage/{uid}_{date[:7]}")
-        return (
-            self._load(UsageDoc, f"{uid}_{date}", day) if day else UsageDoc(uid=uid, date=date),
-            self._load(UsageMonthDoc, f"{uid}_{date[:7]}", month)
-            if month
-            else UsageMonthDoc(uid=uid, month=date[:7]),
-        )
+        return self._load(UsageDoc, f"{uid}_{date}", day) if day else UsageDoc(uid=uid, date=date)
 
     def start_first_run(
         self, uid: str, sid: str, run_id: str, date: str, defaults: LimitDefaults, max_active: int,
@@ -535,10 +577,10 @@ class FakeRepo:
             status = self._get(f"session_status/{sid}") or {}
             user = self._get(f"users/{uid}") or {}
             usage = self._get(f"usage/{uid}_{date}") or {"uid": uid, "date": date, "runs": 0}
-            month = self._get(f"usage/{uid}_{date[:7]}") or {"uid": uid, "month": date[:7]}
             now = utcnow()
-            exempt = bool(sess.get("interview_id"))
-            decided = decide_start(user, usage, month, defaults, max_active, exempt)
+            exempt = bool(sess.get("interview_id")) and not sess.get("free_run_void")
+            units = sess.get("n_runs", 1)
+            decided = decide_start(user, usage, defaults, max_active, exempt, units)
             if decided != "ok":
                 outcome: StartOutcome = START_OUTCOME[decided]  # type: ignore[assignment]
                 code = HELD_ERROR_CODE[outcome]
@@ -555,17 +597,16 @@ class FakeRepo:
                 uid=uid, session_id=sid, run_id=run_id, n_runs=sess.get("n_runs", 1),
                 preset=sess.get("preset"), rating_id=rating_id,
                 stt=sess.get("stt"), code_version=code_version, cap_date=date,
-                counted=not exempt,
+                counted=not exempt, units=units,
             )  # fmt: skip
             self._create(f"sessions/{sid}/runs/{run_id}", run.to_store())
             if not exempt:
-                self._put(f"usage/{uid}_{date}", {**usage, "runs": usage.get("runs", 0) + 1})
-                self._put(f"usage/{uid}_{date[:7]}", {**month, "runs": month.get("runs", 0) + 1})
+                self._put(f"usage/{uid}_{date}", {**usage, "runs": usage.get("runs", 0) + units})
             self._put(f"users/{uid}", {**user, "active_runs": user.get("active_runs", 0) + 1})
             self._put(
                 f"sessions/{sid}",
                 {**sess, "first_run_id": run_id, "state": "running", "step": None, "error": None,
-                 "updated_at": now},
+                 "updated_at": now, "stage_started_at": now},
             )  # fmt: skip
             self._put(
                 f"session_status/{sid}",
@@ -592,10 +633,14 @@ class FakeRepo:
             status = self._get(f"session_status/{sid}") or {}
             user = self._get(f"users/{uid}") or {}
             usage = self._get(f"usage/{uid}_{date}") or {"uid": uid, "date": date, "runs": 0}
-            month = self._get(f"usage/{uid}_{date[:7]}") or {"uid": uid, "month": date[:7]}
             # the free first run of an interview-linked session (SP11 R5), same as start_first_run
-            exempt = bool(sess.get("interview_id")) and not sess.get("first_run_id")
-            decided = decide_start(user, usage, month, defaults, max_active, exempt)
+            exempt = (
+                bool(sess.get("interview_id"))
+                and not sess.get("free_run_void")
+                and not sess.get("first_run_id")
+            )
+            units = n_runs or sess.get("n_runs", 1)
+            decided = decide_start(user, usage, defaults, max_active, exempt, units)
             if decided != "ok":
                 return START_OUTCOME[decided]  # type: ignore[return-value]
             revs = [(i, d) for i, d in self._children(sid, "ratings") if i != DRAFT_ID]
@@ -605,7 +650,7 @@ class FakeRepo:
                 n_runs=n_runs or sess.get("n_runs", 1),
                 preset=preset or sess.get("preset"), rating_id=rating_id,
                 stt=sess.get("stt"), code_version=code_version, cap_date=date,
-                counted=not exempt,
+                counted=not exempt, units=units,
             )  # fmt: skip
             now = utcnow()
             progress = (
@@ -615,13 +660,12 @@ class FakeRepo:
             )
             self._create(f"sessions/{sid}/runs/{run_id}", run.to_store())
             if not exempt:
-                self._put(f"usage/{uid}_{date}", {**usage, "runs": usage.get("runs", 0) + 1})
-                self._put(f"usage/{uid}_{date[:7]}", {**month, "runs": month.get("runs", 0) + 1})
+                self._put(f"usage/{uid}_{date}", {**usage, "runs": usage.get("runs", 0) + units})
             self._put(f"users/{uid}", {**user, "active_runs": user.get("active_runs", 0) + 1})
             self._put(
                 f"sessions/{sid}",
                 {**sess, "first_run_id": sess.get("first_run_id") or run_id, "state": "running",
-                 "step": None, "error": None, "updated_at": now},
+                 "step": None, "error": None, "updated_at": now, "stage_started_at": now},
             )  # fmt: skip
             self._put(
                 f"session_status/{sid}",
@@ -641,6 +685,21 @@ class FakeRepo:
     def get_interview(self, uid: str, iid: str) -> InterviewDoc:
         return self._load(InterviewDoc, iid, self._owned(f"interviews/{iid}", uid))
 
+    def create_interview_reserved(
+        self, uid: str, iid: str, doc: InterviewDoc, defaults: LimitDefaults, max_active: int
+    ) -> ReserveUsageOutcome | Literal["open_exists"]:
+        if doc.uid != uid:
+            raise ValueError("document uid does not match the caller")
+        with self._claim_lock:
+            if self.list_open_interviews(uid):
+                return "open_exists"
+            outcome = self.reserve_usage(
+                uid, "interview", doc.reservation_date, defaults, max_active
+            )
+            if outcome == "ok":
+                self._create(f"interviews/{iid}", doc.to_store())
+            return outcome
+
     def list_open_interviews(self, uid: str) -> list[InterviewDoc]:
         return [
             self._load(InterviewDoc, p.removeprefix("interviews/"), copy.deepcopy(d))
@@ -652,7 +711,7 @@ class FakeRepo:
     def transition_interview(
         self, uid: str, iid: str, from_states: tuple[InterviewState, ...],
         to_state: InterviewState, fields: dict[str, Any] | None = None,
-        refund_rule: tuple[datetime, float] | None = None,
+        refund_rule: tuple[datetime, float] | tuple[datetime, float, int] | None = None,
     ) -> InterviewDoc | None:  # fmt: skip
         with self._claim_lock:
             d = self._owned(f"interviews/{iid}", uid)
@@ -660,7 +719,17 @@ class FakeRepo:
                 return None
             d = {**d, **(fields or {}), "state": to_state}
             if refund_rule is not None:
-                d["refunded"] = interview_refundable(d, *refund_rule)
+                d["refunded"] = interview_refundable(d, *refund_rule[:2])
+                if d["refunded"] and len(refund_rule) > 2:
+                    day_path = f"usage/{uid}_{d['reservation_date']}"
+                    day = self._get(day_path) or {"uid": uid, "date": d["reservation_date"]}
+                    if day.get("interview_refunds", 0) >= refund_rule[2]:
+                        d["refunded"] = False
+                    else:
+                        self._put(
+                            day_path,
+                            {**day, "interview_refunds": day.get("interview_refunds", 0) + 1},
+                        )
             self._put(f"interviews/{iid}", d)
             return self._load(InterviewDoc, iid, d)
 
