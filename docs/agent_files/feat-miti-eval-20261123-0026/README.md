@@ -1,12 +1,20 @@
 ---
-stage: design
-status: draft
-summary: Index of the 5 sub-project PRDs for the MITI eval site (transcript.v1 + upload, CASAA dataset + CLI, engines/core, oneshot + validation, eval.onolys.com), with dependency graph, locked decisions, cross-SP seams, open items, owner tasks, PRD mismatches
+stage: code
+status: in-progress
+summary: All five sub-projects implemented; SP1–4 reviewed PASS, SP5 review fixes in progress before full branch review and shipping
 date: 2026-11-23
 ---
 # MITI eval site: design index
 
-Branch `feat/miti-eval` (Onolys/onolys). Brainstorm: `brainstorm.md`. PRDs are drafts; this file does not replace them.
+Branch `feat/miti-eval` (Onolys/onolys). Brainstorm: `brainstorm.md`. Governing decisions and PRD contracts below remain unchanged.
+
+## Current implementation and review status
+
+- All five sub-projects implemented; every planned task is done, including SP5 Task 12 at `d11ca6c`.
+- SP1–SP4 reviewed PASS. SP5 initial review: NEEDS_CHANGES, three P2 must-fix findings; focused fix agent is in progress.
+- Next: SP5 fix commit and three-persona re-review, then full branch three-persona review, then `dev-ship` PR/CI. Never merge automatically.
+- Live Firebase staging app works at https://onolys-eval-staging.web.app. Task 12 evidence qualifies Gemini HTTP 402/default-provider acceptance, owner DNS/certificate, unregistered deploy workflow, and unverified actual in-flight tab-close proof. Implementation completion does not claim these acceptance conditions passed.
+- Private CASAA data and sensitive evidence remain outside the public repository. See SP5 code/review artifacts and `code-2026-11-23-task12.md` for exact evidence.
 
 ## Sub-projects
 | # | Name | Phase | Depends on | Owns | One-line scope |
