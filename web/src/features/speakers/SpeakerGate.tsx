@@ -69,7 +69,7 @@ export function SpeakerGate({ sessionId, mode, onDone }: SpeakerGateProps) {
     <section className="speaker-gate" aria-labelledby="speaker-gate-heading">
       <h2 id="speaker-gate-heading">Who is the clinician?</h2>
       <p className="form-note">
-        We separated the voices automatically. Check the lines below and tell us which speaker is the clinician.
+        Check the speaker labels and lines below and tell us which speaker is the clinician.
         {list.length > 2 ? " Everyone else is the client." : ""}
       </p>
       <ul className="speaker-cards" aria-label="Speakers">

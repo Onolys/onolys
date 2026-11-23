@@ -7,7 +7,7 @@ import type { components } from "../../api/schema";
 import { formatElapsed } from "../../lib/format";
 import { buildSegments, type SpanInput } from "../../lib/spans";
 
-export type Turn = components["schemas"]["TranscriptTurn"];
+export type Turn = components["schemas"]["TranscriptView"]["turns"][number];
 
 /** A line to highlight: code-point offsets into `turn_id`'s text, with the quote the report claims. */
 export interface Highlight extends SpanInput {

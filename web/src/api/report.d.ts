@@ -14,8 +14,27 @@ export type Version = string;
 export type PackHash = string;
 export type Label = string;
 export type Language = string;
-export type FromS = number | null;
-export type ToS = number | null;
+/**
+ * Exactly one half-open time (milliseconds) or zero-based turn range.
+ */
+export type CodedSpan = CodedSpan1 & CodedSpan2;
+export type CodedSpan1 =
+  | {
+      start_ms: number;
+      end_ms: number;
+      start_turn?: null;
+      end_turn?: null;
+    }
+  | {
+      start_turn: number;
+      end_turn: number;
+      start_ms?: null;
+      end_ms?: null;
+    };
+export type StartMs = number | null;
+export type EndMs = number | null;
+export type StartTurn = number | null;
+export type EndTurn = number | null;
 export type SubjectSpeaker = string;
 export type NRuns = number;
 export type Provider = string;
@@ -153,7 +172,11 @@ export type OutputTokens = number;
 export type CacheReadTokens = number;
 export type CacheWriteTokens = number;
 export type CostUsd = number | null;
-export type Mode = "whole" | "random_window";
+export type Mode = "whole" | "explicit" | "random_window";
+export type StartMs1 = number | null;
+export type EndMs1 = number | null;
+export type StartTurn1 = number | null;
+export type EndTurn1 = number | null;
 export type DurationS = number | null;
 export type Seed = string;
 
@@ -198,9 +221,11 @@ export interface Protocol {
   pack_hash: PackHash;
   label: Label;
 }
-export interface CodedSpan {
-  from_s?: FromS;
-  to_s?: ToS;
+export interface CodedSpan2 {
+  start_ms?: StartMs;
+  end_ms?: EndMs;
+  start_turn?: StartTurn;
+  end_turn?: EndTurn;
 }
 /**
  * route name -> litellm id
@@ -433,6 +458,10 @@ export interface RunUsage {
  */
 export interface SpanInfo {
   mode: Mode;
+  start_ms?: StartMs1;
+  end_ms?: EndMs1;
+  start_turn?: StartTurn1;
+  end_turn?: EndTurn1;
   duration_s?: DurationS;
   seed: Seed;
 }

@@ -8,6 +8,11 @@ import type { components } from "./schema";
 export const GENERIC_MESSAGE = "Something went wrong. Please try again.";
 
 const MESSAGES = {
+  transcript_invalid: "We couldn't read this transcript. Check its format and upload it again.",
+  transcript_too_large: "This transcript is over 1 MB. Upload a smaller file.",
+  empty_transcript: "The transcript needs at least 50 words. Upload a longer transcript.",
+  session_too_long: "This session is too long to code. Use a narrower coded_span in the API.",
+  invalid_coded_span: "The coded range is invalid. Check the range and try again.",
   unsupported_audio:
     "We can't use this file type. Upload an mp3, wav, m4a, webm or ogg recording.",
   audio_too_long: "This recording is longer than 20 minutes. Upload a shorter one.",
@@ -59,6 +64,10 @@ export function messageForCode(code: string | undefined, ctx: MessageContext = {
 export type FailureAction = "upload_new" | "try_again";
 
 const UPLOAD_NEW = new Set<string>([
+  "transcript_invalid",
+  "transcript_too_large",
+  "empty_transcript",
+  "session_too_long",
   "unsupported_audio",
   "audio_too_long",
   "interview_too_long",
