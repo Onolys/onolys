@@ -10,6 +10,7 @@ members = [
     "onolys-engine-core",
     "onolys-eval",
     "onolys-miti",
+    "onolys-oneshot",
 ]
 
 [[package]]
@@ -1355,6 +1356,31 @@ dev = [
     { name = "pytest", specifier = ">=8" },
     { name = "pytest-asyncio", specifier = ">=0.23" },
     { name = "pytest-cov", specifier = ">=5" },
+    { name = "ruff", specifier = ">=0.6" },
+]
+
+[[package]]
+name = "onolys-oneshot"
+version = "0.1.0"
+source = { editable = "engines/oneshot" }
+dependencies = [
+    { name = "onolys-engine-core" },
+]
+
+[package.dev-dependencies]
+dev = [
+    { name = "pytest" },
+    { name = "pytest-asyncio" },
+    { name = "ruff" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "onolys-engine-core", editable = "engines/core" }]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "pytest", specifier = ">=8" },
+    { name = "pytest-asyncio", specifier = ">=0.23" },
     { name = "ruff", specifier = ">=0.6" },
 ]
 

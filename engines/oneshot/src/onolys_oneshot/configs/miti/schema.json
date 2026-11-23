@@ -1,0 +1,156 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:onolys:oneshot:miti:1",
+  "type": "object",
+  "properties": {
+    "counts": {
+      "type": "object",
+      "properties": {
+        "gi": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "persuade": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "persuade_permission": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "question": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "sr": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "cr": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "affirm": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "seek_collab": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "emphasize_autonomy": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "confront": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "gi",
+        "persuade",
+        "persuade_permission",
+        "question",
+        "sr",
+        "cr",
+        "affirm",
+        "seek_collab",
+        "emphasize_autonomy",
+        "confront"
+      ],
+      "additionalProperties": false
+    },
+    "globals": {
+      "type": "object",
+      "properties": {
+        "cct": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5
+        },
+        "sst": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5
+        },
+        "partnership": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5
+        },
+        "empathy": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5
+        }
+      },
+      "required": [
+        "cct",
+        "sst",
+        "partnership",
+        "empathy"
+      ],
+      "additionalProperties": false
+    },
+    "tips": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "rank": {
+            "minimum": 1,
+            "title": "Rank",
+            "type": "integer"
+          },
+          "item_id": {
+            "title": "Item Id",
+            "type": "string",
+            "enum": [
+              "cct",
+              "sst",
+              "partnership",
+              "empathy",
+              "gi",
+              "persuade",
+              "persuade_permission",
+              "question",
+              "sr",
+              "cr",
+              "affirm",
+              "seek_collab",
+              "emphasize_autonomy",
+              "confront"
+            ]
+          },
+          "observation": {
+            "title": "Observation",
+            "type": "string"
+          },
+          "alternative": {
+            "title": "Alternative",
+            "type": "string"
+          },
+          "why_it_matters": {
+            "title": "Why It Matters",
+            "type": "string"
+          }
+        },
+        "required": [
+          "rank",
+          "item_id",
+          "observation",
+          "alternative",
+          "why_it_matters"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": [
+    "counts",
+    "globals",
+    "tips"
+  ],
+  "additionalProperties": false
+}
