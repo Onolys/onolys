@@ -23,3 +23,13 @@ describe('eval API', () => {
     await expect(api.datasets()).rejects.toThrow('Choose a smaller span');
   });
 });
+
+it('uses encoded saved-run, cancel, output and rerun endpoints with abort signals', async () => {
+  const fetcher = vi.fn<typeof fetch>(async () => new Response('{}'));
+  const api = createEvalApi('', fetcher); const signal = new AbortController().signal;
+  await api.runs(signal); await api.run('a/b', signal); await api.output('a/b', 'u/v', signal); await api.cancel('a/b');
+  await api.rerun('a/b', { engines: ['miti'], presets: ['new'], repeats: 3 });
+  expect(fetcher.mock.calls.map(call => call[0])).toEqual(['/v1/runs', '/v1/runs/a%2Fb', '/v1/runs/a%2Fb/units/u%2Fv/output', '/v1/runs/a%2Fb/cancel', '/v1/runs/a%2Fb/rerun']);
+  expect(fetcher.mock.calls[2][1]?.signal).toBe(signal);
+  expect(JSON.parse(String(fetcher.mock.calls[4][1]?.body))).toEqual({ engines: ['miti'], presets: ['new'], repeats: 3 });
+});

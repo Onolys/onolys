@@ -25,8 +25,41 @@ export interface RunInput {
   language?: string;
   coded_span?: CodedSpan;
 }
+export type RunStatus = 'queued' | 'running' | 'done' | 'partial' | 'failed' | 'cancelled';
+export interface RunSummary extends RunInput {
+ run_id: string; status: RunStatus; created_at: string;
+ total_units: number; completed_units: number; done_units: number; failed_units: number; cancelled_units: number;
+ usage: { input_tokens: number; output_tokens: number; cost_usd?: number | null; calls?: number };
+ cost_usd_est: number | null; unpriced_units: number;
+ engine_versions: Record<string, string>; engine_git_sha: Record<string, string> | string; resolved_presets: Record<string, unknown>;
+}
+export interface RunUnit {
+ unit_id: string; session_id: string; engine: string; preset?: string | null; repeat?: number | null;
+ status: Exclude<RunStatus, 'partial'>; stage?: string; error?: { code: string; message?: string } | string; output?: unknown;
+}
+export interface ErrorMetric { mae: number | null; mean_bias: number | null; n: number }
+export interface Aggregate {
+ n: number; counts: Record<string, ErrorMetric>; summaries: Record<string, ErrorMetric>;
+ globals: Record<string, ErrorMetric & { within_1: { n: number; total: number; fraction: number | null } }>;
+}
+export interface Compare {
+ has_human: boolean; metrics: { id: string; group: 'counts' | 'globals' | 'summaries'; label: string }[];
+ sessions: { session_id: string; human: Record<string, number | null> | null; cells: {
+ engine: string; preset: string; n: number; failed: number; unit_ids: string[];
+ values: Record<string, { mean: number | null; min: number | null; max: number | null; n: number }>;
+ diff?: Record<string, number | null>;
+ }[] }[];
+ aggregates: { engine: string; preset: string; metrics: Aggregate }[]; notes: string[];
+}
+export interface RunDetail extends RunSummary { units: RunUnit[]; compare: Compare }
+export type RunSelection = Pick<RunInput, 'engines' | 'presets' | 'repeats'>;
 export interface EvalApi {
   me(): Promise<unknown>;
+  runs(signal?: AbortSignal): Promise<{ runs: RunSummary[] }>;
+  run(id: string, signal?: AbortSignal): Promise<RunDetail>;
+  output(runId: string, unitId: string, signal?: AbortSignal): Promise<unknown>;
+  cancel(id: string): Promise<{ run_id: string; status: RunStatus }>;
+  rerun(id: string, selection: RunSelection): Promise<{ run_id: string; status: string }>;
   options(mode: Mode, uploadId?: string): Promise<Options>;
   datasets(): Promise<{ datasets: DatasetMetadata[] }>;
   dataset(id: string): Promise<Dataset>;
@@ -48,6 +81,11 @@ export function createEvalApi(base: string, fetcher: typeof fetch): EvalApi {
   const id = encodeURIComponent;
   return {
     me: () => request('/me'),
+    runs: signal => request('/runs', { signal }),
+    run: (runId, signal) => request(`/runs/${id(runId)}`, { signal }),
+    output: (runId, unitId, signal) => request(`/runs/${id(runId)}/units/${id(unitId)}/output`, { signal }),
+    cancel: runId => request(`/runs/${id(runId)}/cancel`, json({})),
+    rerun: (runId, selection) => request(`/runs/${id(runId)}/rerun`, json(selection)),
     options: (mode, uploadId) => request(`/options?mode=${mode}${uploadId ? `&upload_id=${id(uploadId)}` : ''}`),
     datasets: () => request('/datasets'),
     dataset: datasetId => request(`/datasets/${id(datasetId)}`),
