@@ -125,7 +125,7 @@ def _inputs(services, body):
                     "session_id": sid,
                     "transcript_path": f"{base}/transcript.json",
                     "gold_path": f"{base}/gold.json",
-                    "coded_span": session.coded_span.model_dump(),
+                    "coded_span": session.coded_span.model_dump() if session.coded_span else None,
                     "change_goal": session.change_goal,
                     "provenance": session.model_dump(mode="json"),
                 }

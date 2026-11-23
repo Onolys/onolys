@@ -556,3 +556,19 @@ def test_internal_creation_helper_can_reuse_immutable_saved_input(services):
     assert saved["change_goal"] == snapshot["sessions"][0]["change_goal"]
     assert saved["coded_span"] == snapshot["sessions"][0]["coded_span"]
     assert status == "queued" and services.repository.get_run(rid)["total_units"] == 3
+
+
+def test_dataset_full_session_null_span_creates_and_executes_human_unit(services):
+    source = services.bucket.read_json("datasets/synthetic/manifest.json")
+    source["sessions"][0]["coded_span"] = None
+    services.bucket.write_json("datasets/synthetic/manifest.json", source)
+    c = client(services=services)
+    response = start(c, engines=["human"], presets=[])
+    assert response.status_code == 200, response.text
+    rid = response.json()["run_id"]
+    saved = services.repository.get_run(rid)["input_ref"]["sessions"][0]
+    assert saved["coded_span"] is None
+    uid = next(iter(services.repository.list_units(rid)))
+    assert dispatch(c, rid, uid).status_code == 200
+    assert services.repository.get_run(rid)["status"] == "done"
+    assert services.repository.get_unit(rid, uid)["scores"]["counts"] == gold()["counts"]
