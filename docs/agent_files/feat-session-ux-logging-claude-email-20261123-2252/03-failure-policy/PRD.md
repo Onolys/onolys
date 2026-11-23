@@ -88,6 +88,8 @@ Interface: `classify(exc: BaseException, stage: Stage) -> Failure` ; `is_transie
 - [RESOLVED: aligned with SP04 — SP04 owns the pre-run cancel charge: pure `decide_cancel` in `repo/limits.py` (re-exported by `jobs/charging.py`), charged in the cancel txn via `usage.runs += units`, stored in `SessionDoc.cancel`; never refunded. It does not use `should_refund`/`release_once`, which stay run-end only. `counted` on the status doc is the one shared field (SP03 failures, SP04 cancel).]
 - [RESOLVED: default — both (run doc is source, session copy for the UI)] `counted` on `SessionError` vs run doc only.
 - [RESOLVED: no change] `AllRunsFailed` from a transient cause stays retryable via `_llm_cause`.
+- [OPEN: owner question; default keep] Interview-linked sessions with `free_run_void` (uploaded audio does not match the interview recording) are charged as normal evaluations today (exempt = `interview_id` and not `free_run_void`). Keep?
+- [OPEN: owner question; default move on failure] No-delete-on-failure (R8) vs bucket TTL: the `uploads/` prefix auto-deletes after 1 day [verified: `infra/modules/environment/main.tf`], so audio of a session that failed validation (still staged in `uploads/`) expires after 1 day. Options: keep the TTL (accept) / move failed uploads to `{uid}/{sid}/audio/` on failure so they persist until Delete.
 - Risk: SP04/SP05 also edit `TRANSITIONS`, `SessionPage.tsx`, `errors.ts`; additive, rebase trivial. SP07 and this SP both regenerate the contracts.
 - Risk: a retry that re-reserves can hit the day cap after we refunded; accepted, shown with today's text.
 

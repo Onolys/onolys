@@ -56,7 +56,6 @@ Brief: [brainstorm.md](brainstorm.md) (approved).
 - GitHub Actions vars `LLM_PROVIDER` / `LLM_MODEL` for staging (optional; routes.yaml already yields Claude) (SP01).
 - Live eval smoke: one unit per provider x effort, owner-run, not CI (SP06 AC8).
 - Release a new `@onolys/ui` tag with Spinner/Progress after the library change (SP05; code in the onolys-ui repo).
-- Decide: is the rating draft saved server-side during `transcribing`? (SP05, only open item).
 - Done by owner: `onolys-app-staging.web.app` added as authorized Firebase domain (SP07).
 
 ## Resolved 2026-11-23
@@ -64,9 +63,11 @@ Brief: [brainstorm.md](brainstorm.md) (approved).
 - SP02: Gemini 400 `provider_error` logged (cleaned, 300 chars); LiteLLM WARNING/ERROR kept unfiltered; voice `configure_logging` checked at task time; PHI audit of logs [DEFERRED] to owner.
 - SP03: no delete on failure (new R8, AC7); interview-linked sessions never counted (R5, AC8); STT `InvalidArgument` = user_file (verify on real case); 529 transient / 400 permanent; `counted` on both run doc and session.
 - SP04: interview-linked cancel charges 0; cancel keeps all data (confirmed, `ensure_active` purges nothing); `stt_operation` crash uncounted accepted; late-PUT 409 verified at coding.
+- SP05: rating draft question moot: rating UI is off in all builds (flag default false), so the "you can close this tab" hint applies through processing (owner 2026-11-23); documented in `docs/concepts/user-rating.md`.
 - SP05: Spinner/Progress added to onolys-ui (cross-repo, no inline SVG); bar hidden on failed/cancelled (R3 fixed); weights/timings calibrated later from logs.
 - SP06: `xhigh` removed; `max` live-smoke gated; output caps/timeout tuned after smoke; Anthropic 64K guard confirmed in smoke; dataset gold verified at coding.
 - SP07: authorized domain done by owner; IAM starts at `roles/firebaseauth.admin`; routes included in public contracts.
 
 ## Still open
-- [OPEN] SP05: Is the rating draft saved server-side during `transcribing`? Owner still deciding (check `RatingCard` autosave; else upload-phase hint for that case).
+- [OPEN] SP03/SP04: interview-linked sessions with `free_run_void` (uploaded audio doesn't match the interview recording) are charged as normal evaluations today (repo exempt = interview_id and not free_run_void). Keep? [default: keep]
+- [OPEN] SP03: no-delete-on-failure vs bucket TTL. The `uploads/` prefix auto-deletes after 1 day (`infra/modules/environment/main.tf`), so audio of a session that failed validation (still staged in `uploads/`) expires after 1 day. Options: keep TTL (accept) / move failed uploads to `{uid}/{sid}/audio/` on failure so they persist until Delete. [default: move on failure]

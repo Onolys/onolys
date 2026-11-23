@@ -97,6 +97,7 @@ Interface: `def cancel_session(self, uid: str, sid: str, date: str, defaults: Li
 ## Risks / Open Questions
 - [RESOLVED: charge 0 (owner 2026-11-23): interview-linked sessions never count, the interview includes its evaluation] Interview-linked cancel charge. Only a `free_run_void` session is charged as normal (matches existing `exempt` code).
 - [RESOLVED: aligned with SP05 — SP05 R7 reserves `<div data-slot="cancel">` directly under the phase hint, right-aligned, rendered iff the web predicate `isCancellable(state)` (the seven states, owned by SP04, exported from `CancelLink.tsx`) is true. SP04 renders `CancelLink` into that slot when SP05 has landed; until then, own row above Delete (coding order 03 → 04 → 05). "Cancelling…" replaces the slot content only.]
+- [OPEN: owner question; default keep] Interview-linked sessions with `free_run_void` (uploaded audio does not match the interview recording) are charged as normal on cancel (exempt = `interview_id` and not `free_run_void`), same as SP03. Keep?
 - [RESOLVED: default — accepted] `steps.transcribe.stt_operation` as "transcription started": a task that submitted but crashed before saving the handle spends Chirp cost uncounted (user-favourable, accepted).
 - [RESOLVED: default — verify at coding (AC4 covers upload-URL/complete on `cancelled` → 409); add an explicit state check if `TRANSITIONS` does not already 409] Does the upload-complete route (late PUT after cancel) already 409 via `TRANSITIONS`?
 - [DEFERRED] Chirp LRO cancellation; cleanup of Cloud Tasks queue entries.
