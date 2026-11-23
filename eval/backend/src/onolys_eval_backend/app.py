@@ -9,7 +9,9 @@ from fastapi.responses import JSONResponse
 from onolys_admin_auth import ConfigError
 
 from onolys_eval_backend.auth import EvalAuthMiddleware, TokenVerifier
+from onolys_eval_backend.catalog import router as catalog_router
 from onolys_eval_backend.config import EvalConfig
+from onolys_eval_backend.services import EvalServices
 
 
 def parse_cors_origins(raw: str) -> list[str]:
@@ -33,7 +35,9 @@ def create_app(
     # Routers access these through request.app.state; construction performs no cloud I/O.
     # Later services can be supplied as a bundle of repository/storage/queue fakes.
     app.state.config = config
-    app.state.services = services
+    app.state.catalog = EvalServices(config)
+    app.state.services = services if services is not None else app.state.catalog
+    app.include_router(catalog_router)
 
     @app.get("/v1/me")
     async def me() -> dict[str, str]:

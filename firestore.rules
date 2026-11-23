@@ -11,6 +11,7 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // eval_uploads and eval_runs (including units) remain server-only under this deny.
     match /{document=**} {
       allow read, write: if false;
     }

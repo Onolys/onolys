@@ -11,6 +11,13 @@
   ],
   "fieldOverrides": [
     {
+      "collectionGroup": "eval_runs",
+      "fieldPath": "created_at",
+      "indexes": [
+        { "order": "DESCENDING", "queryScope": "COLLECTION" }
+      ]
+    },
+    {
       "collectionGroup": "runs",
       "fieldPath": "run_id",
       "indexes": [

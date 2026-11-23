@@ -1,0 +1,20 @@
+# Hand-maintained fallback rates for exact resolved LiteLLM model IDs.
+# Null means unverified/unpriced, never free. Prefer RunUsage.cost_usd when set.
+# Numeric estimates below record the installed LiteLLM snapshot, not a billing
+# guarantee. Record a source and snapshot date when updating rates. Input includes cached tokens; no separate cache surcharge.
+models:
+  gemini/gemini-4-hydrogen:
+    input_usd_per_million: null
+    output_usd_per_million: null
+    rate_as_of: null
+    source: null
+  gemini/gemini-4-neon:
+    input_usd_per_million: null
+    output_usd_per_million: null
+    rate_as_of: null
+    source: null
+  anthropic/claude-sonnet-5-5:
+    input_usd_per_million: 2
+    output_usd_per_million: 10
+    rate_as_of: "2026-11-23"
+    source: "LiteLLM 1.110.2 bundled pricing, model_cost[claude-sonnet-5-5]; snapshot date"
