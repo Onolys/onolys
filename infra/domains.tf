@@ -22,6 +22,7 @@ locals {
   custom_domains = merge(
     { "app.onolys.com" = google_firebase_hosting_custom_domain.app },
     { for d in google_firebase_hosting_custom_domain.admin : "admin.onolys.com" => d },
+    { for d in google_firebase_hosting_custom_domain.eval_staging : "eval.onolys.com" => d },
   )
 }
 
@@ -74,4 +75,13 @@ output "custom_domain_status" {
       cert      = try(d.cert[0].state, null)
     }
   }
+}
+
+resource "google_firebase_hosting_custom_domain" "eval_staging" {
+  count                 = var.eval_enabled ? 1 : 0
+  provider              = google-beta
+  project               = var.project
+  site_id               = google_firebase_hosting_site.eval_staging[0].site_id
+  custom_domain         = "eval.onolys.com"
+  wait_dns_verification = false
 }

@@ -110,3 +110,21 @@ variable "git_sha" {
     error_message = "git_sha needs exactly the keys staging and prod."
   }
 }
+
+variable "eval_enabled" {
+  description = "Enable the staging-only evaluation site and backend."
+  type        = bool
+  default     = true
+}
+
+variable "default_preset" {
+  description = "Production default preset, shared with evaluation prod labels."
+  type        = string
+  default     = "default"
+}
+
+variable "prod_engine" {
+  description = "Production engine key, shared with evaluation prod labels."
+  type        = string
+  default     = "miti"
+}

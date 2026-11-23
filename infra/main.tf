@@ -99,6 +99,7 @@ module "staging" {
   env                      = "staging"
   database_id              = "staging"
   delete_protection        = false
+  default_preset           = var.default_preset
   worker_concurrency       = var.worker_concurrency
   worker_max_instances     = var.worker_max_instances
   api_max_instances        = 3
@@ -130,6 +131,7 @@ module "prod" {
   env                      = "prod"
   database_id              = "(default)"
   delete_protection        = true
+  default_preset           = var.default_preset
   worker_concurrency       = var.worker_concurrency
   worker_max_instances     = var.worker_max_instances
   api_max_instances        = 10
