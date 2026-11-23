@@ -1,0 +1,88 @@
+#!/usr/bin/env bash
+# R11: staging workflow, isolated image inputs and strict Hosting origin substitution.
+set -euo pipefail
+ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+cd "$ROOT"
+python3 - <<'PY'
+import json
+from pathlib import Path
+
+wf = Path('.github/workflows/deploy-eval.yml')
+assert wf.is_file(), 'deploy-eval.yml missing'
+s = wf.read_text()
+for required in ['branches: [main]', 'workflow_dispatch:', 'environment: staging',
+                 'file: eval/backend/Dockerfile', 'steps.push.outputs.digest',
+                 'GIT_SHA=${{ github.sha }}', 'google-github-actions/auth@v2',
+                 'google-github-actions/deploy-cloudrun@v2', 'skip_default_labels: true', 'id-token: write',
+                 'onolys-eval-backend-staging', 'eval-staging', 'onolys-eval-staging',
+                 'VITE_EVAL_API_URL:', 'ADMIN_STAGING_VITE_FIREBASE_API_KEY',
+                 'ADMIN_STAGING_VITE_FIREBASE_AUTH_DOMAIN', 'ADMIN_STAGING_VITE_FIREBASE_APP_ID',
+                 'set_eval_origin.sh', 'test_eval_image.sh', '/v1/me', '401',
+                 'content-security-policy:', 'cancel-in-progress: false',
+                 'hosting:eval-staging']:
+    assert required in s, f'missing workflow contract: {required}'
+for path in ['eval/**', 'admin/auth/**', 'engines/**', 'config/**', 'api/pyproject.toml',
+             'admin/backend/pyproject.toml', 'pyproject.toml', 'uv.lock', '.firebaserc',
+             'scripts/ci/*eval*', '.github/workflows/deploy-eval.yml']:
+    assert f'"{path}"' in s, f'missing deploy input {path}'
+for forbidden in ['DEPLOYER_PROD_SA', 'credentials_json', 'service_account_key',
+                  'environment: production', 'update_env_vars:', '_deploy-cloudrun.yml']:
+    assert forbidden not in s, f'forbidden workflow config: {forbidden}'
+print('ok staging-only WIF workflow, digest image, image provenance, image-only deploy and smoke')
+docker = Path('eval/backend/Dockerfile').read_text()
+for member in ['engines/core', 'engines/miti', 'engines/oneshot', 'api',
+               'admin/auth', 'admin/backend', 'eval/core', 'eval/backend']:
+    assert f'COPY {member}/pyproject.toml {member}/pyproject.toml' in docker, member
+for required in ['--frozen', '--no-editable', 'ARG GIT_SHA', 'GIT_SHA=${GIT_SHA}',
+                 'COPY config /app/config', 'USER onolys']:
+    assert required in docker, required
+ignore = Path('eval/backend/Dockerfile.dockerignore').read_text()
+assert ignore.splitlines()[0] == '**', 'image context must be opt-in'
+for denied in ['**/node_modules', '**/.git', '**/.worktrees', '**/datasets', '**/uploads',
+               '**/runs', '**/.env', '**/.env.*', '**/tests', '**/__pycache__']:
+    assert denied in ignore, denied
+print('ok frozen workspace metadata, runtime source allowlist and excluded data')
+fb = json.loads(Path('eval/web/firebase.json').read_text())['hosting']
+assert len(fb) == 1 and fb[0]['target'] == 'eval-staging'
+assert fb[0]['public'] == 'dist'
+csp = next(h['value'] for rule in fb[0]['headers'] for h in rule['headers']
+           if h['key'] == 'Content-Security-Policy')
+assert "connect-src 'self' __EVAL_BACKEND_ORIGIN__ " in csp
+for origin in ['https://apis.google.com', 'https://identitytoolkit.googleapis.com',
+               'https://securetoken.googleapis.com', 'https://accounts.google.com',
+               'https://*.firebaseapp.com']:
+    assert origin in csp, origin
+for rc in ['.firebaserc', 'eval/web/.firebaserc']:
+    assert json.loads(Path(rc).read_text())['targets']['onolys']['hosting']['eval-staging'] == ['onolys-eval-staging']
+assert 'test_deploy_eval.sh' in Path('.github/workflows/ci.yml').read_text()
+assert 'bash scripts/ci/test_eval_image.sh' in Path('.github/workflows/ci.yml').read_text()
+assert 'eval/web' in Path('scripts/ci/test_hosting_targets.sh').read_text()
+print('ok eval Hosting target and Firebase auth CSP')
+PY
+T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
+cp eval/web/firebase.json "$T/firebase.json"
+bash scripts/ci/set_eval_origin.sh https://eval-test.run.app "$T/firebase.json"
+python3 - "$T/firebase.json" <<'PY'
+import json, sys
+s = open(sys.argv[1]).read()
+json.loads(s)
+assert '__EVAL_BACKEND_ORIGIN__' not in s
+assert "connect-src 'self' https://eval-test.run.app " in s
+print('ok exact deployed origin substituted')
+PY
+for origin in '' http://x.run.app https://localhost https://127.0.0.1 https://x.run.app/path \
+    https://x.run.app:443 'https://x.run.app;evil' javascript:alert 'https://x.run.app?x=y'; do
+  cp eval/web/firebase.json "$T/bad.json"
+  if bash scripts/ci/set_eval_origin.sh "$origin" "$T/bad.json" >/dev/null 2>&1; then
+    echo "FAIL accepted invalid origin $origin" >&2; exit 1
+  fi
+done
+printf '{}\n' > "$T/missing.json"
+if bash scripts/ci/set_eval_origin.sh https://x.run.app "$T/missing.json" >/dev/null 2>&1; then
+  echo 'FAIL accepted missing placeholder' >&2; exit 1
+fi
+echo 'ok malformed/local origins and missing placeholder rejected'
+if command -v actionlint >/dev/null 2>&1; then
+  actionlint .github/workflows/deploy-eval.yml
+  echo 'ok actionlint'
+fi

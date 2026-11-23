@@ -1,0 +1,14 @@
+{
+  "projects": {
+    "default": "onolys"
+  },
+  "targets": {
+    "onolys": {
+      "hosting": {
+        "eval-staging": [
+          "onolys-eval-staging"
+        ]
+      }
+    }
+  }
+}

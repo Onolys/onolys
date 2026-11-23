@@ -59,6 +59,8 @@ jobs:
         run: bash scripts/ci/test_deploy_prod.sh
       - name: Test deploy-admin workflow guard
         run: bash scripts/ci/test_deploy_admin.sh
+      - name: Test eval deployment workflow and image guard
+        run: bash scripts/ci/test_deploy_eval.sh
       - name: Test Hosting targets resolve per app (.firebaserc)
         run: bash scripts/ci/test_hosting_targets.sh
       - name: Test PR preview workflows and helpers
@@ -179,6 +181,8 @@ jobs:
       - run: uv sync --frozen --package onolys-eval-backend
       - run: uv run --no-sync --package onolys-eval-backend ruff check eval/backend
       - run: uv run --no-sync --package onolys-eval-backend pytest eval/backend -m "not live"
+      - name: Build eval image and verify offline runtime, auth and data isolation
+        run: bash scripts/ci/test_eval_image.sh onolys-eval-backend:ci
 
   eval-web:
     needs: changes
