@@ -12,7 +12,7 @@ Source of truth: docs/agent_files/feat-design-system-20261123-0428/01-onolys-ui/
 | 2 | Scaffold toolchain + Storybook/shadcn spike | 1 | done |
 | 3 | Tokens, dark theme, contrast test | 2 | done |
 | 4 | Theme, base, fonts, legacy CSS, cn | 3 | done |
-| 5 | shadcn components | 4 | todo |
+| 5 | shadcn components | 4 | done |
 | 6 | Onolys components | 5 | todo |
 | 7 | CSP-safe Radix overlays | 5 | todo |
 | 8 | Hit-area, privacy and RTL test suite | 6, 7 | todo |
