@@ -247,3 +247,62 @@ def test_cli_applies_metadata_only_override_and_never_guesses_missing_globals(tm
     assert gold.parse.method == 'auto+override'
     assert gold.parse.warnings == []
     assert gold.counts['question'] == 1
+
+
+def test_source_number_correction_is_explicit_indexed_and_checks_original():
+    doc = convert.ParsedDocument(rows=[convert.ParsedRow(1,'I','First'),
+        convert.ParsedRow(1,'C','Second')], globals=dict.fromkeys(convert.GLOBAL_IDS,3))
+    other = convert.ParsedDocument(rows=[convert.ParsedRow(1,'I','First'),
+        convert.ParsedRow(2,'C','Second')])
+    correction = {'source_numbers':[{'row_index':1,'source_number':1,'number':2}]}
+    transcript, _gold, warnings = make_result(doc,other,correction)
+    assert warnings == []
+    assert [t['id'] for t in transcript['turns']] == ['t1','t2']
+    assert doc.rows[1].number == 1  # source evidence stays unchanged
+    correction['source_numbers'][0]['source_number'] = 9
+    with pytest.raises(ValueError,match='source number'):
+        make_result(doc,other,correction)
+
+
+@pytest.mark.parametrize('label,expected',[
+    ('NC\nA “no code”\nwould not be\nwrong if the\nrater views\nGI', []),
+    ('CR\nAffirm codes\nwas considered\nbut not assigned', ['cr']),
+    ('Q\nGI\n(High in CCT)', ['question','gi']),
+    ('NC - support', []), ('CR*', ['cr']),
+    ('Q\n*high empat\nhy', ['question']),
+    ('SR\n+CCT', ['sr']), ('Empha\nsize', ['emphasize_autonomy']),
+    ('Persuade\nwith', ['persuade_permission']),
+    ('NC\n(1)', []),
+])
+def test_explicit_source_annotations_do_not_become_behavior_codes(label,expected):
+    assert convert.parse_codes(label) == (expected,[])
+
+
+def test_unknown_code_after_recognized_code_still_warns():
+    assert convert.parse_codes('Q\nMystery') == (['question'],['MYSTERY'])
+
+
+def test_inline_notes_preserve_later_codes_and_considered_codes_are_not_assignments():
+    assert convert.parse_codes('CR (4)\nQ (high in\nCCT)') == (['cr','question'],[])
+    assert convert.parse_codes('Q\nSeek code\nconsidered\nbut not assigned') == (['question'],[])
+    assert convert.parse_codes('Persuade\nreached\nbecause of tone\nCR\nconsidered') == (['persuade'],[])
+
+
+def test_uncoded_source_number_correction():
+    doc=convert.ParsedDocument(rows=[convert.ParsedRow(1,'I','First'),convert.ParsedRow(2,'C','Second')],globals=dict.fromkeys(convert.GLOBAL_IDS,3))
+    other=convert.ParsedDocument(rows=[convert.ParsedRow(1,'I','First'),convert.ParsedRow(1,'C','Second')])
+    _,_,warnings=make_result(doc,other,{'source_numbers':[{'document':'uncoded','row_index':1,'source_number':1,'number':2}]})
+    assert warnings == []
+
+
+def test_global_heading_footnote_does_not_enter_last_utterance():
+    data=words([(100,[(70,'1'),(100,'C'),(125,'Synthetic')]),
+                (140,[(70,'Global'),(110,'ratings'),(160,'(4)')]),
+                (170,[(70,'CCT 4 SST 3 PAR 5 EMP 5')])])
+    doc=convert.parse_pages([(data,792)])
+    assert doc.rows[0].text == 'Synthetic'
+    assert doc.globals['cct'] == 4
+
+
+def test_unrecognized_parenthetical_annotation_stays_a_warning():
+    assert convert.parse_codes('Q (Mystery)') == (['question'],['(MYSTERY)'])

@@ -7,9 +7,9 @@ never silences missing text, unknown codes, numbering, or count warnings.
 import json
 import re
 from collections import Counter
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Literal
 
 import yaml
 from pydantic import Field
@@ -37,7 +37,25 @@ _LABEL_PATTERN = re.compile(
 
 def parse_codes(label: str) -> tuple[list[str], list[str]]:
     """Match longest labels first, including wrapped and multiple-code cells."""
-    normalized = " ".join(re.sub(r"[/,;]", " ", label).upper().split())
+    # Published code cells also contain teaching notes. Only explicit note
+    # introducers end the assigned-code region; arbitrary unknown labels warn.
+    normalized = " ".join(label.upper().split())
+    normalized = re.sub(
+        r"\((?:\d+|(?:HIGH|LOW) IN (?:CCT|SST)|CONT[’\']D FROM ABOVE|"
+        r"SEEK CONSIDERED BUT DECLINED|COULD BE STRUCTURE|"
+        r"DOES NOT MEET CRITERIA FOR SEEK|GI NOT WRONG|SR ONLY SET UP FOR Q)\)",
+        " ", normalized)
+    normalized = re.sub(r"\b(?:SEEK|CR|SR|AF|GI|Q) (?:CODE )?CONSIDERED.*", "", normalized)
+    note = re.search(
+        r"\*|[+−–-]\s*(?:CCT|SST|PARTNERSHIP|EMPATHY|SUPPORT|AFFIRM|NOT)|"
+        r"A [“\"]?NO CODE|AFFIRM (?:CODES|CONSIDERED)|CONSIDERED|SUPPORTIVE|"
+        r"THIS (?:COMMENT|IS|MIGHT)|AN EMPATHIC|CODE CONSIDERED|RULED OUT|"
+        r"[“\"]DO YOU|REACHED BECAUSE|DID NOT MEET|NOT ENOUGH|STUCTURE|STRUCTURE",
+        normalized)
+    if note and _LABEL_PATTERN.search(normalized[:note.start()]):
+        normalized = normalized[:note.start()]
+    normalized = " ".join(re.sub(r"[/,;]", " ", normalized).split()).rstrip("- ")
+    normalized = normalized.replace("EMPHA SIZE", "EMPHASIZE")
     codes = [_LABELS[m.group()] for m in _LABEL_PATTERN.finditer(normalized)]
     unknown = _LABEL_PATTERN.sub(" ", normalized).strip()
     return [c for c in codes if c is not None], [unknown] if unknown else []
@@ -115,6 +133,9 @@ def parse_pages(pages, *, code_header="Code", layout=None) -> ParsedDocument:
             text = " ".join(w["text"] for w in line)
             if line in header_lines:
                 continue
+            if re.fullmatch(r"Global (?:ratings|measures)(?: \(\d+\))?", text, re.IGNORECASE):
+                ended = True
+                continue
             # Ratings/totals are outside the table and may share one physical line.
             ratings = list(re.finditer(
                 r"\b(CCT|SST|PAR|PART|PARTNERSHIP|EMP|EMPATHY)\s*[:=]?\s*(-?\d+)\b",
@@ -149,7 +170,7 @@ def parse_pages(pages, *, code_header="Code", layout=None) -> ParsedDocument:
             if body:
                 current.text = " ".join(filter(None, [current.text, " ".join(body)]))
             if code:
-                current.label = " ".join(filter(None, [current.label, " ".join(code)]))
+                current.label = "\n".join(filter(None, [current.label, " ".join(code)]))
     for row in result.rows:
         row.codes, row.unknown_codes = parse_codes(row.label)
     return result
@@ -174,7 +195,15 @@ class CodeOverride(Contract):
     codes: list[CountId]
 
 
+class SourceNumberOverride(Contract):
+    document: Literal["coded", "uncoded"] = "coded"
+    row_index: Annotated[int, Field(ge=0)]
+    source_number: Annotated[int, Field(ge=1)]
+    number: Annotated[int, Field(ge=1)]
+
+
 class Overrides(Contract):
+    source_numbers: list[SourceNumberOverride] = Field(default_factory=list)
     utterance_codes: list[CodeOverride] = Field(default_factory=list)
     globals: dict[GlobalId, Annotated[int, Field(ge=1, le=5)]] = Field(default_factory=dict)
     reviewed_utterance_ids: list[Nonempty] = Field(default_factory=list)
@@ -193,6 +222,19 @@ def build_session(manifest: DatasetManifest, session: SessionManifest,
     All other warnings remain in the written gold for downstream upload guards.
     """
     correction = Overrides.model_validate(overrides or {})
+    documents = {"coded": coded, "uncoded": uncoded}
+    corrected_indices = set()
+    for item in correction.source_numbers:
+        document = documents[item.document]
+        rows = list(document.rows)
+        identity = (item.document, item.row_index)
+        if (identity in corrected_indices or item.row_index >= len(rows)
+                or rows[item.row_index].number != item.source_number):
+            raise ValueError("Invalid source number correction: inspect original row")
+        corrected_indices.add(identity)
+        rows[item.row_index] = replace(rows[item.row_index], number=item.number)
+        documents[item.document] = replace(document, rows=rows)
+    coded, uncoded = documents["coded"], documents["uncoded"]
     ids = [f"t{r.number}" for r in coded.rows]
     code_overrides = {r.turn_id: r.codes for r in correction.utterance_codes}
     referenced = set(code_overrides) | set(correction.reviewed_utterance_ids)

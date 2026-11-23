@@ -1,0 +1,6 @@
+# Text checks: coded p2/uncoded p2 line-break hyphen at t22;
+# coded p3/uncoded p2 spelling differs at t29. Coded source is authoritative.
+reviewed_utterance_ids: [t22, t29]
+# Coded p4-p5: SEEK is assigned before the separate explanation of that decision.
+utterance_codes:
+  - {turn_id: t57, codes: [persuade_permission, seek_collab]}
