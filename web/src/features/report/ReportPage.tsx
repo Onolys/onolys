@@ -57,7 +57,7 @@ function LoadedReport({ id, version }: { id: string; version: number }) {
     gcTime: 0,
     queryFn: async () => unwrap(await client.GET("/sessions/{id}/reports", { params: { path: { id } } })),
   });
-  // Same query as TranscriptPanel; fetched in parallel so the report renders without waiting for it.
+  // Same query key as the coded-transcript dialog; fetched in parallel so the report renders without waiting for it.
   const transcript = useQuery({
     queryKey: ["transcript", id],
     staleTime: 0,

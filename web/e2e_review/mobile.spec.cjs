@@ -46,7 +46,7 @@ test.describe("mobile (iPhone 13 viewport)", () => {
     await expect(page.getByRole("status")).toContainText("Coding the session", { timeout: 30_000 });
     await expect(page.getByRole("link", { name: "View report" })).toBeVisible({ timeout: 30_000 });
     await page.getByRole("link", { name: "View report" }).click();
-    await expect(page.getByRole("heading", { name: "Scorecard" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "At a glance" })).toBeVisible();
     await expect(page.getByText(/Difference|Where Onolys disagrees/)).toHaveCount(0);
     await expect(page.getByRole("columnheader", { name: "You", exact: true })).toHaveCount(0);
     await shot(page, "m-report");

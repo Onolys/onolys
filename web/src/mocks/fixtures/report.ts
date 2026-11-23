@@ -350,7 +350,7 @@ function noRating(base: Report): Report {
   return r;
 }
 
-/** The committed N=1 report that `/sample-report` also renders. */
+/** The committed N=1 report that `/sample` also renders. */
 export const sampleReport: Report = build(sampleTranscript, STANDARD_PICKS);
 export const noRatingReport: Report = noRating(sampleReport);
 export const reasonsFailedReport: Report = {

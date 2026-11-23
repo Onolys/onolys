@@ -152,7 +152,7 @@ export function CodedTranscriptProvider({
               <p className="lead">
                 We couldn't load the transcript.{" "}
                 {turns.retry ? (
-                  <button type="button" className="uref" onClick={turns.retry}>
+                  <button type="button" className="link-button" onClick={turns.retry}>
                     Try again
                   </button>
                 ) : null}

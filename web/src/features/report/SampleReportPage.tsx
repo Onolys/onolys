@@ -1,5 +1,5 @@
 /**
- * `/sample-report` (PRD R1, D16): the bundled made-up report and transcript, rendered through the
+ * `/sample` (PRD R1, D16): the bundled made-up report and transcript, rendered through the
  * same view as the real page. Public, read-only, and makes no network request.
  */
 import {

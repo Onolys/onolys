@@ -362,7 +362,7 @@ function TranscriptSection({
         <p className="lead">
           We couldn't load the transcript.{" "}
           {turns.retry ? (
-            <button type="button" className="uref" onClick={turns.retry}>
+            <button type="button" className="link-button" onClick={turns.retry}>
               Try again
             </button>
           ) : null}
@@ -370,7 +370,7 @@ function TranscriptSection({
       ) : null}
       <button
         type="button"
-        className="btn-primary"
+        className="btn btn-primary"
         disabled={turns.status === "loading"}
         onClick={() => open()}
       >

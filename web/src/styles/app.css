@@ -23,7 +23,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 .app-header nav.nav-out { flex: 1; align-items: center; gap: var(--space-2); }
 .app-header nav.nav-out > :first-child { margin-inline: auto; }
 .app-header nav.nav-out > .nav-login { margin-left: auto; }
-.app-header nav .btn { min-height: 44px; text-decoration: none; }
+.app-header nav .btn { text-decoration: none; }
 .app-header nav .nav-btn { font-size: 0.92rem; font-weight: 500; }
 .app-header nav .nav-btn[aria-current="page"] { background: var(--color-accent); color: var(--color-on-accent); }
 .app-header .nav-login, .app-header .nav-signup { justify-content: center; min-height: 44px; border-radius: 8px; text-decoration: none; }
@@ -109,7 +109,6 @@ main { flex: 1; width: 100%; max-width: 64rem; margin: 0 auto; padding: var(--sp
 
 /* Report page (R4) */
 .report-actions { display: flex; flex-wrap: wrap; gap: var(--space-3); align-items: center; }
-.report-actions .btn { min-height: 44px; }
 .chip { display: inline-block; padding: 2px var(--space-2); border-radius: 999px; border: 1px solid var(--color-gray-300); background: var(--color-gray-50); font-size: var(--font-size-sm); }
 .chip[data-tone="agree"] { color: var(--color-score-good); background: var(--color-score-good-background); border-color: var(--color-score-good); }
 .chip[data-tone="differs"] { color: var(--color-score-low); background: var(--color-score-low-background); border-color: var(--color-score-low); }
@@ -185,10 +184,6 @@ main { flex: 1; width: 100%; max-width: 64rem; margin: 0 auto; padding: var(--sp
 .report-view .c-qr { background: var(--rv-soft); color: var(--color-accent); }
 .report-view .c-mia { background: var(--color-score-good-background); color: var(--color-score-good); }
 .report-view .c-mina { background: var(--color-score-low-background); color: var(--color-score-low); }
-.report-view .uref { font: inherit; min-height: 0; color: var(--color-accent); background: none; border: 0; padding: 0; margin: 0; cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
-.report-view .uref:hover { text-decoration-thickness: 2px; }
-.report-view .btn-primary { font: inherit; font-weight: 600; border: 0; border-radius: 6px; padding: 0 1.1rem; cursor: pointer; }
-.report-view .btn-primary:disabled { opacity: 0.6; cursor: default; }
 /* Coded transcript dialog (the dialog sits outside .report-view; .dlg-rv re-enters its scope) */
 html.dlg-open { overflow: hidden; }
 .coded-dialog { padding: 0; border: 1px solid var(--color-gray-300); border-radius: 10px; background: var(--color-background); color: var(--color-text); width: min(1100px, 100vw - 48px); max-width: none; height: 88vh; max-height: none; margin: auto; overflow: hidden; }
