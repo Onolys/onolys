@@ -2,7 +2,7 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { NewRun, plannedUnits } from './NewRun';
-import type { EvalApi, Options, Upload } from './api';
+import { createEvalApi, type EvalApi, type Options, type Upload } from './api';
 
 afterEach(() => { cleanup(); vi.useRealTimers(); });
 const options: Options = {
@@ -12,6 +12,7 @@ const options: Options = {
 };
 function makeApi() {
   return {
+    ...createEvalApi('', vi.fn()),
     me: vi.fn().mockResolvedValue({}),
     options: vi.fn(async (_mode: string, uploadId?: string) => ({ ...options, engines: uploadId === 'gold' || _mode === 'dataset' ? options.engines : options.engines.filter(e => e.id !== 'human') })),
     datasets: vi.fn().mockResolvedValue({ datasets: [{ dataset_id: 'sample', title: 'Sample dataset' }] }),

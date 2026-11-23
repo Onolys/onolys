@@ -21,3 +21,14 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px s
 .planned { font-size: 1.2rem; font-weight: 650; }
 blockquote { border-left: 2px solid #cad8d1; margin: .5rem 0 1rem 1.75rem; padding-left: .8rem; white-space: pre-wrap; }
 @media (max-width: 540px) { .shell { padding: 1rem .75rem 3rem; } label { align-items: flex-start; } input:not([type=checkbox]):not([type=radio]), select { flex-basis: 100%; width: 100%; } }
+nav { margin-bottom: 1.5rem; }
+.table-scroll { overflow-x: auto; margin: 1rem 0; }
+table { border-collapse: collapse; width: 100%; background: white; }
+caption { text-align: left; padding: .75rem 0; line-height: 1.5; }
+th, td { text-align: left; vertical-align: top; padding: .75rem; border: 1px solid #cad8d1; }
+thead th { background: #e7eeea; }
+pre { white-space: pre-wrap; overflow-wrap: anywhere; max-width: 100%; font-size: .85rem; }
+.unit-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr)); gap: 1rem; }
+.unit { background: white; border: 1px solid #cad8d1; border-radius: .65rem; padding: 1rem; min-width: 0; }
+.unit h3 { font-size: 1rem; }
+summary { cursor: pointer; padding: .5rem 0; }
