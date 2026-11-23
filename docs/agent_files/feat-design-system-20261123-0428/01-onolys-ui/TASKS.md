@@ -9,7 +9,7 @@ Source of truth: docs/agent_files/feat-design-system-20261123-0428/01-onolys-ui/
 | # | Task | Depends on | Status |
 |---|---|---|---|
 | 1 | Create public repo Onolys/onolys-ui | - | done |
-| 2 | Scaffold toolchain + Storybook/shadcn spike | 1 | todo |
+| 2 | Scaffold toolchain + Storybook/shadcn spike | 1 | done |
 | 3 | Tokens, dark theme, contrast test | 2 | todo |
 | 4 | Theme, base, fonts, legacy CSS, cn | 3 | todo |
 | 5 | shadcn components | 4 | todo |

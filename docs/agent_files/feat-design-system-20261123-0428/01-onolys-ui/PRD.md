@@ -80,7 +80,7 @@ Compat: ship `legacy.css` aliasing old `--color-*` names so SP2/SP3 can migrate 
 |---|---|---|---|---|
 | 1 | Git-dep install | Commit built `dist/` on release tag commit only (release workflow builds, commits to a detached tag commit, not main) | `prepare` script | `prepare` forces consumers (CI, Astro, Firebase) to install devDeps + build per install: slower, fragile on Node/npm differences, and npm git-dep `prepare` needs dev deps resolved. Tag-with-dist = zero build on install, deterministic. Cost: release workflow complexity |
 | 2 | Dark mode | `@media (prefers-color-scheme: dark)` vars, no `.dark` class | class + JS toggle | No storage allowed; automatic per brief |
-| 3 | Docs | Storybook | Ladle | Maintained a11y addon + test-runner; Ladle lighter but weaker a11y. [RESOLVED: orchestrator default 2026-11-23 — Storybook 10 if it supports Vite 8, else Ladle (spike decides, Storybook preferred); verified in Task 2] |
+| 3 | Docs | Storybook | Ladle | Maintained a11y addon + test-runner; Ladle lighter but weaker a11y. [VERIFIED: Task 2, 2026-11-23 — Storybook 10.6.8 builds on Vite 8.3.8; onolys-ui commit 2aba4f3b01ac6c803b08771460154553ee6676b6] |
 | 4 | Modules | ESM only, peers: react >=19, tailwindcss 4 | dual CJS | All consumers are Vite ESM |
 | 5 | Select | Radix Select (shadcn); native styled `<select>` only if CSP smoke fails (owner-delegated 2026-11-23) | Native styled | Consistent styling now that build checks are relaxed; CSP smoke is the gate |
 | 6 | Versioning | semver, `CHANGELOG.md` (Keep a Changelog), pre-1.0 minor = may break; consumers pin tags | floating `main` | Reproducible builds |
@@ -89,7 +89,7 @@ Compat: ship `legacy.css` aliasing old `--color-*` names so SP2/SP3 can migrate 
 | 9 | Font | `woff2` shipped in package, `@font-face` in `fonts.css` with relative URL | per-app copy | One copy; consumer bundlers emit hashed asset (same-origin, font-src 'self') |
 | 10 | Variants | cva + tailwind-merge (shadcn standard) | CSS modules | Matches shadcn |
 | 11 | Build checks vs Radix | Owner 2026-11-23: build/hosting checks may be changed or removed when they block the design system (no one uses prod); CSP stays strict (`style-src 'self'`), proven by Playwright CSP smoke; prefer Radix Dialog/AlertDialog, native `<dialog>` only if smoke fails | Keep checks, bypass RemoveScroll / native dialog | Unblocks Radix; CSP strictness still verified at runtime |
-| 12 | Orchestrator defaults 2026-11-23 | Storybook 10 (Ladle if no Vite 8 support); shadcn Tailwind v4 conventions; `.d.ts` from TS 6.0.x, fixtures under TS 6 + 7; dist on tag commits only, no `prepare`, git+https install smoke on Node 22; woff2 files + consumer `assetsInlineLimit`; `legacy.css` kept until SP2 final cleanup | Owner delegated open items to orchestrator | Recommended defaults; each verified by a named task in TASKS.md |
+| 12 | Orchestrator defaults 2026-11-23 | Storybook 10.6.8 builds on Vite 8.3.8 (Task 2 verified); shadcn 4.23.0 `diff` and `add --diff` work, using new-york, blank Tailwind config, CSS vars, `@theme inline`, `tw-animate-css`, `data-slot`, React 19 ref props (Task 2 verified); `.d.ts` from TS 6.0.x, fixtures under TS 6 + 7; dist on tag commits only, no `prepare`, git+https install smoke on Node 22; woff2 files + consumer `assetsInlineLimit`; `legacy.css` kept until SP2 final cleanup | Owner delegated open items to orchestrator | Recommended defaults; each verified by a named task in TASKS.md |
 
 ## Manual steps
 - Owner: create public GitHub repo `Onolys/onolys-ui`, enable Actions, branch protection on `main`.
