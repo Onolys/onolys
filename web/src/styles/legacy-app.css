@@ -45,11 +45,6 @@ main { flex: 1; width: 100%; max-width: 64rem; margin: 0 auto; padding: var(--sp
   *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
 }
 
-/* Auth forms (SP05 T3) */
-.auth-form { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-4); max-width: 26rem; overflow-wrap: anywhere; }
-.auth-form label { display: grid; gap: var(--space-1); font-weight: 600; }
-.auth-form input { padding: 0 var(--space-3); border: 1px solid var(--color-gray-300); border-radius: 6px; font: inherit; }
-.auth-form button:disabled { opacity: 0.6; }
 .form-error { border: 1px solid var(--color-score-low); background: var(--color-score-low-background); color: var(--color-score-low); padding: var(--space-3); border-radius: 6px; }
 .form-note { color: var(--color-gray-600); }
 
@@ -68,19 +63,11 @@ main { flex: 1; width: 100%; max-width: 64rem; margin: 0 auto; padding: var(--sp
 .timeline-state, .timeline-sub { color: var(--color-gray-600); font-weight: 400; }
 .timeline-status p { margin: var(--space-1) 0; font-weight: 600; }
 .notice { border: 1px solid var(--color-score-fair); background: var(--color-score-fair-background); padding: var(--space-3); border-radius: 6px; }
-.error-card { border: 1px solid var(--color-score-low); background: var(--color-score-low-background); color: var(--color-text); padding: var(--space-4); border-radius: 6px; margin: var(--space-4) 0; }
-.error-card-message { margin: 0 0 var(--space-2); font-weight: 600; }
-.error-card-ref { margin: 0 0 var(--space-3); color: var(--color-gray-600); font-size: var(--font-size-sm); }
-.error-card-actions { display: flex; flex-wrap: wrap; gap: var(--space-3); }
 .dialog-backdrop { position: fixed; inset: 0; background: rgb(0 0 0 / 0.5); display: grid; place-items: center; padding: var(--space-4); z-index: 10; }
 .dialog { background: var(--color-background); border-radius: 8px; padding: var(--space-6); max-width: 28rem; width: 100%; }
 .dialog h2 { margin-top: 0; }
 .dialog-actions { display: flex; flex-wrap: wrap; gap: var(--space-3); justify-content: flex-end; }
 
-/* Create session form (SP05 T5) */
-.upload-form { max-width: 36rem; }
-.drop-zone { border: 2px dashed var(--color-gray-300); border-radius: 6px; padding: var(--space-4); }
-.drop-zone-active { border-color: var(--color-accent); }
 
 /* Rating card (SP05 T6) */
 .rating-fields { display: grid; gap: var(--space-4); border: 0; padding: 0; margin: 0; min-width: 0; }
@@ -103,18 +90,7 @@ main { flex: 1; width: 100%; max-width: 64rem; margin: 0 auto; padding: var(--sp
 .chip[data-tone="differs"] { color: var(--color-score-low); background: var(--color-score-low-background); border-color: var(--color-score-low); }
 .chip[data-tone="flagged"] { color: var(--color-score-fair); background: var(--color-score-fair-background); border-color: var(--color-score-fair); }
 .quiet-notice { color: var(--color-gray-600); font-size: var(--font-size-sm); margin: var(--space-2) 0; }
-.session-list { list-style: none; padding: 0; }
-.session-row { padding: var(--space-3) 0; border-bottom: 1px solid var(--color-gray-300); }
-.chip[data-tone="progress"] { color: var(--color-accent); border-color: var(--color-accent); }
-.chip[data-tone="wait"] { color: var(--color-score-fair); background: var(--color-score-fair-background); border-color: var(--color-score-fair); }
-.chip[data-tone="done"] { color: var(--color-score-good); background: var(--color-score-good-background); border-color: var(--color-score-good); }
-.chip[data-tone="failed"] { color: var(--color-score-low); background: var(--color-score-low-background); border-color: var(--color-score-low); }
 
-.landing-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr)); gap: var(--space-4); margin-bottom: var(--space-4); }
-.landing-card { border: 1px solid var(--color-gray-300); border-radius: 6px; padding: var(--space-4); }
-.landing-card h2 { margin-top: 0; }
-.scenario-option { display: block; margin-bottom: var(--space-2); }
-.interview-timer { font-size: var(--font-size-lg, 1.5rem); font-variant-numeric: tabular-nums; }
 
 /* === Report view (SP2) === */
 .report-view { --rv-info: light-dark(#3a5a78, #a9c7e4); --rv-info-bg: light-dark(#e6eef5, #1f3345); --rv-line: var(--color-gray-300); --rv-surface: var(--color-gray-50); --rv-soft: var(--color-gray-100); --rv-muted: var(--color-gray-600); max-width: 55rem; margin: 0 auto; font-variant-numeric: tabular-nums; }

@@ -69,6 +69,14 @@ test.describe("CSP smoke: zero violations under the prod CSP", () => {
     await lang.selectOption(options[1]);
     await lang.selectOption(options[0]);
 
+    await spa(page, "/interviews/new"); // native <select> (voice) on the interview picker: choose / change
+    const voice = page.getByRole("combobox", { name: "Voice" });
+    await expect(voice).toBeVisible();
+    const voices = await voice.locator("option").evaluateAll((o) => o.map((x) => x.value));
+    expect(voices.length).toBeGreaterThan(1);
+    await voice.selectOption(voices[1]);
+    await voice.selectOption(voices[0]);
+
     await spa(page, "/new");
     await newSession(page);
     await page.getByRole("button", { name: "Delete session" }).click();

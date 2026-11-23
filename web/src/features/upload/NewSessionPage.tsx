@@ -2,12 +2,15 @@
  * New session: choose audio or a transcript, save the change goal, then upload.
  * Audio runs through the app-level uploader; transcript files go directly to the API.
  */
+import { Button, Input, Label, Select } from "@onolys/ui";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useEffect, useRef, useState, type DragEvent } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 import { unwrap } from "../../api/client";
 import { ApiError, describeError } from "../../api/errors";
 import { useApiClient } from "../../auth/useApiClient";
+import { BTN, H1, NOTE, PAGE } from "../../components/classes";
+import { Field } from "../../components/Field";
 import { ratingEnabled } from "../../config";
 import { issuesFromApi } from "../rating/card";
 import { goalIssues, saveGoal, SetupFields } from "../rating/SetupFields";
@@ -113,10 +116,10 @@ export function NewSessionPage() {
   const canSubmit = filePick.ready && goalOk && !submit.isPending;
 
   return (
-    <>
-      <h1>New session</h1>
+    <div className={PAGE}>
+      <h1 className={H1}>New session</h1>
       <form
-        className="auth-form upload-form"
+        className="grid max-w-xl grid-cols-1 gap-4 break-words [&_p]:m-0"
         onSubmit={(e) => {
           e.preventDefault();
           if (file && canSubmit && !submitting.current) {
@@ -125,21 +128,28 @@ export function NewSessionPage() {
           }
         }}
       >
-        <fieldset disabled={submit.isPending || savedId !== null}>
-          <legend>Session file</legend>
+        <fieldset disabled={submit.isPending || savedId !== null} className="m-0 grid min-w-0 gap-1 border-0 p-0">
+          <legend className="p-0 text-base font-semibold">Session file</legend>
           {(["audio", "transcript"] as const).map((kind) => (
-            <label key={kind}>
-              <input type="radio" name="source" checked={source === kind} onChange={() => {
-                setSource(kind);
-                void pick(undefined);
-                submit.reset();
-              }} />
+            <Label key={kind}>
+              <input
+                type="radio"
+                name="source"
+                className="size-4 accent-primary"
+                checked={source === kind}
+                onChange={() => {
+                  setSource(kind);
+                  void pick(undefined);
+                  submit.reset();
+                }}
+              />
               {kind === "audio" ? "Audio" : "Transcript"}
-            </label>
+            </Label>
           ))}
         </fieldset>
         <div
-          className={`drop-zone${dragging ? " drop-zone-active" : ""}`}
+          data-dragging={dragging || undefined}
+          className="grid gap-2 rounded-md border-2 border-dashed border-border p-4 data-[dragging]:border-primary"
           onDragOver={(e) => {
             e.preventDefault();
             setDragging(true);
@@ -147,45 +157,42 @@ export function NewSessionPage() {
           onDragLeave={() => setDragging(false)}
           onDrop={onDrop}
         >
-          <label>
-            {source === "audio" ? "Audio recording" : "Transcript file"}
-            <input
-              key={source}
-              type="file"
-              accept={source === "audio" ? ".mp3,.wav,.m4a,.webm,.ogg,audio/*" : ".json,.txt"}
-              onChange={(e) => void pick(e.target.files?.[0])}
-            />
-          </label>
-          <p className="form-note">
+          <Field label={source === "audio" ? "Audio recording" : "Transcript file"}>
+            {(id) => (
+              <Input
+                id={id}
+                key={source}
+                type="file"
+                accept={source === "audio" ? ".mp3,.wav,.m4a,.webm,.ogg,audio/*" : ".json,.txt"}
+                onChange={(e) => void pick(e.target.files?.[0])}
+              />
+            )}
+          </Field>
+          <p className={NOTE}>
             {source === "audio"
               ? "Drop a file here or choose one. mp3, wav, m4a, webm or ogg, up to 300 MB, 10 to 20 minutes."
               : "Drop a file here or choose one. json or txt transcript, up to 1 MB."}
           </p>
-          {file ? <p className="form-note">{file.name}</p> : null}
+          {file ? <p className={NOTE}>{file.name}</p> : null}
         </div>
 
         <FileNotices pick={filePick} />
 
-        <label>
-          Language
-          <select value={language} onChange={(e) => setLanguage(e.target.value)}>
-            {LANGUAGES.map((l) => (
-              <option key={l.value} value={l.value}>
-                {l.label}
-              </option>
-            ))}
-          </select>
-        </label>
+        <Field label="Language">
+          {(id) => (
+            <Select id={id} value={language} onChange={(e) => setLanguage(e.target.value)}>
+              {LANGUAGES.map((l) => (
+                <option key={l.value} value={l.value}>
+                  {l.label}
+                </option>
+              ))}
+            </Select>
+          )}
+        </Field>
 
-        <label>
-          Title (optional)
-          <input
-            type="text"
-            maxLength={200}
-            value={title}
-            onChange={(e) => setTypedTitle(e.target.value)}
-          />
-        </label>
+        <Field label="Title (optional)">
+          {(id) => <Input id={id} type="text" maxLength={200} value={title} onChange={(e) => setTypedTitle(e.target.value)} />}
+        </Field>
 
         {showGoal ? (
           <SetupFields
@@ -201,10 +208,12 @@ export function NewSessionPage() {
 
         {err ? <ErrorCard code={err.code} reference={err.requestId} /> : null}
 
-        <button type="submit" className="btn btn-primary" disabled={!canSubmit}>
-          {submit.isPending ? "Starting…" : "Start"}
-        </button>
+        <div>
+          <Button type="submit" className={BTN} disabled={!canSubmit}>
+            {submit.isPending ? "Starting…" : "Start"}
+          </Button>
+        </div>
       </form>
-    </>
+    </div>
   );
 }

@@ -41,8 +41,21 @@ const SIGNED_IN = {
   },
   chooser: async (p) => { await verified(p, "a@example.com"); },
   "sessions-list": async (p) => { await verified(p, "b@example.com"); await spa(p, "/sessions"); await expect(p.getByRole("heading", { level: 1 })).toBeVisible(); },
+  "sessions-list-populated": async (p) => {
+    await verified(p, "h@example.com");
+    for (const goal of ["One", "Two"]) {
+      await openUpload(p);
+      await p.getByLabel("Change goal").fill(goal);
+      await p.locator("input[type=file]").setInputFiles(FIX("ten-min.mp3"));
+      await p.getByRole("button", { name: "Start", exact: true }).click();
+      await expect(p).toHaveURL(/\/sessions\/(?!new$)[^/]+$/);
+    }
+    await spa(p, "/sessions");
+    await expect(p.getByRole("list").getByRole("listitem").first()).toBeVisible();
+    await expect(p.locator("[data-slot=badge][data-tone]").first()).toBeVisible();
+  },
   upload: async (p) => { await verified(p, "c@example.com"); await openUpload(p); await expect(p.getByLabel("Change goal")).toBeVisible(); },
-  "interview-new": async (p) => { await verified(p, "d@example.com"); await p.getByRole("link", { name: /Start AI Interview/ }).click(); await expect(p).toHaveURL(/interviews\/new/); },
+  "interview-new": async (p) => { await verified(p, "d@example.com"); await p.getByRole("link", { name: /Start AI Interview/ }).click(); await expect(p).toHaveURL(/interviews\/new/); await expect(p.getByRole("combobox", { name: "Voice" })).toBeVisible(); },
   session: async (p) => {
     await verified(p, "e@example.com");
     await openUpload(p);

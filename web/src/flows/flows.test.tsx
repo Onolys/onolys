@@ -87,7 +87,7 @@ const withRatingOn = () => {
 
 const user = () => userEvent.setup();
 const h1 = (name: string) => screen.findByRole("heading", { level: 1, name });
-const nav = (name: string) => within(screen.getByRole("navigation")).getByRole("link", { name });
+const nav = (name: string) => within(screen.getByRole("navigation", { name: "Main" })).getByRole("link", { name });
 const mp3 = () => new File([new Uint8Array(100)], "visit.mp3", { type: "audio/mpeg" });
 const sessionId = (router: Parameters<typeof here>[0]) => here(router).split("/")[2]!;
 const step = (sid: string) => act(() => void mockBackend.advance(sid));

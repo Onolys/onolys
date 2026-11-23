@@ -24,6 +24,10 @@ describe("new session chooser", () => {
     const { router } = render();
     expect(await main().findByText("20 of 20 left today")).toBeInTheDocument();
     expect(main().getByText("5 of 5 left today")).toBeInTheDocument();
+    const meters = main().getAllByRole("meter");
+    expect(meters).toHaveLength(2);
+    expect(meters[0]).toHaveAttribute("aria-valuetext", "5 of 5 left today");
+    expect(meters[1]).toHaveAttribute("aria-valuetext", "20 of 20 left today");
     const link = main().getByRole("link", { name: "New session" });
     expect(link).toHaveAttribute("href", "/sessions/new");
     await userEvent.click(link);

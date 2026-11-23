@@ -3,6 +3,7 @@
  * at the limit, an End button, a "reconnecting…" state, and a leave prompt (evaluate what I have / discard).
  * After End the recording goes through the ordinary upload path and the session opens with its prefilled goal.
  */
+import { Button, Skeleton } from "@onolys/ui";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { Link, useBlocker, useLocation, useNavigate, useParams } from "react-router";
@@ -12,6 +13,8 @@ import type { Schemas } from "../../api/types";
 import { useAuth } from "../../auth/AuthProvider";
 import { useApiClient } from "../../auth/useApiClient";
 import { ratingEnabled } from "../../config";
+import { ACTIONS, BTN, H1, LINK, LINK_BTN, NOTE, PAGE } from "../../components/classes";
+import { ErrorNote, Notice } from "../../components/Notice";
 import { cardToForm } from "../rating/card";
 import { saveGoal } from "../rating/SetupFields";
 import { Modal } from "../settings/Modal";
@@ -214,30 +217,41 @@ function InterviewView({ id }: { id: string }) {
     });
   }, [staleLive, client, id, queryClient]);
 
-  if (interview.isPending) return <><h1>Interview</h1><p className="form-note">Loading…</p></>;
+  if (interview.isPending)
+    return (
+      <div className={PAGE} aria-busy="true">
+        <h1 className={H1}>Interview</h1>
+        <p className={NOTE}>Loading…</p>
+        <Skeleton className="h-16 w-full max-w-xl" />
+      </div>
+    );
   if (interview.isError) {
     const e = describeError(interview.error);
     return (
-      <>
-        <h1>Interview</h1>
+      <div className={PAGE}>
+        <h1 className={H1}>Interview</h1>
         <ErrorCard code={e.code} reference={e.requestId}>
-          <Link to="/sessions">Back to your sessions</Link>
+          <Link to="/sessions" className={LINK}>
+            Back to your sessions
+          </Link>
         </ErrorCard>
-      </>
+      </div>
     );
   }
   const iv = interview.data;
   const joinable = iv.state === "created";
   if (!joinable && !active) {
     return (
-      <>
-        <h1>{iv.scenario.title}</h1>
-        <p className="notice">{iv.state === "live" || wasStale ? "Interview ended" : "This interview has ended."}</p>
-        {iv.state === "live" || wasStale ? <p className="form-note">You left this interview, so it was ended. Start a new one to practise again.</p> : null}
+      <div className={PAGE}>
+        <h1 className={H1}>{iv.scenario.title}</h1>
+        <Notice>{iv.state === "live" || wasStale ? "Interview ended" : "This interview has ended."}</Notice>
+        {iv.state === "live" || wasStale ? <p className={NOTE}>You left this interview, so it was ended. Start a new one to practise again.</p> : null}
         <p>
-          <Link to="/sessions">Back to your sessions</Link>
+          <Link to="/sessions" className={LINK}>
+            Back to your sessions
+          </Link>
         </p>
-      </>
+      </div>
     );
   }
 
@@ -249,59 +263,55 @@ function InterviewView({ id }: { id: string }) {
   const minutesLeft = live ? Math.max(1, Math.round((live.maxS - live.warnS) / 60)) : 2;
 
   return (
-    <>
-      <h1>{iv.scenario.title}</h1>
-      <p className="form-note">{iv.scenario.summary}</p>
+    <div className={PAGE}>
+      <h1 className={H1}>{iv.scenario.title}</h1>
+      <p className={NOTE}>{iv.scenario.summary}</p>
 
       {!active ? (
         <>
-          <p className="notice">Use headphones. You'll be asked for your microphone, then the client greets you.</p>
+          <Notice>Use headphones. You'll be asked for your microphone, then the client greets you.</Notice>
           {micError ? (
-            <p role="alert" className="form-error">
-              We couldn't use your microphone. Allow it in your browser's site settings and try again.
-            </p>
+            <ErrorNote role="alert">We couldn't use your microphone. Allow it in your browser's site settings and try again.</ErrorNote>
           ) : null}
-          <p>
-            <button type="button" className="btn btn-primary" disabled={startingUi} onClick={() => void begin()}>
+          <div className={ACTIONS}>
+            <Button type="button" className={BTN} disabled={startingUi} onClick={() => void begin()}>
               Start talking
-            </button>{" "}
-            <Link to="/new">Not now</Link>
-          </p>
+            </Button>
+            <Link to="/new" className={LINK}>
+              Not now
+            </Link>
+          </div>
         </>
       ) : (
         <>
-          <p className="interview-timer" aria-label="Elapsed time">
+          <p className="text-2xl tabular-nums" aria-label="Elapsed time">
             <span>{clock(elapsed)}</span> / <span>{clock(maxS)}</span>
           </p>
-          <div role="status" aria-live="polite">
+          <div role="status" aria-live="polite" className="grid gap-3 empty:hidden [&_p]:m-0">
             {live?.phase === "connecting" ? <p>Connecting…</p> : null}
-            {live?.phase === "reconnecting" ? <p className="notice">Reconnecting… keep talking, your recording continues.</p> : null}
-            {live?.phase === "live" ? <p className="form-note">{live.aiSpeaking ? "The client is speaking" : "Listening"}</p> : null}
+            {live?.phase === "reconnecting" ? <Notice>Reconnecting… keep talking, your recording continues.</Notice> : null}
+            {live?.phase === "live" ? <p className={NOTE}>{live.aiSpeaking ? "The client is speaking" : "Listening"}</p> : null}
             {live?.timeUp ? <p>Time's up. Wrapping up…</p> : null}
             {live?.phase === "ended" && !live.timeUp && !finish.isPending ? (
-              <p className="notice">The interview has ended. Use End interview to save your recording, or Discard.</p>
+              <Notice>The interview has ended. Use End interview to save your recording, or Discard.</Notice>
             ) : null}
             {live?.warned && !live.timeUp ? (
-              <p className="notice" data-testid="warn-toast">
+              <Notice data-testid="warn-toast">
                 {minutesLeft} minute{minutesLeft === 1 ? "" : "s"} left. The interview ends automatically at {clock(live.maxS)}.
-              </p>
+              </Notice>
             ) : null}
             {finish.isPending ? <p>Saving your recording…</p> : null}
           </div>
-          {live?.phase === "error" ? (
-            <p className="notice" role="alert">
-              {LOST[live.errorCode ?? "relay_error"] ?? LOST.relay_error}
-            </p>
-          ) : null}
+          {live?.phase === "error" ? <Notice role="alert">{LOST[live.errorCode ?? "relay_error"] ?? LOST.relay_error}</Notice> : null}
           {e ? <ErrorCard code={e.code} reference={e.requestId} /> : null}
-          <p>
-            <button type="button" className="btn btn-primary" disabled={busy} onClick={evaluate}>
+          <div className={ACTIONS}>
+            <Button type="button" className={BTN} disabled={busy} onClick={evaluate}>
               {finish.isError ? "Try again" : "End interview"}
-            </button>{" "}
-            <button type="button" className="btn btn-secondary" disabled={busy} onClick={() => discard.mutate()}>
+            </Button>
+            <Button type="button" variant="outline" disabled={busy} onClick={() => discard.mutate()}>
               Discard
-            </button>
-          </p>
+            </Button>
+          </div>
         </>
       )}
 
@@ -309,19 +319,19 @@ function InterviewView({ id }: { id: string }) {
         <Modal titleId="leave-title" onEscape={() => blocker.reset()} testId="leave-dialog">
           <h2 id="leave-title">Leave this interview?</h2>
           <p>Your recording is only on this device until it is uploaded.</p>
-          <p>
-            <button type="button" className="btn btn-primary" disabled={busy} onClick={evaluate}>
+          <div className={ACTIONS}>
+            <Button type="button" className={BTN} disabled={busy} onClick={evaluate}>
               Evaluate what I have
-            </button>{" "}
-            <button type="button" className="btn btn-secondary" disabled={busy} onClick={() => discard.mutate()}>
+            </Button>
+            <Button type="button" variant="outline" disabled={busy} onClick={() => discard.mutate()}>
               Discard
-            </button>{" "}
-            <button type="button" className="link-button" disabled={busy} onClick={() => blocker.reset()}>
+            </Button>
+            <Button type="button" variant="link" className={LINK_BTN} disabled={busy} onClick={() => blocker.reset()}>
               Keep talking
-            </button>
-          </p>
+            </Button>
+          </div>
         </Modal>
       ) : null}
-    </>
+    </div>
   );
 }

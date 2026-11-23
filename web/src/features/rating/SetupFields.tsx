@@ -3,6 +3,7 @@
  * while the rating UI is off. Reuses the card helpers for validation and the PUT payload; the
  * rating card itself is untouched. The coded span is never sent (the engine picks it, D3d).
  */
+import { Label, Textarea } from "@onolys/ui";
 import { useId } from "react";
 import { unwrap } from "../../api/client";
 import { ApiError } from "../../api/errors";
@@ -48,9 +49,11 @@ export function SetupFields({ goal, onGoal, disabled, issue }: SetupFieldsProps)
   const id = useId();
   const c = softCount(goal, LIMITS.item);
   return (
-    <div className="rating-field">
-      <label htmlFor={id}>Change goal</label>
-      <textarea
+    <div className="grid gap-1">
+      <Label htmlFor={id} className="min-h-0 text-base font-semibold">
+        Change goal
+      </Label>
+      <Textarea
         id={id}
         required
         rows={2}
@@ -60,12 +63,12 @@ export function SetupFields({ goal, onGoal, disabled, issue }: SetupFieldsProps)
         aria-describedby={issue ? "change-goal-issue" : undefined}
         onChange={(e) => onGoal(e.target.value)}
       />
-      <span className={c.over ? "counter counter-over" : "counter"}>
+      <span className={c.over ? "text-sm font-semibold text-destructive" : "text-sm text-muted-foreground"}>
         {c.length.toLocaleString("en-US")} / {c.limit.toLocaleString("en-US")}
         {c.over ? " — over the limit; shorten it before it can be saved" : ""}
       </span>
       {issue ? (
-        <span id="change-goal-issue" role="alert" className="field-error">
+        <span id="change-goal-issue" role="alert" className="text-sm text-destructive">
           {issue}
         </span>
       ) : null}
