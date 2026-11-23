@@ -9,8 +9,8 @@ Source of truth: /root/projects/onolys/iaudit/.worktrees/feat/miti-eval/docs/age
 
 | # | Task | Depends on | Status |
 |---|---|---|---|
-| 1 | Core: dynamic schema, cost, `apply_coded_span` | - | in-progress |
-| 2 | `run_validated` + `OutputInvalid` | 1 | todo |
+| 1 | Core: dynamic schema, cost, `apply_coded_span` | - | done |
+| 2 | `run_validated` + `OutputInvalid` | 1 | in-progress |
 | 3 | `onolys_oneshot` package skeleton, config loader, rendering | 1 | todo |
 | 4 | `OneshotEngine` run and usage | 3 | todo |
 | 5 | MITI config, schema generator, golden fixtures | 4 | todo |
