@@ -1,11 +1,8 @@
 """Reusable gold.v1 contract with engine item IDs and pack-computed summaries."""
 from datetime import datetime
-from importlib.resources import files
 from pathlib import Path
 from typing import Annotated, Literal
 
-import yaml
-from onolys_miti.formula import evaluate
 from pydantic import Field, StringConstraints, field_validator, model_validator
 
 from ._contracts import (
@@ -16,6 +13,7 @@ from ._contracts import (
     Nonempty,
     NonnegativeInt,
 )
+from ._formulas import compute_summaries
 
 CountId = Literal[
     "gi", "persuade", "persuade_permission", "question", "sr", "cr", "affirm",
@@ -28,13 +26,6 @@ Counts = Annotated[dict[CountId, NonnegativeInt], Field(min_length=10, max_lengt
 Globals = Annotated[dict[GlobalId, Annotated[int, Field(ge=1, le=5)]],
                     Field(min_length=4, max_length=4)]
 Number = Annotated[float, Field(allow_inf_nan=False)]
-
-
-def compute_summaries(counts: dict[str, int], globals: dict[str, int]) -> dict[str, float | None]:
-    """Use the engine's published pack formulas, including null division results."""
-    pack = yaml.safe_load(files("onolys_miti").joinpath("data/pack.yaml").read_text())
-    values = {**counts, **globals}
-    return {item["id"]: evaluate(item["expr"], values) for item in pack["summaries"]}
 
 
 class Summaries(Contract):
