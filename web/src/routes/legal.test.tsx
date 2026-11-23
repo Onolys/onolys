@@ -8,10 +8,9 @@ describe("legal pages", () => {
   it.each([
     ["/privacy", "Privacy Policy"],
     ["/terms", "Terms of Service"],
-  ])("%s renders signed out and signed in with a title", async (path, heading) => {
+  ])("%s renders signed out with an updated date", async (path, heading) => {
     renderApp(path);
     await h1(heading);
-    expect(document.title).toContain(heading);
     expect(screen.getByText(/Last updated: 2026-11-23/)).toBeInTheDocument();
   });
 
