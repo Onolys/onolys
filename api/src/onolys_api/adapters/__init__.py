@@ -46,7 +46,10 @@ def build_adapters(
         return Adapters(stt=FakeStt(), evaluation=FakeEvaluation(), voice=FakeVoice())
     from onolys_api.adapters.real import RealEvaluation, RealStt, RealVoice
 
-    evaluation = RealEvaluation(llm_factory=llm_factory) if llm_factory else RealEvaluation()
+    evaluation = (
+        RealEvaluation(settings, llm_factory=llm_factory)
+        if llm_factory else RealEvaluation(settings)
+    )
     return Adapters(stt=RealStt(stt_registry), evaluation=evaluation, voice=RealVoice())
 
 

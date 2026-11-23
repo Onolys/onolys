@@ -58,6 +58,7 @@ class Settings:
     worker_url: str = ""
     routes_file: str = ""
     default_preset: str = ""
+    prod_engine: str = "miti"
     # Presets beyond the default that users may pick (FX43): empty in prod unless the owner opts in
     extra_presets: tuple[str, ...] = ()
     git_sha: str = "dev"
@@ -119,6 +120,7 @@ class Settings:
             worker_url=e.get("WORKER_URL", ""),
             routes_file=e.get("ROUTES_FILE", ""),
             default_preset=e.get("DEFAULT_PRESET", ""),
+            prod_engine=e.get("PROD_ENGINE", cls.prod_engine),
             extra_presets=tuple(
                 p.strip() for p in e.get("ENABLED_EXTRA_PRESETS", "").split(",") if p.strip()
             ),

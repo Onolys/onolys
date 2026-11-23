@@ -337,12 +337,12 @@ class Capture(FakeEvaluation):
         return await super().run(ctx, transcript, speaker_map, params, progress_cb)
 
 
-async def test_evaluation_gets_seed_language_and_a_deadline_but_no_rating_or_span(env):
+async def test_evaluation_gets_seed_language_deadline_and_whole_session_span_without_rating(env):
     cap = Capture()
     swap_eval(env, cap)
     sid = await env.finished()
     assert cap.seen["params"]["seed"] == sid
-    assert "coded_span" not in cap.seen["params"] and "rating" not in cap.seen["params"]
+    assert cap.seen["params"]["coded_span"] is None and "rating" not in cap.seen["params"]
     sess = env.repo.get_session(env.uid, sid)
     tr = env.repo.get_transcript(env.uid, sid, "current").transcript
     assert cap.seen["params"]["language"] == (tr.language or sess.language)

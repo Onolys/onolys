@@ -138,3 +138,12 @@ def test_enabled_preset_missing_key_fails_in_staging_warns_locally(caplog):
     _resolver("staging").check_keys({"GEMINI_API_KEY": "k"})  # claude not enabled: not needed
     _resolver("test", extra_presets=("claude",)).check_keys({"GEMINI_API_KEY": "k"})
     assert "ANTHROPIC_API_KEY" in caplog.text
+
+
+def test_public_preset_catalog_uses_core_metadata_and_filters_test_presets():
+    prod = _resolver("prod", default_preset="claude", extra_presets=("default",))
+    catalog = prod.presets()
+    assert {p.name for p in catalog} == {"default", "claude"}
+    assert {p.name for p in catalog if p.prod} == {"claude"}
+    assert all(p.models and all(isinstance(m, str) for m in p.models.values()) for p in catalog)
+    assert set(BROKEN) <= {p.name for p in _resolver("staging").presets()}

@@ -1,4 +1,4 @@
-"""R1/D2: api imports `onolys_miti` only. No api src or test file imports an old package."""
+"""API uses shared core and imports MITI only for engine-specific behavior."""
 
 import ast
 from pathlib import Path
@@ -34,4 +34,27 @@ def test_no_file_imports_an_old_package(folder):
         for mod in _imported(ast.parse(p.read_text(encoding="utf-8"))):
             if mod.split(".")[0] in OLD:
                 bad.append(f"{p.relative_to(API)}: {mod}")
+    assert not bad, bad
+
+
+def test_api_imports_miti_only_for_engine_specific_modules():
+    allowed = {
+        "engine", "miti", "prepare", "rating", "report", "result", "run", "span", "stt", "voice",
+    }
+    bad = []
+    for path in sorted((API / "src").rglob("*.py")):
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ImportFrom) and node.module == "onolys_miti":
+                for alias in node.names:
+                    if alias.name == "MitiEngine" and path.name == "engines.py":
+                        continue
+                    if alias.name not in allowed:
+                        bad.append(f"{path.relative_to(API)}: onolys_miti.{alias.name}")
+        for module in _imported(tree):
+            if module == "onolys_miti" or module.startswith("onolys_miti."):
+                if module == "onolys_miti":
+                    continue  # direct from-imports checked above
+                if module.split(".")[1] not in allowed:
+                    bad.append(f"{path.relative_to(API)}: {module}")
     assert not bad, bad

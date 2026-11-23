@@ -130,7 +130,7 @@ async def test_submitted_card_run_leaves_artifacts_run_info_and_header(env):
     assert r.status_code == 200
     header = r.json()["report"]["header"]
     assert header["code_version"] == "abc123" and header["preset"] == "default"
-    assert header["stt"]["model"] == "synthetic-fixture"
+    assert header["stt"] == env.repo.get_session(env.uid, sid).stt.run.model_dump()
     assert r.json()["report"]["run_info"] == ri
 
 

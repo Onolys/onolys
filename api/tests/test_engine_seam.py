@@ -31,13 +31,18 @@ async def test_absent_span_passes_whole_session(env):  # noqa: F811
 async def test_real_adapter_forwards_seed_and_caller_span():
     seen = {}
 
-    async def run_miti(rctx, transcript, speaker_map, params, progress_cb=None):
+    async def run_engine(rctx, transcript, params, progress_cb=None):
         seen.update(params)
         raise RuntimeError("stop")
 
-    from onolys_engine_core.context import RunContext
+    from types import SimpleNamespace
 
-    ev = RealEvaluation(run_miti=run_miti, llm_factory=lambda routes: object())
+    from onolys_engine_core.context import RunContext
+    from onolys_engine_core.registry import EngineRegistry
+
+    registry = EngineRegistry()
+    registry.register(SimpleNamespace(name="miti", run=run_engine))
+    ev = RealEvaluation(registry=registry, llm_factory=lambda routes: object())
     ctx = RunContext(llm=None, metrics=None, request_id="r1")
     params = {"seed": "sess-1", "coded_span": {"start_turn": 0, "end_turn": 2}, "preset": None}
     with pytest.raises(RuntimeError):
