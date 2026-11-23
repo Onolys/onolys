@@ -11,8 +11,8 @@ Source of truth: /root/projects/onolys/iaudit/.worktrees/feat/miti-eval/docs/age
 |---|---|---|---|
 | 1 | Core package scaffold + basics move + import boundary test | - | done |
 | 2 | Move LLM client and routes to core | 1 | done |
-| 3 | Move transcript, txt parser, schema, speaker-gate helper; update eval imports | 1 | in-progress |
-| 4 | Engine ABC, result types, feedback hook, validate_output | 1 | todo |
+| 3 | Move transcript, txt parser, schema, speaker-gate helper; update eval imports | 1 | done |
+| 4 | Engine ABC, result types, feedback hook, validate_output | 1 | in-progress |
 | 5 | EngineRegistry and list_presets | 2, 4 | todo |
 | 6 | MitiEngine adoption | 2, 3, 4, 5 | todo |
 | 7 | API migration: engines.py, PROD_ENGINE, registry in RealEvaluation | 3, 5, 6 | todo |
