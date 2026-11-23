@@ -1,7 +1,7 @@
 ---
 stage: code
 status: in-progress
-summary: All five sub-projects implemented and individually reviewed PASS; full branch review in progress before PR/CI
+summary: Implementation, all five sub-project reviews and full branch final review PASS; dev-ship PR/CI and final redeploy remain
 date: 2026-11-23
 ---
 # MITI eval site: design index
@@ -12,7 +12,7 @@ Branch `feat/miti-eval` (Onolys/onolys). Brainstorm: `brainstorm.md`. Governing 
 
 - All five sub-projects implemented; every planned task is done, including SP5 Task 12 at `d11ca6c`.
 - SP1–SP5 individually reviewed PASS. SP5 fixes ea9afe5 and 789d4ff resolved all three initial findings after two rounds; final Bug Hunter, Security and Architect all PASS.
-- Full branch three-persona review now in progress: `cf3a2a2207fc3846a39b435b8ac01c28ac24e558..789d4ff`. Next: resolve any full-review findings, then `dev-ship` PR/CI. Never merge automatically. Review fixes are not deployed; staging remains source 4808722/revision00005-hfh.
+- Full branch final review PASS from Bug Hunter, Security and Architect at `08faaf5`, baseline `cf3a2a2207fc3846a39b435b8ac01c28ac24e558..08faaf5`. Full-review corrections: 8ee6ee8, f99ef19, 08faaf5. Next: `dev-ship` PR/CI and final manual redeploy with safe Human/no-paid verification. Never merge automatically. Review fixes are not deployed yet; staging remains source4808722/revision00005-hfh.
 - Live Firebase staging app works at https://onolys-eval-staging.web.app. Task 12 evidence qualifies Gemini HTTP 402/default-provider acceptance, owner DNS/certificate, unregistered deploy workflow, and unverified actual in-flight tab-close proof. Implementation completion does not claim these acceptance conditions passed.
 - Private CASAA data and sensitive evidence remain outside the public repository. See SP5 code/review artifacts and `code-2026-11-23-task12.md` for exact evidence.
 
