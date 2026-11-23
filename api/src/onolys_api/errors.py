@@ -12,6 +12,8 @@ ERROR_CODES = (
     "unsupported_media_type",
     "schema_violation",
     "empty_transcript",
+    "invalid_coded_span",
+    "session_too_long",
     "transcript_invalid",
     "transcript_too_large",
     "empty_assessment",
@@ -148,7 +150,7 @@ _STATUS_TEXT = {
     ),
     422: (
         "`invalid_parameters` (incl. a malformed id, cursor or body), `unsupported_audio`, "
-        "`audio_too_large` or `rating_invalid`"
+        "`audio_too_large`, `rating_invalid`, `invalid_coded_span` or `session_too_long`"
     ),
     429: (
         "`daily_cap_reached` (daily run cap), `concurrent_runs` (a run is already in progress) "

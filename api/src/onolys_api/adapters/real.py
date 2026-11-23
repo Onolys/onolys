@@ -11,7 +11,7 @@ The completion carries transcript.v1 and separate STT provenance unchanged.
 
 `RealEvaluation` (SP09 R2, D5) is the single call into `onolys_miti.run_miti`; it names no model
 or provider: routes come from the run's preset (`resolve_preset`, unknown preset -> `InputError`).
-It passes no pack, rating or coded span; `seed` (the session id) lets the engine pick the span.
+It forwards the caller span and seed, without a pack or rating card.
 
 An unknown provider raises core `ConfigError` (an `OnolysError`): `error_map.to_public` maps it
 to `internal_error`, not retryable, and the worker logs the class, never the message.
@@ -101,7 +101,9 @@ class RealVoice:
 
 
 RUN_DEADLINE_S = 8 * 60  # the whole evaluation; a shorter ctx.deadline (task budget) wins
-_ENGINE_PARAMS = ("change_goal", "seed", "language", "n_runs", "preset", "code_version", "stt_run")
+_ENGINE_PARAMS = (
+    "change_goal", "seed", "language", "n_runs", "preset", "code_version", "stt_run", "coded_span",
+)
 
 
 def _llm_from_routes(routes: dict) -> Any:

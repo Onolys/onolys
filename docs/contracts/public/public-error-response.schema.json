@@ -46,6 +46,8 @@
               "unsupported_media_type",
               "schema_violation",
               "empty_transcript",
+              "invalid_coded_span",
+              "session_too_long",
               "transcript_invalid",
               "transcript_too_large",
               "empty_assessment",

@@ -202,12 +202,14 @@ async def test_final_requires_change_goal(env):
 
 
 @pytest.mark.firestore_smoke
-async def test_final_without_coded_span_clears_the_stale_span_on_the_session(env):
-    c, h, repo, uid, sid = env  # BH1: a submitted card without a span leaves no span
+async def test_final_without_coded_span_preserves_the_caller_span(env):
+    c, h, repo, uid, sid = env
+    span = {"start_turn": 0, "end_turn": 1}
+    repo.update_session(uid, sid, {"coded_span": span})
     c2 = card()
     del c2["coded_span"]
     assert (await put(c, h, sid, {"final": True, "card": c2})).status_code == 202
-    assert repo.get_session(uid, sid).coded_span is None
+    assert repo.get_session(uid, sid).coded_span.model_dump(exclude_none=True) == span
 
 
 @pytest.mark.firestore_smoke
@@ -220,7 +222,7 @@ async def test_final_creates_revision_and_updates_session(env, hook_calls):
     assert doc.card["change_goal"] == "cut back on drinking" and doc.no_rating is False
     s = repo.get_session(uid, sid)
     assert s.rating_submitted and s.has_rating
-    assert s.change_goal == "cut back on drinking" and s.coded_span.to_s == 600
+    assert s.change_goal == "cut back on drinking" and s.coded_span is None
     st = repo.get_status(uid, sid)
     assert st.rating_submitted and st.has_rating
     assert len(hook_calls) == 1 and hook_calls[0][2:4] == (uid, sid)

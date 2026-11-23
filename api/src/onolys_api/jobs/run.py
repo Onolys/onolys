@@ -156,7 +156,9 @@ def _evaluate(ctx, blobs, evaluation, run_doc, session) -> ReportDoc:
         raise PermanentError("internal_error")
     params = {
         "change_goal": session.change_goal or "",
-        "seed": sid,  # the engine picks the coded window from it (no caller span)
+        "seed": sid,
+        "coded_span": (run_doc.coded_span.model_dump(exclude_none=True)
+                       if run_doc.coded_span else None),
         "language": transcript.language or session.language,
         "n_runs": run_doc.n_runs,
         "preset": run_doc.preset,

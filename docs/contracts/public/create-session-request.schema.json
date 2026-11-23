@@ -1,7 +1,123 @@
 {
+  "$defs": {
+    "CodedSpan": {
+      "additionalProperties": false,
+      "description": "Exactly one half-open time (milliseconds) or zero-based turn range.",
+      "oneOf": [
+        {
+          "properties": {
+            "end_ms": {
+              "type": "integer"
+            },
+            "end_turn": {
+              "type": "null"
+            },
+            "start_ms": {
+              "type": "integer"
+            },
+            "start_turn": {
+              "type": "null"
+            }
+          },
+          "required": [
+            "start_ms",
+            "end_ms"
+          ]
+        },
+        {
+          "properties": {
+            "end_ms": {
+              "type": "null"
+            },
+            "end_turn": {
+              "type": "integer"
+            },
+            "start_ms": {
+              "type": "null"
+            },
+            "start_turn": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "start_turn",
+            "end_turn"
+          ]
+        }
+      ],
+      "properties": {
+        "end_ms": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "End Ms"
+        },
+        "end_turn": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "End Turn"
+        },
+        "start_ms": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Start Ms"
+        },
+        "start_turn": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Start Turn"
+        }
+      },
+      "title": "CodedSpan",
+      "type": "object"
+    }
+  },
   "$id": "create-session-request.schema.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "properties": {
+    "coded_span": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/CodedSpan"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Half-open milliseconds or zero-based turn range; null codes all turns."
+    },
     "interview_id": {
       "anyOf": [
         {

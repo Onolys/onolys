@@ -12,6 +12,7 @@ from onolys_miti.transcript_input import (
 from onolys_miti.transcript_txt import parse_transcript_txt
 
 from onolys_api.auth.deps import AuthUser, current_user
+from onolys_api.coded_span import validate_coded_input
 from onolys_api.errors import ApiError, ErrorResponse
 from onolys_api.jobs.first_run import maybe_start_first_run
 from onolys_api.jobs.machine import advance, invalid_state
@@ -117,6 +118,8 @@ async def upload_transcript(
         clinician = inferred_clinician_speaker(transcript)
     except TranscriptInputError as error:
         raise _public_error(error) from None
+
+    validate_coded_input(transcript, session.coded_span)
 
     # Recheck after awaiting the body, before any write or usage reservation.
     if repo.get_session(user.uid, id).state != "created":

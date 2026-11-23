@@ -148,6 +148,104 @@
         "title": "AudioUploadResponse",
         "type": "object"
       },
+      "CodedSpan": {
+        "additionalProperties": false,
+        "description": "Exactly one half-open time (milliseconds) or zero-based turn range.",
+        "oneOf": [
+          {
+            "properties": {
+              "end_ms": {
+                "type": "integer"
+              },
+              "end_turn": {
+                "type": "null"
+              },
+              "start_ms": {
+                "type": "integer"
+              },
+              "start_turn": {
+                "type": "null"
+              }
+            },
+            "required": [
+              "start_ms",
+              "end_ms"
+            ]
+          },
+          {
+            "properties": {
+              "end_ms": {
+                "type": "null"
+              },
+              "end_turn": {
+                "type": "integer"
+              },
+              "start_ms": {
+                "type": "null"
+              },
+              "start_turn": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "start_turn",
+              "end_turn"
+            ]
+          }
+        ],
+        "properties": {
+          "end_ms": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End Ms"
+          },
+          "end_turn": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End Turn"
+          },
+          "start_ms": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start Ms"
+          },
+          "start_turn": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start Turn"
+          }
+        },
+        "title": "CodedSpan",
+        "type": "object"
+      },
       "ConfirmRequest": {
         "properties": {
           "clinician_speaker": {
@@ -240,6 +338,17 @@
       },
       "CreateSessionRequest": {
         "properties": {
+          "coded_span": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CodedSpan"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Half-open milliseconds or zero-based turn range; null codes all turns."
+          },
           "interview_id": {
             "anyOf": [
               {
@@ -348,6 +457,8 @@
               "unsupported_media_type",
               "schema_violation",
               "empty_transcript",
+              "invalid_coded_span",
+              "session_too_long",
               "transcript_invalid",
               "transcript_too_large",
               "empty_assessment",
@@ -888,6 +999,17 @@
       },
       "RunRequest": {
         "properties": {
+          "coded_span": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CodedSpan"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Half-open milliseconds or zero-based turn range; null codes all turns."
+          },
           "n_runs": {
             "anyOf": [
               {
@@ -2021,7 +2143,7 @@
                 }
               }
             },
-            "description": "`invalid_parameters` (incl. a malformed id, cursor or body), `unsupported_audio`, `audio_too_large` or `rating_invalid`"
+            "description": "`invalid_parameters` (incl. a malformed id, cursor or body), `unsupported_audio`, `audio_too_large`, `rating_invalid`, `invalid_coded_span` or `session_too_long`"
           },
           "429": {
             "content": {
@@ -2112,7 +2234,7 @@
                 }
               }
             },
-            "description": "`invalid_parameters` (incl. a malformed id, cursor or body), `unsupported_audio`, `audio_too_large` or `rating_invalid`"
+            "description": "`invalid_parameters` (incl. a malformed id, cursor or body), `unsupported_audio`, `audio_too_large`, `rating_invalid`, `invalid_coded_span` or `session_too_long`"
           },
           "429": {
             "content": {
@@ -2221,7 +2343,7 @@
                 }
               }
             },
-            "description": "`invalid_parameters` (incl. a malformed id, cursor or body), `unsupported_audio`, `audio_too_large` or `rating_invalid`"
+            "description": "`invalid_parameters` (incl. a malformed id, cursor or body), `unsupported_audio`, `audio_too_large`, `rating_invalid`, `invalid_coded_span` or `session_too_long`"
           },
           "429": {
             "content": {
@@ -2312,7 +2434,7 @@
                 }
               }
             },
-            "description": "`invalid_parameters` (incl. a malformed id, cursor or body), `unsupported_audio`, `audio_too_large` or `rating_invalid`"
+            "description": "`invalid_parameters` (incl. a malformed id, cursor or body), `unsupported_audio`, `audio_too_large`, `rating_invalid`, `invalid_coded_span` or `session_too_long`"
           },
           "429": {
             "content": {
@@ -2472,7 +2594,7 @@
                 }
               }
             },
-            "description": "`invalid_parameters` (incl. a malformed id, cursor or body), `unsupported_audio`, `audio_too_large` or `rating_invalid`"
+            "description": "`invalid_parameters` (incl. a malformed id, cursor or body), `unsupported_audio`, `audio_too_large`, `rating_invalid`, `invalid_coded_span` or `session_too_long`"
           },
           "429": {
             "content": {
@@ -2582,7 +2704,7 @@
                 }
               }
             },
-            "description": "`invalid_parameters` (incl. a malformed id, cursor or body), `unsupported_audio`, `audio_too_large` or `rating_invalid`"
+            "description": "`invalid_parameters` (incl. a malformed id, cursor or body), `unsupported_audio`, `audio_too_large`, `rating_invalid`, `invalid_coded_span` or `session_too_long`"
           },
           "429": {
             "content": {
@@ -2667,7 +2789,7 @@
                 }
               }
             },
-            "description": "`invalid_parameters` (incl. a malformed id, cursor or body), `unsupported_audio`, `audio_too_large` or `rating_invalid`"
+            "description": "`invalid_parameters` (incl. a malformed id, cursor or body), `unsupported_audio`, `audio_too_large`, `rating_invalid`, `invalid_coded_span` or `session_too_long`"
           },
           "429": {
             "content": {
@@ -2767,7 +2889,7 @@
                 }
               }
             },
-            "description": "`invalid_parameters` (incl. a malformed id, cursor or body), `unsupported_audio`, `audio_too_large` or `rating_invalid`"
+            "description": "`invalid_parameters` (incl. a malformed id, cursor or body), `unsupported_audio`, `audio_too_large`, `rating_invalid`, `invalid_coded_span` or `session_too_long`"
           },
           "429": {
             "content": {
@@ -2858,7 +2980,7 @@
                 }
               }
             },
-            "description": "`invalid_parameters` (incl. a malformed id, cursor or body), `unsupported_audio`, `audio_too_large` or `rating_invalid`"
+            "description": "`invalid_parameters` (incl. a malformed id, cursor or body), `unsupported_audio`, `audio_too_large`, `rating_invalid`, `invalid_coded_span` or `session_too_long`"
           },
           "429": {
             "content": {
@@ -2968,7 +3090,7 @@
                 }
               }
             },
-            "description": "`invalid_parameters` (incl. a malformed id, cursor or body), `unsupported_audio`, `audio_too_large` or `rating_invalid`"
+            "description": "`invalid_parameters` (incl. a malformed id, cursor or body), `unsupported_audio`, `audio_too_large`, `rating_invalid`, `invalid_coded_span` or `session_too_long`"
           },
           "429": {
             "content": {
@@ -3074,7 +3196,7 @@
                 }
               }
             },
-            "description": "`invalid_parameters` (incl. a malformed id, cursor or body), `unsupported_audio`, `audio_too_large` or `rating_invalid`"
+            "description": "`invalid_parameters` (incl. a malformed id, cursor or body), `unsupported_audio`, `audio_too_large`, `rating_invalid`, `invalid_coded_span` or `session_too_long`"
           },
           "429": {
             "content": {
@@ -3175,7 +3297,7 @@
                 }
               }
             },
-            "description": "`invalid_parameters` (incl. a malformed id, cursor or body), `unsupported_audio`, `audio_too_large` or `rating_invalid`"
+            "description": "`invalid_parameters` (incl. a malformed id, cursor or body), `unsupported_audio`, `audio_too_large`, `rating_invalid`, `invalid_coded_span` or `session_too_long`"
           },
           "429": {
             "content": {
@@ -3275,7 +3397,7 @@
                 }
               }
             },
-            "description": "`invalid_parameters` (incl. a malformed id, cursor or body), `unsupported_audio`, `audio_too_large` or `rating_invalid`"
+            "description": "`invalid_parameters` (incl. a malformed id, cursor or body), `unsupported_audio`, `audio_too_large`, `rating_invalid`, `invalid_coded_span` or `session_too_long`"
           },
           "429": {
             "content": {
@@ -3366,7 +3488,7 @@
                 }
               }
             },
-            "description": "`invalid_parameters` (incl. a malformed id, cursor or body), `unsupported_audio`, `audio_too_large` or `rating_invalid`"
+            "description": "`invalid_parameters` (incl. a malformed id, cursor or body), `unsupported_audio`, `audio_too_large`, `rating_invalid`, `invalid_coded_span` or `session_too_long`"
           },
           "429": {
             "content": {
@@ -3467,7 +3589,7 @@
                 }
               }
             },
-            "description": "`invalid_parameters` (incl. a malformed id, cursor or body), `unsupported_audio`, `audio_too_large` or `rating_invalid`"
+            "description": "`invalid_parameters` (incl. a malformed id, cursor or body), `unsupported_audio`, `audio_too_large`, `rating_invalid`, `invalid_coded_span` or `session_too_long`"
           },
           "429": {
             "content": {
@@ -3558,7 +3680,7 @@
                 }
               }
             },
-            "description": "`invalid_parameters` (incl. a malformed id, cursor or body), `unsupported_audio`, `audio_too_large` or `rating_invalid`"
+            "description": "`invalid_parameters` (incl. a malformed id, cursor or body), `unsupported_audio`, `audio_too_large`, `rating_invalid`, `invalid_coded_span` or `session_too_long`"
           },
           "429": {
             "content": {
@@ -3675,7 +3797,7 @@
                 }
               }
             },
-            "description": "`invalid_parameters` (incl. a malformed id, cursor or body), `unsupported_audio`, `audio_too_large` or `rating_invalid`"
+            "description": "`invalid_parameters` (incl. a malformed id, cursor or body), `unsupported_audio`, `audio_too_large`, `rating_invalid`, `invalid_coded_span` or `session_too_long`"
           },
           "429": {
             "content": {
@@ -3787,7 +3909,7 @@
                 }
               }
             },
-            "description": "`invalid_parameters` (incl. a malformed id, cursor or body), `unsupported_audio`, `audio_too_large` or `rating_invalid`"
+            "description": "`invalid_parameters` (incl. a malformed id, cursor or body), `unsupported_audio`, `audio_too_large`, `rating_invalid`, `invalid_coded_span` or `session_too_long`"
           },
           "429": {
             "content": {
@@ -3899,7 +4021,7 @@
                 }
               }
             },
-            "description": "`invalid_parameters` (incl. a malformed id, cursor or body), `unsupported_audio`, `audio_too_large` or `rating_invalid`"
+            "description": "`invalid_parameters` (incl. a malformed id, cursor or body), `unsupported_audio`, `audio_too_large`, `rating_invalid`, `invalid_coded_span` or `session_too_long`"
           },
           "429": {
             "content": {
@@ -4001,7 +4123,7 @@
                 }
               }
             },
-            "description": "`invalid_parameters` (incl. a malformed id, cursor or body), `unsupported_audio`, `audio_too_large` or `rating_invalid`"
+            "description": "`invalid_parameters` (incl. a malformed id, cursor or body), `unsupported_audio`, `audio_too_large`, `rating_invalid`, `invalid_coded_span` or `session_too_long`"
           },
           "429": {
             "content": {
@@ -4106,7 +4228,7 @@
                 }
               }
             },
-            "description": "`invalid_parameters` (incl. a malformed id, cursor or body), `unsupported_audio`, `audio_too_large` or `rating_invalid`"
+            "description": "`invalid_parameters` (incl. a malformed id, cursor or body), `unsupported_audio`, `audio_too_large`, `rating_invalid`, `invalid_coded_span` or `session_too_long`"
           },
           "429": {
             "content": {

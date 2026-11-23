@@ -23,6 +23,12 @@ TRANSCRIPTION = "transcription_failed"
 INTERNAL = "internal_error"
 
 PUBLIC_MESSAGES = {
+    "invalid_coded_span": (
+        "Choose a valid coded_span within the transcript; time spans require timestamps."
+    ),
+    "session_too_long": (
+        "The coded portion exceeds 25 minutes or 6000 words; supply a narrower coded_span."
+    ),
     "invalid_parameters": "The request could not be run with this input.",
     UPSTREAM: "A service we depend on is unavailable. Run again shortly.",
     DEADLINE: "The run took too long. Run again.",
@@ -75,6 +81,8 @@ def _classify(exc: BaseException, stage: Stage) -> tuple[str, bool]:
         if exc.code in _ADAPTER_CODES:
             return exc.code, _ADAPTER_CODES[exc.code]
         return INTERNAL, False
+    if isinstance(exc, InputError) and exc.code in ("invalid_coded_span", "session_too_long"):
+        return exc.code, False
     if isinstance(exc, InputError):
         return "invalid_parameters", False
     if stage == "stt":

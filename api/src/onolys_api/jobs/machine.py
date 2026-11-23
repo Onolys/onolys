@@ -79,6 +79,7 @@ def rating_final() -> ApiError:
 BAD_FILE_CODES = frozenset(
     {
         "unsupported_audio", "audio_too_long", "interview_too_long", "audio_too_large",
+        "invalid_coded_span", "session_too_long",
         "audio_unreadable", "no_speech", "speakers_not_separated", "transcription_failed",
     }
 )  # fmt: skip

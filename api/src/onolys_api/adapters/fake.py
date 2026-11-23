@@ -10,7 +10,8 @@ import hashlib
 from typing import Any
 
 from onolys_miti.context import RunContext
-from onolys_miti.span import duration_s
+from onolys_miti.prepare import RoleTurn, select_turns
+from onolys_miti.span import select_coded_span
 from onolys_miti.stt import AudioRef, SttParams, SttRun, Word
 from onolys_miti.stt.base import BaseSttAdapter
 from onolys_miti.transcript import Transcript
@@ -195,7 +196,7 @@ def _code_result(
         },
         "language": str(params.get("language") or "en"),
         "change_goal": str(params.get("change_goal") or ""),
-        "coded_span": None,  # the whole session: the engine, not the caller, picks the span
+        "coded_span": params.get("coded_span"),
         "subject_speaker": subject,
         "n_runs": n_runs,
         "results": [{**run, "run_index": i} for i in range(n_runs)],
@@ -208,12 +209,9 @@ def _code_result(
         "warnings": [],
         "run_info": {
             **_run_info("miti", params),
-            # The fake always codes the whole session (never a random window).
-            "span": {
-                "mode": "whole",
-                "duration_s": duration_s(transcript),
-                "seed": params["seed"],
-            },
+            "span": select_coded_span(
+                transcript, params["seed"], params.get("coded_span")
+            ).info().model_dump(exclude_none=True),
         },
     }
 
@@ -252,7 +250,11 @@ class FakeEvaluation:
         cb("code", "done")
 
         subject = speaker_map["subject"]
-        quotes = _subject_quotes(transcript, subject)
+        selected, _ = select_turns(
+            [RoleTurn(t, "other") for t in transcript.turns], params.get("coded_span")
+        )
+        selected_transcript = transcript.model_copy(update={"turns": [rt.turn for rt in selected]})
+        quotes = _subject_quotes(selected_transcript, subject)
         code = _code_result(transcript, subject, params, quotes)
         warnings: list[dict[str, Any]] = []
 
@@ -297,7 +299,7 @@ class FakeEvaluation:
                 "change_goal": str(params.get("change_goal") or ""),
                 "protocol": _PROTOCOL,
                 "language": str(params.get("language") or "en"),
-                "coded_span": None,  # the whole session: the engine, not the caller, picks the span
+                "coded_span": params.get("coded_span"),
                 "subject_speaker": subject,
                 "n_runs": n_runs,
                 "models": {},

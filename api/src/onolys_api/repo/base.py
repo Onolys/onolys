@@ -212,7 +212,7 @@ class Repo(Protocol):
     def start_run(
         self, uid: str, sid: str, run_id: str, date: str, defaults: LimitDefaults, max_active: int,
         code_version: str, start_progress: int, allowed_states: tuple[str, ...],
-        n_runs: int | None, preset: str | None,
+        n_runs: int | None, preset: str | None, coded_span: dict | None = None,
     ) -> StartOutcome: ...  # fmt: skip
     # interviews (SP10 R5): uid-scoped `interviews/{id}`; foreign or missing -> NotFoundError.
     def create_interview(self, uid: str, iid: str, doc: InterviewDoc) -> None: ...

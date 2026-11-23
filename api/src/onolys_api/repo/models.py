@@ -6,6 +6,7 @@
 from datetime import UTC, datetime
 from typing import Any, Literal
 
+from onolys_miti.result import CodedSpan
 from onolys_miti.stt import SttRun
 from onolys_miti.transcript import Transcript
 from pydantic import BaseModel, Field
@@ -62,11 +63,6 @@ class SttInfo(BaseModel):
     provider: str = ""
     model: str = ""
     language: str = ""
-
-
-class CodedSpan(BaseModel):
-    from_s: float
-    to_s: float
 
 
 class StepRecord(BaseModel):
@@ -173,6 +169,7 @@ class RatingDraftDoc(Doc):
 
 
 class RunDoc(Doc):
+    coded_span: CodedSpan | None = None
     uid: str
     session_id: str
     run_id: str

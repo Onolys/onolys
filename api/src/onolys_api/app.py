@@ -300,7 +300,8 @@ def register_error_handlers(app: FastAPI) -> None:
         # paths only: pydantic messages can embed input values
         details: list[ErrorDetail] = [
             {
-                "code": "invalid_parameters",
+                "code": ("invalid_coded_span" if "coded_span" in e["loc"]
+                         else "invalid_parameters"),
                 "message": f"{'/'.join(str(p) for p in e['loc'])}: invalid parameter",
             }
             for e in exc.errors()[:5]
