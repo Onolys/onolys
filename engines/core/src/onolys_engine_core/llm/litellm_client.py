@@ -218,12 +218,30 @@ class LiteLLMClient:
         started = time.monotonic()
         attempts = 0
         usage = Usage()
+        received_response = False
+
+        def account(response_usage: Usage) -> None:
+            nonlocal usage, received_response
+            cost = response_usage.cost_usd
+            if received_response:
+                cost = (
+                    usage.cost_usd + cost
+                    if usage.cost_usd is not None and cost is not None
+                    else None
+                )
+            usage = Usage(
+                input_tokens=usage.input_tokens + response_usage.input_tokens,
+                output_tokens=usage.output_tokens + response_usage.output_tokens,
+                cache_read_tokens=usage.cache_read_tokens + response_usage.cache_read_tokens,
+                cache_write_tokens=usage.cache_write_tokens + response_usage.cache_write_tokens,
+                cost_usd=cost,
+            )
+            received_response = True
 
         async def call(attempt: int):
-            nonlocal attempts, usage
+            nonlocal attempts
             attempts = attempt
-            parsed, usage = await self._once_rate_limited(req, route, timeout_s, started)
-            return parsed
+            return await self._once_rate_limited(req, route, timeout_s, started, account)
 
         try:
             parsed = await retry(
@@ -259,7 +277,12 @@ class LiteLLMClient:
             metrics.record(req, model, usage, latency_ms, attempts, ok, error_kind)
 
     async def _once_rate_limited(
-        self, req: LLMRequest, route: Route, timeout_s: float, started: float
+        self,
+        req: LLMRequest,
+        route: Route,
+        timeout_s: float,
+        started: float,
+        account: Callable[[Usage], None],
     ):
         """One attempt, re-sent after a 429/529 for as long as the deadline allows.
 
@@ -271,7 +294,7 @@ class LiteLLMClient:
         waits = 0
         while True:
             try:
-                return await self._once(req, route, timeout_s)
+                return await self._once(req, route, timeout_s, account)
             except LLMRateLimited as exc:
                 backoff = route.backoff_s * 2**waits * random.uniform(0.5, 1.0)
                 wait = max(exc.retry_after or 0.0, backoff)
@@ -281,7 +304,9 @@ class LiteLLMClient:
                 waits += 1
                 await self._sleep(wait)
 
-    async def _once(self, req: LLMRequest, route: Route, timeout_s: float):
+    async def _once(
+        self, req: LLMRequest, route: Route, timeout_s: float, account: Callable[[Usage], None]
+    ):
         async with self._sem(req.tier):
             try:
                 async with asyncio.timeout(timeout_s):
@@ -299,7 +324,8 @@ class LiteLLMClient:
                 err = LLMUnavailable(f"LLM provider error: {type(exc).__name__}")
                 err.no_retry = type(exc).__name__ in _NO_RETRY  # type: ignore[attr-defined]
                 raise err from exc
-        usage = _usage(resp)
+        # Received responses are billable even when parsing or validation fails below.
+        account(_usage(resp))
         try:
             if _get(resp.choices[0], "finish_reason", None) == "length":
                 trunc = LLMBadOutput("LLM output cut off at the token limit")
@@ -315,4 +341,4 @@ class LiteLLMClient:
             raise
         except (ValueError, TypeError, AttributeError, IndexError, ValidationError) as exc:
             raise LLMBadOutput("LLM output was not valid for the schema") from exc
-        return parsed, usage
+        return parsed
