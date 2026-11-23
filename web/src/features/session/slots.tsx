@@ -2,8 +2,10 @@
  * Mount points: the rating card (R4, `features/rating`) and the speaker gate (R4, `features/speakers`). The uploader (R3) lives in
  * `features/upload`.
  */
+import { Button } from "@onolys/ui";
 import { useState } from "react";
 import type { SessionStatusDoc } from "../../api/statusListener";
+import { LINK_BTN } from "../../components/classes";
 import { SpeakerGate } from "../speakers/SpeakerGate";
 import { ratingEnabled } from "../../config";
 import { RatingCard } from "../rating/RatingCard";
@@ -43,11 +45,11 @@ export function SpeakerGateSlot({ sessionId, doc }: SlotProps) {
       ) : rerunnable && open ? (
         <SpeakerGate sessionId={sessionId} mode="rerun" onDone={() => setOpen(false)} />
       ) : rerunnable ? (
-        <p>
-          <button type="button" className="link-button" onClick={() => setOpen(true)}>
+        <div>
+          <Button type="button" variant="link" className={LINK_BTN} onClick={() => setOpen(true)}>
             Change who the clinician is
-          </button>
-        </p>
+          </Button>
+        </div>
       ) : null}
     </div>
   );

@@ -3,10 +3,13 @@
  * build, or an interview whose PUT failed) sets it here. Same field as the upload screen; the
  * "Continue" button only does the final no-rating `PUT /rating` (409 `rating_final` = done).
  */
+import { Button } from "@onolys/ui";
 import { useEffect, useState } from "react";
 import { unwrap } from "../../api/client";
 import { ApiError, describeError } from "../../api/errors";
 import { useApiClient } from "../../auth/useApiClient";
+import { BTN } from "../../components/classes";
+import { ErrorNote } from "../../components/Notice";
 import { cardToForm, issuesFromApi } from "./card";
 import { goalIssues, saveGoal, SetupFields } from "./SetupFields";
 
@@ -56,14 +59,14 @@ export function SetupFallback({ sessionId }: { sessionId: string }) {
   };
 
   return (
-    <form onSubmit={(e) => void onContinue(e)} noValidate>
+    <form className="grid gap-3 [&_p]:m-0" onSubmit={(e) => void onContinue(e)} noValidate>
       <SetupFields goal={goal} onGoal={(v) => setGoal(v)} issue={issue} />
-      {error ? <p role="alert">{error}</p> : null}
-      <p>
-        <button type="submit" className="btn btn-primary" disabled={busy}>
+      {error ? <ErrorNote role="alert">{error}</ErrorNote> : null}
+      <div>
+        <Button type="submit" className={BTN} disabled={busy}>
           Continue
-        </button>
-      </p>
+        </Button>
+      </div>
     </form>
   );
 }

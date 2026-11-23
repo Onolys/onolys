@@ -271,7 +271,7 @@ describe("session page: rating slot (flag off) and fallback", () => {
     await ready();
     expect(document.querySelector('[data-slot="rating-card"]')).not.toBeNull();
     expect(document.querySelector('[data-slot="rating-fallback"]')).toBeNull();
-    expect(document.querySelector('[id^="rating-globals-"]')).not.toBeNull();
+    await waitFor(() => expect(document.querySelector('[id^="rating-globals-"]')).not.toBeNull());
   });
 });
 
@@ -646,11 +646,11 @@ describe("session page: delete", () => {
     open(sid);
     await ready();
     await user.click(screen.getByRole("button", { name: "Delete session" }));
-    const dialog = await screen.findByRole("dialog", { name: /delete this session/i });
+    const dialog = await screen.findByRole("alertdialog", { name: /delete this session/i });
     expect(dialog).toHaveTextContent(/audio, transcript, rating and all report versions/i);
     expect(dialog).toHaveTextContent(/permanently/i);
     await user.click(within(dialog).getByRole("button", { name: "Cancel" }));
-    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
     expect(() => mockBackend.getSession(UID, sid)).not.toThrow();
   });
 
@@ -660,7 +660,7 @@ describe("session page: delete", () => {
     const { router } = open(sid);
     await ready();
     await user.click(screen.getByRole("button", { name: "Delete session" }));
-    await user.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "Delete permanently" }));
+    await user.click(within(await screen.findByRole("alertdialog")).getByRole("button", { name: "Delete permanently" }));
     await screen.findByRole("heading", { level: 1, name: "Sessions" });
     expect(here(router)).toBe("/sessions");
     expect(() => mockBackend.getSession(UID, sid)).toThrow();
@@ -681,10 +681,10 @@ describe("session page: delete", () => {
       ),
     );
     await user.click(screen.getByRole("button", { name: "Delete session" }));
-    const dialog = await screen.findByRole("dialog");
+    const dialog = await screen.findByRole("alertdialog");
     await user.click(within(dialog).getByRole("button", { name: "Delete permanently" }));
     await waitFor(() => expect(within(dialog).getByRole("alert")).toHaveTextContent("Reference: req_del"));
-    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    expect(screen.getByRole("alertdialog")).toBeInTheDocument();
   });
 
   it("Escape is ignored while a delete is in flight, so a failure is still shown (W32)", async () => {
@@ -704,11 +704,11 @@ describe("session page: delete", () => {
       }),
     );
     await user.click(screen.getByRole("button", { name: "Delete session" }));
-    const dialog = await screen.findByRole("dialog");
+    const dialog = await screen.findByRole("alertdialog");
     await user.click(within(dialog).getByRole("button", { name: "Delete permanently" }));
     await waitFor(() => expect(within(dialog).getByRole("button", { name: "Delete permanently" })).toBeDisabled());
     fireEvent.keyDown(dialog, { key: "Escape" }); // focus can still be inside the dialog (e.g. on Cancel)
-    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    expect(screen.getByRole("alertdialog")).toBeInTheDocument();
     release();
     await waitFor(() => expect(within(dialog).getByRole("alert")).toHaveTextContent("Reference: req_esc"));
   });
@@ -719,9 +719,9 @@ describe("session page: delete", () => {
     open(sid);
     await ready();
     await user.click(screen.getByRole("button", { name: "Delete session" }));
-    await screen.findByRole("dialog");
+    await screen.findByRole("alertdialog");
     await user.keyboard("{Escape}");
-    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
   });
 });
 

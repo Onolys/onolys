@@ -1,71 +1,71 @@
-import { useEffect, useRef, type ReactNode } from "react";
+import {
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  Button,
+} from "@onolys/ui";
+import type { ReactNode } from "react";
+import { BTN } from "../../components/classes";
 
-/** Confirm dialog for permanent deletion (PRD R4 Delete). Escape or Cancel closes it (not while a delete is in flight). */
+/**
+ * Confirm dialog for permanent deletion (PRD R4 Delete): the shared AlertDialog (role alertdialog,
+ * focus starts on Cancel). Escape or Cancel closes it, but not while a delete is in flight: its
+ * failure must stay visible. The caller owns the open state and returns focus to the opener.
+ */
 export function DeleteDialog({
+  open,
   busy,
   onConfirm,
   onCancel,
+  onClosed,
   children,
 }: {
+  open: boolean;
   busy: boolean;
   onConfirm: () => void;
   onCancel: () => void;
+  /** Runs after close; the caller returns focus to the opener. */
+  onClosed?: () => void;
   /** Error card slot, shown inside the dialog. */
   children?: ReactNode;
 }) {
-  const cancelRef = useRef<HTMLButtonElement>(null);
-  const dialogRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    cancelRef.current?.focus();
-  }, []);
-
-  const onKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Escape") {
-      e.stopPropagation();
-      if (!busy) onCancel(); // a delete in flight cannot be dismissed: its failure must stay visible
-    } else if (e.key === "Tab") {
-      // keep focus inside the dialog
-      const items = dialogRef.current?.querySelectorAll<HTMLElement>("button:not([disabled])");
-      if (!items || items.length === 0) return;
-      const first = items[0];
-      const last = items[items.length - 1];
-      if (e.shiftKey && document.activeElement === first) {
-        e.preventDefault();
-        last.focus();
-      } else if (!e.shiftKey && document.activeElement === last) {
-        e.preventDefault();
-        first.focus();
-      }
-    }
-  };
-
   return (
-    <div className="dialog-backdrop">
-      {/* eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions */}
-      <div
-        ref={dialogRef}
-        className="dialog"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="delete-title"
-        aria-describedby="delete-body"
-        onKeyDown={onKeyDown}
+    <AlertDialog
+      open={open}
+      onOpenChange={(next) => {
+        if (!next && !busy) onCancel();
+      }}
+    >
+      <AlertDialogContent
+        data-slot="delete-dialog"
+        onCloseAutoFocus={(e) => {
+          e.preventDefault();
+          onClosed?.();
+        }}
+        onEscapeKeyDown={(e) => {
+          if (busy) e.preventDefault();
+        }}
       >
-        <h2 id="delete-title">Delete this session?</h2>
-        <p id="delete-body">
-          This permanently removes the audio, transcript, rating and all report versions. This can't be undone.
-        </p>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Delete this session?</AlertDialogTitle>
+          <AlertDialogDescription>
+            This permanently removes the audio, transcript, rating and all report versions. This can't be undone.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
         {children}
-        <div className="dialog-actions">
-          <button ref={cancelRef} type="button" className="btn btn-secondary" onClick={onCancel} disabled={busy}>
+        <AlertDialogFooter>
+          <AlertDialogCancel variant="secondary" className={BTN} disabled={busy}>
             Cancel
-          </button>
-          <button type="button" className="btn btn-danger" onClick={onConfirm} disabled={busy}>
+          </AlertDialogCancel>
+          <Button type="button" variant="destructive" className={BTN} onClick={onConfirm} disabled={busy}>
             Delete permanently
-          </button>
-        </div>
-      </div>
-    </div>
+          </Button>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   );
 }

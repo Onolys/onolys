@@ -3,6 +3,7 @@
  * gate slots, error cards and delete. The upload, rating card and speaker gate mount in
  * `slots.tsx`.
  */
+import { Button } from "@onolys/ui";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
@@ -10,6 +11,8 @@ import { unwrap } from "../../api/client";
 import { describeError, failureAction, messageForCode } from "../../api/errors";
 import type { SessionStatusDoc } from "../../api/statusListener";
 import { useApiClient } from "../../auth/useApiClient";
+import { ACTIONS, BTN, H1, LINK, LINK_BTN, NOTE, PAGE } from "../../components/classes";
+import { Notice } from "../../components/Notice";
 import { formatElapsed, formatResetTime } from "../../lib/format";
 import { blockingPeriod, formatBlockingReset } from "../usage/usage";
 import { USAGE_KEY, useUsage } from "../usage/useUsage";
@@ -18,6 +21,13 @@ import { ErrorCard } from "./ErrorCard";
 import { RatingCardSlot, SpeakerGateSlot, UploadSlot } from "./slots";
 import { deriveTimeline } from "./timeline";
 import { useSessionStatus } from "./useSessionStatus";
+
+const STEP_CLASS = {
+  done: "border-score-good",
+  current: "border-primary font-semibold",
+  failed: "border-destructive font-semibold",
+  pending: "border-border",
+} as const;
 
 export function SessionPage() {
   const { id = "" } = useParams();
@@ -103,17 +113,18 @@ function SessionView({ id }: { id: string }) {
   const closeDialog = () => {
     setConfirmDelete(false);
     remove.reset();
-    deleteButton.current?.focus();
   };
 
   if (view.phase === "error") {
     return (
-      <>
-        <h1>Session</h1>
+      <div className={PAGE}>
+        <h1 className={H1}>Session</h1>
         <ErrorCard code={view.error.code} reference={view.error.requestId}>
-          <Link to="/sessions">Back to your sessions</Link>
+          <Link to="/sessions" className={LINK}>
+            Back to your sessions
+          </Link>
         </ErrorCard>
-      </>
+      </div>
     );
   }
 
@@ -123,44 +134,44 @@ function SessionView({ id }: { id: string }) {
   const runLocked = run.isPending || run.isSuccess || (atCap && !freeRetry);
 
   return (
-    <>
-      <h1>Session</h1>
+    <div className={PAGE}>
+      <h1 className={H1}>Session</h1>
 
-      <div className="timeline-status" role="status" aria-live="polite">
+      <div className="grid gap-1 font-semibold" role="status" aria-live="polite">
         {timeline ? timeline.lines.map((l) => <p key={l}>{l}</p>) : <p>Loading session…</p>}
       </div>
 
       {!doc || !timeline ? null : (
         <>
           {view.phase === "fallback" && view.exhausted ? (
-            <p className="notice" role="alert">
+            <Notice role="alert">
               Live updates stopped. This is the latest we could load.{" "}
-              <button type="button" className="link-button" onClick={() => window.location.reload()}>
+              <Button type="button" variant="link" className={LINK_BTN} onClick={() => window.location.reload()}>
                 Refresh
-              </button>
-            </p>
+              </Button>
+            </Notice>
           ) : null}
 
-          <ol className="timeline" aria-label="Progress">
+          <ol className="m-0 grid list-none gap-2 p-0" aria-label="Progress">
             {timeline.steps.map((s) => (
-              <li key={s.key} className={`timeline-step timeline-${s.status}`}>
-                <span className="timeline-label">{s.label}</span>{" "}
-                <span className="timeline-state">
+              <li key={s.key} data-status={s.status} className={`border-l-4 px-3 py-2 ${STEP_CLASS[s.status]}`}>
+                <span>{s.label}</span>{" "}
+                <span className="font-normal text-muted-foreground">
                   ({s.status === "done" ? "done" : s.status === "current" ? "in progress" : s.status === "failed" ? "failed" : "not started"})
                 </span>
-                {s.subLabel ? <span className="timeline-sub"> {s.subLabel}</span> : null}
+                {s.subLabel ? <span className="font-normal text-muted-foreground"> {s.subLabel}</span> : null}
               </li>
             ))}
           </ol>
 
           {timeline.showRunCopy ? (
             <>
-              <p className="form-note">
+              <p className={NOTE}>
                 Usually under 5 minutes — you can close this tab and come back; your report will be here.
               </p>
-              {runStartedAt !== null ? <p className="form-note">Elapsed {formatElapsed(now - runStartedAt)}</p> : null}
+              {runStartedAt !== null ? <p className={NOTE}>Elapsed {formatElapsed(now - runStartedAt)}</p> : null}
               {doc.progress > 0 ? (
-                <p className="form-note">
+                <p className={NOTE}>
                   <progress max={100} value={doc.progress} aria-label="Progress" /> {doc.progress}%
                 </p>
               ) : null}
@@ -168,37 +179,37 @@ function SessionView({ id }: { id: string }) {
           ) : null}
 
           {timeline.capReached ? (
-            <p>
-              <button
+            <div>
+              <Button
                 type="button"
-                className="btn btn-primary"
+                className={BTN}
                 disabled={run.isPending || run.isSuccess || (atCap && !freeFirstRun)}
                 onClick={() => run.mutate()}
               >
                 Start
-              </button>
-            </p>
+              </Button>
+            </div>
           ) : null}
 
           {doc.state === "report_ready" && doc.latest_report_version !== null ? (
-            <p>
-              <Link className="btn btn-primary" to={`/sessions/${id}/reports/${doc.latest_report_version}`}>
-                View report
-              </Link>
-            </p>
+            <div>
+              <Button asChild className={BTN}>
+                <Link to={`/sessions/${id}/reports/${doc.latest_report_version}`}>View report</Link>
+              </Button>
+            </div>
           ) : null}
 
           {doc.state === "failed" ? (
             <ErrorCard code={failureCode} reference={id} resetsAt={resetsAt}>
               {failureAction(failureCode, doc.transcript_ready) === "upload_new" ? (
-                <Link className="btn btn-primary" to={`/sessions/new?from=${encodeURIComponent(id)}`}>
-                  Upload a different file
-                </Link>
+                <Button asChild className={BTN}>
+                  <Link to={`/sessions/new?from=${encodeURIComponent(id)}`}>Upload a different file</Link>
+                </Button>
               ) : (
                 <>
-                  <button type="button" className="btn btn-primary" disabled={runLocked} onClick={() => run.mutate()}>
+                  <Button type="button" className={BTN} disabled={runLocked} onClick={() => run.mutate()}>
                     Try again
-                  </button>
+                  </Button>
                   {blocking && !freeRetry ? <span>{messageForCode("daily_cap_reached", { resetsAt })}</span> : null}
                 </>
               )}
@@ -213,29 +224,30 @@ function SessionView({ id }: { id: string }) {
             <SpeakerGateSlot sessionId={id} doc={doc} />
           ) : null}
 
-          <p>
-            <button
+          <div className={ACTIONS}>
+            <Button
               ref={deleteButton}
               type="button"
-              className="btn btn-secondary"
+              variant="secondary"
+              className={BTN}
               onClick={() => setConfirmDelete(true)}
             >
               Delete session
-            </button>
-          </p>
+            </Button>
+          </div>
         </>
       )}
 
-      {confirmDelete ? (
-        <DeleteDialog busy={remove.isPending} onConfirm={() => remove.mutate()} onCancel={closeDialog}>
-          {remove.error ? (
-            <ErrorCard
-              code={describeError(remove.error).code}
-              reference={describeError(remove.error).requestId}
-            />
-          ) : null}
-        </DeleteDialog>
-      ) : null}
-    </>
+      <DeleteDialog open={confirmDelete} busy={remove.isPending} onConfirm={() => remove.mutate()} onCancel={closeDialog}
+        onClosed={() => deleteButton.current?.focus()}
+      >
+        {remove.error ? (
+          <ErrorCard
+            code={describeError(remove.error).code}
+            reference={describeError(remove.error).requestId}
+          />
+        ) : null}
+      </DeleteDialog>
+    </div>
   );
 }

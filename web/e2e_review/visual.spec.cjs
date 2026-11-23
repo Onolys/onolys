@@ -68,7 +68,7 @@ const SIGNED_IN = {
   "session-delete-dialog": async (p) => {
     await SIGNED_IN.session(p);
     await p.getByRole("button", { name: "Delete session" }).click();
-    await expect(p.getByRole("dialog").or(p.getByRole("alertdialog"))).toBeVisible();
+    await expect(p.getByRole("alertdialog")).toBeVisible();
   },
   settings: async (p) => { await verified(p, "f@example.com"); await accountMenu(p, "Settings"); await expect(p.getByRole("heading", { name: "Settings" })).toBeVisible(); },
   "settings-secret-dialog": async (p) => {

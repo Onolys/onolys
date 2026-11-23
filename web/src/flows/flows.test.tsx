@@ -316,7 +316,7 @@ describe("flow: delete a session (AC2)", () => {
     await h1("Session");
     expect(here(router)).toBe(`/sessions/${sid}`);
     await u.click(await screen.findByRole("button", { name: "Delete session" }));
-    await u.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "Delete permanently" }));
+    await u.click(within(await screen.findByRole("alertdialog")).getByRole("button", { name: "Delete permanently" }));
     await h1("Sessions"); // delete lands on the sessions list
     expect(here(router)).toBe("/sessions");
     await screen.findByText(/Onolys codes a recorded session/i); // the empty state (the cards also say "New session")

@@ -80,7 +80,7 @@ test.describe("CSP smoke: zero violations under the prod CSP", () => {
     await spa(page, "/new");
     await newSession(page);
     await page.getByRole("button", { name: "Delete session" }).click();
-    await expect(page.getByRole("dialog").or(page.getByRole("alertdialog"))).toBeVisible();
+    await expect(page.getByRole("alertdialog")).toBeVisible();
     await page.keyboard.press("Escape");
     await expect(page.getByRole("button", { name: "Delete session" })).toBeFocused();
     expect(await csp.all()).toEqual([]);

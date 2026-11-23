@@ -2,10 +2,13 @@
  * In-app rating card (PRD R4, D13, D15): filled while transcription runs, autosaved as a draft,
  * submitted with `final:true`. Only "Submit rating" / "No rating" satisfy the run gate.
  */
+import { Button, Card, CardContent, Input, Label, Select, Textarea } from "@onolys/ui";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { unwrap } from "../../api/client";
 import { ApiError, describeError } from "../../api/errors";
 import { useApiClient } from "../../auth/useApiClient";
+import { BTN, LINK_BTN, NOTE } from "../../components/classes";
+import { ErrorNote, Notice } from "../../components/Notice";
 import { COUNTS, GLOBALS, LIMITS } from "../../protocol/miti-items";
 import { createAutosaver, type Autosaver, type SaveStatus } from "./autosave";
 import {
@@ -32,6 +35,8 @@ const STATUS_TEXT: Record<SaveStatus, string> = {
 type Load = "loading" | "ready" | "error";
 type Submitted = null | "submitted" | "no_rating";
 
+const ITEM = "m-0 grid min-w-0 gap-3 rounded-md border border-border p-3";
+const LEGEND = "px-1 font-semibold";
 const idOf = (path: string) => `rating-${path.replace(/\./g, "-")}`;
 const fmt = (n: number) => n.toLocaleString("en-US");
 
@@ -39,11 +44,13 @@ function Field({ path, label, error, hint, children }: { path: string; label: st
   const id = idOf(path);
   const describedBy = [error ? `${id}-err` : null, hint ? `${id}-hint` : null].filter(Boolean).join(" ") || undefined;
   return (
-    <div className="rating-field">
-      <label htmlFor={id}>{label}</label>
-      {hint ? <span className="form-note" id={`${id}-hint`}>{hint}</span> : null}
+    <div className="grid gap-1">
+      <Label htmlFor={id} className="min-h-0 text-base font-semibold">
+        {label}
+      </Label>
+      {hint ? <span className={NOTE} id={`${id}-hint`}>{hint}</span> : null}
       {children({ id, "aria-describedby": describedBy, "aria-invalid": error ? true : undefined })}
-      {error ? <span className="rating-error" id={`${id}-err`}>{error}</span> : null}
+      {error ? <span className="text-sm text-destructive" id={`${id}-err`}>{error}</span> : null}
     </div>
   );
 }
@@ -51,7 +58,7 @@ function Field({ path, label, error, hint, children }: { path: string; label: st
 function Counter({ value, limit }: { value: string; limit: number }) {
   const c = softCount(value, limit);
   return (
-    <span className={c.over ? "counter counter-over" : "counter"}>
+    <span data-over={c.over ? "true" : "false"} className="text-sm text-muted-foreground data-[over=true]:font-semibold data-[over=true]:text-destructive">
       {fmt(c.length)} / {fmt(c.limit)}
       {c.over ? ` — over the limit by ${fmt(c.length - c.limit)}; shorten it before it can be saved` : ""}
     </span>
@@ -63,7 +70,7 @@ function Text({ path, label, value, limit, error, rows = 3, hint, onChange }: { 
     <Field path={path} label={label} error={error} hint={hint}>
       {(p) => (
         <>
-          <textarea {...p} rows={rows} value={value} onChange={(e) => onChange(e.target.value)} />
+          <Textarea {...p} rows={rows} value={value} onChange={(e) => onChange(e.target.value)} />
           <Counter value={value} limit={limit} />
         </>
       )}
@@ -194,25 +201,32 @@ export function RatingCard({ sessionId, debounceMs = 2000, readOnly = false }: R
     }
   }
 
-  if (load === "loading") return <p className="form-note">Loading your rating…</p>;
+  if (load === "loading") return <p className={NOTE}>Loading your rating…</p>;
   if (load === "error") {
     return (
-      <p className="notice">
+      <Notice>
         We couldn't load your rating.{" "}
-        <button type="button" className="link-button" onClick={() => {
+        <Button
+          type="button"
+          variant="link"
+          className={LINK_BTN}
+          onClick={() => {
             setLoad("loading");
             setAttempt((n) => n + 1);
-          }}>
+          }}
+        >
           Try again
-        </button>
-      </p>
+        </Button>
+      </Notice>
     );
   }
 
   const err = (p: string) => issues[p];
   return (
+    <Card className="max-w-2xl [&_p]:m-0">
+      <CardContent>
     <form
-      className="rating-card"
+      className="grid gap-4"
       aria-labelledby="rating-heading"
       noValidate
       onSubmit={(e) => {
@@ -221,9 +235,9 @@ export function RatingCard({ sessionId, debounceMs = 2000, readOnly = false }: R
       }}
       onBlur={() => void saver.current?.flush()}
     >
-      <h2 id="rating-heading">Your rating</h2>
+      <h2 id="rating-heading" className="m-0 text-xl font-semibold">Your rating</h2>
       {readOnly ? (
-        <p className="form-note">
+        <p className={NOTE}>
           {submitted === "no_rating"
             ? "Saved without a rating — Onolys will score the session on its own. "
             : submitted === "submitted"
@@ -233,67 +247,67 @@ export function RatingCard({ sessionId, debounceMs = 2000, readOnly = false }: R
         </p>
       ) : (
         <>
-          <p className="form-note">
+          <p className={NOTE}>
             Fill this in while we transcribe. It saves as you type. Onolys compares it with its own reading of the session.
           </p>
-          <p className="form-note" aria-live="polite">
+          <p className={NOTE} aria-live="polite">
             {STATUS_TEXT[status]}
           </p>
         </>
       )}
-      <fieldset className="rating-fields" disabled={readOnly}>
+      <fieldset className="m-0 grid min-w-0 gap-4 border-0 p-0" disabled={readOnly}>
 
       <Field path="change_goal" label="Change goal" error={err("change_goal")}>
-        {(p) => <input {...p} type="text" value={form.changeGoal} onChange={(e) => edit((f) => ({ ...f, changeGoal: e.target.value }))} />}
+        {(p) => <Input {...p} type="text" value={form.changeGoal} onChange={(e) => edit((f) => ({ ...f, changeGoal: e.target.value }))} />}
       </Field>
-      <fieldset className="rating-span">
-        <legend>Coded from–to (optional)</legend>
-        <span className="form-note">Only if you rated part of the recording.</span>
+      <fieldset className={ITEM}>
+        <legend className={LEGEND}>Coded from–to (optional)</legend>
+        <span className={NOTE}>Only if you rated part of the recording.</span>
         <Field path="coded_span.from_s" label="Coded from (mm:ss)" error={err("coded_span")}>
-          {(p) => <input {...p} type="text" inputMode="numeric" placeholder="mm:ss" value={form.spanFrom} onChange={(e) => edit((f) => ({ ...f, spanFrom: e.target.value }))} />}
+          {(p) => <Input {...p} type="text" inputMode="numeric" placeholder="mm:ss" value={form.spanFrom} onChange={(e) => edit((f) => ({ ...f, spanFrom: e.target.value }))} />}
         </Field>
         <Field path="coded_span.to_s" label="Coded to (mm:ss)">
-          {(p) => <input {...p} type="text" inputMode="numeric" placeholder="mm:ss" value={form.spanTo} onChange={(e) => edit((f) => ({ ...f, spanTo: e.target.value }))} />}
+          {(p) => <Input {...p} type="text" inputMode="numeric" placeholder="mm:ss" value={form.spanTo} onChange={(e) => edit((f) => ({ ...f, spanTo: e.target.value }))} />}
         </Field>
       </fieldset>
 
-      <h3>Global ratings</h3>
+      <h3 className="m-0 text-lg font-semibold">Global ratings</h3>
       {GLOBALS.map((g) => {
         const f = form.globals[g.id];
         const base = `globals.${g.id}`;
         return (
-          <fieldset key={g.id} className="rating-item">
-            <legend>{g.label}</legend>
+          <fieldset key={g.id} className={ITEM}>
+            <legend className={LEGEND}>{g.label}</legend>
             <Field path={`${base}.score`} label={`${g.label} score`} error={err(`${base}.score`)}>
               {(p) => (
-                <select {...p} value={f.score} onChange={(e) => setGlobal(g.id, { score: e.target.value })}>
+                <Select {...p} value={f.score} onChange={(e) => setGlobal(g.id, { score: e.target.value })}>
                   <option value="">Not rated</option>
                   {g.anchors.map((a, i) => (
                     <option key={a} value={String(i + 1)}>
                       {i + 1} — {a}
                     </option>
                   ))}
-                </select>
+                </Select>
               )}
             </Field>
             <Text path={`${base}.reason`} label={`${g.label} reason`} value={f.reason} limit={LIMITS.item} error={err(`${base}.reason`)} onChange={(v) => setGlobal(g.id, { reason: v })} />
             <Field path={`${base}.example.at_s`} label={`${g.label} example time (mm:ss, optional)`} error={err(`${base}.example.at_s`)}>
-              {(p) => <input {...p} type="text" inputMode="numeric" placeholder="mm:ss" value={f.exTime} onChange={(e) => setGlobal(g.id, { exTime: e.target.value })} />}
+              {(p) => <Input {...p} type="text" inputMode="numeric" placeholder="mm:ss" value={f.exTime} onChange={(e) => setGlobal(g.id, { exTime: e.target.value })} />}
             </Field>
             <Text path={`${base}.example.text`} label={`${g.label} example`} value={f.exText} limit={LIMITS.item} rows={2} error={err(`${base}.example.text`)} onChange={(v) => setGlobal(g.id, { exText: v })} />
           </fieldset>
         );
       })}
 
-      <h3>Behaviour counts</h3>
+      <h3 className="m-0 text-lg font-semibold">Behaviour counts</h3>
       {COUNTS.map((c) => {
         const f = form.counts[c.id];
         const base = `counts.${c.id}`;
         return (
-          <fieldset key={c.id} className="rating-item">
-            <legend>{c.label}</legend>
+          <fieldset key={c.id} className={ITEM}>
+            <legend className={LEGEND}>{c.label}</legend>
             <Field path={`${base}.count`} label={`${c.label} count`} error={err(`${base}.count`)}>
-              {(p) => <input {...p} type="number" min={0} step={1} value={f.count} onChange={(e) => setCount(c.id, { count: e.target.value })} />}
+              {(p) => <Input {...p} type="number" min={0} step={1} value={f.count} onChange={(e) => setCount(c.id, { count: e.target.value })} />}
             </Field>
             <Text path={`${base}.note`} label={`${c.label} note`} value={f.note} limit={LIMITS.item} rows={2} error={err(`${base}.note`)} onChange={(v) => setCount(c.id, { note: v })} />
           </fieldset>
@@ -314,25 +328,25 @@ export function RatingCard({ sessionId, debounceMs = 2000, readOnly = false }: R
       </fieldset>
 
       {formError ? (
-        <p className="form-error" role="alert">
-          {formError}
-        </p>
+        <ErrorNote role="alert">{formError}</ErrorNote>
       ) : null}
       {submitted && !readOnly ? (
-        <p className="form-note">
+        <p className={NOTE}>
           {submitted === "submitted" ? "Rating submitted." : "Saved without a rating — Onolys will score the session on its own."}
         </p>
       ) : null}
       {readOnly ? null : (
-        <div className="rating-actions">
-          <button type="submit" className="btn btn-primary" disabled={busy}>
+        <div className="flex flex-wrap gap-3">
+          <Button type="submit" className={BTN} disabled={busy}>
             Submit rating
-          </button>
-          <button type="button" className="btn btn-secondary" disabled={busy} onClick={() => void submit(true)}>
+          </Button>
+          <Button type="button" variant="secondary" className={BTN} disabled={busy} onClick={() => void submit(true)}>
             No rating — just rate my session
-          </button>
+          </Button>
         </div>
       )}
     </form>
+      </CardContent>
+    </Card>
   );
 }
