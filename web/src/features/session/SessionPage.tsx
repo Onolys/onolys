@@ -11,7 +11,7 @@ import { unwrap } from "../../api/client";
 import { describeError, failureAction, messageForCode } from "../../api/errors";
 import type { SessionStatusDoc } from "../../api/statusListener";
 import { useApiClient } from "../../auth/useApiClient";
-import { ACTIONS, BTN, H1, LINK, LINK_BTN, NOTE, PAGE } from "../../components/classes";
+import { ACTIONS, H1, LINK, LINK_BTN, NOTE, PAGE } from "../../components/classes";
 import { Notice } from "../../components/Notice";
 import { formatElapsed, formatResetTime } from "../../lib/format";
 import { blockingPeriod, formatBlockingReset } from "../usage/usage";
@@ -182,7 +182,7 @@ function SessionView({ id }: { id: string }) {
             <div>
               <Button
                 type="button"
-                className={BTN}
+               
                 disabled={run.isPending || run.isSuccess || (atCap && !freeFirstRun)}
                 onClick={() => run.mutate()}
               >
@@ -193,7 +193,7 @@ function SessionView({ id }: { id: string }) {
 
           {doc.state === "report_ready" && doc.latest_report_version !== null ? (
             <div>
-              <Button asChild className={BTN}>
+              <Button asChild>
                 <Link to={`/sessions/${id}/reports/${doc.latest_report_version}`}>View report</Link>
               </Button>
             </div>
@@ -202,12 +202,12 @@ function SessionView({ id }: { id: string }) {
           {doc.state === "failed" ? (
             <ErrorCard code={failureCode} reference={id} resetsAt={resetsAt}>
               {failureAction(failureCode, doc.transcript_ready) === "upload_new" ? (
-                <Button asChild className={BTN}>
+                <Button asChild>
                   <Link to={`/sessions/new?from=${encodeURIComponent(id)}`}>Upload a different file</Link>
                 </Button>
               ) : (
                 <>
-                  <Button type="button" className={BTN} disabled={runLocked} onClick={() => run.mutate()}>
+                  <Button type="button" disabled={runLocked} onClick={() => run.mutate()}>
                     Try again
                   </Button>
                   {blocking && !freeRetry ? <span>{messageForCode("daily_cap_reached", { resetsAt })}</span> : null}
@@ -229,7 +229,7 @@ function SessionView({ id }: { id: string }) {
               ref={deleteButton}
               type="button"
               variant="secondary"
-              className={BTN}
+             
               onClick={() => setConfirmDelete(true)}
             >
               Delete session

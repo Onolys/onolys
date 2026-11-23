@@ -23,7 +23,7 @@ import { unwrap } from "../../api/client";
 import { describeError } from "../../api/errors";
 import { useSignOut } from "../../auth/useSignOut";
 import { useApiClient } from "../../auth/useApiClient";
-import { ACTIONS, BTN, H1, LINK, NOTE } from "../../components/classes";
+import { ACTIONS, H1, LINK, NOTE } from "../../components/classes";
 import { CONTACT_EMAIL } from "../../config";
 import { formatResetTime } from "../../lib/format";
 import { UsageLeft } from "../usage/UsageLeft";
@@ -32,7 +32,7 @@ import { ErrorCard } from "../session/ErrorCard";
 
 const DOCS_URL = "/v1/docs";
 const H2 = "m-0 text-xl font-semibold";
-const SECTION = "grid gap-3 [&_p]:m-0";
+const SECTION = "grid gap-3";
 const when = (iso: string | null | undefined) => (iso ? new Date(iso).toLocaleString() : "never");
 
 type Confirm = "regenerate" | "revoke" | null;
@@ -117,7 +117,7 @@ export function Settings() {
           <>
             <p>No API key yet.</p>
             <div className={ACTIONS}>
-              <Button type="button" className={BTN} disabled={busy} onClick={() => void create()}>
+              <Button type="button" disabled={busy} onClick={() => void create()}>
                 Create API key
               </Button>
             </div>
@@ -138,10 +138,10 @@ export function Settings() {
               <dd>{when(info.last_used_at)}</dd>
             </dl>
             <div className={ACTIONS}>
-              <Button ref={regenerateBtn} type="button" variant="secondary" className={BTN} disabled={busy} onClick={() => setConfirm("regenerate")}>
+              <Button ref={regenerateBtn} type="button" variant="secondary" disabled={busy} onClick={() => setConfirm("regenerate")}>
                 Regenerate
               </Button>
-              <Button ref={revokeBtn} type="button" variant="secondary" className={BTN} disabled={busy} onClick={() => setConfirm("revoke")}>
+              <Button ref={revokeBtn} type="button" variant="secondary" disabled={busy} onClick={() => setConfirm("revoke")}>
                 Revoke
               </Button>
             </div>
@@ -187,7 +187,7 @@ export function Settings() {
           Deleting a session removes its audio, transcript, rating and reports. For account removal, contact {removal}.
         </p>
         <div className={ACTIONS}>
-          <Button type="button" variant="secondary" className={BTN} onClick={() => void signOut()}>
+          <Button type="button" variant="secondary" onClick={() => void signOut()}>
             Sign out
           </Button>
         </div>
@@ -214,10 +214,10 @@ export function Settings() {
           </AlertDialogHeader>
           {err ? <ErrorCard code={err.code} reference={err.requestId} /> : null}
           <AlertDialogFooter>
-            <AlertDialogCancel variant="secondary" className={BTN}>
+            <AlertDialogCancel variant="secondary">
               Cancel
             </AlertDialogCancel>
-            <Button type="button" className={BTN} disabled={busy} onClick={() => void create()}>
+            <Button type="button" disabled={busy} onClick={() => void create()}>
               Regenerate key
             </Button>
           </AlertDialogFooter>
@@ -242,10 +242,10 @@ export function Settings() {
           </AlertDialogHeader>
           {err ? <ErrorCard code={err.code} reference={err.requestId} /> : null}
           <AlertDialogFooter>
-            <AlertDialogCancel variant="secondary" className={BTN}>
+            <AlertDialogCancel variant="secondary">
               Cancel
             </AlertDialogCancel>
-            <Button type="button" variant="destructive" className={BTN} disabled={busy} onClick={() => void revoke()}>
+            <Button type="button" variant="destructive" disabled={busy} onClick={() => void revoke()}>
               Revoke key
             </Button>
           </AlertDialogFooter>
@@ -269,7 +269,7 @@ export function Settings() {
             {secret}
           </code>
           <div className={ACTIONS}>
-            <Button type="button" variant="secondary" className={BTN} onClick={() => void copySecret(secret ?? "")}>
+            <Button type="button" variant="secondary" onClick={() => void copySecret(secret ?? "")}>
               Copy
             </Button>
             <span role="status" className={NOTE}>
@@ -281,7 +281,7 @@ export function Settings() {
             <Label htmlFor="secret-stored">I've stored it</Label>
           </div>
           <DialogFooter>
-            <Button type="button" className={BTN} disabled={!stored} onClick={dismissSecret}>
+            <Button type="button" disabled={!stored} onClick={dismissSecret}>
               Done
             </Button>
           </DialogFooter>

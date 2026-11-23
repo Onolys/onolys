@@ -3,7 +3,8 @@ import { useLocation, useNavigate } from "react-router";
 import { useAuth } from "../AuthProvider";
 import { readNext } from "../next";
 import { Alert, AlertDescription, Button } from "@onolys/ui";
-import { BTN, ErrorSummary, H1, StatusNote } from "./parts";
+import { H1 } from "../../components/classes";
+import { ErrorSummary, StatusNote } from "./parts";
 import { useFormError } from "./useFormError";
 
 export const RESEND_COOLDOWN_SECONDS = 60;
@@ -106,7 +107,7 @@ export function VerifyEmail() {
   return (
     <section className="text-center" data-page="verify-email">
       <h1 className={H1}>Verify your email</h1>
-      <div className="mx-auto mt-4 grid max-w-sm grid-cols-1 gap-4 break-words [&_p]:m-0">
+      <div className="mx-auto mt-4 grid max-w-sm grid-cols-1 gap-4 break-words">
         {form.error && <ErrorSummary error={form.error} search="" />}
         <p>
           Check your inbox — and your spam folder. We sent a verification link to <strong>{user?.email}</strong>.
@@ -117,7 +118,7 @@ export function VerifyEmail() {
             <AlertDescription>{leaveError}</AlertDescription>
           </Alert>
         )}
-        <Button type="button" className={BTN} disabled={checkingNow} onClick={() => void check(true)}>
+        <Button type="button" disabled={checkingNow} onClick={() => void check(true)}>
           {checkingNow ? "Checking…" : "I've verified"}
         </Button>
         <Button type="button" variant="outline" disabled={busy || cooldown > 0} onClick={() => void resend()}>
@@ -125,7 +126,7 @@ export function VerifyEmail() {
         </Button>
         <p>
           Wrong address?{" "}
-          <Button type="button" variant="link" className="border-0 bg-transparent px-1" onClick={() => void switchEmail()}>
+          <Button type="button" variant="link" className="px-1" onClick={() => void switchEmail()}>
             Use a different email
           </Button>
         </p>

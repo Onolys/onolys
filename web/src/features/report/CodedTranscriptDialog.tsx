@@ -9,7 +9,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CodedRow, TurnsState } from "./codedRows";
 import { CODE_META, SHORT } from "./codeMeta";
 import { Badge, Button, Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@onolys/ui";
-import { BTN, LINK_BTN, NOTE } from "../../components/classes";
+import { LINK_BTN, NOTE } from "../../components/classes";
 import { CodeChip, PLAIN_CODE } from "./CodeChip";
 import { CodedDialogContext } from "./codedDialogContext";
 
@@ -128,7 +128,7 @@ export function CodedTranscriptProvider({
         aria-labelledby="dlg-title"
         onClose={onClose}
       >
-        <div className="flex min-h-0 w-full flex-1 flex-col tabular-nums [&_p]:m-0">
+        <div className="flex min-h-0 w-full flex-1 flex-col tabular-nums">
           <div className="flex flex-none items-start justify-between gap-4 border-b border-border bg-background px-5 py-3.5 max-[640px]:px-4 max-[640px]:py-3">
             <div>
               <h2 id="dlg-title" className="m-0 text-lg font-semibold">
@@ -145,7 +145,7 @@ export function CodedTranscriptProvider({
               type="button"
               variant="outline"
               size="icon"
-              className={`${BTN} border text-2xl leading-none`}
+              className="border text-2xl leading-none"
               aria-label="Close"
               onClick={() => dialogRef.current?.close()}
             >
@@ -166,7 +166,7 @@ export function CodedTranscriptProvider({
                   <Button
                     type="button"
                     variant="link"
-                    className={`${BTN} ${LINK_BTN} inline h-auto min-h-0 py-0 align-baseline`}
+                    className={`${LINK_BTN} inline h-auto min-h-0 py-0 align-baseline`}
                     onClick={turns.retry}
                   >
                     Try again

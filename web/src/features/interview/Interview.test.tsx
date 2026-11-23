@@ -399,6 +399,55 @@ describe("discard and leave prompt (AC9)", () => {
     expect(mockBackend.listSessions(UID, {}).items).toHaveLength(0);
   });
 
+  it("Keep talking returns focus to the element focused before the prompt", async () => {
+    const u = userEvent.setup();
+    const { router } = renderApp("/interviews/new", { user: USER });
+    await startLive(u, router);
+    const opener = main().getByRole("button", { name: "Discard" });
+    opener.focus();
+    await act(() => router.navigate("/settings"));
+    const dialog = await screen.findByRole("alertdialog");
+    await u.click(within(dialog).getByRole("button", { name: "Keep talking" }));
+    await waitFor(() => expect(screen.queryByRole("alertdialog")).toBeNull());
+    await waitFor(() => expect(opener).toHaveFocus());
+  });
+
+  it("Escape also returns focus to the opener", async () => {
+    const u = userEvent.setup();
+    const { router } = renderApp("/interviews/new", { user: USER });
+    await startLive(u, router);
+    const opener = main().getByRole("button", { name: "Discard" });
+    opener.focus();
+    await act(() => router.navigate("/settings"));
+    await screen.findByRole("alertdialog");
+    await u.keyboard("{Escape}");
+    await waitFor(() => expect(screen.queryByRole("alertdialog")).toBeNull());
+    await waitFor(() => expect(opener).toHaveFocus());
+  });
+
+  it("Keep talking and Escape are disabled while Discard is in flight, so the leave still proceeds", async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((r) => (release = r));
+    server.use(
+      http.post("*/v1/interviews/:id/end", async () => {
+        await gate;
+        return HttpResponse.json({ ok: true });
+      }),
+    );
+    const u = userEvent.setup();
+    const { router } = renderApp("/interviews/new", { user: USER });
+    const iid = await startLive(u, router);
+    await act(() => router.navigate("/settings"));
+    const dialog = within(await screen.findByRole("alertdialog"));
+    await u.click(dialog.getByRole("button", { name: "Discard" }));
+    expect(dialog.getByRole("button", { name: "Keep talking" })).toBeDisabled();
+    await u.keyboard("{Escape}");
+    expect(screen.getByRole("alertdialog")).toBeInTheDocument();
+    release();
+    await waitFor(() => expect(here(router)).toBe("/settings"));
+    expect(iid).toMatch(/^iv_/);
+  });
+
   it("leaving with Evaluate what I have ends, uploads and opens the session", async () => {
     const u = userEvent.setup();
     const { router } = renderApp("/interviews/new", { user: USER });

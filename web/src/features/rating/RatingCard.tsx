@@ -7,7 +7,7 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from "react"
 import { unwrap } from "../../api/client";
 import { ApiError, describeError } from "../../api/errors";
 import { useApiClient } from "../../auth/useApiClient";
-import { BTN, LINK_BTN, NOTE } from "../../components/classes";
+import { LINK_BTN, NOTE } from "../../components/classes";
 import { ErrorNote, Notice } from "../../components/Notice";
 import { COUNTS, GLOBALS, LIMITS } from "../../protocol/miti-items";
 import { createAutosaver, type Autosaver, type SaveStatus } from "./autosave";
@@ -223,7 +223,7 @@ export function RatingCard({ sessionId, debounceMs = 2000, readOnly = false }: R
 
   const err = (p: string) => issues[p];
   return (
-    <Card className="max-w-2xl [&_p]:m-0">
+    <Card className="max-w-2xl">
       <CardContent>
     <form
       className="grid gap-4"
@@ -337,10 +337,10 @@ export function RatingCard({ sessionId, debounceMs = 2000, readOnly = false }: R
       ) : null}
       {readOnly ? null : (
         <div className="flex flex-wrap gap-3">
-          <Button type="submit" className={BTN} disabled={busy}>
+          <Button type="submit" disabled={busy}>
             Submit rating
           </Button>
-          <Button type="button" variant="secondary" className={BTN} disabled={busy} onClick={() => void submit(true)}>
+          <Button type="button" variant="secondary" disabled={busy} onClick={() => void submit(true)}>
             No rating — just rate my session
           </Button>
         </div>

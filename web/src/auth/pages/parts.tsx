@@ -2,19 +2,15 @@ import { useEffect, useRef, type ComponentProps, type ReactNode } from "react";
 import { Link } from "react-router";
 import { Alert, AlertDescription, Input, Label } from "@onolys/ui";
 import type { MappedAuthError } from "../errors";
+import { LINK } from "../../components/classes";
 import { withNext } from "../next";
 
 export const ERROR_ID = "form-error";
 
-/** Text link styling shared by the auth screens (semantic tokens only). */
-export const LINK = "text-primary underline underline-offset-4";
-/** Page heading and form layout shared by the auth screens. */
-export const H1 = "m-0 text-2xl font-semibold";
-export const FORM = "mt-4 grid max-w-sm grid-cols-1 gap-4 break-words [&_p]:m-0";
+/** Form layout shared by the auth screens. */
+export const FORM = "mt-4 grid max-w-sm grid-cols-1 gap-4 break-words";
 /** Stack for non-form states (results, expired links): heading, notice, action. */
-export const STACK = "grid max-w-sm grid-cols-1 gap-4 break-words [&_p]:m-0";
-export const BTN = "border-0";
-export const NOTE = "text-sm text-muted-foreground";
+export const STACK = "grid max-w-sm grid-cols-1 gap-4 break-words";
 
 /** Error summary: role=alert, takes focus when it appears or changes (R8 a11y). */
 export function ErrorSummary({ error, search }: { error: MappedAuthError; search: string }) {

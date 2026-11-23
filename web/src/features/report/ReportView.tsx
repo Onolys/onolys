@@ -12,7 +12,7 @@ import { buildCodedRows, evidenceUtterances } from "./codedRows";
 import type { CodedRow, TurnsState } from "./codedRows";
 import { Button, Card, Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@onolys/ui";
 import { StatusChip, type ChipTone } from "../../components/StatusChip";
-import { BTN, H1, LINK_BTN, NOTE } from "../../components/classes";
+import { H1, LINK_BTN, NOTE } from "../../components/classes";
 import { CODE_META } from "./codeMeta";
 import { CodeChip } from "./CodeChip";
 import { CodedTranscriptProvider } from "./CodedTranscriptDialog";
@@ -125,7 +125,7 @@ function Section({
   children: ReactNode;
 }) {
   return (
-    <section id={id} aria-labelledby={`${id}-h`} className="grid grid-cols-1 gap-4 border-t border-border pt-8 [&_p]:m-0">
+    <section id={id} aria-labelledby={`${id}-h`} className="grid grid-cols-1 gap-4 border-t border-border pt-8">
       <h2 id={`${id}-h`} className="m-0 text-lg font-semibold leading-tight text-balance">
         {title}
       </h2>
@@ -383,7 +383,7 @@ function TranscriptSection({
         <p className={NOTE}>
           We couldn't load the transcript.{" "}
           {turns.retry ? (
-            <Button type="button" variant="link" className={`${BTN} ${LINK_BTN} inline h-auto min-h-0 py-0 align-baseline`} onClick={turns.retry}>
+            <Button type="button" variant="link" className={`${LINK_BTN} inline h-auto min-h-0 py-0 align-baseline`} onClick={turns.retry}>
               Try again
             </Button>
           ) : null}
@@ -392,7 +392,7 @@ function TranscriptSection({
       <div>
         <Button
           type="button"
-          className={BTN}
+         
           disabled={turns.status === "loading"}
           onClick={() => open()}
         >
@@ -457,8 +457,8 @@ export function ReportView({
       legendIds={legendIds}
       showNotCodedLegend={!!notCoded && notCoded.size > 0}
     >
-      <div data-report-view="" className="mx-auto grid grid-cols-1 max-w-[55rem] gap-8 tabular-nums [&_p]:m-0">
-        <header className="grid grid-cols-1 gap-2 [&_p]:m-0">
+      <div data-report-view="" className="mx-auto grid grid-cols-1 max-w-[55rem] gap-8 tabular-nums">
+        <header className="grid grid-cols-1 gap-2">
           <h1 className={`${H1} text-balance tracking-tight`}>{title}</h1>
           {headerSlot}
           {r.header.change_goal ? (

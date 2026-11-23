@@ -9,7 +9,7 @@ import { useNavigate, useSearchParams } from "react-router";
 import { unwrap } from "../../api/client";
 import { ApiError, describeError } from "../../api/errors";
 import { useApiClient } from "../../auth/useApiClient";
-import { BTN, H1, NOTE, PAGE } from "../../components/classes";
+import { H1, NOTE, PAGE } from "../../components/classes";
 import { Field } from "../../components/Field";
 import { ratingEnabled } from "../../config";
 import { issuesFromApi } from "../rating/card";
@@ -119,7 +119,7 @@ export function NewSessionPage() {
     <div className={PAGE}>
       <h1 className={H1}>New session</h1>
       <form
-        className="grid max-w-xl grid-cols-1 gap-4 break-words [&_p]:m-0"
+        className="grid max-w-xl grid-cols-1 gap-4 break-words"
         onSubmit={(e) => {
           e.preventDefault();
           if (file && canSubmit && !submitting.current) {
@@ -209,7 +209,7 @@ export function NewSessionPage() {
         {err ? <ErrorCard code={err.code} reference={err.requestId} /> : null}
 
         <div>
-          <Button type="submit" className={BTN} disabled={!canSubmit}>
+          <Button type="submit" disabled={!canSubmit}>
             {submit.isPending ? "Starting…" : "Start"}
           </Button>
         </div>

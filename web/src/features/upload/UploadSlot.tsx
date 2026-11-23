@@ -5,7 +5,7 @@ import { useRef, useSyncExternalStore } from "react";
 import { describeError } from "../../api/errors";
 import type { SessionStatusDoc } from "../../api/statusListener";
 import { useApiClient } from "../../auth/useApiClient";
-import { BTN, NOTE } from "../../components/classes";
+import { NOTE } from "../../components/classes";
 import { Field } from "../../components/Field";
 import { ErrorNote, Notice } from "../../components/Notice";
 import { ErrorCard } from "../session/ErrorCard";
@@ -37,7 +37,7 @@ function ResumeUpload({ sessionId }: { sessionId: string }) {
   });
   const err = resume.error ? describeError(resume.error) : null;
   return (
-    <div className="grid gap-3 [&_p]:m-0">
+    <div className="grid gap-3">
       <Field label="Audio recording">
         {(id) => (
           <Input
@@ -52,7 +52,7 @@ function ResumeUpload({ sessionId }: { sessionId: string }) {
       {err ? <ErrorCard code={err.code} reference={err.requestId} /> : null}
       <Button
         type="button"
-        className={`${BTN} justify-self-start`}
+        className="justify-self-start"
         disabled={!filePick.ready || resume.isPending}
         onClick={() => {
           if (!filePick.file || busy.current) return;
@@ -76,7 +76,7 @@ export function UploadSlot({ sessionId, doc }: { sessionId: string; doc: Session
   const running = job !== undefined && (state.phase === "uploading" || state.phase === "completing");
   if (doc.state === "upload_incomplete" && !running) {
     return (
-      <div data-slot="upload" data-session={sessionId} className="grid gap-3 [&_p]:m-0">
+      <div data-slot="upload" data-session={sessionId} className="grid gap-3">
         <Notice>Pick the same recording again to resume the upload.</Notice>
         <ResumeUpload sessionId={sessionId} />
       </div>
@@ -84,7 +84,7 @@ export function UploadSlot({ sessionId, doc }: { sessionId: string; doc: Session
   }
   if (!job) {
     return (
-      <div data-slot="upload" data-session={sessionId} className="grid gap-3 [&_p]:m-0">
+      <div data-slot="upload" data-session={sessionId} className="grid gap-3">
         <Notice>This upload isn't running in this tab. Start a new session to upload the file again.</Notice>
       </div>
     );
@@ -92,7 +92,7 @@ export function UploadSlot({ sessionId, doc }: { sessionId: string; doc: Session
 
   const pct = state.total > 0 ? Math.min(100, Math.round((state.loaded / state.total) * 100)) : 0;
   return (
-    <div data-slot="upload" data-session={sessionId} className="grid gap-3 [&_p]:m-0">
+    <div data-slot="upload" data-session={sessionId} className="grid gap-3">
       {state.phase === "uploading" || state.phase === "completing" ? (
         <>
           <p>
@@ -111,7 +111,7 @@ export function UploadSlot({ sessionId, doc }: { sessionId: string; doc: Session
       {state.phase === "failed" || state.phase === "cancelled" ? (
         <>
           <ErrorNote role="alert">{state.phase === "cancelled" ? "Upload cancelled." : "The upload didn't finish."}</ErrorNote>
-          <Button type="button" className={`${BTN} justify-self-start`} onClick={() => void job.retry()}>
+          <Button type="button" className="justify-self-start" onClick={() => void job.retry()}>
             Retry upload
           </Button>
         </>

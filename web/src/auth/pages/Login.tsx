@@ -4,7 +4,8 @@ import { useAuth } from "../AuthProvider";
 import { EMAIL_PATTERN, isPopupCancel } from "../errors";
 import { withNext } from "../next";
 import { Button } from "@onolys/ui";
-import { BTN, ErrorSummary, FORM, Field, H1, LINK, StatusNote } from "./parts";
+import { H1, LINK } from "../../components/classes";
+import { ErrorSummary, FORM, Field, StatusNote } from "./parts";
 import { useFormError } from "./useFormError";
 
 /** Router state set by the password-reset flow. */
@@ -68,7 +69,7 @@ export function Login() {
         {form.error && <ErrorSummary error={form.error} search={search} />}
         <Field label="Email" id="login-email" name="email" type="email" autoComplete="email" defaultValue={from.email ?? ""} required {...form.fieldProps("email")} />
         <Field label="Password" id="login-password" name="password" type="password" autoComplete="current-password" required {...form.fieldProps("password")} />
-        <Button type="submit" className={BTN} disabled={busy}>
+        <Button type="submit" disabled={busy}>
           Log in
         </Button>
         <Button type="button" variant="outline" disabled={busy} onClick={() => void google()}>

@@ -4,7 +4,8 @@ import { useAuth } from "../AuthProvider";
 import { EMAIL_PATTERN, MIN_PASSWORD_LENGTH, isPopupCancel } from "../errors";
 import { readNext, withNext } from "../next";
 import { Button } from "@onolys/ui";
-import { BTN, ErrorSummary, FORM, Field, H1, LINK, NOTE } from "./parts";
+import { H1, LINK, NOTE } from "../../components/classes";
+import { ErrorSummary, FORM, Field } from "./parts";
 import { useFormError } from "./useFormError";
 
 export function Signup() {
@@ -62,7 +63,7 @@ export function Signup() {
           Show passwords
         </Button>
         <p className={NOTE}>At least {MIN_PASSWORD_LENGTH} characters. No other rules.</p>
-        <Button type="submit" className={BTN} disabled={busy}>
+        <Button type="submit" disabled={busy}>
           Create account
         </Button>
         <Button type="button" variant="outline" disabled={busy} onClick={() => void google()}>

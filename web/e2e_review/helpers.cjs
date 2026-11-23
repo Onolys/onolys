@@ -59,6 +59,7 @@ async function accountMenu(page, item) {
 async function signOutViaSettings(page) {
   await accountMenu(page, "Settings");
   await expect(page.getByRole("heading", { name: "Settings" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Settings" })).toBeFocused(); // menu close must not steal page-change focus
   await accountMenu(page, "Sign out");
 }
 /** From the New Session chooser (nav "New Session"), open the upload page via the "Rate a recording" card. */

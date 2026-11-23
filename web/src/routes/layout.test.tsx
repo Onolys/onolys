@@ -136,6 +136,17 @@ describe("header nav by auth phase (D1)", () => {
     expect(screen.queryByRole("menu")).not.toBeInTheDocument();
   });
 
+  it("account menu: choosing Settings leaves focus on the Settings heading, not the trigger", async () => {
+    renderApp("/sessions", { user: { email: "a@clinic.org", verified: true } });
+    await h1("Sessions");
+    await userEvent.click(screen.getByRole("button", { name: "Account menu" }));
+    await userEvent.click(screen.getByRole("menuitem", { name: "Settings" }));
+    const heading = await h1("Settings");
+    await new Promise((r) => setTimeout(r, 100)); // let Radix's deferred close auto-focus run
+    expect(heading).toHaveFocus();
+    expect(screen.getByRole("button", { name: "Account menu" })).not.toHaveFocus();
+  });
+
   it("account menu: Sign out calls the service sign-out and lands on /login", async () => {
     const service = createFakeAuthService();
     const spy = vi.spyOn(service, "signOut");

@@ -8,7 +8,6 @@ import { useEffect, useState } from "react";
 import { unwrap } from "../../api/client";
 import { ApiError, describeError } from "../../api/errors";
 import { useApiClient } from "../../auth/useApiClient";
-import { BTN } from "../../components/classes";
 import { ErrorNote } from "../../components/Notice";
 import { cardToForm, issuesFromApi } from "./card";
 import { goalIssues, saveGoal, SetupFields } from "./SetupFields";
@@ -59,11 +58,11 @@ export function SetupFallback({ sessionId }: { sessionId: string }) {
   };
 
   return (
-    <form className="grid gap-3 [&_p]:m-0" onSubmit={(e) => void onContinue(e)} noValidate>
+    <form className="grid gap-3" onSubmit={(e) => void onContinue(e)} noValidate>
       <SetupFields goal={goal} onGoal={(v) => setGoal(v)} issue={issue} />
       {error ? <ErrorNote role="alert">{error}</ErrorNote> : null}
       <div>
-        <Button type="submit" className={BTN} disabled={busy}>
+        <Button type="submit" disabled={busy}>
           Continue
         </Button>
       </div>

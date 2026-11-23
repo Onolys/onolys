@@ -9,7 +9,6 @@ import {
   Button,
 } from "@onolys/ui";
 import type { ReactNode } from "react";
-import { BTN } from "../../components/classes";
 
 /**
  * Confirm dialog for permanent deletion (PRD R4 Delete): the shared AlertDialog (role alertdialog,
@@ -58,10 +57,10 @@ export function DeleteDialog({
         </AlertDialogHeader>
         {children}
         <AlertDialogFooter>
-          <AlertDialogCancel variant="secondary" className={BTN} disabled={busy}>
+          <AlertDialogCancel variant="secondary" disabled={busy}>
             Cancel
           </AlertDialogCancel>
-          <Button type="button" variant="destructive" className={BTN} onClick={onConfirm} disabled={busy}>
+          <Button type="button" variant="destructive" onClick={onConfirm} disabled={busy}>
             Delete permanently
           </Button>
         </AlertDialogFooter>

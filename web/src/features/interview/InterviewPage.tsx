@@ -23,7 +23,7 @@ import type { Schemas } from "../../api/types";
 import { useAuth } from "../../auth/AuthProvider";
 import { useApiClient } from "../../auth/useApiClient";
 import { ratingEnabled } from "../../config";
-import { ACTIONS, BTN, H1, LINK, LINK_BTN, NOTE, PAGE } from "../../components/classes";
+import { ACTIONS, H1, LINK, LINK_BTN, NOTE, PAGE } from "../../components/classes";
 import { ErrorNote, Notice } from "../../components/Notice";
 import { cardToForm } from "../rating/card";
 import { saveGoal } from "../rating/SetupFields";
@@ -94,9 +94,13 @@ function InterviewView({ id }: { id: string }) {
   const goalSaved = useRef(false);
 
   const active = live !== null && live.phase !== "idle";
-  const blocker = useBlocker(
-    ({ currentLocation, nextLocation }) => !leaving.current && active && currentLocation.pathname !== nextLocation.pathname,
-  );
+  const opener = useRef<HTMLElement | null>(null); // focused element when the leave prompt opened, for focus return on cancel
+  const blocker = useBlocker(({ currentLocation, nextLocation }) => {
+    const block = !leaving.current && active && currentLocation.pathname !== nextLocation.pathname;
+    const el = document.activeElement;
+    if (block && el instanceof HTMLElement && !el.closest('[role="alertdialog"]')) opener.current = el;
+    return block;
+  });
 
   // Tear down when the page goes away: socket closed, mic released.
   useEffect(
@@ -283,7 +287,7 @@ function InterviewView({ id }: { id: string }) {
             <ErrorNote role="alert">We couldn't use your microphone. Allow it in your browser's site settings and try again.</ErrorNote>
           ) : null}
           <div className={ACTIONS}>
-            <Button type="button" className={BTN} disabled={startingUi} onClick={() => void begin()}>
+            <Button type="button" disabled={startingUi} onClick={() => void begin()}>
               Start talking
             </Button>
             <Link to="/new" className={LINK}>
@@ -296,7 +300,7 @@ function InterviewView({ id }: { id: string }) {
           <p className="text-2xl tabular-nums" aria-label="Elapsed time">
             <span>{clock(elapsed)}</span> / <span>{clock(maxS)}</span>
           </p>
-          <div role="status" aria-live="polite" className="grid gap-3 empty:hidden [&_p]:m-0">
+          <div role="status" aria-live="polite" className="grid gap-3 empty:hidden">
             {live?.phase === "connecting" ? <p>Connecting…</p> : null}
             {live?.phase === "reconnecting" ? <Notice>Reconnecting… keep talking, your recording continues.</Notice> : null}
             {live?.phase === "live" ? <p className={NOTE}>{live.aiSpeaking ? "The client is speaking" : "Listening"}</p> : null}
@@ -314,7 +318,7 @@ function InterviewView({ id }: { id: string }) {
           {live?.phase === "error" ? <Notice role="alert">{LOST[live.errorCode ?? "relay_error"] ?? LOST.relay_error}</Notice> : null}
           {e ? <ErrorCard code={e.code} reference={e.requestId} /> : null}
           <div className={ACTIONS}>
-            <Button type="button" className={BTN} disabled={busy} onClick={evaluate}>
+            <Button type="button" disabled={busy} onClick={evaluate}>
               {finish.isError ? "Try again" : "End interview"}
             </Button>
             <Button type="button" variant="outline" disabled={busy} onClick={() => discard.mutate()}>
@@ -327,22 +331,32 @@ function InterviewView({ id }: { id: string }) {
       <AlertDialog
         open={blocker.state === "blocked"}
         onOpenChange={(next) => {
-          if (!next && blocker.state === "blocked") blocker.reset();
+          if (!next && !busy && blocker.state === "blocked") blocker.reset();
         }}
       >
-        <AlertDialogContent data-testid="leave-dialog">
+        <AlertDialogContent
+          data-testid="leave-dialog"
+          onCloseAutoFocus={(e) => {
+            e.preventDefault();
+            // Leaving: the next page's heading takes focus. Staying: back to where the user was.
+            if (!leaving.current && opener.current?.isConnected) opener.current.focus();
+          }}
+          onEscapeKeyDown={(e) => {
+            if (busy) e.preventDefault();
+          }}
+        >
           <AlertDialogHeader>
             <AlertDialogTitle>Leave this interview?</AlertDialogTitle>
             <AlertDialogDescription>Your recording is only on this device until it is uploaded.</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <Button type="button" className={BTN} disabled={busy} onClick={evaluate}>
+            <Button type="button" disabled={busy} onClick={evaluate}>
               Evaluate what I have
             </Button>
-            <Button type="button" variant="outline" className={BTN} disabled={busy} onClick={() => discard.mutate()}>
+            <Button type="button" variant="outline" disabled={busy} onClick={() => discard.mutate()}>
               Discard
             </Button>
-            <AlertDialogCancel variant="link" className={LINK_BTN}>
+            <AlertDialogCancel variant="link" className={LINK_BTN} disabled={busy}>
               Keep talking
             </AlertDialogCancel>
           </AlertDialogFooter>

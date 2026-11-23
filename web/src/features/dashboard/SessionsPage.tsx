@@ -5,7 +5,7 @@ import { Link } from "react-router";
 import { unwrap } from "../../api/client";
 import { describeError } from "../../api/errors";
 import { useApiClient } from "../../auth/useApiClient";
-import { BTN, H1, LINK, LINK_BTN, NOTE, PAGE as PAGE_STACK } from "../../components/classes";
+import { H1, LINK, LINK_BTN, NOTE, PAGE as PAGE_STACK } from "../../components/classes";
 import { StatusChip } from "../../components/StatusChip";
 import { ratingEnabled } from "../../config";
 import { ErrorCard } from "../session/ErrorCard";
@@ -53,13 +53,13 @@ export function SessionsPage() {
   } else if (items.length === 0) {
     body = (
       <Card>
-        <CardContent className="grid justify-items-start gap-4 [&_p]:m-0">
+        <CardContent className="grid justify-items-start gap-4">
           <p>
             {ratingEnabled()
               ? "Onolys rates a recorded session against the MITI and shows you where it agrees with your own rating, line by line."
               : "Onolys codes a recorded session against the MITI, with evidence from your transcript and tips to improve."}
           </p>
-          <Button asChild className={BTN}>
+          <Button asChild>
             <Link to="/new">Start a new session</Link>
           </Button>
         </CardContent>

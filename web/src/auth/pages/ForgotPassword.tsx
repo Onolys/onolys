@@ -4,7 +4,8 @@ import { useAuth } from "../AuthProvider";
 import { EMAIL_PATTERN, errorCode } from "../errors";
 import { withNext } from "../next";
 import { Button } from "@onolys/ui";
-import { BTN, ErrorSummary, FORM, Field, H1, LINK, StatusNote } from "./parts";
+import { H1, LINK } from "../../components/classes";
+import { ErrorSummary, FORM, Field, StatusNote } from "./parts";
 import { useFormError } from "./useFormError";
 
 /** Same confirmation for every email: no account enumeration (R2). */
@@ -47,7 +48,7 @@ export function ForgotPassword() {
         {form.error && <ErrorSummary error={form.error} search={search} />}
         {sent && <StatusNote>{RESET_CONFIRMATION}</StatusNote>}
         <Field label="Email" id="forgot-email" name="email" type="email" autoComplete="email" required {...form.fieldProps("email")} />
-        <Button type="submit" className={BTN} disabled={busy}>
+        <Button type="submit" disabled={busy}>
           Send reset link
         </Button>
         <p>

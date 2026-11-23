@@ -4,7 +4,8 @@ import { useAuth } from "../AuthProvider";
 import { MIN_PASSWORD_LENGTH, errorCode, mapAuthError } from "../errors";
 import type { EmailChangeInfo, EmailChangeKind } from "../types";
 import { Alert, AlertDescription, Button } from "@onolys/ui";
-import { BTN, ErrorSummary, FORM, STACK, Field, H1, LINK, NOTE, StatusNote } from "./parts";
+import { H1, LINK, NOTE } from "../../components/classes";
+import { ErrorSummary, FORM, STACK, Field, StatusNote } from "./parts";
 import type { LoginState } from "./Login";
 import { useFormError } from "./useFormError";
 
@@ -109,7 +110,7 @@ function VerifyEmailAction({ oobCode, continueUrl }: { oobCode: string; continue
       <div className={STACK}>
         <h1 className={H1}>Already verified</h1>
         <StatusNote>Your email address is already verified.</StatusNote>
-        <Button type="button" className={BTN} onClick={carryOn}>
+        <Button type="button" onClick={carryOn}>
           Continue
         </Button>
       </div>
@@ -121,7 +122,7 @@ function VerifyEmailAction({ oobCode, continueUrl }: { oobCode: string; continue
       <div className={STACK}>
         <h1 className={H1}>Email verified</h1>
         <StatusNote>Your email address is verified.</StatusNote>
-        <Button type="button" className={BTN} onClick={carryOn}>
+        <Button type="button" onClick={carryOn}>
           Continue
         </Button>
       </div>
@@ -147,7 +148,7 @@ function VerifyEmailAction({ oobCode, continueUrl }: { oobCode: string; continue
         ) : (
           <>
             <p>Confirm your email address to finish setting up your account.</p>
-            <Button type="button" className={BTN} disabled={busy} onClick={() => void verify()}>
+            <Button type="button" disabled={busy} onClick={() => void verify()}>
               Verify my email
             </Button>
           </>
@@ -163,7 +164,7 @@ function CheckFailed({ message, onRetry }: { message: string; onRetry: () => voi
     <div className={STACK}>
       <h1 className={H1}>Couldn't check your link</h1>
       <ErrorNote>{message}</ErrorNote>
-      <Button type="button" className={BTN} onClick={onRetry}>
+      <Button type="button" onClick={onRetry}>
         Try again
       </Button>
     </div>
@@ -246,7 +247,7 @@ function ResetPasswordAction({ oobCode }: { oobCode: string }) {
         </p>
         <Field label="New password" id="reset-password" name="password" type="password" autoComplete="new-password" required minLength={MIN_PASSWORD_LENGTH} />
         <p className={NOTE}>At least {MIN_PASSWORD_LENGTH} characters. No other rules.</p>
-        <Button type="submit" className={BTN} disabled={busy}>
+        <Button type="submit" disabled={busy}>
           Update password
         </Button>
       </form>
@@ -357,14 +358,14 @@ function EmailChangeAction({ mode, oobCode, continueUrl }: { mode: EmailChangeKi
             {resetSent ? (
               <StatusNote>Password reset email sent. Check your inbox.</StatusNote>
             ) : (
-              <Button type="button" className={BTN} onClick={() => void resetPassword()}>
+              <Button type="button" onClick={() => void resetPassword()}>
                 Reset my password
               </Button>
             )}
           </>
         )}
         {signedIn ? (
-          <Button type="button" className={BTN} onClick={carryOn}>
+          <Button type="button" onClick={carryOn}>
             Continue
           </Button>
         ) : (
@@ -391,7 +392,7 @@ function EmailChangeAction({ mode, oobCode, continueUrl }: { mode: EmailChangeKi
             {info.previousEmail ? <> (currently {info.previousEmail})</> : null}.
           </p>
         )}
-        <Button type="button" className={BTN} disabled={busy} onClick={() => void apply()}>
+        <Button type="button" disabled={busy} onClick={() => void apply()}>
           {copy.button}
         </Button>
       </div>

@@ -9,7 +9,7 @@ import { Link, useNavigate } from "react-router";
 import { unwrap } from "../../api/client";
 import { describeError } from "../../api/errors";
 import { useApiClient } from "../../auth/useApiClient";
-import { ACTIONS, BTN, H1, LINK, LINK_BTN, NOTE, PAGE } from "../../components/classes";
+import { ACTIONS, H1, LINK, LINK_BTN, NOTE, PAGE } from "../../components/classes";
 import { Field } from "../../components/Field";
 import { ErrorNote, Notice } from "../../components/Notice";
 import { ErrorCard } from "../session/ErrorCard";
@@ -97,7 +97,7 @@ export function NewInterviewPage() {
         <UsageBar kind="interview" label="AI interviews" />
       </div>
       <form
-        className="grid max-w-xl grid-cols-1 gap-4 break-words [&_p]:m-0"
+        className="grid max-w-xl grid-cols-1 gap-4 break-words"
         onSubmit={(e) => {
           e.preventDefault();
           if (chosen && !blocking && !start.isPending) start.mutate();
@@ -153,7 +153,7 @@ export function NewInterviewPage() {
         {err ? <ErrorCard code={err.code} reference={err.requestId} /> : null}
 
         <div className={ACTIONS}>
-          <Button type="submit" className={BTN} disabled={!chosen || blocking !== null || start.isPending}>
+          <Button type="submit" disabled={!chosen || blocking !== null || start.isPending}>
             {start.isPending ? "Starting…" : "Start interview"}
           </Button>
           <Link to="/new" className={LINK}>

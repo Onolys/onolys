@@ -2,7 +2,7 @@
 import { Button, Card, CardContent, CardDescription, CardFooter, CardHeader, Section } from "@onolys/ui";
 import { Link } from "react-router";
 import { messageForCode } from "../../api/errors";
-import { BTN, H1, PAGE } from "../../components/classes";
+import { H1, PAGE } from "../../components/classes";
 import { Notice } from "../../components/Notice";
 import { interviewCapText } from "../interview/capText";
 import { UsageBar } from "../usage/UsageBar";
@@ -27,17 +27,17 @@ export function NewSessionChooser() {
               </h2>
               <CardDescription>A 10-minute role-play, then rated like any recording.</CardDescription>
             </CardHeader>
-            <CardContent className="grid gap-3 [&_p]:m-0">
+            <CardContent className="grid gap-3">
               <UsageBar kind="interview" label="AI interviews" />
               {interviewBlocking ? <Notice>{interviewCapText(interviewBlocking)}</Notice> : null}
             </CardContent>
             <CardFooter>
               {interviewBlocking ? (
-                <Button type="button" className={BTN} disabled>
+                <Button type="button" disabled>
                   Start AI Interview
                 </Button>
               ) : (
-                <Button asChild className={BTN}>
+                <Button asChild>
                   <Link to="/interviews/new">Start AI Interview</Link>
                 </Button>
               )}
@@ -52,7 +52,7 @@ export function NewSessionChooser() {
               </h2>
               <CardDescription>Bring a session you recorded.</CardDescription>
             </CardHeader>
-            <CardContent className="grid gap-3 [&_p]:m-0">
+            <CardContent className="grid gap-3">
               <UsageBar kind="eval" label="Recording ratings" />
               {blocking ? (
                 <Notice>
@@ -63,7 +63,7 @@ export function NewSessionChooser() {
               ) : null}
             </CardContent>
             <CardFooter>
-              <Button asChild className={BTN}>
+              <Button asChild>
                 <Link to="/sessions/new">New session</Link>
               </Button>
             </CardFooter>

@@ -16,7 +16,7 @@ export function ErrorCard({
 }) {
   return (
     <Alert variant="destructive" className="border-destructive">
-      <AlertDescription className="[&_p]:m-0">
+      <AlertDescription >
         <p className="font-semibold">{messageForCode(code, { resetsAt })}</p>
         {reference ? <p className="text-muted-foreground">Reference: {reference}</p> : null}
         {children ? <div className="flex flex-wrap gap-3">{children}</div> : null}

@@ -14,6 +14,8 @@ import {
 export function AccountMenu({ email, onSignOut }: { email: string | null; onSignOut: () => void }) {
   const [open, setOpen] = useState(false);
   const contentRef = useRef<HTMLDivElement>(null);
+  // Set when Settings is chosen: the route change focuses the page heading, so the menu must not refocus its trigger.
+  const navigating = useRef(false);
   // Menu pattern: opening (pointer or keyboard) moves focus to the first item. Radix focuses the content on pointer open.
   useEffect(() => {
     if (!open) return;
@@ -35,6 +37,12 @@ export function AccountMenu({ email, onSignOut }: { email: string | null; onSign
         ref={contentRef}
         align="end"
         loop
+        onCloseAutoFocus={(e) => {
+          if (navigating.current) {
+            e.preventDefault();
+            navigating.current = false;
+          }
+        }}
         // Tab leaves the menu: close it (Radix keeps focus on the trigger rather than tabbing on).
         onKeyDown={(e) => {
           if (e.key === "Tab") setOpen(false);
@@ -43,7 +51,12 @@ export function AccountMenu({ email, onSignOut }: { email: string | null; onSign
       >
         {email && <DropdownMenuLabel className="font-normal break-words text-muted-foreground">{email}</DropdownMenuLabel>}
         {email && <DropdownMenuSeparator />}
-        <DropdownMenuItem asChild>
+        <DropdownMenuItem
+          asChild
+          onSelect={() => {
+            navigating.current = true;
+          }}
+        >
           <Link to="/settings">Settings</Link>
         </DropdownMenuItem>
         <DropdownMenuItem onSelect={onSignOut}>Sign out</DropdownMenuItem>

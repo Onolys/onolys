@@ -10,7 +10,7 @@ import { useState } from "react";
 import { unwrap } from "../../api/client";
 import { describeError } from "../../api/errors";
 import { useApiClient } from "../../auth/useApiClient";
-import { BTN, LINK_BTN, NOTE } from "../../components/classes";
+import { LINK_BTN, NOTE } from "../../components/classes";
 import { Notice } from "../../components/Notice";
 import { ErrorCard } from "../session/ErrorCard";
 
@@ -69,7 +69,7 @@ export function SpeakerGate({ sessionId, mode, onDone }: SpeakerGateProps) {
 
   const err = error ? describeError(error) : null;
   return (
-    <section className="grid gap-4 [&_p]:m-0" aria-labelledby="speaker-gate-heading">
+    <section className="grid gap-4" aria-labelledby="speaker-gate-heading">
       <h2 id="speaker-gate-heading" className="m-0 text-xl font-semibold">Who is the clinician?</h2>
       <p className={NOTE}>
         Check the speaker labels and lines below and tell us which speaker is the clinician.
@@ -87,7 +87,7 @@ export function SpeakerGate({ sessionId, mode, onDone }: SpeakerGateProps) {
               ))}
             </ul>
             {mode === "first" ? (
-              <Button type="button" className={`${BTN} justify-self-start`} disabled={busy} onClick={() => void confirm(s.speaker, false)}>
+              <Button type="button" className="justify-self-start" disabled={busy} onClick={() => void confirm(s.speaker, false)}>
                 This is the clinician
               </Button>
             ) : (
@@ -113,13 +113,13 @@ export function SpeakerGate({ sessionId, mode, onDone }: SpeakerGateProps) {
         <div className="flex flex-wrap gap-3">
           <Button
             type="button"
-            className={BTN}
+           
             disabled={busy || selected === null}
             onClick={() => selected !== null && void confirm(selected, true)}
           >
             Save and try again
           </Button>
-          <Button type="button" variant="secondary" className={BTN} disabled={busy} onClick={onDone}>
+          <Button type="button" variant="secondary" disabled={busy} onClick={onDone}>
             Cancel
           </Button>
         </div>
