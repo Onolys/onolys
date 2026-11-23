@@ -22,26 +22,108 @@ const navNames = () =>
 const inNav = () => within(screen.getByRole("navigation", { name: "Main" }));
 
 describe("header nav by auth phase (D1)", () => {
-  it("signed out: Log in, Sign up, Sample report", async () => {
+  it("signed out: Sample report, then Log in and Sign up at the far right", async () => {
     renderApp("/login");
     await h1("Log in");
-    expect(navNames()).toEqual(["Log in", "Sign up", "Sample report"]);
+    expect(navNames()).toEqual(["Sample report", "Log in", "Sign up"]);
+    const login = inNav().getByRole("link", { name: "Log in" });
+    const signup = inNav().getByRole("link", { name: "Sign up" });
+    expect(login).toHaveClass("nav-login");
+    expect(signup).toHaveClass("nav-signup", "btn", "btn-primary");
+    expect(login.nextElementSibling).toBe(signup);
+    expect(signup.nextElementSibling).toBeNull();
     expect(inNav().queryByRole("button", { name: "Sign out" })).not.toBeInTheDocument();
   });
 
-  it("unverified: Verify email + Sign out, no app links", async () => {
+  it("unverified: header is the brand only (not a signed-in state)", async () => {
     renderApp("/verify-email", { user: { email: "a@clinic.org", verified: false } });
     await h1("Verify your email");
-    expect(navNames()).toEqual(["Verify email"]);
-    expect(inNav().getByRole("button", { name: "Sign out" })).toBeInTheDocument();
+    const header = within(screen.getByRole("banner"));
+    expect(header.getAllByRole("link").map((a) => a.textContent)).toEqual(["Onolys"]);
+    expect(header.queryByRole("button")).not.toBeInTheDocument();
+    expect(header.queryByText("a@clinic.org")).not.toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 1 }).closest("section")).toHaveClass("verify-page");
   });
 
-  it("verified: Sessions, New session, Settings, Sign out and the email", async () => {
+  it("verified: Sessions, New session in the nav; email and Sign out live in the account menu", async () => {
     renderApp("/", { user: { email: "a@clinic.org", verified: true } });
     await h1("Sessions");
-    expect(navNames()).toEqual(["Sessions", "New session", "Settings"]);
-    expect(inNav().getByText("a@clinic.org")).toBeInTheDocument();
-    expect(inNav().getByRole("button", { name: "Sign out" })).toBeInTheDocument();
+    expect(navNames()).toEqual(["Sessions", "New session"]);
+    expect(inNav().queryByText("a@clinic.org")).not.toBeInTheDocument();
+    expect(inNav().queryByRole("button", { name: "Sign out" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Account menu" })).toHaveTextContent("A");
+  });
+
+  it("account menu: opens with email, Settings and Sign out; closes on Escape, outside click and selection", async () => {
+    renderApp("/", { user: { email: "a@clinic.org", verified: true } });
+    await h1("Sessions");
+    const btn = screen.getByRole("button", { name: "Account menu" });
+    expect(btn).toHaveAttribute("aria-haspopup", "menu");
+    expect(btn).toHaveAttribute("aria-expanded", "false");
+    await userEvent.click(btn);
+    expect(btn).toHaveAttribute("aria-expanded", "true");
+    const menu = within(screen.getByRole("menu"));
+    expect(menu.getByText("a@clinic.org")).toBeInTheDocument();
+    expect(menu.getByRole("menuitem", { name: "Settings" })).toHaveAttribute("href", "/settings");
+    expect(menu.getByRole("menuitem", { name: "Sign out" })).toBeInTheDocument();
+    await userEvent.keyboard("{Escape}");
+    expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+    expect(btn).toHaveFocus();
+    await userEvent.click(btn);
+    await userEvent.click(screen.getByRole("heading", { level: 1 }));
+    expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+    await userEvent.click(btn);
+    await userEvent.click(btn);
+    expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+  });
+
+  it("account menu keyboard: open focuses first item; arrows, Home/End cycle; Escape returns focus; Tab closes", async () => {
+    renderApp("/", { user: { email: "a@clinic.org", verified: true } });
+    await h1("Sessions");
+    const btn = screen.getByRole("button", { name: "Account menu" });
+    await userEvent.click(btn);
+    const settings = screen.getByRole("menuitem", { name: "Settings" });
+    const signOut = screen.getByRole("menuitem", { name: "Sign out" });
+    expect(settings).toHaveFocus();
+    await userEvent.keyboard("{ArrowDown}");
+    expect(signOut).toHaveFocus();
+    await userEvent.keyboard("{ArrowDown}");
+    expect(settings).toHaveFocus();
+    await userEvent.keyboard("{ArrowUp}");
+    expect(signOut).toHaveFocus();
+    await userEvent.keyboard("{Home}");
+    expect(settings).toHaveFocus();
+    await userEvent.keyboard("{End}");
+    expect(signOut).toHaveFocus();
+    await userEvent.keyboard("{Escape}");
+    expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+    expect(btn).toHaveFocus();
+    await userEvent.click(btn);
+    expect(screen.getByRole("menu")).toBeInTheDocument();
+    await userEvent.tab();
+    expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+  });
+
+  it("account menu: Settings navigates and closes", async () => {
+    const { router } = renderApp("/", { user: { email: "a@clinic.org", verified: true } });
+    await h1("Sessions");
+    await userEvent.click(screen.getByRole("button", { name: "Account menu" }));
+    await userEvent.click(screen.getByRole("menuitem", { name: "Settings" }));
+    await h1("Settings");
+    expect(here(router)).toBe("/settings");
+    expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+  });
+
+  it("account menu: Sign out calls the service sign-out and lands on /login", async () => {
+    const service = createFakeAuthService();
+    const spy = vi.spyOn(service, "signOut");
+    const { router } = renderApp("/", { service, user: { email: "a@clinic.org", verified: true } });
+    await h1("Sessions");
+    await userEvent.click(screen.getByRole("button", { name: "Account menu" }));
+    await userEvent.click(screen.getByRole("menuitem", { name: "Sign out" }));
+    await h1("Log in");
+    expect(spy).toHaveBeenCalledTimes(1);
+    expect(here(router)).toBe("/login");
   });
 
   it("loading: brand only", async () => {
@@ -56,7 +138,8 @@ describe("header nav by auth phase (D1)", () => {
   it("header Sign out lands on plain /login", async () => {
     const { router } = renderApp("/settings", { user: { email: "a@clinic.org", verified: true } });
     await h1("Settings");
-    await userEvent.click(inNav().getByRole("button", { name: "Sign out" }));
+    await userEvent.click(screen.getByRole("button", { name: "Account menu" }));
+    await userEvent.click(screen.getByRole("menuitem", { name: "Sign out" }));
     await h1("Log in");
     expect(here(router)).toBe("/login");
   });
@@ -75,7 +158,8 @@ describe("header nav by auth phase (D1)", () => {
     const { router, queryClient } = renderApp("/settings", { service, user: { email: "a@clinic.org", verified: true } });
     queryClient.setQueryData(["secret"], 1);
     await h1("Settings");
-    await userEvent.click(inNav().getByRole("button", { name: "Sign out" }));
+    await userEvent.click(screen.getByRole("button", { name: "Account menu" }));
+    await userEvent.click(screen.getByRole("menuitem", { name: "Sign out" }));
     expect(await screen.findByRole("alert")).toHaveTextContent(/couldn't sign out/i);
     expect(here(router)).toBe("/settings");
     expect(queryClient.getQueryData(["secret"])).toBe(1);

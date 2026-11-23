@@ -12,6 +12,7 @@ const m = {
   createUser: vi.fn(),
   sendEmailVerification: vi.fn(),
   signOut: vi.fn(),
+  signIn: vi.fn(),
 };
 
 vi.mock("firebase/app", () => ({ initializeApp: () => ({}) }));
@@ -28,7 +29,7 @@ vi.mock("firebase/auth", () => ({
   createUserWithEmailAndPassword: (...a: unknown[]) => m.createUser(...a),
   sendEmailVerification: (...a: unknown[]) => m.sendEmailVerification(...a),
   sendPasswordResetEmail: vi.fn(),
-  signInWithEmailAndPassword: vi.fn(),
+  signInWithEmailAndPassword: (...a: unknown[]) => m.signIn(...a),
   signInWithPopup: vi.fn(),
   signInWithRedirect: vi.fn(),
   signOut: (...a: unknown[]) => m.signOut(...a),
@@ -130,9 +131,41 @@ describe("firebase signUp", () => {
     await expect(make().signUp("a@b.co", "password1")).resolves.toBeUndefined();
     expect(m.sendEmailVerification).toHaveBeenCalledOnce();
   });
-  it("still rejects when the account cannot be created", async () => {
+  it("sends the verification email exactly once, only at sign-up", async () => {
+    m.createUser.mockResolvedValue({ user: currentUser });
+    await make().signUp("a@b.co", "password1");
+    expect(m.sendEmailVerification).toHaveBeenCalledOnce();
+    expect(m.signIn).not.toHaveBeenCalled();
+  });
+  it("existing email + right password signs in instead, without sending another verification email", async () => {
     m.createUser.mockRejectedValue({ code: "auth/email-already-in-use" });
+    m.signIn.mockResolvedValue({ user: currentUser });
+    await expect(make().signUp("a@b.co", "password1")).resolves.toBeUndefined();
+    expect(m.signIn).toHaveBeenCalledWith(auth, "a@b.co", "password1");
+    expect(m.sendEmailVerification).not.toHaveBeenCalled();
+  });
+  it("existing email + wrong password still reports email-already-in-use", async () => {
+    m.createUser.mockRejectedValue({ code: "auth/email-already-in-use" });
+    m.signIn.mockRejectedValue({ code: "auth/invalid-credential" });
     await expect(make().signUp("a@b.co", "password1")).rejects.toMatchObject({ code: "auth/email-already-in-use" });
+  });
+  it.each(["auth/wrong-password", "auth/user-not-found"])("existing email + %s sign-in error reports email-already-in-use", async (code) => {
+    m.createUser.mockRejectedValue({ code: "auth/email-already-in-use" });
+    m.signIn.mockRejectedValue({ code });
+    await expect(make().signUp("a@b.co", "password1")).rejects.toMatchObject({ code: "auth/email-already-in-use" });
+  });
+  it.each(["auth/too-many-requests", "auth/network-request-failed", "auth/user-disabled", "auth/internal-error"])(
+    "existing email + %s sign-in error surfaces that error, not email-already-in-use",
+    async (code) => {
+      m.createUser.mockRejectedValue({ code: "auth/email-already-in-use" });
+      m.signIn.mockRejectedValue({ code });
+      await expect(make().signUp("a@b.co", "password1")).rejects.toMatchObject({ code });
+    },
+  );
+  it("other create failures are not retried as sign-in", async () => {
+    m.createUser.mockRejectedValue({ code: "auth/weak-password" });
+    await expect(make().signUp("a@b.co", "password1")).rejects.toMatchObject({ code: "auth/weak-password" });
+    expect(m.signIn).not.toHaveBeenCalled();
   });
 });
 

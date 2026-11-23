@@ -78,3 +78,35 @@ def test_callback_failure_does_not_fail_ensure():
     c = Boom(dict(GOOD, notification={"sendEmail": {"callbackUri": "https://x/__/auth/action"}}))
     ic.ensure(c)
     assert c.patches == []
+
+
+def test_check_passes_when_callback_matches(capsys):
+    assert ic.check(Fake(GOOD)) == 0
+    assert "ok" in capsys.readouterr().out
+
+
+def test_check_fails_on_default_firebaseapp_url(capsys):
+    cfg = dict(GOOD, notification={"sendEmail": {"callbackUri": "https://onolys.firebaseapp.com/__/auth/action"}})
+    c = Fake(cfg)
+    assert ic.check(c) == 1
+    out = capsys.readouterr().err
+    assert CB in out and "https://onolys.firebaseapp.com/__/auth/action" in out
+    assert "python3 infra/scripts/identity-config.py" in out
+    assert "EMAIL_TEMPLATE_UPDATE_NOT_ALLOWED" in out and "custom SMTP" in out
+    assert c.patches == []  # read-only
+
+
+def test_check_fails_when_notification_missing():
+    assert ic.check(Fake({})) == 1
+
+
+def test_main_check_is_read_only_and_exits_nonzero(monkeypatch):
+    c = Fake({})
+    monkeypatch.setattr(ic, "Client", lambda: c)
+    try:
+        ic.main(["--check"])
+    except SystemExit as e:
+        assert e.code == 1
+    else:
+        raise AssertionError("expected SystemExit(1)")
+    assert c.patches == []

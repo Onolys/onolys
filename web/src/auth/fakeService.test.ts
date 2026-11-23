@@ -15,8 +15,19 @@ describe("fake auth service", () => {
   it("rejects duplicates and bad passwords with firebase-style codes", async () => {
     const s = createFakeAuthService();
     await s.signUp("a@b.co", "password1");
-    await expect(s.signUp("a@b.co", "password1")).rejects.toMatchObject({ code: "auth/email-already-in-use" });
+    await s.signOut();
+    await expect(s.signUp("a@b.co", "otherpass1")).rejects.toMatchObject({ code: "auth/email-already-in-use" });
     await expect(s.signIn("a@b.co", "nope")).rejects.toMatchObject({ code: "auth/invalid-credential" });
+  });
+  it("sign-up with an existing email and the right password signs in, without another verification email", async () => {
+    const s = createFakeAuthService();
+    await s.signUp("a@b.co", "password1");
+    await s.signOut();
+    let seen: unknown = "none";
+    s.onAuthStateChanged((u) => (seen = u));
+    await s.signUp("a@b.co", "password1");
+    expect(seen).toMatchObject({ email: "a@b.co", emailVerified: false });
+    expect(s.calls.verificationEmails).toBe(1);
   });
   it("refreshUser counts a forced token refresh and picks up server-side verification", async () => {
     const s = createFakeAuthService();

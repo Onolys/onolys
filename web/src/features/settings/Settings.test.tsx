@@ -157,12 +157,13 @@ describe("settings: API key", () => {
     expect(main().getByText(/curl .*X-API-Key: onolys_<id>_<secret>/)).toBeInTheDocument();
   });
 
-  it("shows usage and the account-removal contact placeholder", async () => {
+  it("shows usage and the account-removal contact link", async () => {
     renderApp("/settings", { user: USER });
     expect(await main().findByText("20 of 20 left today")).toBeInTheDocument();
     expect(main().getByText("5 of 5 left today")).toBeInTheDocument();
     expect(main().queryByText(/this month/)).toBeNull();
     expect(main().getByText(/account removal/i)).toBeInTheDocument();
+    expect(main().getByRole("link", { name: "tejitpabari99@gmail.com" })).toHaveAttribute("href", "mailto:tejitpabari99@gmail.com");
     expect(main().getByText(/deleting a session removes/i)).toBeInTheDocument();
   });
 

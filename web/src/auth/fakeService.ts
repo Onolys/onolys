@@ -110,7 +110,12 @@ export function createFakeAuthService(options: FakeAuthOptions = {}): FakeAuthSe
     async signUp(email, password, next = "/") {
       calls.signUps++;
       const key = norm(email);
-      if (accounts.has(key)) throw new AuthError("auth/email-already-in-use");
+      const existing = accounts.get(key);
+      if (existing) {
+        // Like the Firebase service: the right password signs in (no new verification email).
+        if (existing.password === password) return enter(key);
+        throw new AuthError("auth/email-already-in-use");
+      }
       if (password.length < 6) throw new AuthError("auth/weak-password");
       accounts.set(key, { uid: uidFor(key), email: key, password, verified: false });
       calls.verificationEmails++;

@@ -127,6 +127,18 @@ PR #35 preview: web `onolys-app-staging--pr-35-kkj34ogl.web.app`, API tag `pr-35
 | Combined mode, min 0 / max 1, CPU always allocated (task finishes after the HTTP response) | Pass | Waited until Cloud Monitoring showed 0 instances for the revision (about 17 min idle), then a cold run with a synthetic 20 s tone and stub adapters: create 202 at 4.7 s, PUT 200 at 7.1 s, complete 202 at 7.7 s, `complete` to `awaiting_input` 18.1 s (cold start included), confirm to `report_ready` 1.8 s, report GET 200, session DELETE 204. Background work completed on the single instance. |
 | Test data | Cleaned | The two sessions of the test account on the preview (the staging Firestore is shared with staging) were deleted via the API (204 each); list is empty. |
 
+### Test user for previews and staging
+
+The API rejects unverified emails, so a normal signup cannot sign in without the verify link. Create a pre-verified user instead (ADC, quota project `onolys`):
+
+```
+python3 infra/scripts/create-test-user.py [--email EMAIL] [--password PASSWORD]
+```
+
+It prints `email:` and `password:` (defaults: `test-onolys-<8 hex>@onolys.com` and a generated strong password; an existing email exits non-zero and is not modified). Open the PR preview (or staging) `/login` and sign in with email and password. Google sign-in does not work on previews (see above).
+
+The Firebase Auth user pool is shared by staging and prod (only the Firestore databases are separate), so the account also exists in prod's pool. Delete test users in the Firebase console (Authentication, Users) when done.
+
 Owner/infra action: Google sign-in on previews needs each channel host added to the authorised domains (workflow step plus `roles/firebaseauth.admin` for the preview deployer), or accept email/password only on previews. Acceptance criterion 4 (preview sign-in) is met for email/password only.
 
 Owner decision 2026-11-21: Google sign-in on previews is not needed. The owner uses email/password on previews, so there is no authorised-domain automation (no workflow step, no `roles/firebaseauth.admin` for the preview deployer). The FAIL above is accepted as won't-fix.

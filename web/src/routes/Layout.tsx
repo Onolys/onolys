@@ -2,19 +2,20 @@ import { useEffect, useRef } from "react";
 import { Link, NavLink, Outlet, useLocation } from "react-router";
 import { useAuth, type AuthPhase } from "../auth/AuthProvider";
 import { useSignOut } from "../auth/useSignOut";
+import { AccountMenu } from "./AccountMenu";
+import { Footer } from "./Footer";
 
-const NAV: Record<AuthPhase, { to: string; label: string }[]> = {
+const NAV: Record<AuthPhase, { to: string; label: string; className?: string }[]> = {
   loading: [],
   signedOut: [
-    { to: "/login", label: "Log in" },
-    { to: "/signup", label: "Sign up" },
     { to: "/sample-report", label: "Sample report" },
+    { to: "/login", label: "Log in", className: "nav-login" },
+    { to: "/signup", label: "Sign up", className: "btn btn-primary nav-signup" },
   ],
-  unverified: [{ to: "/verify-email", label: "Verify email" }],
+  unverified: [], // the verify screen is not a signed-in state: brand only
   verified: [
     { to: "/", label: "Sessions" },
     { to: "/sessions/new", label: "New session" },
-    { to: "/settings", label: "Settings" },
   ],
 };
 
@@ -42,29 +43,20 @@ export function Layout() {
         <Link to="/" className="brand">
           Onolys
         </Link>
-        <nav aria-label="Main">
+        <nav aria-label="Main" className={phase === "signedOut" ? "nav-out" : undefined}>
           {NAV[phase].map((l) => (
-            <NavLink key={l.to} to={l.to} end={l.to === "/"}>
+            <NavLink key={l.to} to={l.to} end={l.to === "/"} className={l.className}>
               {l.label}
             </NavLink>
           ))}
-          {(phase === "verified" || phase === "unverified") && (
-            <>
-              {user?.email && <span className="nav-user">{user.email}</span>}
-              <button type="button" className="btn btn-secondary" onClick={() => void signOut()}>
-                Sign out
-              </button>
-            </>
-          )}
         </nav>
+        {phase === "verified" && <AccountMenu email={user?.email ?? null} onSignOut={() => void signOut()} />}
       </header>
       {signOutError && <p role="alert">{signOutError}</p>}
       <main id="main" ref={mainRef}>
         <Outlet />
       </main>
-      <footer className="app-footer">
-        <p>Onolys</p>
-      </footer>
+      <Footer />
     </div>
   );
 }

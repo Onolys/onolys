@@ -3,6 +3,7 @@
 
 Usage (ADC, quota project `onolys`):
   python3 infra/scripts/identity-config.py                      # ensure password policy (min 8) + enumeration protection + email action URL
+  python3 infra/scripts/identity-config.py --check              # read-only drift check of the email action URL (exit 1 on drift)
   python3 infra/scripts/identity-config.py --domains-only --add-domain HOST ...  # union HOST(s) into authorised domains
 
 Idempotent: PATCHes only when the live config differs; domains are only ever added, never removed.
@@ -63,6 +64,21 @@ def ensure(client, callback_uri=DEFAULT_CALLBACK_URI):
             print(f"warning: callbackUri not updated (immutable with default email method): {str(e)[:120]}")
 
 
+def check(client, callback_uri=DEFAULT_CALLBACK_URI):
+    """Read-only drift check: 0 if the live email action URL is ours, else 1 with the remedy on stderr."""
+    actual = ((client.get().get("notification") or {}).get("sendEmail") or {}).get("callbackUri")
+    if actual == callback_uri:
+        print(f"ok: {CALLBACK_MASK} = {actual}")
+        return 0
+    print(
+        f"DRIFT: {CALLBACK_MASK} expected {callback_uri} but live is {actual!r}; verify/reset links will show "
+        "'expired or already used'. Fix: python3 infra/scripts/identity-config.py (if it warns the template is immutable "
+        "(EMAIL_TEMPLATE_UPDATE_NOT_ALLOWED, sender method DEFAULT), switch the Firebase Auth email sender to custom SMTP first)",
+        file=sys.stderr,
+    )
+    return 1
+
+
 def add_domains(client, hosts):
     cur = client.get().get("authorizedDomains", [])
     new = [h for h in hosts if h not in cur]
@@ -111,8 +127,11 @@ def main(argv=None):
     ap.add_argument("--add-domain", action="append", default=[], metavar="HOST")
     ap.add_argument("--callback-uri", default=DEFAULT_CALLBACK_URI, metavar="URL", help="email action URL (verify/reset links)")
     ap.add_argument("--domains-only", action="store_true", help="skip the policy check (fast path for CI preview deploys)")
+    ap.add_argument("--check", action="store_true", help="read-only: exit 1 if the live callbackUri differs from the expected URL")
     args = ap.parse_args(argv)
     c = Client()
+    if args.check:
+        sys.exit(check(c, args.callback_uri))
     if args.domains_only:
         add_domains(c, args.add_domain)
         return

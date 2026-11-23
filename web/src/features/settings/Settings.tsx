@@ -5,7 +5,7 @@ import { unwrap } from "../../api/client";
 import { describeError } from "../../api/errors";
 import { useSignOut } from "../../auth/useSignOut";
 import { useApiClient } from "../../auth/useApiClient";
-import { CONTACT_EMAIL, HAS_CONTACT_EMAIL } from "../../config";
+import { CONTACT_EMAIL } from "../../config";
 import { formatResetTime } from "../../lib/format";
 import { UsageLeft } from "../usage/UsageLeft";
 import { useUsage } from "../usage/useUsage";
@@ -78,7 +78,7 @@ export function Settings() {
 
   const info = key.data;
   const err = error ? describeError(error) : null;
-  const removal = HAS_CONTACT_EMAIL ? <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a> : <strong>{CONTACT_EMAIL}</strong>;
+  const removal = <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>;
 
   return (
     <>

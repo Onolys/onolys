@@ -325,7 +325,8 @@ describe("flow: API key is shown once (AC7)", () => {
     try {
       renderApp("/", { user: USER });
       await h1("Sessions");
-      await u.click(nav("Settings"));
+      await u.click(screen.getByRole("button", { name: "Account menu" }));
+      await u.click(screen.getByRole("menuitem", { name: "Settings" }));
       await h1("Settings");
       await u.click(await screen.findByRole("button", { name: "Create API key" }));
       const dialog = await screen.findByRole("dialog");
@@ -338,7 +339,8 @@ describe("flow: API key is shown once (AC7)", () => {
 
       await u.click(nav("Sessions"));
       await h1("Sessions");
-      await u.click(nav("Settings"));
+      await u.click(screen.getByRole("button", { name: "Account menu" }));
+      await u.click(screen.getByRole("menuitem", { name: "Settings" }));
       await h1("Settings");
       expect(await screen.findByText(/active/i)).toBeInTheDocument();
       expect(document.body.textContent).not.toContain(secret);
