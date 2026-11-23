@@ -44,15 +44,15 @@ Rollout order: app, then landing, then admin/eval.
 - [OPEN] `font-src 'self'`: confirm fonts not inlined as data: (Vite `assetsInlineLimit`) in consumers.
 
 **PRD 02 (app-migration)**
-- [OPEN in SP1] If SP1 drops `legacy.css`, web keeps private `legacy-tokens.css`.
-- [OPEN: confirm needed set] jsdom shims for Radix (`ResizeObserver`, `hasPointerCapture`, `scrollIntoView`, `matchMedia`).
+- [RESOLVED: orchestrator default 2026-11-23 — bridge via SP1 `legacy.css`, removed in final cleanup; private `legacy-tokens.css` only if SP1 drops it]
+- [RESOLVED: orchestrator default 2026-11-23 — standard Radix jsdom shim set in vitest setup]
 - [RESOLVED: 2026-11-23 — approved] `@axe-core/playwright` devDep (web; also onolys-ui checks).
-- [verify: OPEN] `pr-preview.yml` has no separate install step.
-- [OPEN] `npm ci` must not use ssh URL; use `git+https`.
-- [OPEN: pick numbers after baseline] Soft bundle budget (JS gzip +60KB, CSS gzip +15KB).
+- [RESOLVED: orchestrator default 2026-11-23 — verify install covers git dep, add if not]
+- [RESOLVED: orchestrator default 2026-11-23 — `github:` resolves via git+https; verify `npm ci` in CI]
+- [RESOLVED: orchestrator default 2026-11-23 — baseline in Phase 0; soft budget baseline +25%, warning only]
 - [RESOLVED: owner 2026-11-23 — build/hosting checks may be changed or removed when they block the design system; keep the CSP itself strict (style-src 'self') and prove it with the Playwright CSP smoke; prefer Radix Dialog/AlertDialog] (`build.test.ts` `createElement("style")` ban vs `react-style-singleton`.)
-- [OPEN] Radix `aria-hidden` on siblings may break test helpers.
-- [OPEN] Tailwind `@source` through `file:` symlink (local dev).
-- [OPEN] Preflight impact on not-yet-migrated screens.
-- [OPEN] AuthAction (400 lines) may need splitting.
-- [OPEN] MSW service worker under CSP preview (`worker-src`).
+- [RESOLVED: orchestrator default 2026-11-23 — role queries scoped; helpers fixed in first modal phase]
+- [RESOLVED: orchestrator default 2026-11-23 — `@source` to real path, documented]
+- [RESOLVED: orchestrator default 2026-11-23 — cascade layers; Phase 0 screenshots]
+- [RESOLVED: orchestrator default 2026-11-23 — split only if >50% touched; decided in Phase 2]
+- [RESOLVED: orchestrator default 2026-11-23 — MSW only where needed; `worker-src 'self'` in test server config only]
