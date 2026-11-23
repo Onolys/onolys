@@ -9,8 +9,8 @@ Source of truth: /root/projects/onolys/iaudit/.worktrees/feat/miti-eval/docs/age
 
 | # | Task | Depends on | Status |
 |---|---|---|---|
-| 1 | Core package scaffold + basics move + import boundary test | - | in-progress |
-| 2 | Move LLM client and routes to core | 1 | todo |
+| 1 | Core package scaffold + basics move + import boundary test | - | done |
+| 2 | Move LLM client and routes to core | 1 | in-progress |
 | 3 | Move transcript, txt parser, schema, speaker-gate helper; update eval imports | 1 | todo |
 | 4 | Engine ABC, result types, feedback hook, validate_output | 1 | todo |
 | 5 | EngineRegistry and list_presets | 2, 4 | todo |
