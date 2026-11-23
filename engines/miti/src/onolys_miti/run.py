@@ -1,6 +1,6 @@
 """The public entry point: `run_miti` (PRD R2, R7, D6).
 
-Applies the speaker map, picks the coded span once (`span.select_coded_span`), runs the code and
+Applies the speaker map, selects the caller's span or whole transcript once, runs the code and
 globals passes `n_runs` times, averages them (mean/min/max kept), generates tips and assembles
 the no-rating report. Progress stages: `code` (code + globals passes), `tips`, `assemble`.
 
@@ -61,7 +61,6 @@ register_fields({"run_index", "n_runs", "runs_ok", "stage", "stage_status"})
 
 ROUTES = (code_mod.ROUTE, globals_mod.ROUTE)
 _FAILURES = (code_mod.CodePassFailed, globals_mod.GlobalsPassFailed, LLMError)
-_ENGINE_ONLY_PARAMS = ("coded_span",)  # callers never pick the span (R7)
 
 
 class AllRunsFailed(OnolysError):
@@ -271,7 +270,7 @@ async def _code(
         raise InputError("n_runs must be at least 1")
     rid = ctx.request_id
     seed = str(params.get("seed") or rid)
-    choice = select_coded_span(transcript, seed)
+    choice = select_coded_span(transcript, seed, params.get("coded_span"))
     prepared = prepare(transcript, params, choice.coded_span)
     language = _language(params, transcript)
     lang_arg = None if language == "und" else language
@@ -371,8 +370,7 @@ async def _run(
 ) -> MitiOutput:
     rid = ctx.request_id
     code_metrics = MetricsCollector()
-    p = {k: v for k, v in params.items() if k not in _ENGINE_ONLY_PARAMS}
-    engine_params = {**p, "speaker_map": speaker_map}
+    engine_params = {**params, "speaker_map": speaker_map}
     log_event("miti.run_start", request_id=rid)
 
     result = await _stage(
@@ -401,7 +399,7 @@ async def _run(
     async def assemble() -> MitiOutput:
         report = build_report_no_rating(
             transcript=transcript,
-            params=p,
+            params=params,
             result=result,
             tips=art,
             warnings=list(tip_warnings),
@@ -427,8 +425,9 @@ async def run_miti(
     """Code `transcript` and build the no-rating report.
 
     `params`: `change_goal`, `language`, `n_runs` (default 1), `preset`, `code_version`, `seed`
-    (default `ctx.request_id`; picks the coded window), `volleys_per_call`, `code_max_tokens`,
-    `globals_max_tokens`. `coded_span` is ignored: the engine chooses the span (R7)."""
+    (default `ctx.request_id`; recorded for provenance), `volleys_per_call`, `code_max_tokens`,
+    `globals_max_tokens`, `coded_span` (half-open milliseconds or zero-based turns).
+    Without `coded_span`, the whole transcript is coded."""
     if ctx.deadline is None:
         return await _run(ctx, transcript, speaker_map, params, progress_cb)
     remaining = ctx.deadline - asyncio.get_running_loop().time()

@@ -3,7 +3,7 @@
 `final=false` overwrites the single draft doc (size limits only; never gates or starts a run).
 `final=true` is refused (409 `rating_final`) once a rating was submitted or a report exists;
 otherwise it validates the card and writes a new revision `ratings/{rating_id}`, copies
-`change_goal`/`coded_span` to the session, sets `rating_submitted`/`has_rating`, mirrors them to
+`change_goal` to the session, sets `rating_submitted`/`has_rating`, mirrors them to
 `session_status` and calls the first-run hook. Allowed in every state but `deleting` (404).
 """
 
@@ -133,13 +133,6 @@ def put_rating(id: ResourceId, body: RatingRequest, request: Request, user: User
         "rating_submitted": True,
         "has_rating": not no_rating,
     }
-    span = body.card.get("coded_span")
-    # Always set (span or None) so a cleared span replaces the old one on the session (BH1).
-    fields["coded_span"] = (
-        {"from_s": span["from_s"], "to_s": span["to_s"]}
-        if isinstance(span, dict) and "from_s" in span and "to_s" in span
-        else None
-    )
     repo.update_session(
         uid,
         id,

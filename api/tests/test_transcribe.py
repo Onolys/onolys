@@ -175,6 +175,10 @@ def test_polls_until_ready_then_awaiting_input(make_env, blobs):
     assert len(env.repo.get_transcript(UID, SID, tr.TRANSCRIPT_ID).transcript.turns) == 2
     assert env.hook_calls == [(UID, SID)]
     assert env.stt.submits == 1
+    stored = env.repo.get_transcript(UID, SID, tr.TRANSCRIPT_ID).transcript
+    assert "stt_run" not in stored.model_dump()
+    assert s.stt.run.provider == "fixture"
+    assert s.stt.run.adapter_version == "fixture-1"
 
 
 def test_three_speakers_reach_the_gate(make_env):
@@ -571,3 +575,13 @@ def test_a_session_without_a_stored_cap_uses_the_maximum(blobs):
     env.clock.advance(20)
     env.runner.handle(env.queue.pending.pop(0), 0)
     assert env.session.state == "failed"
+
+
+def test_missing_provider_speaker_is_unknown_and_cannot_pass_separation_gate(blobs):
+    uri = blobs.uri(canonical_key(UID, SID))
+    unlabelled = [Word(text="word " * 60, start_ms=0, end_ms=1000)]
+    env = Env(blobs, FixtureStt({uri_hash(uri): unlabelled}))
+    env.start()
+    env.run_polls()
+    assert env.session.state == "failed"
+    assert env.session.error.code == "speakers_not_separated"

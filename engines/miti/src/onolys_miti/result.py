@@ -8,7 +8,14 @@ import sys
 from pathlib import Path
 from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    StringConstraints,
+    model_serializer,
+    model_validator,
+)
 
 from onolys_miti.run_info import RunInfo
 
@@ -21,7 +28,6 @@ WARNING_CODES = (
     "overlap",
     "insufficient_evidence",
     "capped",
-    "span_ignored",
     "coded_window",
     "unknown_speaker",
     "language_not_validated",
@@ -54,8 +60,40 @@ class ProtocolBlock(_Model):
 
 
 class CodedSpan(_Model):
-    from_s: int | None = None
-    to_s: int | None = None
+    """Exactly one half-open time (milliseconds) or zero-based turn range."""
+
+    model_config = ConfigDict(extra="forbid", strict=True, json_schema_extra={
+        "oneOf": [
+            {"required": ["start_ms", "end_ms"], "properties": {
+                "start_ms": {"type": "integer"}, "end_ms": {"type": "integer"},
+                "start_turn": {"type": "null"}, "end_turn": {"type": "null"}}},
+            {"required": ["start_turn", "end_turn"], "properties": {
+                "start_turn": {"type": "integer"}, "end_turn": {"type": "integer"},
+                "start_ms": {"type": "null"}, "end_ms": {"type": "null"}}},
+        ],
+    })
+    start_ms: Offset | None = None
+    end_ms: Offset | None = None
+    start_turn: Offset | None = None
+    end_turn: Offset | None = None
+
+    @model_serializer(mode="wrap")
+    def _serialize(self, handler):
+        return {key: value for key, value in handler(self).items() if value is not None}
+
+    @model_validator(mode="after")
+    def _range(self):
+        time = self.start_ms is not None and self.end_ms is not None
+        turns = self.start_turn is not None and self.end_turn is not None
+        if time and self.start_turn is None and self.end_turn is None:
+            start, end = self.start_ms, self.end_ms
+        elif turns and self.start_ms is None and self.end_ms is None:
+            start, end = self.start_turn, self.end_turn
+        else:
+            raise ValueError("supply exactly one complete time or turn range")
+        if start >= end:
+            raise ValueError("range start must be less than end")
+        return self
 
 
 class Instance(_Model):

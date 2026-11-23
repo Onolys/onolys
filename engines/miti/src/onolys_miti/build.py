@@ -36,6 +36,7 @@ from onolys_miti.report import (
 from onolys_miti.result import MitiResult
 from onolys_miti.run_info import RunInfo, RunUsage
 from onolys_miti.run_info import code_version as _code_version
+from onolys_miti.stt import SttRun
 from onolys_miti.tips import TipsArtifact
 from onolys_miti.tone import ReportConfig, load_report_config, tone_rules
 from onolys_miti.transcript import Transcript
@@ -120,7 +121,8 @@ def build_report_no_rating(
             seen.add((w.code, w.item_id))
             final_warnings.append(w)
 
-    stt = transcript.stt_run
+    stt_data = params.get("stt_run")
+    stt = SttRun.model_validate(stt_data) if stt_data is not None else None
     routes = {n: r.litellm_id for n, r in result.run_info.routes.items()} | dict(models or {})
     eval_info = RunInfo(
         engine="miti", code_version=params.get("code_version") or _code_version(),
@@ -140,7 +142,8 @@ def build_report_no_rating(
             coded_span=span.model_dump() if span else None,
             subject_speaker=result.subject_speaker,
             n_runs=result.n_runs, models=routes, stt=stt, preset=params.get("preset"),
-            code_version=eval_info.code_version, params=dict(params),
+            code_version=eval_info.code_version,
+            params={k: v for k, v in params.items() if k != "stt_run"},
             has_clinician_rating=False,
             rating_coverage=RatingCoverage(rated=0, total=len(global_ids) + len(count_ids))),
         layout=[LayoutEntry(**e) for e in cfg.layout()],

@@ -76,13 +76,13 @@ def test_canonical_audio_ref_points_at_canonical_flac(blobs):
     assert ref.mime == "audio/flac" and ref.duration_ms == 600_000
 
 
-async def test_transcript_passes_through_with_stt_run_unchanged():
+async def test_completion_passes_through_with_separate_stt_provenance():
     direct = fixture_for()
     h = await direct.start(audio(), PARAMS)
     want = await direct.poll(h)
     stt = RealStt({"fixture": lambda: fixture_for()})
     got = await stt.poll(await stt.start(audio(), PARAMS))
-    assert got == want and got.stt_run.provider == "fixture"
+    assert got == want and got.run.provider == "fixture"
 
 
 async def test_poll_returns_none_while_running_and_never_resubmits():

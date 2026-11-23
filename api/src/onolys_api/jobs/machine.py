@@ -22,7 +22,7 @@ _NOT_DELETING = (
 )  # fmt: skip
 
 TRANSITIONS: dict[str, frozenset[str]] = {
-    "created": frozenset({"uploading", "upload_incomplete", "deleting"}),
+    "created": frozenset({"awaiting_input", "uploading", "upload_incomplete", "deleting"}),
     # uploading -> uploading: a fresh signed URL for the same session
     "uploading": frozenset({"uploading", "upload_incomplete", "validating", "deleting"}),
     # never uploaded (lazy stale check): a fresh URL resumes it; a late PUT still completes
@@ -79,6 +79,7 @@ def rating_final() -> ApiError:
 BAD_FILE_CODES = frozenset(
     {
         "unsupported_audio", "audio_too_long", "interview_too_long", "audio_too_large",
+        "invalid_coded_span", "session_too_long",
         "audio_unreadable", "no_speech", "speakers_not_separated", "transcription_failed",
     }
 )  # fmt: skip

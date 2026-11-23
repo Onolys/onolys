@@ -2,25 +2,8 @@
 
 from pydantic import BaseModel
 
-from onolys_miti.stt import SttRun
-
-
-class Turn(BaseModel):
-    id: str
-    speaker: str | None = None
-    text: str
-    start_ms: int | None = None
-    end_ms: int | None = None
-    role: str | None = None
-    language: str | None = None
-
-
-class Transcript(BaseModel):
-    turns: list[Turn]
-    language: str | None = None
-    duration_ms: int | None = None
-    # None for text-only transcripts that never went through STT.
-    stt_run: SttRun | None = None
+from onolys_miti.transcript_v1 import TranscriptTurnV1 as Turn  # noqa: F401
+from onolys_miti.transcript_v1 import TranscriptV1 as Transcript  # noqa: F401
 
 
 class Span(BaseModel):

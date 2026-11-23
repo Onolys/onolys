@@ -15,7 +15,7 @@ The user uploads a session recording (or runs an AI practice interview). Onolys 
 
 The user also states a **change goal** for the session. The report then gives **basic tips**: a few short suggestions for the next session, each quoting the transcript.
 
-The coded span is the whole session when it is up to 20 minutes, otherwise a reproducible 20-minute window.
+The whole session is coded unless the caller supplies a `coded_span` in milliseconds or zero-based turn indices (both half-open ranges). The coded portion must be at most 25 minutes and 6,000 words; longer portions require a narrower `coded_span`.
 
 ## The report
 

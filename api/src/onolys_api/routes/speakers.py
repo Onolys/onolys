@@ -9,6 +9,7 @@ The transcript read is owner-scoped and `private, no-store`: it carries PHI.
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Request, Response
+from onolys_miti.transcript_v1 import TranscriptV1
 from pydantic import BaseModel, Field
 
 from onolys_api.auth.deps import AuthUser, current_user
@@ -54,19 +55,7 @@ class ConfirmResponse(BaseModel):
     clinician_speaker: str
 
 
-class TranscriptTurn(BaseModel):
-    id: str
-    speaker: str | None = None
-    role: str | None = Field(None, description="`clinician`/`client`; null until confirmed")
-    start_ms: int | None = None
-    end_ms: int | None = None
-    text: str
-
-
-class TranscriptView(BaseModel):
-    turns: list[TranscriptTurn]
-    language: str | None = None
-    duration_ms: int | None = None
+class TranscriptView(TranscriptV1):
     clinician_speaker: str | None = None
 
 
@@ -82,7 +71,7 @@ def _ready_session(request: Request, user: AuthUser, id: str) -> SessionDoc:
 def _speakers(transcript) -> list[SpeakerInfo]:
     out: dict[str, SpeakerInfo] = {}
     for t in transcript.turns:
-        if t.speaker is None:
+        if t.speaker == "unknown":
             continue
         info = out.setdefault(t.speaker, SpeakerInfo(speaker=t.speaker, turn_count=0, samples=[]))
         info.turn_count += 1
@@ -167,20 +156,15 @@ def get_transcript(
     response.headers["Cache-Control"] = "private, no-store"
     return TranscriptView(
         turns=[
-            TranscriptTurn(
-                id=x.id,
-                speaker=x.speaker,
-                role=(
+            x.model_copy(update={
+                "role": (
                     None
-                    if who is None or x.speaker is None
+                    if who is None or x.speaker == "unknown"
                     else "clinician"
                     if x.speaker == who
                     else "client"
                 ),
-                start_ms=x.start_ms,
-                end_ms=x.end_ms,
-                text=x.text,
-            )
+            })
             for x in t.turns
         ],
         language=t.language,

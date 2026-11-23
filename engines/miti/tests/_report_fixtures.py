@@ -29,7 +29,8 @@ def inputs() -> dict[str, Any]:
     route = next(iter(result.run_info.routes.values())).litellm_id
     return {
         "transcript": Transcript.model_validate(load("transcript.json")),
-        "params": {"n_runs": 1, "preset": "fixture", "code_version": "fixture"},
+        "params": {"n_runs": 1, "preset": "fixture", "code_version": "fixture",
+                   "stt_run": golden["header"]["stt"]},
         "result": result,
         "tips": TipsArtifact(valid=[Tip.model_validate(t) for t in golden["tips"]],
                              proposals=[]),

@@ -10,7 +10,7 @@ from typing import Any, Protocol
 from onolys_miti import ProgressCb, Stage, StageStatus
 from onolys_miti.context import RunContext
 from onolys_miti.errors import OnolysError
-from onolys_miti.stt import AudioRef, SttParams
+from onolys_miti.stt import AudioRef, SttCompletion, SttParams
 from onolys_miti.transcript import Transcript
 from onolys_miti.voice import VoiceParams, VoiceSession
 from pydantic import BaseModel, Field
@@ -48,8 +48,8 @@ class Stt(Protocol):
         """Begin transcription once; return an opaque, JSON-serialisable handle."""
         ...
 
-    async def poll(self, handle: str) -> Transcript | None:
-        """Return the Transcript, or None while still running. Never re-submits."""
+    async def poll(self, handle: str) -> SttCompletion | None:
+        """Return the completion, or None while still running. Never re-submits."""
         ...
 
 

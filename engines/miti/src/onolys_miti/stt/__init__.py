@@ -2,12 +2,11 @@
 
 from collections.abc import Callable
 from pathlib import Path
-from typing import TYPE_CHECKING, Protocol
+from typing import Protocol
 
 from pydantic import BaseModel
 
-if TYPE_CHECKING:
-    from onolys_miti.transcript import Transcript
+from onolys_miti.transcript_v1 import TranscriptV1
 
 
 class SttParams(BaseModel):
@@ -44,11 +43,18 @@ class SttRun(BaseModel):
     adapter_version: str
 
 
+class SttCompletion(BaseModel):
+    """Completed STT result: portable transcript and separate provider provenance."""
+
+    transcript: TranscriptV1
+    run: SttRun
+
+
 class SttAdapter(Protocol):
     async def start(self, audio: AudioRef, params: SttParams) -> str:
         """Begin transcription; return an opaque, JSON-serialisable handle."""
         ...
 
-    async def poll(self, handle: str) -> "Transcript | None":
-        """Return the Transcript, or None while still running."""
+    async def poll(self, handle: str) -> SttCompletion | None:
+        """Return the completion, or None while still running."""
         ...

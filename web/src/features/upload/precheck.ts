@@ -74,3 +74,11 @@ export function readDuration(file: Blob, timeoutMs = 5000): Promise<number | nul
     audio.src = url;
   });
 }
+
+export const MAX_TRANSCRIPT_BYTES = 1024 * 1024;
+
+export function checkTranscript(file: FileInfo): PrecheckResult {
+  if (file.size > MAX_TRANSCRIPT_BYTES) return { blocked: "This transcript is over 1 MB. Upload a smaller file.", warning: null };
+  if (!["json", "txt"].includes(fileExtension(file.name))) return { blocked: "Upload a json or txt transcript file.", warning: null };
+  return { blocked: null, warning: null };
+}

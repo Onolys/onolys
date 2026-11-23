@@ -1,6 +1,8 @@
 {
   "$defs": {
-    "TranscriptTurn": {
+    "TranscriptTurnV1": {
+      "additionalProperties": false,
+      "description": "One turn, in the order it appears in the transcript.",
       "properties": {
         "end_ms": {
           "anyOf": [
@@ -15,6 +17,8 @@
           "title": "End Ms"
         },
         "id": {
+          "minLength": 1,
+          "pattern": "\\S",
           "title": "Id",
           "type": "string"
         },
@@ -28,20 +32,18 @@
             }
           ],
           "default": null,
-          "description": "`clinician`/`client`; null until confirmed",
+          "enum": [
+            "clinician",
+            "client",
+            null
+          ],
           "title": "Role"
         },
         "speaker": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Speaker"
+          "minLength": 1,
+          "pattern": "\\S",
+          "title": "Speaker",
+          "type": "string"
         },
         "start_ms": {
           "anyOf": [
@@ -56,20 +58,24 @@
           "title": "Start Ms"
         },
         "text": {
+          "minLength": 1,
+          "pattern": "\\S",
           "title": "Text",
           "type": "string"
         }
       },
       "required": [
         "id",
+        "speaker",
         "text"
       ],
-      "title": "TranscriptTurn",
+      "title": "TranscriptTurnV1",
       "type": "object"
     }
   },
   "$id": "transcript-view.schema.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
   "properties": {
     "clinician_speaker": {
       "anyOf": [
@@ -104,12 +110,12 @@
           "type": "null"
         }
       ],
-      "default": null,
+      "default": "en",
       "title": "Language"
     },
     "turns": {
       "items": {
-        "$ref": "#/$defs/TranscriptTurn"
+        "$ref": "#/$defs/TranscriptTurnV1"
       },
       "title": "Turns",
       "type": "array"
