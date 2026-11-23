@@ -7,6 +7,7 @@ from typing import Annotated
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, Header, Query, Request, Response
+from onolys_miti.result import CodedSpan
 from pydantic import BaseModel, Field, field_validator
 
 from onolys_api import logs
@@ -37,6 +38,9 @@ User = Annotated[AuthUser, Depends(current_user)]
 
 
 class CreateSessionRequest(BaseModel):
+    coded_span: CodedSpan | None = Field(
+        None, description="Half-open milliseconds or zero-based turn range; null codes all turns."
+    )
     language: str = Field("auto", description="BCP-47 tag or `auto`")
     n_runs: int = Field(1, ge=1, le=5)
     preset: str | None = Field(None, max_length=64, description="Allowlisted preset name")
@@ -239,6 +243,7 @@ def create_session(
         language=body.language,
         stt=stt,
         n_runs=body.n_runs,
+        coded_span=body.coded_span,
         preset=preset,
         created_at=now,
         updated_at=now,

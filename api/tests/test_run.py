@@ -346,6 +346,10 @@ async def test_evaluation_gets_seed_language_and_a_deadline_but_no_rating_or_spa
     sess = env.repo.get_session(env.uid, sid)
     tr = env.repo.get_transcript(env.uid, sid, "current").transcript
     assert cap.seen["params"]["language"] == (tr.language or sess.language)
+    assert cap.seen["params"]["stt_run"] == sess.stt.run.model_dump()
+    report_id = env.repo.list_reports(env.uid, sid)[0].id
+    report = env.repo.get_report(env.uid, sid, report_id).report
+    assert report["header"]["stt"] == sess.stt.run.model_dump()
     assert cap.seen["map"] == {"subject": "S1"}
     left = cap.seen["ctx"].deadline - time.monotonic()
     assert 0 < left <= 600  # derived from the task's remaining time, not unbounded

@@ -1,7 +1,6 @@
 /**
- * `/sessions/new` (PRD R3): audio, language, optional title, change goal (flag off); advisory pre-checks; then
- * `POST /sessions` → `PUT …/rating` (final no-rating card, goal only; flag off) → `POST …/audio` → hand the file to the app-level uploader and open the
- * session page at once.
+ * New session: choose audio or a transcript, save the change goal, then upload.
+ * Audio runs through the app-level uploader; transcript files go directly to the API.
  */
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useEffect, useRef, useState, type DragEvent } from "react";
@@ -15,6 +14,7 @@ import { goalIssues, saveGoal, SetupFields } from "../rating/SetupFields";
 import { ErrorCard } from "../session/ErrorCard";
 import { DEFAULT_LANGUAGE, LANGUAGES } from "./config";
 import { FileNotices } from "./FileNotices";
+import { fileExtension } from "./precheck";
 import { prepareUpload } from "./startUpload";
 import { getJob } from "./uploader";
 import { useFilePick } from "./useFilePick";
@@ -25,7 +25,8 @@ export function NewSessionPage() {
   const [params] = useSearchParams();
   const from = params.get("from");
 
-  const filePick = useFilePick();
+  const [source, setSource] = useState<"audio" | "transcript">("audio");
+  const filePick = useFilePick(source);
   const { file, pick } = filePick;
   const [language, setLanguage] = useState<string>(DEFAULT_LANGUAGE);
   const [typedTitle, setTypedTitle] = useState<string | null>(null);
@@ -76,11 +77,20 @@ export function NewSessionPage() {
         goalSaved.current.add(id);
         setSavedId(id);
       }
-      await prepareUpload(client, id, f);
+      if (source === "transcript") {
+        unwrap(await client.PUT("/sessions/{id}/transcript", {
+          params: { path: { id } },
+          headers: { "Content-Type": fileExtension(f.name) === "json" ? "application/json" : "text/plain" },
+          body: "",
+          bodySerializer: () => f,
+        }));
+      } else {
+        await prepareUpload(client, id, f);
+      }
       return id;
     },
     onSuccess: (id) => {
-      void getJob(id)?.start(); // the upload runs app-level even if the form is gone
+      if (source === "audio") void getJob(id)?.start(); // the upload runs app-level even if the form is gone
       if (mounted.current) void navigate(`/sessions/${id}`);
     },
     onError: (e) => {
@@ -115,6 +125,19 @@ export function NewSessionPage() {
           }
         }}
       >
+        <fieldset disabled={submit.isPending || savedId !== null}>
+          <legend>Session file</legend>
+          {(["audio", "transcript"] as const).map((kind) => (
+            <label key={kind}>
+              <input type="radio" name="source" checked={source === kind} onChange={() => {
+                setSource(kind);
+                void pick(undefined);
+                submit.reset();
+              }} />
+              {kind === "audio" ? "Audio" : "Transcript"}
+            </label>
+          ))}
+        </fieldset>
         <div
           className={`drop-zone${dragging ? " drop-zone-active" : ""}`}
           onDragOver={(e) => {
@@ -125,15 +148,18 @@ export function NewSessionPage() {
           onDrop={onDrop}
         >
           <label>
-            Audio recording
+            {source === "audio" ? "Audio recording" : "Transcript file"}
             <input
+              key={source}
               type="file"
-              accept=".mp3,.wav,.m4a,.webm,.ogg,audio/*"
+              accept={source === "audio" ? ".mp3,.wav,.m4a,.webm,.ogg,audio/*" : ".json,.txt"}
               onChange={(e) => void pick(e.target.files?.[0])}
             />
           </label>
           <p className="form-note">
-            Drop a file here or choose one. mp3, wav, m4a, webm or ogg, up to 300 MB, 10 to 20 minutes.
+            {source === "audio"
+              ? "Drop a file here or choose one. mp3, wav, m4a, webm or ogg, up to 300 MB, 10 to 20 minutes."
+              : "Drop a file here or choose one. json or txt transcript, up to 1 MB."}
           </p>
           {file ? <p className="form-note">{file.name}</p> : null}
         </div>

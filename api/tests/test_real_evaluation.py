@@ -120,3 +120,15 @@ async def test_a_caller_coded_span_never_reaches_the_engine():
     params = {**PARAMS, "coded_span": {"from_s": 0.0, "to_s": 600.0}}
     await make(engine).run(ctx(), transcript(), SPEAKERS, params)
     assert "coded_span" not in engine.calls[0][0][3]
+
+
+async def test_session_stt_provenance_passes_outside_transcript():
+    from onolys_miti.stt import SttRun
+
+    engine = Engine()
+    run = SttRun(provider="fixture", model="fixture", language_requested="en",
+                 adapter_version="fixture-1").model_dump()
+    await make(engine).run(ctx(), transcript(), SPEAKERS, {**PARAMS, "stt_run": run})
+    args, _ = engine.calls[0]
+    assert args[3]["stt_run"] == run
+    assert "stt_run" not in args[1].model_dump()

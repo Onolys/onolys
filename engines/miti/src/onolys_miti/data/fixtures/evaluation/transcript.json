@@ -1,6 +1,4 @@
 {
-  "synthetic": true,
-  "description": "SYNTHETIC role-play (invented, fictional people; written for testing). Good MI practice.",
   "language": "en",
   "duration_ms": 1205000,
   "turns": [
@@ -158,13 +156,5 @@
       "start_ms": 1155000,
       "end_ms": 1205000
     }
-  ],
-  "stt_run": {
-    "provider": "stub",
-    "model": "synthetic-fixture",
-    "location": null,
-    "language_requested": "en",
-    "language_detected": "en",
-    "adapter_version": "fixture-0.0.1"
-  }
+  ]
 }

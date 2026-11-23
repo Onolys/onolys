@@ -9,13 +9,13 @@ Source of truth: /root/projects/onolys/iaudit/.worktrees/feat/miti-eval/docs/age
 
 | # | Task | Depends on | Status |
 |---|---|---|---|
-| 1 | `transcript.v1` model, schema, prose spec | - | todo |
-| 2 | `.txt` parser and input limits | 1 | todo |
-| 3 | Adopt v1 across engine, STT adapters, API view | 1 | todo |
-| 4 | Engine `coded_span` and full-session default | 3 | todo |
-| 5 | `PUT /transcript` upload and speaker gate | 2, 3 | todo |
-| 6 | `coded_span` in API and contract regeneration | 4, 5 | todo |
-| 7 | Web transcript option and speaker gate | 6 | todo |
+| 1 | `transcript.v1` model, schema, prose spec | - | done |
+| 2 | `.txt` parser and input limits | 1 | done |
+| 3 | Adopt v1 across engine, STT adapters, API view | 1 | done |
+| 4 | Engine `coded_span` and full-session default | 3 | done |
+| 5 | `PUT /transcript` upload and speaker gate | 2, 3 | done |
+| 6 | `coded_span` in API and contract regeneration | 4, 5 | done |
+| 7 | Web transcript option and speaker gate | 6 | done |
 
 ## Task 1 — `transcript.v1` model, schema, prose spec
 What it is: The one documented transcript shape every other piece uses. (R1, R2, Decision 7)

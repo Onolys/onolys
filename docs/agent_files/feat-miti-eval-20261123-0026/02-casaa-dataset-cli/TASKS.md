@@ -9,16 +9,16 @@ Source of truth: /root/projects/onolys/iaudit/.worktrees/feat/miti-eval/docs/age
 
 | # | Task | Depends on | Status |
 |---|---|---|---|
-| 1 | Package skeleton, workspace line, repo guard | - | todo |
-| 2 | Manifest and `gold.v1` schemas | 1 | todo |
-| 3 | Metrics module | 2 | todo |
-| 4 | MITI lean adapter | 3 | todo |
-| 5 | Fetch command | 2 | todo |
-| 6 | PDF convert with overrides | 2, 5 | todo |
-| 7 | Convert the 8 sessions (rounder first) | 6 | todo |
-| 8 | Staging bucket (Terraform) and upload | 2, 7 | todo |
-| 9 | `run` CLI spike | 4, 7 | todo |
-| 10 | CI job for `eval/core` | 1 | todo |
+| 1 | Package skeleton, workspace line, repo guard | - | done |
+| 2 | Manifest and `gold.v1` schemas | 1 | done |
+| 3 | Metrics module | 2 | done |
+| 4 | MITI lean adapter | 3 | done |
+| 5 | Fetch command | 2 | done |
+| 6 | PDF convert with overrides | 2, 5 | done |
+| 7 | Convert the 8 sessions (rounder first) | 6 | done |
+| 8 | Staging bucket (Terraform) and upload | 2, 7 | done |
+| 9 | `run` CLI spike | 4, 7 | done |
+| 10 | CI job for `eval/core` | 1 | in-progress |
 | 11 | Live acceptance pass | 8, 9, 10 | todo |
 
 ## Task 1 — Package skeleton, workspace line, repo guard

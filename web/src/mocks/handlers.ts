@@ -1,6 +1,7 @@
 /** MSW handlers over the mock backend: same handlers for dev, Vitest and browser (PRD D5). */
 import { delay, http, HttpResponse, type HttpHandler } from "msw";
 import type { components } from "../api/schema";
+import { mockTranscriptUpload } from "./transcriptUpload";
 import { mockBackend } from "./backend";
 import { MockHttpError, type MockBackend } from "./stateMachine";
 
@@ -73,6 +74,9 @@ export function createHandlers(b: MockBackend): HttpHandler[] {
       const { clinician_speaker } = await body<{ clinician_speaker: string }>(request);
       return json(b.confirmSpeaker(uid, params.id, clinician_speaker), 202);
     })),
+    http.put(`${V1}/sessions/:id/transcript`, guarded(async ({ uid, params, request }) =>
+      json(b.putTranscript(uid, params.id, mockTranscriptUpload(await request.text(), request.headers.get("content-type")?.split(";")[0] ?? "")), 202),
+    )),
     http.get(`${V1}/sessions/:id/transcript`, guarded(({ uid, params }) => json(b.getTranscript(uid, params.id)))),
     http.get(`${V1}/sessions/:id/runs`, guarded(({ uid, params }) => json({ items: b.listRuns(uid, params.id) }))),
     http.post(`${V1}/sessions/:id/runs`, guarded(async ({ uid, params, request }) =>

@@ -605,7 +605,7 @@ class FakeRepo:
                 uid=uid, session_id=sid, run_id=run_id, n_runs=sess.get("n_runs", 1),
                 preset=sess.get("preset"), rating_id=rating_id,
                 stt=sess.get("stt"), code_version=code_version, cap_date=date,
-                counted=not exempt, units=units,
+                counted=not exempt, units=units, coded_span=sess.get("coded_span"),
             )  # fmt: skip
             self._create(f"sessions/{sid}/runs/{run_id}", run.to_store())
             if not exempt:
@@ -627,7 +627,7 @@ class FakeRepo:
     def start_run(
         self, uid: str, sid: str, run_id: str, date: str, defaults: LimitDefaults, max_active: int,
         code_version: str, start_progress: int, allowed_states: tuple[str, ...],
-        n_runs: int | None, preset: str | None,
+        n_runs: int | None, preset: str | None, coded_span: dict | None = None,
     ) -> StartOutcome:  # fmt: skip
         with self._claim_lock:  # the fake's "transaction"
             sess = self._owned(f"sessions/{sid}", uid)
@@ -666,7 +666,7 @@ class FakeRepo:
                 n_runs=n_runs or sess.get("n_runs", 1),
                 preset=preset or sess.get("preset"), rating_id=rating_id,
                 stt=sess.get("stt"), code_version=code_version, cap_date=date,
-                counted=not exempt, units=units,
+                counted=not exempt, units=units, coded_span=coded_span,
             )  # fmt: skip
             now = utcnow()
             progress = (

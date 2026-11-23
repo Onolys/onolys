@@ -114,6 +114,8 @@ What a failed run or transcription turns into (`api/src/onolys_api/adapters/erro
 
 | Code | Raised by (engines) | Retry | What the user does |
 |---|---|---|---|
+| `invalid_coded_span` | Invalid or unavailable transcript range | No; choose a valid span (time ranges require timestamps) |
+| `session_too_long` | Coded portion exceeds 25 minutes or 6,000 words | No; supply a narrower `coded_span` |
 | `invalid_parameters` | `InputError`: MITI input checks (too long, no change goal, too few clinician or client turns), unknown preset | no | Fix the input (e.g. change who the clinician is) and run again |
 | `upstream_unavailable` | LLM unavailable, timeout, rate limited or bad output after the engine's own retries; a transient STT provider error on attempt 1 | yes | Run again |
 | `deadline_exceeded` | Internal run deadline passed, `TimeoutError` | yes | Run again |
@@ -137,3 +139,9 @@ uv run --package onolys-api python -m onolys_api.contracts   # docs/contracts/pu
 ```
 
 CI job `api` regenerates both and fails on any diff.
+
+### Caller-selected coding span
+
+`POST /v1/sessions` accepts `coded_span` for its first run. `POST /v1/sessions/{id}/runs` accepts an override; omission reuses the session span, and explicit null codes the whole transcript. Use exactly `{start_ms,end_ms}` or `{start_turn,end_turn}`, with nonnegative integer bounds and end greater than start. Both ranges are half-open; turn indices start at zero. The rating card's own seconds span is stored separately and does not control coding.
+
+Shape errors return 422 `invalid_coded_span`. Transcript upload and manual run start also validate selection against the transcript before reserving usage: untimed time ranges, out-of-range turn slices and empty time selections return the same error. A coded portion over 25 minutes or 6,000 words returns 422 `session_too_long`, asking for a narrower span. Audio input can only be checked once transcription finishes; these errors then appear on the failed session.

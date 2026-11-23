@@ -52,7 +52,6 @@ def masked(report: dict) -> dict:
 
 async def _run() -> dict:
     d = json.loads((FIX / "good_practice.json").read_text(encoding="utf-8"))
-    d["turns"][-1]["end_ms"] = 1195000  # 1205 s is just past the 20-minute cap: code it whole
     ctx = RunContext(llm=GoldenClient(), metrics=MetricsCollector(), request_id="req-golden")
     out = await run_miti(ctx, Transcript.model_validate(d), SMAP, PARAMS)
     return json.loads(out.report.model_dump_json())
