@@ -19,8 +19,8 @@ Source of truth: /root/projects/onolys/iaudit/.worktrees/feat/miti-eval/docs/age
 | 8 | Web app: shell, auth, New run | 1 | done |
 | 9 | Web app: progress, compare, history | 6, 8 | done |
 | 10 | CI jobs for eval backend and web | 6, 9 | done |
-| 11 | Deploy workflow and image guard | 7, 10 | in-progress |
-| 12 | Live smoke, docs, reference page | 11 | todo |
+| 11 | Deploy workflow and image guard | 7, 10 | done |
+| 12 | Live smoke, docs, reference page | 11 | in-progress |
 
 ## Task 1 — Backend skeleton, auth, config, workspace member
 What it is / what it means: The empty but secure shell of the eval service: a new uv workspace member that only allowlisted founders can call. (R3, R9, D2)
