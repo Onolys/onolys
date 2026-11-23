@@ -373,46 +373,51 @@ async def _run(
     engine_params = {**params, "speaker_map": speaker_map}
     log_event("miti.run_start", request_id=rid)
 
-    result = await _stage(
-        progress_cb, "code", rid, _code(ctx, transcript, engine_params, code_metrics)
-    )
-
-    _emit(progress_cb, "tips", "started", rid)
     try:
-        art, tip_warnings = await tips_mod.generate_tips(
-            ctx.llm, transcript, speaker_map, result, metrics=ctx.metrics
+        result = await _stage(
+            progress_cb, "code", rid, _code(ctx, transcript, engine_params, code_metrics)
         )
-    except BaseException:
-        _emit(progress_cb, "tips", "failed", rid)
-        raise
-    failed = any(w.code == "tips_failed" for w in tip_warnings)
-    _emit(progress_cb, "tips", "failed" if failed else "done", rid)
 
-    evaluation_usage = _usage(ctx.metrics)  # the report run's own calls (tips)
-    ctx_records = getattr(ctx.metrics, "records", None)
-    if isinstance(ctx_records, list):  # one call log for the whole run
-        ctx_records += code_metrics.records
-    route = (
-        getattr(ctx.llm, "routes", {}).get(tips_mod.ROUTE) if hasattr(ctx.llm, "routes") else None
-    )
+        _emit(progress_cb, "tips", "started", rid)
+        try:
+            art, tip_warnings = await tips_mod.generate_tips(
+                ctx.llm, transcript, speaker_map, result, metrics=ctx.metrics
+            )
+        except BaseException:
+            _emit(progress_cb, "tips", "failed", rid)
+            raise
+        failed = any(w.code == "tips_failed" for w in tip_warnings)
+        _emit(progress_cb, "tips", "failed" if failed else "done", rid)
 
-    async def assemble() -> MitiOutput:
-        report = build_report_no_rating(
-            transcript=transcript,
-            params=params,
-            result=result,
-            tips=art,
-            warnings=list(tip_warnings),
-            prompt_hashes=evaluation_prompt_hashes(),
-            evaluation_routes={tips_mod.ROUTE: route_facts(route)} if route is not None else None,
-            evaluation_usage=evaluation_usage,
-            request_id=rid,
+        evaluation_usage = _usage(ctx.metrics)  # the report run's own calls (tips)
+        route = (
+            getattr(ctx.llm, "routes", {}).get(tips_mod.ROUTE)
+            if hasattr(ctx.llm, "routes") else None
         )
-        return MitiOutput(report=report, artifacts=Artifacts(code=result, tips=art))
 
-    out = await _stage(progress_cb, "assemble", rid, assemble())
-    log_event("miti.run_done", request_id=rid, status="ok")
-    return out
+        async def assemble() -> MitiOutput:
+            report = build_report_no_rating(
+                transcript=transcript,
+                params=params,
+                result=result,
+                tips=art,
+                warnings=list(tip_warnings),
+                prompt_hashes=evaluation_prompt_hashes(),
+                evaluation_routes=(
+                    {tips_mod.ROUTE: route_facts(route)} if route is not None else None
+                ),
+                evaluation_usage=evaluation_usage,
+                request_id=rid,
+            )
+            return MitiOutput(report=report, artifacts=Artifacts(code=result, tips=art))
+
+        out = await _stage(progress_cb, "assemble", rid, assemble())
+        log_event("miti.run_done", request_id=rid, status="ok")
+        return out
+    finally:
+        ctx_records = getattr(ctx.metrics, "records", None)
+        if isinstance(ctx_records, list):  # keep received coding usage on every exit
+            ctx_records += code_metrics.records
 
 
 async def run_miti(

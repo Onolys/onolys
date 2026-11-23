@@ -1,5 +1,6 @@
 """MITI's shared Engine adapter preserves lean output and per-call accounting."""
 
+import asyncio
 import json
 from datetime import UTC, datetime
 from importlib.metadata import version
@@ -7,7 +8,7 @@ from importlib.metadata import version
 import pytest
 from onolys_engine_core.context import RunContext
 from onolys_engine_core.engine import Engine, EngineResult, RunInfo, RunUsage
-from onolys_engine_core.llm import MetricsCollector
+from onolys_engine_core.llm import LLMBadOutput, MetricsCollector
 from onolys_engine_core.llm.types import LLMRequest, Usage
 from onolys_engine_core.registry import EngineRegistry
 from onolys_engine_core.transcript_v1 import TranscriptV1
@@ -17,7 +18,7 @@ from test_golden import FIX, GOLDEN_REPORT, PARAMS, SMAP, GoldenClient, masked
 
 from onolys_miti import MitiEngine, build, run_miti
 from onolys_miti.report import schema_path
-from onolys_miti.run import Artifacts
+from onolys_miti.run import AllRunsFailed, Artifacts
 
 pytestmark = pytest.mark.unit
 
@@ -138,3 +139,60 @@ async def test_shared_validated_run_accepts_lean_golden_report():
     assert masked(result.output) == masked(GOLDEN_REPORT)
     assert result.run_info.validation == {"attempts": 1}
     assert result.run_info.usage.calls == 3
+
+
+@pytest.mark.parametrize("stop_tier,cancel,expected_cost", [("miti_code", False, 0.05), ("miti_code", True, 0.03), ("tips", True, 0.04)])
+async def test_engine_retains_coding_usage_on_failure_or_cancellation(stop_tier, cancel, expected_cost):
+    received = []
+    blocked = asyncio.Event()
+
+    class InterruptedClient(GoldenClient):
+        async def complete_json(self, req, metrics=None):
+            if req.tier == stop_tier:
+                metrics.record(
+                    req, "fixture", Usage(13, 7, 5, 3, 0.02), 0.0, 1, False,
+                    "cancelled" if cancel else "bad_output",
+                )
+                received.append(metrics.records[-1])
+                if cancel:
+                    blocked.set()
+                    await asyncio.Future()  # Known reply usage before an unfinished retry.
+                raise LLMBadOutput("synthetic malformed reply")
+            result = await super().complete_json(req)
+            metrics.record(req, "fixture", Usage(11, 7, 5, 3, 0.01), 0.0, 1, True)
+            received.append(metrics.records[-1])
+            return result
+
+    ctx = RunContext(llm=InterruptedClient(), metrics=MetricsCollector(), request_id="req-interrupted")
+    invocation = MitiEngine().run(ctx, transcript(), {**PARAMS, "speaker_map": SMAP})
+    if cancel:
+        task = asyncio.create_task(invocation)
+        await asyncio.wait_for(blocked.wait(), timeout=1)
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+        assert task.cancelled()
+    else:
+        with pytest.raises(AllRunsFailed):
+            await invocation
+    assert received and any(record["tier"].startswith("miti_") for record in received)
+    # Preserve the existing whole-run order: tips first, followed by coding records.
+    assert ctx.metrics.records == sorted(received, key=lambda record: record["tier"] != "tips")
+    assert sum(record["input_tokens"] for record in ctx.metrics.records) == sum(
+        record["input_tokens"] for record in received
+    )
+    assert sum(record["cost_usd"] for record in ctx.metrics.records) == pytest.approx(
+        expected_cost
+    )
+
+
+async def test_success_retains_whole_run_usage_once_and_tips_only_evaluation_usage():
+    ctx = context()
+    result = await MitiEngine().run(ctx, transcript(), {**PARAMS, "speaker_map": SMAP})
+    assert [record["tier"] for record in ctx.metrics.records] == ["tips", "miti_code", "miti_globals"]
+    assert result.run_info.usage.input_tokens == 33
+    assert result.run_info.usage.output_tokens == 21
+    assert result.run_info.usage.calls == 3
+    evaluation = result.output["run_info"]["evaluation"]["usage"]
+    assert evaluation["input_tokens"] == 11 and evaluation["output_tokens"] == 7
+    assert evaluation["calls"] == 1
