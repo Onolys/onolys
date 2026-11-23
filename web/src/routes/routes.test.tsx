@@ -40,7 +40,8 @@ describe("route table", () => {
     const path = "/auth/action?mode=verifyEmail&oobCode=abc";
     for (const user of [undefined, { email: "a@clinic.org", verified: false }, VERIFIED]) {
       const { router } = renderApp(path, user ? { user } : {});
-      expect(await screen.findByRole("heading", { level: 1, name: "Verify your email" })).toBeInTheDocument();
+      // A verified user's page swaps to "Already verified" once auth state loads; accept either, and don't hold the element across the swap.
+      await screen.findByRole("heading", { level: 1, name: /^(Verify your email|Already verified)$/ });
       expect(router.state.location.pathname).toBe("/auth/action");
       cleanup();
     }

@@ -1,9 +1,10 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { Link, useLocation, useNavigate } from "react-router";
 import { useAuth } from "../AuthProvider";
 import { MIN_PASSWORD_LENGTH, errorCode, mapAuthError } from "../errors";
 import type { EmailChangeInfo, EmailChangeKind } from "../types";
-import { ErrorSummary } from "./parts";
+import { Alert, AlertDescription, Button } from "@onolys/ui";
+import { BTN, ErrorSummary, FORM, STACK, Field, H1, LINK, NOTE, StatusNote } from "./parts";
 import type { LoginState } from "./Login";
 import { useFormError } from "./useFormError";
 
@@ -61,14 +62,14 @@ export function AuthAction() {
     return <EmailChangeAction key={mode} mode={mode} oobCode={oobCode} continueUrl={continueUrl} />;
   }
   return (
-    <>
-      <h1>This link isn't valid</h1>
+    <div className={STACK}>
+      <h1 className={H1}>This link isn't valid</h1>
       <p>The link is incomplete or not one we recognise. Request a new one and try again.</p>
       {mode === "revertSecondFactorAddition" && <p>Two-step verification isn't used on Onolys, so there is nothing to undo.</p>}
       <p>
-        <Link to="/login">Go to log in</Link>
+        <Link to="/login" className={LINK}>Go to log in</Link>
       </p>
-    </>
+    </div>
   );
 }
 
@@ -105,48 +106,50 @@ function VerifyEmailAction({ oobCode, continueUrl }: { oobCode: string; continue
 
   if (user?.emailVerified && !done) {
     return (
-      <>
-        <h1>Already verified</h1>
-        <p role="status">Your email address is already verified.</p>
-        <button type="button" className="primary" onClick={carryOn}>
+      <div className={STACK}>
+        <h1 className={H1}>Already verified</h1>
+        <StatusNote>Your email address is already verified.</StatusNote>
+        <Button type="button" className={BTN} onClick={carryOn}>
           Continue
-        </button>
-      </>
+        </Button>
+      </div>
     );
   }
 
   if (done) {
     return (
-      <>
-        <h1>Email verified</h1>
-        <p role="status">Your email address is verified.</p>
-        <button type="button" className="primary" onClick={carryOn}>
+      <div className={STACK}>
+        <h1 className={H1}>Email verified</h1>
+        <StatusNote>Your email address is verified.</StatusNote>
+        <Button type="button" className={BTN} onClick={carryOn}>
           Continue
-        </button>
-      </>
+        </Button>
+      </div>
     );
   }
 
   return (
     <>
-      <h1>Verify your email</h1>
-      <div className="auth-form">
+      <h1 className={H1}>Verify your email</h1>
+      <div className={FORM}>
         {form.error && <ErrorSummary error={form.error} search="" />}
         {failure ? (
-          <div role="alert" className="form-error">
-            <p>This verification link is invalid, has expired, or was already used.</p>
-            <p>
-              <Link to={user ? "/verify-email" : "/login"}>
-                {user ? "Get a new verification email" : "Log in to get a new verification email"}
-              </Link>
-            </p>
-          </div>
+          <Alert variant="destructive">
+            <AlertDescription>
+              <p>This verification link is invalid, has expired, or was already used.</p>
+              <p>
+                <Link to={user ? "/verify-email" : "/login"} className={LINK}>
+                  {user ? "Get a new verification email" : "Log in to get a new verification email"}
+                </Link>
+              </p>
+            </AlertDescription>
+          </Alert>
         ) : (
           <>
             <p>Confirm your email address to finish setting up your account.</p>
-            <button type="button" className="primary" disabled={busy} onClick={() => void verify()}>
+            <Button type="button" className={BTN} disabled={busy} onClick={() => void verify()}>
               Verify my email
-            </button>
+            </Button>
           </>
         )}
       </div>
@@ -157,13 +160,13 @@ function VerifyEmailAction({ oobCode, continueUrl }: { oobCode: string; continue
 /** The pre-check failed for a reason other than an invalid/expired code (network, throttling): the link may still be fine. */
 function CheckFailed({ message, onRetry }: { message: string; onRetry: () => void }) {
   return (
-    <>
-      <h1>Couldn't check your link</h1>
-      <p role="alert">{message}</p>
-      <button type="button" className="primary" onClick={onRetry}>
+    <div className={STACK}>
+      <h1 className={H1}>Couldn't check your link</h1>
+      <ErrorNote>{message}</ErrorNote>
+      <Button type="button" className={BTN} onClick={onRetry}>
         Try again
-      </button>
-    </>
+      </Button>
+    </div>
   );
 }
 
@@ -221,34 +224,31 @@ function ResetPasswordAction({ oobCode }: { oobCode: string }) {
 
   if (invalid) {
     return (
-      <>
-        <h1>Reset link expired</h1>
-        <p role="alert">This reset link is invalid, has expired, or was already used.</p>
+      <div className={STACK}>
+        <h1 className={H1}>Reset link expired</h1>
+        <ErrorNote>This reset link is invalid, has expired, or was already used.</ErrorNote>
         <p>
-          <Link to="/forgot-password">Request a new reset link</Link>
+          <Link to="/forgot-password" className={LINK}>Request a new reset link</Link>
         </p>
-      </>
+      </div>
     );
   }
   if (checkError) return <CheckFailed message={checkError} onRetry={retryCheck} />;
-  if (!email) return <h1>Checking your link…</h1>;
+  if (!email) return <h1 className={H1}>Checking your link…</h1>;
 
   return (
     <>
-      <h1>Choose a new password</h1>
-      <form className="auth-form" onSubmit={(e) => void onSubmit(e)} noValidate>
+      <h1 className={H1}>Choose a new password</h1>
+      <form className={FORM} onSubmit={(e) => void onSubmit(e)} noValidate>
         {form.error && <ErrorSummary error={form.error} search="" />}
         <p>
           Resetting the password for <strong>{email}</strong>.
         </p>
-        <label>
-          New password
-          <input name="password" type="password" autoComplete="new-password" required minLength={MIN_PASSWORD_LENGTH} />
-        </label>
-        <p className="form-note">At least {MIN_PASSWORD_LENGTH} characters. No other rules.</p>
-        <button type="submit" className="primary" disabled={busy}>
+        <Field label="New password" id="reset-password" name="password" type="password" autoComplete="new-password" required minLength={MIN_PASSWORD_LENGTH} />
+        <p className={NOTE}>At least {MIN_PASSWORD_LENGTH} characters. No other rules.</p>
+        <Button type="submit" className={BTN} disabled={busy}>
           Update password
-        </button>
+        </Button>
       </form>
     </>
   );
@@ -326,60 +326,60 @@ function EmailChangeAction({ mode, oobCode, continueUrl }: { mode: EmailChangeKi
 
   if (invalid) {
     return (
-      <>
-        <h1>Link expired</h1>
-        <p role="alert">This link is invalid, has expired, or was already used.</p>
+      <div className={STACK}>
+        <h1 className={H1}>Link expired</h1>
+        <ErrorNote>This link is invalid, has expired, or was already used.</ErrorNote>
         <p>
-          <Link to="/login">Go to log in</Link>
+          <Link to="/login" className={LINK}>Go to log in</Link>
         </p>
-      </>
+      </div>
     );
   }
   if (checkError) return <CheckFailed message={checkError} onRetry={retryCheck} />;
-  if (!info) return <h1>Checking your link…</h1>;
+  if (!info) return <h1 className={H1}>Checking your link…</h1>;
 
   if (signedIn !== null) {
     return (
-      <>
-        <h1>{copy.doneTitle}</h1>
+      <div className={STACK}>
+        <h1 className={H1}>{copy.doneTitle}</h1>
         {mode === "verifyAndChangeEmail" ? (
-          <p role="status">
+          <StatusNote>
             Your email address is now <strong>{info.email}</strong>.
             {signedIn ? "" : " Log in again with your new email."}
-          </p>
+          </StatusNote>
         ) : (
           <>
-            <p role="status">
+            <StatusNote>
               Your email address is back to <strong>{info.email}</strong>.
-            </p>
+            </StatusNote>
             <p>If you didn't make this change, someone else may have access to your account. Reset your password to be safe.</p>
             {form.error && <ErrorSummary error={form.error} search="" />}
             {resetSent ? (
-              <p role="status">Password reset email sent. Check your inbox.</p>
+              <StatusNote>Password reset email sent. Check your inbox.</StatusNote>
             ) : (
-              <button type="button" className="primary" onClick={() => void resetPassword()}>
+              <Button type="button" className={BTN} onClick={() => void resetPassword()}>
                 Reset my password
-              </button>
+              </Button>
             )}
           </>
         )}
         {signedIn ? (
-          <button type="button" className="primary" onClick={carryOn}>
+          <Button type="button" className={BTN} onClick={carryOn}>
             Continue
-          </button>
+          </Button>
         ) : (
           <p>
-            <Link to="/login">Log in</Link>
+            <Link to="/login" className={LINK}>Log in</Link>
           </p>
         )}
-      </>
+      </div>
     );
   }
 
   return (
     <>
-      <h1>{copy.title}</h1>
-      <div className="auth-form">
+      <h1 className={H1}>{copy.title}</h1>
+      <div className={FORM}>
         {form.error && <ErrorSummary error={form.error} search="" />}
         {mode === "verifyAndChangeEmail" ? (
           <p>
@@ -391,10 +391,19 @@ function EmailChangeAction({ mode, oobCode, continueUrl }: { mode: EmailChangeKi
             {info.previousEmail ? <> (currently {info.previousEmail})</> : null}.
           </p>
         )}
-        <button type="button" className="primary" disabled={busy} onClick={() => void apply()}>
+        <Button type="button" className={BTN} disabled={busy} onClick={() => void apply()}>
           {copy.button}
-        </button>
+        </Button>
       </div>
     </>
+  );
+}
+
+/** Failure notice: role=alert from Alert, no focus move (matches the previous plain role=alert paragraphs). */
+function ErrorNote({ children }: { children: ReactNode }) {
+  return (
+    <Alert variant="destructive">
+      <AlertDescription>{children}</AlertDescription>
+    </Alert>
   );
 }

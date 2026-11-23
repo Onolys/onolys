@@ -3,7 +3,8 @@ import { Link, useLocation } from "react-router";
 import { useAuth } from "../AuthProvider";
 import { EMAIL_PATTERN, MIN_PASSWORD_LENGTH, isPopupCancel } from "../errors";
 import { readNext, withNext } from "../next";
-import { ErrorSummary } from "./parts";
+import { Button } from "@onolys/ui";
+import { BTN, ErrorSummary, FORM, Field, H1, LINK, NOTE } from "./parts";
 import { useFormError } from "./useFormError";
 
 export function Signup() {
@@ -51,33 +52,27 @@ export function Signup() {
 
   return (
     <>
-      <h1>Sign up</h1>
-      <form className="auth-form" onSubmit={(e) => void onSubmit(e)} noValidate>
+      <h1 className={H1}>Sign up</h1>
+      <form className={FORM} onSubmit={(e) => void onSubmit(e)} noValidate>
         {form.error && <ErrorSummary error={form.error} search={search} />}
-        <label>
-          Email
-          <input name="email" type="email" autoComplete="email" required {...form.fieldProps("email")} />
-        </label>
-        <label>
-          Password
-          <input name="password" type={show ? "text" : "password"} autoComplete="new-password" required minLength={MIN_PASSWORD_LENGTH} {...form.fieldProps("password")} />
-        </label>
-        <label>
-          Confirm password
-          <input name="confirm" type={show ? "text" : "password"} autoComplete="new-password" required {...form.fieldProps("confirm")} />
-        </label>
-        <button type="button" className="secondary" aria-pressed={show} onClick={() => setShow((v) => !v)}>
+        <Field label="Email" id="signup-email" name="email" type="email" autoComplete="email" required {...form.fieldProps("email")} />
+        <Field label="Password" id="signup-password" name="password" type={show ? "text" : "password"} autoComplete="new-password" required minLength={MIN_PASSWORD_LENGTH} {...form.fieldProps("password")} />
+        <Field label="Confirm password" id="signup-confirm" name="confirm" type={show ? "text" : "password"} autoComplete="new-password" required {...form.fieldProps("confirm")} />
+        <Button type="button" variant="outline" aria-pressed={show} onClick={() => setShow((v) => !v)}>
           Show passwords
-        </button>
-        <p className="form-note">At least {MIN_PASSWORD_LENGTH} characters. No other rules.</p>
-        <button type="submit" className="primary" disabled={busy}>
+        </Button>
+        <p className={NOTE}>At least {MIN_PASSWORD_LENGTH} characters. No other rules.</p>
+        <Button type="submit" className={BTN} disabled={busy}>
           Create account
-        </button>
-        <button type="button" className="secondary" disabled={busy} onClick={() => void google()}>
+        </Button>
+        <Button type="button" variant="outline" disabled={busy} onClick={() => void google()}>
           Continue with Google
-        </button>
+        </Button>
         <p>
-          Already have an account? <Link to={withNext("/login", search)}>Log in</Link>
+          Already have an account?{" "}
+          <Link to={withNext("/login", search)} className={LINK}>
+            Log in
+          </Link>
         </p>
       </form>
     </>
