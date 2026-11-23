@@ -21,8 +21,8 @@ def inputs(tmp_path, monkeypatch, *, span=None):
     gold['coded_span'] = span
     (session / 'gold.json').write_text(json.dumps(gold))
     transcript = {'language': 'en', 'turns': [
-        {'id': 't1', 'speaker': 'I', 'role': 'subject', 'text': 'Synthetic question?'},
-        {'id': 't2', 'speaker': 'C', 'role': 'other', 'text': 'Synthetic answer.'}]}
+        {'id': 't1', 'speaker': 'I', 'role': 'clinician', 'text': 'Synthetic question?'},
+        {'id': 't2', 'speaker': 'C', 'role': 'client', 'text': 'Synthetic answer.'}]}
     (session / 'transcript.json').write_text(json.dumps(transcript))
     calls = []
     monkeypatch.setattr(run, 'make_client', lambda config: calls.append(config) or object())
@@ -52,12 +52,13 @@ def test_run_cli_table_json_and_forwarded_context(tmp_path, monkeypatch, capsys)
     config, (ctx, transcript, speakers, params) = calls
     assert config.llm_mode == 'live' and config.preset == 'example'
     assert ctx.request_id and len(transcript.turns) == 2
+    assert [turn.role for turn in transcript.turns] == ['clinician', 'client']
     assert speakers == {'subject': 'I', 'other': 'C'}
     assert params == {'change_goal': 'Test goal', 'language': 'en', 'n_runs': 3,
                       'preset': 'example', 'coded_span': {'start_turn': 0, 'end_turn': 2}}
     text = capsys.readouterr().out
     assert 'synthetic / one' in text and 'preset=example' in text
-    assert 'engine=miti sha=abc123' in text and 'tokens=127' in text and '~$0.0123' in text
+    assert 'engine=miti sha=abc123' in text and 'tokens=120' in text and '~$0.0123' in text
     assert text.splitlines()[1].split() == ['code', 'gold', 'ours', 'diff']
     assert next(line for line in text.splitlines() if line.startswith('cr ')).split() == [
         'cr', '3', '1.5', '-1.5']
@@ -72,10 +73,45 @@ def test_run_cli_table_json_and_forwarded_context(tmp_path, monkeypatch, capsys)
     assert payload['metadata']['preset'] == 'example'
     assert payload['metadata']['n_runs'] == 3
     assert payload['metadata']['git_sha'] == 'abc123'
-    assert payload['metadata']['tokens'] == 127
+    assert payload['metadata']['tokens'] == 120
     assert payload['metadata']['rough_cost_usd'] == .0123
     assert len(payload['notes']) == 2
     assert 'Synthetic question' not in output.read_text()
+
+
+def test_run_totals_mixed_cached_and_uncached_routes(tmp_path, monkeypatch, capsys):
+    from onolys_miti.llm.types import Usage
+
+    run, _, calls = inputs(tmp_path, monkeypatch)
+    engine = run.run_miti
+    priced_records = []
+
+    async def mixed_routes(ctx, transcript, speakers, params):
+        result = await engine(ctx, transcript, speakers, params)
+        for route, usage in (
+            ('miti_globals', Usage(input_tokens=40, output_tokens=10, cache_write_tokens=20)),
+            ('miti_tips', Usage(input_tokens=30, output_tokens=5)),
+        ):
+            ctx.metrics.record(SimpleNamespace(call_tag=route, tier=route, unit=None),
+                               'fake', usage, latency_ms=0, attempts=1, ok=True)
+        return result
+
+    def price(record):
+        priced_records.append(record.copy())
+        return .01
+
+    monkeypatch.setattr(run, 'run_miti', mixed_routes)
+    monkeypatch.setattr(run, '_record_cost', price)
+    output = tmp_path / 'comparison.json'
+    assert cli.main(['run', 'synthetic', 'one', '--json-out', str(output)]) == 0
+    # Input totals already contain cache reads/writes: 120 + 50 + 35 = 205.
+    metadata = json.loads(output.read_text())['metadata']
+    assert metadata['tokens'] == 205
+    assert 'tokens=205' in capsys.readouterr().out
+    assert metadata['rough_cost_usd'] == pytest.approx(.03)
+    assert priced_records == calls[-1][0].metrics.records
+    assert [(r['cache_read_tokens'], r['cache_write_tokens']) for r in priced_records] == [
+        (5, 2), (0, 20), (0, 0)]
 
 
 def test_defaults_and_unknown_cost_are_explicit(tmp_path, monkeypatch, capsys):

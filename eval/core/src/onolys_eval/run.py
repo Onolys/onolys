@@ -18,7 +18,8 @@ from .manifest import DatasetManifest
 from .metrics import Scores, compare
 from .upload import BUCKET
 
-_TOKEN_KEYS = ('input_tokens', 'output_tokens', 'cache_read_tokens', 'cache_write_tokens')
+# Cache reads/writes are already included in input_tokens; price them separately.
+_TOKEN_KEYS = ('input_tokens', 'output_tokens')
 
 
 def _git_sha() -> str:
