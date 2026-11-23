@@ -1,6 +1,6 @@
 ---
 status: done
-summary: SP5 all twelve planned tasks implemented; initial review requires three corrections
+summary: SP5 complete and reviewed PASS after two fix rounds; full branch review in progress
 date: 2026-11-23
 ---
 # Code Run — 2026-11-23 04:47 UTC — SP5 completion
@@ -39,7 +39,15 @@ Immutable one-shot config binding and internal class validated-marker bridge rem
 
 ## Remaining review and acceptance limits
 
-- SP5 review NEEDS_CHANGES: spilled JSON lazy load, recoverable pre-provider read after claim, execution SHA/version/model mismatch guard. Focused fix agent in progress; re-review then full branch review required.
+- SP5 reviewed PASS by all three personas after two fix rounds (ea9afe5, 789d4ff). Full branch three-persona review is in progress; final review fixes are not deployed.
 - Gemini HTTP 402 blocks default-provider live acceptance; DNS/certificate pending; feature-only deploy workflow unregistered on default branch.
 - Actual in-flight tab closure is unverified: Kane opened a fresh signed-out browser; no tab was closed before completion. API asynchronous completion alone is not that acceptance proof.
 - See `code-2026-11-23-task12.md` for qualified acceptance matrix and private evidence locations.
+
+## Review fix history
+
+- Round 1 `ea9afe5`: recoverable pre-claim reads and safe execution-config SHA/version/model guards resolved; each correction had an observed red test first, then 43 backend and 20 web tests green, types/lint passed.
+- Round-1 re-review NEEDS_CHANGES: UI spill test depended on output_ref stripped by actual detail projection; Bug Hunter and Architect agreed. Security reran only at final round.
+- Round 2 `789d4ff`: omit only reference-backed null output placeholders in backend projection while hiding private paths; preserve inline values. Red 1 failed/5 passed; green 16 read + 20 web passed.
+- Final three personas PASS. Full branch review range: cf3a2a2207fc3846a39b435b8ac01c28ac24e558..789d4ff.
+- Live revision remains 00005-hfh/source4808722/digest241021e0…; review-fix redeploy pending.
