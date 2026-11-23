@@ -226,11 +226,42 @@ main { flex: 1; width: 100%; max-width: 64rem; margin: 0 auto; padding: var(--sp
 .report-view .uref:hover { text-decoration-thickness: 2px; }
 .report-view .btn-primary { font: inherit; font-weight: 600; border: 0; border-radius: 6px; padding: 0 1.1rem; cursor: pointer; }
 .report-view .btn-primary:disabled { opacity: 0.6; cursor: default; }
+/* Coded transcript dialog (the dialog sits outside .report-view; .dlg-rv re-enters its scope) */
+html.dlg-open { overflow: hidden; }
+.coded-dialog { padding: 0; border: 1px solid var(--color-gray-300); border-radius: 10px; background: var(--color-background); color: var(--color-text); width: min(1100px, 100vw - 48px); max-width: none; height: 88vh; max-height: none; margin: auto; overflow: hidden; }
+.coded-dialog[open] { display: flex; flex-direction: column; }
+.coded-dialog::backdrop { background: rgb(23 28 28 / 0.55); }
+.coded-dialog .dlg-rv { max-width: none; margin: 0; flex: 1; min-height: 0; display: flex; flex-direction: column; width: 100%; }
+.dlg-rv .dlg-head { flex: none; display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-4); padding: 0.875rem 1.25rem; background: var(--color-background); border-bottom: 1px solid var(--rv-line); }
+.dlg-rv .dlg-head h2 { margin: 0; font-size: 1.125rem; }
+.dlg-rv .dlg-count { margin: 2px 0 0; font-size: 0.8125rem; color: var(--rv-muted); }
+.dlg-rv .dlg-close { flex: none; width: 44px; height: 44px; font: inherit; font-size: 1.5rem; line-height: 1; color: var(--color-text); background: var(--rv-surface); border: 1px solid var(--rv-line); border-radius: 6px; cursor: pointer; }
+.dlg-rv .dlg-close:hover { background: var(--rv-soft); }
+.dlg-rv .dlg-body { flex: 1; min-height: 0; overflow: auto; padding: 1rem 1.25rem 1.25rem; }
+.dlg-rv .dlg-legend { margin-bottom: var(--space-4); }
+.dlg-rv .dlg-legend summary { cursor: pointer; font-weight: 600; font-size: var(--font-size-sm); margin-bottom: 0.625rem; }
+.dlg-rv .legend { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 6px 20px; margin: 0 0 var(--space-4); padding: 0; list-style: none; font-size: 0.8125rem; color: var(--rv-muted); }
+.dlg-rv .legend li { display: flex; gap: var(--space-2); align-items: baseline; }
+.dlg-rv .legend .code { flex: none; min-width: 64px; text-align: center; }
+.dlg-rv .legend b { font-weight: 500; color: var(--color-text); }
+.dlg-rv .c-plain { background: var(--rv-surface); color: var(--color-text); border: 1px solid var(--rv-line); }
+.dlg-rv .c-plain.c-dim { color: var(--rv-muted); }
+.dlg-rv .codes { display: flex; flex-wrap: wrap; gap: var(--space-1); }
+.dlg-rv .tbl { overflow: visible; }
+.dlg-rv th { position: sticky; top: 0; z-index: 2; box-shadow: inset 0 -1px 0 var(--rv-line); }
+.dlg-rv tr.hl td { animation: utt-hl 1.5s ease-out; }
+@keyframes utt-hl { from { background-color: var(--rv-soft); } }
+@media (prefers-reduced-motion: reduce) {
+  .dlg-rv tr.hl td { animation: none; background: var(--rv-soft); outline: 2px solid var(--color-accent); outline-offset: -2px; }
+}
 @media (max-width: 640px) {
   .report-view h1 { font-size: var(--font-size-xl); }
   .report-view .globals li { grid-template-columns: 1fr; gap: var(--space-2); }
   .report-view .tip { grid-template-columns: 1fr; padding: var(--space-4); }
   .report-view .parts { grid-column: 1; }
   .report-view .rank { margin-bottom: var(--space-2); }
+  .coded-dialog { width: 100vw; height: 100dvh; border-radius: 0; border: 0; margin: 0; }
+  .dlg-rv .dlg-head { padding: 0.75rem var(--space-4); }
+  .dlg-rv .dlg-body { padding: 0.75rem var(--space-4) var(--space-4); }
 }
 /* === /Report view === */

@@ -29,7 +29,7 @@ export interface ReportViewProps {
   notCoded?: ReadonlySet<string>;
 }
 
-const SHORT: Record<string, string> = {
+export const SHORT: Record<string, string> = {
   gi: "GI", persuade: "Persuade", persuade_permission: "PwP", question: "Q", sr: "SR", cr: "CR",
   affirm: "AF", seek_collab: "Seek", emphasize_autonomy: "EA", confront: "Confront",
 };
@@ -74,7 +74,7 @@ const GROUPS: { title: string; ids: string[]; total?: { label: string; ids: stri
   },
 ];
 
-function CodeChip({ id }: { id: string }) {
+export function CodeChip({ id }: { id: string }) {
   const meta = CODE_META[id];
   return <span className={`code ${GROUP_CLASS[meta?.group ?? ""] ?? "c-info"}`}>{SHORT[id] ?? id}</span>;
 }
