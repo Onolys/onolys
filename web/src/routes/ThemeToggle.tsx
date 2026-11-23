@@ -20,7 +20,7 @@ export function ThemeToggle({ className }: { className?: string }) {
       type="button"
       aria-label={label}
       title={label}
-      className={`inline-flex size-8 items-center justify-center rounded-md text-muted-foreground hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring ${className ?? ""}`}
+      className={`inline-flex size-8 items-center justify-center rounded-md text-current opacity-80 hover:opacity-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring ${className ?? ""}`}
       onClick={() => {
         applyTheme(next);
         saveTheme(next);

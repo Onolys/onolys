@@ -117,10 +117,10 @@ describe("landing cards", () => {
     const u = userEvent.setup();
     const { router } = renderApp("/", { user: USER });
     const interviewCard = within(await main().findByRole("region", { name: /Practise with an AI client/ }));
-    expect(await interviewCard.findByText("5 of 5 left today")).toBeInTheDocument();
+    expect(await interviewCard.findByRole("button", { name: "5 of 5 left today" })).toHaveTextContent("5/5");
     expect(interviewCard.queryByText(/this month/)).toBeNull();
     const rate = within(main().getByRole("region", { name: "Rate a recording" }));
-    expect(rate.getByText("20 of 20 left today")).toBeInTheDocument();
+    expect(rate.getByRole("button", { name: "20 of 20 left today" })).toHaveTextContent("20/20");
     expect(rate.getByRole("link", { name: "New session" })).toHaveAttribute("href", "/sessions/new");
     await u.click(interviewCard.getByRole("link", { name: "Start AI Interview" }));
     expect(here(router)).toBe("/interviews/new");

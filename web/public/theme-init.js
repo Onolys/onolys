@@ -4,7 +4,7 @@
   try {
     var t = localStorage.getItem("onolys-theme");
     if (t === "light" || t === "dark") document.documentElement.dataset.theme = t;
-  } catch (e) {
+  } catch {
     /* storage blocked: follow the OS */
   }
 })();
