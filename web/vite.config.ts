@@ -1,5 +1,6 @@
 import { rmSync } from "node:fs";
 import { join } from "node:path";
+import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import type { Plugin } from "vite";
 import { configDefaults, defineConfig } from "vitest/config";
@@ -17,7 +18,7 @@ function dropMockWorker(mode: string): Plugin {
 }
 
 export default defineConfig(({ mode }) => ({
-  plugins: [react(), dropMockWorker(mode)],
+  plugins: [react(), tailwindcss(), dropMockWorker(mode)],
   test: {
     environment: "jsdom",
     setupFiles: ["./src/test/setup.ts"],

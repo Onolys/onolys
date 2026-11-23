@@ -1,0 +1,8 @@
+/* CSS entry. Cascade order: theme, base (Tailwind preflight + @onolys/ui base), legacy (old app styles), components, utilities.
+   `legacy-app.css` sits in a low-priority layer so Tailwind utilities beat it; it shrinks each migration phase and is deleted in the last. */
+@layer theme, base, legacy, components, utilities;
+@import "tailwindcss";
+@import "@onolys/ui/theme.css";
+@import "@onolys/ui/legacy.css";
+@import "./legacy-app.css" layer(legacy);
+@source "../../node_modules/@onolys/ui/dist";
