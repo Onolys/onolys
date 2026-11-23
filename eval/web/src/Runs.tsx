@@ -67,9 +67,11 @@ export function RunView({ api, runId, onRerun }: { api: EvalApi; runId: string; 
   const cancel = async () => {
     if (cancelling) return;
     setCancelling(true); setError('');
-    try { const result = await api.cancel(runId); stop.current(); setRun(value => value ? { ...value, status: result.status } : value); }
-    catch (e) { setError(errorMessage(e)); }
-    finally { setCancelling(false); }
+    try {
+      await api.cancel(runId);
+      stop.current();
+      setAttempt(n => n + 1);
+    } catch (e) { setError(errorMessage(e)); setCancelling(false); }
   };
   return <section><h1>Run {runId}</h1>{error && <div role="alert">{error}<button onClick={() => { setError(''); setAttempt(n => n + 1); }}>Retry run status</button></div>}
     {!run ? <p role="status">Loading run…</p> : <>

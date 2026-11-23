@@ -26,8 +26,39 @@ it('selects sessions for signed differences', () => {
 it('polls at 3s, stops terminal, loads JSON lazily as escaped text and aborts unmount', async () => {
  vi.useFakeTimers(); const api = {...createEvalApi('',vi.fn()), run:vi.fn().mockResolvedValueOnce(detail('running')).mockResolvedValue(detail()), output:vi.fn().mockResolvedValue({text:'<img src=x onerror=alert(1)>'})}; const view=render(<RunView api={api} runId="r1" onRerun={vi.fn()}/>); await act(async()=>{}); expect(api.run).toHaveBeenCalledTimes(1); await act(async()=>{await vi.advanceTimersByTimeAsync(3000)}); expect(api.run).toHaveBeenCalledTimes(2); await act(async()=>{await vi.advanceTimersByTimeAsync(9000)}); expect(api.run).toHaveBeenCalledTimes(2); expect(api.output).not.toHaveBeenCalled(); fireEvent.click(screen.getByRole('button',{name:'View JSON u1'})); await act(async()=>{}); expect(api.output).toHaveBeenCalledWith('r1','u1',expect.any(AbortSignal)); expect(screen.getByText(/<img src=x/)).toBeTruthy(); expect(document.querySelector('img')).toBeNull(); const signal=api.run.mock.calls[0][1] as AbortSignal; view.unmount(); expect(signal.aborted).toBe(true);
 });
-it('cancels running run and stops polling', async()=>{
- vi.useFakeTimers(); const api={...createEvalApi('',vi.fn()),run:vi.fn().mockResolvedValue(detail('running')),cancel:vi.fn().mockResolvedValue({run_id:'r1',status:'cancelled'})}; render(<RunView api={api} runId="r1" onRerun={vi.fn()}/>); await act(async()=>{}); fireEvent.click(screen.getByRole('button',{name:'Cancel run'})); await act(async()=>{}); expect(api.cancel).toHaveBeenCalledWith('r1'); await act(async()=>{await vi.advanceTimersByTimeAsync(6000)}); expect(api.run).toHaveBeenCalledTimes(1);
+it('refreshes terminal cancellation details before stopping polling', async () => {
+  vi.useFakeTimers();
+  const cancelled = { ...detail('cancelled'), completed_units: 4, cancelled_units: 2, units: [{ ...detail().units[0], unit_id: 'cancelled-unit', status: 'cancelled' as const }] };
+  const api = { ...createEvalApi('', vi.fn()), run: vi.fn().mockResolvedValueOnce(detail('running')).mockResolvedValue(cancelled), cancel: vi.fn().mockResolvedValue({ run_id: 'r1', status: 'cancelled' }) };
+  render(<RunView api={api} runId="r1" onRerun={vi.fn()} />);
+  await act(async () => {});
+  fireEvent.click(screen.getByRole('button', { name: 'Cancel run' }));
+  await act(async () => {});
+  expect(api.cancel).toHaveBeenCalledWith('r1');
+  expect(api.run).toHaveBeenCalledTimes(2);
+  expect(screen.getByText('cancelled · 4/4 units complete · 1 failed · 2 cancelled')).toBeTruthy();
+  expect(screen.queryByRole('button', { name: 'View JSON u1' })).toBeNull();
+  await act(async () => { await vi.advanceTimersByTimeAsync(6000); });
+  expect(api.run).toHaveBeenCalledTimes(2);
+});
+it('keeps polling after cancellation while in-flight work runs, then shows final outputs and costs', async () => {
+  vi.useFakeTimers();
+  const pending = { ...detail('running'), completed_units: 0, units: [{ ...detail().units[0], status: 'running' as const }], cost_usd_est: 0 };
+  const done = { ...detail('done'), cost_usd_est: 0.25 };
+  const api = { ...createEvalApi('', vi.fn()), run: vi.fn().mockResolvedValueOnce(pending).mockResolvedValueOnce(pending).mockResolvedValue(done), cancel: vi.fn().mockResolvedValue({ run_id: 'r1', status: 'running' }) };
+  render(<RunView api={api} runId="r1" onRerun={vi.fn()} />);
+  await act(async () => {});
+  expect(screen.queryByRole('button', { name: 'View JSON u1' })).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Cancel run' }));
+  await act(async () => {});
+  expect(api.run).toHaveBeenCalledTimes(2);
+  await act(async () => { await vi.advanceTimersByTimeAsync(3000); });
+  expect(api.run).toHaveBeenCalledTimes(3);
+  expect(screen.getByText('done · 4/4 units complete · 1 failed · 0 cancelled')).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'View JSON u1' })).toBeTruthy();
+  expect(screen.getByText(/~\$0.2500/)).toBeTruthy();
+  await act(async () => { await vi.advanceTimersByTimeAsync(9000); });
+  expect(api.run).toHaveBeenCalledTimes(3);
 });
 it('history shows provenance and rerun preserves saved input with correct endpoint',async()=>{
  const api={...createEvalApi('',vi.fn()),runs:vi.fn().mockResolvedValue({runs:[summary()]}),options:vi.fn().mockResolvedValue({engines:[{id:'human',label:'Human',prod:false},{id:'miti',label:'MITI',prod:true}],presets:[{name:'default',prod:true}],defaults:{dataset:{engines:[],presets:[]}}}),rerun:vi.fn().mockResolvedValue({run_id:'r2',status:'queued'}),dataset:vi.fn(),datasets:vi.fn()}; const onRerun=vi.fn(),onCreated=vi.fn(); const view=render(<History api={api} onOpen={vi.fn()} onRerun={onRerun}/>); expect(await screen.findByText('saved')).toBeTruthy(); expect(screen.getByText(/abc123/)).toBeTruthy(); expect(screen.getByText(/saved-model/)).toBeTruthy(); expect(screen.getByText(/STT excluded/)).toBeTruthy(); expect(screen.getByText(/1 unpriced unit/)).toBeTruthy(); fireEvent.click(screen.getByRole('button',{name:'Rerun with different engines/presets'})); expect(onRerun).toHaveBeenCalledWith(summary()); view.unmount(); render(<NewRun api={api} initialRun={summary()} onRunCreated={onCreated}/>); await act(async()=>{}); expect((screen.getByLabelText('Runs per cell') as HTMLSelectElement).value).toBe('3'); fireEvent.click(screen.getByLabelText('Human')); fireEvent.click(screen.getByRole('button',{name:'Start run'})); await act(async()=>{}); expect(api.rerun).toHaveBeenCalledWith('r1',{engines:['miti'],presets:['default'],repeats:3}); expect(api.dataset).not.toHaveBeenCalled(); expect(api.datasets).not.toHaveBeenCalled(); expect(onCreated).toHaveBeenCalledWith('r2');
