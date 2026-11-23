@@ -24,9 +24,9 @@ We do not know how close Onolys' MITI 4.2.1 coding is to expert human coders. Pu
 | API param `coded_span` accepts `{start_ms,end_ms}` or `{start_turn,end_turn}`; absent = full transcript (user) | Time-only | CASAA transcripts have no timestamps |
 | Datasets stored in private GCS bucket (staging); repo holds only download/convert scripts + format spec; site lists datasets (user) | Commit data to git | Repo is PUBLIC; CASAA reuse terms unclear |
 | Transcript format `transcript.v1` = engine `Turn` shape (Claude's call, user delegated) | New format | Engine already uses it |
-| STT output saved as `transcript.v1`; existing stored transcripts migrated (user) | Leave old format | One format everywhere |
+| STT output saved as `transcript.v1`; no migration — no real transcripts exist and breaking changes are acceptable, product has no users (user) | Migrate old data | Nothing to migrate |
 | Transcript upload in main app app.onolys.com + API (user) | Eval site only | Users can submit transcripts |
-| Upload accepts .json (`transcript.v1`) and .txt (`T:`/`C:` or `Name:` prefixes), counts against usage limits like audio; speaker gate runs if roles missing (user accepted default) | PDF/DOCX | Keep small |
+| Upload accepts .json (`transcript.v1`) and .txt (`T:`/`C:` or `Name:` prefixes), counts as 1 session against usage limits, same as a normal audio session (user); speaker gate runs if roles missing (user accepted default) | PDF/DOCX | Keep small |
 | Gold format stores session-level codes + optional per-utterance codes; compare session-level now (user) | Utterance alignment now | Alignment is extra work |
 | Compare: behavior counts, 4 globals, summary scores (R:Q, %CR), per-session diff + average error (user) | — | — |
 | Save every eval run (dataset, engine, engine git sha, preset/model, date, results) in staging Firestore (user) | Ephemeral | Track accuracy over engine changes |
@@ -40,12 +40,16 @@ We do not know how close Onolys' MITI 4.2.1 coding is to expert human coders. Pu
 | Output validated in API layer with core validator for all engines; on failure retry once with validation errors + stronger schema-conformance instruction, then fail run (user) | Engine-only validation | One validation path |
 | Lean MITI engine internal checks kept; API validation added on top (Claude's call) | Rewrite engine validation | Don't break working code |
 | One-shot available on eval site only (user) | Main app | Experimental |
+| Eval backend = own Cloud Run service `eval/backend`, reusing `onolys_admin_auth` and `admin_allowed_emails`; runs execute in background, site polls (Claude's call) | Extend `admin/` backend | Long runs, separate scaling |
+| `coded_span` support is an intended engine change in SP1; 'no behavior change' applies only to core extraction (Claude's call) | — | Clarifies anti-goal |
+| `.txt` uploads with `Name:` prefixes use the existing speaker gate to pick the clinician (Claude's call) | New UI | Reuse |
+| Gold schema and metrics (MAE per behavior code and per global; R:Q and %CR computed with the same formula for gold and ours) defined in SP2 (Claude's call) | — | — |
 | Dataset size not a concern; add MI-TAGS later (user) | — | Owner task: submit MI-TAGS access form |
 
 ## Design — sub-projects (in order; 1 and 2 may run in parallel)
 | # | Sub-project | Contents |
 |---|---|---|
-| 1 | Transcript format + upload | `transcript.v1` spec + JSON schema; STT writes it; migrate stored transcripts; .txt/.json upload in API + web (app.onolys.com); `coded_span` param (time or turn range) |
+| 1 | Transcript format + upload | `transcript.v1` spec + JSON schema; STT writes it; .txt/.json upload in API + web (app.onolys.com); `coded_span` param (time or turn range) |
 | 2 | CASAA data + CLI spike | Download CASAA 8 MITI 4.2.1 sessions (uncoded + coded PDFs from casaa.unm.edu/tools/miti.html), convert to `transcript.v1` + gold format, upload to private GCS bucket; CLI runs lean engine on 1 session (full span) and prints ours vs gold |
 | 3 | `engines/core` | Extract engine-agnostic pieces from `engines/miti` (transcript types, LLM client + route presets, RunContext/progress, PHI-safe logging, schema validation helper); define engine base class + registry; miti engine adopts it without behavior change |
 | 4 | `engines/oneshot` + API validation | Generic one-shot engine, MITI one-shot config, API-layer validation + retry-with-errors |
@@ -65,7 +69,7 @@ Existing facts: engine entry `run_miti(ctx, transcript, speaker_map, params, pro
 | Lean engine far off gold | SP2 CLI spike before building site |
 | Core extraction changes MITI output | Golden fixture tests (`engines/miti/tests/test_golden.py`) must pass unchanged |
 | CASAA licence for commercial AI use unclear | Internal-only use, private bucket; owner to confirm terms |
-| Transcript migration breaks old sessions | Dry-run migration on staging copy |
+| Breaking API/contract changes | Acceptable: no users yet (user) |
 
 ## Owner tasks
 - Confirm CASAA reuse terms. Submit MI-TAGS access form (later). DNS for eval.onolys.com if not automatable.
