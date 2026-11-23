@@ -1,0 +1,1 @@
+- brainstorm.md — design brief for processing-screen UX, cancel, error handling/logging, Claude + eval model config, auth emails via Resend

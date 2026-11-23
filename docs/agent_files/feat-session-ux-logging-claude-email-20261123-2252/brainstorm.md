@@ -1,0 +1,112 @@
+---
+status: draft
+summary: Processing-screen clarity, cancel, smart failure handling + traceable logs, Claude for text steps, eval model picker, auth emails via Resend
+date: 2026-11-23
+---
+
+# Brainstorm — session UX, failures/logging, Claude, auth emails
+
+## TL;DR
+Make the processing screen honest (clear current step, % from the start, "you can leave" hint from upload-complete), add a non-destructive **Cancel** (status `cancelled`, charges a limit unit only if transcription started), and replace blanket "busy, retry" errors with a per-failure policy that never charges users for our faults. Log the real provider error and tie every line to the session id so the on-screen Reference finds everything in Logs Explorer. Fix the rating-step outage (no successful rating run on any env since 2026-11-16), move text LLM steps to Claude Sonnet 5.5 (configurable via GitHub vars), give eval a model-config-driven engine/model/effort picker, and send auth emails ourselves via Resend with links to our own `/auth/action`.
+
+## Problem
+Clinician uploads a session recording → validate → transcribe (Google Chirp 3 batch) → user picks clinician speaker + gives own rating → LLM rates (MITI coding, tips, report). Today:
+- Step list shows current step only as bold + left border; "Elapsed", progress bar, and "Usually under 5 minutes — you can close this tab…" appear only once state is `running` (`web/src/features/session/SessionPage.tsx:140-179`, `timeline.ts:175`).
+- "Check audio" and "Session setup" steps clutter the list.
+- Only "Delete session" exists (destructive, `jobs/delete.py`); no cancel, no `cancelled` status.
+- Error "A service we depend on is busy…" (`web/src/api/errors.ts:26`, code `upstream_unavailable`) is shown for every LLM error. Real provider error text is never logged (`engines/core/.../llm/litellm_client.py:330` keeps class name only; `miti` logger never configured). Reference shown on the failed card is the **session id**; docs (`docs/reference/infra.md:236-246`) tell you to query `request_id` → mismatch.
+- Evidence (Cloud Logging, staging worker rev 00048, session 9521150e…, 2026-11-23 21:35–21:38 UTC): transcription OK; 3 `run` attempts each failed `upstream_unavailable` / `AllRunsFailed` / `LLMUnavailable` within ~0.5s, retried by LiteLLM (so not auth/404/400/429 per client mapping). No successful `miti.done` on any service since 2026-11-16. Installed LiteLLM 1.110.2 does not know `gemini-4-*` or `claude-sonnet-5-5` ids.
+- LLM is Gemini via LiteLLM (`config/{env}/routes.yaml`, preset chosen by Terraform `DEFAULT_PRESET`); a `claude` preset (anthropic/claude-sonnet-5-5) and secret `anthropic-api-key-{env}` already exist.
+- Firebase verify/reset emails land on a broken hosted page; we can't change the action URL usefully.
+
+## Decision log
+| Decision | Alternative rejected | Why |
+|---|---|---|
+| Size = full design | small change | 10 items across web, worker, infra, eval (Claude) |
+| Current step: spinner + "In progress" marker + status line (user asked "make clear"; visual specifics Claude's call) | bold only | Today's bold/border is not noticed |
+| Hide "Check audio" and "Session setup" rows (user) | keep | Noise |
+| Progress % shown from upload, whole flow = 100%, weighted by typical stage duration, updated within stages (transcription estimated from audio length × elapsed; rating per sub-stage) (user) | show only during `running`; equal steps | User wants continuous honest progress |
+| Never show 100% until report ready (Claude) | — | Avoid false completion |
+| "You can leave" hint per phase: upload → "Keep this tab open until upload finishes"; after → "You can close this tab — we'll keep working"; at speaker/rating → "We'll wait here for your choice" (user) | literally permanent | Leaving during upload breaks it; input steps wait for user |
+| Streaming transcription dropped (user) | streaming STT | Chirp batch has no partial results; speaker pick is manual; high effort, small gain |
+| Cancel = stop all processing, keep data, status `cancelled` (user) | cancel = delete | Cancel ≠ delete |
+| Cancel shown only on processing page, all in-progress states (uploading → rating) (user) | finished sessions too | Finished sessions use Delete |
+| Cancel is a text link, blue default, red on hover; Delete stays red button (user) | button | Visual separation |
+| Cancel confirm dialog (like delete). If transcription started: dialog warns it counts toward limit (user) | no dialog | Avoid accidental cancel |
+| Click OK → link shows "Cancelling…" + spinner → when everything stopped: "Session cancelled. This counted / did not count toward your limit." (user) | instant | Honest feedback |
+| Limit charge on cancel: 1 unit at cancel time if transcription had started and rating not already charged; if rating already started it's already charged, no refund; race (transcription starts while dialog open) → charge (user) | move all charging to transcription start | Same user rule, far less risk |
+| Internal (our) failure never counts toward limit (user) | — | Fairness |
+| Cancelled session page: "Cancelled" + Delete button; no resume; list shows "Cancelled" chip; nothing else (user) | resume | Simplicity |
+| Failure policy table (below) (user ok'd) | blanket "busy, retry" | Retry only where it can succeed; avoid wasting resources/charges |
+| Text LLM steps (coding, tips, report) → Claude Sonnet 5.5, effort low; STT stays Chirp (user) | Gemini; Claude for STT | Claude has no audio STT; low keeps "under 5 min"; eval compares |
+| Prod provider/model via GitHub Actions vars per env (e.g. `LLM_PROVIDER`, `LLM_MODEL`) passed by deploy workflow to Cloud Run env, overriding route model; API keys stay in Secret Manager; change = re-run deploy (user, Claude's rec) | Firestore admin doc / admin site | Audited + visible, no new write surface |
+| Eval: engine picker (Gemini / Claude) → only that engine's models; effort dropdown per model's allowed levels; context auto = model max, no dropdown (user) | free text; context dropdown | Prevent invalid combos |
+| One model config file is source of truth for engines→models→allowed effort→default effort→context→max output (user/Claude) | scattered | Single place |
+| Logs: every app log line from api/worker/engine carries `session_id` when known; provider error text (status, type, message — never prompt/transcript content) logged; `miti` logger wired into JSON logging (Claude) | status quo | Reference must find everything |
+| Doc with ready Logs Explorer link by session id (user) | — | User wants to paste reference and see all logs |
+| Auth emails sent by API via Resend; Admin SDK generates link; rewritten to `<APP_BASE_URL>/auth/action?mode=…&oobCode=…`; APP_BASE_URL per env from server config, never request (user) | Firebase hosted mail | Hosted page broken |
+| Upgrade LiteLLM to a version that knows gemini-4-* and claude-*-5-5 (Claude) | keep 1.110.2 | Likely cause of outage; needed for effort mapping |
+
+## Design
+
+### A. Processing screen (web)
+Files: `web/src/features/session/SessionPage.tsx`, `timeline.ts`, `useSessionStatus.ts`, `slots.tsx`, `web/src/features/dashboard/chips.ts`.
+- Steps shown: Upload, Transcribe, Confirm speaker, Your rating (only when `ratingEnabled()`), Rate session (with sub-labels), Report. "Check audio" folded into Upload/Transcribe; "Session setup" row removed.
+- Current step: animated spinner icon + "In progress" text + accent color; done = check; pending = muted.
+- Progress bar + "N%" + Elapsed shown from upload start. Server (`api/.../jobs/machine.py` STATE_PROGRESS + `jobs/run.py` STAGE_WEIGHTS) owns base %; web interpolates within long stages (transcription: expected ≈ f(audio duration), capped below next stage's base). Waiting-for-user states freeze %.
+- Phase hint per decision log.
+
+### B. Cancel
+- New state `cancelled` in `api/.../repo/models.py`; transitions from every in-progress state in `jobs/machine.py`.
+- `POST /sessions/{id}/cancel`: atomically mark cancel requested, stop work (in-flight Cloud Task handlers check like `jobs/alive.py:ensure_alive` / `deleting`; STT operation abandoned; run slot released), apply charge rule, set `cancelled`, return `{counted: bool}`. Idempotent.
+- Charge record stored on session so the UI can show counted/not.
+- Web: link + confirm dialog (reuse `DeleteDialog.tsx` pattern), states idle → cancelling (spinner) → cancelled message. Sessions list chip "Cancelled".
+- Delete stays as today on finished/failed/cancelled sessions.
+
+### C. Failure handling policy
+| Failure kind | Example | User sees | Limit |
+|---|---|---|---|
+| Temporary, ours/provider | 5xx, 429, timeout | "Try again" button, max 3 per session; after 3 → "start a new session" | Not counted |
+| Permanent, ours | model not found, auth/config, bug, repeated bad model output | No retry. "Something went wrong on our side. This did not count toward your limit. Please start a new session." + Reference | Not counted |
+| File/user | no speech, speakers not separated, bad format | No retry. "Upload a different file" | Not counted unless rating already started (today's rule) |
+| Cancelled | — | "Session cancelled. This counted / did not count toward your limit." | Counted if transcription started |
+Server-side silent retries (worker + LiteLLM) unchanged. Classification lives in `api/.../adapters/error_map.py` (split today's catch-all `upstream_unavailable` into transient vs permanent; `LLMError` subclasses carry provider status). Apply to every step (validate, transcribe, run), not only run. Web copy in `web/src/api/errors.ts`, actions in `failureAction`.
+
+### D. Logging
+- Wire engine loggers (`miti`, LiteLLM) into the same JSON stderr format; include `session_id`, `run_id`, `step`, `request_id` via context (contextvar set by worker per task and by API per request).
+- On provider failure log: provider, model, HTTP status, error type, provider message (truncated, PHI-safe per `docs/implementation/logging-and-phi.md` / `safe_log` allowlist).
+- Doc: update `docs/reference/infra.md` runbook (and a short `docs/reference/logging.md`): Reference = session id; Logs Explorer link template `https://console.cloud.google.com/logs/query;query=jsonPayload.session_id%3D%22<ID>%22;duration=P14D?project=onolys`; request_id query for API errors; error_code table.
+
+### E. Rating-step outage
+Reproduce the staging `gemini/gemini-4-neon` call with the worker's config to get the real error; upgrade LiteLLM; verify a full staging run succeeds on Claude Sonnet 5.5.
+
+### F. LLM config (prod/staging)
+- `config/{env}/routes.yaml` text routes → Claude Sonnet 5.5, effort low. Provider/model overridable by env vars set from GitHub Actions vars in `.github/workflows/_deploy-cloudrun.yml` `env_vars`; document where to change it and that a deploy re-run applies it. Terraform `DEFAULT_PRESET` unchanged or aligned.
+
+### G. Eval model picker
+- New config file (e.g. `config/models.yaml`): engines `gemini`, `claude`; models:
+  - gemini: gemini-4-carbon (effort low/medium/high, default medium), gemini-4-neon (low/medium/high/xhigh, default high), gemini-4-hydrogen (low/medium/high/xhigh, default high), gemini-4-argon (low/medium/high, default medium); context 1,048,576; max output 65,536.
+  - claude: claude-opus-5-5, claude-sonnet-5-5, claude-haiku-5-5; effort low/medium/high/xhigh/max (defaults: opus medium, sonnet high, haiku medium); context 1M; max output 128K; no temperature.
+- Eval API `GET /v1/options` serves it; `eval/web/src/NewRun.tsx` adds engine → model → effort selects; run payload carries them; backend builds routes from them (`eval/backend/.../runs.py`, `engines/core/.../llm/routes.py`).
+
+### H. Auth emails via Resend
+Per `docs/reference/web-email-actions.md`: API endpoints generate verify/reset links with Firebase Admin SDK, rewrite to `<APP_BASE_URL>/auth/action?mode=…&oobCode=…` (APP_BASE_URL per env, server config only), send via Resend (API key in Secret Manager). Web `web/src/auth/firebaseService.ts` replaces `sendEmailVerification` (lines ~98, ~127) and `sendPasswordResetEmail` (~124) with calls to the new endpoints. Rate-limit + no user enumeration on reset.
+
+## Goals, non-goals, anti-goals
+- Goals: user always knows current step and %; cancel is safe and honest about limits; no user charged for our failure; any Reference finds its logs in one query; rating step works again on Claude; eval can compare engines/models/effort; auth emails land on a working page.
+- Non-goals: streaming transcription; admin-site config UI; moving the general charge point to transcription start; changing STT provider.
+- Anti-goals: retry buttons that can't succeed; logs with patient content; model switch requiring a code change; cancel that deletes data.
+
+## Open risks
+| Risk | Cheapest test |
+|---|---|
+| Outage cause isn't LiteLLM version | Repro call with debug on first, before other work |
+| LiteLLM upgrade changes behavior elsewhere | Run engine + api unit tests after bump |
+| Cancel races with in-flight Cloud Tasks | Unit test each state × cancel; handlers check state after each blob/LLM call |
+| Resend domain/DNS + API key are owner tasks | List in owner tasks; staging first |
+| Gemini xhigh via LiteLLM unverified | Eval smoke call per model/effort |
+
+## Owner-only tasks (user)
+- Resend account, sending domain DNS, API key into Secret Manager (`resend-api-key-{env}`).
+- Set GitHub Actions vars for LLM provider/model per env.
+- Confirm anthropic-api-key-{env} secret has a valid key.
