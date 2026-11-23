@@ -3,7 +3,7 @@
 import typing
 
 import pytest
-from onolys_miti import Stage as EngineStage
+from onolys_miti.run import Stage as EngineStage
 
 from onolys_api.adapters.base import Stage as ApiStage
 from onolys_api.errors import ApiError
