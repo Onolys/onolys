@@ -412,6 +412,34 @@ describe("discard and leave prompt (AC9)", () => {
     await waitFor(() => expect(opener).toHaveFocus());
   });
 
+  it("Settings from the account menu: Keep talking returns focus to the account menu trigger", async () => {
+    const u = userEvent.setup();
+    const { router } = renderApp("/interviews/new", { user: USER });
+    await startLive(u, router);
+    const trigger = screen.getByRole("button", { name: "Account menu" });
+    await u.click(trigger);
+    await u.click(await screen.findByRole("menuitem", { name: "Settings" }));
+    const dialog = await screen.findByRole("alertdialog");
+    await u.click(within(dialog).getByRole("button", { name: "Keep talking" }));
+    await waitFor(() => expect(screen.queryByRole("alertdialog")).toBeNull());
+    await waitFor(() => expect(trigger).toHaveFocus());
+  });
+
+  it("falls back to the page heading when the opener is gone", async () => {
+    const u = userEvent.setup();
+    const { router } = renderApp("/interviews/new", { user: USER });
+    await startLive(u, router);
+    const gone = document.createElement("button");
+    main().getByRole("button", { name: "Discard" }).parentElement!.appendChild(gone);
+    gone.focus();
+    await act(() => router.navigate("/settings"));
+    await screen.findByRole("alertdialog");
+    gone.remove();
+    await u.keyboard("{Escape}");
+    await waitFor(() => expect(screen.queryByRole("alertdialog")).toBeNull());
+    await waitFor(() => expect(screen.getByRole("main").querySelector("h1")).toHaveFocus());
+  });
+
   it("Escape also returns focus to the opener", async () => {
     const u = userEvent.setup();
     const { router } = renderApp("/interviews/new", { user: USER });

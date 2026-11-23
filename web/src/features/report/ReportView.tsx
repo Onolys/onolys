@@ -392,7 +392,6 @@ function TranscriptSection({
       <div>
         <Button
           type="button"
-         
           disabled={turns.status === "loading"}
           onClick={() => open()}
         >

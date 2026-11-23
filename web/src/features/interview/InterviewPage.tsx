@@ -98,7 +98,11 @@ function InterviewView({ id }: { id: string }) {
   const blocker = useBlocker(({ currentLocation, nextLocation }) => {
     const block = !leaving.current && active && currentLocation.pathname !== nextLocation.pathname;
     const el = document.activeElement;
-    if (block && el instanceof HTMLElement && !el.closest('[role="alertdialog"]')) opener.current = el;
+    if (block && el instanceof HTMLElement && !el.closest('[role="alertdialog"]')) {
+      // A menu item unmounts when its menu closes: remember the menu's trigger instead.
+      const trigger = el.closest('[role="menu"]') ? document.querySelector<HTMLElement>('[aria-haspopup="menu"][aria-label="Account menu"]') : null;
+      opener.current = trigger ?? el;
+    }
     return block;
   });
 
@@ -339,7 +343,10 @@ function InterviewView({ id }: { id: string }) {
           onCloseAutoFocus={(e) => {
             e.preventDefault();
             // Leaving: the next page's heading takes focus. Staying: back to where the user was.
-            if (!leaving.current && opener.current?.isConnected) opener.current.focus();
+            if (leaving.current) return;
+            // Opener gone (e.g. a menu item that unmounted): the page heading, so focus never drops to body.
+            if (opener.current?.isConnected) opener.current.focus();
+            else document.querySelector<HTMLElement>("main h1")?.focus();
           }}
           onEscapeKeyDown={(e) => {
             if (busy) e.preventDefault();

@@ -113,7 +113,6 @@ export function SpeakerGate({ sessionId, mode, onDone }: SpeakerGateProps) {
         <div className="flex flex-wrap gap-3">
           <Button
             type="button"
-           
             disabled={busy || selected === null}
             onClick={() => selected !== null && void confirm(selected, true)}
           >

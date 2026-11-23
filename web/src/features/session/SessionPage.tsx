@@ -182,7 +182,6 @@ function SessionView({ id }: { id: string }) {
             <div>
               <Button
                 type="button"
-               
                 disabled={run.isPending || run.isSuccess || (atCap && !freeFirstRun)}
                 onClick={() => run.mutate()}
               >
@@ -229,7 +228,6 @@ function SessionView({ id }: { id: string }) {
               ref={deleteButton}
               type="button"
               variant="secondary"
-             
               onClick={() => setConfirmDelete(true)}
             >
               Delete session
