@@ -9,20 +9,22 @@ date: 2026-11-23
 | # | Sub-project | Phase | Depends on | Status | PRD |
 |---|---|---|---|---|---|
 | 01 | onolys-ui | 1 | none | draft | [PRD](01-onolys-ui/PRD.md) |
-| 02 | app-migration | 2 | 01 v0.1.0 tag + `fix/email-verify-and-public-chrome` merged | draft | [PRD](02-app-migration/PRD.md) |
+| 02 | app-migration | 2 | 01 v0.1.0 tag + merged #52/#54 baseline | draft | [PRD](02-app-migration/PRD.md) |
 | 03 | landing | 3 | 01 | not yet designed | - |
 | 04 | admin-eval-frontend | 4 | 01 | not yet designed | - |
 
 ## Dependency graph
 ```mermaid
 graph LR
-  F[fix/email-verify-and-public-chrome merged] --> SP2
+  F[merged #52 and #54 baseline] --> SP2
   SP1[01 onolys-ui v0.1.0] --> SP2[02 app-migration]
   SP1 --> SP3[03 landing]
   SP1 --> SP4[04 admin/eval]
   SP2 --> SP3 --> SP4
 ```
 Rollout order: app, then landing, then admin/eval.
+
+SP2 preservation baseline refreshed after rebasing onto main `d88fbc6` (merged #54): current /new chooser and /sessions list, safe new-tab /sample navigation, compact footer, and shared ReportView/native CodedTranscriptDialog. Its phases and todo statuses remain unchanged; no app migration has started.
 
 ## Locked decisions
 - Tailwind v4 + shadcn/ui (Radix); CSS-variable tokens.
@@ -34,7 +36,7 @@ Rollout order: app, then landing, then admin/eval.
 
 ## Risks / Open Questions (consolidated)
 **PRD 01 (onolys-ui)**
-- [RESOLVED: 2026-11-23 — Radix Select; native fallback only if CSP smoke fails]
+- [VERIFIED: Task 7 — native Select fallback selected after two Radix inline style CSP violations; strict CSP retained, no Radix-only Select helper exports.]
 - [RESOLVED: owner 2026-11-23 — prefer Radix Dialog/AlertDialog with build check adjusted; native `<dialog>` only if CSP smoke fails; runtime CSP verification remains a task-level check.]
 [RESOLVED: orchestrator default 2026-11-23 — keep `legacy.css` aliases; removed in SP2 final cleanup; verified in Task 4]
 [RESOLVED: orchestrator default 2026-11-23 — Storybook 10 if Vite 8 compatible, else Ladle; verified in Task 2]
