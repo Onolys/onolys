@@ -10,3 +10,4 @@ class RunContext:
     metrics: Any  # MetricsCollector
     request_id: str
     deadline: float | None = None
+    feedback: str | None = None
