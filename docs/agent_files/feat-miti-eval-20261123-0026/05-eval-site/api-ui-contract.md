@@ -46,7 +46,9 @@ Response:
 }
 ```
 
-Status is `ready`, `awaiting_speakers`, or `transcribing`.
+Status is `ready`, `awaiting_speakers`, `transcribing`, or `failed`. Failures include an `error: {code, message}` object with safe public details.
+
+`GET /v1/uploads/{id}` returns the same response shape for polling transcription until ready, awaiting speakers, or failed.
 
 `POST /v1/uploads/{id}/speakers` accepts `{"clinician_speaker": "label"}` and returns the same upload-response shape.
 

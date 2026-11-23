@@ -119,9 +119,9 @@ def test_internal_invalid_token():
     )
 
 
-@pytest.mark.parametrize("route", ["unit", "transcribe"])
-def test_task_identity_passes_without_allowlist_membership(route):
-    assert client().post(f"/internal/tasks/{route}", headers=AUTH).status_code == 501
+@pytest.mark.parametrize("route,status", [("unit", 501), ("transcribe", 422)])
+def test_task_identity_passes_without_allowlist_membership(route, status):
+    assert client().post(f"/internal/tasks/{route}", headers=AUTH).status_code == status
 
 
 def test_task_identity_cannot_access_public_api():

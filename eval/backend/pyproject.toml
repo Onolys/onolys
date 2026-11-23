@@ -6,10 +6,12 @@ requires-python = ">=3.12,<3.13"
 dependencies = [
     "onolys-admin-auth",
     "onolys-engine-core",
-    "onolys-miti",
+    "onolys-miti[stt-google]",
     "onolys-oneshot",
     "onolys-eval",
     "fastapi>=0.115",
+    "python-multipart>=0.0.20",
+    "google-cloud-tasks>=2.16",
     "uvicorn>=0.30",
     "google-auth>=2.35",
     "requests>=2.32",

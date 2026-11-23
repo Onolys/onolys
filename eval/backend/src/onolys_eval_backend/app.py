@@ -12,6 +12,8 @@ from onolys_eval_backend.auth import EvalAuthMiddleware, TokenVerifier
 from onolys_eval_backend.catalog import router as catalog_router
 from onolys_eval_backend.config import EvalConfig
 from onolys_eval_backend.services import EvalServices
+from onolys_eval_backend.uploads import install_error_handler
+from onolys_eval_backend.uploads import router as uploads_router
 
 
 def parse_cors_origins(raw: str) -> list[str]:
@@ -38,6 +40,8 @@ def create_app(
     app.state.catalog = EvalServices(config)
     app.state.services = services if services is not None else app.state.catalog
     app.include_router(catalog_router)
+    app.include_router(uploads_router)
+    install_error_handler(app)
 
     @app.get("/v1/me")
     async def me() -> dict[str, str]:
@@ -48,7 +52,6 @@ def create_app(
         return {"status": "ok"}
 
     @app.post("/internal/tasks/unit")
-    @app.post("/internal/tasks/transcribe")
     async def task_placeholder() -> JSONResponse:
         # Do not acknowledge/discard queued work until the task executors are implemented.
         return JSONResponse({"error": {"code": "not_implemented"}}, status_code=501)

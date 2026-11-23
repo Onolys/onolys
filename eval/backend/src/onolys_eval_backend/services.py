@@ -14,8 +14,12 @@ from onolys_eval_backend.storage import Bucket, GCSBucket
 
 
 class EvalServices:
-    def __init__(self, config: EvalConfig):
+    def __init__(self, config: EvalConfig, *, queue=None, stt_factory=None):
         self.config = config
+        if queue is not None:
+            self.queue = queue
+        if stt_factory is not None:
+            self.stt_factory = stt_factory
 
     @cached_property
     def bucket(self) -> Bucket:
@@ -27,9 +31,12 @@ class EvalServices:
     def repository(self) -> EvalRepository:
         from google.cloud import firestore
 
-        return FirestoreEvalRepository(firestore.Client(
-            project=self.config.project, database=self.config.firestore_database,
-        ))
+        return FirestoreEvalRepository(
+            firestore.Client(
+                project=self.config.project,
+                database=self.config.firestore_database,
+            )
+        )
 
     @cached_property
     def routes(self) -> RouteRegistry:
@@ -65,3 +72,34 @@ class EvalServices:
             return self._bound_engines[engine_id]
         except KeyError:
             raise InputError("Unknown eval engine.") from None
+
+    @cached_property
+    def queue(self):
+        from google.cloud import tasks_v2
+
+        from onolys_eval_backend.queue import CloudTasksQueue
+
+        return CloudTasksQueue(self.config, tasks_v2.CloudTasksClient())
+
+    def stt_params(self, language):
+        from onolys_engine_core.llm.routes import resolve_preset
+        from onolys_miti.stt.select import load_stt_config, select_stt
+
+        _, key = resolve_preset(
+            self.config.default_preset, self.routes, {"DEFAULT_PRESET": self.config.default_preset}
+        )
+        path = Path(self.config.routes_file).parent / "stt_providers.yaml"
+        return select_stt(key, language, config=load_stt_config(path if path.is_file() else None))
+
+    def stt_factory(self, provider):
+        from onolys_miti.stt.fixture import FixtureStt
+        from onolys_miti.stt.google_chirp import GoogleChirp3
+
+        factories = {
+            "google": GoogleChirp3,
+            "google_chirp": GoogleChirp3,
+            "fixture": lambda: FixtureStt({}),
+        }
+        if provider not in factories:
+            raise InputError("Unknown STT provider.")
+        return factories[provider]()

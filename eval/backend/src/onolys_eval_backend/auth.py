@@ -49,7 +49,20 @@ class EvalAuthMiddleware:
 
     async def __call__(self, scope, receive, send):
         if scope["type"] != "http" or not scope["path"].startswith("/internal/tasks/"):
-            return await self.admin(scope, receive, send)
+            if scope["type"] != "http":
+                return await self.admin(scope, receive, send)
+            # Preserve verified identity for audit records without another token verification.
+            verifier = self.admin.verifier
+
+            class CaptureIdentity:
+                def verify(self, token):
+                    claims = verifier.verify(token)
+                    scope.setdefault("state", {})["admin_claims"] = claims
+                    return claims
+
+            return await AdminAuthMiddleware(
+                self.app, config=self.config.auth, verifier=CaptureIdentity()
+            )(scope, receive, send)
         # Cloud Tasks request headers are metadata, never proof of caller identity.
         authorization = next(
             (v.decode("latin-1") for k, v in scope["headers"] if k == b"authorization"), ""
