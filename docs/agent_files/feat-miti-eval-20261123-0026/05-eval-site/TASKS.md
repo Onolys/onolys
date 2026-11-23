@@ -14,7 +14,7 @@ Source of truth: /root/projects/onolys/iaudit/.worktrees/feat/miti-eval/docs/age
 | 3 | Options and datasets endpoints | 2 | done |
 | 4 | Uploads, speaker pick, transcribe poll-chain | 2 | done |
 | 5 | Run creation, unit execution, finalisation | 3, 4 | done |
-| 6 | Compare, history, rerun, tokens and $ | 5 | in-progress |
+| 6 | Compare, history, rerun, tokens and $ | 5 | done |
 | 7 | Infra: Terraform for eval and staging apply | 1 | done |
 | 8 | Web app: shell, auth, New run | 1 | done |
 | 9 | Web app: progress, compare, history | 6, 8 | in-progress |
