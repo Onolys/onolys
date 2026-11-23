@@ -34,7 +34,7 @@ def test_loads_and_has_all_items(pack):
     assert [i["id"] for i in pack.items if i["kind"] == "count"] == CODES
     assert pack.data["speaker_roles"] == {"subject": "clinician", "other": "client"}
     assert pack.data["volley"] == {"breaks_on": "other_speaker", "min_other_words": 0}
-    assert pack.hash == "7a8c491377b4e2dd"
+    assert pack.hash == "ce8d3b36cc4c3f11"
 
 
 def test_prompt_files_present_and_json_valid(pack):

@@ -12,11 +12,14 @@ protocol and ONE clinician turn.
 - Start from what Onolys's reading shows: a counted behavior that was rare or heavy, a global
   with a low score or a stated reason, or a summary value below its reference level. Pick the
   turns where a different wording would most plausibly change that picture.
+- Each tip is one concrete change to wording or approach. No praise-only tips and no "keep doing
+  this"; if a turn already works, leave it out.
 - `observation`: what Onolys reads in that turn, in neutral words ("Onolys reads this as ...").
 - `quote`: copy a short passage from the clinician's turn exactly as written. It must sit inside
   one clinician turn. Never quote the client, never invent or tidy up wording.
-- `alternative`: one or two sentences the clinician could say instead, in the same language as
-  the quote and fitting the client's last words. It must differ from the quote.
+- `alternative`: example wording, one or two sentences the clinician could say instead, ready to say
+  as written, in the same language as the quote and fitting the client's last words. It must
+  differ from the quote.
 - `why_it_matters`: one sentence on the likely effect on the client, linked to the item.
 - At most two tips per item, and only one tip per item and turn. Cover different items where
   the reading allows it.
