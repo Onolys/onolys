@@ -180,9 +180,9 @@ def test_good_token_returns_the_invoker_email():
         {"email_verified": 1},
         {"email_verified": None},
         {"email_verified": _MISSING},
-        {"exp": int(time.time()) - 3600},
+        pytest.param({"exp": int(time.time()) - 3600}, id="exp-expired"),
         {"exp": _MISSING},
-        {"iat": int(time.time()) + 3600},
+        pytest.param({"iat": int(time.time()) + 3600}, id="iat-future"),
     ],
     ids=lambda o: "-".join(f"{k}={'missing' if x is _MISSING else x}" for k, x in o.items()),
 )
