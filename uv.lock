@@ -1317,11 +1317,14 @@ source = { editable = "eval/backend" }
 dependencies = [
     { name = "fastapi" },
     { name = "google-auth" },
+    { name = "google-cloud-firestore" },
+    { name = "google-cloud-storage" },
     { name = "onolys-admin-auth" },
     { name = "onolys-engine-core" },
     { name = "onolys-eval" },
     { name = "onolys-miti" },
     { name = "onolys-oneshot" },
+    { name = "pyyaml" },
     { name = "requests" },
     { name = "uvicorn" },
 ]
@@ -1337,11 +1340,14 @@ dev = [
 requires-dist = [
     { name = "fastapi", specifier = ">=0.115" },
     { name = "google-auth", specifier = ">=2.35" },
+    { name = "google-cloud-firestore", specifier = ">=2.19" },
+    { name = "google-cloud-storage", specifier = ">=2.18" },
     { name = "onolys-admin-auth", editable = "admin/auth" },
     { name = "onolys-engine-core", editable = "engines/core" },
     { name = "onolys-eval", editable = "eval/core" },
     { name = "onolys-miti", editable = "engines/miti" },
     { name = "onolys-oneshot", editable = "engines/oneshot" },
+    { name = "pyyaml", specifier = ">=6" },
     { name = "requests", specifier = ">=2.32" },
     { name = "uvicorn", specifier = ">=0.30" },
 ]

@@ -13,6 +13,9 @@ dependencies = [
     "uvicorn>=0.30",
     "google-auth>=2.35",
     "requests>=2.32",
+    "google-cloud-storage>=2.18",
+    "google-cloud-firestore>=2.19",
+    "pyyaml>=6",
 ]
 
 [dependency-groups]
@@ -24,6 +27,9 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/onolys_eval_backend"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"prices.yaml" = "onolys_eval_backend/prices.yaml"
 
 [tool.uv.sources]
 onolys-admin-auth = { workspace = true }
