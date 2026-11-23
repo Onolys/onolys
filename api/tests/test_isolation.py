@@ -40,6 +40,7 @@ ID_ROUTES: dict[tuple[str, str], dict | None] = {
     ("get", "/v1/sessions/{id}/speakers"): None,
     ("post", "/v1/sessions/{id}/speakers/confirm"): {"clinician_speaker": "S1"},
     ("get", "/v1/sessions/{id}/transcript"): None,
+    ("put", "/v1/sessions/{id}/transcript"): None,
 }
 
 

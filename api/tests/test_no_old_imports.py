@@ -41,13 +41,20 @@ def test_api_imports_miti_only_for_engine_specific_modules():
     allowed = {
         "engine", "miti", "prepare", "rating", "report", "result", "run", "span", "stt", "voice",
     }
+    # The MITI-only API's legacy/fake adapter bridge uses the public engine schema.
+    miti_engine_paths = {
+        "src/onolys_api/engines.py", "src/onolys_api/adapters/validated.py",
+    }
     bad = []
     for path in sorted((API / "src").rglob("*.py")):
         tree = ast.parse(path.read_text(encoding="utf-8"))
         for node in ast.walk(tree):
             if isinstance(node, ast.ImportFrom) and node.module == "onolys_miti":
                 for alias in node.names:
-                    if alias.name == "MitiEngine" and path.name == "engines.py":
+                    if (
+                        alias.name == "MitiEngine"
+                        and path.relative_to(API).as_posix() in miti_engine_paths
+                    ):
                         continue
                     if alias.name not in allowed:
                         bad.append(f"{path.relative_to(API)}: onolys_miti.{alias.name}")
