@@ -9,7 +9,7 @@ date: 2026-11-23
 | # | Sub-project | Phase | Depends on | Status | PRD |
 |---|---|---|---|---|---|
 | 01 | onolys-ui | 1 | none | complete | [PRD](01-onolys-ui/PRD.md) |
-| 02 | app-migration | 2 | 01 v0.1.0 tag + merged #52/#54 baseline | ready / planned | [PRD](02-app-migration/PRD.md) |
+| 02 | app-migration | 2 | 01 v0.1.0 tag + merged #52/#54 baseline | planned · single PR #55 | [PRD](02-app-migration/PRD.md) |
 | 03 | landing | 3 | 01 | not yet designed | - |
 | 04 | admin-eval-frontend | 4 | 01 | not yet designed | - |
 
@@ -24,7 +24,7 @@ graph LR
 ```
 Rollout order: app, then landing, then admin/eval.
 
-SP2 preservation baseline refreshed after rebasing onto main `d88fbc6` (merged #54): current /new chooser and /sessions list, safe new-tab /sample navigation, compact footer, and shared ReportView/native CodedTranscriptDialog. Its phases and todo statuses remain unchanged; no app migration has started.
+SP2 preservation baseline refreshed after rebasing onto main `d88fbc6` (merged #54): current /new chooser and /sessions list, safe new-tab /sample navigation, compact footer, and shared ReportView/native CodedTranscriptDialog. Delivery: all 9 SP2 tasks are implemented as one commit each on this branch and shipped in the single PR #55 (draft until Task 9; merge-commit or rebase-merge, never squash). Phases and todo statuses remain unchanged; no app migration has started.
 
 ## Locked decisions
 - Tailwind v4 + shadcn/ui (Radix); CSS-variable tokens.
@@ -50,14 +50,14 @@ SP2 preservation baseline refreshed after rebasing onto main `d88fbc6` (merged #
 - [RESOLVED: orchestrator default 2026-11-23 — standard Radix jsdom shim set in vitest setup]
 - [RESOLVED: 2026-11-23 — approved] `@axe-core/playwright` devDep (web; also onolys-ui checks).
 - [RESOLVED: orchestrator default 2026-11-23 — verify install covers git dep, add if not]
-- [RESOLVED: orchestrator default 2026-11-23 — `github:` resolves via git+https; verify `npm ci` in CI]
+- [RESOLVED: orchestrator default 2026-11-23 — `git+https://github.com/Onolys/onolys-ui.git#v0.1.0` spec resolves via https; verify lockfile `resolved` and `npm ci` in CI]
 - [RESOLVED: orchestrator default 2026-11-23 — baseline in Phase 0; soft budget baseline +25%, warning only]
 - [RESOLVED: owner 2026-11-23 — build/hosting checks may be changed or removed when they block the design system; keep the CSP itself strict (style-src 'self') and prove it with the Playwright CSP smoke; prefer Radix Dialog/AlertDialog] (`build.test.ts` `createElement("style")` ban vs `react-style-singleton`.)
 - [RESOLVED: orchestrator default 2026-11-23 — role queries scoped; helpers fixed in first modal phase]
 - [RESOLVED: orchestrator default 2026-11-23 — `@source` to real path, documented]
 - [RESOLVED: orchestrator default 2026-11-23 — cascade layers; Phase 0 screenshots]
 - [RESOLVED: orchestrator default 2026-11-23 — split only if >50% touched; decided in Phase 2]
-- [RESOLVED: orchestrator default 2026-11-23 — MSW only where needed; `worker-src 'self'` in test server config only]
+- [RESOLVED: orchestrator default 2026-11-23 — MSW only where needed; exact prod CSP header served, no `worker-src` addition (falls back to `script-src 'self'`)]
 
 ## Delivery evidence
-SP1 is complete: [public v0.1.0 release](https://github.com/Onolys/onolys-ui/releases/tag/v0.1.0), [implementation record](code-2026-11-23-0700.md), and [full review PASS](review-2026-11-23-0653.md). SP2 prerequisites (tag and merged #52) are met; all SP2 tasks remain todo. Owner still enables protection on onolys-ui main.
+SP1 is complete: [public v0.1.0 release](https://github.com/Onolys/onolys-ui/releases/tag/v0.1.0), [implementation record](code-2026-11-23-0700.md), and [full review PASS](review-2026-11-23-0653.md). SP2 prerequisites (tag and merged #52) are met; all SP2 tasks remain todo (delivered as one PR, #55). Owner still enables protection on onolys-ui main.
