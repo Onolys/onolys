@@ -4,6 +4,7 @@ import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import type { Plugin } from "vite";
 import { configDefaults, defineConfig } from "vitest/config";
+import { cspOf, readHosting } from "./src/hosting/csp";
 
 /** `public/mockServiceWorker.js` is for `dev:mock` only; every build except `--mode mock` drops it from `dist/` (PRD R8). */
 function dropMockWorker(mode: string): Plugin {
@@ -17,8 +18,19 @@ function dropMockWorker(mode: string): Plugin {
   };
 }
 
+/** The prod hosting entry's CSP (firebase.json target `app`), serialized as served. The Playwright CSP project previews the build under exactly this header. */
+function prodCspHeader(): string {
+  const entry = readHosting().find((h) => h.target === "app");
+  if (!entry) throw new Error("firebase.json has no `app` hosting entry");
+  return Object.entries(cspOf(entry))
+    .map(([name, sources]) => [name, ...sources].join(" "))
+    .join("; ");
+}
+
 export default defineConfig(({ mode }) => ({
   plugins: [react(), tailwindcss(), dropMockWorker(mode)],
+  // `vite preview` only: the dev server has no CSP, so the e2e `csp` project builds and previews with the prod header (PRD R9).
+  preview: { headers: { "Content-Security-Policy": prodCspHeader() } },
   test: {
     environment: "jsdom",
     setupFiles: ["./src/test/setup.ts"],

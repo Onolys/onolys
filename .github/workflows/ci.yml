@@ -555,7 +555,7 @@ jobs:
     needs: changes
     if: needs.changes.outputs.web == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
     defaults:
       run:
         working-directory: web
@@ -578,10 +578,10 @@ jobs:
           key: playwright-${{ runner.os }}-${{ steps.pw.outputs.version }}
       - name: Install Chromium and system deps
         run: npx playwright install --with-deps chromium
-      - name: Playwright e2e (mock mode)
+      - name: Playwright e2e (dev server project + CSP/visual/axe project on the built app under the prod CSP)
         run: npm run e2e -- --trace off
-      - name: Upload Playwright results
-        if: failure()
+      - name: Upload Playwright results and light/dark screenshots
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: web-e2e-results

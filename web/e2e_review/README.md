@@ -13,6 +13,11 @@ npm run e2e                      # mock mode; add args after `--`, e.g. `npm run
 `@playwright/test` is a web devDependency (pinned to the preinstalled 1.65.1). Chromium is preinstalled on this machine; do not run `playwright install` here (CI does). The config starts `npm run dev:mock` on :5173 itself
 (or reuses a server already there). Tests are independent and `fullyParallel`. CI runs them in the `web-e2e` job (`CI=1`: 2 workers, no retries, `github` reporter). Single spec: `npm run e2e -- login`.
 
+## Projects
+
+- `e2e` (dev:mock on :5173, no CSP): every spec except the two below.
+- `csp` (`E2E_CSP_PORT`, default :4173): `csp.spec.cjs` (zero CSP violations) and `visual.spec.cjs` (light/dark screenshots to `test-results/shots/{light,dark}-*.png` + axe color-contrast/critical gate). Its webServer builds `--mode mock` into `node_modules/.cache/csp-preview` and runs `vite preview`, which serves the prod `firebase.json` CSP (`preview.headers` in `vite.config.ts`). Run one: `npm run e2e -- csp.spec --project=csp`. Waived axe screens go in `TODO` in `visual.spec.cjs`; known non-regression violations in `KNOWN` in `csp-helpers.cjs`.
+
 ## Notes
 
 - Open the app as `localhost`, not `127.0.0.1` (api CORS).
