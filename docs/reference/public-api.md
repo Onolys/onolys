@@ -116,6 +116,7 @@ What a failed run or transcription turns into (`api/src/onolys_api/adapters/erro
 |---|---|---|---|
 | `invalid_coded_span` | Invalid or unavailable transcript range | No; choose a valid span (time ranges require timestamps) |
 | `session_too_long` | Coded portion exceeds 25 minutes or 6,000 words | No; supply a narrower `coded_span` |
+| `output_invalid` | Engine result does not match its output schema | no | Run again; no invalid report is stored |
 | `invalid_parameters` | `InputError`: MITI input checks (too long, no change goal, too few clinician or client turns), unknown preset | no | Fix the input (e.g. change who the clinician is) and run again |
 | `upstream_unavailable` | LLM unavailable, timeout, rate limited or bad output after the engine's own retries; a transient STT provider error on attempt 1 | yes | Run again |
 | `deadline_exceeded` | Internal run deadline passed, `TimeoutError` | yes | Run again |
@@ -124,6 +125,8 @@ What a failed run or transcription turns into (`api/src/onolys_api/adapters/erro
 | `speakers_not_separated` | Fewer than 2 usable speakers | no | Upload a different file |
 | `rate_limited` | Adapter error that already carries this code | yes | Try again shortly |
 | `internal_error` | any other exception, including engine `run_failed` errors (`CodePassFailed`, `GlobalsPassFailed`, `AllRunsFailed`) with no LLM cause and other `OnolysError`s such as `ConfigError`; an adapter code outside this table | no | Run again; the owner is alerted |
+
+A run's `validation` detail carries the number of schema-validation attempts and up to ten `first_issues` entries (`path`, `message`). Issue text contains schema paths and fixed messages only, never output values. A failed `output_invalid` run retains this detail and available usage counters; its fixed public message is "The engine returned an answer that did not match its schema." Lean MITI fails after one invalid result. Provider `LLMBadOutput` keeps the `upstream_unavailable` mapping and task retry policy.
 
 A tips failure is not an error: the report is made with warning `tips_failed` and the session ends `report_ready`.
 

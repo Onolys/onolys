@@ -31,6 +31,10 @@ SPEAKERS = {"subject": "A"}
 
 class Engine:
     name = "miti"
+    accepts_feedback = False
+
+    def output_schema(self):
+        return {"type": "object", "required": ["schema_version"]}
 
     def __init__(self) -> None:
         self.calls: list[tuple] = []
@@ -145,3 +149,41 @@ async def test_session_stt_provenance_passes_outside_transcript():
     args, _ = engine.calls[0]
     assert args[2]["stt_run"] == run
     assert "stt_run" not in args[1].model_dump()
+
+
+async def test_invalid_engine_output_is_not_retried_or_exposed():
+    from onolys_engine_core.validated_run import OutputInvalid
+
+    class Invalid(Engine):
+        async def run(self, *args, **kw):
+            self.calls.append((args, kw))
+            return EngineResult(output={"private": "PHI-secret"}, run_info=RunInfo())
+
+    engine = Invalid()
+    with pytest.raises(OutputInvalid) as caught:
+        await make(engine).run(ctx(), transcript(), SPEAKERS, PARAMS)
+    assert len(engine.calls) == 1
+    assert caught.value.validation["attempts"] == 1
+    assert "PHI-secret" not in str(caught.value.validation)
+
+
+async def test_bad_provider_output_propagates_unchanged_without_wrapper_retry():
+    from onolys_engine_core.llm import LLMBadOutput
+
+    failure = LLMBadOutput("PHI-provider-output")
+
+    class BadProvider(Engine):
+        async def run(self, *args, **kw):
+            self.calls.append((args, kw))
+            raise failure
+
+    engine = BadProvider()
+    with pytest.raises(LLMBadOutput) as caught:
+        await make(engine).run(ctx(), transcript(), SPEAKERS, PARAMS)
+    assert caught.value is failure and len(engine.calls) == 1
+
+
+async def test_validation_metadata_is_preserved_outside_report():
+    out = await make(Engine()).run(ctx(), transcript(), SPEAKERS, PARAMS)
+    assert out.run_info["validation"] == {"attempts": 1}
+    assert "validation" not in out.report

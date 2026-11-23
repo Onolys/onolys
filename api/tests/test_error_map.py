@@ -213,3 +213,16 @@ async def test_stubbed_engine_failure_maps_through_run_and_status_body(env, capl
     body = (await env.c.get(f"/v1/sessions/{sid}", headers=env.h)).text
     assert SECRET not in body and SECRET not in caplog.text
     assert env.counters()[0] == 0  # slot released once
+
+
+def test_output_invalid_has_a_fixed_public_message_and_never_retries():
+    from onolys_engine_core.validate import ValidationIssue
+    from onolys_engine_core.validated_run import OutputInvalid
+
+    from onolys_api.adapters.error_map import PUBLIC_MESSAGES, to_public
+    from onolys_api.errors import ERROR_CODES
+
+    failure = OutputInvalid(1, [ValidationIssue(path="/field", message="invalid type")])
+    assert to_public(failure) == ("output_invalid", False)
+    assert "output_invalid" in ERROR_CODES
+    assert PUBLIC_MESSAGES["output_invalid"] == "The engine returned an answer that did not match its schema."

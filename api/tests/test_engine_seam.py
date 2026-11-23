@@ -41,7 +41,7 @@ async def test_real_adapter_forwards_seed_and_caller_span():
     from onolys_engine_core.registry import EngineRegistry
 
     registry = EngineRegistry()
-    registry.register(SimpleNamespace(name="miti", run=run_engine))
+    registry.register(SimpleNamespace(name="miti", run=run_engine, accepts_feedback=False))
     ev = RealEvaluation(registry=registry, llm_factory=lambda routes: object())
     ctx = RunContext(llm=None, metrics=None, request_id="r1")
     params = {"seed": "sess-1", "coded_span": {"start_turn": 0, "end_turn": 2}, "preset": None}

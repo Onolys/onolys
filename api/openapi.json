@@ -464,6 +464,7 @@
               "empty_assessment",
               "duplicate_ids",
               "invalid_parameters",
+              "output_invalid",
               "body_too_large",
               "too_many_turns",
               "too_many_sections",
@@ -763,6 +764,47 @@
           "day"
         ],
         "title": "KindUsage",
+        "type": "object"
+      },
+      "OutputValidation": {
+        "properties": {
+          "attempts": {
+            "maximum": 2.0,
+            "minimum": 1.0,
+            "title": "Attempts",
+            "type": "integer"
+          },
+          "first_issues": {
+            "items": {
+              "$ref": "#/components/schemas/OutputValidationIssue"
+            },
+            "maxItems": 10,
+            "title": "First Issues",
+            "type": "array"
+          }
+        },
+        "required": [
+          "attempts"
+        ],
+        "title": "OutputValidation",
+        "type": "object"
+      },
+      "OutputValidationIssue": {
+        "properties": {
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "path": {
+            "title": "Path",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "message"
+        ],
+        "title": "OutputValidationIssue",
         "type": "object"
       },
       "Period": {
@@ -1198,6 +1240,16 @@
             "anyOf": [
               {
                 "$ref": "#/components/schemas/SttInfo"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "validation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/OutputValidation"
               },
               {
                 "type": "null"

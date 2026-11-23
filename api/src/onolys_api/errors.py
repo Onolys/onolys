@@ -19,6 +19,7 @@ ERROR_CODES = (
     "empty_assessment",
     "duplicate_ids",
     "invalid_parameters",
+    "output_invalid",
     "body_too_large",
     "too_many_turns",
     "too_many_sections",

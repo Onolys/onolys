@@ -28,6 +28,7 @@ from onolys_engine_core.llm import LiteLLMClient, LLMConfig, MetricsCollector
 from onolys_engine_core.llm.routes import resolve_preset
 from onolys_engine_core.registry import EngineRegistry
 from onolys_engine_core.transcript import Transcript
+from onolys_engine_core.validated_run import run_validated
 from onolys_miti.stt import AudioRef, SttAdapter, SttCompletion, SttParams
 from onolys_miti.stt.fixture import FixtureStt
 from onolys_miti.stt.google_chirp import GoogleChirp3
@@ -116,6 +117,9 @@ def _llm_from_routes(routes: dict) -> Any:
 class RealEvaluation:
     """Implements `adapters.base.Evaluation` through the configured engine registry."""
 
+    # Trusted adapter contract: the job must not validate this result a second time.
+    validates_output = True
+
     def __init__(
         self,
         settings: Settings | None = None,
@@ -148,6 +152,9 @@ class RealEvaluation:
         )
         engine_params = {k: params.get(k) for k in _ENGINE_PARAMS if k != "stt_run" or k in params}
         engine_params["speaker_map"] = dict(speaker_map)
-        out = await engine.run(rctx, transcript, engine_params, progress_cb)
+        out = await run_validated(engine, rctx, transcript, engine_params, progress_cb)
         payload = out.model_dump(mode="json")
-        return EvaluationOutput(report=payload["output"], artifacts=payload["artifacts"] or {})
+        return EvaluationOutput(
+            report=payload["output"], artifacts=payload["artifacts"] or {},
+            run_info=payload["run_info"],
+        )

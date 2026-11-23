@@ -34,7 +34,14 @@ from onolys_api.jobs.run import release_once
 from onolys_api.presets import UnknownPreset
 from onolys_api.repo.base import NotFoundError
 from onolys_api.repo.limits import LimitDefaults
-from onolys_api.repo.models import RunDoc, SessionDoc, SessionError, SessionState, SttInfo
+from onolys_api.repo.models import (
+    OutputValidation,
+    RunDoc,
+    SessionDoc,
+    SessionError,
+    SessionState,
+    SttInfo,
+)
 from onolys_api.routes.ids import ResourceId
 
 ERRORS = {"default": {"model": ErrorResponse, "description": "Error"}}
@@ -79,6 +86,7 @@ class RunView(BaseModel):
     ended: datetime | None = None
     error: str | None = None
     run_info: dict[str, Any] | None = None
+    validation: OutputValidation | None = None
 
 
 class RunList(BaseModel):
@@ -106,7 +114,7 @@ def _view(r: RunDoc) -> RunView:
         run_id=r.run_id, session_id=r.session_id, status=r.status, stage=r.stage,
         n_runs=r.n_runs, preset=r.preset, stt=r.stt, rating_id=r.rating_id,
         code_version=r.code_version, attempts=r.attempts, started=r.started, ended=r.ended,
-        error=r.error, run_info=r.run_info,
+        error=r.error, run_info=r.run_info, validation=r.validation,
     )  # fmt: skip
 
 

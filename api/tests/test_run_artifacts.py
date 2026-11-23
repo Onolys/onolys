@@ -124,14 +124,16 @@ async def test_submitted_card_run_leaves_artifacts_run_info_and_header(env):
     assert ri["evaluation"]["routes"] and ri["evaluation"]["pack"]["id"]
     assert ri["evaluation"]["pack"]["version"] and ri["evaluation"]["pack"]["hash"]
     assert ri["evaluation"]["prompt_hashes"]
-    assert ri["miti"] and len(ri) == 2
+    assert ri["miti"] and set(ri) == {"evaluation", "miti", "usage", "validation"}
+    assert ri["validation"] == {"attempts": 1}
+    assert run.validation.attempts == 1
 
     r = await env.c.get(f"/v1/sessions/{sid}/reports/1", headers=env.h)
     assert r.status_code == 200
     header = r.json()["report"]["header"]
     assert header["code_version"] == "abc123" and header["preset"] == "default"
     assert header["stt"] == env.repo.get_session(env.uid, sid).stt.run.model_dump()
-    assert r.json()["report"]["run_info"] == ri
+    assert r.json()["report"]["run_info"] == {k: ri[k] for k in ("evaluation", "miti")}
 
 
 async def test_no_rating_run_leaves_the_same_artifacts(env):

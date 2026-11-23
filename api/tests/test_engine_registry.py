@@ -47,6 +47,10 @@ async def test_unknown_configured_engine_maps_to_invalid_parameters_without_llm_
 async def test_configured_engine_is_selected_and_speaker_map_is_in_params():
     class Custom:
         name = "custom"
+        accepts_feedback = False
+
+        def output_schema(self):
+            return {"type": "object", "properties": {"selected": {"const": "custom"}}}
 
         async def run(self, ctx, transcript, params, progress_cb):
             assert params["speaker_map"] == {"subject": "S1"}

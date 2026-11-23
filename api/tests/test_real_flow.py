@@ -145,14 +145,26 @@ def test_build_adapters_real_returns_real_adapters(settings):
     assert isinstance(a.stt, RealStt) and isinstance(a.evaluation, RealEvaluation)
 
 
-async def test_real_flow_reaches_report_ready_with_a_no_rating_report(make_env):
+async def test_real_flow_reaches_report_ready_with_a_no_rating_report(make_env, monkeypatch):
+    from onolys_engine_core import validated_run
+
+    validate = validated_run.validate_output
+    calls = []
+
+    def record(output, schema):
+        calls.append(output)
+        return validate(output, schema)
+
+    monkeypatch.setattr(validated_run, "validate_output", record)
     env = await make_env()
     sid = await env.to_awaiting_input()
     assert (await env.status(sid))["status"] == "awaiting_input"
     await env.run(sid, valid_card())
     s = await env.status(sid)
     assert (s["status"], s["progress"], s["latest_report_version"]) == ("report_ready", 100, 1)
-    assert env.engine.code_calls == 1
+    assert env.engine.code_calls == 1 and len(calls) == 1
+    (run,) = env.repo.list_runs(env.uid, sid)
+    assert run.validation.attempts == 1
     report = (await env.c.get(f"/v1/sessions/{sid}/reports/1", headers=env.h)).json()["report"]
     assert report["reasons_audit"]["status"] == "skipped"
     assert report["header"]["has_clinician_rating"] is False
@@ -224,3 +236,37 @@ async def test_transient_failure_twice_ends_failed_upstream_unavailable(make_env
     s = await env.status(sid)
     assert s["status"] == "failed" and s["error"]["code"] == "upstream_unavailable"
     assert env.engine.code_calls == 2
+
+
+async def test_real_invalid_lean_result_fails_once_with_safe_detail(make_env, monkeypatch, caplog):
+    import json
+
+    from onolys_engine_core.engine import EngineResult, RunInfo, RunUsage
+    from onolys_miti import MitiEngine
+
+    env = await make_env()
+    calls = []
+
+    async def invalid(self, ctx, transcript, params, progress_cb=None):
+        calls.append(1)
+        return EngineResult(
+            output={"private": "PHI-secret-output"},
+            artifacts={"code": {"private": "PHI-secret-output"}},
+            run_info=RunInfo(usage=RunUsage(input_tokens=11, output_tokens=2, calls=1)),
+        )
+
+    monkeypatch.setattr(MitiEngine, "run", invalid)
+    sid = await env.to_awaiting_input()
+    await env.run(sid, valid_card())
+    (run,) = env.repo.list_runs(env.uid, sid)
+    detail = (await env.c.get(f"/v1/runs/{run.run_id}", headers=env.h)).json()
+    assert run.status == "failed" and run.error == "output_invalid"
+    assert len(calls) == 1 and run.attempts == 1
+    assert detail["validation"]["attempts"] == 1
+    assert 0 < len(detail["validation"]["first_issues"]) <= 10
+    assert detail["run_info"]["usage"] == {
+        "input_tokens": 11, "output_tokens": 2, "calls": 1, "cost_usd": None,
+    }
+    assert "PHI-secret-output" not in json.dumps(detail) + caplog.text + str(run.model_dump())
+    assert env.repo.list_reports(env.uid, sid) == []
+    assert not any(env.app.state.blobs.root.glob(f"{env.uid}/{sid}/runs/**/*"))

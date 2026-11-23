@@ -13,6 +13,7 @@ from typing import Literal
 from google.api_core import exceptions as gexc
 from onolys_engine_core.errors import InputError, OnolysError
 from onolys_engine_core.llm.errors import LLMError
+from onolys_engine_core.validated_run import OutputInvalid
 from onolys_miti.stt.google_chirp import SttProviderError
 
 Stage = Literal["run", "stt"]
@@ -23,6 +24,7 @@ TRANSCRIPTION = "transcription_failed"
 INTERNAL = "internal_error"
 
 PUBLIC_MESSAGES = {
+    "output_invalid": "The engine returned an answer that did not match its schema.",
     "invalid_coded_span": (
         "Choose a valid coded_span within the transcript; time spans require timestamps."
     ),
@@ -81,6 +83,8 @@ def _classify(exc: BaseException, stage: Stage) -> tuple[str, bool]:
         if exc.code in _ADAPTER_CODES:
             return exc.code, _ADAPTER_CODES[exc.code]
         return INTERNAL, False
+    if isinstance(exc, OutputInvalid):
+        return "output_invalid", False
     if isinstance(exc, InputError):
         code = getattr(exc, "code", None)
         if code in ("invalid_coded_span", "session_too_long"):

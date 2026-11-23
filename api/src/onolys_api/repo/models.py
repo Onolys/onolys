@@ -168,6 +168,16 @@ class RatingDraftDoc(Doc):
     updated_at: datetime = Field(default_factory=utcnow)
 
 
+class OutputValidationIssue(BaseModel):
+    path: str
+    message: str
+
+
+class OutputValidation(BaseModel):
+    attempts: int = Field(ge=1, le=2)
+    first_issues: list[OutputValidationIssue] = Field(default_factory=list, max_length=10)
+
+
 class RunDoc(Doc):
     coded_span: CodedSpan | None = None
     uid: str
@@ -185,6 +195,7 @@ class RunDoc(Doc):
     ended: datetime | None = None
     error: str | None = None
     run_info: dict[str, Any] | None = None
+    validation: OutputValidation | None = None
     artifacts_prefix: str | None = None
     cap_date: str | None = None  # UTC day the cap slot was reserved on (R8)
     counted: bool = True  # False: run did not consume an eval slot (exempt first run, SP11 R5)

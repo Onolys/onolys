@@ -565,7 +565,7 @@ export interface components {
              * Code
              * @enum {string}
              */
-            code: "invalid_json" | "unsupported_media_type" | "schema_violation" | "empty_transcript" | "invalid_coded_span" | "session_too_long" | "transcript_invalid" | "transcript_too_large" | "empty_assessment" | "duplicate_ids" | "invalid_parameters" | "body_too_large" | "too_many_turns" | "too_many_sections" | "rate_limited" | "not_found" | "method_not_allowed" | "cors_rejected" | "request_rejected" | "upstream_unavailable" | "deadline_exceeded" | "internal_error" | "missing_parameter" | "unknown_pack" | "input_rejected" | "run_failed" | "unauthenticated" | "forbidden" | "invalid_state" | "rating_final" | "unsupported_audio" | "audio_too_long" | "audio_too_large" | "audio_unreadable" | "no_speech" | "speakers_not_separated" | "transcription_failed" | "rating_invalid" | "daily_cap_reached" | "interview_cap_reached" | "concurrent_runs" | "email_unverified" | "conflict" | "interview_too_long";
+            code: "invalid_json" | "unsupported_media_type" | "schema_violation" | "empty_transcript" | "invalid_coded_span" | "session_too_long" | "transcript_invalid" | "transcript_too_large" | "empty_assessment" | "duplicate_ids" | "invalid_parameters" | "output_invalid" | "body_too_large" | "too_many_turns" | "too_many_sections" | "rate_limited" | "not_found" | "method_not_allowed" | "cors_rejected" | "request_rejected" | "upstream_unavailable" | "deadline_exceeded" | "internal_error" | "missing_parameter" | "unknown_pack" | "input_rejected" | "run_failed" | "unauthenticated" | "forbidden" | "invalid_state" | "rating_final" | "unsupported_audio" | "audio_too_long" | "audio_too_large" | "audio_unreadable" | "no_speech" | "speakers_not_separated" | "transcription_failed" | "rating_invalid" | "daily_cap_reached" | "interview_cap_reached" | "concurrent_runs" | "email_unverified" | "conflict" | "interview_too_long";
             /**
              * Field
              * @description `/`-joined path of the offending field in the rating card or transcript (e.g. `globals/cct/reason`); `$` is the whole input. Set on `rating_invalid` or transcript upload errors. A path only, never user text.
@@ -672,6 +672,20 @@ export interface components {
         /** KindUsage */
         KindUsage: {
             day: components["schemas"]["Period"];
+        };
+        /** OutputValidation */
+        OutputValidation: {
+            /** Attempts */
+            attempts: number;
+            /** First Issues */
+            first_issues?: components["schemas"]["OutputValidationIssue"][];
+        };
+        /** OutputValidationIssue */
+        OutputValidationIssue: {
+            /** Message */
+            message: string;
+            /** Path */
+            path: string;
         };
         /** Period */
         Period: {
@@ -837,6 +851,7 @@ export interface components {
             /** Status */
             status: string;
             stt?: components["schemas"]["SttInfo"] | null;
+            validation?: components["schemas"]["OutputValidation"] | null;
         };
         /** ScenarioList */
         ScenarioList: {

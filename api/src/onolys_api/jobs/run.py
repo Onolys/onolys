@@ -23,16 +23,15 @@ import json
 import logging
 import time
 from collections.abc import Callable
-from functools import lru_cache
-from pathlib import Path
 from typing import Any
 
-from jsonschema import Draft202012Validator
 from onolys_engine_core.context import RunContext
+from onolys_engine_core.validated_run import OutputInvalid
 
 from onolys_api import logs
 from onolys_api.adapters.base import Evaluation
 from onolys_api.adapters.error_map import to_public
+from onolys_api.adapters.validated import evaluate_validated
 from onolys_api.jobs.alive import ensure_alive
 from onolys_api.jobs.machine import RUN_START_PROGRESS, STAGE_WEIGHTS, advance, is_system_failure
 from onolys_api.jobs.queue import MAX_ATTEMPTS
@@ -48,22 +47,8 @@ from onolys_api.repo.base import NotFoundError
 from onolys_api.repo.models import ReportDoc
 from onolys_api.storage.base import BlobStore
 
-try:  # resolves for editable (repo) and installed (wheel package data) layouts alike
-    from onolys_miti.report import schema_path as _report_schema_path
-
-    REAL_REPORT_SCHEMA = _report_schema_path()
-except (ImportError, FileNotFoundError):
-    REAL_REPORT_SCHEMA = Path("/nonexistent/report.schema.json")
-LOCAL_REPORT_SCHEMA = Path(__file__).resolve().parents[1] / "schemas/report.local.schema.json"
 ARTIFACTS = ("code", "tips")
 MAX_PROGRESS = 99
-
-
-@lru_cache(maxsize=1)
-def report_validator() -> Draft202012Validator:
-    """SP03 `report.schema.json` once it exists in the checkout, else the bundled stand-in."""
-    path = REAL_REPORT_SCHEMA if REAL_REPORT_SCHEMA.exists() else LOCAL_REPORT_SCHEMA
-    return Draft202012Validator(json.loads(path.read_text()))
 
 
 def artifact_key(uid: str, sid: str, run_id: str, name: str) -> str:
@@ -117,6 +102,11 @@ def make_run_handler(
                 release_once(repo, uid, sid, run_id, _refund(repo, uid, sid, run_id, code), date)
             raise
         except Exception as e:
+            if isinstance(e, OutputInvalid):
+                fields = {"validation": e.validation}
+                if e.usage is not None:
+                    fields["run_info"] = {"usage": e.usage.model_dump(mode="json")}
+                repo.update_run(uid, sid, run_id, fields)
             code, retryable = to_public(e, ctx.attempt)
             if not retryable or ctx.attempt >= MAX_ATTEMPTS:
                 release_once(repo, uid, sid, run_id, _refund(repo, uid, sid, run_id, code), date)
@@ -199,14 +189,11 @@ def _evaluate(ctx, blobs, evaluation, run_doc, session) -> ReportDoc:
     repo.update_run(uid, sid, run_id, {"llm_started": True})  # survives retries: a unit is spent
     # no catch here: any engine exception reaches the worker, which maps it with `to_public`
     out = run_coro(
-        evaluation.run(
-            rctx, transcript, {"subject": session.clinician_speaker}, params, progress_cb,
+        evaluate_validated(
+            evaluation, rctx, transcript, {"subject": session.clinician_speaker},
+            params, progress_cb,
         )
     )  # fmt: skip
-
-    if any(True for _ in report_validator().iter_errors(out.report)):
-        logs.emit("report_schema_invalid", logging.ERROR, session_id=sid, run_id=run_id)
-        raise PermanentError("internal_error")
 
     prefix = f"{uid}/{sid}/runs/{run_id}/"
     for name in ARTIFACTS:
@@ -224,6 +211,10 @@ def _evaluate(ctx, blobs, evaluation, run_doc, session) -> ReportDoc:
     repo.put_report(uid, sid, run_id, doc)
     repo.update_run(
         uid, sid, run_id,
-        {"run_info": out.report.get("run_info"), "artifacts_prefix": blobs.uri(prefix)},
+        {
+            "run_info": out.run_info or out.report.get("run_info"),
+            "validation": out.run_info.get("validation"),
+            "artifacts_prefix": blobs.uri(prefix),
+        },
     )  # fmt: skip
     return doc

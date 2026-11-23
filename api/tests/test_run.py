@@ -157,7 +157,17 @@ def swap_eval(env, evaluation):
     env.app.state.adapters = Adapters(stt=env.stt, evaluation=evaluation)  # read lazily by `run`
 
 
-async def test_full_stub_flow_reaches_report_ready_with_progress_table(env):
+async def test_full_stub_flow_reaches_report_ready_with_progress_table(env, monkeypatch):
+    from onolys_engine_core import validated_run
+
+    validate = validated_run.validate_output
+    calls = []
+
+    def record(output, schema):
+        calls.append(output)
+        return validate(output, schema)
+
+    monkeypatch.setattr(validated_run, "validate_output", record)
     sid = await env.start()
     s = env.repo.get_session(env.uid, sid)
     assert s.state == "running"
@@ -178,6 +188,7 @@ async def test_full_stub_flow_reaches_report_ready_with_progress_table(env):
 
     (run,) = env.repo.list_runs(env.uid, sid)
     assert run.status == "done" and run.error is None
+    assert run.validation.attempts == 1 and len(calls) == 1
     assert (run.preset, run.code_version, run.stt.provider) == ("default", "abc123", "p1")
     assert run.rating_id and run.run_info
     assert run.artifacts_prefix
@@ -375,20 +386,29 @@ async def test_run_without_a_usable_rating_still_runs(env):
     assert run2.rating_id and cap.seen["params"]["seed"] == sid2
 
 
-async def test_out_of_schema_report_fails_the_run_and_stores_nothing(env):
+async def test_out_of_schema_report_fails_the_run_and_stores_nothing(env, caplog):
     class BadReport(FakeEvaluation):
         async def run(self, *a, **kw):
             out = await super().run(*a, **kw)
             out.report.pop("schema_version", None)
-            out.report["unexpected"] = {"x": 1}
+            out.report["unexpected"] = {"x": "PHI-secret-output"}
             out.report["method"] = "not-an-object"
             return out
 
     swap_eval(env, BadReport())
     sid = await env.finished()
     s = env.repo.get_session(env.uid, sid)
-    assert s.state == "failed" and s.error.code == "internal_error"
+    assert s.state == "failed" and s.error.code == "output_invalid"
     assert env.repo.list_reports(env.uid, sid) == []
+    (run,) = env.repo.list_runs(env.uid, sid)
+    assert run.attempts == 1 and run.released
+    detail = (await env.c.get(f"/v1/runs/{run.run_id}", headers=env.h)).json()
+    assert detail["validation"]["attempts"] == 1
+    assert 0 < len(detail["validation"]["first_issues"]) <= 10
+    assert all(set(issue) == {"path", "message"} for issue in detail["validation"]["first_issues"])
+    assert "PHI-secret-output" not in json.dumps(detail) + caplog.text + str(run.model_dump())
+    assert env.counters() == (0, 0)
+    assert not any(env.blobs.root.glob(f"{env.uid}/{sid}/runs/**/*"))
 
 
 async def test_slot_is_kept_while_a_retry_is_pending_and_released_after(env):

@@ -1,5 +1,46 @@
 {
   "$defs": {
+    "OutputValidation": {
+      "properties": {
+        "attempts": {
+          "maximum": 2,
+          "minimum": 1,
+          "title": "Attempts",
+          "type": "integer"
+        },
+        "first_issues": {
+          "items": {
+            "$ref": "#/$defs/OutputValidationIssue"
+          },
+          "maxItems": 10,
+          "title": "First Issues",
+          "type": "array"
+        }
+      },
+      "required": [
+        "attempts"
+      ],
+      "title": "OutputValidation",
+      "type": "object"
+    },
+    "OutputValidationIssue": {
+      "properties": {
+        "message": {
+          "title": "Message",
+          "type": "string"
+        },
+        "path": {
+          "title": "Path",
+          "type": "string"
+        }
+      },
+      "required": [
+        "path",
+        "message"
+      ],
+      "title": "OutputValidationIssue",
+      "type": "object"
+    },
     "SttInfo": {
       "properties": {
         "language": {
@@ -203,6 +244,17 @@
       "anyOf": [
         {
           "$ref": "#/$defs/SttInfo"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "validation": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/OutputValidation"
         },
         {
           "type": "null"
