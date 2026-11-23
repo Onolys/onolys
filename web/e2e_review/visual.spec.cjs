@@ -15,7 +15,7 @@ const wait = (page) => page.waitForLoadState("networkidle").catch(() => {});
 async function verified(page, email) {
   await signUp(page, email);
   await page.getByRole("button", { name: "I've verified" }).click();
-  await expect(page.getByRole("heading", { name: "New Session", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: /^Welcome/ })).toBeVisible();
 }
 
 /** Upload ten-min.mp3 and land on the session page (mock upload URL is same-origin, so it passes the prod connect-src). */

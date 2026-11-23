@@ -43,7 +43,7 @@ test.describe("?next= handling", () => {
       await account(page);
       await spa(page, `/login?next=${encodeURIComponent(n)}`);
       await fillLogin(page, "u1@example.com");
-      await expect(page.getByRole("heading", { name: "New Session", exact: true })).toBeVisible();
+      await expect(page.getByRole("heading", { name: /^Welcome/ })).toBeVisible();
       expect(path_(page)).toBe("/new");
       expect(hits).toEqual([]);
     });

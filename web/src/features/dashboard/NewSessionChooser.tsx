@@ -1,6 +1,7 @@
 /** `/new` (PRD SP1): the two landing cards, AI interview and rate a recording, with usage and cap behaviour. */
 import { Button, Card, CardContent, CardDescription, CardFooter, CardHeader, Section } from "@onolys/ui";
 import { Link } from "react-router";
+import { useAuth } from "../../auth/AuthProvider";
 import { messageForCode } from "../../api/errors";
 import { H1, PAGE } from "../../components/classes";
 import { Notice } from "../../components/Notice";
@@ -11,13 +12,22 @@ import { useUsage } from "../usage/useUsage";
 
 const TITLE = "m-0 text-lg font-semibold leading-tight";
 
+/** Firebase displayName (trimmed), else the email's local part, else nothing. */
+export function greetingName(user: { displayName?: string | null; email?: string | null } | null): string {
+  const name = user?.displayName?.trim();
+  if (name) return name;
+  return user?.email?.split("@")[0]?.trim() ?? "";
+}
+
 export function NewSessionChooser() {
+  const { user } = useAuth();
+  const name = greetingName(user);
   const usage = useUsage();
   const blocking = blockingPeriod(usage.data, "eval");
   const interviewBlocking = blockingPeriod(usage.data, "interview");
   return (
     <div className={PAGE}>
-      <h1 className={H1}>New Session</h1>
+      <h1 className={H1}>{name ? `Welcome ${name}` : "Welcome"}</h1>
       <div className="grid grid-cols-[repeat(auto-fit,minmax(16rem,1fr))] gap-4">
         <Section aria-labelledby="card-interview" className="flex">
           <Card className="w-full">

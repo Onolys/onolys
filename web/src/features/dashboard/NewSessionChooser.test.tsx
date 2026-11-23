@@ -11,13 +11,28 @@ const render = () => renderPage(<NewSessionChooser />, "/new", { user: USER });
 const main = () => within(screen.getByRole("main"));
 
 describe("new session chooser", () => {
-  it("has the New Session h1, no Sessions heading, and both cards", async () => {
+  it("has the Welcome h1, no Sessions heading, and both cards", async () => {
     render();
-    expect(await screen.findByRole("heading", { level: 1, name: "New Session" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { level: 1, name: "Welcome rater" })).toBeInTheDocument();
     expect(screen.queryByRole("heading", { level: 1, name: "Sessions" })).toBeNull();
     expect(main().getByRole("heading", { level: 2, name: "Practise with an AI client" })).toBeInTheDocument();
     expect(main().getByRole("heading", { level: 2, name: "Rate a recording" })).toBeInTheDocument();
     expect(main().getByRole("link", { name: "Start AI Interview" })).toHaveAttribute("href", "/interviews/new");
+  });
+
+  it("greets by Firebase displayName (trimmed) when set", async () => {
+    renderPage(<NewSessionChooser />, "/new", { user: { ...USER, displayName: "  Dana Lee " } });
+    expect(await screen.findByRole("heading", { level: 1, name: "Welcome Dana Lee" })).toBeInTheDocument();
+  });
+
+  it("falls back to the email local part when displayName is blank", async () => {
+    renderPage(<NewSessionChooser />, "/new", { user: { ...USER, displayName: "   " } });
+    expect(await screen.findByRole("heading", { level: 1, name: "Welcome rater" })).toBeInTheDocument();
+  });
+
+  it("is just Welcome when there is neither name nor email", async () => {
+    renderPage(<NewSessionChooser />, "/new", { user: { ...USER, email: "" } });
+    expect(await screen.findByRole("heading", { level: 1, name: "Welcome" })).toBeInTheDocument();
   });
 
   it("shows the usage lines and a New session link", async () => {

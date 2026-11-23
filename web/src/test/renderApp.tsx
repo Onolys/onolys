@@ -9,14 +9,14 @@ import { routes } from "../routes/routes";
 export interface RenderOptions {
   service?: FakeAuthService;
   /** Pre-signed-in user. Omit for signed out. */
-  user?: { email: string; verified: boolean };
+  user?: { email: string; verified: boolean; displayName?: string | null };
   /** Route table to render instead of the app routes (page-level tests). */
   routes?: RouteObject[];
 }
 
 export function renderApp(path: string, opts: RenderOptions = {}) {
   const service = opts.service ?? createFakeAuthService();
-  if (opts.user) service.signedInAs(opts.user.email, { verified: opts.user.verified });
+  if (opts.user) service.signedInAs(opts.user.email, { verified: opts.user.verified, displayName: opts.user.displayName });
   const queryClient = makeQueryClient();
   const router = createMemoryRouter(opts.routes ?? routes, { initialEntries: [path] });
   render(

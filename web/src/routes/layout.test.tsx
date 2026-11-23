@@ -49,7 +49,7 @@ describe("header nav by auth phase (D1)", () => {
 
   it("verified: the current page's nav link has aria-current", async () => {
     renderApp("/new", { user: { email: "a@clinic.org", verified: true } });
-    await h1("New Session");
+    await h1("Welcome a");
     expect(inNav().getByRole("link", { name: "New Session" })).toHaveAttribute("aria-current", "page");
     expect(inNav().getByRole("link", { name: "Sessions" })).not.toHaveAttribute("aria-current");
   });

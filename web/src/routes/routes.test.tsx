@@ -6,7 +6,7 @@ const VERIFIED = { email: "a@clinic.org", verified: true };
 
 const table: Array<[string, string]> = [
   ["/sample", "Sample report"],
-  ["/new", "New Session"],
+  ["/new", "Welcome a"],
   ["/sessions", "Sessions"],
   ["/sessions/new", "New session"],
   ["/sessions/abc123", "Session"],
@@ -59,7 +59,7 @@ describe("route table", () => {
 
   it("/ redirects a verified user to /new", async () => {
     const { router } = renderApp("/", { user: VERIFIED });
-    expect(await screen.findByRole("heading", { level: 1, name: "New Session" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { level: 1, name: "Welcome a" })).toBeInTheDocument();
     expect(router.state.location.pathname).toBe("/new");
   });
 

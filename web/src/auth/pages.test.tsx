@@ -115,7 +115,7 @@ describe("sign up", () => {
     await h1("Sign up");
     await user.click(screen.getByRole("button", { name: "Continue with Google" }));
     await waitFor(() => expect(service.calls.googleSignIns).toBe(1));
-    await h1("New Session"); // Google accounts arrive verified
+    await h1("Welcome google.user"); // Google accounts arrive verified
   });
 });
 
@@ -178,7 +178,7 @@ describe("log in", () => {
 
   it("ignores an unsafe ?next= after sign-in", async () => {
     const { router } = renderApp("/login?next=%2F%2Fevil.com", { user: { email: "a@clinic.org", verified: true } });
-    await h1("New Session");
+    await h1("Welcome a");
     expect(here(router)).toBe("/new");
   });
 });
@@ -315,7 +315,7 @@ describe("verify email", () => {
     add.mockRestore();
     service.markVerified("a@clinic.org");
     act(() => void window.dispatchEvent(new Event("focus")));
-    await h1("New Session");
+    await h1("Welcome a");
     expect(service.calls.forcedRefreshes).toBe(1);
   });
 

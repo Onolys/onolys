@@ -41,7 +41,7 @@ async function signUp(page, email, pw = PW) {
 async function signUpVerified(page, email = "user@example.com") {
   await signUp(page, email);
   await page.getByRole("button", { name: "I've verified" }).click();
-  await expect(page.getByRole("heading", { name: "New Session", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: /^Welcome/ })).toBeVisible();
 }
 /** In-app navigation without reload (fake auth state lives in memory and a reload would sign the user out). */
 async function spa(page, url) {

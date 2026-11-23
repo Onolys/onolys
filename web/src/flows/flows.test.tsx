@@ -96,7 +96,7 @@ const settle = (sid: string) => act(() => mockBackend.settle(sid));
 /** Dashboard -> New session -> choose file -> Start; ends on /sessions/:id. */
 async function uploadViaUi(u: ReturnType<typeof user>, router: Parameters<typeof here>[0], title?: string) {
   await u.click(nav("New Session"));
-  await h1("New Session");
+  await h1("Welcome rater");
   await u.click(within(screen.getByRole("main")).getByRole("link", { name: "New session" }));
   await h1("New session");
   if (title) await u.type(screen.getByLabelText(/title/i), title);
@@ -139,7 +139,7 @@ describe("flow: one submit, no rating card (default)", () => {
     await h1("Verify your email");
     service.markVerified(EMAIL);
     await u.click(screen.getByRole("button", { name: "I've verified" }));
-    await h1("New Session");
+    await h1("Welcome rater");
 
     const sid = await uploadViaUi(u, router, "Visit 3");
     expect(screen.queryByLabelText("Cultivating Change Talk score")).toBeNull();
@@ -198,7 +198,7 @@ describe("flow (rating on): sign-up, verify, upload, speaker + rating during tra
     expect(await screen.findByRole("status")).toHaveTextContent("haven't seen your verification");
     service.markVerified(EMAIL);
     await u.click(screen.getByRole("button", { name: "I've verified" }));
-    await h1("New Session");
+    await h1("Welcome rater");
     await u.click(nav("Sessions"));
     await h1("Sessions");
     expect(await screen.findByRole("link", { name: "Start a new session" })).toBeInTheDocument(); // empty state
