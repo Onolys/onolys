@@ -1,6 +1,7 @@
 """Validate selection and engine limits before reserving a run or calling a model."""
 
 from onolys_engine_core.errors import InvalidCodedSpan, SessionTooLong
+from onolys_engine_core.spans import validate_portion_limits
 from onolys_engine_core.transcript import Transcript
 from onolys_miti import miti
 from onolys_miti.prepare import RoleTurn, _duration_ms, select_turns
@@ -19,7 +20,8 @@ def validate_coded_input(transcript: Transcript, span: CodedSpan | None) -> None
         bounds = choice.coded_span.model_dump(exclude_none=True) if choice.coded_span else None
         turns, _ = select_turns([RoleTurn(t, "other") for t in transcript.turns], bounds)
         duration = _duration_ms(transcript, turns, bounds)
-        too_long = sum(len(rt.turn.text.split()) for rt in turns) > 6000
+        validate_portion_limits([rt.turn for rt in turns], duration, max_duration_ms=None)
+        too_long = False
         for check in miti.MITI.data.get("input_checks", []):
             if check["kind"] == "duration_max" and duration is not None:
                 too_long |= duration > check["value"] * 60_000
