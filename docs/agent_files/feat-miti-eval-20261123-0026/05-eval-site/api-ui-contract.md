@@ -46,7 +46,9 @@ Response:
 }
 ```
 
-Status is `ready`, `awaiting_speakers`, or `transcribing`.
+Status is `ready`, `awaiting_speakers`, `transcribing`, or `failed`. A failed response may include `"error": {"code": "string", "message": "string"}`.
+
+Authenticated, allowlisted `GET /v1/uploads/{upload_id}` returns the same upload-response shape. The UI polls while `transcribing` and stops on a terminal state or unmount.
 
 `POST /v1/uploads/{id}/speakers` accepts `{"clinician_speaker": "label"}` and returns the same upload-response shape.
 
