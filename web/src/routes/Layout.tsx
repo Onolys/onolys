@@ -1,24 +1,23 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 import { Link, NavLink, Outlet, useLocation } from "react-router";
-import { useAuth, type AuthPhase } from "../auth/AuthProvider";
+import { AppHeader, SkipLink } from "@onolys/ui";
+import { useAuth } from "../auth/AuthProvider";
 import { useSignOut } from "../auth/useSignOut";
 import { AccountMenu } from "./AccountMenu";
 import { Footer } from "./Footer";
 
-const NAV: Record<AuthPhase, { to: string; label: string; className?: string; external?: boolean }[]> = {
-  loading: [],
-  signedOut: [
-    { to: "/sample", label: "Sample report", className: "btn btn-secondary", external: true },
-    { to: "/login", label: "Log in", className: "nav-login" },
-    { to: "/signup", label: "Sign up", className: "btn btn-primary nav-signup" },
-  ],
-  unverified: [], // the verify screen is not a signed-in state: brand only
-  verified: [
-    { to: "/sessions", label: "Sessions", className: "btn btn-secondary nav-btn" },
-    { to: "/new", label: "New Session", className: "btn btn-secondary nav-btn" },
-    { to: "/sample", label: "Sample report", className: "btn btn-secondary nav-btn", external: true },
-  ],
-};
+/** Plain text nav link (not a button): muted, subtle hover, current page = primary colour + underline. AppHeader's nav supplies the even gap. */
+function NavItem({ to, children }: { to: string; children: ReactNode }) {
+  return (
+    <NavLink
+      to={to}
+      end
+      className="text-sm font-medium text-muted-foreground no-underline hover:text-foreground aria-[current=page]:text-primary aria-[current=page]:underline aria-[current=page]:decoration-2 aria-[current=page]:underline-offset-8"
+    >
+      {children}
+    </NavLink>
+  );
+}
 
 export function Layout() {
   const { pathname } = useLocation();
@@ -35,32 +34,44 @@ export function Layout() {
     }
   }, [pathname, status]);
 
+  let navigation: ReactNode = null; // loading and unverified: brand only (verify is not a signed-in state)
+  if (phase === "signedOut") {
+    navigation = (
+      <>
+        <NavItem to="/login">Log in</NavItem>
+        <NavItem to="/signup">Sign up</NavItem>
+      </>
+    );
+  } else if (phase === "verified") {
+    navigation = (
+      <>
+        <NavItem to="/sessions">Sessions</NavItem>
+        <NavItem to="/new">New Session</NavItem>
+      </>
+    );
+  }
+
   return (
-    <div className="app">
-      <a className="skip-link" href="#main">
-        Skip to main content
-      </a>
-      <header className="app-header">
-        <Link to="/" className="brand">
-          Onolys
-        </Link>
-        <nav aria-label="Main" className={phase === "signedOut" ? "nav-out" : undefined}>
-          {NAV[phase].map((l) =>
-            l.external ? (
-              <Link key={l.to} to={l.to} target="_blank" rel="noopener noreferrer" className={l.className}>
-                {l.label}
-              </Link>
-            ) : (
-              <NavLink key={l.to} to={l.to} end className={l.className}>
-                {l.label}
-              </NavLink>
-            ),
-          )}
-        </nav>
-        {phase === "verified" && <AccountMenu email={user?.email ?? null} onSignOut={() => void signOut()} />}
-      </header>
+    <div className="flex min-h-screen flex-col">
+      <SkipLink />
+      <AppHeader
+        // verified: page nav sits at the true centre of the bar (brand left, account menu right); signed-out nav stays right via the brand's mr-auto
+        className={phase === "verified" ? "relative [&>nav]:absolute [&>nav]:left-1/2 [&>nav]:-translate-x-1/2" : undefined}
+        brand={
+          <Link to="/" className="font-bold text-primary no-underline">
+            Onolys
+          </Link>
+        }
+        navigation={navigation}
+        accountMenu={phase === "verified" ? <AccountMenu email={user?.email ?? null} onSignOut={() => void signOut()} /> : undefined}
+      />
       {signOutError && <p role="alert">{signOutError}</p>}
-      <main id="main" ref={mainRef}>
+      <main
+        id="main"
+        ref={mainRef}
+        // focus-to-h1 on route change: no ring for programmatic focus, keep it for keyboard focus-visible
+        className="mx-auto w-full max-w-5xl flex-1 px-4 py-6 [&_h1:focus:not(:focus-visible)]:outline-none"
+      >
         <Outlet />
       </main>
       <Footer />

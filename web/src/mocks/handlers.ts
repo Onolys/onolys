@@ -102,7 +102,7 @@ export function createHandlers(b: MockBackend): HttpHandler[] {
     http.get(`${V1}/usage`, guarded(({ uid }) => json(b.getUsage(uid)))),
 
     // Stand-in for the GCS signed URL: pinned to the canonical Content-Type, like the real one.
-    http.put("https://uploads.mock.invalid/uploads/:uid/:sid/:upload_id", async ({ request, params }) => {
+    http.put("*/uploads/:uid/:sid/:upload_id", async ({ request, params }) => {
       const expected = b.uploadContentType(String(params.sid), String(params.upload_id));
       if (!expected || request.headers.get("content-type") !== expected)
         return new HttpResponse("SignatureDoesNotMatch", { status: 403 });

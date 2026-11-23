@@ -3,7 +3,9 @@ import { Link, useLocation } from "react-router";
 import { useAuth } from "../AuthProvider";
 import { EMAIL_PATTERN, isPopupCancel } from "../errors";
 import { withNext } from "../next";
-import { ErrorSummary } from "./parts";
+import { Button } from "@onolys/ui";
+import { H1, LINK } from "../../components/classes";
+import { ErrorSummary, FORM, Field, StatusNote } from "./parts";
 import { useFormError } from "./useFormError";
 
 /** Router state set by the password-reset flow. */
@@ -61,29 +63,28 @@ export function Login() {
 
   return (
     <>
-      <h1>Log in</h1>
-      <form className="auth-form" onSubmit={(e) => void onSubmit(e)} noValidate>
-        {from.passwordUpdated && !form.error && <p role="status">Password updated. Log in with your new password.</p>}
+      <h1 className={H1}>Log in</h1>
+      <form className={FORM} onSubmit={(e) => void onSubmit(e)} noValidate>
+        {from.passwordUpdated && !form.error && <StatusNote>Password updated. Log in with your new password.</StatusNote>}
         {form.error && <ErrorSummary error={form.error} search={search} />}
-        <label>
-          Email
-          <input name="email" type="email" autoComplete="email" defaultValue={from.email ?? ""} required {...form.fieldProps("email")} />
-        </label>
-        <label>
-          Password
-          <input name="password" type="password" autoComplete="current-password" required {...form.fieldProps("password")} />
-        </label>
-        <button type="submit" className="primary" disabled={busy}>
+        <Field label="Email" id="login-email" name="email" type="email" autoComplete="email" defaultValue={from.email ?? ""} required {...form.fieldProps("email")} />
+        <Field label="Password" id="login-password" name="password" type="password" autoComplete="current-password" required {...form.fieldProps("password")} />
+        <Button type="submit" disabled={busy}>
           Log in
-        </button>
-        <button type="button" className="secondary" disabled={busy} onClick={() => void google()}>
+        </Button>
+        <Button type="button" variant="outline" disabled={busy} onClick={() => void google()}>
           Continue with Google
-        </button>
+        </Button>
         <p>
-          <Link to={withNext("/forgot-password", search)}>Forgot your password?</Link>
+          <Link to={withNext("/forgot-password", search)} className={LINK}>
+            Forgot your password?
+          </Link>
         </p>
         <p>
-          New here? <Link to={withNext("/signup", search)}>Create an account</Link>
+          New here?{" "}
+          <Link to={withNext("/signup", search)} className={LINK}>
+            Create an account
+          </Link>
         </p>
       </form>
     </>

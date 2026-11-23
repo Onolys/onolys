@@ -7,6 +7,7 @@ import {
   drinkingSampleReport,
   drinkingSampleTurns,
 } from "../../mocks/fixtures/sample";
+import { NOTE } from "../../components/classes";
 import { ReportView, type TurnsState } from "./ReportView";
 
 const TURNS: TurnsState = { status: "ready", turns: drinkingSampleTurns };
@@ -18,7 +19,7 @@ export function SampleReportPage() {
       turns={TURNS}
       title="Sample report"
       notCoded={drinkingSampleNotCoded}
-      headerSlot={<p className="sub">Example report from a made-up role-play conversation.</p>}
+      headerSlot={<p className={NOTE}>Example report from a made-up role-play conversation.</p>}
     />
   );
 }

@@ -1,3 +1,4 @@
+import { Alert, AlertDescription } from "@onolys/ui";
 import type { ReactNode } from "react";
 import { messageForCode } from "../../api/errors";
 
@@ -14,10 +15,12 @@ export function ErrorCard({
   children?: ReactNode;
 }) {
   return (
-    <div className="error-card" role="alert">
-      <p className="error-card-message">{messageForCode(code, { resetsAt })}</p>
-      {reference ? <p className="error-card-ref">Reference: {reference}</p> : null}
-      {children ? <div className="error-card-actions">{children}</div> : null}
-    </div>
+    <Alert variant="destructive" className="border-destructive">
+      <AlertDescription>
+        <p className="font-semibold">{messageForCode(code, { resetsAt })}</p>
+        {reference ? <p className="text-muted-foreground">Reference: {reference}</p> : null}
+        {children ? <div className="flex flex-wrap gap-3">{children}</div> : null}
+      </AlertDescription>
+    </Alert>
   );
 }

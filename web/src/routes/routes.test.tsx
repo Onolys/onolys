@@ -6,7 +6,7 @@ const VERIFIED = { email: "a@clinic.org", verified: true };
 
 const table: Array<[string, string]> = [
   ["/sample", "Sample report"],
-  ["/new", "New Session"],
+  ["/new", "Welcome a"],
   ["/sessions", "Sessions"],
   ["/sessions/new", "New session"],
   ["/sessions/abc123", "Session"],
@@ -40,7 +40,8 @@ describe("route table", () => {
     const path = "/auth/action?mode=verifyEmail&oobCode=abc";
     for (const user of [undefined, { email: "a@clinic.org", verified: false }, VERIFIED]) {
       const { router } = renderApp(path, user ? { user } : {});
-      expect(await screen.findByRole("heading", { level: 1, name: "Verify your email" })).toBeInTheDocument();
+      // A verified user's page swaps to "Already verified" once auth state loads; accept either, and don't hold the element across the swap.
+      await screen.findByRole("heading", { level: 1, name: /^(Verify your email|Already verified)$/ });
       expect(router.state.location.pathname).toBe("/auth/action");
       cleanup();
     }
@@ -50,14 +51,15 @@ describe("route table", () => {
     renderApp("/sessions", { user: VERIFIED });
     await screen.findByRole("heading", { level: 1, name: "Sessions" });
     expect(screen.getByRole("banner")).toBeInTheDocument();
-    expect(screen.getByRole("navigation")).toBeInTheDocument();
+    expect(screen.getByRole("navigation", { name: "Main" })).toBeInTheDocument();
+    expect(screen.getByRole("navigation", { name: "Footer" })).toBeInTheDocument();
     expect(screen.getByRole("main")).toBeInTheDocument();
     expect(screen.getByRole("contentinfo")).toBeInTheDocument();
   });
 
   it("/ redirects a verified user to /new", async () => {
     const { router } = renderApp("/", { user: VERIFIED });
-    expect(await screen.findByRole("heading", { level: 1, name: "New Session" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { level: 1, name: "Welcome a" })).toBeInTheDocument();
     expect(router.state.location.pathname).toBe("/new");
   });
 

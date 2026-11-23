@@ -84,7 +84,8 @@ describe("New session form", () => {
     await waitFor(() => expect(here(router)).toMatch(/^\/sessions\/(?!new$)[^/]+$/));
     const id = here(router).split("/")[2]!;
     expect(getJob(id)).toBeDefined();
-    expect(mockBackend.getSession("u_rater_clinic_org", id).status).toBe("uploading");
+    // the same-origin mock PUT may already have completed (validating); either way the upload was registered
+    expect(mockBackend.getSession("u_rater_clinic_org", id).status).toMatch(/^(uploading|validating)$/);
   });
 
   it("W17: the latest pick wins when an earlier file's check finishes last; Start waits with 'Checking file…'", async () => {

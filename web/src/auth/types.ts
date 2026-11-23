@@ -3,6 +3,8 @@
 export interface AuthUser {
   uid: string;
   email: string | null;
+  /** Firebase profile name; null/empty when the account has none. */
+  displayName: string | null;
   emailVerified: boolean;
 }
 

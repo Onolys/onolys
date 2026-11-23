@@ -28,7 +28,7 @@ test.describe("mobile (iPhone 13 viewport)", () => {
     await shot(page, "m-verify");
     expect(await hasHScroll(page), "verify-email").toBe(false);
     await page.getByRole("button", { name: "I've verified" }).click();
-    await expect(page.getByRole("heading", { name: "New Session", exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { name: /^Welcome/ })).toBeVisible();
     await shot(page, "m-dashboard");
     expect(await hasHScroll(page), "dashboard").toBe(false);
     await shot(page, "m-new-session-chooser");

@@ -53,7 +53,13 @@ describe("footer", () => {
     expect(within(footer).getByRole("link", { name: "Terms" })).toHaveAttribute("href", "/terms");
     const contact = within(footer).getByRole("link", { name: "Contact" });
     expect(contact).toHaveAttribute("href", expect.stringMatching(/^mailto:/));
-    expect(within(footer).getAllByRole("link")).toHaveLength(3);
+    const sample = within(footer).getByRole("link", { name: "Sample report" });
+    expect(sample).toHaveAttribute("href", "/sample");
+    expect(sample).toHaveAttribute("target", "_blank");
+    expect(sample).toHaveAttribute("rel", "noopener noreferrer");
+    const links = within(within(footer).getByRole("navigation", { name: "Footer" })).getAllByRole("link");
+    expect(links.map((a) => a.textContent)).toEqual(["Privacy", "Terms", "Contact", "Sample report"]);
+    expect(within(footer).getAllByRole("link")).toHaveLength(4);
     expect(within(footer).getByText(`© ${new Date().getFullYear()} Onolys`)).toBeInTheDocument();
     expect(within(footer).getByText("Not official MITI coding")).toBeInTheDocument();
     expect(within(footer).getByText("Use it to practice and prepare")).toBeInTheDocument();

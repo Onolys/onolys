@@ -4,9 +4,11 @@ import { Link } from "react-router";
 export function RouteError() {
   return (
     <>
-      <h1>Something went wrong</h1>
-      <p>
-        <Link to="/">Back to the start</Link>
+      <h1 className="text-2xl font-semibold">Something went wrong</h1>
+      <p className="mt-4">
+        <Link to="/" className="text-primary underline underline-offset-4">
+          Back to the start
+        </Link>
       </p>
     </>
   );

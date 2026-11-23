@@ -64,9 +64,9 @@ describe("rating card: soft caps", () => {
     setValue("Change goal", "goal");
     setValue("Empathy reason", "x".repeat(1001));
     expect(screen.getByLabelText("Empathy reason")).toHaveValue("x".repeat(1001));
-    expect(screen.getByText(/1,001 \/ 1,000/)).toHaveClass("counter-over");
+    expect(screen.getByText(/1,001 \/ 1,000/)).toHaveAttribute("data-over", "true");
     setValue("Additional notes / evaluation reasoning", "y".repeat(3001));
-    expect(screen.getByText(/3,001 \/ 3,000/)).toHaveClass("counter-over");
+    expect(screen.getByText(/3,001 \/ 3,000/)).toHaveAttribute("data-over", "true");
     expect(screen.getByRole("button", { name: "Submit rating" })).toBeEnabled();
     expect(screen.getByRole("button", { name: /No rating/ })).toBeEnabled();
   });
@@ -74,7 +74,7 @@ describe("rating card: soft caps", () => {
   it("shows a quiet counter under the limit", async () => {
     await open(newSession());
     setValue("Empathy reason", "abc");
-    expect(screen.getByText(/3 \/ 1,000/)).not.toHaveClass("counter-over");
+    expect(screen.getByText(/3 \/ 1,000/)).toHaveAttribute("data-over", "false");
   });
 });
 

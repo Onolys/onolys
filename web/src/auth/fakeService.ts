@@ -12,6 +12,7 @@ interface Account {
   email: string;
   password: string | null;
   verified: boolean;
+  displayName?: string | null;
 }
 
 export interface FakeAuthOptions {
@@ -45,7 +46,7 @@ export interface FakeAuthService extends AuthService {
   /** Pretend the user clicked the email link (visible after the next refreshUser). */
   markVerified(email: string): void;
   /** Test shortcut: be signed in as this account right now. */
-  signedInAs(email: string, opts: { verified: boolean }): void;
+  signedInAs(email: string, opts: { verified: boolean; displayName?: string | null }): void;
 }
 
 const uidFor = (email: string) => `u_${email.toLowerCase().replace(/[^a-z0-9]/g, "_")}`;
@@ -61,7 +62,7 @@ export function createFakeAuthService(options: FakeAuthOptions = {}): FakeAuthSe
   const view = (): AuthUser | null => {
     if (!currentEmail) return null;
     const a = accounts.get(currentEmail)!;
-    return { uid: a.uid, email: a.email, emailVerified: seenVerified };
+    return { uid: a.uid, email: a.email, displayName: a.displayName ?? null, emailVerified: seenVerified };
   };
   const emit = () => {
     const u = view();
@@ -221,9 +222,9 @@ export function createFakeAuthService(options: FakeAuthOptions = {}): FakeAuthSe
       const a = accounts.get(norm(email));
       if (a) a.verified = true;
     },
-    signedInAs(email, { verified }) {
+    signedInAs(email, { verified, displayName }) {
       const key = norm(email);
-      accounts.set(key, { uid: uidFor(key), email: key, password: "password1", verified });
+      accounts.set(key, { uid: uidFor(key), email: key, password: "password1", verified, displayName });
       enter(key);
     },
   };

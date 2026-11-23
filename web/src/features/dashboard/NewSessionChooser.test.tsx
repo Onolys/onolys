@@ -11,19 +11,35 @@ const render = () => renderPage(<NewSessionChooser />, "/new", { user: USER });
 const main = () => within(screen.getByRole("main"));
 
 describe("new session chooser", () => {
-  it("has the New Session h1, no Sessions heading, and both cards", async () => {
+  it("has the Welcome h1, no Sessions heading, and both cards", async () => {
     render();
-    expect(await screen.findByRole("heading", { level: 1, name: "New Session" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { level: 1, name: "Welcome rater" })).toBeInTheDocument();
     expect(screen.queryByRole("heading", { level: 1, name: "Sessions" })).toBeNull();
     expect(main().getByRole("heading", { level: 2, name: "Practise with an AI client" })).toBeInTheDocument();
     expect(main().getByRole("heading", { level: 2, name: "Rate a recording" })).toBeInTheDocument();
     expect(main().getByRole("link", { name: "Start AI Interview" })).toHaveAttribute("href", "/interviews/new");
   });
 
+  it("greets by Firebase displayName (trimmed) when set", async () => {
+    renderPage(<NewSessionChooser />, "/new", { user: { ...USER, displayName: "  Dana Lee " } });
+    expect(await screen.findByRole("heading", { level: 1, name: "Welcome Dana Lee" })).toBeInTheDocument();
+  });
+
+  it("falls back to the email local part when displayName is blank", async () => {
+    renderPage(<NewSessionChooser />, "/new", { user: { ...USER, displayName: "   " } });
+    expect(await screen.findByRole("heading", { level: 1, name: "Welcome rater" })).toBeInTheDocument();
+  });
+
+  it("is just Welcome when there is neither name nor email", async () => {
+    renderPage(<NewSessionChooser />, "/new", { user: { ...USER, email: "" } });
+    expect(await screen.findByRole("heading", { level: 1, name: "Welcome" })).toBeInTheDocument();
+  });
+
   it("shows the usage lines and a New session link", async () => {
     const { router } = render();
-    expect(await main().findByText("20 of 20 left today")).toBeInTheDocument();
-    expect(main().getByText("5 of 5 left today")).toBeInTheDocument();
+    expect(await main().findByRole("button", { name: "20 of 20 left today" })).toHaveTextContent("20/20");
+    expect(main().getByRole("button", { name: "5 of 5 left today" })).toHaveTextContent("5/5");
+    expect(main().queryAllByRole("meter")).toHaveLength(0);
     const link = main().getByRole("link", { name: "New session" });
     expect(link).toHaveAttribute("href", "/sessions/new");
     await userEvent.click(link);
@@ -33,7 +49,9 @@ describe("new session chooser", () => {
   it("over the eval cap: says so with the reset time", async () => {
     mockBackend.configure({ caps: { eval: { day: 0 } } });
     render();
-    expect(await main().findByText("0 of 0 left today")).toBeInTheDocument();
+    const count = await main().findByRole("button", { name: "0 of 0 left today" });
+    expect(count).toHaveTextContent("0/0");
+    expect(count.querySelector(".text-destructive")).not.toBeNull();
     expect(main().getByText(/reached today's limit/i)).toHaveTextContent(/after .+/);
   });
 

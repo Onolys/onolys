@@ -1,9 +1,13 @@
 /** Upload progress, cancel, "Retry upload" and "Resume upload" on the session page (PRD R3, D4). */
+import { Button, Input } from "@onolys/ui";
 import { useMutation } from "@tanstack/react-query";
 import { useRef, useSyncExternalStore } from "react";
 import { describeError } from "../../api/errors";
 import type { SessionStatusDoc } from "../../api/statusListener";
 import { useApiClient } from "../../auth/useApiClient";
+import { NOTE } from "../../components/classes";
+import { Field } from "../../components/Field";
+import { ErrorNote, Notice } from "../../components/Notice";
 import { ErrorCard } from "../session/ErrorCard";
 import { FileNotices } from "./FileNotices";
 import { prepareUpload } from "./startUpload";
@@ -33,20 +37,22 @@ function ResumeUpload({ sessionId }: { sessionId: string }) {
   });
   const err = resume.error ? describeError(resume.error) : null;
   return (
-    <>
-      <label>
-        Audio recording
-        <input
-          type="file"
-          accept=".mp3,.wav,.m4a,.webm,.ogg,audio/*"
-          onChange={(e) => void filePick.pick(e.target.files?.[0])}
-        />
-      </label>
+    <div className="grid gap-3">
+      <Field label="Audio recording">
+        {(id) => (
+          <Input
+            id={id}
+            type="file"
+            accept=".mp3,.wav,.m4a,.webm,.ogg,audio/*"
+            onChange={(e) => void filePick.pick(e.target.files?.[0])}
+          />
+        )}
+      </Field>
       <FileNotices pick={filePick} />
       {err ? <ErrorCard code={err.code} reference={err.requestId} /> : null}
-      <button
+      <Button
         type="button"
-        className="btn btn-primary"
+        className="justify-self-start"
         disabled={!filePick.ready || resume.isPending}
         onClick={() => {
           if (!filePick.file || busy.current) return;
@@ -55,8 +61,8 @@ function ResumeUpload({ sessionId }: { sessionId: string }) {
         }}
       >
         {resume.isPending ? "Resuming…" : "Resume upload"}
-      </button>
-    </>
+      </Button>
+    </div>
   );
 }
 
@@ -70,48 +76,44 @@ export function UploadSlot({ sessionId, doc }: { sessionId: string; doc: Session
   const running = job !== undefined && (state.phase === "uploading" || state.phase === "completing");
   if (doc.state === "upload_incomplete" && !running) {
     return (
-      <div data-slot="upload" data-session={sessionId}>
-        <p className="notice">Pick the same recording again to resume the upload.</p>
+      <div data-slot="upload" data-session={sessionId} className="grid gap-3">
+        <Notice>Pick the same recording again to resume the upload.</Notice>
         <ResumeUpload sessionId={sessionId} />
       </div>
     );
   }
   if (!job) {
     return (
-      <div data-slot="upload" data-session={sessionId}>
-        <p className="notice">
-          This upload isn't running in this tab. Start a new session to upload the file again.
-        </p>
+      <div data-slot="upload" data-session={sessionId} className="grid gap-3">
+        <Notice>This upload isn't running in this tab. Start a new session to upload the file again.</Notice>
       </div>
     );
   }
 
   const pct = state.total > 0 ? Math.min(100, Math.round((state.loaded / state.total) * 100)) : 0;
   return (
-    <div data-slot="upload" data-session={sessionId}>
+    <div data-slot="upload" data-session={sessionId} className="grid gap-3">
       {state.phase === "uploading" || state.phase === "completing" ? (
         <>
           <p>
-            <progress max={100} value={pct} aria-label="Upload progress" /> {mb(state.loaded)} of{" "}
+            <progress max={100} value={pct} aria-label="Upload progress" className="h-3 w-64 max-w-full align-middle accent-primary" /> {mb(state.loaded)} of{" "}
             {mb(state.total)} MB ({pct}%)
           </p>
-          {state.attempt > 0 ? <p className="form-note">Trying again…</p> : null}
+          {state.attempt > 0 ? <p className={NOTE}>Trying again…</p> : null}
           {state.phase === "uploading" ? (
-            <button type="button" className="btn btn-secondary" onClick={() => job.cancel()}>
+            <Button type="button" variant="outline" className="justify-self-start" onClick={() => job.cancel()}>
               Cancel upload
-            </button>
+            </Button>
           ) : null}
         </>
       ) : null}
-      {state.phase === "done" ? <p className="form-note">Upload finished.</p> : null}
+      {state.phase === "done" ? <p className={NOTE}>Upload finished.</p> : null}
       {state.phase === "failed" || state.phase === "cancelled" ? (
         <>
-          <p className="form-error" role="alert">
-            {state.phase === "cancelled" ? "Upload cancelled." : "The upload didn't finish."}
-          </p>
-          <button type="button" className="btn btn-primary" onClick={() => void job.retry()}>
+          <ErrorNote role="alert">{state.phase === "cancelled" ? "Upload cancelled." : "The upload didn't finish."}</ErrorNote>
+          <Button type="button" className="justify-self-start" onClick={() => void job.retry()}>
             Retry upload
-          </button>
+          </Button>
         </>
       ) : null}
     </div>

@@ -1,9 +1,12 @@
 /** `/sessions` (PRD R5, D16): the caller's sessions, newest first, with status chips and an empty state. */
+import { Badge, Button, Card, CardContent, Skeleton } from "@onolys/ui";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { Link } from "react-router";
 import { unwrap } from "../../api/client";
 import { describeError } from "../../api/errors";
 import { useApiClient } from "../../auth/useApiClient";
+import { H1, LINK, LINK_BTN, NOTE, PAGE as PAGE_STACK } from "../../components/classes";
+import { StatusChip } from "../../components/StatusChip";
 import { ratingEnabled } from "../../config";
 import { ErrorCard } from "../session/ErrorCard";
 import type { components } from "../../api/schema";
@@ -31,78 +34,83 @@ export function SessionsPage() {
 
   let body;
   if (sessions.isPending) {
-    body = <p className="form-note">Loading your sessions…</p>;
+    body = (
+      <div aria-busy="true" className="grid gap-3">
+        <p className={NOTE}>Loading your sessions…</p>
+        <Skeleton className="h-12 w-full" />
+        <Skeleton className="h-12 w-full" />
+      </div>
+    );
   } else if (sessions.isError && items.length === 0) {
     const e = describeError(sessions.error);
     body = (
       <ErrorCard code={e.code} reference={e.requestId}>
-        <button type="button" className="link-button" onClick={() => void sessions.refetch()}>
+        <Button type="button" variant="link" className={LINK_BTN} onClick={() => void sessions.refetch()}>
           Try again
-        </button>
+        </Button>
       </ErrorCard>
     );
   } else if (items.length === 0) {
     body = (
-      <div className="empty-state">
-        <p>
-          {ratingEnabled()
-            ? "Onolys rates a recorded session against the MITI and shows you where it agrees with your own rating, line by line."
-            : "Onolys codes a recorded session against the MITI, with evidence from your transcript and tips to improve."}
-        </p>
-        <p>
-          <Link to="/new">Start a new session</Link>
-        </p>
-      </div>
+      <Card>
+        <CardContent className="grid justify-items-start gap-4">
+          <p>
+            {ratingEnabled()
+              ? "Onolys rates a recorded session against the MITI and shows you where it agrees with your own rating, line by line."
+              : "Onolys codes a recorded session against the MITI, with evidence from your transcript and tips to improve."}
+          </p>
+          <Button asChild>
+            <Link to="/new">Start a new session</Link>
+          </Button>
+        </CardContent>
+      </Card>
     );
   } else {
     body = (
       <>
-        <ul className="session-list">
-          {items.map((s) => {
-            const chip = STATUS_CHIP[s.status];
-            return (
-              <li key={s.id} className="session-row">
-                <Link to={`/sessions/${s.id}`}>{s.title ?? date(s.created_at)}</Link>{" "}
-                {s.interview_id ? (
-                  <>
-                    <span className="chip">AI interview</span>{" "}
-                  </>
-                ) : null}
-                <span className="chip" data-tone={chip.tone}>
-                  {chip.text}
-                </span>{" "}
-                <span className="form-note">{date(s.created_at)}</span>
-                {s.latest_report_version ? (
-                  <>
-                    {" "}
-                    <Link to={`/sessions/${s.id}/reports/${s.latest_report_version}`}>Report v{s.latest_report_version}</Link>
-                  </>
-                ) : null}
-              </li>
-            );
-          })}
-        </ul>
+        <Card className="py-0">
+          <ul className="m-0 grid list-none p-0">
+            {items.map((s) => {
+              const chip = STATUS_CHIP[s.status];
+              return (
+                <li key={s.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-border px-4 py-3 last:border-b-0">
+                  <Link to={`/sessions/${s.id}`} className={`${LINK} flex min-h-11 items-center`}>
+                    {s.title ?? date(s.created_at)}
+                  </Link>
+                  {s.interview_id ? <Badge variant="outline">AI interview</Badge> : null}
+                  <StatusChip tone={chip.tone}>{chip.text}</StatusChip>
+                  <span className={NOTE}>{date(s.created_at)}</span>
+                  {s.latest_report_version ? (
+                    <Link to={`/sessions/${s.id}/reports/${s.latest_report_version}`} className={`${LINK} flex min-h-11 items-center`}>
+                      Report v{s.latest_report_version}
+                    </Link>
+                  ) : null}
+                </li>
+              );
+            })}
+          </ul>
+        </Card>
         {sessions.isError ? (
           <ErrorCard code={describeError(sessions.error).code} reference={describeError(sessions.error).requestId}>
-            <button type="button" className="link-button" onClick={() => void sessions.refetch()}>
+            <Button type="button" variant="link" className={LINK_BTN} onClick={() => void sessions.refetch()}>
               Try again
-            </button>
+            </Button>
           </ErrorCard>
         ) : null}
         {sessions.hasNextPage ? (
-          <p>
-            <button type="button" className="btn btn-secondary" disabled={sessions.isFetchingNextPage} onClick={() => void sessions.fetchNextPage()}>
+          <div>
+            <Button type="button" variant="outline" disabled={sessions.isFetchingNextPage} onClick={() => void sessions.fetchNextPage()}>
               Load more
-            </button>
-          </p>
+            </Button>
+          </div>
         ) : null}
       </>
     );
   }
   return (
-    <>
-      <h1>Sessions</h1>
+    <div className={PAGE_STACK}>
+      <h1 className={H1}>Sessions</h1>
       {body}
-    </>
+    </div>
   );
 }

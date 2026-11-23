@@ -1,18 +1,38 @@
 /** `/settings` (PRD R6, D9): API key management, usage, sign out, account-removal contact. */
+import {
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  Button,
+  Checkbox,
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  Label,
+} from "@onolys/ui";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { unwrap } from "../../api/client";
 import { describeError } from "../../api/errors";
 import { useSignOut } from "../../auth/useSignOut";
 import { useApiClient } from "../../auth/useApiClient";
+import { ACTIONS, H1, LINK, NOTE } from "../../components/classes";
 import { CONTACT_EMAIL } from "../../config";
 import { formatResetTime } from "../../lib/format";
 import { UsageLeft } from "../usage/UsageLeft";
 import { useUsage } from "../usage/useUsage";
 import { ErrorCard } from "../session/ErrorCard";
-import { Modal } from "./Modal";
 
 const DOCS_URL = "/v1/docs";
+const H2 = "m-0 text-xl font-semibold";
+const SECTION = "grid gap-3";
 const when = (iso: string | null | undefined) => (iso ? new Date(iso).toLocaleString() : "never");
 
 type Confirm = "regenerate" | "revoke" | null;
@@ -25,6 +45,8 @@ export function Settings() {
   const usage = useUsage();
 
   const [confirm, setConfirm] = useState<Confirm>(null);
+  const regenerateBtn = useRef<HTMLButtonElement>(null);
+  const revokeBtn = useRef<HTMLButtonElement>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
   // The one-time secret lives only here (dialog state): not in the query cache, storage or logs.
@@ -78,60 +100,68 @@ export function Settings() {
 
   const info = key.data;
   const err = error ? describeError(error) : null;
-  const removal = <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>;
+  const removal = <a className={LINK} href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>;
 
   return (
-    <>
-      <h1>Settings</h1>
+    <div className="grid gap-6">
+      <h1 className={H1}>Settings</h1>
 
-      <section aria-labelledby="key-h">
-        <h2 id="key-h">API key</h2>
-        {key.isPending ? <p className="form-note">Loading…</p> : null}
+      <section aria-labelledby="key-h" className={SECTION}>
+        <h2 id="key-h" className={H2}>
+          API key
+        </h2>
+        {key.isPending ? <p className={NOTE}>Loading…</p> : null}
         {key.isError ? <ErrorCard code={describeError(key.error).code} reference={describeError(key.error).requestId} /> : null}
         {err && !confirm ? <ErrorCard code={err.code} reference={err.requestId} /> : null}
         {info && !info.active ? (
           <>
             <p>No API key yet.</p>
-            <button type="button" className="btn btn-primary" disabled={busy} onClick={() => void create()}>
-              Create API key
-            </button>
+            <div className={ACTIONS}>
+              <Button type="button" disabled={busy} onClick={() => void create()}>
+                Create API key
+              </Button>
+            </div>
           </>
         ) : null}
         {info?.active ? (
           <>
-            <dl>
-              <dt>Key</dt>
+            <dl className="m-0 grid grid-cols-[max-content_1fr] gap-x-4 gap-y-1 [&_dd]:m-0">
+              <dt className="font-semibold">Key</dt>
               <dd>
                 <code>onolys_{info.key_id}_…</code>
               </dd>
-              <dt>Status</dt>
+              <dt className="font-semibold">Status</dt>
               <dd>Active</dd>
-              <dt>Created</dt>
+              <dt className="font-semibold">Created</dt>
               <dd>{when(info.created)}</dd>
-              <dt>Last used</dt>
+              <dt className="font-semibold">Last used</dt>
               <dd>{when(info.last_used_at)}</dd>
             </dl>
-            <p className="dialog-actions" style={{ justifyContent: "flex-start" }}>
-              <button type="button" className="btn btn-secondary" disabled={busy} onClick={() => setConfirm("regenerate")}>
+            <div className={ACTIONS}>
+              <Button ref={regenerateBtn} type="button" variant="secondary" disabled={busy} onClick={() => setConfirm("regenerate")}>
                 Regenerate
-              </button>
-              <button type="button" className="btn btn-secondary" disabled={busy} onClick={() => setConfirm("revoke")}>
+              </Button>
+              <Button ref={revokeBtn} type="button" variant="secondary" disabled={busy} onClick={() => setConfirm("revoke")}>
                 Revoke
-              </button>
-            </p>
+              </Button>
+            </div>
           </>
         ) : null}
-        <h3>Use the API</h3>
+        <h3 className="m-0 mt-2 text-lg font-semibold">Use the API</h3>
         <p>
-          <a href={DOCS_URL}>API docs</a>
+          <a className={LINK} href={DOCS_URL}>
+            API docs
+          </a>
         </p>
-        <pre>
+        <pre className="m-0 overflow-x-auto rounded-md border border-border bg-muted p-3 text-sm">
           <code>{`curl -H "X-API-Key: onolys_<id>_<secret>" ${window.location.origin}/v1/usage`}</code>
         </pre>
       </section>
 
-      <section aria-labelledby="usage-h">
-        <h2 id="usage-h">Usage</h2>
+      <section aria-labelledby="usage-h" className={SECTION}>
+        <h2 id="usage-h" className={H2}>
+          Usage
+        </h2>
         {usage.data ? (
           <>
             <p>
@@ -145,78 +175,118 @@ export function Settings() {
             </p>
           </>
         ) : (
-          <p className="form-note">Loading…</p>
+          <p className={NOTE}>Loading…</p>
         )}
       </section>
 
-      <section aria-labelledby="account-h">
-        <h2 id="account-h">Account</h2>
+      <section aria-labelledby="account-h" className={SECTION}>
+        <h2 id="account-h" className={H2}>
+          Account
+        </h2>
         <p>
           Deleting a session removes its audio, transcript, rating and reports. For account removal, contact {removal}.
         </p>
-        <button type="button" className="btn btn-secondary" onClick={() => void signOut()}>
-          Sign out
-        </button>
+        <div className={ACTIONS}>
+          <Button type="button" variant="secondary" onClick={() => void signOut()}>
+            Sign out
+          </Button>
+        </div>
         {signOutError && <p role="alert">{signOutError}</p>}
       </section>
 
-      {confirm === "regenerate" ? (
-        <Modal titleId="regen-title" onEscape={closeConfirm}>
-          <h2 id="regen-title">Regenerate API key?</h2>
-          <p>The old key stops working immediately. Anything using it must be updated with the new key.</p>
+      <AlertDialog
+        open={confirm === "regenerate"}
+        onOpenChange={(next) => {
+          if (!next) closeConfirm();
+        }}
+      >
+        <AlertDialogContent
+          onCloseAutoFocus={(e) => {
+            e.preventDefault();
+            regenerateBtn.current?.focus();
+          }}
+        >
+          <AlertDialogHeader>
+            <AlertDialogTitle>Regenerate API key?</AlertDialogTitle>
+            <AlertDialogDescription>
+              The old key stops working immediately. Anything using it must be updated with the new key.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
           {err ? <ErrorCard code={err.code} reference={err.requestId} /> : null}
-          <div className="dialog-actions">
-            <button type="button" className="btn btn-secondary" onClick={closeConfirm}>
+          <AlertDialogFooter>
+            <AlertDialogCancel variant="secondary">
               Cancel
-            </button>
-            <button type="button" className="btn btn-primary" disabled={busy} onClick={() => void create()}>
+            </AlertDialogCancel>
+            <Button type="button" disabled={busy} onClick={() => void create()}>
               Regenerate key
-            </button>
-          </div>
-        </Modal>
-      ) : null}
-      {confirm === "revoke" ? (
-        <Modal titleId="revoke-title" onEscape={closeConfirm}>
-          <h2 id="revoke-title">Revoke API key?</h2>
-          <p>The key stops working immediately. You can create a new one later.</p>
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog
+        open={confirm === "revoke"}
+        onOpenChange={(next) => {
+          if (!next) closeConfirm();
+        }}
+      >
+        <AlertDialogContent
+          onCloseAutoFocus={(e) => {
+            e.preventDefault();
+            revokeBtn.current?.focus();
+          }}
+        >
+          <AlertDialogHeader>
+            <AlertDialogTitle>Revoke API key?</AlertDialogTitle>
+            <AlertDialogDescription>The key stops working immediately. You can create a new one later.</AlertDialogDescription>
+          </AlertDialogHeader>
           {err ? <ErrorCard code={err.code} reference={err.requestId} /> : null}
-          <div className="dialog-actions">
-            <button type="button" className="btn btn-secondary" onClick={closeConfirm}>
+          <AlertDialogFooter>
+            <AlertDialogCancel variant="secondary">
               Cancel
-            </button>
-            <button type="button" className="btn btn-danger" disabled={busy} onClick={() => void revoke()}>
+            </AlertDialogCancel>
+            <Button type="button" variant="destructive" disabled={busy} onClick={() => void revoke()}>
               Revoke key
-            </button>
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* One-time secret: no Escape, no outside click, no close button; only "Done" (after the stored checkbox) dismisses. */}
+      <Dialog open={secret !== null}>
+        <DialogContent
+          data-testid="api-secret-dialog"
+          showCloseButton={false}
+          onEscapeKeyDown={(e) => e.preventDefault()}
+          onPointerDownOutside={(e) => e.preventDefault()}
+          onInteractOutside={(e) => e.preventDefault()}
+        >
+          <DialogHeader>
+            <DialogTitle>Your new API key</DialogTitle>
+            <DialogDescription>Copy it now. It is shown only once and can't be retrieved later.</DialogDescription>
+          </DialogHeader>
+          <code data-testid="api-secret" className="break-all rounded-md border border-border bg-muted p-3 text-sm">
+            {secret}
+          </code>
+          <div className={ACTIONS}>
+            <Button type="button" variant="secondary" onClick={() => void copySecret(secret ?? "")}>
+              Copy
+            </Button>
+            <span role="status" className={NOTE}>
+              {copy === "copied" ? "Copied" : copy === "failed" ? "Couldn't copy. Select the key and copy it by hand." : ""}
+            </span>
           </div>
-        </Modal>
-      ) : null}
-      {secret ? (
-        <Modal titleId="secret-title" testId="api-secret-dialog">
-          <h2 id="secret-title">Your new API key</h2>
-          <p>Copy it now. It is shown only once and can't be retrieved later.</p>
-          <p>
-            <code data-testid="api-secret" style={{ wordBreak: "break-all" }}>
-              {secret}
-            </code>
-          </p>
-          <button type="button" className="btn btn-secondary" onClick={() => void copySecret(secret)}>
-            Copy
-          </button>
-          <span role="status" className="form-note">
-            {copy === "copied" ? "Copied" : copy === "failed" ? "Couldn't copy. Select the key and copy it by hand." : ""}
-          </span>
-          <p>
-            <label>
-              <input type="checkbox" checked={stored} onChange={(e) => setStored(e.target.checked)} /> I've stored it
-            </label>
-          </p>
-          <div className="dialog-actions">
-            <button type="button" className="btn btn-primary" disabled={!stored} onClick={dismissSecret}>
+          <div className="flex items-center gap-2">
+            <Checkbox id="secret-stored" checked={stored} onCheckedChange={(v) => setStored(v === true)} />
+            <Label htmlFor="secret-stored">I've stored it</Label>
+          </div>
+          <DialogFooter>
+            <Button type="button" disabled={!stored} onClick={dismissSecret}>
               Done
-            </button>
-          </div>
-        </Modal>
-      ) : null}
-    </>
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
   );
 }

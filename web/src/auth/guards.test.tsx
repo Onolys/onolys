@@ -41,7 +41,7 @@ describe("guards", () => {
     const { router } = renderApp("/", { user: { email: "a@clinic.org", verified: false } });
     await h1("Verify your email");
     expect(here(router)).toBe("/verify-email?next=%2Fnew");
-    expect(screen.queryByRole("heading", { level: 1, name: "New Session" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { level: 1, name: "Welcome a" })).not.toBeInTheDocument();
   });
 
   it("an unverified user is sent from a deep link to /verify-email keeping next", async () => {
@@ -52,7 +52,7 @@ describe("guards", () => {
 
   it("a verified user at / ends at /new", async () => {
     const { router } = renderApp("/", { user: { email: "a@clinic.org", verified: true } });
-    await h1("New Session");
+    await h1("Welcome a");
     expect(here(router)).toBe("/new");
   });
 
@@ -63,7 +63,7 @@ describe("guards", () => {
 
   it("a verified user on /login or /verify-email is sent on", async () => {
     renderApp("/login", { user: { email: "a@clinic.org", verified: true } });
-    await h1("New Session");
+    await h1("Welcome a");
   });
 
   it("a signed-out user on /verify-email goes to /login", async () => {

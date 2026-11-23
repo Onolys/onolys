@@ -3,7 +3,9 @@ import { Link, useLocation } from "react-router";
 import { useAuth } from "../AuthProvider";
 import { EMAIL_PATTERN, errorCode } from "../errors";
 import { withNext } from "../next";
-import { ErrorSummary } from "./parts";
+import { Button } from "@onolys/ui";
+import { H1, LINK } from "../../components/classes";
+import { ErrorSummary, FORM, Field, StatusNote } from "./parts";
 import { useFormError } from "./useFormError";
 
 /** Same confirmation for every email: no account enumeration (R2). */
@@ -41,19 +43,18 @@ export function ForgotPassword() {
 
   return (
     <>
-      <h1>Reset your password</h1>
-      <form className="auth-form" onSubmit={(e) => void onSubmit(e)} noValidate>
+      <h1 className={H1}>Reset your password</h1>
+      <form className={FORM} onSubmit={(e) => void onSubmit(e)} noValidate>
         {form.error && <ErrorSummary error={form.error} search={search} />}
-        {sent && <p role="status">{RESET_CONFIRMATION}</p>}
-        <label>
-          Email
-          <input name="email" type="email" autoComplete="email" required {...form.fieldProps("email")} />
-        </label>
-        <button type="submit" className="primary" disabled={busy}>
+        {sent && <StatusNote>{RESET_CONFIRMATION}</StatusNote>}
+        <Field label="Email" id="forgot-email" name="email" type="email" autoComplete="email" required {...form.fieldProps("email")} />
+        <Button type="submit" disabled={busy}>
           Send reset link
-        </button>
+        </Button>
         <p>
-          <Link to={withNext("/login", search)}>Back to log in</Link>
+          <Link to={withNext("/login", search)} className={LINK}>
+            Back to log in
+          </Link>
         </p>
       </form>
     </>

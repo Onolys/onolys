@@ -117,10 +117,10 @@ describe("landing cards", () => {
     const u = userEvent.setup();
     const { router } = renderApp("/", { user: USER });
     const interviewCard = within(await main().findByRole("region", { name: /Practise with an AI client/ }));
-    expect(await interviewCard.findByText("5 of 5 left today")).toBeInTheDocument();
+    expect(await interviewCard.findByRole("button", { name: "5 of 5 left today" })).toHaveTextContent("5/5");
     expect(interviewCard.queryByText(/this month/)).toBeNull();
     const rate = within(main().getByRole("region", { name: "Rate a recording" }));
-    expect(rate.getByText("20 of 20 left today")).toBeInTheDocument();
+    expect(rate.getByRole("button", { name: "20 of 20 left today" })).toHaveTextContent("20/20");
     expect(rate.getByRole("link", { name: "New session" })).toHaveAttribute("href", "/sessions/new");
     await u.click(interviewCard.getByRole("link", { name: "Start AI Interview" }));
     expect(here(router)).toBe("/interviews/new");
@@ -387,16 +387,93 @@ describe("discard and leave prompt (AC9)", () => {
     const { router } = renderApp("/interviews/new", { user: USER });
     const iid = await startLive(u, router);
     await act(() => router.navigate("/settings"));
-    const dialog = await screen.findByRole("dialog");
+    const dialog = await screen.findByRole("alertdialog");
     await u.click(within(dialog).getByRole("button", { name: "Keep talking" }));
     expect(here(router)).toBe(`/interviews/${iid}`);
-    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(screen.queryByRole("alertdialog")).toBeNull();
 
     await act(() => router.navigate("/settings"));
-    await u.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "Discard" }));
+    await u.click(within(await screen.findByRole("alertdialog")).getByRole("button", { name: "Discard" }));
     await waitFor(() => expect(here(router)).toBe("/settings"));
     expect(mockBackend.getInterview(UID, iid).state).toBe("abandoned");
     expect(mockBackend.listSessions(UID, {}).items).toHaveLength(0);
+  });
+
+  it("Keep talking returns focus to the element focused before the prompt", async () => {
+    const u = userEvent.setup();
+    const { router } = renderApp("/interviews/new", { user: USER });
+    await startLive(u, router);
+    const opener = main().getByRole("button", { name: "Discard" });
+    opener.focus();
+    await act(() => router.navigate("/settings"));
+    const dialog = await screen.findByRole("alertdialog");
+    await u.click(within(dialog).getByRole("button", { name: "Keep talking" }));
+    await waitFor(() => expect(screen.queryByRole("alertdialog")).toBeNull());
+    await waitFor(() => expect(opener).toHaveFocus());
+  });
+
+  it("Settings from the account menu: Keep talking returns focus to the account menu trigger", async () => {
+    const u = userEvent.setup();
+    const { router } = renderApp("/interviews/new", { user: USER });
+    await startLive(u, router);
+    const trigger = screen.getByRole("button", { name: "Account menu" });
+    await u.click(trigger);
+    await u.click(await screen.findByRole("menuitem", { name: "Settings" }));
+    const dialog = await screen.findByRole("alertdialog");
+    await u.click(within(dialog).getByRole("button", { name: "Keep talking" }));
+    await waitFor(() => expect(screen.queryByRole("alertdialog")).toBeNull());
+    await waitFor(() => expect(trigger).toHaveFocus());
+  });
+
+  it("falls back to the page heading when the opener is gone", async () => {
+    const u = userEvent.setup();
+    const { router } = renderApp("/interviews/new", { user: USER });
+    await startLive(u, router);
+    const gone = document.createElement("button");
+    main().getByRole("button", { name: "Discard" }).parentElement!.appendChild(gone);
+    gone.focus();
+    await act(() => router.navigate("/settings"));
+    await screen.findByRole("alertdialog");
+    gone.remove();
+    await u.keyboard("{Escape}");
+    await waitFor(() => expect(screen.queryByRole("alertdialog")).toBeNull());
+    await waitFor(() => expect(screen.getByRole("main").querySelector("h1")).toHaveFocus());
+  });
+
+  it("Escape also returns focus to the opener", async () => {
+    const u = userEvent.setup();
+    const { router } = renderApp("/interviews/new", { user: USER });
+    await startLive(u, router);
+    const opener = main().getByRole("button", { name: "Discard" });
+    opener.focus();
+    await act(() => router.navigate("/settings"));
+    await screen.findByRole("alertdialog");
+    await u.keyboard("{Escape}");
+    await waitFor(() => expect(screen.queryByRole("alertdialog")).toBeNull());
+    await waitFor(() => expect(opener).toHaveFocus());
+  });
+
+  it("Keep talking and Escape are disabled while Discard is in flight, so the leave still proceeds", async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((r) => (release = r));
+    server.use(
+      http.post("*/v1/interviews/:id/end", async () => {
+        await gate;
+        return HttpResponse.json({ ok: true });
+      }),
+    );
+    const u = userEvent.setup();
+    const { router } = renderApp("/interviews/new", { user: USER });
+    const iid = await startLive(u, router);
+    await act(() => router.navigate("/settings"));
+    const dialog = within(await screen.findByRole("alertdialog"));
+    await u.click(dialog.getByRole("button", { name: "Discard" }));
+    expect(dialog.getByRole("button", { name: "Keep talking" })).toBeDisabled();
+    await u.keyboard("{Escape}");
+    expect(screen.getByRole("alertdialog")).toBeInTheDocument();
+    release();
+    await waitFor(() => expect(here(router)).toBe("/settings"));
+    expect(iid).toMatch(/^iv_/);
   });
 
   it("leaving with Evaluate what I have ends, uploads and opens the session", async () => {
@@ -404,7 +481,7 @@ describe("discard and leave prompt (AC9)", () => {
     const { router } = renderApp("/interviews/new", { user: USER });
     const iid = await startLive(u, router);
     await act(() => router.navigate("/settings"));
-    await u.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "Evaluate what I have" }));
+    await u.click(within(await screen.findByRole("alertdialog")).getByRole("button", { name: "Evaluate what I have" }));
     await waitFor(() => expect(here(router)).toMatch(/^\/sessions\/(?!new)[^/]+$/));
     expect(mockBackend.getSession(UID, here(router).split("/")[2]!).interview_id).toBe(iid);
   });

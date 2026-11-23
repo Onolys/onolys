@@ -1,4 +1,4 @@
-import { act, screen, waitFor, within } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { createFakeAuthService } from "../auth/fakeService";
@@ -20,33 +20,38 @@ const navNames = () =>
     .queryAllByRole("link")
     .map((a) => a.textContent);
 const inNav = () => within(screen.getByRole("navigation", { name: "Main" }));
+/** A plain nav link: an <a> with no Button styling (no data-slot/data-variant, no border/background/pill classes). */
+function expectPlainLink(a: HTMLElement) {
+  expect(a.tagName).toBe("A");
+  expect(a).not.toHaveAttribute("data-slot");
+  expect(a).not.toHaveAttribute("data-variant");
+  expect(a).not.toHaveAttribute("data-size");
+  expect(a.className).not.toMatch(/(^|\s)(border|bg-|rounded|shadow|px-)/);
+}
 
 describe("header nav by auth phase (D1)", () => {
-  it("signed out: Sample report, then Log in and Sign up at the far right", async () => {
+  it("signed out: plain Log in and Sign up links at the far right, no Sample report", async () => {
     renderApp("/login");
     await h1("Log in");
-    expect(navNames()).toEqual(["Sample report", "Log in", "Sign up"]);
+    expect(navNames()).toEqual(["Log in", "Sign up"]);
     const login = inNav().getByRole("link", { name: "Log in" });
     const signup = inNav().getByRole("link", { name: "Sign up" });
-    expect(login).toHaveClass("nav-login");
-    expect(signup).toHaveClass("nav-signup", "btn", "btn-primary");
-    const sample = inNav().getByRole("link", { name: "Sample report" });
-    expect(sample).toHaveAttribute("href", "/sample");
-    expect(sample).toHaveAttribute("target", "_blank");
-    expect(sample).toHaveAttribute("rel", "noopener noreferrer");
+    expect(login).toHaveAttribute("href", "/login");
+    expect(signup).toHaveAttribute("href", "/signup");
+    for (const a of [login, signup]) expectPlainLink(a);
+    expect(login).toHaveAttribute("aria-current", "page");
+    expect(signup).not.toHaveAttribute("aria-current");
+    expect(inNav().queryByRole("link", { name: "Sample report" })).not.toBeInTheDocument();
     expect(login.nextElementSibling).toBe(signup);
     expect(signup.nextElementSibling).toBeNull();
     expect(inNav().queryByRole("button", { name: "Sign out" })).not.toBeInTheDocument();
   });
 
-  it("verified: the current page's nav button has aria-current; Sample report never does, even on /sample", async () => {
-    const { router } = renderApp("/new", { user: { email: "a@clinic.org", verified: true } });
-    await h1("New Session");
+  it("verified: the current page's nav link has aria-current", async () => {
+    renderApp("/new", { user: { email: "a@clinic.org", verified: true } });
+    await h1("Welcome a");
     expect(inNav().getByRole("link", { name: "New Session" })).toHaveAttribute("aria-current", "page");
     expect(inNav().getByRole("link", { name: "Sessions" })).not.toHaveAttribute("aria-current");
-    await act(() => router.navigate("/sample"));
-    await h1("Sample report");
-    expect(inNav().getByRole("link", { name: "Sample report" })).not.toHaveAttribute("aria-current");
   });
 
   it("unverified: header is the brand only (not a signed-in state)", async () => {
@@ -56,24 +61,34 @@ describe("header nav by auth phase (D1)", () => {
     expect(header.getAllByRole("link").map((a) => a.textContent)).toEqual(["Onolys"]);
     expect(header.queryByRole("button")).not.toBeInTheDocument();
     expect(header.queryByText("a@clinic.org")).not.toBeInTheDocument();
-    expect(screen.getByRole("heading", { level: 1 }).closest("section")).toHaveClass("verify-page");
+    expect(screen.getByRole("heading", { level: 1 }).closest("section")).toHaveAttribute("data-page", "verify-email");
   });
 
-  it("verified: Sessions, New Session, Sample report buttons; email and Sign out live in the account menu", async () => {
+  it("verified: Sessions and New Session plain links, no Sample report; email and Sign out live in the account menu", async () => {
     renderApp("/sessions", { user: { email: "a@clinic.org", verified: true } });
     await h1("Sessions");
-    expect(navNames()).toEqual(["Sessions", "New Session", "Sample report"]);
-    for (const n of ["Sessions", "New Session", "Sample report"]) expect(inNav().getByRole("link", { name: n })).toHaveClass("btn", "btn-secondary");
+    expect(navNames()).toEqual(["Sessions", "New Session"]);
+    for (const n of ["Sessions", "New Session"]) expectPlainLink(inNav().getByRole("link", { name: n }));
     expect(inNav().getByRole("link", { name: "Sessions" })).toHaveAttribute("href", "/sessions");
     expect(inNav().getByRole("link", { name: "New Session" })).toHaveAttribute("href", "/new");
-    const sample = inNav().getByRole("link", { name: "Sample report" });
-    expect(sample).toHaveAttribute("href", "/sample");
-    expect(sample).toHaveAttribute("target", "_blank");
-    expect(sample).toHaveAttribute("rel", "noopener noreferrer");
-    expect(sample).not.toHaveAttribute("aria-current");
+    expect(inNav().queryByRole("link", { name: "Sample report" })).not.toBeInTheDocument();
     expect(inNav().queryByText("a@clinic.org")).not.toBeInTheDocument();
     expect(inNav().queryByRole("button", { name: "Sign out" })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Account menu" })).toHaveTextContent("A");
+  });
+
+  it("verified: page nav is centred in the header (true centre)", async () => {
+    renderApp("/sessions", { user: { email: "a@clinic.org", verified: true } });
+    await h1("Sessions");
+    const nav = screen.getByRole("navigation", { name: "Main" });
+    const header = nav.parentElement!;
+    expect(header).toHaveClass("relative", "[&>nav]:absolute", "[&>nav]:left-1/2", "[&>nav]:-translate-x-1/2");
+  });
+
+  it("signed out: nav is not centred (stays right)", async () => {
+    renderApp("/login");
+    await h1("Log in");
+    expect(screen.getByRole("banner")).not.toHaveClass("[&>nav]:absolute");
   });
 
   it("account menu: opens with email, Settings and Sign out; closes on Escape, outside click and selection", async () => {
@@ -136,6 +151,17 @@ describe("header nav by auth phase (D1)", () => {
     expect(screen.queryByRole("menu")).not.toBeInTheDocument();
   });
 
+  it("account menu: choosing Settings leaves focus on the Settings heading, not the trigger", async () => {
+    renderApp("/sessions", { user: { email: "a@clinic.org", verified: true } });
+    await h1("Sessions");
+    await userEvent.click(screen.getByRole("button", { name: "Account menu" }));
+    await userEvent.click(screen.getByRole("menuitem", { name: "Settings" }));
+    const heading = await h1("Settings");
+    await new Promise((r) => setTimeout(r, 100)); // let Radix's deferred close auto-focus run
+    expect(heading).toHaveFocus();
+    expect(screen.getByRole("button", { name: "Account menu" })).not.toHaveFocus();
+  });
+
   it("account menu: Sign out calls the service sign-out and lands on /login", async () => {
     const service = createFakeAuthService();
     const spy = vi.spyOn(service, "signOut");
@@ -153,7 +179,7 @@ describe("header nav by auth phase (D1)", () => {
     service.onAuthStateChanged = () => () => {};
     renderApp("/settings", { service });
     await screen.findByRole("status");
-    expect(navNames()).toEqual([]);
+    expect(screen.queryByRole("navigation", { name: "Main" })).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Onolys" })).toBeInTheDocument();
   });
 

@@ -5,9 +5,7 @@ import { createFirestoreStatusListener } from "./api/firestoreListener";
 import { setStatusListener } from "./api/statusListener";
 import { createAuthService } from "./auth/createAuthService";
 import { renderBootError } from "./bootError";
-import "./styles/inter-latin.css";
-import "./styles/tokens.css";
-import "./styles/app.css";
+import "./styles/index.css";
 
 async function enableMocking(): Promise<void> {
   if (import.meta.env.VITE_USE_MOCKS !== "true") return;

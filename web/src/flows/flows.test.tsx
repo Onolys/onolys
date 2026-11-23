@@ -87,7 +87,7 @@ const withRatingOn = () => {
 
 const user = () => userEvent.setup();
 const h1 = (name: string) => screen.findByRole("heading", { level: 1, name });
-const nav = (name: string) => within(screen.getByRole("navigation")).getByRole("link", { name });
+const nav = (name: string) => within(screen.getByRole("navigation", { name: "Main" })).getByRole("link", { name });
 const mp3 = () => new File([new Uint8Array(100)], "visit.mp3", { type: "audio/mpeg" });
 const sessionId = (router: Parameters<typeof here>[0]) => here(router).split("/")[2]!;
 const step = (sid: string) => act(() => void mockBackend.advance(sid));
@@ -96,7 +96,7 @@ const settle = (sid: string) => act(() => mockBackend.settle(sid));
 /** Dashboard -> New session -> choose file -> Start; ends on /sessions/:id. */
 async function uploadViaUi(u: ReturnType<typeof user>, router: Parameters<typeof here>[0], title?: string) {
   await u.click(nav("New Session"));
-  await h1("New Session");
+  await h1("Welcome rater");
   await u.click(within(screen.getByRole("main")).getByRole("link", { name: "New session" }));
   await h1("New session");
   if (title) await u.type(screen.getByLabelText(/title/i), title);
@@ -139,7 +139,7 @@ describe("flow: one submit, no rating card (default)", () => {
     await h1("Verify your email");
     service.markVerified(EMAIL);
     await u.click(screen.getByRole("button", { name: "I've verified" }));
-    await h1("New Session");
+    await h1("Welcome rater");
 
     const sid = await uploadViaUi(u, router, "Visit 3");
     expect(screen.queryByLabelText("Cultivating Change Talk score")).toBeNull();
@@ -198,7 +198,7 @@ describe("flow (rating on): sign-up, verify, upload, speaker + rating during tra
     expect(await screen.findByRole("status")).toHaveTextContent("haven't seen your verification");
     service.markVerified(EMAIL);
     await u.click(screen.getByRole("button", { name: "I've verified" }));
-    await h1("New Session");
+    await h1("Welcome rater");
     await u.click(nav("Sessions"));
     await h1("Sessions");
     expect(await screen.findByRole("link", { name: "Start a new session" })).toBeInTheDocument(); // empty state
@@ -316,7 +316,7 @@ describe("flow: delete a session (AC2)", () => {
     await h1("Session");
     expect(here(router)).toBe(`/sessions/${sid}`);
     await u.click(await screen.findByRole("button", { name: "Delete session" }));
-    await u.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "Delete permanently" }));
+    await u.click(within(await screen.findByRole("alertdialog")).getByRole("button", { name: "Delete permanently" }));
     await h1("Sessions"); // delete lands on the sessions list
     expect(here(router)).toBe("/sessions");
     await screen.findByText(/Onolys codes a recorded session/i); // the empty state (the cards also say "New session")
@@ -366,7 +366,7 @@ describe("flow: sample report works with no network (AC3a)", () => {
     const { router } = renderApp("/login");
     await h1("Log in");
     // opens in a new tab (target=_blank), so assert the link, then the public route
-    const sample = nav("Sample report");
+    const sample = within(screen.getByRole("contentinfo")).getByRole("link", { name: "Sample report" });
     expect(sample).toHaveAttribute("href", "/sample");
     expect(sample).toHaveAttribute("target", "_blank");
     await act(() => router.navigate("/sample"));

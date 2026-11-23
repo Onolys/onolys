@@ -2,14 +2,18 @@
  * `/interviews/new` (SP10 R8, D16): pick a practice scenario and a voice, read the headphone tip, check the
  * microphone, then start. Starting reserves one interview unit and opens the live page.
  */
+import { Badge, Button, Label, Select, Skeleton } from "@onolys/ui";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { Link, useNavigate } from "react-router";
 import { unwrap } from "../../api/client";
 import { describeError } from "../../api/errors";
 import { useApiClient } from "../../auth/useApiClient";
+import { ACTIONS, H1, LINK, LINK_BTN, NOTE, PAGE } from "../../components/classes";
+import { Field } from "../../components/Field";
+import { ErrorNote, Notice } from "../../components/Notice";
 import { ErrorCard } from "../session/ErrorCard";
-import { UsageLeft } from "../usage/UsageLeft";
+import { UsageBar } from "../usage/UsageBar";
 import { blockingPeriod } from "../usage/usage";
 import { USAGE_KEY, useUsage } from "../usage/useUsage";
 import { interviewCapText } from "./capText";
@@ -60,86 +64,103 @@ export function NewInterviewPage() {
     onError: () => void queryClient.invalidateQueries({ queryKey: USAGE_KEY }),
   });
 
-  if (scenarios.isPending) return <><h1>AI interview</h1><p className="form-note">Loading scenarios…</p></>;
+  if (scenarios.isPending)
+    return (
+      <div className={PAGE} aria-busy="true">
+        <h1 className={H1}>AI interview</h1>
+        <p className={NOTE}>Loading scenarios…</p>
+        <Skeleton className="h-16 w-full max-w-xl" />
+        <Skeleton className="h-16 w-full max-w-xl" />
+      </div>
+    );
   if (scenarios.isError) {
     const e = describeError(scenarios.error);
     return (
-      <>
-        <h1>AI interview</h1>
+      <div className={PAGE}>
+        <h1 className={H1}>AI interview</h1>
         <ErrorCard code={e.code} reference={e.requestId}>
-          <button type="button" className="link-button" onClick={() => void scenarios.refetch()}>
+          <Button type="button" variant="link" className={LINK_BTN} onClick={() => void scenarios.refetch()}>
             Try again
-          </button>
+          </Button>
         </ErrorCard>
-      </>
+      </div>
     );
   }
 
   const err = start.error ? describeError(start.error) : null;
 
   return (
-    <>
-      <h1>AI interview</h1>
-      <p className="form-note">
-        Practise a motivational interview with an AI client, then get it rated like any recording.{" "}
-        <UsageLeft kind="interview" period="day" />
-      </p>
+    <div className={PAGE}>
+      <h1 className={H1}>AI interview</h1>
+      <p className={NOTE}>Practise a motivational interview with an AI client, then get it rated like any recording.</p>
+      <div className="max-w-xl">
+        <UsageBar kind="interview" label="AI interviews" />
+      </div>
       <form
-        className="auth-form"
+        className="grid max-w-xl grid-cols-1 gap-4 break-words"
         onSubmit={(e) => {
           e.preventDefault();
           if (chosen && !blocking && !start.isPending) start.mutate();
         }}
       >
-        <fieldset>
-          <legend>Scenario</legend>
+        <fieldset className="m-0 grid min-w-0 gap-2 border-0 p-0">
+          <legend className="p-0 pb-1 text-base font-semibold">Scenario</legend>
           {list.map((s) => (
-            <label key={s.id} className="scenario-option">
-              <input type="radio" name="scenario" checked={chosen === s.id} onChange={() => {
+            <Label key={s.id} className="items-start rounded-md border border-border p-3 has-[:checked]:border-primary">
+              <input
+                type="radio"
+                name="scenario"
+                className="mt-1 size-4 shrink-0 accent-primary"
+                checked={chosen === s.id}
+                onChange={() => {
                   setScenarioId(s.id);
                   setVoice(null); // the picker follows the scenario's own voice
-                }} />{" "}
-              <strong>{s.title}</strong> <span className="chip">{s.difficulty}</span>
-              <span className="form-note"> {s.summary}</span>
-            </label>
+                }}
+              />{" "}
+              <span className="block leading-normal">
+                <strong>{s.title}</strong> <Badge variant="outline">{s.difficulty}</Badge>
+                <span className={`${NOTE} block font-normal`}> {s.summary}</span>
+              </span>
+            </Label>
           ))}
         </fieldset>
 
-        <label>
-          Voice
-          <select value={chosenVoice} onChange={(e) => setVoice(e.target.value)}>
-            {(scenarios.data?.voices ?? []).map((v) => (
-              <option key={v} value={v}>
-                {v}
-              </option>
-            ))}
-          </select>
-        </label>
+        <Field label="Voice">
+          {(id) => (
+            <Select id={id} value={chosenVoice} onChange={(e) => setVoice(e.target.value)}>
+              {(scenarios.data?.voices ?? []).map((v) => (
+                <option key={v} value={v}>
+                  {v}
+                </option>
+              ))}
+            </Select>
+          )}
+        </Field>
 
-        <p className="notice">Use headphones: the AI's voice would otherwise leak into your microphone and be recorded twice.</p>
+        <Notice>Use headphones: the AI's voice would otherwise leak into your microphone and be recorded twice.</Notice>
 
-        <p>
-          <button type="button" className="btn btn-secondary" onClick={() => void checkMic()} disabled={mic === "checking"}>
+        <div className={ACTIONS}>
+          <Button type="button" variant="outline" onClick={() => void checkMic()} disabled={mic === "checking"}>
             Test microphone
-          </button>{" "}
+          </Button>
           {mic === "ok" ? <span role="status">Microphone works.</span> : null}
-          {mic === "denied" ? (
-            <span role="alert" className="form-error">
-              We couldn't use your microphone. Allow it in your browser's site settings and test again.
-            </span>
-          ) : null}
-        </p>
+        </div>
+        {mic === "denied" ? (
+          <ErrorNote role="alert">We couldn't use your microphone. Allow it in your browser's site settings and test again.</ErrorNote>
+        ) : null}
 
-        {blocking ? <p className="notice">{interviewCapText(blocking)}</p> : null}
+        {blocking ? <Notice>{interviewCapText(blocking)}</Notice> : null}
         {err ? <ErrorCard code={err.code} reference={err.requestId} /> : null}
 
-        <p>
-          <button type="submit" className="btn btn-primary" disabled={!chosen || blocking !== null || start.isPending}>
+        <div className={ACTIONS}>
+          <Button type="submit" disabled={!chosen || blocking !== null || start.isPending}>
             {start.isPending ? "Starting…" : "Start interview"}
-          </button>{" "}
-          <Link to="/new">Cancel</Link>
-        </p>
+          </Button>
+          <Link to="/new" className={LINK}>
+            Cancel
+          </Link>
+        </div>
       </form>
-    </>
+    </div>
   );
 }

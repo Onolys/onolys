@@ -1,0 +1,16 @@
+/* CSS entry. Cascade order: theme, base (Tailwind preflight + @onolys/ui base), components, utilities. Only the design system styles the app. */
+@layer theme, base, components, utilities;
+@import "tailwindcss";
+@import "@onolys/ui/theme.css";
+@source "../../node_modules/@onolys/ui/dist";
+
+/* === App overrides ===
+   Only rules that Tailwind utilities cannot express: a class toggled from JS on <html>, the native <dialog>
+   backdrop, and the keyframe highlight for the pointed transcript row. Everything else is utilities in JSX. */
+html.dlg-open { overflow: hidden; }
+.coded-dialog::backdrop { background: rgb(23 28 28 / 0.55); }
+@keyframes utt-hl { from { background-color: var(--muted); } }
+tr.hl > td { animation: utt-hl 1.5s ease-out; }
+@media (prefers-reduced-motion: reduce) {
+  tr.hl > td { animation: none; background-color: var(--muted); outline: 2px solid var(--primary); outline-offset: -2px; }
+}

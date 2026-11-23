@@ -34,9 +34,9 @@ test.describe("signed-out gating", () => {
     for (const s of seen) expect(s).not.toMatch(/^Settings|API key|^Sessions/);
   });
 
-  test("Sample report is public from the signed-out nav", async ({ page }) => {
+  test("Sample report is public from the footer", async ({ page }) => {
     await page.goto("/login");
-    const [popup] = await Promise.all([page.waitForEvent("popup"), page.locator("header nav a", { hasText: "Sample report" }).click()]);
+    const [popup] = await Promise.all([page.waitForEvent("popup"), page.locator("footer a", { hasText: "Sample report" }).click()]);
     await expect(popup).toHaveURL(/\/sample$/);
     await expect(popup.getByRole("heading", { name: "Sample report" })).toBeVisible();
     await shot(popup, "so-sample");

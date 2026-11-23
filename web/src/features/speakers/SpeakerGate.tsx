@@ -4,11 +4,14 @@
  * as the client. After a run (`report_ready` / `failed`) the same cards reopen with "Save and run
  * again": confirming then only changes the clinician for the next run, so a new run is started.
  */
+import { Button, Card, CardContent, Label } from "@onolys/ui";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { unwrap } from "../../api/client";
 import { describeError } from "../../api/errors";
 import { useApiClient } from "../../auth/useApiClient";
+import { LINK_BTN, NOTE } from "../../components/classes";
+import { Notice } from "../../components/Notice";
 import { ErrorCard } from "../session/ErrorCard";
 
 export interface SpeakerGateProps {
@@ -30,15 +33,15 @@ export function SpeakerGate({ sessionId, mode, onDone }: SpeakerGateProps) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
 
-  if (speakers.isPending) return <p className="form-note">Loading speakers…</p>;
+  if (speakers.isPending) return <p className={NOTE}>Loading speakers…</p>;
   if (speakers.isError) {
     return (
-      <p className="notice">
+      <Notice>
         We couldn't load the speakers.{" "}
-        <button type="button" className="link-button" onClick={() => void speakers.refetch()}>
+        <Button type="button" variant="link" className={LINK_BTN} onClick={() => void speakers.refetch()}>
           Try again
-        </button>
-      </p>
+        </Button>
+      </Notice>
     );
   }
 
@@ -66,55 +69,59 @@ export function SpeakerGate({ sessionId, mode, onDone }: SpeakerGateProps) {
 
   const err = error ? describeError(error) : null;
   return (
-    <section className="speaker-gate" aria-labelledby="speaker-gate-heading">
-      <h2 id="speaker-gate-heading">Who is the clinician?</h2>
-      <p className="form-note">
+    <section className="grid gap-4" aria-labelledby="speaker-gate-heading">
+      <h2 id="speaker-gate-heading" className="m-0 text-xl font-semibold">Who is the clinician?</h2>
+      <p className={NOTE}>
         Check the speaker labels and lines below and tell us which speaker is the clinician.
         {list.length > 2 ? " Everyone else is the client." : ""}
       </p>
-      <ul className="speaker-cards" aria-label="Speakers">
+      <ul className="m-0 grid list-none gap-3 p-0" aria-label="Speakers">
         {list.map((s) => (
-          <li key={s.speaker} className="speaker-card">
-            <h3>Speaker {s.speaker}</h3>
-            <ul className="speaker-samples" aria-label={`Sample lines from speaker ${s.speaker}`}>
+          <li key={s.speaker}>
+            <Card>
+              <CardContent className="grid gap-3">
+            <h3 className="m-0 text-lg font-semibold">Speaker {s.speaker}</h3>
+            <ul className="m-0 grid list-disc gap-1 pl-5" aria-label={`Sample lines from speaker ${s.speaker}`}>
               {s.samples.map((line, i) => (
                 <li key={i}>{line}</li>
               ))}
             </ul>
             {mode === "first" ? (
-              <button type="button" className="btn btn-primary" disabled={busy} onClick={() => void confirm(s.speaker, false)}>
+              <Button type="button" className="justify-self-start" disabled={busy} onClick={() => void confirm(s.speaker, false)}>
                 This is the clinician
-              </button>
+              </Button>
             ) : (
-              <label>
+              <Label className="min-h-0 justify-self-start">
                 <input
                   type="radio"
                   name="clinician-speaker"
+                  className="size-4 accent-primary"
                   checked={selected === s.speaker}
                   disabled={busy}
                   onChange={() => setChosen(s.speaker)}
-                />{" "}
+                />
                 This is the clinician
-              </label>
+              </Label>
             )}
+              </CardContent>
+            </Card>
           </li>
         ))}
       </ul>
       {err ? <ErrorCard code={err.code} reference={err.requestId} /> : null}
       {mode === "rerun" ? (
-        <p>
-          <button
+        <div className="flex flex-wrap gap-3">
+          <Button
             type="button"
-            className="btn btn-primary"
             disabled={busy || selected === null}
             onClick={() => selected !== null && void confirm(selected, true)}
           >
             Save and try again
-          </button>{" "}
-          <button type="button" className="btn btn-secondary" disabled={busy} onClick={onDone}>
+          </Button>
+          <Button type="button" variant="secondary" disabled={busy} onClick={onDone}>
             Cancel
-          </button>
-        </p>
+          </Button>
+        </div>
       ) : null}
     </section>
   );

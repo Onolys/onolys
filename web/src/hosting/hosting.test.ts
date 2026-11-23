@@ -55,13 +55,14 @@ describe("web/firebase.json", () => {
     expect(connect.filter((s) => s.startsWith("wss://"))).toHaveLength(1);
   });
 
-  it("adds no blob: or data: script allowance for audio worklets (SP10 AC9)", () => {
+  it("allows blob: only in media-src, no data:/blob: script allowance (SP10 AC9)", () => {
     for (const e of entries) {
       const csp = cspOf(e);
       expect(Object.keys(csp)).not.toContain("worker-src");
       expect(Object.keys(csp)).not.toContain("script-src-elem");
+      expect(csp["media-src"]).toEqual(["'self'", "blob:"]);
       for (const [directive, sources] of Object.entries(csp)) {
-        expect(sources, directive).not.toContain("blob:");
+        if (directive !== "media-src") expect(sources, directive).not.toContain("blob:");
         if (directive !== "img-src") expect(sources, directive).not.toContain("data:");
       }
     }

@@ -2,11 +2,12 @@
 const { defineConfig } = require("@playwright/test");
 const path = require("path");
 
-const PORT = process.env.E2E_PORT || "5173";
+const PORT = process.env.E2E_PORT || "5173"; // dev:mock server (no CSP): every spec except csp/visual
+const CSP_PORT = process.env.E2E_CSP_PORT || "4173"; // built mock app under the exact prod CSP (`vite preview`, headers from vite.config.ts): csp/visual specs
+const CSP_SPECS = /(csp|visual)\.spec\.cjs$/;
 
 module.exports = defineConfig({
   testDir: __dirname,
-  testMatch: "*.spec.cjs",
   outputDir: path.join(__dirname, "test-results"), // vite ignores **/test-results/**; other writes under web/ trigger a full reload
   fullyParallel: true, // every test is independent (own context, in-memory fake auth + MSW state): safe for --shard=i/n
   forbidOnly: !!process.env.CI,
@@ -22,11 +23,25 @@ module.exports = defineConfig({
     viewport: { width: 1280, height: 720 },
     trace: "off",
   },
-  webServer: {
-    command: `npm run dev:mock -- --port ${PORT} --strictPort`,
-    cwd: path.join(__dirname, ".."),
-    url: `http://localhost:${PORT}`,
-    reuseExistingServer: !process.env.CI,
-    timeout: 60_000,
-  },
+  projects: [
+    { name: "e2e", testMatch: "*.spec.cjs", testIgnore: CSP_SPECS, use: { baseURL: `http://localhost:${PORT}` } },
+    { name: "csp", testMatch: CSP_SPECS, use: { baseURL: `http://localhost:${CSP_PORT}` } },
+  ],
+  webServer: [
+    {
+      command: `npm run dev:mock -- --port ${PORT} --strictPort`,
+      cwd: path.join(__dirname, ".."),
+      url: `http://localhost:${PORT}`,
+      reuseExistingServer: !process.env.CI,
+      timeout: 60_000,
+    },
+    {
+      // Build outside the vite-watched tree (node_modules/.cache) so it cannot reload the dev server's pages.
+      command: `npm run build -- --mode mock --outDir node_modules/.cache/csp-preview --emptyOutDir && npx vite preview --mode mock --outDir node_modules/.cache/csp-preview --port ${CSP_PORT} --strictPort`,
+      cwd: path.join(__dirname, ".."),
+      url: `http://localhost:${CSP_PORT}`,
+      reuseExistingServer: !process.env.CI,
+      timeout: 180_000,
+    },
+  ],
 });

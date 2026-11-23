@@ -35,7 +35,7 @@ export interface FirebaseWebConfig {
 }
 
 const toUser = (u: User | null): AuthUser | null =>
-  u ? { uid: u.uid, email: u.email, emailVerified: u.emailVerified } : null;
+  u ? { uid: u.uid, email: u.email, displayName: u.displayName, emailVerified: u.emailVerified } : null;
 
 const POPUP_FALLBACK = new Set([
   "auth/popup-blocked",

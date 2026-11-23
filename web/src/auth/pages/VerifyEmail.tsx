@@ -2,7 +2,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router";
 import { useAuth } from "../AuthProvider";
 import { readNext } from "../next";
-import { ErrorSummary } from "./parts";
+import { Alert, AlertDescription, Button } from "@onolys/ui";
+import { H1 } from "../../components/classes";
+import { ErrorSummary, StatusNote } from "./parts";
 import { useFormError } from "./useFormError";
 
 export const RESEND_COOLDOWN_SECONDS = 60;
@@ -103,26 +105,30 @@ export function VerifyEmail() {
   }
 
   return (
-    <section className="verify-page">
-      <h1>Verify your email</h1>
-      <div className="auth-form">
+    <section className="text-center" data-page="verify-email">
+      <h1 className={H1}>Verify your email</h1>
+      <div className="mx-auto mt-4 grid max-w-sm grid-cols-1 gap-4 break-words">
         {form.error && <ErrorSummary error={form.error} search="" />}
         <p>
           Check your inbox — and your spam folder. We sent a verification link to <strong>{user?.email}</strong>.
         </p>
-        {note && <p role="status">{note}</p>}
-        {leaveError && <p role="alert">{leaveError}</p>}
-        <button type="button" className="primary" disabled={checkingNow} onClick={() => void check(true)}>
+        {note && <StatusNote>{note}</StatusNote>}
+        {leaveError && (
+          <Alert variant="destructive" className="text-left">
+            <AlertDescription>{leaveError}</AlertDescription>
+          </Alert>
+        )}
+        <Button type="button" disabled={checkingNow} onClick={() => void check(true)}>
           {checkingNow ? "Checking…" : "I've verified"}
-        </button>
-        <button type="button" className="secondary" disabled={busy || cooldown > 0} onClick={() => void resend()}>
+        </Button>
+        <Button type="button" variant="outline" disabled={busy || cooldown > 0} onClick={() => void resend()}>
           {cooldown > 0 ? `Resend in ${cooldown}s` : "Resend email"}
-        </button>
+        </Button>
         <p>
           Wrong address?{" "}
-          <button type="button" className="link-button" onClick={() => void switchEmail()}>
+          <Button type="button" variant="link" className="px-1" onClick={() => void switchEmail()}>
             Use a different email
-          </button>
+          </Button>
         </p>
       </div>
     </section>
