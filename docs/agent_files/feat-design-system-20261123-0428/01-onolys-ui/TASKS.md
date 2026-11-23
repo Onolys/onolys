@@ -13,8 +13,8 @@ Source of truth: docs/agent_files/feat-design-system-20261123-0428/01-onolys-ui/
 | 3 | Tokens, dark theme, contrast test | 2 | done |
 | 4 | Theme, base, fonts, legacy CSS, cn | 3 | done |
 | 5 | shadcn components | 4 | done |
-| 6 | Onolys components | 5 | todo |
-| 7 | CSP-safe Radix overlays | 5 | todo |
+| 6 | Onolys components | 5 | done |
+| 7 | CSP-safe Radix overlays | 5 | done |
 | 8 | Hit-area, privacy and RTL test suite | 6, 7 | todo |
 | 9 | Storybook docs + axe tests | 6, 7 | todo |
 | 10 | Build, exports, types under TS 6 and 7 | 8 | todo |

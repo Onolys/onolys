@@ -8,7 +8,7 @@ date: 2026-11-23
 Repo/branch: new repo `Onolys/onolys-ui` (public), `main` + tags `vX.Y.Z` (design docs live in iaudit `feat/design-system`) · Depends on: none · Owns: whole `onolys-ui` repo (`src/tokens`, `src/styles`, `src/components`, `src/lib/cn.ts`, `components.json`, `fonts/`, `.storybook/`, `.github/workflows/`, `CHANGELOG.md`, `dist/`)
 
 ## TL;DR
-One repo, one package. Ships CSS (tokens + Tailwind v4 `@theme`, light and dark via `prefers-color-scheme`), ESM + types for React components (shadcn code we own, plus Onolys components), and self-hosted Inter. Consumers install `github:Onolys/onolys-ui#vX.Y.Z`. Built `dist/` is committed only on the tag commit (no `prepare` build in consumers). Radix (Dialog, AlertDialog, DropdownMenu, Select) is used as-is; `style-src 'self'` stays strict and is proven by the Playwright CSP smoke (build checks relaxed 2026-11-23). Storybook for docs. Astro consumes the CSS only.
+One repo, one package. Ships CSS (tokens + Tailwind v4 `@theme`, light and dark via `prefers-color-scheme`), ESM + types for React components (shadcn code we own, plus Onolys components), and self-hosted Inter. Consumers install `github:Onolys/onolys-ui#vX.Y.Z`. Built `dist/` is committed only on the tag commit (no `prepare` build in consumers). Radix Dialog/AlertDialog use a custom CSS scroll lock, DropdownMenu is nonmodal, and Select uses styled native `<select>` with `<option>` children; `style-src 'self'` stays strict and is proven by the Playwright CSP smoke (build checks relaxed 2026-11-23). Storybook for docs. Astro consumes the CSS only.
 
 ## Problem
 Tokens are copy-pasted (web == miti, light only; admin has a separate verdict set), primitives are hand-built per app, no dark theme, no radius/shadow tokens, two hand-rolled dialogs. [verified: web/src/styles/tokens.css identical to miti; web/src/styles/app.css 145 lines of `.btn`/`.auth-form`; frontend/src/tokens/tokens.css separate]
@@ -46,9 +46,9 @@ Tokens are copy-pasted (web == miti, light only; admin has a separate verdict se
 | Onolys | AppHeader (+AccountMenu slot), Footer, ScoreBadge (good/fair/low), UsageMeter, SkipLink, Page/Section | app.css chrome, chips, usage meter |
 | Later | RadioGroup, Switch, Toast | not needed by SP2 evidence; add on demand |
 
-Select = Radix Select (shadcn Select) for consistent styling [RESOLVED: 2026-11-23 — Radix Select; native fallback only if CSP smoke fails]. Fallback: styled native `<select>` only if the Playwright CSP smoke shows Radix Select breaking under `style-src 'self'`. Tooltip optional until used.
+Select = styled native `<select>` with native `<option>` children. [VERIFIED: Task 7, 2026-11-23 — Radix Select produced two inline `style-src-elem` violations under `style-src 'self'`; user delegated the policy choice and the orchestrator retained strict CSP, activating the approved native fallback.] The public API exports Select and its native props; Radix-only Select helper exports are removed. Browser selection smoke remains required in consumer fixtures and the app. Tooltip optional until used.
 
-**CSP-compatible Radix.** `react-remove-scroll-bar` injects a `<style>` on Dialog/AlertDialog/DropdownMenu(modal)/Popover/Select, which `style-src 'self'` blocks. Choices: (a) DropdownMenu `modal={false}`; (b) Dialog/AlertDialog built on Radix Dialog with the scroll-lock replaced by our own `body[data-scroll-locked]` class in base.css (CSS file, no inline style) and Radix's `RemoveScroll` bypassed; (c) fallback: native `<dialog showModal()>` (already used on landing, no style injection, built-in focus trap and inert). Popper positioning writes via CSSOM style props (allowed). ScrollArea excluded. Owner 2026-11-23: build/hosting checks may be adjusted, so prefer (b) Radix Dialog/AlertDialog with the `build.test.ts` check changed as needed; native `<dialog>` (c) only if the CSP smoke fails. CSP smoke is the gate. [RESOLVED: owner 2026-11-23 — prefer Radix Dialog/AlertDialog with build check adjusted; native <dialog> only if CSP smoke fails; remaining task-level check = runtime CSP verification]
+**CSP-compatible Radix.** Task 7 retained Radix Dialog/AlertDialog with `RemoveScroll` bypassed and custom CSS `body[data-scroll-locked]` locking in base.css; focus trapping and Escape behavior remain verified. DropdownMenu uses `modal={false}`. The Chromium smoke observed no CSP violations for these shipped overlays and the native Select; Radix Select separately produced two inline `style-src-elem` violations, so its native fallback is now the supported API. Popper positioning uses CSSOM style props. ScrollArea remains excluded. User delegated the policy choice; the orchestrator kept `style-src 'self'` strict with no relaxation. App/consumer runtime CSP smoke remains a release gate.
 
 **Dark derivation.** Keep teal #0b5f5a as light `--primary`. Dark: surfaces from the teal hue at low chroma (bg ~#0f1514, card ~#151d1c, border ~#2a3736); `--primary` lightened (~#5fc4b8, text-on-primary dark ink) for AA on dark; score colors inverted (dark tint bg + light fg); footer tone stays dark in both. Exact values tuned by the contrast test, not guessed here.
 
@@ -82,7 +82,7 @@ Compat: ship `legacy.css` aliasing old `--color-*` names so SP2/SP3 can migrate 
 | 2 | Dark mode | `@media (prefers-color-scheme: dark)` vars, no `.dark` class | class + JS toggle | No storage allowed; automatic per brief |
 | 3 | Docs | Storybook | Ladle | Maintained a11y addon + test-runner; Ladle lighter but weaker a11y. [VERIFIED: Task 2, 2026-11-23 — Storybook 10.6.8 builds on Vite 8.3.8; onolys-ui commit 2aba4f3b01ac6c803b08771460154553ee6676b6] |
 | 4 | Modules | ESM only, peers: react >=19, tailwindcss 4 | dual CJS | All consumers are Vite ESM |
-| 5 | Select | Radix Select (shadcn); native styled `<select>` only if CSP smoke fails (owner-delegated 2026-11-23) | Native styled | Consistent styling now that build checks are relaxed; CSP smoke is the gate |
+| 5 | Select | Styled native `<select>` with `<option>` children; no Radix-only helper exports | Radix Select | Task 7 Chromium measured two inline `style-src-elem` violations under strict `style-src 'self'`; user delegated policy choice and orchestrator retained strict CSP, activating native fallback; app browser selection smoke still required |
 | 6 | Versioning | semver, `CHANGELOG.md` (Keep a Changelog), pre-1.0 minor = may break; consumers pin tags | floating `main` | Reproducible builds |
 | 7 | Local dev | `file:../onolys-ui` or `npm link` (`npm run build:watch`) | publish snapshots | No registry |
 | 8 | Release | Tag `vX.Y.Z` triggers workflow: CI gate, build, commit dist to tag, GitHub Release notes | manual | Repeatable; Renovate/Dependabot optional later |
@@ -107,7 +107,7 @@ Compat: ship `legacy.css` aliasing old `--color-*` names so SP2/SP3 can migrate 
 
 ## Acceptance Criteria
 1. `npm i github:Onolys/onolys-ui#v0.1.0` in a clean Vite+Tailwind v4 fixture installs without build and renders Button/Dialog styled with the teal primary.
-2. Same fixture served with `style-src 'self'` (Playwright): zero CSP violations opening Dialog, AlertDialog, DropdownMenu, Select (Select failing = fall back to styled native `<select>`).
+2. Same fixture served with `style-src 'self'` (Playwright): zero CSP violations opening Dialog, AlertDialog, nonmodal DropdownMenu, and selecting an option using styled native Select.
 3. Contrast test passes in light and dark for all documented pairs; fails on a deliberately bad token (negative test).
 4. Dark theme applies under `prefers-color-scheme: dark`, no JS.
 5. All interactive components have >=44px hit area (test).
