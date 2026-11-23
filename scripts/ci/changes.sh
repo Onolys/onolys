@@ -19,6 +19,8 @@ PACKAGES=(
   "admin-auth:admin/auth:python"
   "admin-backend:admin/backend:python"
   "eval:eval/core:python"
+  "eval-backend:eval/backend:python"
+  "eval-web:eval/web:node"
   "frontend:frontend:other"
   "web:web:node"
   "infra:infra:other"
@@ -38,6 +40,12 @@ ONESHOT_EXTRA_RE='^(scripts/gen_miti_schema\.py$|config/staging/routes\.yaml$|en
 # Dataset manifests and metadata-only overrides are inputs to eval/core.
 EVAL_EXTRA_RE='^eval/datasets/'
 
+# Backend runtime configuration and image inputs are not Python package dependencies.
+EVAL_BACKEND_EXTRA_RE='^(config/|protocols/|\.dockerignore$)'
+# The SPA copies admin auth and maintains API types by hand; recheck those contracts.
+# These are source/data dependencies, not npm runtime edges in DEPS.
+EVAL_WEB_EXTRA_RE='^(frontend/src/auth/|frontend/src/transport/authFetch\.ts$|eval/backend/|api/openapi\.json$|docs/contracts/public/|engines/miti/src/onolys_miti/data/report\.schema\.json$)'
+
 # The infra job's tests import admin/auth (onolys_admin_auth), so admin/auth changes also run infra.
 INFRA_EXTRA_RE='^(admin/auth/|pyproject\.toml$|uv\.lock$)'
 
@@ -52,6 +60,7 @@ DEPS=(
   "miti:core"
   "api:core miti"
   "eval:core miti"
+  "eval-backend:admin-auth core miti oneshot eval"
   "admin-backend:admin-auth"
 )
 
@@ -65,6 +74,8 @@ for entry in "${PACKAGES[@]}"; do
           ( "$kind" == python && "$f" =~ $PY_SHARED_RE ) ||
           ( "$name" == oneshot && "$f" =~ $ONESHOT_EXTRA_RE ) ||
           ( "$name" == eval && "$f" =~ $EVAL_EXTRA_RE ) ||
+          ( "$name" == eval-backend && "$f" =~ $EVAL_BACKEND_EXTRA_RE ) ||
+          ( "$name" == eval-web && "$f" =~ $EVAL_WEB_EXTRA_RE ) ||
           ( "$name" == api && "$f" =~ $API_EXTRA_RE ) ||
           ( "$name" == admin-backend && "$f" =~ $ADMIN_BACKEND_EXTRA_RE ) ||
           ( "$name" == infra && "$f" =~ $INFRA_EXTRA_RE ) ||
