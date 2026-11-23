@@ -9,6 +9,7 @@ members = [
     "onolys-api",
     "onolys-engine-core",
     "onolys-eval",
+    "onolys-eval-backend",
     "onolys-miti",
     "onolys-oneshot",
 ]
@@ -1305,6 +1306,49 @@ provides-extras = ["convert"]
 
 [package.metadata.requires-dev]
 dev = [
+    { name = "pytest", specifier = ">=8" },
+    { name = "ruff", specifier = ">=0.6" },
+]
+
+[[package]]
+name = "onolys-eval-backend"
+version = "0.1.0"
+source = { editable = "eval/backend" }
+dependencies = [
+    { name = "fastapi" },
+    { name = "google-auth" },
+    { name = "onolys-admin-auth" },
+    { name = "onolys-engine-core" },
+    { name = "onolys-eval" },
+    { name = "onolys-miti" },
+    { name = "onolys-oneshot" },
+    { name = "requests" },
+    { name = "uvicorn" },
+]
+
+[package.dev-dependencies]
+dev = [
+    { name = "httpx" },
+    { name = "pytest" },
+    { name = "ruff" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "fastapi", specifier = ">=0.115" },
+    { name = "google-auth", specifier = ">=2.35" },
+    { name = "onolys-admin-auth", editable = "admin/auth" },
+    { name = "onolys-engine-core", editable = "engines/core" },
+    { name = "onolys-eval", editable = "eval/core" },
+    { name = "onolys-miti", editable = "engines/miti" },
+    { name = "onolys-oneshot", editable = "engines/oneshot" },
+    { name = "requests", specifier = ">=2.32" },
+    { name = "uvicorn", specifier = ">=0.30" },
+]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "httpx", specifier = ">=0.27" },
     { name = "pytest", specifier = ">=8" },
     { name = "ruff", specifier = ">=0.6" },
 ]
