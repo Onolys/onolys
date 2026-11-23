@@ -5,8 +5,9 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from onolys_miti import miti, rules
-from onolys_miti.errors import InputError
+from onolys_miti.errors import InputError, InvalidCodedSpan, SessionTooLong
 from onolys_miti.result import CodedSpan, ResultWarning
+from onolys_miti.span import select_coded_span
 from onolys_miti.transcript import Transcript, Turn
 
 SUBJECT = "subject"
@@ -81,19 +82,16 @@ def mark_roles(
 def select_turns(
     turns: list[RoleTurn], coded_span: dict[str, Any] | None
 ) -> tuple[list[RoleTurn], list[ResultWarning]]:
-    """Keep turns overlapping the span: `start_ms < to_s*1000 and end_ms > from_s*1000`
-    (a missing `end_ms` falls back to `start_ms`). Partly-inside turns are kept whole. No turn
-    has a timestamp -> span ignored + `span_ignored`. A turn without `start_ms` is kept.
-    The engine's span always has both bounds; no span (or a bound missing) keeps every turn."""
-    span = coded_span or {}
-    from_s, to_s = span.get("from_s"), span.get("to_s")
-    if from_s is None or to_s is None:
+    """Keep whole turns in a zero-based slice or overlapping a time range.
+
+    Untimed turns are kept alongside timed turns; a fully untimed transcript rejects time
+    ranges. A missing end timestamp falls back to the start timestamp.
+    """
+    if coded_span is None:
         return list(turns), []
-    if not any(rt.turn.start_ms is not None for rt in turns):
-        return list(turns), [
-            ResultWarning(code="span_ignored", detail="transcript has no timestamps")
-        ]
-    lo, hi = from_s * 1000, to_s * 1000
+    span = select_coded_span(Transcript(turns=[rt.turn for rt in turns]), "", coded_span).coded_span
+    if span.start_turn is not None:
+        return turns[span.start_turn:span.end_turn], []
     kept = []
     for rt in turns:
         start = rt.turn.start_ms
@@ -101,8 +99,10 @@ def select_turns(
             kept.append(rt)
             continue
         end = rt.turn.end_ms if rt.turn.end_ms is not None else start
-        if start < hi and end > lo:
+        if start < span.end_ms and end > span.start_ms:
             kept.append(rt)
+    if not kept:
+        raise InvalidCodedSpan("invalid_coded_span: time range selects no turns")
     return kept, []
 
 
@@ -135,22 +135,20 @@ def build_volleys(turns: list[RoleTurn], volley_cfg: dict[str, Any]) -> list[Vol
 
 
 def _duration_ms(
-    transcript: Transcript, turns: list[RoleTurn], coded_span: dict[str, Any] | None, applied: bool
+    transcript: Transcript, turns: list[RoleTurn], coded_span: dict[str, Any] | None
 ) -> int | None:
-    """Session length: the span length (to - from) when a span was applied, else the max turn
-    `end_ms` (fallback `start_ms`) measured from 0, as `span.duration_s` does. Turns without any
-    timestamp are ignored. `transcript.duration_ms` is only the fallback for a transcript without
-    turn timestamps."""
+    """Measure the selected portion, using the header only for an untimed whole session."""
+    if coded_span and coded_span.get("start_ms") is not None:
+        return coded_span["end_ms"] - coded_span["start_ms"]
     ends = [
         rt.turn.end_ms if rt.turn.end_ms is not None else rt.turn.start_ms
         for rt in turns
         if rt.turn.end_ms is not None or rt.turn.start_ms is not None
     ]
-    if not ends:
-        return transcript.duration_ms
-    if applied and coded_span:
-        return max(coded_span["to_s"] * 1000 - coded_span["from_s"] * 1000, 0)
-    return max(ends)
+    if coded_span:
+        starts = [rt.turn.start_ms for rt in turns if rt.turn.start_ms is not None]
+        return max(ends) - min(starts) if ends and starts else None
+    return max(ends) if ends else transcript.duration_ms
 
 
 def run_input_checks(
@@ -165,7 +163,7 @@ def run_input_checks(
         code = "short_session"
         if kind == "duration_max":
             bad = duration_ms is not None and duration_ms > value * 60_000
-            msg = f"session longer than {value} min"
+            msg = f"session longer than {value} min; supply a narrower coded_span"
             code = "session_too_long"
         elif kind == "duration_min":
             bad = duration_ms is not None and duration_ms < value * 60_000
@@ -183,7 +181,8 @@ def run_input_checks(
         if not bad:
             continue
         if chk["severity"] == "error":
-            raise InputError(f"{chk['id']}: {msg}")
+            error = SessionTooLong if code == "session_too_long" else InputError
+            raise error(f"{chk['id']}: {msg}")
         warnings.append(ResultWarning(code=code, detail=f"{chk['id']}: {msg}"))
     return warnings
 
@@ -199,21 +198,19 @@ def prepare(
 ) -> Prepared:
     """Roles -> select by span -> input checks (+ rules.check_input) -> volleys.
     Checks run on the selected turns, so a short span counts as a short session.
-    `coded_span` is chosen by the engine (`span.select_coded_span`); a `coded_span` in
-    `params` is deliberately ignored: callers never pick the span (PRD R7)."""
+    An explicit keyword overrides params["coded_span"]; absent means the whole transcript."""
     speaker_map = params.get("speaker_map") or {}
     role_turns, warnings = mark_roles(transcript, speaker_map)
-    if isinstance(coded_span, CodedSpan):
-        coded_span = coded_span.model_dump()
+    if coded_span is None:
+        coded_span = params.get("coded_span")
+    choice = select_coded_span(transcript, "", coded_span)
+    coded_span = choice.coded_span.model_dump(exclude_none=True) if choice.coded_span else None
     selected, span_warn = select_turns(role_turns, coded_span)
     warnings += span_warn
-    applied = (
-        bool(coded_span)
-        and not span_warn
-        and coded_span.get("from_s") is not None
-        and coded_span.get("to_s") is not None
-    )
-    duration = _duration_ms(transcript, selected, coded_span, applied)
+    duration = _duration_ms(transcript, selected, coded_span)
+    if sum(_words(rt.turn.text) for rt in selected) > 6000:
+        raise SessionTooLong("session_too_long: coded portion exceeds 6000 words; "
+                             "supply a narrower coded_span")
     warnings += run_input_checks(selected, params, duration)
     extra = rules.check_input(CheckInput(selected, params, duration), miti.MITI.data) or []
     warnings += [_coerce(w) for w in extra]

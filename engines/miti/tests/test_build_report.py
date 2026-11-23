@@ -107,10 +107,10 @@ def test_text_only_transcript_has_null_stt():
 
 def test_span_reaches_header():
     kw = inputs()
-    span = CodedSpan(from_s=60, to_s=1260)
+    span = CodedSpan(start_ms=60000, end_ms=1260000)
     result = kw["result"].model_copy(update={"coded_span": span})
     r = build_report_no_rating(**{**kw, "result": result})
-    assert r.header.coded_span.from_s == 60 and r.header.coded_span.to_s == 1260
+    assert r.header.coded_span.start_ms == 60000 and r.header.coded_span.end_ms == 1260000
 
 
 def test_method_from_definition_and_not_official():

@@ -327,30 +327,101 @@
     },
     "CodedSpan": {
       "additionalProperties": false,
-      "properties": {
-        "from_s": {
-          "anyOf": [
-            {
-              "type": "number"
+      "description": "Exactly one half-open time (milliseconds) or zero-based turn range.",
+      "oneOf": [
+        {
+          "properties": {
+            "start_ms": {
+              "type": "integer"
             },
-            {
+            "end_ms": {
+              "type": "integer"
+            },
+            "start_turn": {
+              "type": "null"
+            },
+            "end_turn": {
               "type": "null"
             }
-          ],
-          "default": null,
-          "title": "From S"
+          },
+          "required": [
+            "start_ms",
+            "end_ms"
+          ]
         },
-        "to_s": {
+        {
+          "properties": {
+            "start_turn": {
+              "type": "integer"
+            },
+            "end_turn": {
+              "type": "integer"
+            },
+            "start_ms": {
+              "type": "null"
+            },
+            "end_ms": {
+              "type": "null"
+            }
+          },
+          "required": [
+            "start_turn",
+            "end_turn"
+          ]
+        }
+      ],
+      "properties": {
+        "start_ms": {
           "anyOf": [
             {
-              "type": "number"
+              "minimum": 0,
+              "type": "integer"
             },
             {
               "type": "null"
             }
           ],
           "default": null,
-          "title": "To S"
+          "title": "Start Ms"
+        },
+        "end_ms": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "End Ms"
+        },
+        "start_turn": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Start Turn"
+        },
+        "end_turn": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "End Turn"
         }
       },
       "title": "CodedSpan",
@@ -1259,10 +1330,59 @@
         "mode": {
           "enum": [
             "whole",
+            "explicit",
             "random_window"
           ],
           "title": "Mode",
           "type": "string"
+        },
+        "start_ms": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Start Ms"
+        },
+        "end_ms": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "End Ms"
+        },
+        "start_turn": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Start Turn"
+        },
+        "end_turn": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "End Turn"
         },
         "duration_s": {
           "anyOf": [

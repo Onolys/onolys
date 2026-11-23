@@ -8,7 +8,7 @@ from collections.abc import Iterable
 from pathlib import Path
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, model_serializer
 
 from onolys_miti.llm.routes import Route
 from onolys_miti.stt import SttRun
@@ -52,9 +52,19 @@ class RunUsage(_Model):
 class SpanInfo(_Model):
     """How the coded span was chosen (PRD R7)."""
 
-    mode: Literal["whole", "random_window"]
+    mode: Literal["whole", "explicit", "random_window"]
+    start_ms: int | None = None
+    end_ms: int | None = None
+    start_turn: int | None = None
+    end_turn: int | None = None
     duration_s: int | None = None
     seed: str
+
+    @model_serializer(mode="wrap")
+    def _serialize(self, handler):
+        # Whole-session provenance has no range bounds; explicit ranges carry their form.
+        return {key: value for key, value in handler(self).items()
+                if key not in {"start_ms", "end_ms", "start_turn", "end_turn"} or value is not None}
 
 
 class RunInfo(_Model):

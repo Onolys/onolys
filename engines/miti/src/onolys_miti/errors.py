@@ -11,3 +11,15 @@ class InputError(OnolysError):
 
 class ConfigError(OnolysError):
     """Deployment configuration is invalid (bad routes file, unset API-key variable)."""
+
+
+class InvalidCodedSpan(InputError):
+    """An explicit coded span cannot be applied to this transcript."""
+
+    code = "invalid_coded_span"
+
+
+class SessionTooLong(InputError):
+    """The selected portion exceeds the engine's coding limits."""
+
+    code = "session_too_long"
