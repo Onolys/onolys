@@ -7,9 +7,9 @@ from dataclasses import replace
 from types import SimpleNamespace
 
 import pytest
+from onolys_engine_core.errors import ConfigError
 from pydantic import BaseModel
 
-from onolys_miti.errors import ConfigError
 from onolys_miti.llm import (
     LiteLLMClient,
     LLMBadOutput,

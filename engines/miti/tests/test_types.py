@@ -6,7 +6,6 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from onolys_miti.errors import ConfigError, InputError, OnolysError
 from onolys_miti.stt import AudioRef, SttAdapter, SttCompletion, SttParams, SttRun, Word
 from onolys_miti.transcript import Span, Transcript, Turn
 
@@ -87,12 +86,6 @@ async def test_stt_adapter_protocol_usable():
     assert (await a.poll("h1")).transcript == Transcript(turns=[])
 
 
-def test_error_hierarchy():
-    assert issubclass(InputError, OnolysError) and issubclass(ConfigError, OnolysError)
-    with pytest.raises(OnolysError):
-        raise InputError("bad")
-
-
 def test_miti_imports_no_sibling_packages():
     """Boundary: importing the package pulls in no sibling Onolys packages."""
     forbidden = ("api", "admin", "eval")
@@ -103,10 +96,3 @@ def test_miti_imports_no_sibling_packages():
     )
     out = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, check=True)
     assert out.stdout.strip() == "[]"
-
-
-def test_run_context_defaults():
-    from onolys_miti.context import RunContext
-
-    ctx = RunContext(llm=object(), metrics=object(), request_id="r1")
-    assert ctx.deadline is None and ctx.request_id == "r1"

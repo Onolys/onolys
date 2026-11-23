@@ -12,9 +12,9 @@ import time
 
 import jsonschema
 import pytest
+from onolys_engine_core.context import RunContext
 
 from onolys_miti import miti
-from onolys_miti.context import RunContext
 from onolys_miti.llm import LLMBadOutput, LLMResult, LLMUnavailable, MetricsCollector, Usage
 from onolys_miti.result import MitiResult
 from onolys_miti.run import AllRunsFailed, MitiOutput, aggregate, run_miti
@@ -200,7 +200,7 @@ async def test_explicit_span_is_honored_and_echoed(span):
 
 
 async def test_over_duration_fails_before_model_calls():
-    from onolys_miti.errors import InputError
+    from onolys_engine_core.errors import InputError
     t = transcript()
     t.turns[-1] = t.turns[-1].model_copy(update={"end_ms": 1500001})
     client = FakeClient()
@@ -215,7 +215,7 @@ async def test_over_duration_fails_before_model_calls():
     {"start_turn": 0, "end_turn": 999},
 ])
 async def test_invalid_span_fails_before_model_calls(span):
-    from onolys_miti.errors import InputError
+    from onolys_engine_core.errors import InputError
     t = transcript().model_copy(update={"duration_ms": None, "turns": [
         turn.model_copy(update={"start_ms": None, "end_ms": None}) for turn in transcript().turns
     ]})
@@ -349,7 +349,7 @@ async def test_language_warning():
 
 
 async def test_invalid_n_runs():
-    from onolys_miti.errors import InputError
+    from onolys_engine_core.errors import InputError
 
     with pytest.raises(InputError):
         await go(params={"n_runs": -1})
@@ -417,7 +417,6 @@ def test_public_reexports():
         "run_miti",
         "MitiOutput",
         "AllRunsFailed",
-        "RunContext",
         "SttParams",
         "LiteLLMClient",
         "GoogleChirp3",
@@ -425,3 +424,6 @@ def test_public_reexports():
         "Transcript",
     ):
         assert hasattr(m, name), name
+
+    for name in ("RunContext", "ConfigError", "InputError", "OnolysError"):
+        assert not hasattr(m, name), name

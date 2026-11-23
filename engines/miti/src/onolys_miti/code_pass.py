@@ -16,10 +16,10 @@ import json
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
+from onolys_engine_core.errors import OnolysError
 from pydantic import BaseModel, create_model
 
 from onolys_miti import miti
-from onolys_miti.errors import OnolysError
 from onolys_miti.llm import LLMBadOutput, LLMClient, LLMRequest, MetricsCollector
 from onolys_miti.llm.warm import warm_then_fanout
 from onolys_miti.locate import locate

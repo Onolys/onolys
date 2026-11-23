@@ -7,10 +7,9 @@ from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from typing import Protocol
 
+from onolys_engine_core.errors import OnolysError
+from onolys_engine_core.safe_log import register_fields
 from pydantic import BaseModel
-
-from onolys_miti.errors import OnolysError
-from onolys_miti.safe_log import register_fields
 
 # Loggable voice fields. The system prompt is never loggable (not allowlisted).
 register_fields({"voice_provider", "voice_model", "voice", "reason", "frames"})

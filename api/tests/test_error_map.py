@@ -7,8 +7,8 @@ import pytest
 import test_run
 import test_worker
 from google.api_core.exceptions import ServiceUnavailable, TooManyRequests
+from onolys_engine_core.errors import ConfigError, InputError, OnolysError
 from onolys_miti.code_pass import CodePassFailed
-from onolys_miti.errors import ConfigError, InputError, OnolysError
 from onolys_miti.globals_pass import GlobalsPassFailed
 from onolys_miti.llm.errors import (
     FixtureMiss,

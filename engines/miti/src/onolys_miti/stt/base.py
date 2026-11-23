@@ -3,7 +3,8 @@
 import asyncio
 from abc import ABC, abstractmethod
 
-from onolys_miti.safe_log import log_event
+from onolys_engine_core.safe_log import log_event
+
 from onolys_miti.stt import AudioRef, SttCompletion, SttParams, SttRun, Word
 from onolys_miti.transcript import Transcript, Turn
 

@@ -10,7 +10,7 @@ import os
 from collections.abc import Mapping
 from pathlib import Path
 
-from onolys_miti.errors import ConfigError, InputError
+from onolys_engine_core.errors import ConfigError, InputError
 from onolys_miti.llm.routes import (
     DEFAULT_PRESET_ENV,
     RouteRegistry,

@@ -28,7 +28,7 @@ from pathlib import Path
 from typing import Any
 
 from jsonschema import Draft202012Validator
-from onolys_miti.context import RunContext
+from onolys_engine_core.context import RunContext
 
 from onolys_api import logs
 from onolys_api.adapters.base import Evaluation

@@ -9,8 +9,8 @@ from importlib import resources
 from pathlib import Path
 
 import yaml
+from onolys_engine_core.errors import InputError
 
-from onolys_miti.errors import InputError
 from onolys_miti.stt import SttParams
 
 STT_FILE_NAME = "stt_providers.yaml"

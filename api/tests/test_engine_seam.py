@@ -35,7 +35,7 @@ async def test_real_adapter_forwards_seed_and_caller_span():
         seen.update(params)
         raise RuntimeError("stop")
 
-    from onolys_miti import RunContext
+    from onolys_engine_core.context import RunContext
 
     ev = RealEvaluation(run_miti=run_miti, llm_factory=lambda routes: object())
     ctx = RunContext(llm=None, metrics=None, request_id="r1")

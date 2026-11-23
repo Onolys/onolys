@@ -4,7 +4,7 @@ the session's stored `stt.provider`. Unit tests use `FixtureStt`; no live STT.""
 import json
 
 import pytest
-from onolys_miti.errors import ConfigError
+from onolys_engine_core.errors import ConfigError
 from onolys_miti.stt import AudioRef, SttParams
 from onolys_miti.stt.fixture import FixtureStt, uri_hash
 from onolys_miti.stt.google_chirp import GoogleChirp3

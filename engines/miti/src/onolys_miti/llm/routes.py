@@ -12,8 +12,8 @@ from pathlib import Path
 from typing import Any, Literal
 
 import yaml
+from onolys_engine_core.errors import ConfigError, InputError
 
-from onolys_miti.errors import ConfigError, InputError
 from onolys_miti.stt.select import locate_config_file
 
 ROUTES_ENV = "ROUTES_FILE"

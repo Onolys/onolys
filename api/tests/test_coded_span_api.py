@@ -4,7 +4,7 @@ import json
 
 import pytest
 from cards import valid_card
-from onolys_miti.errors import InvalidCodedSpan, SessionTooLong
+from onolys_engine_core.errors import InvalidCodedSpan, SessionTooLong
 from test_transcript_upload import AUTH, Queue, create, document, upload
 
 from onolys_api.adapters.error_map import to_public

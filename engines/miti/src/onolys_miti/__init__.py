@@ -1,12 +1,10 @@
 """MITI 4.2.1 coding engine.
 
 Re-exports `run_miti`, its progress/stage types and the commonly used llm, stt, voice, transcript
-and error types. The API also imports submodules directly (`context`, `errors`, `miti`, `rating`,
-`report`, `safe_log`, `span`, `transcript`, `stt.*`, `voice.*`, `llm.*`), so those are part of the
+types. The API also imports submodules directly (`miti`, `rating`,
+`report`, `span`, `transcript`, `stt.*`, `voice.*`, `llm.*`), so those are part of the
 contract too (see the README)."""
 
-from onolys_miti.context import RunContext
-from onolys_miti.errors import ConfigError, InputError, OnolysError
 from onolys_miti.llm import (
     LiteLLMClient,
     LLMConfig,
@@ -35,18 +33,14 @@ __all__ = [
     "AllRunsFailed",
     "Artifacts",
     "AudioRef",
-    "ConfigError",
     "GoogleChirp3",
-    "InputError",
     "LLMConfig",
     "LLMError",
     "LLMUnavailable",
     "LiteLLMClient",
     "MetricsCollector",
     "MitiOutput",
-    "OnolysError",
     "ProgressCb",
-    "RunContext",
     "RunInfo",
     "Stage",
     "StageStatus",

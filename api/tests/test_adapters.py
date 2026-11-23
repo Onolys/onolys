@@ -2,8 +2,8 @@ import json
 
 import pytest
 from jsonschema import Draft202012Validator
+from onolys_engine_core.context import RunContext
 from onolys_miti import miti
-from onolys_miti.context import RunContext
 from onolys_miti.stt import AudioRef, SttParams, Word
 from onolys_miti.stt.base import words_to_turns
 from onolys_miti.stt.fixture import FixtureStt, uri_hash

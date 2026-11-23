@@ -11,10 +11,9 @@ import time
 from collections.abc import Awaitable, Callable
 from typing import Any
 
+from onolys_engine_core.errors import ConfigError
+from onolys_engine_core.retry import retry
 from pydantic import ValidationError
-
-from onolys_miti.errors import ConfigError
-from onolys_miti.retry import retry
 
 from .config import LLMConfig
 from .errors import LLMBadOutput, LLMRateLimited, LLMTimeout, LLMUnavailable

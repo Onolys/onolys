@@ -1,6 +1,6 @@
 import pytest
+from onolys_engine_core.errors import ConfigError, InputError
 
-from onolys_miti.errors import ConfigError, InputError
 from onolys_miti.llm.routes import (
     allowed_presets,
     check_api_keys,

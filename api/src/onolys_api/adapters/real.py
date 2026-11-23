@@ -22,8 +22,8 @@ import time
 from collections.abc import Callable, Mapping
 from typing import Any
 
-from onolys_miti.context import RunContext
-from onolys_miti.errors import ConfigError
+from onolys_engine_core.context import RunContext
+from onolys_engine_core.errors import ConfigError
 from onolys_miti.llm import LiteLLMClient, LLMConfig, MetricsCollector
 from onolys_miti.llm.routes import resolve_preset
 from onolys_miti.stt import AudioRef, SttAdapter, SttCompletion, SttParams

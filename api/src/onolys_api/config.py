@@ -4,7 +4,7 @@ import os
 from collections.abc import Mapping
 from dataclasses import dataclass
 
-from onolys_miti.errors import ConfigError
+from onolys_engine_core.errors import ConfigError
 
 ENVS = ("local", "test", "staging", "prod")
 SERVICE_MODES = ("api", "worker", "combined", "voice")

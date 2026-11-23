@@ -3,8 +3,8 @@ from pathlib import Path
 
 import pytest
 from jsonschema import Draft202012Validator
+from onolys_engine_core.errors import InputError
 
-from onolys_miti.errors import InputError
 from onolys_miti.stt import AudioRef, SttParams, Word
 from onolys_miti.stt.base import transcribe, words_to_turns
 from onolys_miti.stt.fixture import FixtureStt, uri_hash

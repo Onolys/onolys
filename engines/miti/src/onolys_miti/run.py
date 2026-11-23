@@ -9,7 +9,7 @@ every run fails `AllRunsFailed` is raised (a coding failure never yields a repor
 failure degrades to a warning. `ctx.deadline` (absolute `time.monotonic()` value) bounds the whole
 call: past it a `TimeoutError` is raised.
 
-Logging goes through `onolys_miti.safe_log` with ids, counts and statuses only, never text.
+Logging goes through `onolys_engine_core.safe_log` with ids, counts and statuses only, never text.
 """
 
 import asyncio
@@ -20,6 +20,9 @@ import statistics
 from collections.abc import Awaitable, Callable
 from typing import Any, Literal
 
+from onolys_engine_core.context import RunContext
+from onolys_engine_core.errors import InputError, OnolysError
+from onolys_engine_core.safe_log import log_event, register_fields
 from pydantic import BaseModel
 
 from onolys_miti import code_pass as code_mod
@@ -27,8 +30,6 @@ from onolys_miti import globals_pass as globals_mod
 from onolys_miti import miti
 from onolys_miti import tips as tips_mod
 from onolys_miti.build import build_report_no_rating
-from onolys_miti.context import RunContext
-from onolys_miti.errors import InputError, OnolysError
 from onolys_miti.formula import label_for
 from onolys_miti.hashes import evaluation_prompt_hashes
 from onolys_miti.llm import LLMClient, LLMError, MetricsCollector
@@ -47,7 +48,6 @@ from onolys_miti.result import (
     SummaryStat,
 )
 from onolys_miti.run_info import RunInfo, RunUsage, code_version, hash_files, route_facts
-from onolys_miti.safe_log import log_event, register_fields
 from onolys_miti.score import score_run
 from onolys_miti.span import select_coded_span
 from onolys_miti.tips import TipsArtifact

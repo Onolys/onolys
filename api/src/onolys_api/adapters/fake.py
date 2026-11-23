@@ -9,7 +9,7 @@ adapters ignore it). Matching is by substring.
 import hashlib
 from typing import Any
 
-from onolys_miti.context import RunContext
+from onolys_engine_core.context import RunContext
 from onolys_miti.prepare import RoleTurn, select_turns
 from onolys_miti.span import select_coded_span
 from onolys_miti.stt import AudioRef, SttParams, SttRun, Word

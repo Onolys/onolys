@@ -4,7 +4,7 @@ from datetime import UTC, datetime, timedelta
 
 import httpx
 import pytest
-from onolys_miti.errors import ConfigError
+from onolys_engine_core.errors import ConfigError
 
 from onolys_api.adapters import Adapters, build_adapters
 from onolys_api.adapters.fake import FakeVoice

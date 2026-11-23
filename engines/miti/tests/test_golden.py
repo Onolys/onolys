@@ -8,9 +8,9 @@ from pathlib import Path
 
 import jsonschema
 import pytest
+from onolys_engine_core.context import RunContext
 
 from onolys_miti import miti
-from onolys_miti.context import RunContext
 from onolys_miti.llm import LLMResult, MetricsCollector
 from onolys_miti.llm.fixture_client import FixtureClient
 from onolys_miti.run import run_miti

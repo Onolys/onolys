@@ -7,6 +7,7 @@ members = [
     "onolys-admin-auth",
     "onolys-admin-backend",
     "onolys-api",
+    "onolys-engine-core",
     "onolys-miti",
 ]
 
@@ -1185,6 +1186,7 @@ dependencies = [
     { name = "google-cloud-storage" },
     { name = "google-cloud-tasks" },
     { name = "jsonschema" },
+    { name = "onolys-engine-core" },
     { name = "onolys-miti", extra = ["stt-google", "voice-gemini"] },
     { name = "pydantic" },
     { name = "requests" },
@@ -1211,6 +1213,7 @@ requires-dist = [
     { name = "google-cloud-storage", specifier = ">=2.18" },
     { name = "google-cloud-tasks", specifier = ">=2.16" },
     { name = "jsonschema", specifier = ">=4" },
+    { name = "onolys-engine-core", editable = "engines/core" },
     { name = "onolys-miti", extras = ["stt-google", "voice-gemini"], editable = "engines/miti" },
     { name = "pydantic", specifier = ">=2.7" },
     { name = "requests", specifier = ">=2.31" },
@@ -1230,12 +1233,48 @@ dev = [
 ]
 
 [[package]]
+name = "onolys-engine-core"
+version = "0.1.0"
+source = { editable = "engines/core" }
+dependencies = [
+    { name = "jsonschema" },
+    { name = "litellm" },
+    { name = "pydantic" },
+    { name = "pyyaml" },
+]
+
+[package.dev-dependencies]
+dev = [
+    { name = "pytest" },
+    { name = "pytest-asyncio" },
+    { name = "pytest-cov" },
+    { name = "ruff" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "jsonschema", specifier = ">=4.22" },
+    { name = "litellm", specifier = ">=1.50" },
+    { name = "pydantic", specifier = ">=2.7" },
+    { name = "pyyaml", specifier = ">=6" },
+]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "pytest", specifier = ">=8" },
+    { name = "pytest-asyncio", specifier = ">=0.23" },
+    { name = "pytest-cov", specifier = ">=5" },
+    { name = "ruff", specifier = ">=0.6" },
+]
+
+[[package]]
 name = "onolys-miti"
 version = "0.1.0"
 source = { editable = "engines/miti" }
 dependencies = [
     { name = "jsonschema" },
     { name = "litellm" },
+    { name = "onolys-engine-core" },
     { name = "pydantic" },
     { name = "pyyaml" },
     { name = "rapidfuzz" },
@@ -1263,6 +1302,7 @@ requires-dist = [
     { name = "google-genai", marker = "extra == 'voice-gemini'", specifier = ">=1.0" },
     { name = "jsonschema", specifier = ">=4.22" },
     { name = "litellm", specifier = ">=1.50" },
+    { name = "onolys-engine-core", editable = "engines/core" },
     { name = "pydantic", specifier = ">=2.7" },
     { name = "pyyaml", specifier = ">=6" },
     { name = "rapidfuzz", specifier = ">=3.14.6" },

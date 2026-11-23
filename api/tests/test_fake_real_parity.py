@@ -6,8 +6,8 @@ import json
 import miti_fixtures as fx
 import pytest
 from jsonschema import Draft202012Validator
+from onolys_engine_core.context import RunContext
 from onolys_miti import miti
-from onolys_miti.context import RunContext
 from onolys_miti.run_info import SpanInfo
 
 from onolys_api.adapters import FakeEvaluation
