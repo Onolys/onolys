@@ -1,8 +1,8 @@
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { reasonsFailedReport, sampleReport } from "../../mocks/fixtures/report";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { drinkingSampleReport, drinkingSampleTurns } from "../../mocks/fixtures/sample";
 import { mockBackend, server } from "../../mocks/server";
 import { here, renderApp } from "../../test/renderApp";
 
@@ -42,177 +42,93 @@ function serve(report: unknown, schemaVersion = "0.0.1") {
   );
 }
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-const clone = () => structuredClone(sampleReport) as unknown as Record<string, any>;
+const clone = () => structuredClone(drinkingSampleReport) as unknown as Record<string, any>;
 
-const section = (name: string) => screen.getByRole("region", { name });
-const row = (name: RegExp, sec = "Scorecard") => within(section(sec)).getByRole("row", { name });
+/** Serve the transcript the report was made from (ids t1..t54 match the fixture report). */
+function serveTranscript() {
+  server.use(http.get("*/v1/sessions/:id/transcript", () => HttpResponse.json({ turns: drinkingSampleTurns })));
+}
 
 afterEach(() => {
-  delete (Element.prototype as { scrollIntoView?: unknown }).scrollIntoView;
   vi.unstubAllEnvs();
 });
 
-describe("report page, rated report, flag off (default)", () => {
-  it("shows Onolys coding and tips only: no You/Difference, no Disagreements/Reasons, no withheld warning", async () => {
-    serve({ ...clone(), warnings: [{ code: "reason_withheld_tone", item_id: "cct" }] });
+describe("report page", () => {
+  it("shows the header with run details and version select, and the new single-column sections", async () => {
+    serve(clone());
+    serveTranscript();
     const sid = reported({ final: true, card: SCORED });
     open(sid);
-    await screen.findByRole("region", { name: "Scorecard" });
-    const score = within(section("Scorecard"));
-    expect(score.getAllByRole("columnheader").map((h) => h.textContent)).toEqual(["Item", "Onolys"]);
-    expect(score.queryByText(/No rating of yours/)).toBeNull();
-    expect(screen.queryByText(/differs|flagged|Same as you/)).toBeNull();
-    expect(screen.queryByText(/tally-only self-rating/)).toBeNull();
-    const beh = within(section("Behaviour counts"));
-    expect(beh.getAllByRole("columnheader").map((h) => h.textContent)).toEqual(["Behaviour", "Onolys", "Instances"]);
-    const summaries = within(section("Summary measures"));
-    expect(summaries.queryByText(/You /)).toBeNull();
-    expect(document.querySelector(".ref-dot[data-kind='you']")).toBeNull();
-    expect(screen.queryByRole("region", { name: "Where Onolys disagrees" })).toBeNull();
-    expect(screen.queryByRole("region", { name: "Your reasons, checked" })).toBeNull();
-    expect(screen.queryByText(/not shown, to keep the report fair/)).toBeNull();
-    expect(screen.queryByText(/^You: /)).toBeNull();
-    expect(within(section("Tips")).getAllByRole("listitem")).toHaveLength(3);
-    expect(section("About this report")).toBeInTheDocument();
-  });
-});
-
-describe("report page, rated report", () => {
-  beforeEach(() => vi.stubEnv("VITE_RATING_ENABLED", "true"));
-
-  it("shows the header with run details and version select, with no Run again or rating edit", async () => {
-    const sid = reported({ final: true, card: SCORED });
-    open(sid);
-    expect(await screen.findByText("Walk more in the evenings")).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { level: 1, name: "Report" })).toBeInTheDocument();
+    expect(await screen.findByText(/Cut down on drinking/)).toBeInTheDocument();
     expect(screen.getAllByText(/MITI 4\.2\.1/).length).toBeGreaterThan(0);
     const details = screen.getByText(/Run details/);
-    expect(details).toHaveTextContent(/mock-stt/);
     expect(details).toHaveTextContent(/default/);
     expect(details).toHaveTextContent(/mock/);
     const select = screen.getByLabelText("Version");
     expect(within(select).getAllByRole("option").map((o) => o.textContent)).toEqual([expect.stringMatching(/^v1/)]);
-    // FX45: the rating is final: nothing to run again or edit
-    expect(screen.queryByRole("button", { name: /run again/i })).toBeNull();
-    expect(screen.queryByRole("button", { name: /edit my rating/i })).toBeNull();
-    expect(screen.queryByRole("button", { name: /submit/i })).toBeNull();
-  });
-
-  it("keeps the tally-only self-rating note when the rating is on", async () => {
-    const sid = reported({ final: true, card: SCORED });
-    open(sid);
-    await screen.findByRole("region", { name: "Scorecard" });
-    expect(screen.getByText(/tally-only self-rating/)).toBeInTheDocument();
-  });
-
-  it("renders sections in layout order and shows the transcript pane", async () => {
-    const sid = reported({ final: true, card: SCORED });
-    open(sid);
-    await screen.findByRole("region", { name: "Scorecard" });
-    const names = screen.getAllByRole("region").map((r) => r.getAttribute("aria-label") ?? r.querySelector("h2")?.textContent);
-    expect(names).toEqual([
-      "Scorecard",
-      "Where Onolys disagrees",
-      "Global scores",
+    expect(screen.getAllByRole("heading", { level: 2 }).map((h) => h.textContent)).toEqual([
+      "At a glance",
+      "Feedback: ideas to try",
       "Behaviour counts",
-      "Summary measures",
-      "Your reasons, checked",
-      "Tips",
-      "About this report",
-      "Transcript",
+      "Coded transcript",
+      "Method & limits",
     ]);
-    expect(await screen.findByRole("list", { name: "Transcript" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: /Scorecard|disagrees|Your reasons/i })).toBeNull();
+    expect(screen.queryByRole("tab")).toBeNull();
+    expect(screen.queryByRole("button", { name: /run again|edit my rating|submit/i })).toBeNull();
+    expect(screen.queryByText(/^Sample$/)).toBeNull();
   });
 
-  it("scorecard chips carry text and tone", async () => {
+  it("once the transcript loads, utterance links appear and the button opens the coded transcript", async () => {
+    serve(clone());
+    serveTranscript();
     const sid = reported({ final: true, card: SCORED });
     open(sid);
-    await screen.findByRole("region", { name: "Scorecard" });
-    const cct = within(row(/Cultivating Change Talk/)).getByText("Onolys -2 (differs)");
-    expect(cct).toHaveAttribute("data-tone", "differs");
-    const cr = within(row(/Complex Reflection/)).getByText("Onolys +2 (flagged)");
-    expect(cr).toHaveAttribute("data-tone", "flagged");
-    const empathy = within(row(/Empathy/)).getByText("Onolys +1");
-    expect(empathy).toHaveAttribute("data-tone", "agree");
-    expect(within(row(/Partnership/)).getByText("Same as you")).toHaveAttribute("data-tone", "agree");
+    const btn = await screen.findByRole("button", { name: "Open coded transcript" });
+    expect(screen.getAllByRole("button", { name: /^Open utterance \d+$/ }).length).toBeGreaterThan(0);
+    await userEvent.click(btn);
+    const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).getByRole("table")).toBeInTheDocument();
   });
 
-  it("shows disagreement blocks only for a differing global and a flagged count", async () => {
+  it("a transcript 500 keeps every other section and offers Try again, which recovers", async () => {
+    serve(clone());
+    let fail = true;
+    server.use(
+      http.get("*/v1/sessions/:id/transcript", () =>
+        fail ? HttpResponse.json({ status: 500 }, { status: 500 }) : HttpResponse.json({ turns: drinkingSampleTurns }),
+      ),
+    );
     const sid = reported({ final: true, card: SCORED });
     open(sid);
-    const blocks = within(await screen.findByRole("region", { name: "Where Onolys disagrees" }));
-    expect(blocks.getAllByRole("article")).toHaveLength(2);
-    expect(blocks.getByText("Onolys disagrees on Cultivating Change Talk, here's why")).toBeInTheDocument();
-    expect(blocks.getByText("Onolys counted more complex reflections than you did")).toBeInTheDocument();
-    expect(blocks.getByText(/Lines supporting your rating/)).toBeInTheDocument();
-    // Simple Reflection only differs: a chip and a table row, no block.
-    expect(blocks.queryByText(/Simple Reflection/)).toBeNull();
-    expect(within(row(/Simple Reflection/)).getByText("Onolys -2 (differs)")).toBeInTheDocument();
+    const retry = await screen.findByRole("button", { name: "Try again" });
+    expect(screen.getByRole("heading", { name: "At a glance" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /Feedback/ })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Behaviour counts" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Method & limits" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^Open utterance/ })).toBeNull();
+    fail = false;
+    await userEvent.click(retry);
+    expect(await screen.findByRole("button", { name: "Open coded transcript" })).toBeEnabled();
+    expect(screen.getAllByRole("button", { name: /^Open utterance \d+$/ }).length).toBeGreaterThan(0);
   });
 
-  it("globals, behaviour table with '+N more', summaries, tips and method", async () => {
+  it("renders the report before the transcript arrives", async () => {
+    serve(clone());
+    server.use(http.get("*/v1/sessions/:id/transcript", () => new Promise(() => {})));
     const sid = reported({ final: true, card: SCORED });
     open(sid);
-    const globals = within(await screen.findByRole("region", { name: "Global scores" }));
-    expect(globals.getByText(/Several clear statements about walking more/)).toBeInTheDocument();
-    const table = within(section("Behaviour counts"));
-    expect(within(table.getByRole("row", { name: /Complex Reflection/ })).getByText("+2 more")).toBeInTheDocument();
-    expect(table.getByText(/can't be matched line by line/)).toBeInTheDocument();
-    const summaries = within(section("Summary measures"));
-    expect(summaries.getAllByText(/reference levels, not pass marks/i).length).toBeGreaterThan(0);
-    expect(within(section("Tips")).getAllByRole("listitem")).toHaveLength(3);
-    expect(within(section("About this report")).getByText(/not official MITI coding/i)).toBeInTheDocument();
-    expect(within(section("Your reasons, checked")).getByText("Partly supported")).toBeInTheDocument();
-  });
-
-  it("clicking an instance chip selects it, scrolls and pulses it in the transcript", async () => {
-    const scroll = vi.fn();
-    Element.prototype.scrollIntoView = scroll;
-    const sid = reported({ final: true, card: SCORED });
-    const { router } = open(sid);
-    await screen.findByRole("list", { name: "Transcript" });
-    await screen.findByRole("region", { name: "Behaviour counts" });
-    const chip = within(row(/Complex Reflection/, "Behaviour counts")).getByRole("button", {
-      name: /part of you still wants to get out there/,
-    });
-    await userEvent.click(chip);
-    expect(router.state.location.hash).toBe("#i=cr-1");
-    await waitFor(() => expect(scroll).toHaveBeenCalled());
-    const mark = within(screen.getByRole("list", { name: "Transcript" })).getByText(/part of you still wants to get out there/);
-    expect(mark.tagName).toBe("MARK");
-    expect(mark).toHaveClass("pulse");
-  });
-
-  it("a tip quote highlights in the transcript", async () => {
-    const sid = reported({ final: true, card: SCORED });
-    const { router } = open(sid);
-    await screen.findByRole("list", { name: "Transcript" });
-    const tips = within(await screen.findByRole("region", { name: "Tips" }));
-    await userEvent.click(tips.getAllByRole("button", { name: /You'd like to walk more in the evenings\./ })[0]);
-    expect(router.state.location.hash).toMatch(/^#i=/);
-    await waitFor(() => expect(document.querySelector("mark.pulse")).not.toBeNull());
+    expect(await screen.findByRole("heading", { name: "At a glance" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Loading transcript…" })).toBeDisabled();
   });
 });
 
-describe("report page, no rating", () => {
-  beforeEach(() => vi.stubEnv("VITE_RATING_ENABLED", "true"));
-
-  it("shows Onolys only, and offers no way to add a rating or run again (FX45)", async () => {
-    const sid = reported({ final: true, no_rating: true, card: CARD });
-    open(sid);
-    await screen.findByRole("region", { name: "Scorecard" });
-    const cct = row(/Cultivating Change Talk/);
-    expect(within(cct).getAllByText("–").length).toBeGreaterThan(0);
-    expect(within(cct).queryByText(/differs/)).toBeNull();
-    expect(screen.queryByRole("region", { name: "Where Onolys disagrees" })).toBeNull();
-    expect(screen.queryByRole("region", { name: "Your reasons, checked" })).toBeNull();
-    expect(screen.queryByRole("button", { name: /run again|edit my rating/i })).toBeNull();
-  });
-});
-
-describe("report page, versions from earlier data", () => {
+describe("report page, versions", () => {
   it("switching the version select goes to that version's route", async () => {
     const sid = reported({ final: true, no_rating: true, card: CARD });
     serve(clone());
+    serveTranscript();
     server.use(
       http.get("*/v1/sessions/:id/reports", () =>
         HttpResponse.json({
@@ -233,66 +149,36 @@ describe("report page, versions from earlier data", () => {
   });
 });
 
-describe("report page, reasons audit failed", () => {
-  beforeEach(() => vi.stubEnv("VITE_RATING_ENABLED", "true"));
-
-  it("replaces the section with a note (no Run again), and keeps the rest", async () => {
-    serve(reasonsFailedReport);
-    const sid = reported({ final: true, card: SCORED });
-    open(sid);
-    const audit = within(await screen.findByRole("region", { name: "Your reasons, checked" }));
-    expect(audit.getByText("We couldn't check your reasons this time. The rest of your report is complete.")).toBeInTheDocument();
-    expect(within(section("Tips")).getAllByRole("listitem").length).toBeGreaterThan(0);
-    expect(screen.getByRole("region", { name: "Scorecard" })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /run again/i })).toBeNull();
-  });
-});
-
 describe("report page, tolerance", () => {
-  it("skips unknown sections and warns on a newer major schema_version", async () => {
-    const r = clone();
-    r.layout.push({ section: "future_widget", title: "Future widget" });
-    serve(r, "1.2.0");
+  it("warns on a newer major schema_version", async () => {
+    serve(clone(), "1.2.0");
+    serveTranscript();
     const sid = reported({ final: true, card: SCORED });
     open(sid);
     expect(await screen.findByText(/This report was made by a newer version/)).toBeInTheDocument();
-    expect(screen.getByRole("region", { name: "Scorecard" })).toBeInTheDocument();
-    expect(screen.queryByText("Future widget")).toBeNull();
+    expect(screen.getByRole("heading", { name: "At a glance" })).toBeInTheDocument();
   });
 
-  it("no mismatch notice for the same major, and unknown sections are skipped", async () => {
-    const r = clone();
-    r.layout.splice(1, 0, { section: "future_widget", title: "Future widget" });
-    serve(r, "0.9.0");
+  it("no mismatch notice for the same major", async () => {
+    serve(clone(), "0.9.0");
+    serveTranscript();
     const sid = reported({ final: true, card: SCORED });
     open(sid);
-    await screen.findByRole("region", { name: "Scorecard" });
+    await screen.findByRole("heading", { name: "At a glance" });
     expect(screen.queryByText(/newer version/)).toBeNull();
-    expect(screen.queryByText("Future widget")).toBeNull();
-    expect(screen.getByRole("region", { name: "Global scores" })).toBeInTheDocument();
   });
 
-  it("N>1 shows the value with 'based on N runs'", async () => {
-    const r = clone();
-    r.header.n_runs = 3;
-    serve(r);
-    const sid = reported({ final: true, card: SCORED });
-    open(sid);
-    await screen.findByRole("region", { name: "Scorecard" });
-    expect(screen.getAllByText(/based on 3 runs/).length).toBeGreaterThan(0);
-  });
-
-  it("behaviour table shows the mean across runs, not run 1 (W28)", async () => {
+  it("N>1: behaviour table shows the mean across runs, not run 1 (W28)", async () => {
     const r = clone();
     r.header.n_runs = 3;
     const b = r.behaviours.find((x: { item_id: string }) => x.item_id === "cr")!;
-    b.onolys_count = { mean: 4, min: 2, max: 6, values: [2, 4, 6] };
+    b.onolys_count = { mean: 7, min: 2, max: 12, values: [2, 7, 12] };
     serve(r);
+    serveTranscript();
     const sid = reported({ final: true, card: SCORED });
     open(sid);
-    const table = within(await screen.findByRole("region", { name: "Behaviour counts" }));
-    const cell = within(table.getByRole("row", { name: /Complex Reflection/ })).getByText("4");
-    expect(cell).toHaveAttribute("data-label", "Onolys");
+    const table = within(await screen.findByRole("table", { name: "Behaviour counts" }));
+    expect(within(table.getByRole("row", { name: /Complex reflection/i })).getByText("7")).toBeInTheDocument();
   });
 
   it("a malformed session id (422 invalid_parameters) shows the same not-found page as 404 (E21)", async () => {
@@ -306,56 +192,6 @@ describe("report page, tolerance", () => {
     );
     open("not-hex");
     expect(await screen.findByText("We couldn't find that report.")).toBeInTheDocument();
-  });
-
-  it("hides empty tips and shows warnings as quiet notices", async () => {
-    const r = clone();
-    r.tips = [];
-    r.warnings = [{ code: "tips_failed" }, { code: "short_session" }];
-    serve(r);
-    const sid = reported({ final: true, card: SCORED });
-    open(sid);
-    await screen.findByRole("region", { name: "Scorecard" });
-    expect(screen.queryByRole("region", { name: "Tips" })).toBeNull();
-    expect(screen.getAllByRole("note").length).toBe(2);
-  });
-
-  it("renders the API's FakeEvaluation shape (no diffs, null stt and preset, scorecard only)", async () => {
-    serve({
-      schema_version: "0.0.1",
-      created_at: "2026-11-20T09:30:00.000Z",
-      header: {
-        change_goal: "",
-        protocol: { id: "miti", version: "4.2.1", pack_hash: "x", label: "MITI 4.2.1" },
-        language: "en",
-        coded_span: null,
-        subject_speaker: "spk_0",
-        n_runs: 1,
-        models: {},
-        stt: null,
-        preset: null,
-        code_version: "fake",
-        params: {},
-        has_clinician_rating: true,
-        rating_coverage: { rated: 1, total: 1 },
-      },
-      layout: [{ section: "scorecard", title: "Scorecard" }],
-      scorecard: [
-        { item_id: "cct", kind: "global", label: "Cultivating Change Talk", clinician: { value: 3 }, onolys: { value: 3, mean: 3, min: 3, max: 3, values: [3] } },
-      ],
-      globals: [],
-      behaviours: [],
-      summaries: [],
-      reasons_audit: { status: "ran", items: [] },
-      tips: [],
-      method: { statement: "Synthetic fixture report.", limits: [], not_official_miti_coding: true, citation: "n/a" },
-      aggregates: {},
-      warnings: [],
-      run_info: {},
-    });
-    const sid = reported({ final: true, card: SCORED });
-    open(sid);
-    expect(await screen.findByRole("row", { name: /Cultivating Change Talk/ })).toBeInTheDocument();
   });
 
   it("a version that is not a whole number shows a not-found message", async () => {

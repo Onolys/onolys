@@ -117,12 +117,7 @@ main { flex: 1; width: 100%; max-width: 64rem; margin: 0 auto; padding: var(--sp
 /* Report page (R4) */
 .report-page { max-width: 80rem; }
 .report-actions { display: flex; flex-wrap: wrap; gap: var(--space-3); align-items: center; }
-.report-actions .btn, .report-tabs button { min-height: 44px; }
-.report-tabs { display: none; gap: var(--space-2); margin: var(--space-3) 0; }
-.report-tabs button { flex: 1; border: 1px solid var(--color-accent); background: var(--color-background); color: var(--color-accent); font: inherit; border-radius: 6px; cursor: pointer; }
-.report-tabs button[aria-selected="true"] { background: var(--color-accent); color: var(--color-on-accent); }
-.report-panes { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: var(--space-6); align-items: start; }
-.report-transcript { position: sticky; top: var(--space-3); max-height: calc(100vh - 2 * var(--space-3)); overflow-y: auto; }
+.report-actions .btn { min-height: 44px; }
 .report-section { margin: var(--space-6) 0; }
 .report-table { width: 100%; border-collapse: collapse; }
 .report-table th, .report-table td { text-align: left; padding: var(--space-2); border-bottom: 1px solid var(--color-gray-300); vertical-align: top; }
@@ -143,10 +138,6 @@ main { flex: 1; width: 100%; max-width: 64rem; margin: 0 auto; padding: var(--sp
 .ref-dot { position: absolute; top: 0; width: 12px; height: 12px; margin-left: -6px; border-radius: 50%; background: var(--color-accent); }
 .ref-dot[data-kind="you"] { background: var(--color-background); border: 2px solid var(--color-accent); box-sizing: border-box; }
 @media (max-width: 800px) {
-  .report-tabs { display: flex; }
-  .report-panes { display: block; }
-  .report-panes[data-tab="report"] .report-transcript, .report-panes[data-tab="transcript"] .report-main { display: none; }
-  .report-transcript { position: static; max-height: none; }
   .report-table thead { position: absolute; left: -9999px; }
   .report-table tr { display: block; border-bottom: 1px solid var(--color-gray-300); padding: var(--space-2) 0; }
   .report-table th, .report-table td { display: block; border: 0; padding: var(--space-1) 0; }
