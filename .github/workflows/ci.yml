@@ -18,6 +18,7 @@ jobs:
     timeout-minutes: 15
     outputs:
       miti: ${{ steps.flags.outputs.miti }}
+      eval: ${{ steps.flags.outputs.eval }}
       api: ${{ steps.flags.outputs.api }}
       admin-auth: ${{ steps.flags.outputs.admin-auth }}
       admin-backend: ${{ steps.flags.outputs.admin-backend }}
@@ -95,6 +96,26 @@ jobs:
             echo "### Coverage: onolys-miti"
             uv run --no-sync --package onolys-miti coverage report --format=markdown
           } >> "$GITHUB_STEP_SUMMARY"
+
+  eval-core:
+    needs: changes
+    if: needs.changes.outputs.eval == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      # Use LiteLLM's bundled pricing data; unit tests need no provider/network access.
+      LITELLM_LOCAL_MODEL_COST_MAP: "True"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+      # convert is needed for tests that generate and parse synthetic PDFs.
+      # Package dev dependencies (pytest) are included by default.
+      - run: uv sync --frozen --package onolys-eval --extra convert
+      - name: Offline unit tests (synthetic fixtures and public-repo guard)
+        run: uv run --no-sync --package onolys-eval pytest eval/core/tests -m "not live"
 
   # api is split so the critical path is max(api-unit, api-emulator) + api-coverage (~30s), not their sum.
   # Selection: conftest.py adds the `firestore` marker to every test that needs the emulator
