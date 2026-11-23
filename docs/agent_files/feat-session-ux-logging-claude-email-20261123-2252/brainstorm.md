@@ -7,7 +7,7 @@ date: 2026-11-23
 # Brainstorm — session UX, failures/logging, Claude, auth emails
 
 ## TL;DR
-Make the processing screen honest (clear current step, % from the start, "you can leave" hint from upload-complete), add a non-destructive **Cancel** (status `cancelled`, charges a limit unit only if transcription started), and replace blanket "busy, retry" errors with a per-failure policy that never charges users for our faults. Log the real provider error and tie every line to the session id so the on-screen Reference finds everything in Logs Explorer. Fix the rating-step outage (no successful rating run on any env since 2026-11-16), move text LLM steps to Claude Sonnet 5.5 (configurable via GitHub vars), give eval a model-config-driven engine/model/effort picker, and send auth emails ourselves via Resend with links to our own `/auth/action`.
+Make the processing screen honest (clear current step, % from the start, "you can leave" hint from upload-complete), add a non-destructive **Cancel** (status `cancelled`, charges a limit unit only if transcription started), and replace blanket "busy, retry" errors with a per-failure policy that never charges users for our faults. Log the real provider error and tie every line to the session id so the on-screen Reference finds everything in Logs Explorer. Fix the rating-step outage (no successful rating run on any env since 2026-11-16), move text LLM steps to Claude Sonnet 5.5 (configurable via GitHub vars), give eval a model-config-driven engine/model/effort picker, and send auth emails ourselves via Resend with links to our own `/auth/action`. Eval runs every selected engine × model × effort combination per report, always against a locked-on human baseline, with per-report and combined comparison tables; each combination is isolated and retried up to 3× on retryable errors. Everything targets staging only.
 
 ## Problem
 Clinician uploads a session recording → validate → transcribe (Google Chirp 3 batch) → user picks clinician speaker + gives own rating → LLM rates (MITI coding, tips, report). Today:
@@ -46,6 +46,26 @@ Clinician uploads a session recording → validate → transcribe (Google Chirp 
 | Doc with ready Logs Explorer link by session id (user) | — | User wants to paste reference and see all logs |
 | Auth emails sent by API via Resend; Admin SDK generates link; rewritten to `<APP_BASE_URL>/auth/action?mode=…&oobCode=…`; APP_BASE_URL per env from server config, never request (user) | Firebase hosted mail | Hosted page broken |
 | Upgrade LiteLLM to a version that knows gemini-4-* and claude-*-5-5 (Claude) | keep 1.110.2 | Likely cause of outage; needed for effort mapping |
+| Eval run = cartesian product of selected engines × models × efforts (multi-select), per report (user) | single preset | Compare all combos |
+| Eval results: per-report comparison table (combo rows/cols, diff vs human, MAE) + combined summary page across all reports (MAE, within-1, per combo) (user) | per-session view only | Easy cross-report comparison |
+| Human baseline auto-selected and greyed (cannot uncheck) for dataset runs (user) | toggleable | Always compare vs human |
+| Transcription once: dataset runs use stored transcripts; uploads transcribe once and reuse across reruns (already true — no change) (verified) | audio-hash cache | Already satisfied |
+| Eval unit retry: up to 3 attempts for retryable error classes only (transient provider/5xx/429/timeout); other units unaffected (user) | none | Failure-proof runs |
+| Planned unit count shown before Start; block above 499-unit cap with message (Claude) | auto-split runs | Firestore batch limit; keep simple |
+| Eval picker replaces "presets" with engine × model × effort selects (Claude) | keep presets | One concept |
+| Main-app user Retry button: 5-second countdown shown in button "Retry (5)…(1)" before enabled (user) | immediate | Avoid hammering |
+| Retry cap 3 per session; 429/quota treated as temporary (Claude) | per step | Simple, bounded |
+| Internal failure at rating step is not counted (user rule overrides old "rating started" rule) (user) | old rule | Fairness |
+| Cancel at awaiting_input counts (transcription started) (user) | — | User rule |
+| `cancelled` is terminal; only Delete after; cancel result (`counted`) persisted on session so reload shows the message; "Cancelling…" is client-side until POST returns (Claude) | — | Simple, durable |
+| Cancel ignores in-flight Chirp job (results discarded), does not kill it (Claude) | cancel LRO | Simpler; cost small |
+| Cancel available in states created, uploading, upload_incomplete, validating, transcribing, awaiting_input, running (Claude) | subset | User: all in-progress |
+| Finished sessions cannot be re-run (already true: API 409 rating_final) (verified) | — | No change |
+| Provider error message logged truncated to 300 chars via safe_log allowlist; GCP project `onolys` for both envs (Claude) | — | PHI-safe |
+| Claude Sonnet 5.5 effort low maps via LiteLLM `reasoning_effort: low` (→ adaptive thinking + output_config.effort); verify after LiteLLM upgrade (Claude) | — | — |
+| Staging only; prod untouched (user) | prod rollout | Nothing is prod yet |
+| Auth email sender "Onolys <no-reply@onolys.com>", simple branded HTML + plain-text; verify endpoint requires auth, reset is unauthenticated and never reveals whether the email exists; rate-limited; fake sender adapter locally; on Resend failure user sees generic "couldn't send, try again" (user/Claude) | Firebase mail | Working links |
+| Outage repro + LiteLLM upgrade is the first task (gates Claude switch); if root cause isn't LiteLLM, fixing it stays in scope (Claude) | parallel | Must know cause |
 
 ## Design
 
@@ -88,6 +108,10 @@ Reproduce the staging `gemini/gemini-4-neon` call with the worker's config to ge
   - gemini: gemini-4-carbon (effort low/medium/high, default medium), gemini-4-neon (low/medium/high/xhigh, default high), gemini-4-hydrogen (low/medium/high/xhigh, default high), gemini-4-argon (low/medium/high, default medium); context 1,048,576; max output 65,536.
   - claude: claude-opus-5-5, claude-sonnet-5-5, claude-haiku-5-5; effort low/medium/high/xhigh/max (defaults: opus medium, sonnet high, haiku medium); context 1M; max output 128K; no temperature.
 - Eval API `GET /v1/options` serves it; `eval/web/src/NewRun.tsx` adds engine → model → effort selects; run payload carries them; backend builds routes from them (`eval/backend/.../runs.py`, `engines/core/.../llm/routes.py`).
+- Run = product(engines × models × efforts) per report, plus human unit. Units built in `eval/backend/src/onolys_eval_backend/runs.py:284-300`; count check `:248-252`.
+- Human locked for datasets in `eval/web/src/NewRun.tsx:113` and enforced server-side.
+- Results: extend `CompareView` (`eval/web/src/Runs.tsx:15`, backend `read_runs.py:89-170`) so each report shows one row/column per combo with diff vs human + per-report error; add a Summary view aggregating across reports (`eval/core/src/onolys_eval/metrics.py:106` aggregate: MAE, within_1).
+- Per-unit retry: `execute_unit` (`runs.py:536-555`) retries up to 3× with backoff for retryable classes only.
 
 ### H. Auth emails via Resend
 Per `docs/reference/web-email-actions.md`: API endpoints generate verify/reset links with Firebase Admin SDK, rewrite to `<APP_BASE_URL>/auth/action?mode=…&oobCode=…` (APP_BASE_URL per env, server config only), send via Resend (API key in Secret Manager). Web `web/src/auth/firebaseService.ts` replaces `sendEmailVerification` (lines ~98, ~127) and `sendPasswordResetEmail` (~124) with calls to the new endpoints. Rate-limit + no user enumeration on reset.
@@ -107,6 +131,6 @@ Per `docs/reference/web-email-actions.md`: API endpoints generate verify/reset l
 | Gemini xhigh via LiteLLM unverified | Eval smoke call per model/effort |
 
 ## Owner-only tasks (user)
-- Resend account, sending domain DNS, API key into Secret Manager (`resend-api-key-{env}`).
-- Set GitHub Actions vars for LLM provider/model per env.
+- Resend: verify domain onolys.com (SPF/DKIM DNS records; may already be done if Firebase custom SMTP uses Resend), create API key (Sending access), store as Secret Manager `resend-api-key-staging`.
+- Set GitHub Actions vars for LLM provider/model (staging only).
 - Confirm anthropic-api-key-{env} secret has a valid key.
