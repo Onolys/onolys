@@ -12,3 +12,5 @@ What exactly is supported? Precise, lookup-oriented facts.
 - [staging-e2e.md](staging-e2e.md): measured staging end-to-end results.
 - [web-email-actions.md](web-email-actions.md): in-app `/auth/action` handler for verify-email and reset-password links, and why.
 - [infra.md](infra.md): GCP resources, env vars, Terraform outputs, DNS records, GitHub settings, provider how-to, failure runbook, rollback.
+
+- [eval-site.md](eval-site.md): staging evaluation usage, authenticated API, storage, costs and method limits.
