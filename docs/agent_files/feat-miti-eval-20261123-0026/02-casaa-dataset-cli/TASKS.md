@@ -19,7 +19,7 @@ Source of truth: /root/projects/onolys/iaudit/.worktrees/feat/miti-eval/docs/age
 | 8 | Staging bucket (Terraform) and upload | 2, 7 | done |
 | 9 | `run` CLI spike | 4, 7 | done |
 | 10 | CI job for `eval/core` | 1 | done |
-| 11 | Live acceptance pass | 8, 9, 10 | in-progress |
+| 11 | Live acceptance pass | 8, 9, 10 | done |
 
 ## Task 1 — Package skeleton, workspace line, repo guard
 What it is / what it means: The empty, installable `onolys-eval` package plus the safety net that keeps CASAA data out of the public repo. (R1, R9)
