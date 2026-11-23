@@ -196,7 +196,7 @@ describe("flow (rating on): sign-up, verify, upload, speaker + rating during tra
     service.markVerified(EMAIL);
     await u.click(screen.getByRole("button", { name: "I've verified" }));
     await h1("Sessions");
-    expect(screen.getByRole("link", { name: "See a sample report" })).toBeInTheDocument(); // empty state
+    expect(screen.getByRole("link", { name: "Start a new session" })).toBeInTheDocument(); // empty state
 
     const sid = await uploadViaUi(u, router, "Visit 3");
     expect(screen.getByRole("status")).not.toHaveTextContent(/start the rating|limit/i);
