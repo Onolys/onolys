@@ -43,8 +43,11 @@ Brief: [brainstorm.md](brainstorm.md) (approved).
 - Eval cap 499 units; human always included for datasets; unit retry max 3 on transient only.
 - Auth emails: Admin SDK link -> rebuilt on `APP_BASE_URL`; reset never reveals account existence; deploys before Resend secret exists.
 - STT stays Chirp 3; streaming transcription dropped.
-- Failures and cancel never delete user data; only the explicit Delete action deletes (owner 2026-11-23). SP03 removes `validate.py` `purge()`-on-failure; staged-object cleanup after a successful move stays. Reason: future "retry with existing upload".
+- Failures after a successful validation, and cancel, never delete user data; only the explicit Delete action deletes (owner 2026-11-23). Exception: validation file-check failure = upload failure (see below). Staged-object cleanup after a successful move stays. Reason: future "retry with existing upload" (validated uploads only).
 - Interview-linked sessions never consume the evaluation limit (the interview includes its evaluation): cancel charges 0 (SP04), same `exempt` predicate as `start_first_run` (SP03).
+- Interview sessions are never counted and an audio/relay mismatch is OUR error (owner 2026-11-23): beyond a lenient threshold (`max(60 s, 15 %)`, new `AI_MISMATCH_*`; was 30 s) the session stops as permanent_internal, never charged; within it, free. `free_run_void` retired (old docs: field ignored). Every interview validation logs `interview_audio_check` with versions (SP02 R12/R13, SP03 R9).
+- Validation failure = upload failure, not a session (owner 2026-11-23): file-check codes purge all audio, delete the session doc, keep a data-free status stub (7 days TTL); not counted, not listed; web shows "Upload failed: <reason>. Choose a different file."; stale link -> upload-failed/not-found notice (SP03 R11).
+- Client pre-checks (size, type, duration) mirror the server; limits served by `GET /v1/upload-limits`, no duplicated constants; server stays authoritative (SP03 R10).
 - Effort levels: `xhigh` dropped entirely (config, picker, caps, tests). Gemini low/medium/high; Claude low/medium/high/max; `max` keeps a live smoke gate (hidden if unsupported).
 - Log provider errors incl. Gemini 400 text (cleaned, 300 chars) and LiteLLM WARNING/ERROR lines unfiltered for now; owner audits logs later (SP02 [DEFERRED] PHI audit).
 
@@ -61,13 +64,15 @@ Brief: [brainstorm.md](brainstorm.md) (approved).
 ## Resolved 2026-11-23
 - SP01: root cause/LiteLLM pin decided by the probe (AC1/AC2); voice service routes verified at coding; Anthropic egress/quota verified by AC4; `xhigh` dropped, `max` keeps smoke gate.
 - SP02: Gemini 400 `provider_error` logged (cleaned, 300 chars); LiteLLM WARNING/ERROR kept unfiltered; voice `configure_logging` checked at task time; PHI audit of logs [DEFERRED] to owner.
-- SP03: no delete on failure (new R8, AC7); interview-linked sessions never counted (R5, AC8); STT `InvalidArgument` = user_file (verify on real case); 529 transient / 400 permanent; `counted` on both run doc and session.
+- SP03: no delete on failure after validation (R8, AC7); interview-linked sessions never counted (R5, AC8); STT `InvalidArgument` = user_file (verify on real case); 529 transient / 400 permanent; `counted` on both run doc and session.
 - SP04: interview-linked cancel charges 0; cancel keeps all data (confirmed, `ensure_active` purges nothing); `stt_operation` crash uncounted accepted; late-PUT 409 verified at coding.
 - SP05: rating draft question moot: rating UI is off in all builds (flag default false), so the "you can close this tab" hint applies through processing (owner 2026-11-23); documented in `docs/concepts/user-rating.md`.
 - SP05: Spinner/Progress added to onolys-ui (cross-repo, no inline SVG); bar hidden on failed/cancelled (R3 fixed); weights/timings calibrated later from logs.
 - SP06: `xhigh` removed; `max` live-smoke gated; output caps/timeout tuned after smoke; Anthropic 64K guard confirmed in smoke; dataset gold verified at coding.
 - SP07: authorized domain done by owner; IAM starts at `roles/firebaseauth.admin`; routes included in public contracts.
+- SP03/SP04: interview `free_run_void` charging replaced: mismatch beyond lenient threshold = our error, never charged (SP03 R9); SP02 logs interview audio check + versions (R12/R13).
+- SP03: no-delete-on-failure vs `uploads/` 1-day TTL: [RESOLVED: moot] validation failure purges (R11); after validation data lives under `{uid}/{sid}/audio/` (no TTL).
+- SP03: web pre-checks (size/type/duration) added with limits served by the API (R10).
 
 ## Still open
-- [OPEN] SP03/SP04: interview-linked sessions with `free_run_void` (uploaded audio doesn't match the interview recording) are charged as normal evaluations today (repo exempt = interview_id and not free_run_void). Keep? [default: keep]
-- [OPEN] SP03: no-delete-on-failure vs bucket TTL. The `uploads/` prefix auto-deletes after 1 day (`infra/modules/environment/main.tf`), so audio of a session that failed validation (still staged in `uploads/`) expires after 1 day. Options: keep TTL (accept) / move failed uploads to `{uid}/{sid}/audio/` on failure so they persist until Delete. [default: move on failure]
+None (0 open).

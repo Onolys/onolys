@@ -5,7 +5,7 @@ date: 2026-11-23
 ---
 # PRD: SP02 Traceable logging
 
-Repo/branch: Onolys/onolys (local `iaudit`) / `feat/session-ux-logging-claude-email` · Depends on: SP01 (Phase 1; lands first, SP02 replaces its error log) · Owns: `engines/core/src/onolys_engine_core/{log_context.py (new), json_logging.py (new), safe_log.py, llm/errors.py (fields only), llm/litellm_client.py (error log only)}`, `engines/miti/src/onolys_miti/run.py` (no change expected), `api/src/onolys_api/{logs.py, app.py (middleware+configure), jobs/worker.py (bind)}`, `docs/reference/{infra.md (runbook), logging.md (new), README.md}`, `docs/implementation/logging-and-phi.md`, tests under `api/tests/test_logging.py`, `engines/core/tests/`
+Repo/branch: Onolys/onolys (local `iaudit`) / `feat/session-ux-logging-claude-email` · Depends on: SP01 (Phase 1; lands first, SP02 replaces its error log) · Owns: `engines/core/src/onolys_engine_core/{log_context.py (new), json_logging.py (new), safe_log.py, llm/errors.py (fields only), llm/litellm_client.py (error log only)}`, `engines/miti/src/onolys_miti/run.py` (no change expected), `api/src/onolys_api/{logs.py, app.py (middleware+configure), jobs/worker.py (bind)}`, `api/src/onolys_api/{routes/sessions.py + web client header (session-create `client` field), voice/relay.py (relay version fields)}`, `web/src/api/client.ts` (`X-Client-Version`), `docs/reference/{infra.md (runbook), logging.md (new), README.md}`, `docs/implementation/logging-and-phi.md`, tests under `api/tests/test_logging.py`, `engines/core/tests/`
 
 ## TL;DR
 A failed staging run today leaves almost nothing to search: errors log only `upstream_unavailable`/`LLMUnavailable`, engine lines have no `session_id`, and the runbook tells you to search `request_id` while the failed card shows the session id. This SP adds one context mechanism (contextvars in engine-core), one JSON formatter for `onolys_api`, `miti` and LiteLLM loggers, PHI-safe provider error fields, and a `logging.md` with a ready Logs Explorer link per session id.
@@ -39,11 +39,25 @@ A failed staging run today leaves almost nothing to search: errors log only `ups
 - `infra.md` runbook: reference id is the session id (request_id only for non-session API errors), step order rewritten, link to `logging.md`; keep the verified-2026-11-20 REST example.
 - `logging-and-phi.md`: add field list, per-field cap, sanitizer, third-party-logger rule.
 **R11 Tests.**
+- Interview audio check (R12/R13): match, mismatch and skipped cases each emit exactly one `interview_audio_check` line with all listed fields; versions absent from docs log as absent.
 - Worker: run a sample task through `TaskRunner` with a handler that logs via `miti` `log_event`, a plain `logging.getLogger("litellm")` WARNING and `logs.emit`; assert every captured line has `session_id`, `run_id`, `step`, `request_id`.
 - API: request to a `{sid}` route with a sync endpoint; assert its in-handler line carries `session_id`.
 - PHI: handler/engine run with a transcript sentinel string (e.g. `"SENTINEL-PHI-7731"`) in transcript and a stub provider exception whose text embeds it in quotes; assert no line emitted by our code (including exceptions) contains it. LiteLLM-emitted lines are not asserted (kept as is, see [DEFERRED] PHI audit).
 - Provider error: stubbed `acompletion` raising an error with `status_code=503`; assert fields `provider, model, http_status=503, error_type`, `provider_error` ≤300 and redacted.
 - Formatter: valid JSON per line, no CR/LF forging, `miti` INFO lines now emitted; context reset after task (no leak into next task).
+
+**R12 Interview validation log (owner 2026-11-23; behaviour in SP03 R9).** `validate` logs ONE `interview_audio_check` line for every interview-linked validation, match or not (INFO on ok, WARNING on mismatch/skip): `session_id`, `interview_id`, `uploaded_s`, `relay_s`, `diff_s`, `threshold_s`, `result` (`ok`|`mismatch`|`skipped_no_relay_duration`|`skipped_no_interview`), plus the version fields of R13. Add to `safe_log.ALLOWED_FIELDS`: `interview_id`, `uploaded_s`, `relay_s`, `diff_s`, `threshold_s`, `result`, and the R13 names. Numbers are rounded to 0.1 s. No audio content or user text.
+**R13 Version fields (every `interview_audio_check` line; the first two are on every log line already or by one-line additions).**
+| Field | Source today | Change |
+|---|---|---|
+| `code_version` (api/worker image) | `settings.git_sha` (`GIT_SHA` env, `logs.py:82`), already on every line | none |
+| `revision` (api/worker Cloud Run revision) | `K_REVISION` env set by Cloud Run; NOT read anywhere today [verified: grep] | `JsonFormatter` adds `revision=os.environ.get("K_REVISION")` beside `code_version` (static, every line) |
+| `relay_version`, `relay_revision` (voice service) | same image as the api with `SERVICE_MODE=voice`; `GIT_SHA` set in `infra/modules/environment/voice.tf:92`; `K_REVISION` set by Cloud Run | relay writes both onto the interview doc at connect (`InterviewDoc.relay`), `validate` reads them from there (the worker has no relay context) |
+| `web_version` | NOT sent to the api today [verified: no build id in `web/src`, no client header] | web build injects `VITE_BUILD_SHA` (CI `GITHUB_SHA`, `dev` locally); `web/src/api/client.ts` sends `X-Client-Version: <sha>` on every request; session-create stores `client.web_version` and `client.user_agent` on the session doc; the interview create/end call stores them on the interview doc too; `validate` reads from the docs (the Cloud Task has no request headers). A `client_version` request-scoped context field is bound by `RequestIdMiddleware` for API lines |
+| `user_agent` | request `User-Agent` header, available at session/interview create | stored with `client` (trimmed to 200 chars, control chars stripped); logged only on `interview_audio_check` (not a per-line field) |
+| `recorder_mime`, `audio_engine` | web `audio/mime.ts` (chosen `MediaRecorder` mimeType) and `audio/engine.ts` | web sends both with `client` at interview end / session create (`recorder_mime`, `audio_engine` = engine name + its version constant) |
+| `audio_format`, `audio_codec`, `audio_streams` | `validate` sniff (`fmt`) and `tools.probe` result | logged from the probe (add `codec_name` to the probe result if absent) |
+`client` is a small server-validated object (4 optional strings, length-capped); unknown or missing values are logged as absent, never rejected.
 
 ## Architecture
 ```
@@ -77,6 +91,7 @@ Interface: `with log_context(session_id=..., run_id=..., step=..., request_id=..
 - [RESOLVED: `RunContext.request_id` equals the API request id, `run.py:271`] engine `request_id` fields do not conflict with context.
 - Risk: moving `log_event` from `k=v` text to JSON changes `miti` line format; any consumer or test parsing it (`engines/miti/tests`, `test_safe_log.py`) updates in the same PR.
 - Risk: sync handlers on threads. Worker handlers run inside `handle`; `to_thread`/`asyncio.run` copy context. A raw `threading.Thread` does not: forbid in worker code, covered by the sample-task test.
+- Risk: `X-Client-Version` and `client` add a field to session-create/interview-create request bodies and the contracts (SP03/04/05/07 also regenerate; last merged wins). Fields are optional; old clients keep working.
 - Risk: SP01 and SP02 both edit `_once`. Order fixed: SP01 first.
 
 ## Acceptance Criteria
@@ -86,3 +101,5 @@ Interface: `with log_context(session_id=..., run_id=..., step=..., request_id=..
 4. The tests in R11 pass (worker `session_id` on every line; sentinel PHI absent; context does not leak between tasks).
 5. `docs/reference/logging.md` exists with the link template, request_id query, error_code table and field list; the `infra.md` runbook says Reference = session id.
 6. `LLMError` exposes the five attributes of R9 and SP03 can read `http_status` without re-parsing.
+7. Every interview-linked validation (match, mismatch, skipped) emits one `interview_audio_check` line carrying `session_id, interview_id, uploaded_s, relay_s, diff_s, threshold_s, result` and the R13 version fields (`code_version, revision, relay_version, relay_revision, web_version, user_agent, recorder_mime, audio_engine, audio_format, audio_codec`); absent sources show as absent, not as an error.
+8. `K_REVISION` appears as `revision` on every api/worker line; the web sends `X-Client-Version` on every request and the value reaches the session doc (test: request with the header, read `client.web_version`).

@@ -30,7 +30,7 @@ Today the current step is only bold + a left border, and Elapsed, the bar and "y
 | validating | done | current, sub-label "Checking audio" | folded |
 | transcribing | done | current | |
 | awaiting_input+ | done | done | speaker/rating current per flags (unchanged logic) |
-| failed, bad-file codes (`VALIDATE_CODES`) | failed | pending | "upload a different file" fits Upload |
+| `upload_failed` (status stub; file-check failure, SP03 R11) | not a timeline: `UploadFailedView` replaces the steps ("Upload failed: <reason>. Choose a different file.") | n/a | The session was discarded; the Upload step never shows `failed` for bad-file codes |
 | failed, `TRANSCRIBE_CODES` / other pre-transcript | done | failed | |
 | failed after transcript | done | done | `run` failed |
 | cancelled / deleting | all pending, no progress | | SP04 shows its own message |
@@ -61,7 +61,7 @@ Base `progress` stays server-owned (`STATE_PROGRESS`, `STAGE_WEIGHTS`); values u
 | upload | created, uploading, upload_incomplete | Keep this tab open until upload finishes |
 | background | validating, transcribing, running | You can close this tab — we'll keep working |
 | waiting | awaiting_input (incl. held Start) | We'll wait here for your choice |
-| none | report_ready, failed, cancelled, deleting | — |
+| none | report_ready, failed, cancelled, upload_failed, deleting | — |
 
 "Usually under 5 minutes" is dropped (unverified claim with a Claude run now in play). The "Your rating" step and any rating-related waiting copy apply only when `ratingEnabled()`; the default flow (flag off) has no rating step and no rating input during processing, so the background hint holds from upload-complete (speaker pick excepted).
 **R9 Docs.** SP05 updates project docs: `docs/concepts/user-rating.md` (created 2026-11-23; states self-rating is not offered today, flag off; dormant card behaviour) is kept consistent with the hint copy; the `docs/reference/` status-doc note covers the new progress fields (R2).
@@ -90,7 +90,7 @@ Shared files: `SessionPage.tsx`, `timeline.ts` (SP03 failure copy, SP04 `cancell
 | D2 | Curve | `1 − exp(−t/expected)` capped below next base | Linear then stall | Never overshoots, never freezes if slow |
 | D3 | Elapsed | Pauses while waiting for the user | Wall clock | User think time is not our processing time; avoids "10:00 elapsed" at the speaker pick |
 | D4 | Upload % | Real byte fraction | Time-based | Bytes are known [verified: uploader.ts `loaded/total`] |
-| D5 | Bad-file failure at validate | Upload row failed | Transcribe row failed | Matches the "upload a different file" action |
+| D5 | Bad-file failure at validate | Not a session failure: SP03 R11 discards the session; web shows `UploadFailedView` from the `upload_failed` status stub (no timeline) | Upload row failed | Owner 2026-11-23: validation failure = upload failure, not listed, not counted |
 | D6 | Weights | Keep current table now, calibrate later | Re-weight now | No timing evidence yet |
 | D7 | "Under 5 minutes" copy | Removed | Keep | Not verifiable |
 
