@@ -19,11 +19,25 @@ def main(argv: Sequence[str] | None = None) -> int:
     ):
         command = commands.add_parser(name, help=description, description=description)
         command.add_argument("dataset", help="Dataset identifier")
-        if name == "fetch":
+        if name in {"fetch", "convert"}:
             command.add_argument("--cache", type=Path, help="Cache directory (outside git)")
+        if name == "convert":
+            command.add_argument("--session", help="Convert only this session")
+            command.add_argument("--dump", action="store_true", help="Print the parsed table")
+            command.add_argument("--allow-warnings", action="store_true")
         if name == "run":
             command.add_argument("session_id", help="Session identifier")
     args = parser.parse_args(argv)
+    if args.command == "convert":
+        from .convert import convert_dataset
+
+        if re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", args.dataset) is None:
+            parser.error("Invalid dataset identifier")
+        try:
+            return convert_dataset(args.dataset, args.cache, args.session,
+                                   dump=args.dump, allow_warnings=args.allow_warnings)
+        except (OSError, ValueError, KeyError) as error:
+            parser.error(str(error))
     if args.command == "fetch":
         from .fetch import fetch_dataset
         from .manifest import load_manifest

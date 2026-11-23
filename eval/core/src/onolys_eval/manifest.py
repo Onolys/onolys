@@ -8,6 +8,17 @@ from pydantic import Field, model_validator
 from ._contracts import CodedSpan, Contract, HttpURL, Identifier, Nonempty
 
 
+class PDFLayout(Contract):
+    """Per-source coordinate quirks; omitted values use detected column headers."""
+    number_x: float | None = None
+    speaker_x: float | None = None
+    text_x: float | None = None
+    code_x: float | None = None
+    notes_x: float | None = None
+    header_bottom: float | None = None
+    footer_height: float | None = None
+
+
 class SessionManifest(Contract):
     session_id: Identifier
     title: Nonempty
@@ -21,6 +32,8 @@ class SessionManifest(Contract):
     change_goal_source: Literal["header", "curated"]
     coded_span: CodedSpan
     notes: str
+    pdf_layout: PDFLayout = Field(default_factory=PDFLayout)
+    uncoded_pdf_layout: PDFLayout = Field(default_factory=PDFLayout)
 
     @model_validator(mode="after")
     def unique_labels(self):
