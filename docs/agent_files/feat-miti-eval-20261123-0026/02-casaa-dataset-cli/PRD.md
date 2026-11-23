@@ -6,7 +6,7 @@ date: 2026-11-23
 # PRD: SP2 CASAA dataset + gold format + CLI eval spike
 
 Repo/branch: Onolys/onolys (local `iaudit`) / `feat/miti-eval` · Depends on: SP1 (`transcript.v1` schema; stub with the engine `Turn` shape until it lands) · Blocks: SP5 (imports registry, gold, metrics, bucket layout)
-Owns: `eval/core/**` (new uv member), `eval/datasets/**` (manifests, overrides; no data), root `pyproject.toml` workspace line, one staging bucket in `infra/`. Not owned: `engines/**`, `api/**`, `admin/**`, `web/**`, `eval/backend` (SP5).
+Owns: `eval/core/**` (new uv member, incl. `onolys_eval.adapters` with the MITI lean adapter), `eval/datasets/**` (manifests, overrides; no data), root `pyproject.toml` workspace line, one staging bucket in `infra/`. Not owned: `engines/**`, `api/**`, `admin/**`, `web/**`, `eval/backend` (SP5).
 
 ## TL;DR
 A small Python package `onolys_eval` with four parts: dataset manifest + downloader, CASAA PDF -> `transcript.v1` + `gold.v1` converter (with manual-override fallback), pure metrics (MAE per code and per global, R:Q and %CR from one formula for gold and ours), and a CLI `onolys-eval run` that codes one CASAA session with the lean engine and prints a side-by-side table. Data never enters git: it lives in `~/.cache/onolys-eval/` locally and in a private staging bucket for SP5. The spike runs fully local, so it needs no bucket and no SP1 code.
@@ -27,7 +27,7 @@ We do not know how close lean MITI is to expert coding. CASAA publishes coded tr
 **Non-Goals:** utterance-level alignment (gold stores per-utterance codes, nobody compares them yet); Firestore run history, site, engine/preset multi-select (SP5); the role-play audio set and MI-TAGS/AnnoMI (manifest format must allow them; [DEFERRED]); engine changes; committing any dataset content.
 
 ## Requirements
-**R1 Package.** `eval/core` = uv member `onolys-eval` (package `onolys_eval`), added to workspace `members` as `eval/*` (SP5's `eval/backend` is the sibling, mirroring `admin/auth` + `admin/backend`). Depends on `onolys_miti` and `pyyaml`; PDF parsing in an optional extra `convert` (`pdfplumber`) so SP5's backend imports metrics/gold without PDF libs. Old untracked `eval/__pycache__` removed locally (not tracked, no repo change).
+**R1 Package.** `eval/core` = uv member `onolys-eval` (package `onolys_eval`), added to workspace `members` as `eval/*` (SP5's `eval/backend` is the sibling, mirroring `admin/auth` + `admin/backend`). Depends on `onolys_miti` and `pyyaml` (it imports `Turn`/`RunContext` from `onolys_miti` initially; SP3 moves those to `onolys_engine_core` and updates these imports, M7); PDF parsing in an optional extra `convert` (`pdfplumber`) so SP5's backend imports metrics/gold without PDF libs. Old untracked `eval/__pycache__` removed locally (not tracked, no repo change).
 
 **R2 Manifest** `eval/datasets/<dataset_id>/manifest.yaml` (committed, no content): `dataset_id`, `title`, `license_note` ("internal use only; reuse terms unconfirmed"), `source_page`, `miti_version: 4.2.1`, `sessions[]: {session_id, title, uncoded_url, coded_url, audio_url?, clinician_labels, change_goal, change_goal_source: header|curated, coded_span: null|{...}, notes}`. First dataset id `casaa-miti421-video2013` (8 sessions). `change_goal` is required by the engine and absent in CASAA: taken from the PDF `Focus:` header when present, else curated by hand in the manifest (a short phrase; no invention beyond what the transcript states).
 
@@ -41,12 +41,12 @@ We do not know how close lean MITI is to expert coding. CASAA publishes coded tr
 
 **R5 gold.v1** (`onolys_eval/schemas/gold.v1.schema.json`, shared with SP5): `{schema:"gold.v1", dataset_id, session_id, source:{coded_url, uncoded_url, retrieved_at, sha256}, coded_span: null|{start_ms,end_ms}|{start_turn,end_turn} (SP1 grammar; null = full), counts:{10 ids -> int}, globals:{cct,sst,partnership,empathy -> int 1-5}, summaries:{...computed via onolys_miti.formula at convert time}, utterance_codes?:[{turn_id, codes:[ids], note?}], parse:{method:"auto|auto+override", warnings:[]}}`. Per-utterance codes are optional so datasets with session totals only still fit.
 
-**R6 Metrics** `onolys_eval.metrics` (pure functions, no I/O, no LLM; SP5 reuses unchanged): `Scores{counts, globals, summaries}` is engine-agnostic. `compare(gold, ours) -> SessionComparison` (per key: gold, ours, signed diff, abs diff). `aggregate([SessionComparison]) -> Aggregate` (MAE per count, per global, per summary; mean bias; globals within 1 point; n). R:Q and %CR are always recomputed from counts with the pack formula on both sides; a null (zero denominator) is skipped in MAE and reported as n. Adapter `scores_from_report(report)` maps the lean report to `Scores`; SP3/SP4 engines supply their own adapter. Output is a JSON-serialisable `compare.v1` dict.
+**R6 Metrics** `onolys_eval.metrics` (pure functions, no I/O, no LLM; SP5 reuses unchanged): `Scores{counts, globals, summaries}` is engine-agnostic. `compare(gold, ours) -> SessionComparison` (per key: gold, ours, signed diff, abs diff). `aggregate([SessionComparison]) -> Aggregate` (MAE per count, per global, per summary; mean bias; globals within 1 point; n). R:Q and %CR are always recomputed from counts with the pack formula on both sides; a null (zero denominator) is skipped in MAE and reported as n. Scores extraction has one home, `onolys_eval.adapters` (M2): SP2 creates the module with the MITI lean adapter (full lean report -> `Scores`), SP4 adds the one-shot adapter. Per decision D1, comparison and scoring use only the model-authorable subset (behavior counts, 4 globals, tips) for every engine: lean output is projected to that subset by its adapter. All adapters produce `Scores` for metrics; metrics never read engine-specific reports. Output is a JSON-serialisable `compare.v1` dict.
 
 **R7 Bucket.** Private GCS bucket `onolys-eval-data-staging` (Terraform in `infra/`, staging only, uniform access, public access prevention enforced, no versioning needed). Layout: `datasets/<dataset_id>/manifest.json` (rendered from yaml, SP5 lists datasets by listing this prefix) and `datasets/<dataset_id>/<session_id>/{transcript.json, gold.json, raw/*.pdf, raw/audio.mp3?}`. `uploads/` is reserved for SP5. `onolys-eval upload <dataset>` copies from cache; needs `gsutil`-free `google-cloud-storage` via ADC. Run `convert` first; upload refuses unresolved warnings.
 
 **R8 CLI** (`onolys-eval`, module `python -m onolys_eval`): `fetch`, `convert`, `upload`, and
-`run <dataset> <session_id> [--preset P] [--runs N=1] [--source cache|bucket] [--json-out PATH]`. `run` loads transcript + gold, builds a `RunContext` like `onolys_miti.check`, calls `run_miti(ctx, transcript, speaker_map, {change_goal, language:"en", n_runs, preset})`, maps the report with `scores_from_report`, and prints:
+`run <dataset> <session_id> [--preset P] [--runs N=1] [--source cache|bucket] [--json-out PATH]`. `run` loads transcript + gold, builds a `RunContext` like `onolys_miti.check`, calls `run_miti(ctx, transcript, speaker_map, {change_goal, language:"en", n_runs, preset})`, maps the report with `onolys_eval.adapters` (lean adapter), and prints:
 ```
 casaa-miti421-video2013 / rounder   preset=<p>   engine=miti sha=<git>   tokens=<n> ~$<x>
 code                gold  ours  diff
@@ -65,7 +65,7 @@ Live keys via `set -a; . ~/.config/onolys/keys.env; set +a`. `--json-out` writes
 ```
 casaa.unm.edu --fetch--> ~/.cache/onolys-eval/<ds>/raw --convert--> <ds>/<sid>/{transcript,gold}.json
                                                          |--upload--> gs://onolys-eval-data-staging/datasets/<ds>/...
-cache|bucket --> run_miti(lean) --> scores_from_report --> metrics.compare(gold, ours) --> table | JSON
+cache|bucket --> run_miti(lean) --> adapters (-> Scores) --> metrics.compare(gold, ours) --> table | JSON
 ```
 Shared with other SPs: `gold.v1.schema.json`, `metrics.py` (`Scores`, `compare`, `aggregate`), manifest format, bucket layout, `transcript.json` = `transcript.v1` (SP1).
 
@@ -82,17 +82,17 @@ Shared with other SPs: `gold.v1.schema.json`, `metrics.py` (`Scores`, `compare`,
 | Dataset = the 8 video-series sessions (transcript-only); role-play audio set as later dataset | Use the 12 audio sessions first | Locked decision; audio set is cheap to add via manifest |
 
 ## Manual steps (owner)
-Confirm CASAA reuse terms (internal use only until then). Provide staging GCP access for the upload step and apply the bucket Terraform. Review the curated `change_goal` per session.
+Review the curated `change_goal` per session. CASAA reuse terms: confirmed OK by owner (D5). GCP: credentials available on this machine via `~/.config/gcloud` (ADC; `gcloud` CLI binary not installed: install it or use ADC from Python); Terraform at `/root/.local/bin/terraform`. Applying the bucket Terraform is an implementation step (agent-doable), not an owner task.
 
 ## Risks / Open Questions
-- [OPEN] Staging creds: no `gcloud` on this machine and no known SA key. Upload needs ADC or a service-account key; spike does not.
-- [OPEN] Are the transcripts excerpts of longer videos? Only some headers state a length (confirmed-smoker: 16 min). Assume transcript = coded span, `coded_span: null`.
-- [OPEN] Do coded and uncoded PDF texts match utterance for utterance (counts differed by regex for 2 PDFs, possibly `I` vs `P` labels)? Convert check R4 will tell; coded PDF is the source of truth for text.
-- [OPEN] Per-PDF accuracy of the parser; how many need overrides. Cheapest test: convert `rounder` and `confirmed-smoker` first.
-- [OPEN] Gold is one consensus code per utterance; no inter-coder noise. MAE vs one coder is a ceiling-limited metric. Accept.
-- [OPEN] Engine volley rules (one reflection per volley) may differ from how CASAA rows code consecutive clinician turns; count differences may partly be rule mismatch, not model error.
-- [OPEN] Exact `Report` field path for counts/globals; confirm in `report.py` when writing `scores_from_report`.
-- [OPEN] Token/$ figure: take from `MetricsCollector`; price table source unknown (rough, per brief).
+- [RESOLVED: ADC from `~/.config/gcloud` available (owner D5)] Upload uses ADC via `google-cloud-storage`; install `gcloud` only if needed for Terraform auth. Spike needs none of this.
+- [RESOLVED: assume transcript = coded span, `coded_span: null`] Manifest `coded_span` can override per session if a header says otherwise.
+- [RESOLVED: coded PDF is the source of truth for text] Per-utterance mismatch vs the uncoded PDF is a convert warning (R4), resolved per session via overrides.
+- [RESOLVED: convert `rounder` and `confirmed-smoker` first] Overrides for 2-3 PDFs acceptable; reassess if more are needed.
+- [RESOLVED: accept] One consensus coder; MAE is ceiling-limited; documented in the compare output notes.
+- [RESOLVED: accept and note] Rule mismatch (volley rules vs CASAA row coding) is a known caveat shown in spike results; no engine change.
+- [RESOLVED: confirm in `report.py` while writing the lean adapter] Field path is fixed by the adapter, covered by a unit test on a golden report.
+- [RESOLVED: tokens and cost from typed `RunUsage` in `EngineResult.run_info` (SP3/M3)] Until SP3 lands the spike reads `MetricsCollector`; $ via litellm cost when present, else SP5 `prices.yaml` estimate (labelled rough).
 - [DEFERRED] Role-play audio dataset (12 sessions, STT path); utterance-level alignment; `--runs 3` aggregation as median vs mean.
 - [RESOLVED: auto-default] SP1 not ready: use engine `Turn` JSON, field-compatible with `transcript.v1`.
 

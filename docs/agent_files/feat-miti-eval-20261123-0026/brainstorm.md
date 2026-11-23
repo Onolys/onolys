@@ -20,7 +20,7 @@ We do not know how close Onolys' MITI 4.2.1 coding is to expert human coders. Pu
 | Host at eval.onolys.com (user) | Page inside admin.onolys.com | User choice |
 | Access = same allowlist as admin (`admin_allowed_emails`), reuse `onolys_admin_auth` (user) | Separate eval allowlist | Simpler, same people |
 | Staging only (user) | Prod | Matches admin |
-| Code full session by default; dataset may specify a window (user) | Engine's own seeded window | Compare like with like vs human coding |
+| Code full session by default, in the main app too (owner D3, design phase: sessions over the engine `duration_max` 25 min return a clear error asking for a `coded_span`; `docs/mission.md` wording updated in SP1); dataset may specify a window (user) | Engine's own seeded window | Compare like with like vs human coding |
 | API param `coded_span` accepts `{start_ms,end_ms}` or `{start_turn,end_turn}`; absent = full transcript (user) | Time-only | CASAA transcripts have no timestamps |
 | Datasets stored in private GCS bucket (staging); repo holds only download/convert scripts + format spec; site lists datasets (user) | Commit data to git | Repo is PUBLIC; CASAA reuse terms unclear |
 | Transcript format `transcript.v1` = engine `Turn` shape (Claude's call, user delegated) | New format | Engine already uses it |
@@ -33,7 +33,7 @@ We do not know how close Onolys' MITI 4.2.1 coding is to expert human coders. Pu
 | Two input modes: pick a stored dataset (has human scores) OR single upload of audio or transcript, like the production app (user) | Datasets only | Trial engines on new inputs |
 | Single uploads (audio/transcript) saved to private staging GCS bucket like prod, and kept in run history for reruns (user) | Ephemeral | Rerun new engines later |
 | Two separate multi-select dropdowns: Engine (Human score, MITI lean, One-shot, future engines) and Preset (model settings, e.g. Gemini Flash / Pro) (user) | One combined dropdown | User preference |
-| Items currently used in production labelled '(prod)' in both dropdowns (user) | — | Know what prod runs |
+| Items currently used in production labelled '(prod)' in both dropdowns (user). Design phase (D4): prod preset = the preset named by the prod env `DEFAULT_PRESET` (currently `default`: Gemini hydrogen cheap / neon mid+strong, low reasoning effort), prod engine = MITI lean; eval reads these from config, not hardcoded | — | Know what prod runs |
 | Defaults: dataset mode pre-ticks Human score + MITI lean (prod) + prod preset; upload mode pre-ticks MITI lean (prod) + prod preset; all untickable (user) | — | — |
 | Human score appears for a single upload only if a human-scores file (gold format) is attached (Claude's call) | — | No gold otherwise |
 | Runs = every selected engine × every selected preset; Human score ignores preset; all shown in one compare table (Claude's call) | — | Follows from two dropdowns |
@@ -45,8 +45,8 @@ We do not know how close Onolys' MITI 4.2.1 coding is to expert human coders. Pu
 | `engines/core` = engine-agnostic basics only, no MITI-specific code (user) | Put MITI shared bits in core | Future engines (oneshot, adhd) |
 | Common engine interface: base class with overridable `run(ctx, transcript, params) -> output` + declared output schema; API picks engine by name from a registry (user liked override approach) | Ad hoc per-engine entrypoints | Plug-in engines |
 | `oneshot` engine generic: inputs (transcript.v1 etc.) + instructions + output schema -> one model call (user) | MITI-specific | Reusable for any task |
-| "MITI one-shot" config = MITI instructions + same MITI report schema as lean engine, versioned in repo `engines/oneshot/configs/miti/`, picked by name, not UI-editable (user) | UI-editable prompts | Comparable output, simple |
-| Output validated in API layer with core validator for all engines; on failure retry once with validation errors + stronger schema-conformance instruction, then fail run (user) | Engine-only validation | One validation path |
+| "MITI one-shot" config = MITI instructions + scoring-subset schema (see CHANGED), versioned in repo `engines/oneshot/configs/miti/`, picked by name, not UI-editable (user). CHANGED (owner D1, design phase): outputs only the model-authorable scoring subset (behavior counts, 4 globals, tips), not the full MITI report schema; comparison/scoring uses this same subset for every engine (lean output projected to it) | UI-editable prompts | Comparable output, simple; model cannot author provenance/offsets |
+| Output validated in API layer with core validator for all engines; on failure retry once with validation errors + stronger schema-conformance instruction, then fail run. CHANGED (owner D2, design phase): retry-with-feedback only for engines with `accepts_feedback=True` (one-shot); lean MITI fails directly on invalid output (user) | Engine-only validation | One validation path |
 | Lean MITI engine internal checks kept; API validation added on top (Claude's call) | Rewrite engine validation | Don't break working code |
 | One-shot available on eval site only (user) | Main app | Experimental |
 | Eval backend = own Cloud Run service `eval/backend`, reusing `onolys_admin_auth` and `admin_allowed_emails`; runs execute in background, site polls (Claude's call) | Extend `admin/` backend | Long runs, separate scaling |
@@ -81,4 +81,5 @@ Existing facts: engine entry `run_miti(ctx, transcript, speaker_map, params, pro
 | Breaking API/contract changes | Acceptable: no users yet (user) |
 
 ## Owner tasks
-- Confirm CASAA reuse terms. Submit MI-TAGS access form (later). DNS for eval.onolys.com if not automatable.
+- CASAA reuse terms: confirmed OK by owner. GCP access available on this machine (ADC via `~/.config/gcloud`; terraform at `/root/.local/bin/terraform`).
+- Later: submit MI-TAGS access form; DNS for eval.onolys.com (not blocking the build).
