@@ -12,8 +12,8 @@ from jsonschema.validators import validator_for
 MAX_ISSUES = 20
 MAX_ISSUE_LENGTH = 200
 SCHEMA_CONFORMANCE_INSTRUCTION = (
-    "Return a complete corrected output that conforms to the declared JSON Schema. "
-    "Do not include explanations or text outside the JSON output."
+    "Your last answer did not match the schema. Return the complete JSON object; "
+    "every required field present, no extra fields, exact enum values"
 )
 
 

@@ -127,3 +127,14 @@ async def test_current_run_cost_sums_prices_and_preserves_unknown(prices, expect
     ctx = RunContext(llm=PricedClient(), metrics=metrics, request_id="req-cost")
     result = await MitiEngine().run(ctx, transcript(), {**PARAMS, "speaker_map": SMAP})
     assert result.run_info.usage.cost_usd == expected
+
+
+async def test_shared_validated_run_accepts_lean_golden_report():
+    from onolys_engine_core.validated_run import run_validated
+
+    result = await run_validated(
+        MitiEngine(), context(), transcript(), {**PARAMS, "speaker_map": SMAP}
+    )
+    assert masked(result.output) == masked(GOLDEN_REPORT)
+    assert result.run_info.validation == {"attempts": 1}
+    assert result.run_info.usage.calls == 3
