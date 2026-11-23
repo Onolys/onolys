@@ -1274,6 +1274,7 @@ version = "0.1.0"
 source = { editable = "eval/core" }
 dependencies = [
     { name = "google-cloud-storage" },
+    { name = "onolys-engine-core" },
     { name = "onolys-miti" },
     { name = "pydantic" },
     { name = "pyyaml" },
@@ -1293,6 +1294,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "google-cloud-storage", specifier = ">=2.18" },
+    { name = "onolys-engine-core", editable = "engines/core" },
     { name = "onolys-miti", editable = "engines/miti" },
     { name = "pdfplumber", marker = "extra == 'convert'", specifier = ">=0.11" },
     { name = "pydantic", specifier = ">=2.7" },

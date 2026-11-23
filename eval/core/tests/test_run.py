@@ -80,7 +80,7 @@ def test_run_cli_table_json_and_forwarded_context(tmp_path, monkeypatch, capsys)
 
 
 def test_run_totals_mixed_cached_and_uncached_routes(tmp_path, monkeypatch, capsys):
-    from onolys_miti.llm.types import Usage
+    from onolys_engine_core.llm.types import Usage
 
     run, _, calls = inputs(tmp_path, monkeypatch)
     engine = run.run_miti

@@ -5,11 +5,11 @@ from datetime import UTC, datetime
 from pathlib import Path
 from uuid import uuid4
 
-from onolys_miti.context import RunContext
-from onolys_miti.llm import LLMConfig, MetricsCollector, make_client
-from onolys_miti.llm.routes import default_preset_name
+from onolys_engine_core.context import RunContext
+from onolys_engine_core.llm import LLMConfig, MetricsCollector, make_client
+from onolys_engine_core.llm.routes import default_preset_name
+from onolys_engine_core.transcript import Transcript
 from onolys_miti.run import run_miti
-from onolys_miti.transcript import Transcript
 
 from .adapters import miti_lean_scores
 from .fetch import default_cache, require_external_path

@@ -6,7 +6,7 @@ can represent short transcripts, while uploaded sessions need enough speech to c
 
 from pydantic import ValidationError
 
-from onolys_miti.transcript_v1 import TranscriptV1
+from onolys_engine_core.transcript_v1 import TranscriptV1
 
 MAX_TURNS = 5_000
 MAX_TURN_CHARS = 20_000

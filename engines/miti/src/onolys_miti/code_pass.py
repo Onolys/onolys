@@ -19,13 +19,13 @@ from typing import Any, Literal
 from onolys_engine_core.errors import OnolysError
 from onolys_engine_core.llm import LLMBadOutput, LLMClient, LLMRequest, MetricsCollector
 from onolys_engine_core.llm.warm import warm_then_fanout
+from onolys_engine_core.transcript import Turn
 from pydantic import BaseModel, create_model
 
 from onolys_miti import miti
 from onolys_miti.locate import locate
 from onolys_miti.prepare import Prepared, Volley
 from onolys_miti.result import Instance, ResultWarning
-from onolys_miti.transcript import Turn
 
 ROUTE = "miti_code"
 DEFAULT_VOLLEYS_PER_CALL = 25

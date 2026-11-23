@@ -1,5 +1,5 @@
 import json
-from pathlib import Path
+from importlib.resources import files
 
 import pytest
 from jsonschema import Draft202012Validator
@@ -142,13 +142,13 @@ async def test_stt_output_validates_generated_transcript_v1_schema():
     transcript = completion.transcript
     assert completion.run.provider == "fixture"
     assert "stt_run" not in transcript.model_dump()
-    path = Path(__file__).parents[1] / "src/onolys_miti/data/transcript.v1.schema.json"
+    path = files("onolys_engine_core").joinpath("data/transcript.v1.schema.json")
     Draft202012Validator(json.loads(path.read_text())).validate(transcript.model_dump())
 
 
 def test_engine_uses_shared_v1_model_and_default_language():
-    from onolys_miti.transcript import Transcript, Turn
-    from onolys_miti.transcript_v1 import TranscriptTurnV1, TranscriptV1
+    from onolys_engine_core.transcript import Transcript, Turn
+    from onolys_engine_core.transcript_v1 import TranscriptTurnV1, TranscriptV1
 
     assert Transcript is TranscriptV1
     assert Turn is TranscriptTurnV1

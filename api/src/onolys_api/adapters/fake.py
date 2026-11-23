@@ -10,11 +10,11 @@ import hashlib
 from typing import Any
 
 from onolys_engine_core.context import RunContext
+from onolys_engine_core.transcript import Transcript
 from onolys_miti.prepare import RoleTurn, select_turns
 from onolys_miti.span import select_coded_span
 from onolys_miti.stt import AudioRef, SttParams, SttRun, Word
 from onolys_miti.stt.base import BaseSttAdapter
-from onolys_miti.transcript import Transcript
 from onolys_miti.voice import VoiceParams, VoiceSession
 from onolys_miti.voice.fixture import FixtureVoice
 

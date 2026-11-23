@@ -1,13 +1,12 @@
 """The portable transcript contract and its generated schema."""
 
 import json
-from pathlib import Path
+from importlib.resources import files
 
 import pytest
 from jsonschema import Draft202012Validator
+from onolys_engine_core.transcript_v1 import TranscriptV1
 from pydantic import ValidationError
-
-from onolys_miti.transcript_v1 import TranscriptV1
 
 pytestmark = pytest.mark.unit
 
@@ -74,7 +73,7 @@ def test_provenance_and_per_turn_language_are_not_v1(payload):
 
 
 def test_generated_schema_does_not_drift():
-    path = Path(__file__).parents[1] / "src/onolys_miti/data/transcript.v1.schema.json"
+    path = files("onolys_engine_core").joinpath("data/transcript.v1.schema.json")
     generated = json.dumps(TranscriptV1.model_json_schema(), indent=2, ensure_ascii=False) + "\n"
     assert path.read_text(encoding="utf-8") == generated
 

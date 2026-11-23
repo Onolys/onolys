@@ -1,9 +1,6 @@
-"""Transcript types (PRD R5). STT interface types live in onolys_miti.stt."""
+"""MITI quote spans measured in code-point offsets (ADR 0002)."""
 
 from pydantic import BaseModel
-
-from onolys_miti.transcript_v1 import TranscriptTurnV1 as Turn  # noqa: F401
-from onolys_miti.transcript_v1 import TranscriptV1 as Transcript  # noqa: F401
 
 
 class Span(BaseModel):

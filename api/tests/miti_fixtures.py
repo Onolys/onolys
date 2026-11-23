@@ -4,11 +4,11 @@ from old engines) and the two seams that stand in for the LLM: the coding stage 
 import json
 from typing import Any
 
+from onolys_engine_core.transcript import Transcript
 from onolys_miti import miti
 from onolys_miti.report import Tip
 from onolys_miti.result import MitiResult
 from onolys_miti.tips import TipsArtifact
-from onolys_miti.transcript import Transcript
 
 FIXTURES = miti.DATA_DIR / "fixtures" / "evaluation"
 

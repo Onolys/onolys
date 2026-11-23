@@ -4,9 +4,9 @@ import asyncio
 from abc import ABC, abstractmethod
 
 from onolys_engine_core.safe_log import log_event
+from onolys_engine_core.transcript import Transcript, Turn
 
 from onolys_miti.stt import AudioRef, SttCompletion, SttParams, SttRun, Word
-from onolys_miti.transcript import Transcript, Turn
 
 DEFAULT_MAX_GAP_MS = 2000
 

@@ -4,10 +4,11 @@ import sys
 from pathlib import Path
 
 import pytest
+from onolys_engine_core.transcript import Transcript, Turn
 from pydantic import ValidationError
 
 from onolys_miti.stt import AudioRef, SttAdapter, SttCompletion, SttParams, SttRun, Word
-from onolys_miti.transcript import Span, Transcript, Turn
+from onolys_miti.transcript import Span
 
 pytestmark = pytest.mark.unit
 

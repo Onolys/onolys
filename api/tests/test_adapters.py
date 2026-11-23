@@ -3,11 +3,11 @@ import json
 import pytest
 from jsonschema import Draft202012Validator
 from onolys_engine_core.context import RunContext
+from onolys_engine_core.transcript import Transcript
 from onolys_miti import miti
 from onolys_miti.stt import AudioRef, SttParams, Word
 from onolys_miti.stt.base import words_to_turns
 from onolys_miti.stt.fixture import FixtureStt, uri_hash
-from onolys_miti.transcript import Transcript
 
 from onolys_api.adapters import AdapterError, FakeEvaluation, FakeStt, build_adapters
 from onolys_api.adapters import fake as f

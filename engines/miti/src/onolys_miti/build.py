@@ -5,6 +5,8 @@ from collections.abc import Mapping
 from datetime import UTC, datetime
 from typing import Any
 
+from onolys_engine_core.transcript import Transcript
+
 from onolys_miti import miti
 from onolys_miti.compare import (
     METHOD_LIMIT,
@@ -39,7 +41,6 @@ from onolys_miti.run_info import code_version as _code_version
 from onolys_miti.stt import SttRun
 from onolys_miti.tips import TipsArtifact
 from onolys_miti.tone import ReportConfig, load_report_config, tone_rules
-from onolys_miti.transcript import Transcript
 
 
 def _stats(s: Any) -> RunStats:

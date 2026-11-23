@@ -9,7 +9,7 @@ The transcript read is owner-scoped and `private, no-store`: it carries PHI.
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Request, Response
-from onolys_miti.transcript_v1 import TranscriptV1
+from onolys_engine_core.transcript_v1 import TranscriptV1
 from pydantic import BaseModel, Field
 
 from onolys_api.auth.deps import AuthUser, current_user

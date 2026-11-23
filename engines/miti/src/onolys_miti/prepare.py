@@ -5,11 +5,11 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from onolys_engine_core.errors import InputError, InvalidCodedSpan, SessionTooLong
+from onolys_engine_core.transcript import Transcript, Turn
 
 from onolys_miti import miti, rules
 from onolys_miti.result import CodedSpan, ResultWarning
 from onolys_miti.span import select_coded_span
-from onolys_miti.transcript import Transcript, Turn
 
 SUBJECT = "subject"
 OTHER = "other"

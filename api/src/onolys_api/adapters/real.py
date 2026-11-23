@@ -26,10 +26,10 @@ from onolys_engine_core.context import RunContext
 from onolys_engine_core.errors import ConfigError
 from onolys_engine_core.llm import LiteLLMClient, LLMConfig, MetricsCollector
 from onolys_engine_core.llm.routes import resolve_preset
+from onolys_engine_core.transcript import Transcript
 from onolys_miti.stt import AudioRef, SttAdapter, SttCompletion, SttParams
 from onolys_miti.stt.fixture import FixtureStt
 from onolys_miti.stt.google_chirp import GoogleChirp3
-from onolys_miti.transcript import Transcript
 from onolys_miti.voice import VoiceAdapter, VoiceParams, VoiceSession
 from onolys_miti.voice.fixture import FixtureVoice
 from onolys_miti.voice.gemini_live_vertex import GeminiLiveVertex

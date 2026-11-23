@@ -5,6 +5,7 @@ from conftest import install_demo
 from onolys_engine_core.llm import LLMBadOutput, LLMRequest, LLMResult, MetricsCollector
 from onolys_engine_core.llm.litellm_client import LiteLLMClient
 from onolys_engine_core.llm.routes import Route
+from onolys_engine_core.transcript import Turn
 from pydantic import ValidationError
 
 from onolys_miti.code_pass import (
@@ -14,7 +15,6 @@ from onolys_miti.code_pass import (
     make_response_model,
 )
 from onolys_miti.prepare import Prepared, RoleTurn, Volley
-from onolys_miti.transcript import Turn
 
 pytestmark = pytest.mark.unit
 

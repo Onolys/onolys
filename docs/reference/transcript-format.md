@@ -1,8 +1,8 @@
 # Transcript format: transcript.v1
 
 `transcript.v1` is the JSON shape for a session transcript. Its source of truth is
-`TranscriptV1` in `engines/miti/src/onolys_miti/transcript_v1.py`. The generated JSON
-Schema ships at `engines/miti/src/onolys_miti/data/transcript.v1.schema.json`.
+`TranscriptV1` in `engines/core/src/onolys_engine_core/transcript_v1.py`. The generated JSON
+Schema ships at `engines/core/src/onolys_engine_core/data/transcript.v1.schema.json`.
 The format name is not a field in the JSON object.
 
 | Transcript field | Type | Required | Meaning |
@@ -50,11 +50,11 @@ for the complete contract.
 Regenerate the schema from the repository root after changing the model:
 
 ```bash
-uv run --package onolys-miti python - <<'PY'
+uv run --package onolys-engine-core python - <<'PY'
 import json
 from pathlib import Path
-from onolys_miti.transcript_v1 import TranscriptV1
-path = Path("engines/miti/src/onolys_miti/data/transcript.v1.schema.json")
+from onolys_engine_core.transcript_v1 import TranscriptV1
+path = Path("engines/core/src/onolys_engine_core/data/transcript.v1.schema.json")
 path.write_text(
     json.dumps(TranscriptV1.model_json_schema(), indent=2, ensure_ascii=False) + "\n",
     encoding="utf-8",

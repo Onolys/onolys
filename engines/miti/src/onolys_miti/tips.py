@@ -20,6 +20,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from onolys_engine_core.llm import LLMBadOutput, LLMClient, LLMRequest, MetricsCollector
+from onolys_engine_core.transcript import Transcript
 from pydantic import BaseModel
 
 from onolys_miti import miti
@@ -28,7 +29,6 @@ from onolys_miti.prepare import OTHER, SUBJECT, RoleTurn, mark_roles, select_tur
 from onolys_miti.report import Tip, TipQuote, Warning
 from onolys_miti.result import MitiResult
 from onolys_miti.tone import tone_rules
-from onolys_miti.transcript import Transcript
 
 ROUTE = "tips"
 MIN_TIPS = 3

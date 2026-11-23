@@ -6,7 +6,7 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 from google.api_core.exceptions import Aborted
-from onolys_miti.transcript import Transcript, Turn
+from onolys_engine_core.transcript import Transcript, Turn
 
 from onolys_api.repo.base import ConflictError, NotFoundError
 from onolys_api.repo.fake import FakeRepo

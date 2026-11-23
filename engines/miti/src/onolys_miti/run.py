@@ -25,6 +25,7 @@ from onolys_engine_core.errors import InputError, OnolysError
 from onolys_engine_core.llm import LLMClient, LLMError, MetricsCollector
 from onolys_engine_core.llm.routes import Route, resolve_preset
 from onolys_engine_core.safe_log import log_event, register_fields
+from onolys_engine_core.transcript import Transcript
 from pydantic import BaseModel
 
 from onolys_miti import code_pass as code_mod
@@ -51,7 +52,6 @@ from onolys_miti.run_info import RunInfo, RunUsage, code_version, hash_files, ro
 from onolys_miti.score import score_run
 from onolys_miti.span import select_coded_span
 from onolys_miti.tips import TipsArtifact
-from onolys_miti.transcript import Transcript
 
 Stage = Literal["code", "tips", "assemble"]
 StageStatus = Literal["started", "done", "failed"]

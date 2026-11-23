@@ -1,9 +1,9 @@
 import pytest
+from onolys_engine_core.transcript import Transcript, Turn
 
 from onolys_miti.prepare import prepare
 from onolys_miti.result import CodedSpan
 from onolys_miti.span import MAX_CODED_S, SpanChoice, default_window, select_coded_span
-from onolys_miti.transcript import Transcript, Turn
 
 pytestmark = pytest.mark.unit
 

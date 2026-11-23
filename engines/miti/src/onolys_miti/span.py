@@ -7,11 +7,11 @@ from dataclasses import dataclass, field
 from typing import Any, Literal
 
 from onolys_engine_core.errors import InvalidCodedSpan
+from onolys_engine_core.transcript import Transcript
 from pydantic import ValidationError
 
 from onolys_miti.result import CodedSpan, ResultWarning
 from onolys_miti.run_info import SpanInfo
-from onolys_miti.transcript import Transcript
 
 MAX_CODED_S = 1200  # optional default_window length: 20 minutes
 

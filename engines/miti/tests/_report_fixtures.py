@@ -5,12 +5,13 @@ import json
 from pathlib import Path
 from typing import Any
 
+from onolys_engine_core.transcript import Transcript
+
 from onolys_miti import miti
 from onolys_miti.hashes import evaluation_prompt_hashes
 from onolys_miti.report import Tip
 from onolys_miti.result import MitiResult
 from onolys_miti.tips import TipsArtifact
-from onolys_miti.transcript import Transcript
 
 FIXTURES = miti.DATA_DIR / "fixtures" / "evaluation"
 SCHEMA_PATH = Path(miti.DATA_DIR) / "report.schema.json"

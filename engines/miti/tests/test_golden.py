@@ -12,10 +12,10 @@ import pytest
 from onolys_engine_core.context import RunContext
 from onolys_engine_core.llm import LLMResult, MetricsCollector
 from onolys_engine_core.llm.fixture_client import FixtureClient
+from onolys_engine_core.transcript import Transcript
 
 from onolys_miti import miti
 from onolys_miti.run import run_miti
-from onolys_miti.transcript import Transcript
 
 pytestmark = pytest.mark.unit
 

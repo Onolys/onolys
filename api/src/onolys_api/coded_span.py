@@ -1,11 +1,11 @@
 """Validate selection and engine limits before reserving a run or calling a model."""
 
 from onolys_engine_core.errors import InvalidCodedSpan, SessionTooLong
+from onolys_engine_core.transcript import Transcript
 from onolys_miti import miti
 from onolys_miti.prepare import RoleTurn, _duration_ms, select_turns
 from onolys_miti.result import CodedSpan
 from onolys_miti.span import select_coded_span
-from onolys_miti.transcript import Transcript
 
 from onolys_api.adapters.error_map import PUBLIC_MESSAGES
 from onolys_api.errors import ApiError

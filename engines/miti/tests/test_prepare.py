@@ -1,10 +1,10 @@
 import pytest
 from conftest import install_demo
 from onolys_engine_core.errors import InputError
+from onolys_engine_core.transcript import Transcript, Turn
 
 from onolys_miti import miti, rules
 from onolys_miti.prepare import RoleTurn, build_volleys, mark_roles, prepare, select_turns
-from onolys_miti.transcript import Transcript, Turn
 
 pytestmark = pytest.mark.unit
 

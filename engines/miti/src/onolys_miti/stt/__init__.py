@@ -4,9 +4,8 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Protocol
 
+from onolys_engine_core.transcript_v1 import TranscriptV1
 from pydantic import BaseModel
-
-from onolys_miti.transcript_v1 import TranscriptV1
 
 
 class SttParams(BaseModel):

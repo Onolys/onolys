@@ -9,7 +9,7 @@ from types import SimpleNamespace
 import pytest
 from onolys_engine_core.context import RunContext
 from onolys_engine_core.errors import InputError
-from onolys_miti.transcript import Transcript
+from onolys_engine_core.transcript import Transcript
 
 from onolys_api.adapters import real
 from onolys_api.adapters.base import EvaluationOutput

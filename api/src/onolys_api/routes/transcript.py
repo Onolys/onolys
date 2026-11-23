@@ -4,12 +4,12 @@ import json
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Request
-from onolys_miti.transcript_input import (
+from onolys_engine_core.transcript_input import (
     TranscriptInputError,
     inferred_clinician_speaker,
     validate_transcript_input,
 )
-from onolys_miti.transcript_txt import parse_transcript_txt
+from onolys_engine_core.transcript_txt import parse_transcript_txt
 
 from onolys_api.auth.deps import AuthUser, current_user
 from onolys_api.coded_span import validate_coded_input
