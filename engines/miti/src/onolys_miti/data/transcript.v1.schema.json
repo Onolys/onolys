@@ -1,0 +1,116 @@
+{
+  "$defs": {
+    "TranscriptTurnV1": {
+      "additionalProperties": false,
+      "description": "One turn, in the order it appears in the transcript.",
+      "properties": {
+        "id": {
+          "minLength": 1,
+          "pattern": "\\S",
+          "title": "Id",
+          "type": "string"
+        },
+        "speaker": {
+          "minLength": 1,
+          "pattern": "\\S",
+          "title": "Speaker",
+          "type": "string"
+        },
+        "role": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "enum": [
+            "clinician",
+            "client",
+            null
+          ],
+          "title": "Role"
+        },
+        "text": {
+          "minLength": 1,
+          "pattern": "\\S",
+          "title": "Text",
+          "type": "string"
+        },
+        "start_ms": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Start Ms"
+        },
+        "end_ms": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "End Ms"
+        }
+      },
+      "required": [
+        "id",
+        "speaker",
+        "text"
+      ],
+      "title": "TranscriptTurnV1",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "The transcript shape shared by upload, transcription, and coding.",
+  "properties": {
+    "language": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Language"
+    },
+    "duration_ms": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Duration Ms"
+    },
+    "turns": {
+      "items": {
+        "$ref": "#/$defs/TranscriptTurnV1"
+      },
+      "title": "Turns",
+      "type": "array"
+    }
+  },
+  "required": [
+    "turns"
+  ],
+  "title": "TranscriptV1",
+  "type": "object"
+}
