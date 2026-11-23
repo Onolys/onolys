@@ -107,9 +107,16 @@ describe("no analytics or telemetry", () => {
 
 describe("no app data in browser storage", () => {
   it("source never touches localStorage, sessionStorage, IndexedDB, cookies or the Cache API", () => {
-    for (const f of files) {
+    // The one exception: the theme preference (light/dark/system), which is not app data (src/lib/theme.ts).
+    for (const f of files.filter((f) => rel(f) !== "src/lib/theme.ts")) {
       expect(read(f), rel(f)).not.toMatch(/localStorage|sessionStorage|indexedDB|document\.cookie|\bcaches\.|serviceWorker\.register|setPersistence|persistentLocalCache/);
     }
+  });
+
+  it("the only storage the source uses is the theme preference key", () => {
+    const users = files.filter((f) => /localStorage/.test(read(f)));
+    expect(users.map(rel)).toEqual(["src/lib/theme.ts"]);
+    expect(read(users[0]!)).not.toMatch(/sessionStorage|indexedDB|document\.cookie/);
   });
 
   it("Firestore uses a memory cache", () => {

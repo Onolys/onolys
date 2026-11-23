@@ -1,6 +1,7 @@
 import { Link } from "react-router";
 import { Footer as UiFooter } from "@onolys/ui";
 import { CONTACT_EMAIL } from "../config";
+import { ThemeToggle } from "./ThemeToggle";
 
 const NOTICES = ["Not official MITI coding", "Use it to practice and prepare", "Role-play or de-identified transcripts only"];
 
@@ -28,7 +29,12 @@ export function Footer() {
           </Link>
         </>
       }
-      copyright={<>© {new Date().getFullYear()} Onolys</>}
+      copyright={
+        <>
+          © {new Date().getFullYear()} Onolys
+          <ThemeToggle className="absolute right-3 bottom-2" />
+        </>
+      }
     />
   );
 }
