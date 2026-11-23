@@ -14,7 +14,9 @@ from .config import OneshotConfig
 CORE_FOOTER = (
     "Return only JSON matching the schema; never invent quotes, speakers or timestamps"
 )
-_CONTROL_PARAMS = {"config", "coded_span"}
+_CONTROL_PARAMS = {
+    "config", "coded_span", "preset", "speaker_map", "n_runs", "seed", "code_version",
+}
 
 
 @dataclass(frozen=True)

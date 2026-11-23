@@ -1,0 +1,29 @@
+{
+  "language": "en",
+  "turns": [
+    {
+      "id": "s1",
+      "speaker": "Client",
+      "role": "client",
+      "text": "I want to walk at lunch, but meetings get in the way."
+    },
+    {
+      "id": "s2",
+      "speaker": "Clinician",
+      "role": "clinician",
+      "text": "Walking matters to you, and protecting that time is difficult. What could help?"
+    },
+    {
+      "id": "s3",
+      "speaker": "Client",
+      "role": "client",
+      "text": "I could block two lunch breaks on my calendar."
+    },
+    {
+      "id": "s4",
+      "speaker": "Clinician",
+      "role": "clinician",
+      "text": "You have found a practical starting point. It is your choice how to try it."
+    }
+  ]
+}
