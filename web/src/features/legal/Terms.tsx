@@ -1,4 +1,4 @@
-import { SUPPORT_EMAIL } from "../../config";
+import { CONTACT_EMAIL } from "../../config";
 import { LegalPage } from "./LegalPage";
 
 export function Terms() {
@@ -35,7 +35,7 @@ export function Terms() {
 
       <h2>Contact</h2>
       <p>
-        Questions: <a href={`mailto:${SUPPORT_EMAIL}`}>{SUPPORT_EMAIL}</a>.
+        Questions: <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>.
       </p>
     </LegalPage>
   );

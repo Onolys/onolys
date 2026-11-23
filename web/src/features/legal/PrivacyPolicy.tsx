@@ -1,8 +1,8 @@
-import { SUPPORT_EMAIL } from "../../config";
+import { CONTACT_EMAIL } from "../../config";
 import { LegalPage } from "./LegalPage";
 
 export function PrivacyPolicy() {
-  const mail = <a href={`mailto:${SUPPORT_EMAIL}`}>{SUPPORT_EMAIL}</a>;
+  const mail = <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>;
   return (
     <LegalPage title="Privacy Policy">
       <p>This policy explains what Onolys collects when you practice MITI coding, why, and the control you keep.</p>
@@ -10,7 +10,10 @@ export function PrivacyPolicy() {
       <h2>Your data is yours</h2>
       <ul>
         <li>Your data is stored only for you, under your account.</li>
-        <li>Only your own account can access your sessions, transcripts and reports.</li>
+        <li>
+          No other user can access your sessions, transcripts and reports. Our service and the providers listed below process
+          them only to run Onolys.
+        </li>
         <li>You have full control over your data.</li>
         <li>You can delete your data at any time.</li>
       </ul>
@@ -19,6 +22,12 @@ export function PrivacyPolicy() {
       <ul>
         <li>Your account email address and sign-in details (managed by Firebase Authentication).</li>
         <li>Session audio you upload, and the transcripts made from it.</li>
+        <li>
+          Practice-interview audio: if you run an AI practice interview, your voice is streamed to Google Gemini Live (on Google
+          Cloud Vertex AI) and the recording becomes a session. We also keep interview records: the scenario, the voice, the
+          duration and the interview state.
+        </li>
+        <li>Your API key, if you create one: we store only a hash of it and when it was created and last used, never the key itself.</li>
         <li>Ratings you submit, and the coding reports we generate for your sessions.</li>
         <li>Basic usage counters (for example, how many sessions you ran in a day) to apply fair-use limits.</li>
       </ul>
@@ -32,8 +41,8 @@ export function PrivacyPolicy() {
       <h2>How to delete your data</h2>
       <p>
         Open a session and choose Delete. This permanently removes that session&apos;s audio, transcript, rating and all report
-        versions. Usage counters are kept. To remove your whole account and everything in it, contact us at {mail} and we will
-        do it for you.
+        versions. Usage counters and interview records (scenario, voice and duration of any practice interview) are kept. To
+        remove your whole account and everything in it, including those, contact us at {mail} and we will do it for you.
       </p>
 
       <h2>Service providers</h2>

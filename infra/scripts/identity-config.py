@@ -72,7 +72,8 @@ def check(client, callback_uri=DEFAULT_CALLBACK_URI):
         return 0
     print(
         f"DRIFT: {CALLBACK_MASK} expected {callback_uri} but live is {actual!r}; verify/reset links will show "
-        "'expired or already used'. Fix: python3 infra/scripts/identity-config.py",
+        "'expired or already used'. Fix: python3 infra/scripts/identity-config.py (if it warns the template is immutable "
+        "(EMAIL_TEMPLATE_UPDATE_NOT_ALLOWED, sender method DEFAULT), switch the Firebase Auth email sender to custom SMTP first)",
         file=sys.stderr,
     )
     return 1

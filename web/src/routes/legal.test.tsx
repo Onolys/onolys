@@ -27,9 +27,20 @@ describe("legal pages", () => {
     await h1("Privacy Policy");
     const main = screen.getByRole("main");
     expect(within(main).getByText(/stored only for you/i)).toBeInTheDocument();
-    expect(within(main).getByText(/only your own account can access/i)).toBeInTheDocument();
+    expect(within(main).getByText(/no other user can access/i)).toBeInTheDocument();
     expect(within(main).getByText(/full control over your data/i)).toBeInTheDocument();
     expect(within(main).getByText(/delete your data at any time/i)).toBeInTheDocument();
+  });
+});
+
+describe("privacy accuracy", () => {
+  it("covers interview audio, API keys and what deletion keeps", async () => {
+    renderApp("/privacy");
+    await h1("Privacy Policy");
+    const main = within(screen.getByRole("main"));
+    expect(main.getByText(/practice-interview audio/i)).toBeInTheDocument();
+    expect(main.getByText(/api key/i)).toBeInTheDocument();
+    expect(main.getByText(/are kept\. To remove/i)).toBeInTheDocument();
   });
 });
 

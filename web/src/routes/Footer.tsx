@@ -1,5 +1,5 @@
 import { Link } from "react-router";
-import { SUPPORT_EMAIL } from "../config";
+import { CONTACT_EMAIL } from "../config";
 
 export function Footer() {
   return (
@@ -12,10 +12,10 @@ export function Footer() {
       <div className="footer-links">
         <Link to="/privacy">Privacy Policy</Link>
         <Link to="/terms">Terms of Service</Link>
-        <a href={`mailto:${SUPPORT_EMAIL}`}>Contact</a>
+        <a href={`mailto:${CONTACT_EMAIL}`}>Contact</a>
       </div>
       <p>
-        Questions? Reach out to <a href={`mailto:${SUPPORT_EMAIL}`}>{SUPPORT_EMAIL}</a>
+        Questions? Reach out to <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>
       </p>
       <p className="copy">© {new Date().getFullYear()} Onolys. All rights reserved.</p>
     </footer>

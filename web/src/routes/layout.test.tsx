@@ -29,7 +29,7 @@ describe("header nav by auth phase (D1)", () => {
     const login = inNav().getByRole("link", { name: "Log in" });
     const signup = inNav().getByRole("link", { name: "Sign up" });
     expect(login).toHaveClass("nav-login");
-    expect(signup).toHaveClass("nav-signup");
+    expect(signup).toHaveClass("nav-signup", "btn", "btn-primary");
     expect(login.nextElementSibling).toBe(signup);
     expect(signup.nextElementSibling).toBeNull();
     expect(inNav().queryByRole("button", { name: "Sign out" })).not.toBeInTheDocument();

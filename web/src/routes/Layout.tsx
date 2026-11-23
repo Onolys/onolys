@@ -9,7 +9,7 @@ const NAV: Record<AuthPhase, { to: string; label: string; className?: string }[]
   signedOut: [
     { to: "/sample-report", label: "Sample report" },
     { to: "/login", label: "Log in", className: "nav-login" },
-    { to: "/signup", label: "Sign up", className: "nav-signup" },
+    { to: "/signup", label: "Sign up", className: "btn btn-primary nav-signup" },
   ],
   unverified: [{ to: "/verify-email", label: "Verify email" }],
   verified: [

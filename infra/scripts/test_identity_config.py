@@ -92,6 +92,7 @@ def test_check_fails_on_default_firebaseapp_url(capsys):
     out = capsys.readouterr().err
     assert CB in out and "https://onolys.firebaseapp.com/__/auth/action" in out
     assert "python3 infra/scripts/identity-config.py" in out
+    assert "EMAIL_TEMPLATE_UPDATE_NOT_ALLOWED" in out and "custom SMTP" in out
     assert c.patches == []  # read-only
 
 
