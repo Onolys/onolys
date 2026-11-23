@@ -15,7 +15,7 @@ Source of truth: /root/projects/onolys/iaudit/.worktrees/feat/miti-eval/docs/age
 | 4 | `OneshotEngine` run and usage | 3 | done |
 | 5 | MITI config, schema generator, golden fixtures | 4 | done |
 | 6 | API rewiring and `output_invalid` error | 2 | done |
-| 7 | One-shot scoring adapter | 5 | in-progress |
+| 7 | One-shot scoring adapter | 5 | done |
 | 8 | Workspace and CI for oneshot | 5, 6 | in-progress |
 
 ## Task 1 — Core: dynamic schema, cost, `apply_coded_span`
