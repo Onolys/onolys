@@ -1,0 +1,5 @@
+# Both PDFs print a duplicate 22 at source row index 24; adjacent rows establish 25.
+source_numbers:
+  - {document: coded, row_index: 24, source_number: 22, number: 25}
+  - {document: uncoded, row_index: 24, source_number: 22, number: 25}
+reviewed_utterance_ids: [t24]

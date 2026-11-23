@@ -16,6 +16,7 @@ PACKAGES=(
   "api:api:python"
   "admin-auth:admin/auth:python"
   "admin-backend:admin/backend:python"
+  "eval:eval/core:python"
   "frontend:frontend:other"
   "web:web:node"
   "infra:infra:other"
@@ -29,6 +30,9 @@ API_EXTRA_RE='^(firestore\.rules|firebase\.json|firestore-rules-test/)'
 # The web job also runs on the contracts its generated types come from (gen:api staleness check).
 WEB_EXTRA_RE='^(api/openapi\.json$|engines/miti/src/onolys_miti/data/report\.schema\.json$|engines/miti/src/onolys_miti/data/fixtures/evaluation/)'
 
+# Dataset manifests and metadata-only overrides are inputs to eval/core.
+EVAL_EXTRA_RE='^eval/datasets/'
+
 # The infra job's tests import admin/auth (onolys_admin_auth), so admin/auth changes also run infra.
 INFRA_EXTRA_RE='^(admin/auth/|pyproject\.toml$|uv\.lock$)'
 
@@ -40,6 +44,7 @@ ADMIN_BACKEND_EXTRA_RE='^(admin/auth/|\.dockerignore)'
 # test_changes_deps.py fails if this drifts from the pyprojects.
 DEPS=(
   "api:miti"
+  "eval:miti"
   "admin-backend:admin-auth"
 )
 
@@ -51,6 +56,7 @@ for entry in "${PACKAGES[@]}"; do
   for f in "${FILES[@]}"; do
     if [[ "$f" == "$dir/"* || "$f" =~ $CI_SHARED_RE ||
           ( "$kind" == python && "$f" =~ $PY_SHARED_RE ) ||
+          ( "$name" == eval && "$f" =~ $EVAL_EXTRA_RE ) ||
           ( "$name" == api && "$f" =~ $API_EXTRA_RE ) ||
           ( "$name" == admin-backend && "$f" =~ $ADMIN_BACKEND_EXTRA_RE ) ||
           ( "$name" == infra && "$f" =~ $INFRA_EXTRA_RE ) ||

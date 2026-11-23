@@ -1,0 +1,7 @@
+# Coded p1 includes an inline coder annotation absent from uncoded p1.
+reviewed_utterance_ids: [t3]
+utterance_codes:
+  # Coded p1: Persuade is explicitly ruled out, only GI assigned.
+  - {turn_id: t9, codes: [gi]}
+  # Coded p2: Q and Persuade assigned; teaching commentary lies between them.
+  - {turn_id: t23, codes: [question, persuade]}

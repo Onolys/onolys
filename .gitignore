@@ -12,3 +12,7 @@ api/config/
 api/docs/
 api/engines/
 api/protocols/
+
+# Evaluation dataset artifacts stay outside git.
+eval/**/raw/
+eval/**/*.cache
