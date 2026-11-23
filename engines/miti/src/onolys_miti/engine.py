@@ -41,11 +41,14 @@ class MitiEngine(Engine):
     ) -> EngineResult:
         # A caller can retain the collector across runs; only charge this invocation.
         before = _usage_totals(ctx.metrics.snapshot())
+        first_record = len(ctx.metrics.records)
         engine_params = dict(params)
         speaker_map = engine_params.pop("speaker_map")
         result = await run_miti(ctx, transcript, speaker_map, engine_params, progress_cb)
         after = _usage_totals(ctx.metrics.snapshot())
-        usage = RunUsage(**{key: after[key] - before[key] for key in after})
+        prices = [record["cost_usd"] for record in ctx.metrics.records[first_record:]]
+        cost = None if any(price is None for price in prices) else sum(prices)
+        usage = RunUsage(**{key: after[key] - before[key] for key in after}, cost_usd=cost)
         output = result.report.model_dump(mode="json")
         return EngineResult(
             output=output,

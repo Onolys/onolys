@@ -13,8 +13,8 @@ class LLMRequest:
     tier: Tier
     system: str
     user: str
-    response_model: type[BaseModel]
-    call_tag: str
+    response_model: type[BaseModel] | None = None
+    call_tag: str = ""
     cache_prefix: str | None = None  # stable leading text marked cacheable
     cache_prefixes: list[str] = field(
         default_factory=list
@@ -26,6 +26,11 @@ class LLMRequest:
     fixture_key: str | None = None
     deadline: float | None = None  # monotonic; gates the transport retry
     retry: bool = True  # False: one attempt only (warm-up calls)
+    response_schema: dict[str, Any] | None = None
+
+    def __post_init__(self) -> None:
+        if (self.response_model is None) == (self.response_schema is None):
+            raise ValueError("supply exactly one of response_model or response_schema")
 
 
 @dataclass
@@ -34,6 +39,7 @@ class Usage:
     output_tokens: int = 0
     cache_read_tokens: int = 0
     cache_write_tokens: int = 0
+    cost_usd: float | None = None
 
 
 @dataclass
@@ -76,6 +82,7 @@ class MetricsCollector:
                 "output_tokens": usage.output_tokens,
                 "cache_read_tokens": usage.cache_read_tokens,
                 "cache_write_tokens": usage.cache_write_tokens,
+                "cost_usd": usage.cost_usd,
                 "latency_ms": round(latency_ms, 1),
                 "attempts": attempts,
                 "ok": ok,

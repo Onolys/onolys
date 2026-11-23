@@ -29,7 +29,10 @@ class FixtureClient:
             "system": req.system,
             "user": req.user,
             "cache_prefix": req.cache_prefix,
-            "schema": req.response_model.__name__,
+            "schema": (
+                req.response_model.__name__ if req.response_model is not None
+                else json.dumps(req.response_schema, sort_keys=True, ensure_ascii=False)
+            ),
         }
         if req.cache_prefixes:  # left out when empty so existing recordings keep their keys
             data["cache_prefixes"] = req.cache_prefixes
@@ -45,7 +48,9 @@ class FixtureClient:
         path = self._dir / f"{key}.json"
         if not path.is_file():
             raise FixtureMiss(f"no fixture for key {key} (call_tag={req.call_tag})")
-        parsed = req.response_model.model_validate(json.loads(path.read_text(encoding="utf-8")))
+        parsed = json.loads(path.read_text(encoding="utf-8"))
+        if req.response_model is not None:
+            parsed = req.response_model.model_validate(parsed)
         if metrics is not None:
             metrics.record(req, "fixture", Usage(), 0.0, 1, True)
         return LLMResult(parsed=parsed, model="fixture")
@@ -70,7 +75,7 @@ class StubClient:
         value = self._canned[req.call_tag]
         if callable(value):
             value = value(req)
-        if isinstance(value, dict):
+        if isinstance(value, dict) and req.response_model is not None:
             value = req.response_model.model_validate(value)
         if metrics is not None:
             metrics.record(req, "stub", Usage(), 0.0, 1, True)
@@ -103,5 +108,9 @@ class RecordingClient:
         key = req.fixture_key or FixtureClient.key_for(req)
         if _SAFE_KEY.match(key):
             self._dir.mkdir(parents=True, exist_ok=True)
-            (self._dir / f"{key}.json").write_text(res.parsed.model_dump_json(), encoding="utf-8")
+            payload = (
+                res.parsed.model_dump_json() if isinstance(res.parsed, BaseModel)
+                else json.dumps(res.parsed, ensure_ascii=False)
+            )
+            (self._dir / f"{key}.json").write_text(payload, encoding="utf-8")
         return res

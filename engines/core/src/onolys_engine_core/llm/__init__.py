@@ -7,6 +7,7 @@ from .errors import FixtureMiss, LLMBadOutput, LLMError, LLMRateLimited, LLMTime
 from .fixture_client import FailingClient, FixtureClient, RecordingClient, StubClient
 from .litellm_client import LiteLLMClient
 from .routes import check_api_keys
+from .schema import to_provider_schema
 from .types import LLMClient, LLMRequest, LLMResult, MetricsCollector, Usage
 
 
@@ -41,4 +42,5 @@ __all__ = [
     "StubClient",
     "Usage",
     "make_client",
+    "to_provider_schema",
 ]

@@ -112,3 +112,18 @@ def test_package_exports_only_entry_points():
     assert set(onolys_miti.__all__) == {"run_miti", "MitiEngine"}
     for name in ("RunInfo", "Artifacts", "ProgressCb", "AudioRef", "VoiceSession"):
         assert not hasattr(onolys_miti, name)
+
+
+@pytest.mark.parametrize("prices,expected", [([0.01, 0.02, 0.03], 0.06), ([0.0, 0.0, 0.0], 0.0), ([0.01, None, 0.03], None)])
+async def test_current_run_cost_sums_prices_and_preserves_unknown(prices, expected):
+    class PricedClient(GoldenClient):
+        async def complete_json(self, req, metrics=None):
+            result = await super().complete_json(req)
+            metrics.record(req, "fixture", Usage(11, 7, cost_usd=prices.pop(0)), 0.0, 1, True)
+            return result
+
+    metrics = MetricsCollector()
+    metrics.record(LLMRequest("prior", "", "", BaseModel, "prior"), "fixture", Usage(cost_usd=None), 0.0, 1, True)
+    ctx = RunContext(llm=PricedClient(), metrics=metrics, request_id="req-cost")
+    result = await MitiEngine().run(ctx, transcript(), {**PARAMS, "speaker_map": SMAP})
+    assert result.run_info.usage.cost_usd == expected

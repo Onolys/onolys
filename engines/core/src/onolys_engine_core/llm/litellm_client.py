@@ -19,6 +19,7 @@ from onolys_engine_core.retry import retry
 from .config import LLMConfig
 from .errors import LLMBadOutput, LLMRateLimited, LLMTimeout, LLMUnavailable
 from .routes import Route, resolve_preset
+from .schema import to_provider_schema
 from .types import LLMRequest, LLMResult, MetricsCollector, Usage
 
 RETRY_MARGIN_S = 1.0
@@ -48,11 +49,19 @@ def _usage(resp: Any) -> Usage:
     u = _get(resp, "usage", None)
     details = _get(u, "prompt_tokens_details", None)
     cache_read = _get(u, "cache_read_input_tokens", 0) or _get(details, "cached_tokens", 0)
+    # Unknown/custom models are usable even when LiteLLM has no price for them.
+    from litellm import completion_cost
+
+    try:
+        cost = completion_cost(completion_response=resp)
+    except Exception:
+        cost = None
     return Usage(
         input_tokens=int(_get(u, "prompt_tokens", 0) or 0),
         output_tokens=int(_get(u, "completion_tokens", 0) or 0),
         cache_read_tokens=int(cache_read or 0),
         cache_write_tokens=int(_get(u, "cache_creation_input_tokens", 0) or 0),
+        cost_usd=cost,
     )
 
 
@@ -146,8 +155,11 @@ class LiteLLMClient:
         return {
             "type": "json_schema",
             "json_schema": {
-                "name": req.response_model.__name__,
-                "schema": req.response_model.model_json_schema(),
+                "name": req.response_model.__name__ if req.response_model else "response",
+                "schema": (
+                    req.response_model.model_json_schema() if req.response_model
+                    else to_provider_schema(req.response_schema)
+                ),
                 "strict": True,
             },
         }
@@ -294,7 +306,11 @@ class LiteLLMClient:
                 trunc.no_retry = True  # type: ignore[attr-defined]
                 raise trunc
             content = resp.choices[0].message.content
-            parsed = req.response_model.model_validate(json.loads(_unfence(content)))
+            parsed = json.loads(_unfence(content))
+            if req.response_model is not None:
+                parsed = req.response_model.model_validate(parsed)
+            elif not isinstance(parsed, dict):
+                raise ValueError("dynamic schema response must be a JSON object")
         except LLMBadOutput:
             raise
         except (ValueError, TypeError, AttributeError, IndexError, ValidationError) as exc:
