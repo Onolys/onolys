@@ -15,7 +15,7 @@ Source of truth: docs/agent_files/feat-design-system-20261123-0428/01-onolys-ui/
 | 5 | shadcn components | 4 | done |
 | 6 | Onolys components | 5 | done |
 | 7 | CSP-safe Radix overlays | 5 | done |
-| 8 | Hit-area, privacy and RTL test suite | 6, 7 | todo |
+| 8 | Hit-area, privacy and RTL test suite | 6, 7 | done |
 | 9 | Storybook docs + axe tests | 6, 7 | todo |
 | 10 | Build, exports, types under TS 6 and 7 | 8 | todo |
 | 11 | CSP smoke, Vite/Tailwind and Astro fixtures | 9, 10 | todo |
