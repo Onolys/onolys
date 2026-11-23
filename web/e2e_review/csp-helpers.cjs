@@ -6,13 +6,6 @@ const { expect } = require("@playwright/test");
 
 const SHOTS = path.join(__dirname, "test-results", "shots"); // gitignored; uploaded by the CI web-e2e job
 
-/**
- * Violations that are not design-system regressions and are tracked elsewhere. Keep this list minimal and explained.
- * - media-src blob: precheck.ts probes audio duration via an <audio src=blob:>; default-src 'self' blocks it in prod today
- *   (pre-existing; fix is a firebase.json `media-src 'self' blob:` change, an owner call outside the design-system scope).
- */
-const KNOWN = [/media-src blocked blob/, /Loading media from\s+'blob:/];
-
 /** Record every CSP violation: the DOM `securitypolicyviolation` event (survives navigations via an init script) and CSP console errors. */
 async function watchCsp(page) {
   const violations = [];
@@ -29,7 +22,7 @@ async function watchCsp(page) {
   return {
     async all() {
       const fromDom = await page.evaluate(() => window.__csp || []).catch(() => []);
-      return [...violations, ...fromDom.map((v) => `dom: ${v}`)].filter((v) => !KNOWN.some((k) => k.test(v)));
+      return [...violations, ...fromDom.map((v) => `dom: ${v}`)];
     },
   };
 }

@@ -16,7 +16,7 @@ npm run e2e                      # mock mode; add args after `--`, e.g. `npm run
 ## Projects
 
 - `e2e` (dev:mock on :5173, no CSP): every spec except the two below.
-- `csp` (`E2E_CSP_PORT`, default :4173): `csp.spec.cjs` (zero CSP violations) and `visual.spec.cjs` (light/dark screenshots to `test-results/shots/{light,dark}-*.png` + axe color-contrast/critical gate). Its webServer builds `--mode mock` into `node_modules/.cache/csp-preview` and runs `vite preview`, which serves the prod `firebase.json` CSP (`preview.headers` in `vite.config.ts`). Run one: `npm run e2e -- csp.spec --project=csp`. Waived axe screens go in `TODO` in `visual.spec.cjs`; known non-regression violations in `KNOWN` in `csp-helpers.cjs`.
+- `csp` (`E2E_CSP_PORT`, default :4173): `csp.spec.cjs` (zero CSP violations) and `visual.spec.cjs` (light/dark screenshots to `test-results/shots/{light,dark}-*.png` + axe color-contrast/critical gate). Its webServer builds `--mode mock` into `node_modules/.cache/csp-preview` and runs `vite preview`, which serves the prod `firebase.json` CSP (`preview.headers` in `vite.config.ts`). Run one: `npm run e2e -- csp.spec --project=csp`. Waived axe screens go in `TODO` in `visual.spec.cjs`.
 
 ## Notes
 
