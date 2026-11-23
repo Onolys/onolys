@@ -137,3 +137,19 @@ def test_turn_span_duration_is_relative_to_selected_range():
 
 def test_twenty_five_minutes_is_allowed():
     assert prepare(session(1500), {"speaker_map": SM, "change_goal": "g"}).duration_ms == 1500000
+
+
+def test_shared_limits_preserve_pack_duration_warning_policy(monkeypatch):
+    from onolys_miti import miti
+
+    monkeypatch.setitem(miti.MITI.data, "input_checks", [
+        {"id": "custom_duration", "kind": "duration_max", "value": 26, "severity": "warn"},
+    ])
+    exact = prepare(session(1560), {"speaker_map": SM})
+    assert not any(w.code == "session_too_long" for w in exact.warnings)
+    result = prepare(session(1561), {"speaker_map": SM})
+    warnings = [w for w in result.warnings if w.code == "session_too_long"]
+    assert len(warnings) == 1
+    assert warnings[0].detail == (
+        "custom_duration: session longer than 26 min; supply a narrower coded_span"
+    )

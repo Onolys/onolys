@@ -194,3 +194,67 @@ async def test_unknown_route_fails_before_call(configs, transcript):
     with pytest.raises(ConfigError):
         await OneshotEngine().run(context(llm), transcript, {"config": "miti"})
     assert llm.requests == []
+
+
+@pytest.mark.parametrize("span,words,duration", [
+    (None, 6001, None),
+    (None, 2, 1_500_001),
+    ({"start_turn": 0, "end_turn": 1}, 6001, None),
+    ({"start_turn": 0, "end_turn": 2}, 2, 1_500_001),
+    ({"start_ms": 0, "end_ms": 1_500_001}, 2, 1_500_001),
+])
+async def test_oversized_coded_portion_rejected_before_model_call(configs, span, words, duration):
+    from onolys_engine_core.errors import SessionTooLong
+
+    tx = TranscriptV1.model_validate({"turns": [
+        {"id": "a", "speaker": "A", "text": "word " * words,
+         "start_ms": 0, "end_ms": 1},
+        {"id": "b", "speaker": "B", "text": "word", "start_ms": 1,
+         "end_ms": duration or 2},
+    ]})
+    original = tx.model_dump()
+    llm = FakeLLM()
+    with pytest.raises(SessionTooLong, match="narrower coded_span") as error:
+        await OneshotEngine().run(context(llm), tx, {"config": "miti", "coded_span": span})
+    assert error.value.code == "session_too_long"
+    assert llm.requests == []
+    assert tx.model_dump() == original
+
+
+@pytest.mark.parametrize("span,timed,duration,words", [
+    (None, True, 1_500_000, 5999),
+    ({"start_turn": 1, "end_turn": 2}, True, 3_600_000, 6001),
+    ({"start_ms": 3_599_999, "end_ms": 3_600_000}, True, 3_600_000, 6001),
+    ({"start_turn": 1, "end_turn": 2}, False, 3_600_000, 6001),
+])
+async def test_coded_portion_boundaries_and_narrow_long_sources_pass(configs, span, timed, duration, words):
+    turns = [
+        {"id": "a", "speaker": "A", "text": "word " * words},
+        {"id": "b", "speaker": "B", "text": "selected"},
+    ]
+    if timed:
+        turns[0].update(start_ms=0, end_ms=duration - 1)
+        turns[1].update(start_ms=duration - 1, end_ms=duration)
+    tx = TranscriptV1.model_validate({"duration_ms": duration, "turns": turns})
+    original = tx.model_dump()
+    llm = FakeLLM()
+    await OneshotEngine().run(context(llm), tx, {"config": "miti", "coded_span": span})
+    assert len(llm.requests) == 1
+    assert tx.model_dump() == original
+
+
+async def test_untimed_whole_session_uses_header_duration(configs, transcript):
+    from onolys_engine_core.errors import SessionTooLong
+
+    transcript.duration_ms = 1_500_001
+    llm = FakeLLM()
+    with pytest.raises(SessionTooLong, match="narrower coded_span"):
+        await OneshotEngine().run(context(llm), transcript, {"config": "miti"})
+    assert llm.requests == []
+
+
+async def test_future_configs_do_not_inherit_miti_specific_caps(configs, transcript):
+    transcript.duration_ms = 1_500_001
+    llm = FakeLLM()
+    await OneshotEngine(config="other").run(context(llm), transcript, {"config": "other"})
+    assert len(llm.requests) == 1

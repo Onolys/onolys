@@ -5,6 +5,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from onolys_engine_core.errors import InputError, InvalidCodedSpan, SessionTooLong
+from onolys_engine_core.spans import selected_duration_ms, validate_portion_limits
 from onolys_engine_core.transcript import Transcript, Turn
 
 from onolys_miti import miti, rules
@@ -139,17 +140,7 @@ def _duration_ms(
     transcript: Transcript, turns: list[RoleTurn], coded_span: dict[str, Any] | None
 ) -> int | None:
     """Measure the selected portion, using the header only for an untimed whole session."""
-    if coded_span and coded_span.get("start_ms") is not None:
-        return coded_span["end_ms"] - coded_span["start_ms"]
-    ends = [
-        rt.turn.end_ms if rt.turn.end_ms is not None else rt.turn.start_ms
-        for rt in turns
-        if rt.turn.end_ms is not None or rt.turn.start_ms is not None
-    ]
-    if coded_span:
-        starts = [rt.turn.start_ms for rt in turns if rt.turn.start_ms is not None]
-        return max(ends) - min(starts) if ends and starts else None
-    return max(ends) if ends else transcript.duration_ms
+    return selected_duration_ms(transcript, [rt.turn for rt in turns], coded_span)
 
 
 def run_input_checks(
@@ -209,9 +200,7 @@ def prepare(
     selected, span_warn = select_turns(role_turns, coded_span)
     warnings += span_warn
     duration = _duration_ms(transcript, selected, coded_span)
-    if sum(_words(rt.turn.text) for rt in selected) > 6000:
-        raise SessionTooLong("session_too_long: coded portion exceeds 6000 words; "
-                             "supply a narrower coded_span")
+    validate_portion_limits([rt.turn for rt in selected], duration, max_duration_ms=None)
     warnings += run_input_checks(selected, params, duration)
     extra = rules.check_input(CheckInput(selected, params, duration), miti.MITI.data) or []
     warnings += [_coerce(w) for w in extra]

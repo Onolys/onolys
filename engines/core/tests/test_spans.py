@@ -89,3 +89,57 @@ def test_empty_transcript_supports_whole_but_rejects_explicit():
     assert apply(tx, None) == tx
     with pytest.raises(InvalidCodedSpan):
         apply(tx, {"start_turn": 0, "end_turn": 1})
+
+
+@pytest.mark.parametrize("span,expected", [
+    (None, 3000),
+    ({"start_turn": 1, "end_turn": 3}, 2000),
+    ({"start_ms": 1100, "end_ms": 2100}, 1000),
+])
+def test_selected_duration_uses_span_semantics(span, expected):
+    from onolys_engine_core.spans import selected_duration_ms
+
+    tx = transcript()
+    original = tx.model_dump()
+    selected = apply(tx, span)
+    assert selected_duration_ms(tx, selected.turns, span) == expected
+    assert tx.model_dump() == original
+
+
+def test_untimed_selected_duration_never_inherits_whole_header():
+    from onolys_engine_core.spans import selected_duration_ms
+
+    tx = transcript()
+    for turn in tx.turns:
+        turn.start_ms = turn.end_ms = None
+    assert selected_duration_ms(tx, tx.turns, None) == 4000
+    assert selected_duration_ms(tx, tx.turns[1:], {"start_turn": 1, "end_turn": 3}) is None
+
+
+def test_partial_timing_duration_uses_maximum_end_and_minimum_start():
+    from onolys_engine_core.spans import selected_duration_ms
+
+    tx = transcript()
+    tx.turns[0].end_ms = None
+    tx.turns[1].start_ms = None
+    span = {"start_turn": 0, "end_turn": 3}
+    assert selected_duration_ms(tx, list(reversed(tx.turns)), span) == 3000
+
+
+@pytest.mark.parametrize("words,duration,allowed", [
+    (6000, 1_500_000, True),
+    (6001, 1_500_000, False),
+    (6000, 1_500_001, False),
+])
+def test_selected_portion_limits_are_inclusive(words, duration, allowed):
+    from onolys_engine_core.errors import SessionTooLong
+    from onolys_engine_core.spans import validate_portion_limits
+
+    tx = TranscriptV1.model_validate({"turns": [
+        {"id": "a", "speaker": "T", "text": "word\t\n" * words},
+    ]})
+    if allowed:
+        validate_portion_limits(tx.turns, duration)
+    else:
+        with pytest.raises(SessionTooLong, match="narrower coded_span"):
+            validate_portion_limits(tx.turns, duration)

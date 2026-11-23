@@ -1,7 +1,9 @@
 """Pure transcript selection shared by engines; indices and times are half-open."""
 
-from .errors import InvalidCodedSpan
-from .transcript_v1 import TranscriptV1
+from collections.abc import Sequence
+
+from .errors import InvalidCodedSpan, SessionTooLong
+from .transcript_v1 import TranscriptTurnV1, TranscriptV1
 
 _FIELDS = {"start_ms", "end_ms", "start_turn", "end_turn"}
 
@@ -43,3 +45,44 @@ def apply_coded_span(transcript: TranscriptV1, span: dict | None) -> TranscriptV
         if not selected:
             raise InvalidCodedSpan("invalid_coded_span: time range selects no turns")
     return transcript.model_copy(update={"turns": selected})
+
+
+def selected_duration_ms(
+    source: TranscriptV1, turns: Sequence[TranscriptTurnV1], span: dict | None,
+) -> int | None:
+    """Measure a validated selection; the source header describes only a whole session."""
+    if span and span.get("start_ms") is not None:
+        return span["end_ms"] - span["start_ms"]
+    ends = [
+        turn.end_ms if turn.end_ms is not None else turn.start_ms
+        for turn in turns
+        if turn.end_ms is not None or turn.start_ms is not None
+    ]
+    if span:
+        starts = [turn.start_ms for turn in turns if turn.start_ms is not None]
+        return max(ends) - min(starts) if ends and starts else None
+    return max(ends) if ends else source.duration_ms
+
+
+def validate_portion_limits(
+    turns: Sequence[TranscriptTurnV1],
+    duration_ms: int | None,
+    *,
+    max_duration_ms: int | None = 25 * 60_000,
+    max_words: int = 6000,
+) -> None:
+    """Reject an oversized coded portion without inspecting or changing source metadata.
+
+    Callers with configurable duration checks may disable this duration cap and retain
+    their existing warning/error policy. Word counts always use selected turns only.
+    """
+    if sum(len(turn.text.split()) for turn in turns) > max_words:
+        raise SessionTooLong(
+            f"session_too_long: coded portion exceeds {max_words} words; "
+            "supply a narrower coded_span"
+        )
+    if max_duration_ms is not None and duration_ms is not None and duration_ms > max_duration_ms:
+        raise SessionTooLong(
+            "session_too_long: coded portion exceeds the duration limit; "
+            "supply a narrower coded_span"
+        )

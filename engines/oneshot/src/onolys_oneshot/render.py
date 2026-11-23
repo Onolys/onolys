@@ -5,7 +5,11 @@ from dataclasses import dataclass
 from typing import Literal
 
 from onolys_engine_core.errors import InputError
-from onolys_engine_core.spans import apply_coded_span
+from onolys_engine_core.spans import (
+    apply_coded_span,
+    selected_duration_ms,
+    validate_portion_limits,
+)
 from onolys_engine_core.transcript_v1 import TranscriptV1
 from onolys_engine_core.validate import validate_output
 
@@ -55,6 +59,11 @@ def render_prompt(
     allowed = (config.params_schema or {}).get("properties", {})
     rendered_params = {key: value for key, value in model_params.items() if key in allowed}
     selected = apply_coded_span(transcript, params.get("coded_span"))
+    if config.name == "miti":
+        validate_portion_limits(
+            selected.turns,
+            selected_duration_ms(transcript, selected.turns, params.get("coded_span")),
+        )
     system = f"{config.instructions.rstrip()}\n\n{CORE_FOOTER}"
     if config.schema_hint and structured_output_mode == "json_object":
         system += "\n\nOutput JSON Schema:\n" + json.dumps(config.schema, sort_keys=True)

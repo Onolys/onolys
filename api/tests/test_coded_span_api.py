@@ -131,3 +131,54 @@ async def test_over_limit_upload_requests_narrower_span(client, app):
                                      (SessionTooLong("private"), "session_too_long")])
 def test_engine_span_errors_keep_public_code(exc, code):
     assert to_public(exc) == (code, False)
+
+
+@pytest.mark.parametrize("span,words,duration,allowed", [
+    (None, 6000, 1_500_000, True),
+    (None, 6001, 1_500_000, False),
+    (None, 2, 1_500_001, False),
+    ({"start_turn": 1, "end_turn": 2}, 6001, 3_600_000, True),
+    ({"start_ms": 3_599_999, "end_ms": 3_600_000}, 6001, 3_600_000, True),
+])
+def test_shared_portion_limits_match_core_and_lean(span, words, duration, allowed, monkeypatch):
+    from onolys_engine_core.spans import (
+        apply_coded_span,
+        selected_duration_ms,
+        validate_portion_limits,
+    )
+    from onolys_engine_core.transcript import Transcript
+    from onolys_miti import miti
+    from onolys_miti.prepare import prepare
+    from onolys_miti.result import CodedSpan
+
+    from onolys_api.coded_span import validate_coded_input
+    from onolys_api.errors import ApiError
+
+    # Isolate portion caps from unrelated minimum speech/role quality requirements.
+    monkeypatch.setitem(miti.MITI.data, "input_checks", [
+        check for check in miti.MITI.data["input_checks"] if check["kind"] == "duration_max"
+    ])
+    tx = Transcript.model_validate({"turns": [
+        {"id": "a", "speaker": "A", "text": "word " * (words - 1),
+         "start_ms": 0, "end_ms": duration - 1},
+        {"id": "b", "speaker": "B", "text": "word",
+         "start_ms": duration - 1, "end_ms": duration},
+    ]})
+    original = tx.model_dump()
+    selected = apply_coded_span(tx, span)
+    checks = [
+        (SessionTooLong, lambda: validate_portion_limits(
+            selected.turns, selected_duration_ms(tx, selected.turns, span))),
+        (SessionTooLong, lambda: prepare(tx, {
+            "speaker_map": {"subject": "A", "other": "B"},
+            "change_goal": "Read", "coded_span": span,
+        })),
+        (ApiError, lambda: validate_coded_input(tx, CodedSpan(**span) if span else None)),
+    ]
+    for error_type, check in checks:
+        if allowed:
+            check()
+        else:
+            with pytest.raises(error_type, match="narrower coded_span"):
+                check()
+    assert tx.model_dump() == original
