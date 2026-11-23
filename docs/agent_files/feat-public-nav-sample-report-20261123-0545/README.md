@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: done
 summary: Public nav, compact footer, sessions split and MITI-style report with public sample — index of sub-projects
 date: 2026-11-23
 ---
