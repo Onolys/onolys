@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 import { Link, NavLink, Outlet, useLocation } from "react-router";
 import { useAuth, type AuthPhase } from "../auth/AuthProvider";
 import { useSignOut } from "../auth/useSignOut";
+import { AccountMenu } from "./AccountMenu";
 import { Footer } from "./Footer";
 
 const NAV: Record<AuthPhase, { to: string; label: string; className?: string }[]> = {
@@ -15,7 +16,6 @@ const NAV: Record<AuthPhase, { to: string; label: string; className?: string }[]
   verified: [
     { to: "/", label: "Sessions" },
     { to: "/sessions/new", label: "New session" },
-    { to: "/settings", label: "Settings" },
   ],
 };
 
@@ -49,7 +49,7 @@ export function Layout() {
               {l.label}
             </NavLink>
           ))}
-          {(phase === "verified" || phase === "unverified") && (
+          {phase === "unverified" && (
             <>
               {user?.email && <span className="nav-user">{user.email}</span>}
               <button type="button" className="btn btn-secondary" onClick={() => void signOut()}>
@@ -58,6 +58,7 @@ export function Layout() {
             </>
           )}
         </nav>
+        {phase === "verified" && <AccountMenu email={user?.email ?? null} onSignOut={() => void signOut()} />}
       </header>
       {signOutError && <p role="alert">{signOutError}</p>}
       <main id="main" ref={mainRef}>
