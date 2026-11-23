@@ -18,8 +18,8 @@ Source of truth: /root/projects/onolys/iaudit/.worktrees/feat/miti-eval/docs/age
 | 7 | Infra: Terraform for eval and staging apply | 1 | done |
 | 8 | Web app: shell, auth, New run | 1 | done |
 | 9 | Web app: progress, compare, history | 6, 8 | done |
-| 10 | CI jobs for eval backend and web | 6, 9 | in-progress |
-| 11 | Deploy workflow and image guard | 7, 10 | todo |
+| 10 | CI jobs for eval backend and web | 6, 9 | done |
+| 11 | Deploy workflow and image guard | 7, 10 | in-progress |
 | 12 | Live smoke, docs, reference page | 11 | todo |
 
 ## Task 1 — Backend skeleton, auth, config, workspace member
