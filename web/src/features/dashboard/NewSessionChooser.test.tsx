@@ -37,12 +37,9 @@ describe("new session chooser", () => {
 
   it("shows the usage lines and a New session link", async () => {
     const { router } = render();
-    expect(await main().findByText("20 of 20 left today")).toBeInTheDocument();
-    expect(main().getByText("5 of 5 left today")).toBeInTheDocument();
-    const meters = main().getAllByRole("meter");
-    expect(meters).toHaveLength(2);
-    expect(meters[0]).toHaveAttribute("aria-valuetext", "5 of 5 left today");
-    expect(meters[1]).toHaveAttribute("aria-valuetext", "20 of 20 left today");
+    expect(await main().findByRole("button", { name: "20 of 20 left today" })).toHaveTextContent("20/20");
+    expect(main().getByRole("button", { name: "5 of 5 left today" })).toHaveTextContent("5/5");
+    expect(main().queryAllByRole("meter")).toHaveLength(0);
     const link = main().getByRole("link", { name: "New session" });
     expect(link).toHaveAttribute("href", "/sessions/new");
     await userEvent.click(link);
@@ -52,7 +49,9 @@ describe("new session chooser", () => {
   it("over the eval cap: says so with the reset time", async () => {
     mockBackend.configure({ caps: { eval: { day: 0 } } });
     render();
-    expect(await main().findByText("0 of 0 left today")).toBeInTheDocument();
+    const count = await main().findByRole("button", { name: "0 of 0 left today" });
+    expect(count).toHaveTextContent("0/0");
+    expect(count.querySelector(".text-destructive")).not.toBeNull();
     expect(main().getByText(/reached today's limit/i)).toHaveTextContent(/after .+/);
   });
 

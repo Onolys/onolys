@@ -6,7 +6,7 @@ import { messageForCode } from "../../api/errors";
 import { H1, PAGE } from "../../components/classes";
 import { Notice } from "../../components/Notice";
 import { interviewCapText } from "../interview/capText";
-import { UsageBar } from "../usage/UsageBar";
+import { UsageCount } from "../usage/UsageCount";
 import { blockingPeriod, formatBlockingReset } from "../usage/usage";
 import { useUsage } from "../usage/useUsage";
 
@@ -38,10 +38,9 @@ export function NewSessionChooser() {
               <CardDescription>A 10-minute role-play, then rated like any recording.</CardDescription>
             </CardHeader>
             <CardContent className="grid gap-3">
-              <UsageBar kind="interview" label="AI interviews" />
               {interviewBlocking ? <Notice>{interviewCapText(interviewBlocking)}</Notice> : null}
             </CardContent>
-            <CardFooter>
+            <CardFooter className="justify-between">
               {interviewBlocking ? (
                 <Button type="button" disabled>
                   Start AI Interview
@@ -51,6 +50,7 @@ export function NewSessionChooser() {
                   <Link to="/interviews/new">Start AI Interview</Link>
                 </Button>
               )}
+              <UsageCount kind="interview" />
             </CardFooter>
           </Card>
         </Section>
@@ -63,7 +63,6 @@ export function NewSessionChooser() {
               <CardDescription>Bring a session you recorded.</CardDescription>
             </CardHeader>
             <CardContent className="grid gap-3">
-              <UsageBar kind="eval" label="Recording ratings" />
               {blocking ? (
                 <Notice>
                   {messageForCode("daily_cap_reached", {
@@ -72,10 +71,11 @@ export function NewSessionChooser() {
                 </Notice>
               ) : null}
             </CardContent>
-            <CardFooter>
+            <CardFooter className="justify-between">
               <Button asChild>
                 <Link to="/sessions/new">New session</Link>
               </Button>
+              <UsageCount kind="eval" />
             </CardFooter>
           </Card>
         </Section>
