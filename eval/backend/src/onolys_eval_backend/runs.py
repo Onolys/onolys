@@ -441,8 +441,15 @@ def _cost(services, run, unit, usage, metrics):
         return usage.cost_usd, usage.cost_usd is None
 
 
+class _ExecutionConfigChanged(Exception):
+    """Queued AI work no longer matches its saved execution provenance."""
+
+
 async def execute_unit(services, rid, uid):
     repository = services.repository
+    # Read immutable execution inputs before claiming: transient read failures must
+    # leave queued work retryable. The transaction still checks live ownership/cancel.
+    run, unit = repository.get_run(rid), repository.get_unit(rid, uid)
     started_at = now()
 
     def claim(run, unit):
@@ -460,7 +467,6 @@ async def execute_unit(services, rid, uid):
         if run and run.get("cancel_requested"):
             finish_unit(repository, rid, uid, {"status": "cancelled"}, expected={"queued"})
         return
-    run, unit = repository.get_run(rid), repository.get_unit(rid, uid)
     metrics = MetricsCollector()
     usage = None
     try:
@@ -478,6 +484,14 @@ async def execute_unit(services, rid, uid):
                 services.bucket.read_json(source["transcript_path"])
             )
             routes, _ = resolve_preset(unit["preset"], services.routes)
+            engine = services.engine(unit["engine"])
+            if (
+                run["engine_git_sha"] != _git_sha()
+                or run["engine_versions"].get(unit["engine"]) != engine.version
+                or run["resolved_presets"].get(unit["preset"])
+                != {name: route.litellm_id for name, route in routes.items()}
+            ):
+                raise _ExecutionConfigChanged
             factory = getattr(services, "llm_factory", None)
             llm = factory(routes, metrics) if factory else LiteLLMClient(LLMConfig(routes=routes))
             ctx = RunContext(
@@ -492,7 +506,6 @@ async def execute_unit(services, rid, uid):
             }
             if ":" in unit["engine"]:
                 params["config"] = unit["engine"].split(":", 1)[1]
-            engine = services.engine(unit["engine"])
 
             def progress(stage, status):
                 repository.update_unit(rid, uid, {"stage": str(stage)})
@@ -524,11 +537,14 @@ async def execute_unit(services, rid, uid):
             or _metric_usage(metrics)
         )
         cost, unpriced = _cost(services, run, unit, usage, metrics)
+        error_code = "engine_failed"
+        if isinstance(exc, OutputInvalid):
+            error_code = "output_invalid"
+        elif isinstance(exc, _ExecutionConfigChanged):
+            error_code = "execution_config_changed"
         saved = {
             "status": "failed",
-            "error": {
-                "code": "output_invalid" if isinstance(exc, OutputInvalid) else "engine_failed"
-            },
+            "error": {"code": error_code},
             "run_info": {"usage": usage.model_dump(mode="json")},
             "cost_usd_est": cost,
             "unpriced": unpriced,

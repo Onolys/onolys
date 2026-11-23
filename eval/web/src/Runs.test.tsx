@@ -26,6 +26,29 @@ it('selects sessions for signed differences', () => {
 it('polls at 3s, stops terminal, loads JSON lazily as escaped text and aborts unmount', async () => {
  vi.useFakeTimers(); const api = {...createEvalApi('',vi.fn()), run:vi.fn().mockResolvedValueOnce(detail('running')).mockResolvedValue(detail()), output:vi.fn().mockResolvedValue({text:'<img src=x onerror=alert(1)>'})}; const view=render(<RunView api={api} runId="r1" onRerun={vi.fn()}/>); await act(async()=>{}); expect(api.run).toHaveBeenCalledTimes(1); await act(async()=>{await vi.advanceTimersByTimeAsync(3000)}); expect(api.run).toHaveBeenCalledTimes(2); await act(async()=>{await vi.advanceTimersByTimeAsync(9000)}); expect(api.run).toHaveBeenCalledTimes(2); expect(api.output).not.toHaveBeenCalled(); fireEvent.click(screen.getByRole('button',{name:'View JSON u1'})); await act(async()=>{}); expect(api.output).toHaveBeenCalledWith('r1','u1',expect.any(AbortSignal)); expect(screen.getByText(/<img src=x/)).toBeTruthy(); expect(document.querySelector('img')).toBeNull(); const signal=api.run.mock.calls[0][1] as AbortSignal; view.unmount(); expect(signal.aborted).toBe(true);
 });
+it('loads bucket JSON lazily when the run detail includes output null and output_ref', async () => {
+  const saved = detail();
+  saved.units[0] = { ...saved.units[0], output: null, output_ref: 'runs/r1/u1.json' };
+  const api = { ...createEvalApi('', vi.fn()), run: vi.fn().mockResolvedValue(saved), output: vi.fn().mockResolvedValue({ stored: true }) };
+  render(<RunView api={api} runId="r1" onRerun={vi.fn()} />);
+  await act(async () => {});
+  expect(api.output).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole('button', { name: 'View JSON u1' }));
+  await act(async () => {});
+  expect(api.output).toHaveBeenCalledExactlyOnceWith('r1', 'u1', expect.any(AbortSignal));
+  expect(screen.getByText(/"stored": true/)).toBeTruthy();
+});
+it.each([null, false, 0, ''])('renders inline JSON %j without fetching', async output => {
+  const saved = detail();
+  saved.units[0] = { ...saved.units[0], output };
+  const api = { ...createEvalApi('', vi.fn()), run: vi.fn().mockResolvedValue(saved), output: vi.fn() };
+  render(<RunView api={api} runId="r1" onRerun={vi.fn()} />);
+  await act(async () => {});
+  fireEvent.click(screen.getByRole('button', { name: 'View JSON u1' }));
+  await act(async () => {});
+  expect(api.output).not.toHaveBeenCalled();
+  expect(screen.getAllByRole('heading', { name: /s1 · miti/ })[0].parentElement?.querySelector('pre')?.textContent).toBe(JSON.stringify(output));
+});
 it('refreshes terminal cancellation details before stopping polling', async () => {
   vi.useFakeTimers();
   const cancelled = { ...detail('cancelled'), completed_units: 4, cancelled_units: 2, units: [{ ...detail().units[0], unit_id: 'cancelled-unit', status: 'cancelled' as const }] };

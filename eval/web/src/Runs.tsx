@@ -32,7 +32,7 @@ export function CompareView({ compare }: { compare: Compare }) {
 }
 function UnitOutput({ api, runId, unit }: { api: EvalApi; runId: string; unit: RunUnit }) {
   const [open, setOpen] = useState(false);
-  const [output, setOutput] = useState<unknown>(unit.output);
+  const [output, setOutput] = useState<unknown>(unit.output == null && unit.output_ref ? undefined : unit.output);
   const [error, setError] = useState('');
   const [attempt, setAttempt] = useState(0);
   useEffect(() => {

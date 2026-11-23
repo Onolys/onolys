@@ -4,8 +4,10 @@ import asyncio
 from concurrent.futures import ThreadPoolExecutor
 from threading import Event
 from types import SimpleNamespace
+from unittest.mock import Mock
 
 import pytest
+from fastapi.testclient import TestClient
 from onolys_engine_core.engine import EngineResult, RunInfo, RunUsage
 from onolys_engine_core.llm.routes import Preset, RouteRegistry
 from onolys_engine_core.registry import EngineRegistry
@@ -65,7 +67,7 @@ def dispatch(c, run_id, unit_id):
 
 class FakeEngine:
     name = "oneshot"
-    version = "synthetic"
+    version = OneshotEngine(config="miti").version
     accepts_feedback = True
 
     def __init__(self, *, invalid=False, fail=False):
@@ -198,6 +200,111 @@ def test_simultaneous_claims_execute_only_once(services):
         first.result()
     assert len(engine.calls) == 1
     assert services.repository.get_run(rid)["completed_units"] == 1
+
+
+@pytest.mark.parametrize("read_method", ["get_run", "get_unit"])
+def test_transient_execution_snapshot_read_failure_can_retry(services, monkeypatch, read_method):
+    engine = services.fake_engine = FakeEngine()
+    c = client(services=services)
+    rid = start(c, engines=["oneshot:miti"]).json()["run_id"]
+    uid = next(iter(services.repository.list_units(rid)))
+    repository = services.repository
+    original_read = getattr(repository, read_method)
+    original_transact = repository.transact_unit
+    in_transaction = False
+    fail_next = True
+
+    def transact(*args):
+        nonlocal in_transaction
+        in_transaction = True
+        try:
+            return original_transact(*args)
+        finally:
+            in_transaction = False
+
+    def flaky_read(*args):
+        nonlocal fail_next
+        # Firestore transaction reads do not call the standalone repository getters.
+        if not in_transaction and fail_next:
+            fail_next = False
+            raise RuntimeError("PRIVATE storage details")
+        return original_read(*args)
+
+    monkeypatch.setattr(repository, "transact_unit", transact)
+    monkeypatch.setattr(repository, read_method, flaky_read)
+    c = TestClient(c.app, raise_server_exceptions=False)
+    response = dispatch(c, rid, uid)
+    assert response.status_code == 500
+    assert "PRIVATE" not in response.text
+    assert engine.calls == []
+    assert repository.get_unit(rid, uid)["status"] == "queued"
+    assert dispatch(c, rid, uid).status_code == 200
+    assert dispatch(c, rid, uid).status_code == 200
+    assert repository.get_unit(rid, uid)["status"] == "done"
+    assert repository.get_run(rid)["completed_units"] == 1
+    assert len(engine.calls) == 1
+
+
+@pytest.mark.parametrize("changed", ["sha", "version", "routes"])
+def test_execution_config_drift_fails_before_provider_work(services, monkeypatch, changed):
+    engine = services.fake_engine = FakeEngine()
+    monkeypatch.setenv("GIT_SHA", "before-deployment")
+    c = client(services=services)
+    rid = start(c, engines=["oneshot:miti"]).json()["run_id"]
+    uid = next(iter(services.repository.list_units(rid)))
+    factory = services.llm_factory = Mock(wraps=services.llm_factory)
+    if changed == "sha":
+        monkeypatch.setenv("GIT_SHA", "after-deployment")
+    elif changed == "version":
+        engine.version = "after-deployment"
+    else:
+        services.routes.raw_routes["oneshot"]["litellm_id"] = "synthetic/changed-model"
+    assert dispatch(c, rid, uid).status_code == 200
+    assert dispatch(c, rid, uid).status_code == 200
+    unit = services.repository.get_unit(rid, uid)
+    run = services.repository.get_run(rid)
+    assert unit["status"] == "failed"
+    assert unit["error"] == {"code": "execution_config_changed"}
+    assert run["status"] == "failed" and run["completed_units"] == 1
+    assert run["usage"]["calls"] == 0 and run["cost_usd_est"] == 0
+    assert engine.calls == []
+    factory.assert_not_called()
+
+
+def test_rerun_uses_current_execution_snapshot_and_matching_config_runs(services, monkeypatch):
+    engine = services.fake_engine = FakeEngine()
+    monkeypatch.setenv("GIT_SHA", "before-deployment")
+    c = client(services=services)
+    rid = start(c, engines=["oneshot:miti"]).json()["run_id"]
+    original = services.repository.get_run(rid)
+    monkeypatch.setenv("GIT_SHA", "after-deployment")
+    services.routes.raw_routes["oneshot"]["litellm_id"] = "synthetic/changed-model"
+    engine.version = "after-deployment"
+    monkeypatch.setattr(services.registry.get("oneshot"), "version", engine.version)
+    response = c.post(
+        f"/v1/runs/{rid}/rerun", headers=AUTH,
+        json={"engines": ["oneshot:miti"], "presets": ["configured-prod"], "repeats": 1},
+    )
+    assert response.status_code == 200, response.text
+    rerun_id = response.json()["run_id"]
+    saved = services.repository.get_run(rerun_id)
+    assert saved["engine_git_sha"] == "after-deployment" != original["engine_git_sha"]
+    assert saved["engine_versions"]["oneshot:miti"] == engine.version
+    assert saved["resolved_presets"] == {"configured-prod": {"oneshot": "synthetic/changed-model"}}
+    uid = next(iter(services.repository.list_units(rerun_id)))
+    assert dispatch(c, rerun_id, uid).status_code == 200
+    assert services.repository.get_unit(rerun_id, uid)["status"] == "done"
+    assert len(engine.calls) == 1
+
+
+def test_human_gold_remains_available_after_runtime_config_changes(services, monkeypatch):
+    c = client(services=services)
+    rid = start(c, engines=["human"]).json()["run_id"]
+    monkeypatch.setenv("GIT_SHA", "after-deployment")
+    services.routes.raw_routes["oneshot"]["litellm_id"] = "synthetic/changed-model"
+    uid = next(iter(services.repository.list_units(rid)))
+    assert dispatch(c, rid, uid).status_code == 200
+    assert services.repository.get_unit(rid, uid)["status"] == "done"
 
 
 def test_queue_partial_failure_finishes_unqueued_units(services):
