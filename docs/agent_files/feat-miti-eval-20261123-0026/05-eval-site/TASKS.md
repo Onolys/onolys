@@ -10,8 +10,8 @@ Source of truth: /root/projects/onolys/iaudit/.worktrees/feat/miti-eval/docs/age
 | # | Task | Depends on | Status |
 |---|---|---|---|
 | 1 | Backend skeleton, auth, config, workspace member | - | done |
-| 2 | Storage layer: bucket, Firestore, prices | 1 | in-progress |
-| 3 | Options and datasets endpoints | 2 | todo |
+| 2 | Storage layer: bucket, Firestore, prices | 1 | done |
+| 3 | Options and datasets endpoints | 2 | in-progress |
 | 4 | Uploads, speaker pick, transcribe poll-chain | 2 | todo |
 | 5 | Run creation, unit execution, finalisation | 3, 4 | todo |
 | 6 | Compare, history, rerun, tokens and $ | 5 | todo |
