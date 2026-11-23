@@ -7,7 +7,7 @@ date: 2026-11-23
 # MITI eval site, transcript upload, engine core + one-shot engine
 
 ## TL;DR
-Build an internal eval site at eval.onolys.com (staging, same email allowlist as admin) where you pick a stored dataset and an engine, run it, and see our MITI coding side by side with expert human coding. First dataset: CASAA (UNM, MITI 4.2.1, 8 sessions from 2013 series). Alongside: a shared transcript format `transcript.v1` with transcript upload in the main app, an `engines/core` package with a common engine interface, and a generic `oneshot` engine (one model call: transcript + instructions + output schema), so lean MITI vs one-shot vs human can be compared.
+Build an internal eval site at eval.onolys.com (staging, same email allowlist as admin) where you pick a stored dataset and an engine, run it, and see our MITI coding side by side with expert human coding. First dataset: CASAA (UNM, MITI 4.2.1, 8 sessions from 2013 series). Alongside: a shared transcript format `transcript.v1` with transcript upload in the main app, an `engines/core` package with a common engine interface, and a generic `oneshot` engine (one model call: transcript + instructions + output schema), so lean MITI vs one-shot vs human can be compared. The eval site also supports a single upload (audio or transcript) to trial engines on new inputs, and multi-select comparison of engines and presets.
 
 ## Problem
 We do not know how close Onolys' MITI 4.2.1 coding is to expert human coders. Public coded datasets exist (see Drive doc "MITI Datasets"), but they come as transcripts, not audio, and the app only accepts audio. We also want to try other engine styles (one-shot now, e.g. ADHD later) without duplicating plumbing. Users of the eval site: the founders only.
@@ -30,7 +30,16 @@ We do not know how close Onolys' MITI 4.2.1 coding is to expert human coders. Pu
 | Gold format stores session-level codes + optional per-utterance codes; compare session-level now (user) | Utterance alignment now | Alignment is extra work |
 | Compare: behavior counts, 4 globals, summary scores (R:Q, %CR), per-session diff + average error (user) | — | — |
 | Save every eval run (dataset, engine, engine git sha, preset/model, date, results) in staging Firestore (user) | Ephemeral | Track accuracy over engine changes |
-| Preset dropdown defaulting to prod preset; 1 run per session, option 3 (user) | — | — |
+| Two input modes: pick a stored dataset (has human scores) OR single upload of audio or transcript, like the production app (user) | Datasets only | Trial engines on new inputs |
+| Single uploads (audio/transcript) saved to private staging GCS bucket like prod, and kept in run history for reruns (user) | Ephemeral | Rerun new engines later |
+| Two separate multi-select dropdowns: Engine (Human score, MITI lean, One-shot, future engines) and Preset (model settings, e.g. Gemini Flash / Pro) (user) | One combined dropdown | User preference |
+| Items currently used in production labelled '(prod)' in both dropdowns (user) | — | Know what prod runs |
+| Defaults: dataset mode pre-ticks Human score + MITI lean (prod) + prod preset; upload mode pre-ticks MITI lean (prod) + prod preset; all untickable (user) | — | — |
+| Human score appears for a single upload only if a human-scores file (gold format) is attached (Claude's call) | — | No gold otherwise |
+| Runs = every selected engine × every selected preset; Human score ignores preset; all shown in one compare table (Claude's call) | — | Follows from two dropdowns |
+| Single upload without human scores: compare table shows engine outputs side by side (counts, globals, summary scores) without accuracy (Claude's call) | — | No gold |
+| 1 run per engine×preset per session, option for 3 (user) | — | LLM variance |
+| Eval backend skips usage limits entirely; main app keeps them (user) | Count eval runs | Internal tool |
 | No cost cap; show tokens + rough $ after run (user) | Hard cap | User choice |
 | CLI spike first: 1 CASAA session through lean engine, print comparison, before building site (user) | Site first | Cheapest check |
 | `engines/core` = engine-agnostic basics only, no MITI-specific code (user) | Put MITI shared bits in core | Future engines (oneshot, adhd) |
@@ -53,12 +62,12 @@ We do not know how close Onolys' MITI 4.2.1 coding is to expert human coders. Pu
 | 2 | CASAA data + CLI spike | Download CASAA 8 MITI 4.2.1 sessions (uncoded + coded PDFs from casaa.unm.edu/tools/miti.html), convert to `transcript.v1` + gold format, upload to private GCS bucket; CLI runs lean engine on 1 session (full span) and prints ours vs gold |
 | 3 | `engines/core` | Extract engine-agnostic pieces from `engines/miti` (transcript types, LLM client + route presets, RunContext/progress, PHI-safe logging, schema validation helper); define engine base class + registry; miti engine adopts it without behavior change |
 | 4 | `engines/oneshot` + API validation | Generic one-shot engine, MITI one-shot config, API-layer validation + retry-with-errors |
-| 5 | Eval site | eval.onolys.com (Firebase hosting site + domain + CORS), backend reusing admin auth + allowlist, dataset list from bucket, run (dataset × engine × preset × n_runs), compare table, run history, token/$ display |
+| 5 | Eval site | eval.onolys.com (Firebase hosting site + domain + CORS), own Cloud Run backend reusing admin auth + allowlist, no usage limits; dataset mode (list from bucket) and single-upload mode (audio via existing STT path, or transcript.v1/.txt; optional human-scores file), saved to bucket; Engine and Preset multi-select dropdowns with '(prod)' labels and defaults; background runs (engine × preset), compare table, run history, token/$ display |
 
 Existing facts: engine entry `run_miti(ctx, transcript, speaker_map, params, progress_cb)`; `Turn{id, speaker, text, start_ms?, end_ms?, role?, language?}`; admin shell = `admin/` (FastAPI + `onolys_admin_auth`, secret `admin_allowed_emails`), admin.onolys.com, staging only; `eval/` currently holds only untracked `__pycache__` leftovers.
 
 ## Goals, non-goals, anti-goals
-- Goals: pick CASAA on eval site, run lean or one-shot, see per-session and average agreement vs human; transcripts uploadable in main app; new engines plug in via core interface.
+- Goals: pick CASAA on eval site, run lean or one-shot, see per-session and average agreement vs human; transcripts uploadable in main app; new engines plug in via core interface; trial engines/presets on a single new upload.
 - Non-goals: utterance-level alignment metrics; MI-TAGS/AnnoMI now; one-shot in main app; UI prompt editing; prod eval.
 - Anti-goals: dataset files committed to the public repo; lean MITI engine behavior changing during core extraction; eval site reachable by anyone off the allowlist.
 
