@@ -126,14 +126,15 @@ async def test_start_poll_words_speakers_ms():
     assert be.last[1] == "us-speech.googleapis.com"
     assert be.last[0]["recognizer"].startswith("projects/proj/locations/us/")
     assert await ad.poll(handle) is None
-    t = await ad.poll(handle)
+    completion = await ad.poll(handle)
+    t = completion.transcript
     assert be.submits == 1
     assert [(x.speaker, x.text, x.start_ms, x.end_ms) for x in t.turns] == [
         ("S1", "Hello", 0, 400),
         ("S2", "Hi", 1000, 1200),
     ]
-    assert t.language == "en-us" and t.stt_run.language_requested == "auto"
-    assert t.stt_run.provider == "google" and t.stt_run.location == "us"
+    assert t.language == "en-us" and completion.run.language_requested == "auto"
+    assert completion.run.provider == "google" and completion.run.location == "us"
 
 
 async def test_transcribe_helper_and_options_project():
@@ -144,7 +145,7 @@ async def test_transcribe_helper_and_options_project():
         params(options={"location": "us", "project": "x", "endpoint": "us-speech.googleapis.com"}),
         interval_s=0,
     )
-    assert t.turns[0].speaker is None and be.last[0]["recognizer"].startswith("projects/x/")
+    assert t.turns[0].speaker == "unknown" and be.last[0]["recognizer"].startswith("projects/x/")
 
 
 async def test_file_error_raises_and_bad_handle():

@@ -7,7 +7,7 @@ code. A new STT provider is one core adapter plus one `DEFAULT_REGISTRY` line (a
 
 `poll(handle)` carries no provider, so `start` wraps the core handle as
 `{"provider", "handle"}` JSON; `stt_operation` stores that string and `poll` routes on it.
-The `Transcript` (incl. `stt_run`) from the core adapter is returned unchanged.
+The completion carries transcript.v1 and separate STT provenance unchanged.
 
 `RealEvaluation` (SP09 R2, D5) is the single call into `onolys_miti.run_miti`; it names no model
 or provider: routes come from the run's preset (`resolve_preset`, unknown preset -> `InputError`).
@@ -26,7 +26,7 @@ from onolys_miti.context import RunContext
 from onolys_miti.errors import ConfigError
 from onolys_miti.llm import LiteLLMClient, LLMConfig, MetricsCollector
 from onolys_miti.llm.routes import resolve_preset
-from onolys_miti.stt import AudioRef, SttAdapter, SttParams
+from onolys_miti.stt import AudioRef, SttAdapter, SttCompletion, SttParams
 from onolys_miti.stt.fixture import FixtureStt
 from onolys_miti.stt.google_chirp import GoogleChirp3
 from onolys_miti.transcript import Transcript
@@ -66,7 +66,7 @@ class RealStt:
         handle = await self._adapter(params.provider).start(audio, params)
         return json.dumps({"provider": params.provider, "handle": handle})
 
-    async def poll(self, handle: str) -> Transcript | None:
+    async def poll(self, handle: str) -> SttCompletion | None:
         try:
             wrapped = json.loads(handle)
             provider, inner = wrapped["provider"], wrapped["handle"]
@@ -101,7 +101,7 @@ class RealVoice:
 
 
 RUN_DEADLINE_S = 8 * 60  # the whole evaluation; a shorter ctx.deadline (task budget) wins
-_ENGINE_PARAMS = ("change_goal", "seed", "language", "n_runs", "preset", "code_version")
+_ENGINE_PARAMS = ("change_goal", "seed", "language", "n_runs", "preset", "code_version", "stt_run")
 
 
 def _llm_from_routes(routes: dict) -> Any:
@@ -140,7 +140,7 @@ class RealEvaluation:
             request_id=ctx.request_id,
             deadline=deadline,
         )
-        engine_params = {k: params.get(k) for k in _ENGINE_PARAMS}
+        engine_params = {k: params.get(k) for k in _ENGINE_PARAMS if k != "stt_run" or k in params}
         out = await run_miti(rctx, transcript, speaker_map, engine_params, progress_cb)
         return EvaluationOutput(
             report=json.loads(out.report.model_dump_json()),

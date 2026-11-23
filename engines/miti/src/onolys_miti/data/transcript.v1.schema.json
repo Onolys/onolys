@@ -85,7 +85,7 @@
           "type": "null"
         }
       ],
-      "default": null,
+      "default": "en",
       "title": "Language"
     },
     "duration_ms": {

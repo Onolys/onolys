@@ -289,7 +289,7 @@ class FakeEvaluation:
         ]
         cb("assemble", "started")
         n_runs = int(params.get("n_runs") or 1)
-        stt = transcript.stt_run.model_dump() if transcript.stt_run else None
+        stt = params.get("stt_run")
         report = {
             "schema_version": "0.0.1",
             "created_at": FAKE_CREATED_AT,

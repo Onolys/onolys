@@ -8,7 +8,7 @@ The format name is not a field in the JSON object.
 | Transcript field | Type | Required | Meaning |
 |---|---|---|---|
 | `turns` | array of turn objects | Yes | Turns in transcript order; array order is authoritative |
-| `language` | string or null | No | Transcript language; omitted means null in the model |
+| `language` | string or null | No | Transcript language; omitted defaults to `en` |
 | `duration_ms` | integer or null | No | Session duration in milliseconds; omitted means null |
 
 | Turn field | Type | Required | Meaning |
@@ -64,3 +64,7 @@ PY
 
 `engines/miti/tests/test_transcript_v1.py` regenerates and compares the exact file content,
 so the engine tests fail when the committed schema drifts from the model.
+
+STT output uses the same model. Missing provider speaker labels use `unknown`, an explicit
+uncertainty marker excluded from the API speaker-separation check; it is never an inferred
+speaker identity. STT completion metadata is stored on the session, outside transcript.v1.

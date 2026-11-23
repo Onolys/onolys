@@ -4,7 +4,7 @@ import asyncio
 from abc import ABC, abstractmethod
 
 from onolys_miti.safe_log import log_event
-from onolys_miti.stt import AudioRef, SttParams, SttRun, Word
+from onolys_miti.stt import AudioRef, SttCompletion, SttParams, SttRun, Word
 from onolys_miti.transcript import Transcript, Turn
 
 DEFAULT_MAX_GAP_MS = 2000
@@ -13,7 +13,8 @@ DEFAULT_MAX_GAP_MS = 2000
 def words_to_turns(words: list[Word], max_gap_ms: int = DEFAULT_MAX_GAP_MS) -> list[Turn]:
     """Group words into turns: new turn on speaker change or a gap above `max_gap_ms`.
 
-    Speaker labels are normalised to S1..Sn by first appearance; None stays None.
+    Speaker labels are normalised to S1..Sn by first appearance.
+    Missing provider labels use the explicit uncertainty marker `unknown`.
     """
     turns: list[Turn] = []
     labels: dict[str, str] = {}
@@ -23,7 +24,7 @@ def words_to_turns(words: list[Word], max_gap_ms: int = DEFAULT_MAX_GAP_MS) -> l
         if not cur:
             return
         raw = cur[0].speaker
-        speaker = None if raw is None else labels.setdefault(raw, f"S{len(labels) + 1}")
+        speaker = "unknown" if raw is None else labels.setdefault(raw, f"S{len(labels) + 1}")
         turns.append(
             Turn(
                 id=f"t{len(turns) + 1}",
@@ -75,7 +76,7 @@ class BaseSttAdapter(ABC):
         )
         return handle
 
-    async def poll(self, handle: str) -> Transcript | None:
+    async def poll(self, handle: str) -> SttCompletion | None:
         got = await self._fetch(handle)
         if got is None:
             log_event("stt_poll", step="poll", status="running", job_id=handle)
@@ -93,12 +94,14 @@ class BaseSttAdapter(ABC):
             speakers=len({w.speaker for w in words if w.speaker is not None}),
             audio_ms=max((w.end_ms for w in words), default=None),
         )
-        return Transcript(
-            turns=turns,
-            language=run.language_detected
-            or (None if run.language_requested == "auto" else run.language_requested),
-            duration_ms=max((w.end_ms for w in words), default=None),
-            stt_run=run,
+        return SttCompletion(
+            transcript=Transcript(
+                turns=turns,
+                language=run.language_detected
+                or ("en" if run.language_requested == "auto" else run.language_requested),
+                duration_ms=max((w.end_ms for w in words), default=None),
+            ),
+            run=run,
         )
 
 
@@ -116,7 +119,7 @@ async def transcribe(
     while True:
         result = await adapter.poll(handle)
         if result is not None:
-            return result
+            return result.transcript
         polls += 1
         if max_polls is not None and polls >= max_polls:
             raise TimeoutError(f"STT job {handle!r} not finished after {polls} polls")

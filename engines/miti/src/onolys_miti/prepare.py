@@ -63,7 +63,7 @@ def mark_roles(
         if t.speaker == subject:
             out.append(RoleTurn(t, SUBJECT))
             continue
-        if t.speaker is None or t.speaker == "" or (other is not None and t.speaker != other):
+        if t.speaker == "unknown" or (other is not None and t.speaker != other):
             unknown.append(t.id)
         out.append(RoleTurn(t, OTHER))
     warnings = []

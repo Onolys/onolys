@@ -6,6 +6,7 @@
 from datetime import UTC, datetime
 from typing import Any, Literal
 
+from onolys_miti.stt import SttRun
 from onolys_miti.transcript import Transcript
 from pydantic import BaseModel, Field
 
@@ -57,6 +58,7 @@ class UserDoc(Doc):
 
 
 class SttInfo(BaseModel):
+    run: SttRun | None = None
     provider: str = ""
     model: str = ""
     language: str = ""

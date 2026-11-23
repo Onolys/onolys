@@ -29,14 +29,16 @@ def sparams(title: str | None = None) -> SttParams:
 
 async def transcribe(adapter: FakeStt, title: str | None = None) -> Transcript | None:
     h = await adapter.start(AUDIO, sparams(title))
-    return await adapter.poll(h)
+    return (await adapter.poll(h)).transcript
 
 
 async def evaluate(title: str = "", events=None, adapter=None):
-    t = await transcribe(FakeStt())
+    stt = FakeStt()
+    completion = await stt.poll(await stt.start(AUDIO, sparams()))
+    t = completion.transcript
     cb = (lambda s, st: events.append((s, st))) if events is not None else None
     ev = adapter or FakeEvaluation()
-    return await ev.run(CTX, t, {"subject": "S1"}, {**PARAMS, f.STUB_TITLE_KEY: title}, cb)
+    return await ev.run(CTX, t, {"subject": "S1"}, {**PARAMS, "stt_run": completion.run.model_dump(), f.STUB_TITLE_KEY: title}, cb)
 
 
 # ---- Stt ----
@@ -55,7 +57,7 @@ async def test_stt_ok_shape():
     t = await transcribe(FakeStt())
     words = sum(len(x.text.split()) for x in t.turns)
     assert {x.speaker for x in t.turns} == {"S1", "S2"} and words >= 50
-    assert t.stt_run.provider == "fake"
+    assert "stt_run" not in t.model_dump()
 
 
 async def test_stt_poll_not_ready_then_ready_without_resubmit():
@@ -88,7 +90,7 @@ async def test_fixture_stt_replays_and_counts_submits():
     fx = FixtureStt({uri_hash(AUDIO.uri): words})
     h = await fx.start(AUDIO, sparams())
     t = await fx.poll(h)
-    assert fx.submits == 1 and t.turns == words_to_turns(words)
+    assert fx.submits == 1 and t.transcript.turns == words_to_turns(words)
 
 
 # ---- Evaluation ----

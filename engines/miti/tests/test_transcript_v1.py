@@ -51,7 +51,7 @@ def test_invalid_role(role):
 def test_role_can_be_missing_or_null(supplied):
     transcript = TranscriptV1(turns=[turn(**supplied)])
     assert transcript.turns[0].role is None
-    assert transcript.language is None
+    assert transcript.language == "en"
     assert transcript.duration_ms is None
     assert transcript.turns[0].start_ms is None
     assert transcript.turns[0].end_ms is None

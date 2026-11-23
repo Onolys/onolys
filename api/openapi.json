@@ -1526,12 +1526,74 @@
             "default": "",
             "title": "Provider",
             "type": "string"
+          },
+          "run": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SttRun"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "title": "SttInfo",
         "type": "object"
       },
-      "TranscriptTurn": {
+      "SttRun": {
+        "properties": {
+          "adapter_version": {
+            "title": "Adapter Version",
+            "type": "string"
+          },
+          "language_detected": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Language Detected"
+          },
+          "language_requested": {
+            "title": "Language Requested",
+            "type": "string"
+          },
+          "location": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Location"
+          },
+          "model": {
+            "title": "Model",
+            "type": "string"
+          },
+          "provider": {
+            "title": "Provider",
+            "type": "string"
+          }
+        },
+        "required": [
+          "provider",
+          "model",
+          "language_requested",
+          "adapter_version"
+        ],
+        "title": "SttRun",
+        "type": "object"
+      },
+      "TranscriptTurnV1": {
+        "additionalProperties": false,
+        "description": "One turn, in the order it appears in the transcript.",
         "properties": {
           "end_ms": {
             "anyOf": [
@@ -1545,6 +1607,8 @@
             "title": "End Ms"
           },
           "id": {
+            "minLength": 1,
+            "pattern": "\\S",
             "title": "Id",
             "type": "string"
           },
@@ -1557,19 +1621,18 @@
                 "type": "null"
               }
             ],
-            "description": "`clinician`/`client`; null until confirmed",
+            "enum": [
+              "clinician",
+              "client",
+              null
+            ],
             "title": "Role"
           },
           "speaker": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Speaker"
+            "minLength": 1,
+            "pattern": "\\S",
+            "title": "Speaker",
+            "type": "string"
           },
           "start_ms": {
             "anyOf": [
@@ -1583,18 +1646,22 @@
             "title": "Start Ms"
           },
           "text": {
+            "minLength": 1,
+            "pattern": "\\S",
             "title": "Text",
             "type": "string"
           }
         },
         "required": [
           "id",
+          "speaker",
           "text"
         ],
-        "title": "TranscriptTurn",
+        "title": "TranscriptTurnV1",
         "type": "object"
       },
       "TranscriptView": {
+        "additionalProperties": false,
         "properties": {
           "clinician_speaker": {
             "anyOf": [
@@ -1627,11 +1694,12 @@
                 "type": "null"
               }
             ],
+            "default": "en",
             "title": "Language"
           },
           "turns": {
             "items": {
-              "$ref": "#/components/schemas/TranscriptTurn"
+              "$ref": "#/components/schemas/TranscriptTurnV1"
             },
             "title": "Turns",
             "type": "array"

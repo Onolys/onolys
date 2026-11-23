@@ -161,6 +161,7 @@ def _evaluate(ctx, blobs, evaluation, run_doc, session) -> ReportDoc:
         "n_runs": run_doc.n_runs,
         "preset": run_doc.preset,
         "code_version": run_doc.code_version,
+        "stt_run": session.stt.run.model_dump() if session.stt and session.stt.run else None,
         "stub_title": session.title or "",  # real adapters ignore it
     }
     done: set[str] = set()

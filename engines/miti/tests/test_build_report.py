@@ -91,7 +91,7 @@ def test_explanations_are_onolys_only():
 def test_header_fields():
     kw = inputs()
     h = doc()["header"]
-    assert h["stt"] == json.loads(kw["transcript"].stt_run.model_dump_json())
+    assert h["stt"] == kw["params"]["stt_run"]
     assert h["preset"] == "fixture" and h["code_version"] == "fixture"
     assert h["protocol"]["pack_hash"] == miti.MITI.hash
     assert h["n_runs"] == kw["result"].n_runs
@@ -100,7 +100,7 @@ def test_header_fields():
 
 def test_text_only_transcript_has_null_stt():
     kw = inputs()
-    kw["transcript"] = kw["transcript"].model_copy(update={"stt_run": None})
+    kw["params"].pop("stt_run")
     r = build_report_no_rating(**kw)
     assert r.header.stt is None and r.run_info.evaluation.stt is None
 

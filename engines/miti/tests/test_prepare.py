@@ -87,7 +87,7 @@ def test_under_ten_minutes_warns(tmp_path, pack_data):
 def test_unknown_speaker_treated_as_other(tmp_path, pack_data):
     t = convo()
     t.turns[1] = t.turns[1].model_copy(update={"speaker": "Z"})
-    t.turns[3] = t.turns[3].model_copy(update={"speaker": None})
+    t.turns[3] = t.turns[3].model_copy(update={"speaker": "unknown"})
     p = prepare(t, params())
     codes = [w.code for w in p.warnings]
     assert codes == ["unknown_speaker"]

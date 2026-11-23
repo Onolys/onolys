@@ -36,7 +36,7 @@ class TranscriptV1(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    language: str | None = None
+    language: str | None = "en"
     duration_ms: int | None = None
     turns: list[TranscriptTurnV1]
 
