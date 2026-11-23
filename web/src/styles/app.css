@@ -36,16 +36,11 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 .app-header a { display: inline-flex; align-items: center; }
 .brand { font-weight: 700; text-decoration: none; }
 main { flex: 1; width: 100%; max-width: 64rem; margin: 0 auto; padding: var(--space-6) var(--gutter); }
-.app-footer { padding: 3.5rem var(--gutter); background: var(--tone-footer); color: #dcebe9; font-size: 0.95rem; overflow-wrap: anywhere; }
+.app-footer { padding: 0.75rem var(--gutter); background: var(--tone-footer); color: #dcebe9; font-size: 0.75rem; line-height: 1.5; text-align: center; overflow-wrap: anywhere; }
 .app-footer a { color: #9fe3d8; }
-.app-footer ul { margin: 0 0 1.25rem; padding: 0; list-style: none; }
+.app-footer ul { margin: 0; padding: 0; list-style: none; }
 .app-footer li { display: inline; }
 .app-footer li + li::before { content: " · "; white-space: pre; color: #9fcfc8; }
-.app-footer p { margin: 0; }
-.app-footer p + p { margin-top: 0.75rem; }
-.app-footer .footer-links { display: flex; flex-wrap: wrap; gap: var(--space-4); margin-bottom: 1.25rem; }
-.app-footer .footer-links a { display: inline-flex; align-items: center; }
-.app-footer .copy { margin-top: 1.75rem; padding-top: 1.25rem; border-top: 1px solid rgba(255, 255, 255, 0.15); font-size: 0.8rem; color: #9fcfc8; }
 .legal { max-width: 44rem; }
 .legal h2 { font-size: var(--font-size-lg, 1.25rem); margin-top: var(--space-6); }
 .legal-updated { color: var(--color-gray-600); }
