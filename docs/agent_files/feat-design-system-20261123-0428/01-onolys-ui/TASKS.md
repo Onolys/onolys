@@ -19,7 +19,7 @@ Source of truth: docs/agent_files/feat-design-system-20261123-0428/01-onolys-ui/
 | 9 | Storybook docs + axe tests | 6, 7 | done |
 | 10 | Build, exports, types under TS 6 and 7 | 8 | done |
 | 11 | CSP smoke, Vite/Tailwind and Astro fixtures | 9, 10 | done |
-| 12 | CI workflow | 9, 10, 11 | todo |
+| 12 | CI workflow | 9, 10, 11 | done |
 | 13 | Release workflow, CHANGELOG, tag v0.1.0 | 12 | todo |
 
 ## Task 1 — Create public repo Onolys/onolys-ui
