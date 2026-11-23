@@ -12,6 +12,8 @@ import { InterviewPage } from "../features/interview/InterviewPage";
 import { NewInterviewPage } from "../features/interview/NewInterviewPage";
 import { NewSessionPage } from "../features/upload/NewSessionPage";
 import { SessionPage } from "../features/session/SessionPage";
+import { PrivacyPolicy } from "../features/legal/PrivacyPolicy";
+import { Terms } from "../features/legal/Terms";
 import { Layout } from "./Layout";
 import { RouteError } from "./RouteError";
 import { Settings } from "../features/settings/Settings";
@@ -47,6 +49,8 @@ export const routes: RouteObject[] = [
         },
         // Email action links (verify email, reset password): reachable in every auth state, so no guard.
         { path: "/auth/action", element: <AuthAction /> },
+        { path: "/privacy", element: <PrivacyPolicy /> },
+        { path: "/terms", element: <Terms /> },
         { path: "/sample-report", element: <SampleReportPage /> },
         { path: "*", element: <P.NotFound /> },
         ],

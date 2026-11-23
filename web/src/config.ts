@@ -7,3 +7,6 @@ export const HAS_CONTACT_EMAIL = Boolean(import.meta.env.VITE_CONTACT_EMAIL);
  * constant, so tests can `vi.stubEnv` it.
  */
 export const ratingEnabled = (): boolean => import.meta.env.VITE_RATING_ENABLED === "true";
+
+/** Public contact address shown in the footer and legal pages. `VITE_CONTACT_EMAIL` overrides the default. */
+export const SUPPORT_EMAIL: string = import.meta.env.VITE_CONTACT_EMAIL || "tejitpabari99@gmail.com";

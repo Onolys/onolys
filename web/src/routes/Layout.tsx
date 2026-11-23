@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 import { Link, NavLink, Outlet, useLocation } from "react-router";
 import { useAuth, type AuthPhase } from "../auth/AuthProvider";
 import { useSignOut } from "../auth/useSignOut";
+import { Footer } from "./Footer";
 
 const NAV: Record<AuthPhase, { to: string; label: string; className?: string }[]> = {
   loading: [],
@@ -62,9 +63,7 @@ export function Layout() {
       <main id="main" ref={mainRef}>
         <Outlet />
       </main>
-      <footer className="app-footer">
-        <p>Onolys</p>
-      </footer>
+      <Footer />
     </div>
   );
 }
