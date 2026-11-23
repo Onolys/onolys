@@ -48,12 +48,12 @@ Rating-off: no rating row; awaiting-input line reads "Waiting for your change go
 | `stage_expected_s` | typical duration of the current stage | server (stage table + f(audio_s)) |
 
 Base `progress` stays server-owned (`STATE_PROGRESS`, `STAGE_WEIGHTS`); values unchanged until calibrated (R6). `detailToDoc` uses the real `updated_at`.
-**R3 Interpolation** (`progress.ts`, pure): `deriveProgress(doc, now, uploadFraction?) → {pct, elapsedMs, frozen}`.
+**R3 Interpolation** (`progress.ts`, pure): `deriveProgress(doc, now, uploadFraction?) → {pct, elapsedMs, frozen, hidden}`.
 - Upload: `pct = base + (next−base) × uploadFraction` from the uploader's byte counter; after a reload (no counter) just base.
 - Timed stage (`validating`, `transcribing`, each `run` stage): `x = 1 − exp(−t / stage_expected_s)`, `t = now − stage_started_at`; `pct = floor(base + (progress_next − 1 − base) × x)`. Asymptotic: never reaches the next base, never stalls visibly.
-- Frozen: `awaiting_input` → `pct = progress` (40), no interpolation; `failed`/`cancelled` frozen; `report_ready` = 100. Elapsed = `now − started_at − waited_ms` (− current wait while `awaiting_input`, so it freezes too).
+- Frozen: `awaiting_input` → `pct = progress` (40), no interpolation; `report_ready` = 100. `failed`/`cancelled`: the bar, % and Elapsed are hidden (R4, AC3; resolved owner-default 2026-11-23), `deriveProgress` returns `hidden: true` instead of a frozen value. Elapsed = `now − started_at − waited_ms` (− current wait while `awaiting_input`, so it freezes too).
 - Invariants: integer; `pct ≤ 99` unless `report_ready`; never below server `progress`; the hook keeps the max shown within one state so a late doc cannot move the bar back (a re-run restarts at 45, as today).
-**R4 Visual** (`SessionPage.tsx`). Step row: `done` = check + `text-score-good`; `current` = spinner + visible text "In progress" + `text-primary`/`border-primary`; `pending` = `text-muted-foreground`; `failed` = `text-destructive`. Bar, "N%" and Elapsed render in every non-terminal state from `created`, above the step list; one "Cancel" slot (R7). Spinner: `@onolys/ui` Spinner if v0.2.0 exports one, else inline SVG with `motion-safe:animate-spin`.
+**R4 Visual** (`SessionPage.tsx`). Step row: `done` = check + `text-score-good`; `current` = spinner + visible text "In progress" + `text-primary`/`border-primary`; `pending` = `text-muted-foreground`; `failed` = `text-destructive`. Bar, "N%" and Elapsed render in every non-terminal state from `created`, above the step list; one "Cancel" slot (R7). Spinner and bar: `Spinner` and `Progress` components from `@onolys/ui`. v0.2.0 exports neither [verified 2026-11-23: local clone `/root/projects/onolys/onolys-ui`, `git show v0.2.0:src/index.ts` has no Spinner/Progress, no such file under `src/components`], so this SP depends on a cross-repo change (see Cross-repo dependency); no inline SVG fallback. `Spinner` uses `motion-safe:animate-spin`; `Progress` renders a native `<progress>` (R8).
 **R5 Hint** (one line under the bar, in the live region's sibling, not the live region):
 
 | Phase | States | Copy |
@@ -67,6 +67,9 @@ Base `progress` stays server-owned (`STATE_PROGRESS`, `STAGE_WEIGHTS`); values u
 **R6 Calibration.** `stage_expected_s` and the `STATE_PROGRESS` weights are placeholders until real timings exist: transcription expected = `clamp(20 + 0.2 × audio_s, 30, 600)`; rating stages from `miti.done` stage durations on staging after SP01/SP02 land. Constants live in one server table.
 **R7 Cancel slot.** SP05 reserves `<div data-slot="cancel">` directly under the hint, right-aligned, rendered iff SP04's `isCancellable(state)` (the seven in-progress states) is true. SP04 owns the link, dialog, "Cancelling…" and `cancelled` message; SP05 only requires that "Cancelling…" replaces the slot's content, not the step list.
 **R8 A11y.** Status lines stay in the existing `role="status" aria-live="polite"` block and change only on state/step change (not per tick). The bar is a native `<progress>` with `aria-label="Overall progress"` and `aria-valuetext`, outside any live region; Elapsed also outside it. Spinner `aria-hidden`; meaning always also in text ("In progress"), never colour alone. Reduced motion: no spin (static ring), no bar transition. 1 s tick runs only while a timed state is active [verified: existing `useNow(active)`].
+
+## Cross-repo dependency (owner 2026-11-23)
+Add `Spinner` and `Progress` to the UI library repo `github.com/Onolys/onolys-ui` (local clone `/root/projects/onolys/onolys-ui`, components in `src/components/ui/`, exports in `src/index.ts`; follow its tests, stories and CHANGELOG conventions), release a new tag (v0.3.0 or next, per that repo's release process), then bump `web/package.json` `"@onolys/ui": "git+https://github.com/Onolys/onolys-ui.git#v0.2.0"` to the new tag and refresh `web/package-lock.json`. This is a separate repo/PR and gates the web tasks of this SP. No inline SVG fallback.
 
 ## Architecture
 ```
@@ -87,7 +90,7 @@ Shared files: `SessionPage.tsx`, `timeline.ts` (SP03 failure copy, SP04 `cancell
 | D3 | Elapsed | Pauses while waiting for the user | Wall clock | User think time is not our processing time; avoids "10:00 elapsed" at the speaker pick |
 | D4 | Upload % | Real byte fraction | Time-based | Bytes are known [verified: uploader.ts `loaded/total`] |
 | D5 | Bad-file failure at validate | Upload row failed | Transcribe row failed | Matches the "upload a different file" action |
-| D6 | Weights | Keep current table now, calibrate later | Re-weight now | No timing evidence yet [OPEN] |
+| D6 | Weights | Keep current table now, calibrate later | Re-weight now | No timing evidence yet |
 | D7 | "Under 5 minutes" copy | Removed | Keep | Not verifiable |
 
 ## Manual steps
@@ -95,20 +98,21 @@ None. Staging deploy of api + web via normal workflow.
 
 ## Risks / Open Questions
 - Elapsed/% after a re-run (Try again): restarts at 45 with `started_at` reset to run start; total flow time is lost. [DEFERRED]
-- Typical Chirp 3 batch time vs `audio_s`, and rating stage times on Claude low: unknown; no successful run since 2026-11-16 [verified: brainstorm]. Constants are guesses. [OPEN: calibrate from staging logs after SP01+SP02]
-- Does `@onolys/ui` v0.2.0 export a Spinner/Progress? `node_modules` not installed in the worktree, unchecked. [OPEN: fallback inline SVG is specified]
+- Typical Chirp 3 batch time vs `audio_s`, and rating stage times on Claude low: unknown; no successful run since 2026-11-16 [verified: brainstorm]. Constants are guesses. [RESOLVED: default — placeholders now, calibrate from staging logs after SP01+SP02]
+- Does `@onolys/ui` v0.2.0 export a Spinner/Progress? [RESOLVED: no (verified in the local clone, tag v0.2.0); owner 2026-11-23: add both to onolys-ui, release a new tag, bump the web dependency, no inline SVG fallback; see Cross-repo dependency]
 - Exposing `audio_s` on a client-readable doc: duration only, no text; confirm against the AC11 "no text" test. [RESOLVED: numbers only, allowlist + test extended]
-- Rating typed during `transcribing` shows "can close this tab": is the draft saved server-side? [OPEN: check `RatingCard` autosave; if not, hint becomes upload-phase copy for that case]
+- Rating typed during `transcribing` shows "can close this tab": is the draft saved server-side? [OPEN: owner is still deciding (2026-11-23); check `RatingCard` autosave; if not saved, hint becomes upload-phase copy for that case]
 - Mock backend emits `[85, 93, 100]` vs server 96 cap [verified: stateMachine.test.ts:87]; align mock with the real table. [RESOLVED: in scope]
 
 ## Acceptance Criteria
 1. Steps shown match R1 for every state × `ratingEnabled` (unit table); no "Check audio"/"Session setup" rows.
 2. The current step shows a spinner, text "In progress" and accent class; done = check, pending = muted; verified in light and dark visual shots.
-3. Bar + N% + Elapsed present from `created` to `running`, absent at `report_ready`/`failed`/`cancelled`.
+3. Bar + N% + Elapsed present from `created` to `running`, absent (hidden, not frozen) at `report_ready`/`failed`/`cancelled`.
 4. `deriveProgress`: monotonic in `t`; `< progress_next` while in a stage; ≤ 99 before `report_ready`; frozen in `awaiting_input` (pct and Elapsed unchanged over 10 min); unknown `audio_s` falls back to the default expected duration.
 5. Reload mid-transcription keeps Elapsed (from `started_at`) and does not drop the bar; fallback-poll doc behaves the same.
 6. Hint copy matches R5 per state; the old "Usually under 5 minutes" is gone.
 7. With `prefers-reduced-motion: reduce` nothing animates; `aria-live` text changes only on step change; bar has accessible name/value.
 8. Cancel slot present for all SP04 cancellable states with no layout shift when it swaps to "Cancelling…".
 9. API: `session_status` carries the new fields; allowlist/no-text test passes; `advance` unit tests cover `started_at`, `waited_ms`, `progress_next` per state/stage; `openapi.json`, `docs/contracts/public`, `schema.d.ts` regenerated and consistent.
-10. Tests updated: `timeline.test.ts` (rows), new `progress.test.ts`, `SessionPage.test.tsx` (hint per phase, Elapsed in upload/transcribing, spinner text), `stateMachine.test.ts`, one visual e2e shot per phase (`web/e2e_review/visual.spec.cjs`).
+10. Cross-repo: `@onolys/ui` new tag exports `Spinner` and `Progress`; `web/package.json` points at it; `SessionPage` imports both from the package; no inline spinner SVG in the web code.
+11. Tests updated: `timeline.test.ts` (rows), new `progress.test.ts`, `SessionPage.test.tsx` (hint per phase, Elapsed in upload/transcribing, spinner text), `stateMachine.test.ts`, one visual e2e shot per phase (`web/e2e_review/visual.spec.cjs`).

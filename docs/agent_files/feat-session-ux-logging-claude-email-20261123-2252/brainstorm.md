@@ -105,8 +105,8 @@ Reproduce the staging `gemini/gemini-4-neon` call with the worker's config to ge
 
 ### G. Eval model picker
 - New config file (e.g. `config/models.yaml`): models `gemini`, `claude`; tiers:
-  - gemini: gemini-4-carbon (effort low/medium/high, default medium), gemini-4-neon (low/medium/high/xhigh, default high), gemini-4-hydrogen (low/medium/high/xhigh, default high), gemini-4-argon (low/medium/high, default medium); context 1,048,576; max output 65,536.
-  - claude: claude-opus-5-5, claude-sonnet-5-5, claude-haiku-5-5; effort low/medium/high/xhigh/max (defaults: opus medium, sonnet high, haiku medium); context 1M; max output 128K; no temperature.
+  - gemini: gemini-4-carbon (effort low/medium/high, default medium), gemini-4-neon (low/medium/high, default high), gemini-4-hydrogen (low/medium/high, default high), gemini-4-argon (low/medium/high, default medium); context 1,048,576; max output 65,536.
+  - claude: claude-opus-5-5, claude-sonnet-5-5, claude-haiku-5-5; effort low/medium/high/max (defaults: opus medium, sonnet high, haiku medium); context 1M; max output 128K; no temperature.
 - Eval API `GET /v1/options` serves it; `eval/web/src/NewRun.tsx` adds model → tier → effort selects; run payload carries them; backend builds routes from them (`eval/backend/.../runs.py`, `engines/core/.../llm/routes.py`).
 - Run = product(models × tiers × efforts) per report, plus human unit. Units built in `eval/backend/src/onolys_eval_backend/runs.py:284-300`; count check `:248-252`.
 - Human locked for datasets in `eval/web/src/NewRun.tsx:113` and enforced server-side.
@@ -128,7 +128,7 @@ Per `docs/reference/web-email-actions.md`: API endpoints generate verify/reset l
 | LiteLLM upgrade changes behavior elsewhere | Run engine + api unit tests after bump |
 | Cancel races with in-flight Cloud Tasks | Unit test each state × cancel; handlers check state after each blob/LLM call |
 | Resend domain/DNS + API key are owner tasks | List in owner tasks; staging first |
-| Gemini xhigh via LiteLLM unverified | Eval smoke call per model/effort |
+| Claude `max` via LiteLLM unverified (`xhigh` dropped by owner 2026-11-23) | Eval smoke call per model/effort; hide `max` if unsupported |
 
 ## Owner-only tasks (user)
 - Resend: verify domain onolys.com (SPF/DKIM DNS records; may already be done if Firebase custom SMTP uses Resend), create API key (Sending access), store as Secret Manager `resend-api-key-staging`.

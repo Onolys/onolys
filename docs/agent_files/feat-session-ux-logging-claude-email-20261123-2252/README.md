@@ -43,38 +43,30 @@ Brief: [brainstorm.md](brainstorm.md) (approved).
 - Eval cap 499 units; human always included for datasets; unit retry max 3 on transient only.
 - Auth emails: Admin SDK link -> rebuilt on `APP_BASE_URL`; reset never reveals account existence; deploys before Resend secret exists.
 - STT stays Chirp 3; streaming transcription dropped.
+- Failures and cancel never delete user data; only the explicit Delete action deletes (owner 2026-11-23). SP03 removes `validate.py` `purge()`-on-failure; staged-object cleanup after a successful move stays. Reason: future "retry with existing upload".
+- Interview-linked sessions never consume the evaluation limit (the interview includes its evaluation): cancel charges 0 (SP04), same `exempt` predicate as `start_first_run` (SP03).
+- Effort levels: `xhigh` dropped entirely (config, picker, caps, tests). Gemini low/medium/high; Claude low/medium/high/max; `max` keeps a live smoke gate (hidden if unsupported).
+- Log provider errors incl. Gemini 400 text (cleaned, 300 chars) and LiteLLM WARNING/ERROR lines unfiltered for now; owner audits logs later (SP02 [DEFERRED] PHI audit).
+
+## Cross-repo dependency
+- SP05 needs `Spinner` and `Progress` in `@onolys/ui` (repo `github.com/Onolys/onolys-ui`, local `/root/projects/onolys/onolys-ui`). Verified: tag v0.2.0 exports neither. Add them there, release a new tag, bump `web/package.json` (`#v0.2.0` -> new tag). No inline SVG fallback. Separate repo/PR; gates SP05 web tasks.
 
 ## Owner-only tasks
 - Resend: verify `onolys.com` (SPF/DKIM), create sending-only API key, store as Secret Manager `resend-api-key-staging`, set `resend_secret_wired=true` for staging and redeploy, then staging smoke (SP07).
 - GitHub Actions vars `LLM_PROVIDER` / `LLM_MODEL` for staging (optional; routes.yaml already yields Claude) (SP01).
 - Live eval smoke: one unit per provider x effort, owner-run, not CI (SP06 AC8).
-- Confirm: cancel charge for interview-linked sessions (default 0) (SP04); `provider_error` on for 400s (SP02).
-- Confirm `onolys-app-staging.web.app` is an authorized Firebase domain (SP07).
+- Release a new `@onolys/ui` tag with Spinner/Progress after the library change (SP05; code in the onolys-ui repo).
+- Decide: is the rating draft saved server-side during `transcribing`? (SP05, only open item).
+- Done by owner: `onolys-app-staging.web.app` added as authorized Firebase domain (SP07).
 
-## Open questions (consolidated; [default] where PRD gives one)
-- SP01: Root cause unknown; LiteLLM version is leading hypothesis (probe decides).
-- SP01: First LiteLLM version knowing both id families + `reasoning_effort` mapping; pin after probe.
-- SP01: Does voice service load routes (needs same env_vars)?
-- SP01: `xhigh`/`max` via `reasoning_effort` unverified (matters for SP06).
-- SP01: Cloud Run egress to api.anthropic.com + key quota on first run.
-- SP02: Does LiteLLM WARNING/ERROR echo prompt text on provider errors? [verify via stub + forced staging failure; else class+status only]
-- SP02: Gemini 400 text may quote content; redactor heuristic [accepted; owner may disable for 400s]
-- SP02: Does voice service share `logs.configure`? [grep at task time]
-- SP03: Google STT `InvalidArgument`: user_file vs permanent_internal [user_file; check real bad-audio case]
-- SP03: Ambiguous provider statuses (529, Gemini 400 overload) [529 transient, 400 permanent; revisit from logs]
-- SP03: `counted` on `SessionError` vs run doc only [both; run doc is source]
-- SP04: Interview-linked (free first run) cancel charge [0; owner confirm]
-- SP04: `stt_operation` unset-crash spends Chirp uncounted [accepted, user-favourable]
-- SP04: Does late upload-complete PUT after cancel 409 via `TRANSITIONS`? [verify at coding; add explicit check]
-- SP05: Calibrate `stage_expected_s`/weights from staging logs after SP01+SP02 [placeholders now]
-- SP05: Does `@onolys/ui` v0.2.0 export Spinner/Progress? [inline SVG fallback]
-- SP05: Is rating draft saved server-side during `transcribing`? [check `RatingCard` autosave; else upload-phase hint]
-- SP06: LiteLLM mapping of `xhigh`/`max` (drop_params could mislabel) [live smoke gate; remove unsupported efforts]
-- SP06: `EFFORT_OUTPUT_CAP` and `timeout_s=300` are guesses [tune after smoke]
-- SP06: Anthropic non-streaming large `max_tokens` guard [confirm with 64K on Sonnet/Opus]
-- SP06: Do all shipped dataset sessions have gold? [else unit `skipped: no_gold`]
-- SP07: Minimal IAM role for `generate_*_link` [try `roles/firebaseauth.admin`, narrow after smoke]
-- SP07: Needs `ActionCodeSettings.url` on authorized domain? [assume yes; confirm]
-- SP07: Two routes in published `docs/contracts/public` or hidden? [included]
+## Resolved 2026-11-23
+- SP01: root cause/LiteLLM pin decided by the probe (AC1/AC2); voice service routes verified at coding; Anthropic egress/quota verified by AC4; `xhigh` dropped, `max` keeps smoke gate.
+- SP02: Gemini 400 `provider_error` logged (cleaned, 300 chars); LiteLLM WARNING/ERROR kept unfiltered; voice `configure_logging` checked at task time; PHI audit of logs [DEFERRED] to owner.
+- SP03: no delete on failure (new R8, AC7); interview-linked sessions never counted (R5, AC8); STT `InvalidArgument` = user_file (verify on real case); 529 transient / 400 permanent; `counted` on both run doc and session.
+- SP04: interview-linked cancel charges 0; cancel keeps all data (confirmed, `ensure_active` purges nothing); `stt_operation` crash uncounted accepted; late-PUT 409 verified at coding.
+- SP05: Spinner/Progress added to onolys-ui (cross-repo, no inline SVG); bar hidden on failed/cancelled (R3 fixed); weights/timings calibrated later from logs.
+- SP06: `xhigh` removed; `max` live-smoke gated; output caps/timeout tuned after smoke; Anthropic 64K guard confirmed in smoke; dataset gold verified at coding.
+- SP07: authorized domain done by owner; IAM starts at `roles/firebaseauth.admin`; routes included in public contracts.
 
-Counts: SP01 5, SP02 3, SP03 3, SP04 3, SP05 3, SP06 4, SP07 3 (24).
+## Still open
+- [OPEN] SP05: Is the rating draft saved server-side during `transcribing`? Owner still deciding (check `RatingCard` autosave; else upload-phase hint for that case).

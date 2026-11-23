@@ -29,7 +29,7 @@ A failed staging run today leaves almost nothing to search: errors log only `ups
 - Engine: no new binds; it inherits, since `asyncio.run`, `to_thread` and anyio copy the context. Engine stages may narrow `step` with `log_context`.
 **R3 Injection.** A `logging.Filter` (`ContextFilter`) copies `snapshot()` onto the record as `record.ctx`; the formatter merges it. Attached to the handler, not the loggers (logger filters skip records from child loggers).
 **R4 One formatter** `onolys_engine_core/json_logging.py`: `JsonFormatter` emits `{severity, message, event, <allowlisted fields>, code_version}` (same shape and Cloud Logging keys as `logs.emit` today). Field sources, in order: context, then explicit fields (explicit wins). `safe_log.log_event` stops rendering `k=v` text and passes `extra={"fields": kept}`; `logs.emit` keeps its API and routes through the same formatter (one code path). `configure_logging(settings)` in `logs.configure` (api and worker share one image/app, so one entrypoint) installs one stderr handler with ContextFilter+JsonFormatter on **root**, and sets `miti`, `onolys_api.events`, `litellm`, `LiteLLM`, `LiteLLM Router`, `LiteLLM Proxy`, `httpx` to propagate to root (no per-logger handlers, so no duplicates).
-**R5 Third-party records.** Non-onolys loggers (litellm, uvicorn, httpx, google) emit `{severity, message (single line, capped 300), logger}` plus context fields; never DEBUG. LiteLLM loggers are pinned to WARNING at configure time; `litellm.suppress_debug_info=True`; `LITELLM_LOG` is not set. Exceptions are reduced to class names with the existing `_NoTraceback` rule, now applied on the handler for all loggers.
+**R5 Third-party records.** Non-onolys loggers (litellm, uvicorn, httpx, google) emit `{severity, message (single line, capped 300), logger}` plus context fields; never DEBUG. LiteLLM loggers are pinned to WARNING at configure time and their WARNING/ERROR lines are kept as emitted (no reduction to class+status; owner 2026-11-23, PHI audit of logs deferred); `litellm.suppress_debug_info=True`; `LITELLM_LOG` is not set. Exceptions are reduced to class names with the existing `_NoTraceback` rule, now applied on the handler for all loggers.
 **R6 Provider error fields.** In `_once`, on provider exceptions log one WARNING `llm_provider_error` (and set the same attributes on the raised `LLMError`): `provider` (from `litellm_id` prefix), `model`, `http_status` (int|None, existing `_status(exc)`), `error_type` (exception class name), `provider_error` (sanitized text, R7). Replaces SP01's R2 log call. Also logged for rate-limit (`LLMRateLimited`) and timeout (`http_status` None). The name `provider_error` avoids the blocked `message` part.
 **R7 Sanitizer.** `safe_log.sanitize_provider_text(s)`: first line collapsed, quoted spans over 20 chars (`"…"`, `'…'`, backticks) replaced by `"<redacted>"`, truncated to 300. Per-field caps: `FIELD_CAPS={"provider_error": 300}` over the default 200 (`MAX_VALUE_CHARS`), applied in both `_fmt`/`_clean` paths. Prompts, completions and request bodies are never passed to a logger by our code.
 **R8 Allowlist.** Add to `safe_log.ALLOWED_FIELDS`: `provider`, `model`, `http_status`, `error_type`, `provider_error`. Context fields `session_id,run_id,step,request_id` already allowed. SP07 adds `email_kind, outcome, provider_status` to `logs.py` `API_FIELDS`; SP02 adds none there, so the two edits are disjoint (conflict only on that frozenset literal; rebase trivial).
@@ -41,7 +41,7 @@ A failed staging run today leaves almost nothing to search: errors log only `ups
 **R11 Tests.**
 - Worker: run a sample task through `TaskRunner` with a handler that logs via `miti` `log_event`, a plain `logging.getLogger("litellm")` WARNING and `logs.emit`; assert every captured line has `session_id`, `run_id`, `step`, `request_id`.
 - API: request to a `{sid}` route with a sync endpoint; assert its in-handler line carries `session_id`.
-- PHI: handler/engine run with a transcript sentinel string (e.g. `"SENTINEL-PHI-7731"`) in transcript and a stub provider exception whose text embeds it in quotes; assert no captured line (including exceptions) contains it.
+- PHI: handler/engine run with a transcript sentinel string (e.g. `"SENTINEL-PHI-7731"`) in transcript and a stub provider exception whose text embeds it in quotes; assert no line emitted by our code (including exceptions) contains it. LiteLLM-emitted lines are not asserted (kept as is, see [DEFERRED] PHI audit).
 - Provider error: stubbed `acompletion` raising an error with `status_code=503`; assert fields `provider, model, http_status=503, error_type`, `provider_error` ≤300 and redacted.
 - Formatter: valid JSON per line, no CR/LF forging, `miti` INFO lines now emitted; context reset after task (no leak into next task).
 
@@ -62,7 +62,7 @@ Interface: `with log_context(session_id=..., run_id=..., step=..., request_id=..
 | D1 | Context carrier | contextvars + handler `ContextFilter` in engine-core | `LoggerAdapter`; passing ids as args | Adapters need every call site changed and miss third-party loggers; contextvars covers LiteLLM/uvicorn lines too |
 | D2 | Filter attach point | The handler | Per-logger filters | Logger filters do not see child-logger records |
 | D3 | Formatter home | engine-core, reused by api | Separate copies | One shape; `miti` already lives there |
-| D4 | Third-party log text | Cap 300, WARNING+, class-name-only exceptions | Silence litellm entirely | Brief locks wiring; prompts only appear at DEBUG, which stays off |
+| D4 | Third-party log text | Cap 300, WARNING+, class-name-only exceptions, LiteLLM lines kept (owner: log everything for now) | Silence litellm entirely; reduce to class+status | Brief locks wiring; prompts only appear at DEBUG, which stays off |
 | D5 | Provider text | Sanitized `provider_error`, 300 chars, quoted spans redacted | Log nothing; full text | Needed to debug; allowlist + redaction bound PHI echo |
 | D6 | Session routes | async dependency `bind_session` | Middleware parsing the path; sync dependency | Path params exist only after routing; sync deps lose contextvar sets |
 | D7 | Reference | session id | request_id on card | Locked in brief; one id spans api+worker+engine |
@@ -70,9 +70,10 @@ Interface: `with log_context(session_id=..., run_id=..., step=..., request_id=..
 | D9 | Level for LiteLLM | WARNING | INFO/DEBUG | INFO logs request summaries; DEBUG logs payloads |
 
 ## Risks / Open Questions
-- [OPEN] Does a LiteLLM WARNING/ERROR line ever echo prompt text on provider errors (version after SP01 bump)? Verify with the stub-provider test and one forced real failure on staging (`test-broken-llm`); if yes, drop `litellm` records to class+status only.
-- [OPEN] Gemini 400 messages can quote request content; the quoted-span redactor is a heuristic, not a guarantee. Residual risk accepted by the brief (truncated, allowlisted); owner may prefer `provider_error` off for 400s [DEFERRED to owner].
-- [OPEN] Does the voice service share `logs.configure`? If not it needs the same `configure_logging` call (grep at task time).
+- [RESOLVED: log everything for now; keep LiteLLM WARNING/ERROR output, no suppression to class+status (owner 2026-11-23)] Does a LiteLLM WARNING/ERROR line ever echo prompt text on provider errors? Not gated on; covered by the deferred audit below.
+- [RESOLVED: log Gemini 400 text / `provider_error` for 400s too, cleaned (R7 sanitizer) and capped at 300 chars (owner 2026-11-23)] Gemini 400 messages can quote request content; the quoted-span redactor is a heuristic, not a guarantee. Residual risk accepted; reviewed in the deferred audit.
+- [DEFERRED] PHI audit of logs: owner will audit staging logs later (provider_error text, LiteLLM WARNING/ERROR lines, Gemini 400 text) and decide any tightening. Out of scope for this SP.
+- [RESOLVED: default — grep at task time; if the voice service does not share `logs.configure`, it gets the same `configure_logging` call] Does the voice service share `logs.configure`?
 - [RESOLVED: `RunContext.request_id` equals the API request id, `run.py:271`] engine `request_id` fields do not conflict with context.
 - Risk: moving `log_event` from `k=v` text to JSON changes `miti` line format; any consumer or test parsing it (`engines/miti/tests`, `test_safe_log.py`) updates in the same PR.
 - Risk: sync handlers on threads. Worker handlers run inside `handle`; `to_thread`/`asyncio.run` copy context. A raw `threading.Thread` does not: forbid in worker code, covered by the sample-task test.
@@ -80,7 +81,7 @@ Interface: `with log_context(session_id=..., run_id=..., step=..., request_id=..
 
 ## Acceptance Criteria
 1. For a staging session, `jsonPayload.session_id="<sid>"` returns api request lines, worker step lines, `miti.*` lines and any provider error line, ordered.
-2. A forced provider failure shows one `llm_provider_error` line with `provider, model, http_status, error_type, provider_error` (≤300 chars), and no prompt/transcript text anywhere in the session's logs.
+2. A forced provider failure shows one `llm_provider_error` line with `provider, model, http_status, error_type, provider_error` (≤300 chars), and no prompt/transcript text in any line emitted by our code (LiteLLM's own WARNING/ERROR lines are kept unfiltered for now; see [DEFERRED] PHI audit).
 3. `miti` and LiteLLM records are single-line JSON with `severity`; no plain-text lines remain except none from our code.
 4. The tests in R11 pass (worker `session_id` on every line; sentinel PHI absent; context does not leak between tasks).
 5. `docs/reference/logging.md` exists with the link template, request_id query, error_code table and field list; the `infra.md` runbook says Reference = session id.

@@ -29,8 +29,8 @@ No rating run has succeeded on any env since 2026-11-16. First reproduce the sta
 **R4 Claude effort.** Claude routes use `extra_params: {reasoning_effort: low}` and `supports_temperature: false` (no temperature on 5.5 family, per brief). No `thinking` key (`disabled` is rejected, as the existing `claude` preset comment says). Thinking tokens count against `max_output_tokens` (16000): verify a full run is not truncated (`finish_reason=length` -> `LLMBadOutput`).
 **R5 Staging routes.** In `config/staging/routes.yaml` base routes `cheap`, `mid`, `strong` (and thus `miti_code/miti_globals/tips` via alias) switch to the Claude anchor (`anthropic/claude-sonnet-5-5`, `ANTHROPIC_API_KEY`, `caching_mode: anthropic_ephemeral`, effort low). Gemini anchors stay defined for `oneshot` (eval baseline, unchanged) and `test-broken-*`. The `claude` preset is kept (SP06 retires presets). Prod stays on `config/prod/routes.yaml`, unmodified, so prod is untouched by construction; Terraform `DEFAULT_PRESET`/`default_preset` unchanged (D4).
 **R6 Override.** `LLM_PROVIDER` (`gemini|anthropic`) and `LLM_MODEL` (bare model id, e.g. `claude-sonnet-5-5`), read in `routes.py:_apply_env` next to the existing `MITI_MODEL_*`. Semantics: both set -> text routes (`cheap, mid, strong, miti_code, miti_globals, tips`) get `litellm_id=<provider>/<model>`, `api_key_env` and `caching_mode` taken from the provider entry in `models.yaml`; `extra_params` and caps stay as the route has them. Empty/unset = ignored (an unset GitHub var arrives as `""`). Only one set, or unknown provider/model per `models.yaml`: `ConfigError` at startup (fail fast, per `check_api_keys` precedent). `oneshot` is never overridden. Precedence, low to high: routes.yaml base < `MITI_MODEL_*` < `LLM_*` < preset overrides (preset is applied after env at `routes.py:load_registry/_overlay`, so `test-broken-*` still break as designed).
-**R7 Wiring.** `deploy-staging.yml` api and worker jobs (and voice if it loads routes, [OPEN]) add to `env_vars`: `LLM_PROVIDER=${{ vars.LLM_PROVIDER }}` and `LLM_MODEL=${{ vars.LLM_MODEL }}` through the existing `_deploy-cloudrun.yml` `env_vars` input. `deploy-prod.yml` and the reusable workflow are not edited. Eval service does not receive them (it selects explicitly in SP06). Change = set var, re-run deploy. Secret `anthropic-api-key-staging` is already mapped to the worker/api/eval via `var.llm_secrets` (`infra/variables.tf:52`, `modules/environment/services.tf:184`): no Terraform change; verify revision shows the secret ref.
-**R8 `config/models.yaml`** (schema below) and `onolys_engine_core/llm/models.py`: `load_models(path|None)` (env `MODELS_FILE`, else `<ROUTES_FILE dir>/../models.yaml`), frozen dataclasses `Model/Tier`, validation: efforts non-empty subset of `low|medium|high|xhigh|max`, `default_effort` in `efforts`, positive ints, unique tier ids across models. Contents exactly per brief section G.
+**R7 Wiring.** `deploy-staging.yml` api and worker jobs (and voice if it loads routes; verify at coding with grep, add the same env_vars if it does) add to `env_vars`: `LLM_PROVIDER=${{ vars.LLM_PROVIDER }}` and `LLM_MODEL=${{ vars.LLM_MODEL }}` through the existing `_deploy-cloudrun.yml` `env_vars` input. `deploy-prod.yml` and the reusable workflow are not edited. Eval service does not receive them (it selects explicitly in SP06). Change = set var, re-run deploy. Secret `anthropic-api-key-staging` is already mapped to the worker/api/eval via `var.llm_secrets` (`infra/variables.tf:52`, `modules/environment/services.tf:184`): no Terraform change; verify revision shows the secret ref.
+**R8 `config/models.yaml`** (schema below) and `onolys_engine_core/llm/models.py`: `load_models(path|None)` (env `MODELS_FILE`, else `<ROUTES_FILE dir>/../models.yaml`), frozen dataclasses `Model/Tier`, validation: efforts non-empty subset of `low|medium|high|max` (`xhigh` is not a supported effort anywhere, owner 2026-11-23), `default_effort` in `efforts`, positive ints, unique tier ids across models. Contents exactly per brief section G.
 **R9 Route/model consistency.** A test loads `config/{staging,prod}/routes.yaml` + `models.yaml` and asserts every non-test route's `litellm_id` is a known `<provider>/<tier>`, its `reasoning_effort` is allowed for that tier, and `max_output_tokens <= tier max`.
 **R10 Tests (no live API).** Stub `litellm.acompletion` (the client has `_call()` injection): override matrix (unset, empty, one-of-two, unknown, preset beats env), models loader errors, route/model consistency, probe script kwargs snapshot (Claude: `reasoning_effort=low`, no `temperature`). `LITELLM_LOCAL_MODEL_COST_MAP=True` (CI) used for the "model known" assertion. One manual live smoke (AC4).
 **R11 Docs.** `docs/reference/infra.md`: where to change provider/model, precedence, secret names, rollback (set `LLM_PROVIDER=gemini LLM_MODEL=gemini-4-neon` and re-run deploy).
@@ -55,9 +55,9 @@ models:
     context_tokens: 1000000
     max_output_tokens: 128000
     tiers:                      # "tier" = concrete model id
-      claude-sonnet-5-5: {efforts: [low, medium, high, xhigh, max], default_effort: high}
+      claude-sonnet-5-5: {efforts: [low, medium, high, max], default_effort: high}
 ```
-Gemini block likewise (context 1,048,576; max out 65,536; four `gemini-4-*` tiers).
+Gemini block likewise (context 1,048,576; max out 65,536; four `gemini-4-*` tiers; efforts `low/medium/high` for all four, so `gemini-4-neon` and `gemini-4-hydrogen` have no `xhigh`). `xhigh` appears nowhere in the file; no test for it.
 Shared files: `litellm_client.py` (SP02 builds on R2; SP01 lands first, SP02 rebases and replaces the R2 log call), `routes.py` (SP06 adds a models x tiers x efforts -> `Route` builder using `models.py`), `config/models.yaml` (SP06 consumer; schema changes need SP06 sign-off), `config/staging/routes.yaml`, `uv.lock`.
 
 ## Decisions
@@ -79,11 +79,11 @@ Shared files: `litellm_client.py` (SP02 builds on R2; SP01 lands first, SP02 reb
 - Resend items belong to SP07.
 
 ## Risks / Open Questions
-- [OPEN] Root cause not yet known; LiteLLM version is only the leading hypothesis (R1 decides).
-- [OPEN] First LiteLLM version that knows both id families and maps `reasoning_effort` for `claude-sonnet-5-5`; pin chosen after the probe.
-- [OPEN] Does the voice service load routes (`onolys-voice-staging`)? If yes it gets the same env_vars.
-- [OPEN] `xhigh`/`max` via LiteLLM `reasoning_effort` unverified; matters for SP06, not for `low`.
-- [OPEN] Cloud Run egress to `api.anthropic.com` and key quota/rate limits on first run.
+- [RESOLVED: default — probe (R1) decides; AC1 records the result] Root cause not yet known; LiteLLM version is only the leading hypothesis.
+- [RESOLVED: default — pin chosen after the probe; AC2 verifies `model_cost`] First LiteLLM version that knows both id families and maps `reasoning_effort` for `claude-sonnet-5-5`.
+- [RESOLVED: default — verify at coding (grep voice service for routes loading); if yes it gets the same env_vars] Does the voice service load routes (`onolys-voice-staging`)?
+- [RESOLVED: `xhigh` dropped entirely (owner 2026-11-23); `max` kept, live smoke gate in SP06, hidden if unsupported (default)] `xhigh`/`max` via LiteLLM `reasoning_effort` unverified; matters for SP06, not for `low`.
+- [RESOLVED: default — verified by AC4 staging run] Cloud Run egress to `api.anthropic.com` and key quota/rate limits on first run.
 - Risk: thinking tokens vs 16000 cap truncating output (R4 check). Risk: LiteLLM bump changes behavior elsewhere (run core/miti/oneshot/api/eval unit tests, not full suite). [DEFERRED] Prod rollout; `claude` preset removal (SP06).
 
 ## Acceptance Criteria

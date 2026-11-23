@@ -8,7 +8,7 @@ date: 2026-11-23
 Repo/branch: Onolys/onolys (local `iaudit`) / `feat/session-ux-logging-claude-email` · Depends on: SP01, SP02 (Phase 2) · Owns: `api/src/onolys_api/adapters/error_map.py`, `api/.../jobs/{charging.py (new), worker.py (_fail), run.py (refund call), machine.py (TRANSITIONS, BAD_FILE_CODES removal), stale.py (kind on write)}`, `api/.../routes/{runs.py, sessions.py (new retry route + fields)}`, `api/.../repo/{models.py (fields), firestore.py, fake.py (release/retry txn)}`, `api/.../config.py` (`MAX_SESSION_RETRIES`), `engines/core/src/onolys_engine_core/llm/errors.py` (`is_transient`), `web/src/api/errors.ts`, `web/src/features/session/{SessionPage.tsx, RetryButton.tsx (new)}`, `web/src/mocks/*`, `docs/reference/public-api.md` error table · Shared regen: `api/openapi.json`, `docs/contracts/public`, `web/src/api/schema.d.ts` (SP07 also regenerates; run last-merged wins)
 
 ## TL;DR
-Today every provider failure, including "model not found", maps to retryable `upstream_unavailable` [verified: `error_map._classify_llm` returns `(UPSTREAM, True)` for any `LLMError`; `docs/reference/staging-e2e.md:105-115`], and "Try again" exists only for the run step: a validate or transcribe failure forces a new upload [verified: `SessionPage.tsx:203`, `failureAction`]. This SP adds a three-way kind, a capped retry at every step, and makes the limit rule "only a user/file fault is ever counted".
+Today every provider failure, including "model not found", maps to retryable `upstream_unavailable` [verified: `error_map._classify_llm` returns `(UPSTREAM, True)` for any `LLMError`; `docs/reference/staging-e2e.md:105-115`], and "Try again" exists only for the run step: a validate or transcribe failure forces a new upload [verified: `SessionPage.tsx:203`, `failureAction`]. This SP adds a three-way kind, a capped retry at every step, makes the limit rule "only a user/file fault is ever counted", and (owner rule) makes failures non-destructive: a failed step never deletes the user's blobs or docs, so a retry (and a future "retry with existing upload") reuses them.
 
 ## Problem
 - No distinction between a blip and a broken config: the user is told to retry something that cannot succeed (anti-goal in the brief).
@@ -18,7 +18,7 @@ Today every provider failure, including "model not found", maps to retryable `up
 - Web has no copy for `output_invalid`, `deadline_exceeded`, `run_failed`; they fall to the generic message [verified: `errors.ts` MESSAGES].
 
 ## Goals / Non-Goals
-**Goals:** one classifier; persisted kind; retry cap 3 per session enforced server-side; no unit lost to our faults; copy and countdown per the locked table; reusable helpers for SP04/SP06.
+**Goals:** one classifier; persisted kind; retry cap 3 per session enforced server-side; no unit lost to our faults; failures never delete user data (R8); copy and countdown per the locked table; reusable helpers for SP04/SP06.
 **Non-goals:** logging fields (SP02); cancel state and charge-on-cancel (SP04); processing-screen layout (SP05); silent worker/LiteLLM retries (unchanged, `MAX_ATTEMPTS=2`); changing STT/LLM providers.
 
 ## Requirements
@@ -34,7 +34,7 @@ Classification reads SP02's `LLMError.http_status`/`error_type` (SP02 R9); it ne
 **R4 Retry endpoint.** `POST /sessions/{id}/retry` (opId `retrySession`), 202. Allowed only when `state=failed`, `error.kind=transient`, `retry_count < MAX_SESSION_RETRIES` (3, setting), rating not final; else 409 `invalid_state`. One repo transaction increments `retry_count` and moves state, so the cap cannot be raced. Re-entry by `error.step`:
 | failed step | transition | action |
 |---|---|---|
-| validate | `failed -> validating` | enqueue `validate`; staged/original audio still exists (only `validate.fail()` purges, and only for user faults) [verified: `validate.py:70`]; if gone → 409 |
+| validate | `failed -> validating` | enqueue `validate`; staged/original audio still exists (failures never purge, R8; the staged `uploads/` copy expires after 1 day by bucket lifecycle, see R8); if gone → 409 |
 | transcribe | `failed -> transcribing` | reset `steps.transcribe` (pending, attempts 0, no `stt_operation`), enqueue `transcribe` |
 | run | `failed -> running` | existing `start_run` logic (same preset/n_runs/span as the failed run), new run id, new unit reserved |
 `TRANSITIONS["failed"]` gains `validating`, `transcribing`. `POST /runs` on a `failed` session returns 409 so there is one retry path and one counter. Silent worker retry (`MAX_ATTEMPTS=2`) stays inside one user-visible attempt and does not touch `retry_count`.
@@ -42,7 +42,7 @@ Classification reads SP02's `LLMError.http_status`/`error_type` (SP02 R9); it ne
 - A unit is reserved only at run start (`start_run`/`start_first_run`, one txn with the day count and `active_runs`); validate/transcribe never charge [verified: `repo/firestore.py` start_*; `caps.py` docstring]. So "reverse at rating step" = refund at run end, which already exists via `release_run_slot` (idempotent: `released` flag set in the same txn) [verified: `firestore.py:699`].
 - New rule `should_refund(kind, llm_started) -> bool`: `transient` and `permanent_internal` → always refund; `user_file` → refund only if `llm_started` is False (today's rule). This replaces `is_system_failure`, so an `output_invalid`/`internal_error` is refunded as before, and a model-not-found no longer looks like a retryable blip.
 - `release_once(repo, uid, sid, run_id, refund, date)` and `should_refund` are the public helpers SP04 reuses; `release_run_slot` returns whether a unit was kept, which `worker._fail` writes to `SessionError.counted`.
-- Retry at run step: the failed run was refunded, so the retry reserves normally (cap check applies; at cap the user sees today's `daily_cap_reached` text, except `free_run` sessions, unchanged). `counted=False` and `units` semantics on the run doc stay.
+- Interview-linked sessions (owner 2026-11-23): an AI interview includes its evaluation, and that evaluation never consumes the user's evaluation limit. Existing code already treats a session with `interview_id` and not `free_run_void` as exempt (`exempt` in `repo/{fake,firestore}.py` `start_first_run`: no day count, `counted=false`); SP03 keeps that and `should_refund` never refunds an uncounted run. A `free_run_void` session (uploaded audio did not match the relay recording, `validate.py` A10) is a normal evaluation and counts as today. Same rule as SP04 R4. so the retry reserves normally (cap check applies; at cap the user sees today's `daily_cap_reached` text, except `free_run` sessions, unchanged). `counted=False` and `units` semantics on the run doc stay.
 - Ordering: refund happens in `run.py` before `worker._fail`; `counted` is read from the released run doc there.
 **R6 Web.** Copy lives in `errors.ts` (`MESSAGES`, add `output_invalid`, `deadline_exceeded`, `run_failed`→internal copy). `failureAction(code, transcriptReady)` is replaced by `failureView(doc)` reading `error_kind`, `retries_left`, `counted` from the status doc (no hardcoded code sets; unknown code + no kind → permanent_internal copy).
 | kind | card |
@@ -53,6 +53,12 @@ Classification reads SP02's `LLMError.http_status`/`error_type` (SP02 R9); it ne
 | user_file | existing per-code text + "Upload a different file" (`/sessions/new?from=`); appends "This counted toward your limit." only when `counted=true` |
 All cards show `Reference: <session id>` (existing `ErrorCard reference`). Countdown: client-side, 5 s from card mount, button disabled (`aria-disabled`, text `Retry (n)`), resets on remount only; the server does not enforce it (it is UX, the cap is the guard).
 **R7 Docs.** `public-api.md` error table gets kind/retry columns; `logging.md` error_code table (SP02) links to it.
+
+**R8 Failures never delete user data (owner rule 2026-11-23).** Only the explicit Delete action deletes (`jobs/delete.py` sweep, and `jobs/alive.py` `ensure_alive`'s sweep after a `deleting` mark, which is the Delete path and stays). Reason: a future "retry with existing upload" feature reuses stored audio and transcripts. Verified today (grep `delete_prefix`/`.delete(` over `api/src/onolys_api/jobs`): the only delete-on-failure path is `validate.py` `purge()` (lines 63-65: `uploads/{uid}/{sid}/` and `{uid}/{sid}/audio/`), called only from `fail()` (line 71); its docstring (line 7) says "A failure removes every object of the session's audio". `transcribe.py`, `run.py`, `worker.py`, `stale.py`, `interviews.py`, `interview_sweep.py` have no blob or doc deletes. Changes:
+- Remove `purge()` and its call in `validate.fail()` (it only returns `PermanentError(code)`); fix the module docstring (a failure keeps the objects and records the public code).
+- Validation, transcription and run failures keep every blob and doc (uploads, original, canonical, recording doc, transcript, run docs).
+- Kept as is: staged-object cleanup after a SUCCESSFUL move (`validate.py:171-175`, `blobs.delete_prefix("uploads/{uid}/{sid}/")` for late PUTs and stale-URL strays) and `blobs.move` deleting its source. This is housekeeping of a duplicate after success, not user data; the audio is in `{uid}/{sid}/audio/`.
+- Retention: the audio bucket (`infra/modules/environment/main.tf`) has one lifecycle rule: delete objects under `uploads/` after age 1 day; versioning off; soft delete retention 0. No rule on `{uid}/{sid}/audio/` or other prefixes. So a session that fails validation (audio still only in staged `uploads/`) loses that copy after 1 day by bucket TTL (not by code); everything past the move (`{uid}/{sid}/audio/`, transcripts, docs) persists until the user presses Delete. The "retry with existing upload" feature (future) must account for the 1-day `uploads/` TTL (or the move must happen before it); out of scope here.
 
 ## Architecture
 ```
@@ -77,10 +83,10 @@ Interface: `classify(exc: BaseException, stage: Stage) -> Failure` ; `is_transie
 | D8 | is_transient home | engine-core `llm/errors.py` | api-only | SP06 needs it; api already imports engine-core |
 
 ## Risks / Open Questions
-- [OPEN] Google `InvalidArgument` on STT: user_file vs permanent_internal; default user_file; check against a real bad-audio staging case.
-- [OPEN] Provider statuses with ambiguous meaning (Anthropic 529 overloaded, Gemini 400 "model overloaded"): default 529 transient, 400 permanent; revisit from SP02 logs.
+- [RESOLVED: default — user_file; verify against a real bad-audio staging case (task note, see AC4 forced-failure run)] Google `InvalidArgument` on STT: user_file vs permanent_internal.
+- [RESOLVED: default — 529 transient, 400 permanent; revisit later from SP02 logs] Provider statuses with ambiguous meaning (Anthropic 529 overloaded, Gemini 400 "model overloaded").
 - [RESOLVED: aligned with SP04 — SP04 owns the pre-run cancel charge: pure `decide_cancel` in `repo/limits.py` (re-exported by `jobs/charging.py`), charged in the cancel txn via `usage.runs += units`, stored in `SessionDoc.cancel`; never refunded. It does not use `should_refund`/`release_once`, which stay run-end only. `counted` on the status doc is the one shared field (SP03 failures, SP04 cancel).]
-- [OPEN] `counted` on `SessionError` vs run doc only; default both (run doc is source, session copy for the UI).
+- [RESOLVED: default — both (run doc is source, session copy for the UI)] `counted` on `SessionError` vs run doc only.
 - [RESOLVED: no change] `AllRunsFailed` from a transient cause stays retryable via `_llm_cause`.
 - Risk: SP04/SP05 also edit `TRANSITIONS`, `SessionPage.tsx`, `errors.ts`; additive, rebase trivial. SP07 and this SP both regenerate the contracts.
 - Risk: a retry that re-reserves can hit the day cap after we refunded; accepted, shown with today's text.
@@ -92,3 +98,5 @@ Interface: `classify(exc: BaseException, stage: Stage) -> Failure` ; `is_transie
 4. Staging: forcing a 404 model yields the "our side… start a new session" card with the session id and no Retry; forcing a 503 yields the countdown button, 3 retries then the new-session CTA; usage count unchanged after each.
 5. Web tests: copy per kind, countdown `Retry (5)`→enabled after 5 s (fake timers), CTA shown at `retries_left=0`, Reference shown, "counted" sentence only when `counted=true`.
 6. `is_transient` has unit tests and no api imports; `openapi.json`, `docs/contracts/public`, `schema.d.ts` regenerated and consistent.
+7. Failed validation leaves the uploaded audio in place: a validate failure (e.g. `unsupported_audio`, `audio_too_long`) writes the error code and leaves the staged/original blobs and session docs intact (no `delete_prefix` call; fake `BlobStore` still lists the objects). Same for transcribe and run failures (blobs, transcript and run docs remain). Successful validation still removes the staged `uploads/` object after the move (existing test stays). Delete still sweeps everything.
+8. Interview-linked session (`interview_id` set, not `free_run_void`): a failing or succeeding first run leaves `counted=false` and never changes usage counters; `free_run_void` session counts as a normal evaluation.
