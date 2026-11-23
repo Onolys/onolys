@@ -48,7 +48,7 @@ Tokens are copy-pasted (web == miti, light only; admin has a separate verdict se
 
 Select = native `<select>` styled (no Radix Select/popper scroll lock; matches current a11y + mobile UX) [OPEN: confirm]. Tooltip optional until used.
 
-**CSP-compatible Radix.** `react-remove-scroll-bar` injects a `<style>` on Dialog/AlertDialog/DropdownMenu(modal)/Popover/Select, which `style-src 'self'` blocks. Choices: (a) DropdownMenu `modal={false}`; (b) Dialog/AlertDialog built on Radix Dialog with the scroll-lock replaced by our own `body[data-scroll-locked]` class in base.css (CSS file, no inline style) and Radix's `RemoveScroll` bypassed; (c) fallback: native `<dialog showModal()>` (already used on landing, no style injection, built-in focus trap and inert). Popper positioning writes via CSSOM style props (allowed). ScrollArea excluded. Spike in task 1 decides (b) vs (c); CSP smoke test is the gate. [OPEN]
+**CSP-compatible Radix.** `react-remove-scroll-bar` injects a `<style>` on Dialog/AlertDialog/DropdownMenu(modal)/Popover/Select, which `style-src 'self'` blocks. Choices: (a) DropdownMenu `modal={false}`; (b) Dialog/AlertDialog built on Radix Dialog with the scroll-lock replaced by our own `body[data-scroll-locked]` class in base.css (CSS file, no inline style) and Radix's `RemoveScroll` bypassed; (c) fallback: native `<dialog showModal()>` (already used on landing, no style injection, built-in focus trap and inert). Popper positioning writes via CSSOM style props (allowed). ScrollArea excluded. Owner 2026-11-23: build/hosting checks may be adjusted, so prefer (b) Radix Dialog/AlertDialog with the `build.test.ts` check changed as needed; native `<dialog>` (c) only if the CSP smoke fails. CSP smoke is the gate. [RESOLVED: owner 2026-11-23 — prefer Radix Dialog/AlertDialog with build check adjusted; native <dialog> only if CSP smoke fails; remaining task-level check = runtime CSP verification]
 
 **Dark derivation.** Keep teal #0b5f5a as light `--primary`. Dark: surfaces from the teal hue at low chroma (bg ~#0f1514, card ~#151d1c, border ~#2a3736); `--primary` lightened (~#5fc4b8, text-on-primary dark ink) for AA on dark; score colors inverted (dark tint bg + light fg); footer tone stays dark in both. Exact values tuned by the contrast test, not guessed here.
 
@@ -88,13 +88,14 @@ Compat: ship `legacy.css` aliasing old `--color-*` names so SP2/SP3 can migrate 
 | 8 | Release | Tag `vX.Y.Z` triggers workflow: CI gate, build, commit dist to tag, GitHub Release notes | manual | Repeatable; Renovate/Dependabot optional later |
 | 9 | Font | `woff2` shipped in package, `@font-face` in `fonts.css` with relative URL | per-app copy | One copy; consumer bundlers emit hashed asset (same-origin, font-src 'self') |
 | 10 | Variants | cva + tailwind-merge (shadcn standard) | CSS modules | Matches shadcn |
+| 11 | Build checks vs Radix | Owner 2026-11-23: build/hosting checks may be changed or removed when they block the design system (no one uses prod); CSP stays strict (`style-src 'self'`), proven by Playwright CSP smoke; prefer Radix Dialog/AlertDialog, native `<dialog>` only if smoke fails | Keep checks, bypass RemoveScroll / native dialog | Unblocks Radix; CSP strictness still verified at runtime |
 
 ## Manual steps
 - Owner: create public GitHub repo `Onolys/onolys-ui`, enable Actions, branch protection on `main`.
 - Owner: approve if CSP ever needs relaxing (not planned).
 
 ## Risks / Open Questions
-- [OPEN] Dialog scroll lock: Radix + custom class vs native `<dialog>`; decided by CSP spike.
+- [RESOLVED: owner 2026-11-23 — prefer Radix Dialog/AlertDialog with the build check adjusted; native `<dialog>` only if the CSP smoke fails] Dialog scroll lock. Only the runtime CSP verification remains as a task-level check.
 - [OPEN] Verify at implementation: current shadcn CLI conventions for Tailwind v4 (`@theme inline`, `tw-animate-css` dep, `data-slot` attrs, React 19 ref handling); Storybook/Vite 8/TS 6-7 compat; Tailwind `@source` resolution through git-dep symlink-free install.
 - [OPEN] TS version: web TS 6.0.3, admin TS 7; emitted `.d.ts` must typecheck under both.
 - [OPEN] Node 22 + `npm install github:` with committed dist: confirm no `prepare` runs (no `prepare` script defined).

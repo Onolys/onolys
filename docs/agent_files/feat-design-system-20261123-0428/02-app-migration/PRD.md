@@ -75,6 +75,7 @@ Class strategy: app-specific layout via Tailwind utilities in JSX; no new global
 | 4 | Class assertions | Move to `data-*` | Keep dead class names | No styling-only hooks |
 | 5 | Dark-mode proof | axe + screenshots, no pixel diff | Pixel baselines | Baselines churn with Inter/Chromium versions |
 | 6 | CSP proof | Preview server with exact firebase.json CSP | Assert in dev server | Dev server has no CSP |
+| 7 | Build checks | Owner 2026-11-23: build/hosting checks (e.g. `build.test.ts` `createElement("style")` ban) may be changed or removed when they block the design system; CSP stays strict, proven by Playwright CSP smoke; prefer Radix Dialog/AlertDialog | Keep check, avoid react-style-singleton | No one is using prod; runtime smoke is the real proof |
 
 ## CI / deploy impact
 - `ci.yml` jobs `web` and `web-e2e` (lines ~400-478) both run `npm ci`; git dep over HTTPS needs no token (public repo, SP1 spec) and the tag commit ships `dist/`, so no build on install [depends on SP1 no-`prepare`]. Nothing to change besides `web-e2e` adding the build+preview CSP project.
@@ -96,7 +97,7 @@ Each phase is a revert-able PR; Phase 0 alone is a no-op visually. If production
 - Owner: after Phase 0 preview, eyeball staging in a dark-mode device (cannot be automated for taste).
 
 ## Risks / Open Questions
-- [OPEN] **`build.test.ts` regex** fails on any JS containing `createElement("style")` [verified: build.test.ts line ~28]. `react-style-singleton` (pulled by `react-remove-scroll`, a Radix Dialog dependency) contains that call; unreachable if SP1 bypasses RemoveScroll, but still bundled/minified into output. Check at Phase 0 build. Fix options: SP1 avoids the dependency, or narrow the test to "no runtime style injection observed" via the CSP smoke. Loosening the test needs owner sign-off.
+- [RESOLVED: owner 2026-11-23 — build/hosting checks may be changed or removed when they block the design system; keep the CSP itself strict (style-src 'self') and prove it with the Playwright CSP smoke; prefer Radix Dialog/AlertDialog] **`build.test.ts` regex** fails on any JS containing `createElement("style")` [verified: build.test.ts line ~28]. `react-style-singleton` (pulled by `react-remove-scroll`, a Radix Dialog dependency) contains that call; unreachable if SP1 bypasses RemoveScroll, but still bundled/minified into output. Check at Phase 0 build. Fix options: SP1 avoids the dependency, or narrow the test to "no runtime style injection observed" via the CSP smoke. Owner has now allowed changing or removing the check; keep CSP strict and rely on the CSP smoke.
 - [OPEN] Radix jsdom shims set; `aria-hidden` on siblings while dialog open may hide `main()` helpers used in tests.
 - [OPEN] Tailwind `@source` through a `file:` symlink (local dev only).
 - [OPEN] Preflight impact on the not-yet-migrated screens (h1, lists, buttons): visual pass in Phase 0.

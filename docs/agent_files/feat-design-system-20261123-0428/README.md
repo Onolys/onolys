@@ -29,13 +29,13 @@ Rollout order: app, then landing, then admin/eval.
 - New public repo `Onolys/onolys-ui`, consumed as git dependency pinned to tags (no npm registry).
 - Dark mode follows device (`prefers-color-scheme`); no toggle.
 - Teal `#0b5f5a` brand, existing score colors, Inter self-hosted.
-- Strict CSP kept, Playwright CSP smoke test; any relaxation needs owner approval.
+- Strict CSP kept, Playwright CSP smoke test; any relaxation needs owner approval. Owner 2026-11-23: build/hosting checks may be changed or removed when they block the design system.
 - Rollout: app, landing, admin/eval.
 
 ## Risks / Open Questions (consolidated)
 **PRD 01 (onolys-ui)**
 - [OPEN: confirm] Select = native `<select>` styled, no Radix Select.
-- [OPEN] Dialog scroll lock: Radix + custom class vs native `<dialog>`; task 1 CSP spike decides.
+- [RESOLVED: owner 2026-11-23 — prefer Radix Dialog/AlertDialog with build check adjusted; native `<dialog>` only if CSP smoke fails; runtime CSP verification remains a task-level check.]
 - [OPEN: or drop] Keep `legacy.css` color aliases or force-migrate.
 - [OPEN: verify] Storybook 10 + Vite 8 compat (Storybook vs Ladle).
 - [OPEN] Verify current shadcn CLI conventions for Tailwind v4; Storybook/Vite 8/TS compat; Tailwind `@source` through git-dep install.
@@ -50,7 +50,7 @@ Rollout order: app, then landing, then admin/eval.
 - [verify: OPEN] `pr-preview.yml` has no separate install step.
 - [OPEN] `npm ci` must not use ssh URL; use `git+https`.
 - [OPEN: pick numbers after baseline] Soft bundle budget (JS gzip +60KB, CSS gzip +15KB).
-- [OPEN] `build.test.ts` regex bans `createElement("style")`; `react-style-singleton` bundled; loosening needs owner sign-off.
+- [RESOLVED: owner 2026-11-23 — build/hosting checks may be changed or removed when they block the design system; keep the CSP itself strict (style-src 'self') and prove it with the Playwright CSP smoke; prefer Radix Dialog/AlertDialog] (`build.test.ts` `createElement("style")` ban vs `react-style-singleton`.)
 - [OPEN] Radix `aria-hidden` on siblings may break test helpers.
 - [OPEN] Tailwind `@source` through `file:` symlink (local dev).
 - [OPEN] Preflight impact on not-yet-migrated screens.
