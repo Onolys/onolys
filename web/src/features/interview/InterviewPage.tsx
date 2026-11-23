@@ -3,7 +3,17 @@
  * at the limit, an End button, a "reconnecting…" state, and a leave prompt (evaluate what I have / discard).
  * After End the recording goes through the ordinary upload path and the session opens with its prefilled goal.
  */
-import { Button, Skeleton } from "@onolys/ui";
+import {
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  Button,
+  Skeleton,
+} from "@onolys/ui";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { Link, useBlocker, useLocation, useNavigate, useParams } from "react-router";
@@ -17,7 +27,6 @@ import { ACTIONS, BTN, H1, LINK, LINK_BTN, NOTE, PAGE } from "../../components/c
 import { ErrorNote, Notice } from "../../components/Notice";
 import { cardToForm } from "../rating/card";
 import { saveGoal } from "../rating/SetupFields";
-import { Modal } from "../settings/Modal";
 import { ErrorCard } from "../session/ErrorCard";
 import { prepareUpload } from "../upload/startUpload";
 import { getJob } from "../upload/uploader";
@@ -315,23 +324,30 @@ function InterviewView({ id }: { id: string }) {
         </>
       )}
 
-      {blocker.state === "blocked" ? (
-        <Modal titleId="leave-title" onEscape={() => blocker.reset()} testId="leave-dialog">
-          <h2 id="leave-title">Leave this interview?</h2>
-          <p>Your recording is only on this device until it is uploaded.</p>
-          <div className={ACTIONS}>
+      <AlertDialog
+        open={blocker.state === "blocked"}
+        onOpenChange={(next) => {
+          if (!next && blocker.state === "blocked") blocker.reset();
+        }}
+      >
+        <AlertDialogContent data-testid="leave-dialog">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Leave this interview?</AlertDialogTitle>
+            <AlertDialogDescription>Your recording is only on this device until it is uploaded.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
             <Button type="button" className={BTN} disabled={busy} onClick={evaluate}>
               Evaluate what I have
             </Button>
-            <Button type="button" variant="outline" disabled={busy} onClick={() => discard.mutate()}>
+            <Button type="button" variant="outline" className={BTN} disabled={busy} onClick={() => discard.mutate()}>
               Discard
             </Button>
-            <Button type="button" variant="link" className={LINK_BTN} disabled={busy} onClick={() => blocker.reset()}>
+            <AlertDialogCancel variant="link" className={LINK_BTN}>
               Keep talking
-            </Button>
-          </div>
-        </Modal>
-      ) : null}
+            </AlertDialogCancel>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

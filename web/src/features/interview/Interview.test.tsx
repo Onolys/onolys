@@ -387,13 +387,13 @@ describe("discard and leave prompt (AC9)", () => {
     const { router } = renderApp("/interviews/new", { user: USER });
     const iid = await startLive(u, router);
     await act(() => router.navigate("/settings"));
-    const dialog = await screen.findByRole("dialog");
+    const dialog = await screen.findByRole("alertdialog");
     await u.click(within(dialog).getByRole("button", { name: "Keep talking" }));
     expect(here(router)).toBe(`/interviews/${iid}`);
-    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(screen.queryByRole("alertdialog")).toBeNull();
 
     await act(() => router.navigate("/settings"));
-    await u.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "Discard" }));
+    await u.click(within(await screen.findByRole("alertdialog")).getByRole("button", { name: "Discard" }));
     await waitFor(() => expect(here(router)).toBe("/settings"));
     expect(mockBackend.getInterview(UID, iid).state).toBe("abandoned");
     expect(mockBackend.listSessions(UID, {}).items).toHaveLength(0);
@@ -404,7 +404,7 @@ describe("discard and leave prompt (AC9)", () => {
     const { router } = renderApp("/interviews/new", { user: USER });
     const iid = await startLive(u, router);
     await act(() => router.navigate("/settings"));
-    await u.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "Evaluate what I have" }));
+    await u.click(within(await screen.findByRole("alertdialog")).getByRole("button", { name: "Evaluate what I have" }));
     await waitFor(() => expect(here(router)).toMatch(/^\/sessions\/(?!new)[^/]+$/));
     expect(mockBackend.getSession(UID, here(router).split("/")[2]!).interview_id).toBe(iid);
   });

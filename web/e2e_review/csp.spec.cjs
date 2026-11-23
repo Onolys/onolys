@@ -57,9 +57,19 @@ test.describe("CSP smoke: zero violations under the prod CSP", () => {
     await expect(page.getByRole("button", { name: "Account menu" })).toBeFocused(); // Escape returns focus
     await accountMenu(page, "Settings");
     await page.getByRole("button", { name: "Create API key" }).click();
+    await expect(page.getByRole("dialog")).toBeVisible();
     await page.getByRole("button", { name: "Copy" }).click();
     await expect(page.getByText(/copied/i)).toBeVisible();
-    await page.keyboard.press("Tab");
+    await page.keyboard.press("Escape");
+    await page.mouse.click(5, 5); // outside click
+    await expect(page.getByRole("dialog")).toBeVisible(); // neither dismisses the one-time secret
+    await page.getByRole("checkbox", { name: /stored it/i }).click();
+    await page.getByRole("button", { name: "Done" }).click();
+    await expect(page.getByRole("dialog")).toHaveCount(0);
+    await page.getByRole("button", { name: "Regenerate" }).click();
+    await expect(page.getByRole("alertdialog")).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(page.getByRole("alertdialog")).toHaveCount(0);
 
     await spa(page, "/sessions/new"); // native <select>: choose / change
     const lang = page.getByRole("combobox").first();

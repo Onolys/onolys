@@ -1,4 +1,4 @@
-import { cleanup, screen, waitFor, within } from "@testing-library/react";
+import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -10,6 +10,7 @@ const USER = { email: "rater@clinic.org", verified: true };
 const SECRET_RE = /onolys_[A-Za-z0-9]+_[A-Za-z0-9]+/;
 const main = () => within(screen.getByRole("main"));
 const dialog = () => screen.getByRole("dialog");
+const confirmDialog = () => screen.getByRole("alertdialog");
 
 async function createKey(user: ReturnType<typeof userEvent.setup>) {
   await user.click(await main().findByRole("button", { name: "Create API key" }));
@@ -34,7 +35,7 @@ const everythingStored = () =>
 describe("settings: API key", () => {
   it("shows 'no key' and offers Create when none is active", async () => {
     renderApp("/settings", { user: USER });
-    expect(await main().findByText(/no api key/i)).toBeInTheDocument();
+    expect(await screen.findByText(/no api key/i)).toBeInTheDocument();
     expect(main().queryByRole("button", { name: /regenerate|revoke/i })).toBeNull();
   });
 
@@ -100,14 +101,25 @@ describe("settings: API key", () => {
     expect(await within(dialog()).findByText(/couldn't copy/i)).toBeInTheDocument();
   });
 
+  it("the secret dialog ignores outside clicks as well as Escape", async () => {
+    const user = userEvent.setup();
+    renderApp("/settings", { user: USER });
+    await createKey(user);
+    fireEvent.pointerDown(document.querySelector("[data-slot='dialog-overlay']") ?? document.body);
+    fireEvent.pointerUp(document.body);
+    fireEvent.click(document.body);
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    expect(within(dialog()).queryByRole("button", { name: /close/i })).toBeNull();
+  });
+
   it("restores focus to the opener when a confirm dialog closes (W26)", async () => {
     const user = userEvent.setup();
     mockBackend.createApiKey(UID);
     renderApp("/settings", { user: USER });
     const opener = await main().findByRole("button", { name: "Revoke" });
     await user.click(opener);
-    await user.click(within(dialog()).getByRole("button", { name: "Cancel" }));
-    expect(screen.queryByRole("dialog")).toBeNull();
+    await user.click(within(confirmDialog()).getByRole("button", { name: "Cancel" }));
+    expect(screen.queryByRole("alertdialog")).toBeNull();
     expect(opener).toHaveFocus();
   });
 
@@ -117,9 +129,9 @@ describe("settings: API key", () => {
     server.use(http.delete("*/v1/api-key", () => HttpResponse.json({ code: "internal_error" }, { status: 500 })));
     renderApp("/settings", { user: USER });
     await user.click(await main().findByRole("button", { name: "Revoke" }));
-    await user.click(within(dialog()).getByRole("button", { name: "Revoke key" }));
-    expect(await within(dialog()).findByText(/something went wrong/i)).toBeInTheDocument();
-    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    await user.click(within(confirmDialog()).getByRole("button", { name: "Revoke key" }));
+    expect(await within(confirmDialog()).findByText(/something went wrong/i)).toBeInTheDocument();
+    expect(screen.getByRole("alertdialog")).toBeInTheDocument();
   });
 
   it("regenerate asks to confirm that the old key stops working; cancel changes nothing", async () => {
@@ -128,13 +140,13 @@ describe("settings: API key", () => {
     const before = mockBackend.getApiKey(UID);
     renderApp("/settings", { user: USER });
     await user.click(await main().findByRole("button", { name: "Regenerate" }));
-    expect(within(dialog()).getByText(/old key stops working/i)).toBeInTheDocument();
-    await user.click(within(dialog()).getByRole("button", { name: "Cancel" }));
-    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(within(confirmDialog()).getByText(/old key stops working/i)).toBeInTheDocument();
+    await user.click(within(confirmDialog()).getByRole("button", { name: "Cancel" }));
+    expect(screen.queryByRole("alertdialog")).toBeNull();
     expect(mockBackend.getApiKey(UID).key_id).toBe(before.key_id);
 
     await user.click(main().getByRole("button", { name: "Regenerate" }));
-    await user.click(within(dialog()).getByRole("button", { name: "Regenerate key" }));
+    await user.click(within(confirmDialog()).getByRole("button", { name: "Regenerate key" }));
     const secret = await within(await screen.findByTestId("api-secret-dialog")).findByTestId("api-secret");
     expect(secret.textContent).toMatch(SECRET_RE);
     expect(mockBackend.getApiKey(UID).key_id).not.toBe(before.key_id);
@@ -145,8 +157,8 @@ describe("settings: API key", () => {
     mockBackend.createApiKey(UID);
     renderApp("/settings", { user: USER });
     await user.click(await main().findByRole("button", { name: "Revoke" }));
-    await user.click(within(dialog()).getByRole("button", { name: "Revoke key" }));
-    expect(await main().findByText(/no api key/i)).toBeInTheDocument();
+    await user.click(within(confirmDialog()).getByRole("button", { name: "Revoke key" }));
+    expect(await screen.findByText(/no api key/i)).toBeInTheDocument();
     expect(mockBackend.getApiKey(UID).active).toBe(false);
   });
 
