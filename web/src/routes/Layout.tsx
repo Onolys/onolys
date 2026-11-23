@@ -75,13 +75,13 @@ export function Layout() {
   }
 
   return (
-    <div className="app">
+    <div className="flex min-h-screen flex-col">
       <SkipLink />
       <AppHeader
         // signed-out: let the nav fill the header so Sample can center and Log in/Sign up sit right
         className={phase === "signedOut" ? "[&>nav]:min-w-0 [&>nav]:flex-1" : undefined}
         brand={
-          <Link to="/" className="font-bold no-underline">
+          <Link to="/" className="font-bold text-primary no-underline">
             Onolys
           </Link>
         }
@@ -89,7 +89,12 @@ export function Layout() {
         accountMenu={phase === "verified" ? <AccountMenu email={user?.email ?? null} onSignOut={() => void signOut()} /> : undefined}
       />
       {signOutError && <p role="alert">{signOutError}</p>}
-      <main id="main" ref={mainRef}>
+      <main
+        id="main"
+        ref={mainRef}
+        // focus-to-h1 on route change: no ring for programmatic focus, keep it for keyboard focus-visible
+        className="mx-auto w-full max-w-5xl flex-1 px-4 py-6 [&_h1:focus:not(:focus-visible)]:outline-none"
+      >
         <Outlet />
       </main>
       <Footer />

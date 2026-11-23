@@ -8,7 +8,7 @@ const NOTICES = ["Not official MITI coding", "Use it to practice and prepare", "
 export function Footer() {
   return (
     <UiFooter
-      className="flex flex-wrap items-center justify-center gap-x-4 gap-y-0 space-y-0 px-gutter py-3 text-center text-xs [&>div]:text-xs"
+      className="[&_a]:underline flex flex-wrap items-center justify-center gap-x-4 gap-y-0 space-y-0 px-gutter py-3 text-center text-xs [&>div]:text-xs"
       notices={
         <ul className="m-0 flex w-full list-none flex-wrap justify-center gap-x-2 p-0">
           {NOTICES.map((n) => (

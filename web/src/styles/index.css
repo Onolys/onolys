@@ -1,13 +1,10 @@
-/* CSS entry. Cascade order: theme, base (Tailwind preflight + @onolys/ui base), legacy (old app styles), components, utilities.
-   `legacy-app.css` sits in a low-priority layer so Tailwind utilities beat it; it shrinks each migration phase and is deleted in the last. */
-@layer theme, base, legacy, components, utilities;
+/* CSS entry. Cascade order: theme, base (Tailwind preflight + @onolys/ui base), components, utilities. Only the design system styles the app. */
+@layer theme, base, components, utilities;
 @import "tailwindcss";
 @import "@onolys/ui/theme.css";
-@import "@onolys/ui/legacy.css";
-@import "./legacy-app.css" layer(legacy);
 @source "../../node_modules/@onolys/ui/dist";
 
-/* === App overrides (kept after Task 9 deletes legacy-app.css) ===
+/* === App overrides ===
    Only rules that Tailwind utilities cannot express: a class toggled from JS on <html>, the native <dialog>
    backdrop, and the keyframe highlight for the pointed transcript row. Everything else is utilities in JSX. */
 html.dlg-open { overflow: hidden; }

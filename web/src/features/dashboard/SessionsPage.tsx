@@ -74,14 +74,14 @@ export function SessionsPage() {
               const chip = STATUS_CHIP[s.status];
               return (
                 <li key={s.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-border px-4 py-3 last:border-b-0">
-                  <Link to={`/sessions/${s.id}`} className={LINK}>
+                  <Link to={`/sessions/${s.id}`} className={`${LINK} flex min-h-11 items-center`}>
                     {s.title ?? date(s.created_at)}
                   </Link>
                   {s.interview_id ? <Badge variant="outline">AI interview</Badge> : null}
                   <StatusChip tone={chip.tone}>{chip.text}</StatusChip>
                   <span className={NOTE}>{date(s.created_at)}</span>
                   {s.latest_report_version ? (
-                    <Link to={`/sessions/${s.id}/reports/${s.latest_report_version}`} className={LINK}>
+                    <Link to={`/sessions/${s.id}/reports/${s.latest_report_version}`} className={`${LINK} flex min-h-11 items-center`}>
                       Report v{s.latest_report_version}
                     </Link>
                   ) : null}
