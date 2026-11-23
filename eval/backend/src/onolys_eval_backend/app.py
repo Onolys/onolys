@@ -10,6 +10,7 @@ from onolys_admin_auth import ConfigError
 from onolys_eval_backend.auth import EvalAuthMiddleware, TokenVerifier
 from onolys_eval_backend.catalog import router as catalog_router
 from onolys_eval_backend.config import EvalConfig
+from onolys_eval_backend.read_runs import router as read_runs_router
 from onolys_eval_backend.runs import router as runs_router
 from onolys_eval_backend.services import EvalServices
 from onolys_eval_backend.uploads import install_error_handler
@@ -42,6 +43,7 @@ def create_app(
     app.include_router(catalog_router)
     app.include_router(uploads_router)
     app.include_router(runs_router)
+    app.include_router(read_runs_router)
     install_error_handler(app)
 
     @app.get("/v1/me")

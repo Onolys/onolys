@@ -9,6 +9,7 @@ from onolys_engine_core.llm.routes import RouteRegistry, load_registry
 from onolys_engine_core.registry import EngineRegistry
 
 from onolys_eval_backend.config import EvalConfig
+from onolys_eval_backend.costs import PriceBook
 from onolys_eval_backend.repository import EvalRepository, FirestoreEvalRepository
 from onolys_eval_backend.storage import Bucket, GCSBucket
 
@@ -20,6 +21,10 @@ class EvalServices:
             self.queue = queue
         if stt_factory is not None:
             self.stt_factory = stt_factory
+
+    @cached_property
+    def prices(self) -> PriceBook:
+        return PriceBook.from_yaml()
 
     @cached_property
     def bucket(self) -> Bucket:
