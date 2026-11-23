@@ -1,0 +1,542 @@
+"""Persisted eval fanout and exactly-once terminal accounting.
+
+Transaction callbacks contain only state calculations. Provider calls and bucket
+writes happen after claiming, outside Firestore's retryable callback.
+"""
+
+import asyncio
+import hashlib
+import json
+import os
+import re
+from datetime import UTC, datetime
+from itertools import product
+from time import monotonic
+from uuid import uuid4
+
+from fastapi import APIRouter, HTTPException, Request
+from onolys_engine_core.context import RunContext
+from onolys_engine_core.engine import RunUsage
+from onolys_engine_core.errors import InputError
+from onolys_engine_core.llm.config import LLMConfig
+from onolys_engine_core.llm.litellm_client import LiteLLMClient
+from onolys_engine_core.llm.routes import resolve_preset
+from onolys_engine_core.llm.types import MetricsCollector
+from onolys_engine_core.presets import list_presets
+from onolys_engine_core.transcript_input import (
+    inferred_clinician_speaker,
+    validate_transcript_input,
+)
+from onolys_engine_core.validated_run import OutputInvalid, run_validated
+from onolys_eval.adapters import miti_lean_scores, oneshot_scores
+from onolys_eval.gold import Gold
+from onolys_eval.metrics import Scores
+from pydantic import BaseModel, ConfigDict, Field, StrictInt, model_validator
+
+from onolys_eval_backend.catalog import _IDENTIFIER, read_dataset
+from onolys_eval_backend.costs import PriceBook
+from onolys_eval_backend.storage import store_output
+from onolys_eval_backend.uploads import validate_gold, validate_span
+
+router = APIRouter()
+TERMINAL = {"done", "failed", "cancelled"}
+ZERO_USAGE = {"input_tokens": 0, "output_tokens": 0, "calls": 0, "cost_usd": 0.0}
+
+
+def now():
+    return datetime.now(UTC).isoformat()
+
+
+class InputRef(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    dataset_id: str | None = None
+    session_ids: list[str] | None = None
+    upload_id: str | None = None
+
+    @model_validator(mode="after")
+    def one_source(self):
+        if self.upload_id is not None:
+            if (
+                not re.fullmatch(r"[A-Za-z0-9_-]+", self.upload_id)
+                or self.dataset_id is not None
+                or self.session_ids is not None
+            ):
+                raise ValueError("Invalid input reference")
+        elif (
+            not self.dataset_id
+            or not _IDENTIFIER.fullmatch(self.dataset_id)
+            or not self.session_ids
+            or len(set(self.session_ids)) != len(self.session_ids)
+        ):
+            raise ValueError("Invalid input reference")
+        return self
+
+
+class RunRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    input: InputRef
+    engines: list[str] = Field(min_length=1)
+    presets: list[str] = Field(default_factory=list)
+    repeats: StrictInt = 1
+    change_goal: str | None = Field(default=None, min_length=1, max_length=4000)
+    language: str | None = Field(default=None, min_length=1, max_length=64)
+    coded_span: dict | None = None
+
+    @model_validator(mode="after")
+    def selection(self):
+        if (
+            self.repeats not in (1, 3)
+            or len(set(self.engines)) != len(self.engines)
+            or len(set(self.presets)) != len(self.presets)
+            or (any(e != "human" for e in self.engines) and not self.presets)
+        ):
+            raise ValueError("Invalid run selection")
+        if self.input.dataset_id and self.coded_span is not None:
+            raise ValueError("Dataset spans come from the manifest")
+        return self
+
+
+class UnitTask(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    run_id: str = Field(pattern=r"^[A-Za-z0-9_-]+$")
+    unit_id: str = Field(pattern=r"^[A-Za-z0-9_-]+$")
+
+
+def _hash(data):
+    return hashlib.sha256(
+        json.dumps(data, sort_keys=True, ensure_ascii=False, separators=(",", ":")).encode()
+    ).hexdigest()
+
+
+def _inputs(services, body):
+    """Read and validate everything before publishing any run or bucket object."""
+    ref = body.input
+    if ref.dataset_id:
+        manifest = read_dataset(services.bucket, ref.dataset_id)
+        sessions = {s.session_id: s for s in manifest.sessions}
+        if any(sid not in sessions for sid in ref.session_ids):
+            raise ValueError("Unknown dataset session")
+        sources = []
+        for sid in ref.session_ids:
+            session = sessions[sid]
+            base = f"datasets/{ref.dataset_id}/{sid}"
+            sources.append(
+                {
+                    "session_id": sid,
+                    "transcript_path": f"{base}/transcript.json",
+                    "gold_path": f"{base}/gold.json",
+                    "coded_span": session.coded_span.model_dump(),
+                    "change_goal": session.change_goal,
+                    "provenance": session.model_dump(mode="json"),
+                }
+            )
+    else:
+        upload = services.repository.get_upload(ref.upload_id)
+        if upload is None:
+            raise HTTPException(404, "Upload not found.")
+        if upload.get("status") != "ready":
+            raise HTTPException(409, "Upload is not ready.")
+        sources = [
+            {
+                "session_id": ref.upload_id,
+                "transcript_path": upload["transcript_path"],
+                "gold_path": upload.get("gold_path") if upload.get("has_gold") is True else None,
+                "coded_span": body.coded_span
+                if body.coded_span is not None
+                else upload.get("coded_span"),
+                "change_goal": body.change_goal or upload.get("change_goal"),
+                "language": body.language or upload.get("language"),
+                "provenance": {
+                    "upload_id": ref.upload_id,
+                    "kind": upload.get("kind"),
+                    "stt_run": upload.get("stt_run"),
+                },
+            }
+        ]
+    return _validate_sources(services, sources, body)
+
+
+def _validate_sources(services, sources, body):
+    """Also accepts trusted server-saved snapshots for a later rerun endpoint."""
+    ref = body.input
+    expected_ids = ref.session_ids if ref.dataset_id else [ref.upload_id]
+    if not sources or [source["session_id"] for source in sources] != expected_ids:
+        raise ValueError("Saved input sessions do not match input reference")
+    resolved = []
+    for source in sources:
+        transcript = validate_transcript_input(services.bucket.read_json(source["transcript_path"]))
+        if source.get("transcript_sha256") and source["transcript_sha256"] != _hash(
+            transcript.model_dump(mode="json")
+        ):
+            raise ValueError("Saved transcript integrity mismatch")
+        clinician = inferred_clinician_speaker(transcript)
+        clients = {t.speaker for t in transcript.turns if t.role == "client"}
+        if clinician is None or len(clients) != 1:
+            raise ValueError("Unresolved speakers")
+        validate_span(transcript, source["coded_span"])
+        gold = None
+        if source["gold_path"]:
+            try:
+                gold = Gold.model_validate(services.bucket.read_json(source["gold_path"]))
+            except FileNotFoundError:
+                if "human" in body.engines:
+                    raise ValueError("Human requires gold") from None
+            if gold is not None:
+                if source.get("gold_sha256") and source["gold_sha256"] != _hash(
+                    gold.model_dump(mode="json", by_alias=True)
+                ):
+                    raise ValueError("Saved gold integrity mismatch")
+                validate_gold(gold, transcript)
+                if ref.dataset_id and (
+                    gold.dataset_id != ref.dataset_id or gold.session_id != source["session_id"]
+                ):
+                    raise ValueError("Gold identity mismatch")
+        if "human" in body.engines and gold is None:
+            raise ValueError("Human requires gold")
+        resolved.append(
+            {
+                **source,
+                "transcript": transcript.model_dump(mode="json"),
+                "gold": gold.model_dump(mode="json", by_alias=True) if gold else None,
+                "language": source.get("language") or body.language or transcript.language,
+                "speaker_map": {"subject": clinician, "other": next(iter(clients))},
+            }
+        )
+    return resolved
+
+
+def _git_sha():
+    # Deploy builds inject GIT_SHA; source checkouts resolve git without a shell.
+    value = os.environ.get("GIT_SHA") or os.environ.get("COMMIT_SHA")
+    if value:
+        return value
+    import subprocess
+
+    try:
+        return subprocess.check_output(
+            ["git", "rev-parse", "HEAD"], text=True, stderr=subprocess.DEVNULL, timeout=2
+        ).strip()
+    except (OSError, subprocess.SubprocessError):
+        return "unknown"
+
+
+def create_run(services, config, body, created_by, *, registry=None, input_ref=None):
+    """Create a run; input_ref is an optional trusted snapshot from an existing run.
+
+    HTTP clients can only submit RunRequest.input. The rerun layer can pass the
+    original run's input_ref here to preserve bytes and effective session settings.
+    """
+    registry = registry or services.registry
+    infos = registry.engines()
+    choices = {
+        f"{info.name}:{v.id}" if v else info.name: info
+        for info in infos
+        for v in (info.variants or [None])
+    }
+    if any(e != "human" and e not in choices for e in body.engines):
+        raise ValueError("Unknown engine")
+    presets = {
+        p.name: p.models
+        for p in list_presets(services.routes, config.default_preset)
+        if not p.name.startswith("test-")
+    }
+    if any(p not in presets for p in body.presets):
+        raise ValueError("Unknown preset")
+    count = (len(body.input.session_ids) if body.input.dataset_id else 1) * (
+        int("human" in body.engines)
+        + sum(e != "human" for e in body.engines) * len(body.presets) * body.repeats
+    )
+    if count > 499:
+        raise ValueError("Run exceeds atomic Firestore batch capacity")
+    sources = (
+        _validate_sources(services, input_ref["sessions"], body)
+        if input_ref is not None
+        else _inputs(services, body)
+    )
+    if (
+        len(sources)
+        * (
+            int("human" in body.engines)
+            + sum(e != "human" for e in body.engines) * len(body.presets) * body.repeats
+        )
+        > 499
+    ):
+        raise ValueError("Run exceeds atomic Firestore batch capacity")
+    rid = uuid4().hex
+    saved_sources, units = [], {}
+    for source in sources:
+        sid = source["session_id"]
+        transcript, gold = source["transcript"], source["gold"]
+        saved = {k: v for k, v in source.items() if k not in {"transcript", "gold"}}
+        saved["source_transcript_path"] = saved["transcript_path"]
+        saved["source_gold_path"] = saved["gold_path"]
+        saved["transcript_path"] = f"runs/{rid}/inputs/{sid}/transcript.json"
+        saved["gold_path"] = f"runs/{rid}/inputs/{sid}/gold.json" if gold else None
+        saved["transcript_sha256"] = _hash(transcript)
+        saved["gold_sha256"] = _hash(gold) if gold else None
+        services.bucket.write_json(saved["transcript_path"], transcript)
+        if gold:
+            services.bucket.write_json(saved["gold_path"], gold)
+        saved_sources.append(saved)
+        for engine in body.engines:
+            axes = [(None, 0)] if engine == "human" else product(body.presets, range(body.repeats))
+            for preset, repeat in axes:
+                uid = f"u{len(units):04d}"
+                span = gold["coded_span"] if engine == "human" else source["coded_span"]
+                units[uid] = {
+                    "session_id": sid,
+                    "engine": engine,
+                    "preset": preset,
+                    "repeat": repeat,
+                    "status": "queued",
+                    "stage": "queued",
+                    "coded_span": span,
+                    "warnings": ["human_span_differs"]
+                    if engine == "human" and span != source["coded_span"]
+                    else [],
+                }
+    run = {
+        "input": body.input.model_dump(exclude_none=True),
+        "input_ref": {"sessions": saved_sources},
+        "engines": body.engines,
+        "presets": body.presets,
+        "repeats": body.repeats,
+        "change_goal": body.change_goal,
+        "language": body.language,
+        "coded_span": body.coded_span,
+        "status": "queued",
+        "created_by": created_by,
+        "created_at": now(),
+        "cancel_requested": False,
+        "total_units": len(units),
+        "completed_units": 0,
+        "done_units": 0,
+        "failed_units": 0,
+        "cancelled_units": 0,
+        "usage": dict(ZERO_USAGE),
+        "cost_usd_est": 0.0,
+        "unpriced_units": 0,
+        "engine_git_sha": _git_sha(),
+        "engine_versions": {e: choices[e].version for e in body.engines if e != "human"},
+        "resolved_presets": {p: presets[p] for p in body.presets},
+    }
+    services.repository.create_run(rid, run, units)
+    for uid in units:
+        try:
+            services.queue.enqueue("unit", {"run_id": rid, "unit_id": uid})
+        except Exception:
+            # Ambiguous enqueue failures may have delivered. Terminalization wins
+            # only while still queued; already-claimed work owns its completion.
+            finish_unit(
+                services.repository,
+                rid,
+                uid,
+                {"status": "failed", "error": {"code": "enqueue_failed"}},
+                expected={"queued"},
+            )
+    return rid, services.repository.get_run(rid)["status"]
+
+
+@router.post("/v1/runs")
+def post_run(request: Request, body: RunRequest):
+    services = request.app.state.services
+    try:
+        rid, status = create_run(
+            services,
+            request.app.state.config,
+            body,
+            request.state.admin_claims["email"].strip().lower(),
+            registry=getattr(services, "registry", None) or request.app.state.catalog.registry,
+        )
+        return {"run_id": rid, "status": status}
+    except HTTPException:
+        raise
+    except (ValueError, FileNotFoundError, InputError):
+        raise HTTPException(422, "Invalid run selection or input.") from None
+    except Exception:
+        raise HTTPException(503, "Run creation unavailable.") from None
+
+
+def finish_unit(repository, rid, uid, result, *, expected=None):
+    """One transaction accounts a terminal unit and finalizes its parent once."""
+
+    finished_at = now()
+
+    def mutate(run, unit):
+        if unit["status"] in TERMINAL or (expected and unit["status"] not in expected):
+            return None
+        status = result["status"]
+        usage = result.get("run_info", {}).get("usage") or ZERO_USAGE
+        total_usage = {
+            k: run["usage"].get(k, 0) + usage.get(k, 0)
+            for k in ("input_tokens", "output_tokens", "calls")
+        }
+        old_cost, new_cost = run["usage"].get("cost_usd"), usage.get("cost_usd")
+        total_usage["cost_usd"] = (
+            old_cost + new_cost if old_cost is not None and new_cost is not None else None
+        )
+        updates = {
+            "completed_units": run["completed_units"] + 1,
+            "done_units": run["done_units"] + int(status == "done"),
+            "failed_units": run["failed_units"] + int(status == "failed"),
+            "cancelled_units": run["cancelled_units"] + int(status == "cancelled"),
+            "usage": total_usage,
+            "cost_usd_est": run.get("cost_usd_est", 0) + (result.get("cost_usd_est") or 0),
+            "unpriced_units": run.get("unpriced_units", 0) + int(result.get("unpriced", False)),
+        }
+        if updates["completed_units"] == run["total_units"]:
+            done = updates["done_units"]
+            updates["status"] = (
+                "done" if done == run["total_units"] else "partial" if done else "failed"
+            )
+            updates["finished_at"] = finished_at
+        return updates, {**result, "stage": result["status"], "finished_at": finished_at}
+
+    return repository.transact_unit(rid, uid, mutate)
+
+
+@router.post("/v1/runs/{run_id}/cancel")
+def cancel_run(request: Request, run_id: str):
+    repository = request.app.state.services.repository
+    if not repository.cancel_run(run_id):
+        raise HTTPException(404, "Run not found.")
+    # Finalize pending units immediately, including ones never successfully queued.
+    # In-flight units retain ownership and finish normally; no provider cancellation.
+    for uid in repository.list_units(run_id):
+        finish_unit(repository, run_id, uid, {"status": "cancelled"}, expected={"queued"})
+    return {"run_id": run_id, "status": repository.get_run(run_id)["status"]}
+
+
+def _metric_usage(metrics):
+    records = metrics.records
+    return RunUsage(
+        input_tokens=sum(r["input_tokens"] for r in records),
+        output_tokens=sum(r["output_tokens"] for r in records),
+        calls=len(records),
+        cost_usd=sum(r["cost_usd"] for r in records)
+        if all(r["cost_usd"] is not None for r in records)
+        else None,
+    )
+
+
+def _estimate_cost(services, run, unit, usage, metrics):
+    prices = getattr(services, "prices", None) or PriceBook.from_yaml()
+    if usage.cost_usd is not None:
+        return usage.cost_usd, False
+    # Metrics records are the only sound way to price mixed-model engines.
+    if metrics.records:
+        estimates = [prices.estimate(record, record["model"]) for record in metrics.records]
+        unknown = any(e.cost_usd is None for e in estimates)
+        return sum(e.cost_usd or 0 for e in estimates), unknown
+    models = set(run["resolved_presets"].get(unit["preset"], {}).values())
+    estimate = prices.estimate(usage, next(iter(models)) if len(models) == 1 else "")
+    return estimate.cost_usd, estimate.cost_usd is None
+
+
+def _cost(services, run, unit, usage, metrics):
+    # Missing/broken price metadata must never prevent terminal unit accounting.
+    try:
+        return _estimate_cost(services, run, unit, usage, metrics)
+    except Exception:
+        return usage.cost_usd, usage.cost_usd is None
+
+
+async def execute_unit(services, rid, uid):
+    repository = services.repository
+    started_at = now()
+
+    def claim(run, unit):
+        if unit["status"] != "queued" or run.get("cancel_requested"):
+            return None
+        return {"status": "running"}, {
+            "status": "running",
+            "stage": "coding",
+            "started_at": started_at,
+        }
+
+    if not repository.transact_unit(rid, uid, claim):
+        # A cancel may race dispatch before its sweep reaches this unit.
+        run = repository.get_run(rid)
+        if run and run.get("cancel_requested"):
+            finish_unit(repository, rid, uid, {"status": "cancelled"}, expected={"queued"})
+        return
+    run, unit = repository.get_run(rid), repository.get_unit(rid, uid)
+    metrics = MetricsCollector()
+    usage = None
+    try:
+        source = next(
+            s for s in run["input_ref"]["sessions"] if s["session_id"] == unit["session_id"]
+        )
+        if unit["engine"] == "human":
+            output = services.bucket.read_json(source["gold_path"])
+            gold = Gold.model_validate(output)
+            scores = Scores(counts=gold.counts, globals=gold.globals)
+            run_info = {"usage": dict(ZERO_USAGE)}
+            cost, unpriced = 0.0, False
+        else:
+            transcript = validate_transcript_input(
+                services.bucket.read_json(source["transcript_path"])
+            )
+            routes, _ = resolve_preset(unit["preset"], services.routes)
+            factory = getattr(services, "llm_factory", None)
+            llm = factory(routes, metrics) if factory else LiteLLMClient(LLMConfig(routes=routes))
+            ctx = RunContext(
+                llm=llm, metrics=metrics, request_id=f"{rid}-{uid}", deadline=monotonic() + 840
+            )
+            params = {
+                "preset": unit["preset"],
+                "coded_span": unit["coded_span"],
+                "speaker_map": source["speaker_map"],
+                "language": source["language"],
+                "change_goal": source["change_goal"],
+            }
+            if ":" in unit["engine"]:
+                params["config"] = unit["engine"].split(":", 1)[1]
+            engine = services.engine(unit["engine"])
+
+            def progress(stage, status):
+                repository.update_unit(rid, uid, {"stage": str(stage)})
+
+            async with asyncio.timeout(840):
+                result = await run_validated(engine, ctx, transcript, params, progress_cb=progress)
+            output = result.output
+            scores = (
+                oneshot_scores(output)
+                if unit["engine"].startswith("oneshot:")
+                else miti_lean_scores(output)
+            )
+            run_info = result.run_info.model_dump(mode="json")
+            usage = result.run_info.usage or _metric_usage(metrics)
+            run_info["usage"] = usage.model_dump(mode="json")
+            cost, unpriced = _cost(services, run, unit, usage, metrics)
+        saved = {
+            **store_output(services.bucket, rid, uid, output),
+            "status": "done",
+            "scores": scores.model_dump(mode="json"),
+            "run_info": run_info,
+            "cost_usd_est": cost,
+            "unpriced": unpriced,
+        }
+    except Exception as exc:
+        usage = (
+            (exc.usage if isinstance(exc, OutputInvalid) else None)
+            or usage
+            or _metric_usage(metrics)
+        )
+        cost, unpriced = _cost(services, run, unit, usage, metrics)
+        saved = {
+            "status": "failed",
+            "error": {
+                "code": "output_invalid" if isinstance(exc, OutputInvalid) else "engine_failed"
+            },
+            "run_info": {"usage": usage.model_dump(mode="json")},
+            "cost_usd_est": cost,
+            "unpriced": unpriced,
+        }
+    finish_unit(repository, rid, uid, saved, expected={"running"})
+
+
+@router.post("/internal/tasks/unit")
+async def unit_task(request: Request, body: UnitTask):
+    await execute_unit(request.app.state.services, body.run_id, body.unit_id)
+    return {"status": "ok"}

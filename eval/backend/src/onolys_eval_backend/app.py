@@ -5,12 +5,12 @@ from collections.abc import Mapping
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
 from onolys_admin_auth import ConfigError
 
 from onolys_eval_backend.auth import EvalAuthMiddleware, TokenVerifier
 from onolys_eval_backend.catalog import router as catalog_router
 from onolys_eval_backend.config import EvalConfig
+from onolys_eval_backend.runs import router as runs_router
 from onolys_eval_backend.services import EvalServices
 from onolys_eval_backend.uploads import install_error_handler
 from onolys_eval_backend.uploads import router as uploads_router
@@ -41,6 +41,7 @@ def create_app(
     app.state.services = services if services is not None else app.state.catalog
     app.include_router(catalog_router)
     app.include_router(uploads_router)
+    app.include_router(runs_router)
     install_error_handler(app)
 
     @app.get("/v1/me")
@@ -50,11 +51,6 @@ def create_app(
     @app.get("/healthz")
     async def health() -> dict[str, str]:
         return {"status": "ok"}
-
-    @app.post("/internal/tasks/unit")
-    async def task_placeholder() -> JSONResponse:
-        # Do not acknowledge/discard queued work until the task executors are implemented.
-        return JSONResponse({"error": {"code": "not_implemented"}}, status_code=501)
 
     app.add_middleware(
         EvalAuthMiddleware, config=config, verifier=verifier, task_verifier=task_verifier
