@@ -45,6 +45,46 @@ async def test_run_override_is_snapshotted_without_changing_session(client, app,
     assert app.state.repo.get_session("upload-user", sid).coded_span.start_turn == 0
 
 
+@pytest.mark.parametrize("span", SPANS + [None])
+async def test_manual_first_run_defaults_to_session_span(client, app, span):
+    app.state.queue = Queue()
+    sid = await create(client, coded_span=span)
+    assert (await upload(client, sid, json.dumps(timed_document()))).status_code == 202
+    r = await client.post(f"/v1/sessions/{sid}/runs", headers=AUTH, json={})
+    assert r.status_code == 202, r.text
+    run = app.state.repo.get_run("upload-user", sid, r.json()["run_id"])
+    assert (run.coded_span.model_dump(exclude_none=True) if run.coded_span else None) == span
+
+
+@pytest.mark.parametrize("prior_span", [SPANS[1], None], ids=["override", "whole-session"])
+@pytest.mark.parametrize(
+    "body",
+    [{}, {"coded_span": {"start_turn": 1, "end_turn": 2}}, {"coded_span": None}],
+    ids=["inherit", "new-override", "explicit-null"],
+)
+async def test_failed_run_retry_preserves_span_unless_overridden(client, app, prior_span, body):
+    sid = await create(client, coded_span=SPANS[0])
+    assert (await upload(client, sid, json.dumps(timed_document()))).status_code == 202
+    app.state.queue = None  # A dispatch failure creates and refunds a failed run snapshot.
+    failed = await client.post(
+        f"/v1/sessions/{sid}/runs", headers=AUTH, json={"coded_span": prior_span}
+    )
+    assert failed.status_code == 503, failed.text
+    repo = app.state.repo
+    (prior,) = repo.list_runs("upload-user", sid)
+    assert prior.status == "failed"
+    snapshot = prior.model_dump()
+
+    app.state.queue = Queue()
+    retry = await client.post(f"/v1/sessions/{sid}/runs", headers=AUTH, json=body)
+    assert retry.status_code == 202, retry.text
+    run = repo.get_run("upload-user", sid, retry.json()["run_id"])
+    expected = body.get("coded_span", prior_span)
+    assert (run.coded_span.model_dump(exclude_none=True) if run.coded_span else None) == expected
+    assert repo.get_run("upload-user", sid, prior.run_id).model_dump() == snapshot
+    assert repo.get_session("upload-user", sid).coded_span.model_dump(exclude_none=True) == SPANS[0]
+
+
 @pytest.mark.parametrize("span", [{}, {"start_turn": 0}, {"start_turn": 0, "end_turn": 0},
     {"start_turn": True, "end_turn": 2}, {"start_ms": 0.5, "end_ms": 1000},
     {"start_turn": 0, "end_turn": 1, "start_ms": 0, "end_ms": 1000}])
