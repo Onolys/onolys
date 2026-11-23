@@ -13,9 +13,9 @@ Source of truth: [PRD.md](./PRD.md) (visual reference: [mockup.html](./mockup.ht
 | 2 | New sample fixture (54-utterance role-play) | 1 | done |
 | 3 | `ReportView` sections + report CSS block | 1, 2 | done |
 | 4 | `CodedTranscriptDialog` + `UtteranceLink` | 1, 3 | done |
-| 5 | Wire `ReportPage` and `SampleReportPage` | 2, 3, 4 | in-progress |
-| 6 | Engine tips prompt + refreshed fixture hashes | none | todo |
-| 7 | Dead-code cleanup | 5 | todo |
+| 5 | Wire `ReportPage` and `SampleReportPage` | 2, 3, 4 | done |
+| 6 | Engine tips prompt + refreshed fixture hashes | none | done |
+| 7 | Dead-code cleanup | 5 | done |
 
 ## Task 1 — buildCodedRows + evidence mapping
 What it is / what it means: the pure data join that turns transcript turns plus a report into table rows, and the helper that maps evidence turn ids to 1-based utterance numbers. Everything else renders from this.
