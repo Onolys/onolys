@@ -13,8 +13,8 @@ Source of truth: /root/projects/onolys/iaudit/.worktrees/feat/miti-eval/docs/age
 | 2 | Move LLM client and routes to core | 1 | done |
 | 3 | Move transcript, txt parser, schema, speaker-gate helper; update eval imports | 1 | done |
 | 4 | Engine ABC, result types, feedback hook, validate_output | 1 | done |
-| 5 | EngineRegistry and list_presets | 2, 4 | in-progress |
-| 6 | MitiEngine adoption | 2, 3, 4, 5 | todo |
+| 5 | EngineRegistry and list_presets | 2, 4 | done |
+| 6 | MitiEngine adoption | 2, 3, 4, 5 | in-progress |
 | 7 | API migration: engines.py, PROD_ENGINE, registry in RealEvaluation | 3, 5, 6 | todo |
 | 8 | Dockerfile, CI core job, docs | 7 | todo |
 
