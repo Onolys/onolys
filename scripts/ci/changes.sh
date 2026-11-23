@@ -12,6 +12,7 @@ OUT="${GITHUB_OUTPUT:-/dev/stdout}"
 
 # name:dir:kind (kind python => also triggered by Python-shared paths; node => needs package.json)
 PACKAGES=(
+  "core:engines/core:python"
   "miti:engines/miti:python"
   "api:api:python"
   "admin-auth:admin/auth:python"
@@ -43,8 +44,9 @@ ADMIN_BACKEND_EXTRA_RE='^(admin/auth/|\.dockerignore)'
 # A change in a package also runs every package that (transitively) depends on it.
 # test_changes_deps.py fails if this drifts from the pyprojects.
 DEPS=(
-  "api:miti"
-  "eval:miti"
+  "miti:core"
+  "api:core miti"
+  "eval:core miti"
   "admin-backend:admin-auth"
 )
 

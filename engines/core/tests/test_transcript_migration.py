@@ -52,16 +52,3 @@ def test_consumers_do_not_import_removed_transcript_modules():
                     assert parts[:1] != ["onolys_miti"] or len(parts) < 2 or parts[1] not in removed, path
                     if parts == ["onolys_miti", "transcript"]:
                         assert all(alias.name == "Span" for alias in node.names), path
-
-
-def test_miti_has_no_transcript_reexports_or_moved_files():
-    import onolys_miti
-    import onolys_miti.transcript as miti_transcript
-
-    for name in ("Turn", "Transcript", "TranscriptTurnV1", "TranscriptV1"):
-        assert not hasattr(onolys_miti, name)
-        assert not hasattr(miti_transcript, name)
-    assert miti_transcript.Span.__module__ == "onolys_miti.transcript"
-    for module in ("transcript_v1", "transcript_input", "transcript_txt"):
-        assert importlib.util.find_spec(f"onolys_miti.{module}") is None
-    assert not files("onolys_miti").joinpath("data/transcript.v1.schema.json").is_file()

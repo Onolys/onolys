@@ -18,6 +18,11 @@ def _req_name(req: str) -> str:
     return re.split(r"[\[<>=!~; ]", req.strip(), maxsplit=1)[0]
 
 
+def test_core_package_is_registered() -> None:
+    # Missing registration would hide all new core edges from the comparison below.
+    assert "core:engines/core:python" in _array("PACKAGES")
+
+
 def test_eval_package_is_registered() -> None:
     # Without this assertion, the dependency check silently ignores a new package.
     assert "eval:eval/core:python" in _array("PACKAGES")
@@ -47,6 +52,7 @@ def test_deps_map_matches_pyproject_dependencies() -> None:
 
 
 if __name__ == "__main__":
+    test_core_package_is_registered()
     test_eval_package_is_registered()
     test_deps_map_matches_pyproject_dependencies()
     print("ok   changes.sh DEPS map matches pyproject dependencies")
