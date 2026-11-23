@@ -21,12 +21,13 @@ describe("new session chooser", () => {
   });
 
   it("shows the usage lines and a New session link", async () => {
-    render();
+    const { router } = render();
     expect(await main().findByText("20 of 20 left today")).toBeInTheDocument();
     expect(main().getByText("5 of 5 left today")).toBeInTheDocument();
     const link = main().getByRole("link", { name: "New session" });
     expect(link).toHaveAttribute("href", "/sessions/new");
     await userEvent.click(link);
+    expect(here(router)).toBe("/sessions/new");
   });
 
   it("over the eval cap: says so with the reset time", async () => {

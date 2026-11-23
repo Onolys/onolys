@@ -13,7 +13,7 @@ type SessionListItem = components["schemas"]["SessionListItem"];
 const PAGE = 20;
 const date = (iso: string) => new Date(iso).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
 
-export function SessionsList() {
+export function SessionsPage() {
   const client = useApiClient();
   const sessions = useInfiniteQuery({
     queryKey: ["sessions"],
@@ -99,14 +99,10 @@ export function SessionsList() {
       </>
     );
   }
-  return body;
-}
-
-export function SessionsPage() {
   return (
     <>
       <h1>Sessions</h1>
-      <SessionsList />
+      {body}
     </>
   );
 }

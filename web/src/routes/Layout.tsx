@@ -8,7 +8,7 @@ import { Footer } from "./Footer";
 const NAV: Record<AuthPhase, { to: string; label: string; className?: string; external?: boolean }[]> = {
   loading: [],
   signedOut: [
-    { to: "/sample", label: "Sample report", className: "btn btn-secondary nav-sample", external: true },
+    { to: "/sample", label: "Sample report", className: "btn btn-secondary", external: true },
     { to: "/login", label: "Log in", className: "nav-login" },
     { to: "/signup", label: "Sign up", className: "btn btn-primary nav-signup" },
   ],
@@ -16,7 +16,7 @@ const NAV: Record<AuthPhase, { to: string; label: string; className?: string; ex
   verified: [
     { to: "/sessions", label: "Sessions", className: "btn btn-secondary nav-btn" },
     { to: "/new", label: "New Session", className: "btn btn-secondary nav-btn" },
-    { to: "/sample", label: "Sample report", className: "btn btn-secondary nav-btn nav-sample", external: true },
+    { to: "/sample", label: "Sample report", className: "btn btn-secondary nav-btn", external: true },
   ],
 };
 

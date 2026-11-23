@@ -1,5 +1,5 @@
 const { test, expect, devices } = require("@playwright/test");
-const { shot, FIX, signUp, spa, hasHScroll, accountMenu } = require("./helpers.cjs");
+const { shot, FIX, signUp, spa, openUpload, hasHScroll, accountMenu } = require("./helpers.cjs");
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 const { defaultBrowserType, ...iphone } = devices["iPhone 13"]; // run on chromium (only chromium is installed)
@@ -28,10 +28,12 @@ test.describe("mobile (iPhone 13 viewport)", () => {
     await shot(page, "m-verify");
     expect(await hasHScroll(page), "verify-email").toBe(false);
     await page.getByRole("button", { name: "I've verified" }).click();
-    await expect(page.getByRole("heading", { name: "Sessions" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "New Session", exact: true })).toBeVisible();
     await shot(page, "m-dashboard");
     expect(await hasHScroll(page), "dashboard").toBe(false);
-    await page.locator("header nav a", { hasText: "New session" }).click();
+    await shot(page, "m-new-session-chooser");
+    expect(await hasHScroll(page), "new session chooser").toBe(false);
+    await openUpload(page);
     await shot(page, "m-new-session");
     expect(await hasHScroll(page), "new session").toBe(false);
     await page.getByLabel("Change goal").fill("Walk more");

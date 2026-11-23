@@ -1,8 +1,8 @@
 const { test, expect } = require("@playwright/test");
-const { shot, collect, FIX, signUpVerified, spa, accountMenu } = require("./helpers.cjs");
+const { shot, collect, FIX, signUpVerified, spa, openUpload, accountMenu } = require("./helpers.cjs");
 
 async function newSession(page, file = "ten-min.mp3", { dbl = false } = {}) {
-  await page.locator("header nav a", { hasText: "New session" }).click();
+  await openUpload(page);
   await page.getByLabel("Change goal").fill("Walk more");
   await page.locator("input[type=file]").setInputFiles(FIX(file));
   const start = page.getByRole("button", { name: "Start", exact: true });
@@ -15,7 +15,7 @@ async function newSession(page, file = "ten-min.mp3", { dbl = false } = {}) {
 test.describe("new session precheck", () => {
   test("non-audio file is blocked; <10 min warns; ok file + goal enables Start", async ({ page }) => {
     await signUpVerified(page, "pre@example.com");
-    await page.locator("header nav a", { hasText: "New session" }).click();
+    await openUpload(page);
     const start = page.getByRole("button", { name: "Start", exact: true });
     await expect(start).toBeDisabled();
     await page.locator("input[type=file]").setInputFiles(FIX("notaudio.txt"));
