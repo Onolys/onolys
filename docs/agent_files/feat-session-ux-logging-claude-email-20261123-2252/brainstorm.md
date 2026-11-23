@@ -1,5 +1,5 @@
 ---
-status: draft
+status: approved
 summary: Processing-screen clarity, cancel, smart failure handling + traceable logs, Claude for text steps, eval model picker, auth emails via Resend
 date: 2026-11-23
 ---
@@ -7,7 +7,7 @@ date: 2026-11-23
 # Brainstorm — session UX, failures/logging, Claude, auth emails
 
 ## TL;DR
-Make the processing screen honest (clear current step, % from the start, "you can leave" hint from upload-complete), add a non-destructive **Cancel** (status `cancelled`, charges a limit unit only if transcription started), and replace blanket "busy, retry" errors with a per-failure policy that never charges users for our faults. Log the real provider error and tie every line to the session id so the on-screen Reference finds everything in Logs Explorer. Fix the rating-step outage (no successful rating run on any env since 2026-11-16), move text LLM steps to Claude Sonnet 5.5 (configurable via GitHub vars), give eval a model-config-driven engine/model/effort picker, and send auth emails ourselves via Resend with links to our own `/auth/action`. Eval runs every selected engine × model × effort combination per report, always against a locked-on human baseline, with per-report and combined comparison tables; each combination is isolated and retried up to 3× on retryable errors. Everything targets staging only.
+Make the processing screen honest (clear current step, % from the start, "you can leave" hint from upload-complete), add a non-destructive **Cancel** (status `cancelled`, charges a limit unit only if transcription started), and replace blanket "busy, retry" errors with a per-failure policy that never charges users for our faults. Log the real provider error and tie every line to the session id so the on-screen Reference finds everything in Logs Explorer. Fix the rating-step outage (no successful rating run on any env since 2026-11-16), move text LLM steps to Claude Sonnet 5.5 (configurable via GitHub vars), give eval a model-config-driven model/tier/effort picker, and send auth emails ourselves via Resend with links to our own `/auth/action`. Eval runs every selected model × tier × effort combination per report, always against a locked-on human baseline, with per-report and combined comparison tables; each combination is isolated and retried up to 3× on retryable errors. Everything targets staging only.
 
 ## Problem
 Clinician uploads a session recording → validate → transcribe (Google Chirp 3 batch) → user picks clinician speaker + gives own rating → LLM rates (MITI coding, tips, report). Today:
@@ -40,19 +40,19 @@ Clinician uploads a session recording → validate → transcribe (Google Chirp 
 | Failure policy table (below) (user ok'd) | blanket "busy, retry" | Retry only where it can succeed; avoid wasting resources/charges |
 | Text LLM steps (coding, tips, report) → Claude Sonnet 5.5, effort low; STT stays Chirp (user) | Gemini; Claude for STT | Claude has no audio STT; low keeps "under 5 min"; eval compares |
 | Prod provider/model via GitHub Actions vars per env (e.g. `LLM_PROVIDER`, `LLM_MODEL`) passed by deploy workflow to Cloud Run env, overriding route model; API keys stay in Secret Manager; change = re-run deploy (user, Claude's rec) | Firestore admin doc / admin site | Audited + visible, no new write surface |
-| Eval: engine picker (Gemini / Claude) → only that engine's models; effort dropdown per model's allowed levels; context auto = model max, no dropdown (user) | free text; context dropdown | Prevent invalid combos |
-| One model config file is source of truth for engines→models→allowed effort→default effort→context→max output (user/Claude) | scattered | Single place |
+| Eval: model picker (Gemini / Claude) → only that model's tiers; effort dropdown per tier's allowed levels; context auto = model max, no dropdown (user) | free text; context dropdown | Prevent invalid combos |
+| One model config file is source of truth for models→tiers→allowed effort→default effort→context→max output (user/Claude) | scattered | Single place |
 | Logs: every app log line from api/worker/engine carries `session_id` when known; provider error text (status, type, message — never prompt/transcript content) logged; `miti` logger wired into JSON logging (Claude) | status quo | Reference must find everything |
 | Doc with ready Logs Explorer link by session id (user) | — | User wants to paste reference and see all logs |
 | Auth emails sent by API via Resend; Admin SDK generates link; rewritten to `<APP_BASE_URL>/auth/action?mode=…&oobCode=…`; APP_BASE_URL per env from server config, never request (user) | Firebase hosted mail | Hosted page broken |
 | Upgrade LiteLLM to a version that knows gemini-4-* and claude-*-5-5 (Claude) | keep 1.110.2 | Likely cause of outage; needed for effort mapping |
-| Eval run = cartesian product of selected engines × models × efforts (multi-select), per report (user) | single preset | Compare all combos |
+| Eval run = cartesian product of selected models × tiers × efforts (multi-select), per report (user) | single preset | Compare all combos |
 | Eval results: per-report comparison table (combo rows/cols, diff vs human, MAE) + combined summary page across all reports (MAE, within-1, per combo) (user) | per-session view only | Easy cross-report comparison |
 | Human baseline auto-selected and greyed (cannot uncheck) for dataset runs (user) | toggleable | Always compare vs human |
 | Transcription once: dataset runs use stored transcripts; uploads transcribe once and reuse across reruns (already true — no change) (verified) | audio-hash cache | Already satisfied |
 | Eval unit retry: up to 3 attempts for retryable error classes only (transient provider/5xx/429/timeout); other units unaffected (user) | none | Failure-proof runs |
 | Planned unit count shown before Start; block above 499-unit cap with message (Claude) | auto-split runs | Firestore batch limit; keep simple |
-| Eval picker replaces "presets" with engine × model × effort selects (Claude) | keep presets | One concept |
+| Eval picker replaces "presets" with model × tier × effort selects (Claude) | keep presets | One concept |
 | Main-app user Retry button: 5-second countdown shown in button "Retry (5)…(1)" before enabled (user) | immediate | Avoid hammering |
 | Retry cap 3 per session; 429/quota treated as temporary (Claude) | per step | Simple, bounded |
 | Internal failure at rating step is not counted (user rule overrides old "rating started" rule) (user) | old rule | Fairness |
@@ -104,11 +104,11 @@ Reproduce the staging `gemini/gemini-4-neon` call with the worker's config to ge
 - `config/{env}/routes.yaml` text routes → Claude Sonnet 5.5, effort low. Provider/model overridable by env vars set from GitHub Actions vars in `.github/workflows/_deploy-cloudrun.yml` `env_vars`; document where to change it and that a deploy re-run applies it. Terraform `DEFAULT_PRESET` unchanged or aligned.
 
 ### G. Eval model picker
-- New config file (e.g. `config/models.yaml`): engines `gemini`, `claude`; models:
+- New config file (e.g. `config/models.yaml`): models `gemini`, `claude`; tiers:
   - gemini: gemini-4-carbon (effort low/medium/high, default medium), gemini-4-neon (low/medium/high/xhigh, default high), gemini-4-hydrogen (low/medium/high/xhigh, default high), gemini-4-argon (low/medium/high, default medium); context 1,048,576; max output 65,536.
   - claude: claude-opus-5-5, claude-sonnet-5-5, claude-haiku-5-5; effort low/medium/high/xhigh/max (defaults: opus medium, sonnet high, haiku medium); context 1M; max output 128K; no temperature.
-- Eval API `GET /v1/options` serves it; `eval/web/src/NewRun.tsx` adds engine → model → effort selects; run payload carries them; backend builds routes from them (`eval/backend/.../runs.py`, `engines/core/.../llm/routes.py`).
-- Run = product(engines × models × efforts) per report, plus human unit. Units built in `eval/backend/src/onolys_eval_backend/runs.py:284-300`; count check `:248-252`.
+- Eval API `GET /v1/options` serves it; `eval/web/src/NewRun.tsx` adds model → tier → effort selects; run payload carries them; backend builds routes from them (`eval/backend/.../runs.py`, `engines/core/.../llm/routes.py`).
+- Run = product(models × tiers × efforts) per report, plus human unit. Units built in `eval/backend/src/onolys_eval_backend/runs.py:284-300`; count check `:248-252`.
 - Human locked for datasets in `eval/web/src/NewRun.tsx:113` and enforced server-side.
 - Results: extend `CompareView` (`eval/web/src/Runs.tsx:15`, backend `read_runs.py:89-170`) so each report shows one row/column per combo with diff vs human + per-report error; add a Summary view aggregating across reports (`eval/core/src/onolys_eval/metrics.py:106` aggregate: MAE, within_1).
 - Per-unit retry: `execute_unit` (`runs.py:536-555`) retries up to 3× with backoff for retryable classes only.
