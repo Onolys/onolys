@@ -6,3 +6,14 @@
 @import "@onolys/ui/legacy.css";
 @import "./legacy-app.css" layer(legacy);
 @source "../../node_modules/@onolys/ui/dist";
+
+/* === App overrides (kept after Task 9 deletes legacy-app.css) ===
+   Only rules that Tailwind utilities cannot express: a class toggled from JS on <html>, the native <dialog>
+   backdrop, and the keyframe highlight for the pointed transcript row. Everything else is utilities in JSX. */
+html.dlg-open { overflow: hidden; }
+.coded-dialog::backdrop { background: rgb(23 28 28 / 0.55); }
+@keyframes utt-hl { from { background-color: var(--muted); } }
+tr.hl > td { animation: utt-hl 1.5s ease-out; }
+@media (prefers-reduced-motion: reduce) {
+  tr.hl > td { animation: none; background-color: var(--muted); outline: 2px solid var(--primary); outline-offset: -2px; }
+}

@@ -113,6 +113,12 @@ for (const scheme of ["light", "dark"]) {
         if (!TODO[`mobile${r}@${scheme}`]) expect(bad, `axe ${scheme} mobile ${r}`).toEqual([]);
         expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true);
       }
+      // Sample coded-transcript dialog at phone width (full-screen native dialog).
+      await page.getByRole("button", { name: "Open coded transcript" }).click();
+      await expect(page.locator("dialog[open]")).toBeVisible();
+      await shotTo(page, `${scheme}-mobile-sample-transcript-dialog`);
+      const dlgBad = await axeGate(page);
+      expect(dlgBad, `axe ${scheme} mobile transcript dialog`).toEqual([]);
       await ctx.close();
     });
   });

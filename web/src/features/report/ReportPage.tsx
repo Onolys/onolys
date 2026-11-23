@@ -9,7 +9,11 @@ import { Link, useNavigate, useParams } from "react-router";
 import { unwrap } from "../../api/client";
 import { describeError, isNotFoundError } from "../../api/errors";
 import type { Report } from "../../api/report";
+import { Button, Select } from "@onolys/ui";
 import { useApiClient } from "../../auth/useApiClient";
+import { ACTIONS, H1, LINK, LINK_BTN, NOTE, PAGE } from "../../components/classes";
+import { Field } from "../../components/Field";
+import { Notice } from "../../components/Notice";
 import { ErrorCard } from "../session/ErrorCard";
 import { ReportView as ReportDocument, type TurnsState } from "./ReportView";
 
@@ -24,13 +28,15 @@ export function ReportPage() {
 
 function NotFound({ id }: { id: string }) {
   return (
-    <>
-      <h1>Report</h1>
+    <div className={PAGE}>
+      <h1 className={H1}>Report</h1>
       <p>We couldn't find that report.</p>
       <p>
-        <Link to={`/sessions/${id}`}>Back to the session</Link>
+        <Link to={`/sessions/${id}`} className={LINK}>
+          Back to the session
+        </Link>
       </p>
-    </>
+    </div>
   );
 }
 
@@ -79,24 +85,24 @@ function LoadedReport({ id, version }: { id: string; version: number }) {
 
   if (view.isPending) {
     return (
-      <>
-        <h1>Report</h1>
-        <p className="form-note">Loading report…</p>
-      </>
+      <div className={PAGE}>
+        <h1 className={H1}>Report</h1>
+        <p className={NOTE}>Loading report…</p>
+      </div>
     );
   }
   if (view.isError || !view.data || !report) {
     if (isNotFoundError(view.error)) return <NotFound id={id} />;
     const e = describeError(view.error);
     return (
-      <>
-        <h1>Report</h1>
+      <div className={PAGE}>
+        <h1 className={H1}>Report</h1>
         <ErrorCard code={e.code} reference={e.requestId}>
-          <button type="button" className="link-button" onClick={() => void view.refetch()}>
+          <Button type="button" variant="link" className={LINK_BTN} onClick={() => void view.refetch()}>
             Try again
-          </button>
+          </Button>
         </ErrorCard>
-      </>
+      </div>
     );
   }
 
@@ -112,25 +118,25 @@ function LoadedReport({ id, version }: { id: string; version: number }) {
   const headerSlot = (
     <>
       {newer ? (
-        <p className="notice" role="alert">
-          This report was made by a newer version — refresh
-        </p>
+        <Notice role="alert">This report was made by a newer version — refresh</Notice>
       ) : null}
-      <p className="form-note">Run details: {details.join(" · ") || "not recorded"}</p>
-      <div className="report-actions">
-        <label>
-          Version{" "}
-          <select
-            value={String(version)}
-            onChange={(e) => void navigate(`/sessions/${id}/reports/${e.target.value}`)}
-          >
-            {(versions.data?.items ?? [{ version, created_at: view.data.created_at }]).map((v) => (
-              <option key={v.version} value={String(v.version)}>
-                v{v.version} · {date(v.created_at)}
-              </option>
-            ))}
-          </select>
-        </label>
+      <p className={NOTE}>Run details: {details.join(" · ") || "not recorded"}</p>
+      <div className={ACTIONS}>
+        <Field label="Version">
+          {(fid) => (
+            <Select
+              id={fid}
+              value={String(version)}
+              onChange={(e) => void navigate(`/sessions/${id}/reports/${e.target.value}`)}
+            >
+              {(versions.data?.items ?? [{ version, created_at: view.data.created_at }]).map((v) => (
+                <option key={v.version} value={String(v.version)}>
+                  v{v.version} · {date(v.created_at)}
+                </option>
+              ))}
+            </Select>
+          )}
+        </Field>
       </div>
     </>
   );

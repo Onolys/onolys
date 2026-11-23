@@ -8,7 +8,9 @@ import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CodedRow, TurnsState } from "./codedRows";
 import { CODE_META, SHORT } from "./codeMeta";
-import { CodeChip } from "./CodeChip";
+import { Badge, Button, Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@onolys/ui";
+import { BTN, LINK_BTN, NOTE } from "../../components/classes";
+import { CodeChip, PLAIN_CODE } from "./CodeChip";
 import { CodedDialogContext } from "./codedDialogContext";
 
 export interface CodedTranscriptProviderProps {
@@ -24,6 +26,8 @@ export interface CodedTranscriptProviderProps {
   children: ReactNode;
 }
 
+const TH = "text-xs font-semibold uppercase tracking-wider text-muted-foreground";
+const CELL = "whitespace-normal align-top";
 const HIGHLIGHT_MS = 1500;
 const prefersReducedMotion = () =>
   typeof window.matchMedia === "function" &&
@@ -120,91 +124,107 @@ export function CodedTranscriptProvider({
       <dialog
         ref={dialogRef}
         id="transcript-dialog"
-        className="coded-dialog"
+        className="coded-dialog m-auto h-[88vh] max-h-none w-[min(1100px,calc(100vw-3rem))] max-w-none overflow-hidden rounded-[10px] border border-border bg-background p-0 text-foreground open:flex open:flex-col max-[640px]:m-0 max-[640px]:h-dvh max-[640px]:w-screen max-[640px]:rounded-none max-[640px]:border-0"
         aria-labelledby="dlg-title"
         onClose={onClose}
       >
-        <div className="report-view dlg-rv">
-          <div className="dlg-head">
-            <div className="dlg-titles">
-              <h2 id="dlg-title">Coded transcript</h2>
+        <div className="flex min-h-0 w-full flex-1 flex-col tabular-nums [&_p]:m-0">
+          <div className="flex flex-none items-start justify-between gap-4 border-b border-border bg-background px-5 py-3.5 max-[640px]:px-4 max-[640px]:py-3">
+            <div>
+              <h2 id="dlg-title" className="m-0 text-lg font-semibold">
+                Coded transcript
+              </h2>
               {turns.status === "ready" ? (
-                <p className="dlg-count">
+                <p className="mt-0.5 text-[0.8125rem] text-muted-foreground">
                   {rows.length} utterances, {practitioner} from the
                   practitioner. Each code shows the reason it was given.
                 </p>
               ) : null}
             </div>
-            <button
+            <Button
               type="button"
-              className="dlg-close"
+              variant="outline"
+              size="icon"
+              className={`${BTN} border text-2xl leading-none`}
               aria-label="Close"
               onClick={() => dialogRef.current?.close()}
             >
               ×
-            </button>
+            </Button>
           </div>
-          <div className="dlg-body" ref={bodyRef}>
+          <div
+            className="min-h-0 flex-1 overflow-auto px-5 pb-5 pt-4 max-[640px]:px-4 max-[640px]:pb-4 max-[640px]:pt-3 [&_[data-slot=table-container]]:overflow-visible"
+            ref={bodyRef}
+          >
             {turns.status === "loading" ? (
-              <p className="lead">Loading transcript…</p>
+              <p className={NOTE}>Loading transcript…</p>
             ) : null}
             {turns.status === "error" ? (
-              <p className="lead">
+              <p className={NOTE}>
                 We couldn't load the transcript.{" "}
                 {turns.retry ? (
-                  <button type="button" className="link-button" onClick={turns.retry}>
+                  <Button
+                    type="button"
+                    variant="link"
+                    className={`${BTN} ${LINK_BTN} inline h-auto min-h-0 py-0 align-baseline`}
+                    onClick={turns.retry}
+                  >
                     Try again
-                  </button>
+                  </Button>
                 ) : null}
               </p>
             ) : null}
             {turns.status === "ready" ? (
-              <>
-                <p className="lead">
+              <div className="grid gap-4">
+                <p className={NOTE}>
                   Each practitioner utterance carries its code and the reason
                   for it. Client utterances are not coded.
                 </p>
-                <details className="dlg-legend">
-                  <summary>Code legend</summary>
-                  <ul className="legend">
+                <details data-legend="">
+                  <summary className="mb-2.5 cursor-pointer text-sm font-semibold">Code legend</summary>
+                  <ul className="m-0 grid list-none grid-cols-[repeat(auto-fill,minmax(230px,1fr))] gap-x-5 gap-y-1.5 p-0 text-[0.8125rem] text-muted-foreground">
                     {legendIds.map((id) => (
-                      <li key={id}>
+                      <li key={id} className="flex items-baseline gap-2">
                         <CodeChip id={id} />
-                        <b>{CODE_META[id]?.label ?? id}</b>
+                        <b className="font-medium text-foreground">{CODE_META[id]?.label ?? id}</b>
                       </li>
                     ))}
-                    <li>
-                      <span className="code c-plain">P / C</span>
-                      <b>P = practitioner, C = client</b>
+                    <li className="flex items-baseline gap-2">
+                      <Badge variant="outline" data-code="" className={`rounded font-mono text-xs font-semibold ${PLAIN_CODE}`}>
+                        P / C
+                      </Badge>
+                      <b className="font-medium text-foreground">P = practitioner, C = client</b>
                     </li>
                     {showNotCodedLegend ? (
-                      <li>
-                        <span className="code c-plain c-dim">Not coded</span>
-                        <b>Not coded</b>
+                      <li className="flex items-baseline gap-2">
+                        <Badge variant="outline" data-code="" className={`rounded font-mono text-xs font-semibold ${PLAIN_CODE} text-muted-foreground`}>
+                          Not coded
+                        </Badge>
+                        <b className="font-medium text-foreground">Not coded</b>
                       </li>
                     ) : null}
                   </ul>
                 </details>
-                <div className="tbl tr">
-                  <table>
-                    <thead>
-                      <tr>
-                        <th>Utt #</th>
-                        <th>Speaker</th>
-                        <th>Utterance</th>
-                        <th>Code(s)</th>
-                        <th>Why</th>
-                      </tr>
-                    </thead>
-                    <tbody>
+                <div className="rounded-md border border-border">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="hover:bg-transparent">
+                        {["Utt #", "Speaker", "Utterance", "Code(s)", "Why"].map((h) => (
+                          <TableHead key={h} className={`${TH} sticky top-0 z-10 bg-muted shadow-[inset_0_-1px_0_var(--border)]`}>
+                            {h}
+                          </TableHead>
+                        ))}
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
                       {rows.map((r) => (
-                        <tr key={r.turn_id} id={`utt-${r.n}`}>
-                          <td>{r.n}</td>
-                          <td>{r.speaker}</td>
-                          <td>{r.text}</td>
-                          <td>
+                        <TableRow key={r.turn_id} id={`utt-${r.n}`}>
+                          <TableCell className={CELL}>{r.n}</TableCell>
+                          <TableCell className={CELL}>{r.speaker}</TableCell>
+                          <TableCell className={CELL}>{r.text}</TableCell>
+                          <TableCell className={CELL}>
                             {r.codes.length > 0 ? (
-                              <div className="codes">
+                              <div data-codes="" className="flex flex-wrap gap-1">
                                 {r.codes.map((c, i) => (
                                   <CodeChip
                                     key={`${c.item_id}-${i}`}
@@ -213,14 +233,14 @@ export function CodedTranscriptProvider({
                                 ))}
                               </div>
                             ) : r.notCoded ? (
-                              <span className="code c-plain c-dim">
+                              <Badge variant="outline" data-code="" className={`rounded font-mono text-xs font-semibold ${PLAIN_CODE} text-muted-foreground`}>
                                 Not coded
-                              </span>
+                              </Badge>
                             ) : r.uncoded ? (
                               "—"
                             ) : null}
-                          </td>
-                          <td>
+                          </TableCell>
+                          <TableCell className={CELL}>
                             {r.why.map((w, i) => (
                               <div key={i}>
                                 {r.codes.length > 1
@@ -228,13 +248,13 @@ export function CodedTranscriptProvider({
                                   : w}
                               </div>
                             ))}
-                          </td>
-                        </tr>
+                          </TableCell>
+                        </TableRow>
                       ))}
-                    </tbody>
-                  </table>
+                    </TableBody>
+                  </Table>
                 </div>
-              </>
+              </div>
             ) : null}
           </div>
         </div>

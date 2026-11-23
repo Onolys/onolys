@@ -10,6 +10,9 @@ import type { components } from "../../api/schema";
 import type { Report } from "../../api/report";
 import { buildCodedRows, evidenceUtterances } from "./codedRows";
 import type { CodedRow, TurnsState } from "./codedRows";
+import { Button, Card, Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@onolys/ui";
+import { StatusChip, type ChipTone } from "../../components/StatusChip";
+import { BTN, H1, LINK_BTN, NOTE } from "../../components/classes";
 import { CODE_META } from "./codeMeta";
 import { CodeChip } from "./CodeChip";
 import { CodedTranscriptProvider } from "./CodedTranscriptDialog";
@@ -45,11 +48,16 @@ const FORMULA: Record<string, string> = {
   total_mia: "Seek + AF + EA",
   total_mina: "Confront + Persuade",
 };
-const STATUS: Record<string, { text: string; cls: string }> = {
-  below_fair: { text: "Below fair", cls: "s-low" },
-  fair: { text: "Fair", cls: "s-fair" },
-  good: { text: "Good", cls: "s-good" },
+// Reused StatusChip tones: failed = low, wait = fair, done = good (the visible text always says the status).
+const STATUS: Record<string, { text: string; tone: ChipTone }> = {
+  below_fair: { text: "Below fair", tone: "failed" },
+  fair: { text: "Fair", tone: "wait" },
+  good: { text: "Good", tone: "done" },
 };
+const TH = "text-xs font-semibold uppercase tracking-wider text-muted-foreground";
+const TBL = "rounded-md border border-border";
+const CELL = "whitespace-normal align-top";
+const LABEL = "block text-[0.6875rem] font-semibold uppercase tracking-widest text-muted-foreground";
 const WARNING_TEXT: Record<string, string> = {
   fewer_tips: "We could only find a few tips this time.",
   tips_failed: "We couldn't write tips this time.",
@@ -117,8 +125,10 @@ function Section({
   children: ReactNode;
 }) {
   return (
-    <section id={id} aria-labelledby={`${id}-h`}>
-      <h2 id={`${id}-h`}>{title}</h2>
+    <section id={id} aria-labelledby={`${id}-h`} className="grid grid-cols-1 gap-4 border-t border-border pt-8 [&_p]:m-0">
+      <h2 id={`${id}-h`} className="m-0 text-lg font-semibold leading-tight text-balance">
+        {title}
+      </h2>
       {children}
     </section>
   );
@@ -135,34 +145,41 @@ function Glance({ r, turns }: { r: Report; turns: readonly Turn[] | null }) {
   const labels = new Map((r.scorecard ?? []).map((s) => [s.item_id, s.label]));
   return (
     <Section id="glance" title="At a glance">
-      <ul className="globals">
+      <ul className="m-0 grid list-none grid-cols-1 rounded-md border border-border p-0">
         {(r.globals ?? []).map((g) => {
           const score = g.onolys?.score ?? null;
           const ev = turns ? evidenceUtterances(g, turns) : [];
           return (
-            <li key={g.item_id} className="global">
-              <span className="g-name">
+            <li
+              key={g.item_id}
+              data-global=""
+              className="grid items-center gap-x-5 gap-y-2 border-b border-border p-4 last:border-b-0 sm:grid-cols-[190px_150px_minmax(0,1fr)]"
+            >
+              <span className="font-semibold">
                 {labels.get(g.item_id) ?? GLOBAL_LABEL[g.item_id] ?? g.item_id}
               </span>
               <span
-                className="scale"
+                className="flex items-center gap-1"
+                data-scale=""
                 role="img"
                 aria-label={score === null ? "No score" : `${score} out of 5`}
               >
                 {[1, 2, 3, 4, 5].map((i) => (
-                  <i
+                  <span
                     key={i}
-                    className={score !== null && i <= score ? "on" : undefined}
+                    data-segment=""
+                    data-on={score !== null && i <= score ? "" : undefined}
+                    className="block h-2 w-5 rounded-sm bg-muted data-[on]:bg-primary"
                   />
                 ))}
-                <span className="sc">
-                  {score ?? "–"} <small>/ 5</small>
+                <span className="ml-2 whitespace-nowrap font-bold">
+                  {score ?? "–"} <small className="text-xs font-normal text-muted-foreground">/ 5</small>
                 </span>
               </span>
-              <span className="g-why">
+              <span className="min-w-0 text-sm text-muted-foreground">
                 {g.onolys?.reason}
                 {ev.length > 0 ? (
-                  <span className="g-evidence">
+                  <span data-evidence="" className="mt-1 block text-xs">
                     Evidence: utterances{" "}
                     {ev.map((n, i) => (
                       <Fragment key={n}>
@@ -177,53 +194,53 @@ function Glance({ r, turns }: { r: Report; turns: readonly Turn[] | null }) {
           );
         })}
       </ul>
-      <div className="tbl">
-        <table aria-label="Summary scores">
-          <thead>
-            <tr>
-              <th>Summary score</th>
-              <th className="num">Value</th>
-              <th className="num">Fair</th>
-              <th className="num">Good</th>
-              <th>Status</th>
-            </tr>
-          </thead>
-          <tbody>
+      <div className={TBL}>
+        <Table aria-label="Summary scores">
+          <TableHeader>
+            <TableRow className="bg-muted hover:bg-muted">
+              <TableHead className={TH}>Summary score</TableHead>
+              <TableHead className={`${TH} text-right`}>Value</TableHead>
+              <TableHead className={`${TH} text-right`}>Fair</TableHead>
+              <TableHead className={`${TH} text-right`}>Good</TableHead>
+              <TableHead className={TH}>Status</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
             {(r.summaries ?? []).map((s) => {
               const ref = s.reference;
               const st = ref ? STATUS[s.onolys.label ?? ""] : undefined;
               return (
-                <tr key={s.id}>
-                  <td>
+                <TableRow key={s.id}>
+                  <TableCell className={CELL}>
                     {s.label}
                     {FORMULA[s.id] ? (
                       <>
                         {" "}
-                        <span className="cite">{FORMULA[s.id]}</span>
+                        <span className="text-[0.8125rem] text-muted-foreground">{FORMULA[s.id]}</span>
                       </>
                     ) : null}
-                  </td>
-                  <td className="num">{valueText(s.id, s.onolys.value)}</td>
-                  <td className="num">
+                  </TableCell>
+                  <TableCell className={`${CELL} text-right`}>{valueText(s.id, s.onolys.value)}</TableCell>
+                  <TableCell className={`${CELL} text-right`}>
                     {ref ? valueText(s.id, ref.fair) : "–"}
-                  </td>
-                  <td className="num">
+                  </TableCell>
+                  <TableCell className={`${CELL} text-right`}>
                     {ref ? valueText(s.id, ref.good) : "–"}
-                  </td>
-                  <td>
+                  </TableCell>
+                  <TableCell className={CELL}>
                     {!ref ? (
-                      <span className="s-none">No reference level</span>
+                      <span className="text-muted-foreground">No reference level</span>
                     ) : st ? (
-                      <span className={`chip ${st.cls}`}>{st.text}</span>
+                      <StatusChip tone={st.tone}>{st.text}</StatusChip>
                     ) : null}
-                  </td>
-                </tr>
+                  </TableCell>
+                </TableRow>
               );
             })}
-          </tbody>
-        </table>
+          </TableBody>
+        </Table>
       </div>
-      <p className="pc-note">
+      <p className="text-xs text-muted-foreground">
         Fair and good are reference levels, not pass marks.
       </p>
     </Section>
@@ -238,48 +255,50 @@ function Feedback({ r, turns }: { r: Report; turns: readonly Turn[] | null }) {
   return (
     <Section id="feedback" title="Feedback: ideas to try">
       {tips.length > 0 ? (
-        <p className="lead">
+        <p className={NOTE}>
           Listed in order of priority. Start with the first.
         </p>
       ) : null}
       {tips.length > 0 ? (
-        <ol className="tips">
+        <ol className="m-0 grid list-none grid-cols-1 gap-5 p-0">
           {tips.map((t) => {
             const n = index.get(t.quote.turn_id);
             return (
-              <li key={t.rank} className="tip">
-                <span className="rank">{t.rank}</span>
-                <div className="tip-title">
+              <li key={t.rank} data-tip="">
+                <Card className="grid grid-cols-1 gap-x-4 gap-y-0 p-5 sm:grid-cols-[36px_minmax(0,1fr)]">
+                <span className="mb-2 grid size-8 place-items-center rounded-full bg-primary font-bold text-primary-foreground sm:mb-0">{t.rank}</span>
+                <div className="mb-4 mt-[3px] flex flex-wrap items-center gap-x-2.5 gap-y-1.5 font-semibold">
                   {t.observation} <CodeChip id={t.item_id} />
                 </div>
-                <div className="parts">
+                <div className="grid grid-cols-1 gap-4 sm:col-start-2">
                   <div>
-                    <span className="lbl">What was said</span>
-                    <blockquote className="said">
+                    <span className={`${LABEL} mb-1`}>What was said</span>
+                    <blockquote className="m-0 border-l-[3px] border-border py-0 pl-3 pr-0 italic">
                       “{t.quote.text}”
                       {n !== undefined ? (
-                        <cite>
+                        <cite className="ml-1.5 whitespace-nowrap text-xs not-italic text-muted-foreground">
                           Utterance <UtteranceLink n={n} />
                         </cite>
                       ) : null}
                     </blockquote>
                   </div>
-                  <div className="try">
-                    <span className="lbl">Try instead</span>
-                    <p className="eg">{t.alternative}</p>
+                  <div data-try="" className="rounded-md bg-muted px-3.5 py-3">
+                    <span className={`${LABEL} mb-1 text-primary`}>Try instead</span>
+                    <p data-eg="" className="font-semibold text-primary">{t.alternative}</p>
                   </div>
                   <div>
-                    <span className="lbl">Why it matters</span>
-                    <p className="why">{t.why_it_matters}</p>
+                    <span className={`${LABEL} mb-1`}>Why it matters</span>
+                    <p>{t.why_it_matters}</p>
                   </div>
                 </div>
+                </Card>
               </li>
             );
           })}
         </ol>
       ) : null}
       {notices.map((w, i) => (
-        <p key={i} className="quiet-notice" role="note">
+        <p key={i} className={NOTE} role="note">
           {WARNING_TEXT[w.code]}
         </p>
       ))}
@@ -300,41 +319,43 @@ function Counts({ r }: { r: Report }) {
     Math.round(ids.reduce((a, id) => a + (means.get(id) ?? 0), 0));
   return (
     <Section id="counts" title="Behaviour counts">
-      <div className="tbl">
-        <table aria-label="Behaviour counts">
-          <thead>
-            <tr>
-              <th>Code</th>
-              <th>Behaviour</th>
-              <th className="num">Count</th>
-            </tr>
-          </thead>
-          <tbody>
+      <div className={TBL}>
+        <Table aria-label="Behaviour counts">
+          <TableHeader>
+            <TableRow className="bg-muted hover:bg-muted">
+              <TableHead className={TH}>Code</TableHead>
+              <TableHead className={TH}>Behaviour</TableHead>
+              <TableHead className={`${TH} text-right`}>Count</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
             {GROUPS.map((g) => (
               <Fragment key={g.title}>
-                <tr className="subhead">
-                  <td colSpan={3}>{g.title}</td>
-                </tr>
+                <TableRow className="bg-muted hover:bg-muted">
+                  <TableCell colSpan={3} className={`${TH} py-1.5`}>
+                    {g.title}
+                  </TableCell>
+                </TableRow>
                 {g.ids.map((id) => (
-                  <tr key={id}>
-                    <td>
+                  <TableRow key={id}>
+                    <TableCell className={CELL}>
                       <CodeChip id={id} />
-                    </td>
-                    <td>{CODE_META[id]?.label ?? id}</td>
-                    <td className="num">{counts.get(id) ?? 0}</td>
-                  </tr>
+                    </TableCell>
+                    <TableCell className={CELL}>{CODE_META[id]?.label ?? id}</TableCell>
+                    <TableCell className={`${CELL} text-right`}>{counts.get(id) ?? 0}</TableCell>
+                  </TableRow>
                 ))}
                 {g.total ? (
-                  <tr className="total">
-                    <td />
-                    <td>{g.total.label}</td>
-                    <td className="num">{sum(g.total.ids)}</td>
-                  </tr>
+                  <TableRow className="bg-muted font-semibold">
+                    <TableCell />
+                    <TableCell className={CELL}>{g.total.label}</TableCell>
+                    <TableCell className={`${CELL} text-right`}>{sum(g.total.ids)}</TableCell>
+                  </TableRow>
                 ) : null}
               </Fragment>
             ))}
-          </tbody>
-        </table>
+          </TableBody>
+        </Table>
       </div>
     </Section>
   );
@@ -353,31 +374,33 @@ function TranscriptSection({
   return (
     <Section id="transcript" title="Coded transcript">
       {turns.status === "ready" ? (
-        <p className="lead">
+        <p className={NOTE}>
           {rows.length} utterances, {practitioner} from the practitioner. Each
           code shows the reason it was given.
         </p>
       ) : null}
       {turns.status === "error" ? (
-        <p className="lead">
+        <p className={NOTE}>
           We couldn't load the transcript.{" "}
           {turns.retry ? (
-            <button type="button" className="link-button" onClick={turns.retry}>
+            <Button type="button" variant="link" className={`${BTN} ${LINK_BTN} inline h-auto min-h-0 py-0 align-baseline`} onClick={turns.retry}>
               Try again
-            </button>
+            </Button>
           ) : null}
         </p>
       ) : null}
-      <button
-        type="button"
-        className="btn btn-primary"
-        disabled={turns.status === "loading"}
-        onClick={() => open()}
-      >
-        {turns.status === "loading"
-          ? "Loading transcript…"
-          : "Open coded transcript"}
-      </button>
+      <div>
+        <Button
+          type="button"
+          className={BTN}
+          disabled={turns.status === "loading"}
+          onClick={() => open()}
+        >
+          {turns.status === "loading"
+            ? "Loading transcript…"
+            : "Open coded transcript"}
+        </Button>
+      </div>
     </Section>
   );
 }
@@ -391,9 +414,9 @@ function Method({ r }: { r: Report }) {
       {m.limits?.map((l) => (
         <p key={l}>{l}</p>
       ))}
-      {m.citation ? <p className="cite">{m.citation}</p> : null}
+      {m.citation ? <p className="text-[0.8125rem] text-muted-foreground">{m.citation}</p> : null}
       {m.not_official_miti_coding ? (
-        <p className="warn">
+        <p className="rounded-md bg-score-fair-bg px-4 py-3 font-semibold text-score-fair">
           Not official MITI coding and cannot be submitted as one.
         </p>
       ) : null}
@@ -434,24 +457,24 @@ export function ReportView({
       legendIds={legendIds}
       showNotCodedLegend={!!notCoded && notCoded.size > 0}
     >
-      <div className="report-view">
-        <header>
-          <h1>{title}</h1>
+      <div data-report-view="" className="mx-auto grid grid-cols-1 max-w-[55rem] gap-8 tabular-nums [&_p]:m-0">
+        <header className="grid grid-cols-1 gap-2 [&_p]:m-0">
+          <h1 className={`${H1} text-balance tracking-tight`}>{title}</h1>
           {headerSlot}
           {r.header.change_goal ? (
-            <p className="goal">
+            <p>
               <b>Change goal:</b> {r.header.change_goal}
             </p>
           ) : null}
-          <ul className="meta">
+          <ul className="m-0 flex list-none flex-wrap gap-x-5 gap-y-1 p-0 text-[0.8125rem] text-muted-foreground">
             <li>
-              <b>Protocol</b> {r.header.protocol.label}
+              <b className="font-medium text-foreground">Protocol</b> {r.header.protocol.label}
             </li>
             <li>
-              <b>Coded span</b> {spanText(r, list ? list.length : null)}
+              <b className="font-medium text-foreground">Coded span</b> {spanText(r, list ? list.length : null)}
             </li>
             <li>
-              <b>Date</b> {fmtDate(r.created_at)}
+              <b className="font-medium text-foreground">Date</b> {fmtDate(r.created_at)}
             </li>
           </ul>
         </header>

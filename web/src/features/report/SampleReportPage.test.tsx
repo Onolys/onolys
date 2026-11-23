@@ -35,7 +35,7 @@ describe("/sample", () => {
     expect(await main.findByText("Example report from a made-up role-play conversation.")).toBeInTheDocument();
     expect(main.queryByText(/^Sample$/)).toBeNull();
     expect(main.queryByRole("note")).toBeNull();
-    expect(document.querySelector(".notice")).toBeNull();
+    expect(main.queryByRole("alert")).toBeNull();
   });
 
   it("opens the coded transcript with the closing pleasantry marked Not coded", async () => {

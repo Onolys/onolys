@@ -56,7 +56,7 @@ describe("ReportView", () => {
 
   it("shows the four globals with value and reason", () => {
     view();
-    const items = screen.getAllByRole("listitem").filter((li) => li.classList.contains("global"));
+    const items = screen.getAllByRole("listitem").filter((li) => li.hasAttribute("data-global"));
     expect(items).toHaveLength(4);
     expect(items.map((li) => within(li).getByRole("img").getAttribute("aria-label"))).toEqual([
       "2 out of 5",
@@ -69,8 +69,8 @@ describe("ReportView", () => {
 
   it("renders Evidence utterance rows from evidence ids, sorted, and opens the dialog at that row", () => {
     view();
-    const cct = screen.getAllByRole("listitem").filter((li) => li.classList.contains("global"))[0];
-    const row = cct.querySelector(".g-evidence")!;
+    const cct = screen.getAllByRole("listitem").filter((li) => li.hasAttribute("data-global"))[0];
+    const row = cct.querySelector("[data-evidence]")!;
     expect(row.textContent).toBe("Evidence: utterances 18, 19, 31, 40, 41");
     fireEvent.click(within(row as HTMLElement).getByRole("button", { name: "Open utterance 31" }));
     expect(dlg().hasAttribute("open")).toBe(true);
@@ -81,9 +81,9 @@ describe("ReportView", () => {
     const r = structuredClone(drinkingSampleReport);
     r.globals![0].onolys.evidence = [];
     const { container, rerender } = view({ report: r });
-    expect(container.querySelectorAll(".g-evidence")).toHaveLength(3);
+    expect(container.querySelectorAll("[data-evidence]")).toHaveLength(3);
     rerender(<ReportView report={drinkingSampleReport} turns={{ status: "loading" }} title="Report" />);
-    expect(container.querySelectorAll(".g-evidence")).toHaveLength(0);
+    expect(container.querySelectorAll("[data-evidence]")).toHaveLength(0);
   });
 
   it("renders the summary table with chips, and No reference level for null references", () => {
@@ -104,14 +104,14 @@ describe("ReportView", () => {
 
   it("renders ranked tip cards with quote, utterance link, alternative and why", () => {
     view();
-    const tips = screen.getAllByRole("listitem").filter((li) => li.classList.contains("tip"));
+    const tips = screen.getAllByRole("listitem").filter((li) => li.hasAttribute("data-tip"));
     expect(tips).toHaveLength(3);
     expect(tips[0].textContent).toContain("Arguing against cutting down closed the client off");
     expect(within(tips[0]).getByText("Confront")).toBeTruthy();
     expect(within(tips[0]).getByText("What was said")).toBeTruthy();
     expect(within(tips[0]).getByText("Try instead")).toBeTruthy();
     expect(within(tips[0]).getByText("Why it matters")).toBeTruthy();
-    expect(tips[0].querySelector(".try .eg")!.textContent).toContain("You'd like to keep wine in your life");
+    expect(tips[0].querySelector("[data-try] [data-eg]")!.textContent).toContain("You'd like to keep wine in your life");
     fireEvent.click(within(tips[0]).getByRole("button", { name: "Open utterance 25" }));
     expect(dlg().hasAttribute("open")).toBe(true);
     expect(scroll.mock.instances[0]).toBe(document.getElementById("utt-25"));

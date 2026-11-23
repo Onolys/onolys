@@ -132,7 +132,7 @@ describe("CodedTranscriptDialog", () => {
     expect(heads).toEqual(["Utt #", "Speaker", "Utterance", "Code(s)", "Why"]);
     expect(dlg().querySelector("#utt-1")).toBeTruthy();
     expect(dlg().querySelector("#utt-54")).toBeTruthy();
-    const legend = dlg().querySelector("details.dlg-legend")!;
+    const legend = dlg().querySelector("details[data-legend]")!;
     expect(legend.querySelector("summary")!.textContent).toBe("Code legend");
     expect(legend.textContent).toContain("Emphasize Autonomy");
     expect(legend.textContent).toContain("Persuade with Permission");
@@ -146,7 +146,7 @@ describe("CodedTranscriptDialog", () => {
     );
     const row = dlg().querySelector("#utt-29")!;
     expect(
-      [...row.querySelectorAll(".code")].map((c) => c.textContent),
+      [...row.querySelectorAll("[data-code]")].map((c) => c.textContent),
     ).toEqual(["EA", "PwP"]);
     expect(row.textContent).toContain("'your call'");
     expect(row.textContent).toContain(
@@ -224,7 +224,7 @@ describe("CodedTranscriptDialog", () => {
     for (const [n, chips] of Object.entries(order)) {
       const row = dlg().querySelector(`#utt-${n}`)!;
       expect(
-        [...row.querySelectorAll(".codes .code")].map((c) => c.textContent),
+        [...row.querySelectorAll("[data-codes] [data-code]")].map((c) => c.textContent),
       ).toEqual(chips);
       const why = [...row.querySelectorAll("td:last-child > div")].map(
         (d) => d.textContent!.split(":")[0],
