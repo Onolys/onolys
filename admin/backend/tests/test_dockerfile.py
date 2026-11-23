@@ -46,7 +46,7 @@ def test_safe_defaults_and_workdir():
 
 
 def test_no_removed_engine_manifests():
-    assert not re.search(r"engines/(core|eaudit|paudit|evaluation)", re.sub(r"^#.*$", "", DOCKERFILE, flags=re.M))
+    assert not re.search(r"engines/(eaudit|paudit|evaluation)", re.sub(r"^#.*$", "", DOCKERFILE, flags=re.M))
 
 
 def test_every_engine_manifest_is_copied():

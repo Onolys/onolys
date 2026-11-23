@@ -18,6 +18,7 @@ WORKDIR /src
 # (engines/*, api, admin/*) needs its pyproject present for uv to resolve the frozen lock;
 # no member source other than admin/auth and admin/backend is copied.
 COPY pyproject.toml uv.lock ./
+COPY engines/core/pyproject.toml engines/core/pyproject.toml
 COPY engines/miti/pyproject.toml engines/miti/pyproject.toml
 COPY api/pyproject.toml api/pyproject.toml
 COPY admin/auth/pyproject.toml admin/auth/pyproject.toml
