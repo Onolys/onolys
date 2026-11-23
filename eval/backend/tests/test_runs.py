@@ -348,6 +348,69 @@ def saved_upload(services, *, ready=True, has_gold=False):
     )
 
 
+@pytest.mark.parametrize("clients", [["Morgan"], ["Morgan", "Sam"]])
+def test_named_text_upload_with_multiple_clients_runs_without_losing_speakers(services, clients):
+    engine = services.fake_engine = FakeEngine()
+    original_run = engine.run
+    observed = []
+
+    async def capture(ctx, value, params, progress_cb=None):
+        observed.append(value.model_dump(mode="json"))
+        return await original_run(ctx, value, params, progress_cb)
+
+    engine.run = capture
+    c = client(services=services)
+    labels = ["Alex", *clients, "Alex"]
+    texts = ["synthetic clinician words " * 20, *[f"synthetic client {i} words" for i in range(len(clients))], "synthetic closing words"]
+    raw = "\n".join(f"{label}: {text}" for label, text in zip(labels, texts, strict=True))
+    response = c.post(
+        "/v1/uploads", headers=AUTH,
+        files={"file": ("named-session.txt", raw.encode(), "text/plain")},
+        data={"change_goal": "Synthetic change goal", "language": "en"},
+    )
+    assert response.status_code == 200, response.text
+    upload = response.json()
+    assert upload["status"] == "awaiting_speakers"
+    upload_id = upload["upload_id"]
+    selection = {"input": {"upload_id": upload_id}, "engines": ["oneshot:miti"]}
+    assert start(c, **selection).status_code == 409
+    ready = c.post(
+        f"/v1/uploads/{upload_id}/speakers", headers=AUTH,
+        json={"clinician_speaker": "Alex"},
+    )
+    assert ready.status_code == 200 and ready.json()["status"] == "ready"
+    uploaded = services.repository.get_upload(upload_id)
+    confirmed = services.bucket.read_json(uploaded["transcript_path"])
+    assert [turn["speaker"] for turn in confirmed["turns"]] == labels
+    assert [turn["text"] for turn in confirmed["turns"]] == [text.strip() for text in texts]
+    assert [turn["role"] for turn in confirmed["turns"]] == ["clinician", *["client"] * len(clients), "clinician"]
+    response = start(c, **selection)
+    assert response.status_code == 200, response.text
+    rid = response.json()["run_id"]
+    source = services.repository.get_run(rid)["input_ref"]["sessions"][0]
+    expected_map = {"subject": "Alex", **({"other": clients[0]} if len(clients) == 1 else {})}
+    assert source["speaker_map"] == expected_map
+    assert services.bucket.read_json(source["transcript_path"]) == confirmed
+    uid = next(iter(services.repository.list_units(rid)))
+    assert dispatch(c, rid, uid).status_code == 200
+    assert services.repository.get_unit(rid, uid)["status"] == "done"
+    assert observed == [confirmed]
+    assert len(engine.calls) == 1 and engine.calls[0][1]["speaker_map"] == expected_map
+
+
+@pytest.mark.parametrize("invalid_speakers", ["unresolved", "no_client"])
+def test_run_still_rejects_unresolved_or_missing_client(services, invalid_speakers):
+    saved_upload(services)
+    data = transcript(roles=invalid_speakers != "unresolved")
+    if invalid_speakers == "no_client":
+        for turn in data["turns"]:
+            turn.update(speaker="T", role="clinician")
+    services.bucket.write_json("uploads/saved/transcript.json", data)
+    response = start(client(services=services), input={"upload_id": "saved"}, engines=["miti"])
+    assert response.status_code == 422
+    assert services.repository.list_runs() == {} and services.queue.tasks == []
+
+
 def test_upload_readiness_gold_gate_and_override_snapshot(services):
     saved_upload(services, has_gold=True)
     c = client(services=services)

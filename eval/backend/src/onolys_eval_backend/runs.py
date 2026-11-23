@@ -171,7 +171,7 @@ def _validate_sources(services, sources, body):
             raise ValueError("Saved transcript integrity mismatch")
         clinician = inferred_clinician_speaker(transcript)
         clients = {t.speaker for t in transcript.turns if t.role == "client"}
-        if clinician is None or len(clients) != 1:
+        if clinician is None or not clients:
             raise ValueError("Unresolved speakers")
         validate_span(transcript, source["coded_span"])
         gold = None
@@ -199,7 +199,10 @@ def _validate_sources(services, sources, body):
                 "transcript": transcript.model_dump(mode="json"),
                 "gold": gold.model_dump(mode="json", by_alias=True) if gold else None,
                 "language": source.get("language") or body.language or transcript.language,
-                "speaker_map": {"subject": clinician, "other": next(iter(clients))},
+                "speaker_map": {
+                    "subject": clinician,
+                    **({"other": next(iter(clients))} if len(clients) == 1 else {}),
+                },
             }
         )
     return resolved
