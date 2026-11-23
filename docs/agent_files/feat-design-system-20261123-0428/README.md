@@ -9,7 +9,7 @@ date: 2026-11-23
 | # | Sub-project | Phase | Depends on | Status | PRD |
 |---|---|---|---|---|---|
 | 01 | onolys-ui | 1 | none | complete | [PRD](01-onolys-ui/PRD.md) |
-| 02 | app-migration | 2 | 01 v0.1.0 tag + merged #52/#54 baseline | planned · single PR #55 | [PRD](02-app-migration/PRD.md) |
+| 02 | app-migration | 2 | 01 v0.1.0 tag + merged #52/#54 baseline | complete · single PR #55 | [PRD](02-app-migration/PRD.md) |
 | 03 | landing | 3 | 01 | not yet designed | - |
 | 04 | admin-eval-frontend | 4 | 01 | not yet designed | - |
 
@@ -60,4 +60,4 @@ SP2 preservation baseline refreshed after rebasing onto main `d88fbc6` (merged #
 - [RESOLVED: orchestrator default 2026-11-23 — MSW only where needed; exact prod CSP header served, no `worker-src` addition (falls back to `script-src 'self'`)]
 
 ## Delivery evidence
-SP1 is complete: [public v0.1.0 release](https://github.com/Onolys/onolys-ui/releases/tag/v0.1.0), [implementation record](code-2026-11-23-0700.md), and [full review PASS](review-2026-11-23-0653.md). SP2 prerequisites (tag and merged #52) are met; all SP2 tasks remain todo (delivered as one PR, #55). Owner still enables protection on onolys-ui main.
+SP1 is complete: [public v0.1.0 release](https://github.com/Onolys/onolys-ui/releases/tag/v0.1.0), [implementation record](code-2026-11-23-0700.md), and [full review PASS](review-2026-11-23-0653.md). SP2 is complete as single PR #55: [implementation record](02-app-migration/code-2026-11-23-1657.md), [full review PASS](02-app-migration/review-2026-11-23-1657.md). Owner still enables protection on onolys-ui main.

@@ -8,15 +8,15 @@ Source of truth: docs/agent_files/feat-design-system-20261123-0428/02-app-migrat
 
 | # | Task | Depends on | Status |
 |---|------|-----------|--------|
-| 1 | Phase 0: deps, CSS entry, shims, baseline | SP1 v0.1.0 + merged #52/#54 baseline | todo |
-| 2 | Phase 0: CSP smoke, visual and axe gates | 1 | todo |
-| 3 | Phase 1: shell | 2 | todo |
-| 4 | Phase 2: auth | 3 | todo |
-| 5 | Phase 3: chooser, sessions, upload, interview | 4 | todo |
-| 6 | Phase 4: session page | 5 | todo |
-| 7 | Phase 5: shared report and coded-transcript dialog | 6 | todo |
-| 8 | Phase 6: settings and legal | 7 | todo |
-| 9 | Phase 6: legacy cleanup | 8 | todo |
+| 1 | Phase 0: deps, CSS entry, shims, baseline | SP1 v0.1.0 + merged #52/#54 baseline | done |
+| 2 | Phase 0: CSP smoke, visual and axe gates | 1 | done |
+| 3 | Phase 1: shell | 2 | done |
+| 4 | Phase 2: auth | 3 | done |
+| 5 | Phase 3: chooser, sessions, upload, interview | 4 | done |
+| 6 | Phase 4: session page | 5 | done |
+| 7 | Phase 5: shared report and coded-transcript dialog | 6 | done |
+| 8 | Phase 6: settings and legal | 7 | done |
+| 9 | Phase 6: legacy cleanup | 8 | done |
 
 ## Task 1 — Phase 0: deps, CSS entry, shims, baseline
 **What it is / what it means:** Install the design system and switch the app's CSS entry without changing how any screen looks in light mode (Decisions 1, 2).
