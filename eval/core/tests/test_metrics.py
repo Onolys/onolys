@@ -111,7 +111,8 @@ def test_metrics_and_shared_summary_helper_do_not_read_files(monkeypatch):
 
 @pytest.mark.parametrize("group,key,value", [
     ("counts", "question", -1), ("counts", "question", True),
-    ("counts", "question", 1.5), ("counts", "extra", 1),
+    ("counts", "question", float("nan")), ("counts", "question", float("inf")),
+    ("counts", "extra", 1),
     ("globals", "cct", 0), ("globals", "cct", 6),
     ("globals", "cct", True), ("summaries", "pct_cr", float("nan")),
     ("summaries", "pct_cr", float("inf")),

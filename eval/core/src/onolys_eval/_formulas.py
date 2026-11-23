@@ -15,7 +15,7 @@ SUMMARY_FORMULAS = tuple(
 )
 
 
-def compute_summaries(counts: Mapping[str, int], globals: Mapping[str, int]
+def compute_summaries(counts: Mapping[str, int | float], globals: Mapping[str, int]
                       ) -> dict[str, float | None]:
     """Evaluate the shared pack formulas, preserving undefined ratios as null."""
     values = {**counts, **globals}

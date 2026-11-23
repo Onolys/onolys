@@ -5,13 +5,17 @@ key, excluding pairs where either side is null; ``n`` counts valid pairs. All
 returned comparisons and aggregates contain only JSON-native values.
 """
 from collections.abc import Iterable, Mapping
-from typing import Literal, TypedDict
+from typing import Annotated, Literal, TypedDict
 
 from pydantic import Field
 
 from ._contracts import Contract
 from ._formulas import SUMMARY_FORMULAS, compute_summaries
-from .gold import COUNT_IDS, GLOBAL_IDS, Counts, Globals, Number
+from .gold import COUNT_IDS, GLOBAL_IDS, CountId, Globals, Number
+
+# Gold counts remain strict integers; lean multi-run reports expose count means.
+ScoreCount = Annotated[int | float, Field(ge=0, allow_inf_nan=False)]
+ScoreCounts = Annotated[dict[CountId, ScoreCount], Field(min_length=10, max_length=10)]
 
 
 class Scores(Contract):
@@ -21,7 +25,7 @@ class Scores(Contract):
     from the authorable counts/globals; engine-computed values never affect scores.
     """
 
-    counts: Counts
+    counts: ScoreCounts
     globals: Globals
     summaries: dict[str, Number | None] = Field(default_factory=dict)
 
