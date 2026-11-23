@@ -61,7 +61,7 @@ async def test_one_call_with_exact_params():
     (args, kw) = engine.calls[0]
     c, tr, speakers, params, got_cb = args
     assert speakers == SPEAKERS and got_cb is cb and kw == {}
-    assert params == {k: v for k, v in PARAMS.items() if k != "stub_title"}
+    assert params == {**{k: v for k, v in PARAMS.items() if k != "stub_title"}, "coded_span": None}
     assert c.request_id == "req-9" and c.llm == "llm" and c.metrics is not None
     assert isinstance(out, EvaluationOutput)
     assert out.report == {"schema_version": "1"} and out.artifacts == {"code": {"x": 1}}
@@ -115,11 +115,16 @@ def test_adapter_names_no_model_or_provider():
     )
 
 
-async def test_a_caller_coded_span_never_reaches_the_engine():
+@pytest.mark.parametrize(
+    "coded_span",
+    [{"start_ms": 0, "end_ms": 600_000}, {"start_turn": 0, "end_turn": 2}],
+    ids=["milliseconds", "turns"],
+)
+async def test_a_caller_coded_span_reaches_the_engine_unchanged(coded_span):
     engine = Engine()
-    params = {**PARAMS, "coded_span": {"from_s": 0.0, "to_s": 600.0}}
+    params = {**PARAMS, "coded_span": coded_span}
     await make(engine).run(ctx(), transcript(), SPEAKERS, params)
-    assert "coded_span" not in engine.calls[0][0][3]
+    assert engine.calls[0][0][3]["coded_span"] == coded_span
 
 
 async def test_session_stt_provenance_passes_outside_transcript():

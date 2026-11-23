@@ -81,9 +81,10 @@ def _classify(exc: BaseException, stage: Stage) -> tuple[str, bool]:
         if exc.code in _ADAPTER_CODES:
             return exc.code, _ADAPTER_CODES[exc.code]
         return INTERNAL, False
-    if isinstance(exc, InputError) and exc.code in ("invalid_coded_span", "session_too_long"):
-        return exc.code, False
     if isinstance(exc, InputError):
+        code = getattr(exc, "code", None)
+        if code in ("invalid_coded_span", "session_too_long"):
+            return code, False
         return "invalid_parameters", False
     if stage == "stt":
         if isinstance(exc, SttProviderError):

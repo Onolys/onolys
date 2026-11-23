@@ -43,5 +43,7 @@ async def test_fake_and_real_agree_on_shape(monkeypatch):
     # The patched engine returns a fixture result without a span, so compare the fake's span to
     # what the real engine emits (SpanInfo).
     fspan = fo.report["run_info"]["miti"]["span"]
-    assert set(fspan) == set(SpanInfo.model_fields)
+    # Whole-session serialization omits the optional explicit-range bounds.
+    assert set(fspan) == {"mode", "duration_s", "seed"}
+    assert SpanInfo.model_validate(fspan).model_dump() == fspan
     assert fspan["mode"] == "whole" and fspan["seed"] == PARAMS["seed"]

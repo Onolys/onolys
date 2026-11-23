@@ -7,7 +7,13 @@ import pytest
 import test_run
 import test_worker
 from google.api_core.exceptions import ServiceUnavailable, TooManyRequests
-from onolys_engine_core.errors import ConfigError, InputError, OnolysError
+from onolys_engine_core.errors import (
+    ConfigError,
+    InputError,
+    InvalidCodedSpan,
+    OnolysError,
+    SessionTooLong,
+)
 from onolys_miti.code_pass import CodePassFailed
 from onolys_miti.globals_pass import GlobalsPassFailed
 from onolys_miti.llm.errors import (
@@ -35,9 +41,17 @@ repo = test_worker.repo
 SECRET = "SECRET-transcript-text"
 UPSTREAM, DEADLINE, TRANSCRIBE = "upstream_unavailable", "deadline_exceeded", "transcription_failed"
 
+
+class UnknownInputError(InputError):
+    code = SECRET
+
+
 # (id, exception factory, stage, attempt, public code, retryable)
 CASES = [
     ("input", lambda: InputError(SECRET), "run", 1, "invalid_parameters", False),
+    ("input_unknown_code", lambda: UnknownInputError(SECRET), "run", 1, "invalid_parameters", False),
+    ("invalid_span", lambda: InvalidCodedSpan(SECRET), "run", 1, "invalid_coded_span", False),
+    ("too_long", lambda: SessionTooLong(SECRET), "run", 1, "session_too_long", False),
     ("config", lambda: ConfigError(SECRET), "run", 1, "internal_error", False),
     ("llm_unavailable", lambda: LLMUnavailable(SECRET), "run", 1, UPSTREAM, True),
     ("llm_timeout", lambda: LLMTimeout(SECRET), "run", 1, UPSTREAM, True),
