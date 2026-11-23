@@ -1,6 +1,6 @@
-/** Shared audio-file pick with the advisory pre-check (new session form and "Resume upload"). */
+/** Shared file pick with source-specific advisory pre-checks. */
 import { useCallback, useRef, useState } from "react";
-import { checkFile, readDuration, type PrecheckResult } from "./precheck";
+import { checkFile, checkTranscript, readDuration, type PrecheckResult } from "./precheck";
 
 export interface FilePick {
   file: File | null;
@@ -13,7 +13,7 @@ export interface FilePick {
   ready: boolean;
 }
 
-export function useFilePick(): FilePick {
+export function useFilePick(kind: "audio" | "transcript" = "audio"): FilePick {
   const [file, setFile] = useState<File | null>(null);
   const [check, setCheck] = useState<PrecheckResult | null>(null);
   const [checking, setChecking] = useState(false);
@@ -25,6 +25,7 @@ export function useFilePick(): FilePick {
     setCheck(null);
     setChecking(false);
     if (!f) return;
+    if (kind === "transcript") return setCheck(checkTranscript(f));
     const quick = checkFile(f, null);
     if (quick.blocked) return setCheck(quick);
     setChecking(true);
@@ -32,7 +33,7 @@ export function useFilePick(): FilePick {
     if (latest.current !== f) return; // a newer pick owns the state now
     setCheck(checkFile(f, duration));
     setChecking(false);
-  }, []);
+  }, [kind]);
 
   return { file, check, checking, pick, ready: file !== null && check !== null && check.blocked === null };
 }

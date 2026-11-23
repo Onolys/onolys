@@ -1,4 +1,5 @@
 # Virtual workspace root (no [project]).
-# Members: engines/miti, api, admin/auth, admin/backend.
+# Members: engines/core, engines/miti, api, admin/auth, admin/backend, eval/core, eval/backend.
 [tool.uv.workspace]
-members = ["engines/*", "api", "admin/*"]
+members = ["engines/*", "api", "admin/*", "eval/*"]
+exclude = ["eval/datasets", "eval/web"]

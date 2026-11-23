@@ -11,7 +11,7 @@ from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 from google.api_core.exceptions import AlreadyExists
 from google.auth import crypt, jwt
-from onolys_miti.errors import ConfigError
+from onolys_engine_core.errors import ConfigError
 
 from onolys_api.app import create_app
 from onolys_api.auth.oidc import OidcVerifier

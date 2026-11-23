@@ -236,7 +236,7 @@ async def test_limit_comes_from_the_provider_config(settings, repo, blobs, tmp_p
 def settings_routes(settings):
     from importlib import resources
 
-    return resources.files("onolys_miti.llm").joinpath("routes.default.yaml")
+    return resources.files("onolys_engine_core.llm").joinpath("routes.default.yaml")
 
 
 class DeletingTools(StubTools):

@@ -8,7 +8,7 @@ from typing import Annotated, Literal
 
 from fastapi import Depends, Request
 from fastapi.security import APIKeyHeader, HTTPAuthorizationCredentials, HTTPBearer
-from onolys_miti.errors import ConfigError
+from onolys_engine_core.errors import ConfigError
 
 from onolys_api.auth.idtoken import EmailNotVerified, IdTokenVerifier, InvalidToken, TokenVerifier
 from onolys_api.auth.keys import parse_key, secret_matches

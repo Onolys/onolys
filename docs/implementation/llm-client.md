@@ -1,6 +1,6 @@
 # LLM client
 
-Every model call goes through one interface. Code: `engines/miti/src/onolys_miti/llm/`.
+Every model call goes through one interface. Code: `engines/core/src/onolys_engine_core/llm/`.
 
 **Audience:** maintainers and coding agents.
 

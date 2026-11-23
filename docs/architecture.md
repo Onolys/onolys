@@ -4,25 +4,39 @@ High-level design: how the system fits together.
 
 **Audience:** everyone.
 
-Onolys has a web app, a public API with a background worker, one MITI engine, and a small admin shell.
+Onolys has a web app, a public API with a background worker, one MITI engine on a shared engine core, and a small admin shell.
 
 ```
-web app --/v1--> api (+ worker) --imports--> onolys_miti
-                    |                           |-- LLM (LiteLLM routes)
+web app --/v1--> api (+ worker) --registry--> MitiEngine (onolys_miti)
+                    |                           |-- onolys_engine_core (LLM, transcript, context)
                     |                           |-- speech-to-text
                     |                           `-- voice (Gemini Live)
                     `-- Firestore, Cloud Storage, Cloud Tasks
 admin site --/v1/me--> admin backend (login check only)
 ```
 
+## Shared engine core: `onolys_engine_core`
+
+[`engines/core/`](../engines/core/pyproject.toml) holds transcript types and parsing,
+`RunContext`, LLM clients and route presets, safe logging, output validation, and the
+`Engine` interface and registry. It imports no MITI code; an AST boundary test enforces
+that separation. API and eval import these shared types directly from
+`onolys_engine_core`, without compatibility re-exports in `onolys_miti`.
+
+Each engine declares its output schema and runs asynchronously, returning an
+`EngineResult` with output, artifacts and usage metadata. The API explicitly registers
+MITI in `onolys_api.engines`; `PROD_ENGINE` selects the engine (default `miti`). Engine
+and preset listings mark the configured production choices; `DEFAULT_PRESET` selects
+the production route preset.
+
 ## Engine: `onolys_miti`
 
-[`engines/miti/`](../engines/miti/README.md) is a Python package with MITI 4.2.1 built in. It holds the MITI definition, prompts, fixtures and report schema (`src/onolys_miti/data/`), the coding and tips passes, and the infrastructure the api needs:
+[`engines/miti/`](../engines/miti/README.md) is a Python package with MITI 4.2.1 built in. It holds the MITI definition, prompts, fixtures and report schema (`src/onolys_miti/data/`), the coding and tips passes, and audio adapters used by the api:
 
 | Part | Job |
 |---|---|
 | `run_miti(...)` | Transcript in, no-rating report out. Passes: `code`, `tips`, `assemble`. |
-| `llm/` | The one interface to every model call: routes (model choice as data), live, fixture and failing clients. |
+| `MitiEngine` | Adapts `run_miti` to the core `Engine` interface and declares the report schema. |
 | `stt/` | Speech-to-text providers (Google Chirp, fixture). |
 | `voice/` | The Gemini Live adapter for the AI practice interview. |
 
@@ -30,7 +44,12 @@ Models propose; code checks quotes against the transcript and computes the score
 
 ## API and worker: `onolys_api`
 
-[`api/`](../api/README.md) serves the public `/v1` API ([reference](reference/public-api.md), [schemas](contracts/)). One image runs as `api`, `worker` or `combined` (`SERVICE_MODE`). A session goes: create, upload audio, validate, transcribe, confirm speakers, run, report. The run calls `onolys_miti`. The api also relays the AI practice interview ([ADR 0024](decisions/0024-ai-practice-interview-gemini-live-relay.md)). Auth is Identity Platform ID tokens or API keys; data is in Firestore and Cloud Storage.
+[`api/`](../api/README.md) serves the public `/v1` API ([reference](reference/public-api.md), [schemas](contracts/)). One image runs as `api`, `worker` or `combined` (`SERVICE_MODE`). A session goes: create, upload audio, validate, transcribe, confirm speakers, run, report. The run resolves `MitiEngine` through the registry and calls its `run` method. The api also relays the AI practice interview ([ADR 0024](decisions/0024-ai-practice-interview-gemini-live-relay.md)). Auth is Identity Platform ID tokens or API keys; data is in Firestore and Cloud Storage.
+
+The API image includes core and MITI wheels. It copies the eval workspace manifest for
+frozen dependency resolution, without installing eval or shipping datasets. CI has a
+separate core job for lint, offline tests and the import boundary. A core change also
+runs MITI, API and eval checks through workspace dependency flags.
 
 ## Web app: `web/`
 

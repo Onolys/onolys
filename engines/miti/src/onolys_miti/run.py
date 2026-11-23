@@ -1,6 +1,6 @@
 """The public entry point: `run_miti` (PRD R2, R7, D6).
 
-Applies the speaker map, picks the coded span once (`span.select_coded_span`), runs the code and
+Applies the speaker map, selects the caller's span or whole transcript once, runs the code and
 globals passes `n_runs` times, averages them (mean/min/max kept), generates tips and assembles
 the no-rating report. Progress stages: `code` (code + globals passes), `tips`, `assemble`.
 
@@ -9,7 +9,7 @@ every run fails `AllRunsFailed` is raised (a coding failure never yields a repor
 failure degrades to a warning. `ctx.deadline` (absolute `time.monotonic()` value) bounds the whole
 call: past it a `TimeoutError` is raised.
 
-Logging goes through `onolys_miti.safe_log` with ids, counts and statuses only, never text.
+Logging goes through `onolys_engine_core.safe_log` with ids, counts and statuses only, never text.
 """
 
 import asyncio
@@ -20,6 +20,12 @@ import statistics
 from collections.abc import Awaitable, Callable
 from typing import Any, Literal
 
+from onolys_engine_core.context import RunContext
+from onolys_engine_core.errors import InputError, OnolysError
+from onolys_engine_core.llm import LLMClient, LLMError, MetricsCollector
+from onolys_engine_core.llm.routes import Route, resolve_preset
+from onolys_engine_core.safe_log import log_event, register_fields
+from onolys_engine_core.transcript import Transcript
 from pydantic import BaseModel
 
 from onolys_miti import code_pass as code_mod
@@ -27,12 +33,8 @@ from onolys_miti import globals_pass as globals_mod
 from onolys_miti import miti
 from onolys_miti import tips as tips_mod
 from onolys_miti.build import build_report_no_rating
-from onolys_miti.context import RunContext
-from onolys_miti.errors import InputError, OnolysError
 from onolys_miti.formula import label_for
 from onolys_miti.hashes import evaluation_prompt_hashes
-from onolys_miti.llm import LLMClient, LLMError, MetricsCollector
-from onolys_miti.llm.routes import Route, resolve_preset
 from onolys_miti.prepare import Prepared, prepare
 from onolys_miti.report import Report
 from onolys_miti.result import (
@@ -47,11 +49,9 @@ from onolys_miti.result import (
     SummaryStat,
 )
 from onolys_miti.run_info import RunInfo, RunUsage, code_version, hash_files, route_facts
-from onolys_miti.safe_log import log_event, register_fields
 from onolys_miti.score import score_run
 from onolys_miti.span import select_coded_span
 from onolys_miti.tips import TipsArtifact
-from onolys_miti.transcript import Transcript
 
 Stage = Literal["code", "tips", "assemble"]
 StageStatus = Literal["started", "done", "failed"]
@@ -61,7 +61,6 @@ register_fields({"run_index", "n_runs", "runs_ok", "stage", "stage_status"})
 
 ROUTES = (code_mod.ROUTE, globals_mod.ROUTE)
 _FAILURES = (code_mod.CodePassFailed, globals_mod.GlobalsPassFailed, LLMError)
-_ENGINE_ONLY_PARAMS = ("coded_span",)  # callers never pick the span (R7)
 
 
 class AllRunsFailed(OnolysError):
@@ -271,7 +270,7 @@ async def _code(
         raise InputError("n_runs must be at least 1")
     rid = ctx.request_id
     seed = str(params.get("seed") or rid)
-    choice = select_coded_span(transcript, seed)
+    choice = select_coded_span(transcript, seed, params.get("coded_span"))
     prepared = prepare(transcript, params, choice.coded_span)
     language = _language(params, transcript)
     lang_arg = None if language == "und" else language
@@ -371,50 +370,54 @@ async def _run(
 ) -> MitiOutput:
     rid = ctx.request_id
     code_metrics = MetricsCollector()
-    p = {k: v for k, v in params.items() if k not in _ENGINE_ONLY_PARAMS}
-    engine_params = {**p, "speaker_map": speaker_map}
+    engine_params = {**params, "speaker_map": speaker_map}
     log_event("miti.run_start", request_id=rid)
 
-    result = await _stage(
-        progress_cb, "code", rid, _code(ctx, transcript, engine_params, code_metrics)
-    )
-
-    _emit(progress_cb, "tips", "started", rid)
     try:
-        art, tip_warnings = await tips_mod.generate_tips(
-            ctx.llm, transcript, speaker_map, result, metrics=ctx.metrics
+        result = await _stage(
+            progress_cb, "code", rid, _code(ctx, transcript, engine_params, code_metrics)
         )
-    except BaseException:
-        _emit(progress_cb, "tips", "failed", rid)
-        raise
-    failed = any(w.code == "tips_failed" for w in tip_warnings)
-    _emit(progress_cb, "tips", "failed" if failed else "done", rid)
 
-    evaluation_usage = _usage(ctx.metrics)  # the report run's own calls (tips)
-    ctx_records = getattr(ctx.metrics, "records", None)
-    if isinstance(ctx_records, list):  # one call log for the whole run
-        ctx_records += code_metrics.records
-    route = (
-        getattr(ctx.llm, "routes", {}).get(tips_mod.ROUTE) if hasattr(ctx.llm, "routes") else None
-    )
+        _emit(progress_cb, "tips", "started", rid)
+        try:
+            art, tip_warnings = await tips_mod.generate_tips(
+                ctx.llm, transcript, speaker_map, result, metrics=ctx.metrics
+            )
+        except BaseException:
+            _emit(progress_cb, "tips", "failed", rid)
+            raise
+        failed = any(w.code == "tips_failed" for w in tip_warnings)
+        _emit(progress_cb, "tips", "failed" if failed else "done", rid)
 
-    async def assemble() -> MitiOutput:
-        report = build_report_no_rating(
-            transcript=transcript,
-            params=p,
-            result=result,
-            tips=art,
-            warnings=list(tip_warnings),
-            prompt_hashes=evaluation_prompt_hashes(),
-            evaluation_routes={tips_mod.ROUTE: route_facts(route)} if route is not None else None,
-            evaluation_usage=evaluation_usage,
-            request_id=rid,
+        evaluation_usage = _usage(ctx.metrics)  # the report run's own calls (tips)
+        route = (
+            getattr(ctx.llm, "routes", {}).get(tips_mod.ROUTE)
+            if hasattr(ctx.llm, "routes") else None
         )
-        return MitiOutput(report=report, artifacts=Artifacts(code=result, tips=art))
 
-    out = await _stage(progress_cb, "assemble", rid, assemble())
-    log_event("miti.run_done", request_id=rid, status="ok")
-    return out
+        async def assemble() -> MitiOutput:
+            report = build_report_no_rating(
+                transcript=transcript,
+                params=params,
+                result=result,
+                tips=art,
+                warnings=list(tip_warnings),
+                prompt_hashes=evaluation_prompt_hashes(),
+                evaluation_routes=(
+                    {tips_mod.ROUTE: route_facts(route)} if route is not None else None
+                ),
+                evaluation_usage=evaluation_usage,
+                request_id=rid,
+            )
+            return MitiOutput(report=report, artifacts=Artifacts(code=result, tips=art))
+
+        out = await _stage(progress_cb, "assemble", rid, assemble())
+        log_event("miti.run_done", request_id=rid, status="ok")
+        return out
+    finally:
+        ctx_records = getattr(ctx.metrics, "records", None)
+        if isinstance(ctx_records, list):  # keep received coding usage on every exit
+            ctx_records += code_metrics.records
 
 
 async def run_miti(
@@ -427,8 +430,9 @@ async def run_miti(
     """Code `transcript` and build the no-rating report.
 
     `params`: `change_goal`, `language`, `n_runs` (default 1), `preset`, `code_version`, `seed`
-    (default `ctx.request_id`; picks the coded window), `volleys_per_call`, `code_max_tokens`,
-    `globals_max_tokens`. `coded_span` is ignored: the engine chooses the span (R7)."""
+    (default `ctx.request_id`; recorded for provenance), `volleys_per_call`, `code_max_tokens`,
+    `globals_max_tokens`, `coded_span` (half-open milliseconds or zero-based turns).
+    Without `coded_span`, the whole transcript is coded."""
     if ctx.deadline is None:
         return await _run(ctx, transcript, speaker_map, params, progress_cb)
     remaining = ctx.deadline - asyncio.get_running_loop().time()

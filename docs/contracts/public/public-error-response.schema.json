@@ -46,9 +46,14 @@
               "unsupported_media_type",
               "schema_violation",
               "empty_transcript",
+              "invalid_coded_span",
+              "session_too_long",
+              "transcript_invalid",
+              "transcript_too_large",
               "empty_assessment",
               "duplicate_ids",
               "invalid_parameters",
+              "output_invalid",
               "body_too_large",
               "too_many_turns",
               "too_many_sections",
@@ -91,7 +96,7 @@
           },
           "field": {
             "type": "string",
-            "description": "`/`-joined path of the offending field in the rating card (e.g. `globals/cct/reason`); `$` is the whole card. Set on `rating_invalid`. A path only, never user text."
+            "description": "`/`-joined path of the offending field in the rating card or transcript (e.g. `globals/cct/reason`); `$` is the whole input. Set on `rating_invalid` or transcript upload errors. A path only, never user text."
           },
           "issue": {
             "enum": [

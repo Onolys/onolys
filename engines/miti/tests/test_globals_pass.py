@@ -3,12 +3,12 @@ import json
 
 import pytest
 from conftest import install_demo
+from onolys_engine_core.llm import LLMBadOutput, LLMResult
+from onolys_engine_core.transcript import Turn
 from pydantic import ValidationError
 
 from onolys_miti.globals_pass import GlobalsPassFailed, globals_pass, make_response_model
-from onolys_miti.llm import LLMBadOutput, LLMResult
 from onolys_miti.prepare import Prepared, RoleTurn
-from onolys_miti.transcript import Turn
 
 pytestmark = pytest.mark.unit
 

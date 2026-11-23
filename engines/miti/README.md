@@ -4,13 +4,31 @@ MITI 4.2.1 coding engine: a session transcript in, the no-rating report out
 (`run_miti(ctx, transcript, speaker_map, params, progress_cb)`). The MITI definition, prompts,
 fixtures and report schema ship inside the package under `src/onolys_miti/data/`.
 
+`MitiEngine` implements the shared `onolys_engine_core.engine.Engine` interface and
+wraps `run_miti` without changing its signature or report. `MitiEngine.output_schema()`
+returns the report schema; `run()` returns an `EngineResult` with the report, artifacts
+and usage. The API registers it explicitly and selects it through the engine registry.
+
+Shared infrastructure lives in the `onolys-engine-core` workspace package. Import
+`RunContext` from `onolys_engine_core.context`, `Turn` from
+`onolys_engine_core.transcript`, `TranscriptV1` from
+`onolys_engine_core.transcript_v1`, and LLM clients/routes from
+`onolys_engine_core.llm`. Retry helpers, safe logging and transcript text parsing also
+live in core. MITI keeps its coding passes, schemas, prompts, fixture data, code-point
+spans, STT and voice adapters; it does not re-export moved core modules.
+
 ## Tests
 
 From the repo root (`uv sync --frozen --package onolys-miti` first):
 
 ```bash
-uv run --package onolys-miti pytest engines/miti -m "not live"
-uv run --package onolys-miti ruff check engines/miti
+uv run --no-sync --package onolys-miti pytest engines/miti -m "not live"
+uv run --no-sync --package onolys-miti ruff check engines/miti
+
+# Shared infrastructure and its AST import-boundary guard have their own CI job.
+uv sync --frozen --package onolys-engine-core
+LITELLM_LOCAL_MODEL_COST_MAP=True uv run --no-sync --package onolys-engine-core pytest engines/core -m "not live"
+uv run --no-sync --package onolys-engine-core ruff check engines/core
 ```
 
 `-m "not live"` is also the default (`addopts`), so a plain `pytest engines/miti` is offline too.
@@ -51,8 +69,10 @@ What the api imports from this package:
 - Rating schema: `onolys_miti.miti.MITI.rating_schema`.
 - Scenarios directory: `MITI.data_dir / "scenarios"`.
 - Test fixtures: `miti.DATA_DIR / "fixtures" / "evaluation"`.
-- Entry: `run_miti(ctx, transcript, speaker_map, params, progress_cb)`; `params["seed"]` (the
-  session id) picks the coded window.
+- Engine entry: `MitiEngine().run(ctx, transcript, params, progress_cb)`;
+  `params["speaker_map"]` supplies the speaker roles. Direct callers may still use
+  `run_miti(ctx, transcript, speaker_map, params, progress_cb)`.
+- Session selection: the entire transcript is coded unless `params["coded_span"]` narrows it.
 - Env vars: `MITI_MODEL_CHEAP`, `MITI_MODEL_MID`, `MITI_MODEL_STRONG`, `MITI_LLM_RESPONSE_FORMAT`,
   `MITI_LLM_RECORD`.
 - LLM routes: `miti_code`, `miti_globals`, `tips`.

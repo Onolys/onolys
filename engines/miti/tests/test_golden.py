@@ -4,17 +4,18 @@ answered with the golden report's own tips, must equal `report_no_rating.json` a
 volatile keys. The report also validates against the report schema and the API's local copy."""
 
 import json
+from dataclasses import replace
 from pathlib import Path
 
 import jsonschema
 import pytest
+from onolys_engine_core.context import RunContext
+from onolys_engine_core.llm import LLMResult, MetricsCollector
+from onolys_engine_core.llm.fixture_client import FixtureClient
+from onolys_engine_core.transcript import Transcript
 
 from onolys_miti import miti
-from onolys_miti.context import RunContext
-from onolys_miti.llm import LLMResult, MetricsCollector
-from onolys_miti.llm.fixture_client import FixtureClient
 from onolys_miti.run import run_miti
-from onolys_miti.transcript import Transcript
 
 pytestmark = pytest.mark.unit
 
@@ -52,7 +53,6 @@ def masked(report: dict) -> dict:
 
 async def _run() -> dict:
     d = json.loads((FIX / "good_practice.json").read_text(encoding="utf-8"))
-    d["turns"][-1]["end_ms"] = 1195000  # 1205 s is just past the 20-minute cap: code it whole
     ctx = RunContext(llm=GoldenClient(), metrics=MetricsCollector(), request_id="req-golden")
     out = await run_miti(ctx, Transcript.model_validate(d), SMAP, PARAMS)
     return json.loads(out.report.model_dump_json())
@@ -83,3 +83,23 @@ async def test_golden_report_against_api_local_schema():
         assert all(e.message.endswith("is a required property") for e in errors)
         assert not any("'miti'" in e.message for e in errors)
         assert all(e.validator == "required" for e in errors)
+
+
+async def test_fixture_keys_match_existing_golden_filenames(monkeypatch):
+    """Freeze request hashes before extracting the shared LLM implementation."""
+    expected = {
+        "0041dea5d075fde958d921148c11543d6f7fd0ac72b964f6f82236d74e8e3e74",
+        "c24dfc214fee7fdb4aa02911ec86b49e7e4dca8b2b4c3f1feba40db6033602a2",
+    }
+    seen = set()
+    original = FixtureClient.complete_json
+
+    async def capture(self, req, metrics=None):
+        key = self.key_for(req)
+        assert key == self.key_for(replace(req))
+        seen.add(key)
+        return await original(self, req, metrics)
+
+    monkeypatch.setattr(FixtureClient, "complete_json", capture)
+    await _run()
+    assert seen == expected == {path.stem for path in GOLD.glob("*.json")}

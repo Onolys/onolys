@@ -4,10 +4,10 @@ never card text. Drafts (`final=False`) check shape and limits; final adds a non
 from typing import Any
 
 from jsonschema import Draft202012Validator
+from onolys_engine_core.safe_log import log_event, register_fields
 
 from onolys_miti import miti
 from onolys_miti.report import Issue
-from onolys_miti.safe_log import log_event, register_fields
 
 register_fields({"final", "issues", "no_rating"})
 

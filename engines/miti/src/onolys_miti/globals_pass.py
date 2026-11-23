@@ -16,12 +16,12 @@ import json
 from dataclasses import dataclass, field
 from typing import Any
 
+from onolys_engine_core.errors import OnolysError
+from onolys_engine_core.llm import LLMBadOutput, LLMClient, LLMRequest, MetricsCollector
 from pydantic import BaseModel, create_model
 
 from onolys_miti import miti
 from onolys_miti.code_pass import _CFG, _overrides
-from onolys_miti.errors import OnolysError
-from onolys_miti.llm import LLMBadOutput, LLMClient, LLMRequest, MetricsCollector
 from onolys_miti.locate import locate
 from onolys_miti.prepare import Prepared
 from onolys_miti.result import Evidence, GlobalScore, ResultWarning

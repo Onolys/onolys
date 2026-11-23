@@ -8,7 +8,7 @@ import logging
 import pytest
 import test_run
 import test_worker
-from onolys_miti.safe_log import ALLOWED_FIELDS
+from onolys_engine_core.safe_log import ALLOWED_FIELDS
 from test_run import CARD
 from test_worker import SID, payload, runner_with
 

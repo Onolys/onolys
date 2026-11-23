@@ -13,7 +13,7 @@ import {
   threeSpeakerTranscript,
 } from ".";
 
-type Turn = components["schemas"]["TranscriptTurn"];
+type Turn = components["schemas"]["TranscriptView"]["turns"][number];
 
 const cpSlice = (text: string, start: number, end: number) =>
   Array.from(text).slice(start, end).join("");

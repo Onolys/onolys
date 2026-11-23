@@ -1,7 +1,7 @@
 /** Synthetic, non-clinical transcripts (everyday topic). No real sessions. */
 import type { components } from "../../api/schema";
 
-export type Turn = components["schemas"]["TranscriptTurn"];
+export type Turn = components["schemas"]["TranscriptView"]["turns"][number];
 
 type Spec = [speaker: "spk_0" | "spk_1" | "spk_2", text: string];
 

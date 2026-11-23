@@ -91,7 +91,7 @@ def test_explanations_are_onolys_only():
 def test_header_fields():
     kw = inputs()
     h = doc()["header"]
-    assert h["stt"] == json.loads(kw["transcript"].stt_run.model_dump_json())
+    assert h["stt"] == kw["params"]["stt_run"]
     assert h["preset"] == "fixture" and h["code_version"] == "fixture"
     assert h["protocol"]["pack_hash"] == miti.MITI.hash
     assert h["n_runs"] == kw["result"].n_runs
@@ -100,17 +100,17 @@ def test_header_fields():
 
 def test_text_only_transcript_has_null_stt():
     kw = inputs()
-    kw["transcript"] = kw["transcript"].model_copy(update={"stt_run": None})
+    kw["params"].pop("stt_run")
     r = build_report_no_rating(**kw)
     assert r.header.stt is None and r.run_info.evaluation.stt is None
 
 
 def test_span_reaches_header():
     kw = inputs()
-    span = CodedSpan(from_s=60, to_s=1260)
+    span = CodedSpan(start_ms=60000, end_ms=1260000)
     result = kw["result"].model_copy(update={"coded_span": span})
     r = build_report_no_rating(**{**kw, "result": result})
-    assert r.header.coded_span.from_s == 60 and r.header.coded_span.to_s == 1260
+    assert r.header.coded_span.start_ms == 60000 and r.header.coded_span.end_ms == 1260000
 
 
 def test_method_from_definition_and_not_official():

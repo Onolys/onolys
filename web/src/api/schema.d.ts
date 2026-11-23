@@ -351,7 +351,11 @@ export interface paths {
          * @description Owner-scoped; `Cache-Control: private, no-store`. Report offsets are code points into `turn.text`. 409 `invalid_state` before transcription finishes.
          */
         get: operations["getTranscript"];
-        put?: never;
+        /**
+         * Upload a transcript.v1 JSON or label-prefixed UTF-8 text file
+         * @description Created sessions only. Maximum 1 MiB. May start the first run.
+         */
+        put: operations["uploadTranscript"];
         post?: never;
         delete?: never;
         options?: never;
@@ -447,6 +451,30 @@ export interface components {
             /** Upload Url */
             upload_url: string;
         };
+        /**
+         * CodedSpan
+         * @description Exactly one half-open time (milliseconds) or zero-based turn range.
+         */
+        CodedSpan: {
+            /** End Ms */
+            end_ms?: number | null;
+            /** End Turn */
+            end_turn?: number | null;
+            /** Start Ms */
+            start_ms?: number | null;
+            /** Start Turn */
+            start_turn?: number | null;
+        } & ({
+            end_ms: number;
+            end_turn?: null;
+            start_ms: number;
+            start_turn?: null;
+        } | {
+            end_ms?: null;
+            end_turn: number;
+            start_ms?: null;
+            start_turn: number;
+        });
         /** ConfirmRequest */
         ConfirmRequest: {
             /** Clinician Speaker */
@@ -480,6 +508,8 @@ export interface components {
         };
         /** CreateSessionRequest */
         CreateSessionRequest: {
+            /** @description Half-open milliseconds or zero-based turn range; null codes all turns. */
+            coded_span?: components["schemas"]["CodedSpan"] | null;
             /**
              * Interview Id
              * @description An `ended`, not yet linked AI interview of the caller: the session takes its scenario language and title (unless `title` is set) and a prefilled rating draft
@@ -535,15 +565,15 @@ export interface components {
              * Code
              * @enum {string}
              */
-            code: "invalid_json" | "unsupported_media_type" | "schema_violation" | "empty_transcript" | "empty_assessment" | "duplicate_ids" | "invalid_parameters" | "body_too_large" | "too_many_turns" | "too_many_sections" | "rate_limited" | "not_found" | "method_not_allowed" | "cors_rejected" | "request_rejected" | "upstream_unavailable" | "deadline_exceeded" | "internal_error" | "missing_parameter" | "unknown_pack" | "input_rejected" | "run_failed" | "unauthenticated" | "forbidden" | "invalid_state" | "rating_final" | "unsupported_audio" | "audio_too_long" | "audio_too_large" | "audio_unreadable" | "no_speech" | "speakers_not_separated" | "transcription_failed" | "rating_invalid" | "daily_cap_reached" | "interview_cap_reached" | "concurrent_runs" | "email_unverified" | "conflict" | "interview_too_long";
+            code: "invalid_json" | "unsupported_media_type" | "schema_violation" | "empty_transcript" | "invalid_coded_span" | "session_too_long" | "transcript_invalid" | "transcript_too_large" | "empty_assessment" | "duplicate_ids" | "invalid_parameters" | "output_invalid" | "body_too_large" | "too_many_turns" | "too_many_sections" | "rate_limited" | "not_found" | "method_not_allowed" | "cors_rejected" | "request_rejected" | "upstream_unavailable" | "deadline_exceeded" | "internal_error" | "missing_parameter" | "unknown_pack" | "input_rejected" | "run_failed" | "unauthenticated" | "forbidden" | "invalid_state" | "rating_final" | "unsupported_audio" | "audio_too_long" | "audio_too_large" | "audio_unreadable" | "no_speech" | "speakers_not_separated" | "transcription_failed" | "rating_invalid" | "daily_cap_reached" | "interview_cap_reached" | "concurrent_runs" | "email_unverified" | "conflict" | "interview_too_long";
             /**
              * Field
-             * @description `/`-joined path of the offending field in the rating card (e.g. `globals/cct/reason`); `$` is the whole card. Set on `rating_invalid`. A path only, never user text.
+             * @description `/`-joined path of the offending field in the rating card or transcript (e.g. `globals/cct/reason`); `$` is the whole input. Set on `rating_invalid` or transcript upload errors. A path only, never user text.
              */
             field?: string | null;
             /**
              * Issue
-             * @description What is wrong at `field`. Set on `rating_invalid`.
+             * @description What is wrong at `field`. Set on rating or transcript upload errors.
              */
             issue?: ("invalid_type" | "too_long" | "out_of_range" | "required" | "unknown_key" | "invalid" | "order" | "too_large") | null;
             /** Message */
@@ -642,6 +672,20 @@ export interface components {
         /** KindUsage */
         KindUsage: {
             day: components["schemas"]["Period"];
+        };
+        /** OutputValidation */
+        OutputValidation: {
+            /** Attempts */
+            attempts: number;
+            /** First Issues */
+            first_issues?: components["schemas"]["OutputValidationIssue"][];
+        };
+        /** OutputValidationIssue */
+        OutputValidationIssue: {
+            /** Message */
+            message: string;
+            /** Path */
+            path: string;
         };
         /** Period */
         Period: {
@@ -747,6 +791,8 @@ export interface components {
         };
         /** RunRequest */
         RunRequest: {
+            /** @description Half-open milliseconds or zero-based turn range; null codes all turns. */
+            coded_span?: components["schemas"]["CodedSpan"] | null;
             /**
              * N Runs
              * @description Default: the session's
@@ -805,6 +851,7 @@ export interface components {
             /** Status */
             status: string;
             stt?: components["schemas"]["SttInfo"] | null;
+            validation?: components["schemas"]["OutputValidation"] | null;
         };
         /** ScenarioList */
         ScenarioList: {
@@ -971,20 +1018,39 @@ export interface components {
              * @default
              */
             provider?: string;
+            run?: components["schemas"]["SttRun"] | null;
         };
-        /** TranscriptTurn */
-        TranscriptTurn: {
+        /** SttRun */
+        SttRun: {
+            /** Adapter Version */
+            adapter_version: string;
+            /** Language Detected */
+            language_detected?: string | null;
+            /** Language Requested */
+            language_requested: string;
+            /** Location */
+            location?: string | null;
+            /** Model */
+            model: string;
+            /** Provider */
+            provider: string;
+        };
+        /**
+         * TranscriptTurnV1
+         * @description One turn, in the order it appears in the transcript.
+         */
+        TranscriptTurnV1: {
             /** End Ms */
             end_ms?: number | null;
             /** Id */
             id: string;
             /**
              * Role
-             * @description `clinician`/`client`; null until confirmed
+             * @enum {unknown}
              */
-            role?: string | null;
+            role?: "clinician" | "client" | null;
             /** Speaker */
-            speaker?: string | null;
+            speaker: string;
             /** Start Ms */
             start_ms?: number | null;
             /** Text */
@@ -996,10 +1062,13 @@ export interface components {
             clinician_speaker?: string | null;
             /** Duration Ms */
             duration_ms?: number | null;
-            /** Language */
+            /**
+             * Language
+             * @default en
+             */
             language?: string | null;
             /** Turns */
-            turns: components["schemas"]["TranscriptTurn"][];
+            turns: components["schemas"]["TranscriptTurnV1"][];
         };
         /** Usage */
         Usage: {
@@ -1241,7 +1310,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description `invalid_parameters` (incl. a malformed id, cursor or body), `unsupported_audio`, `audio_too_large` or `rating_invalid` */
+            /** @description `invalid_parameters` (incl. a malformed id, cursor or body), `unsupported_audio`, `audio_too_large`, `rating_invalid`, `invalid_coded_span` or `session_too_long` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -1308,7 +1377,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description `invalid_parameters` (incl. a malformed id, cursor or body), `unsupported_audio`, `audio_too_large` or `rating_invalid` */
+            /** @description `invalid_parameters` (incl. a malformed id, cursor or body), `unsupported_audio`, `audio_too_large`, `rating_invalid`, `invalid_coded_span` or `session_too_long` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -1379,7 +1448,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description `invalid_parameters` (incl. a malformed id, cursor or body), `unsupported_audio`, `audio_too_large` or `rating_invalid` */
+            /** @description `invalid_parameters` (incl. a malformed id, cursor or body), `unsupported_audio`, `audio_too_large`, `rating_invalid`, `invalid_coded_span` or `session_too_long` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -1446,7 +1515,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description `invalid_parameters` (incl. a malformed id, cursor or body), `unsupported_audio`, `audio_too_large` or `rating_invalid` */
+            /** @description `invalid_parameters` (incl. a malformed id, cursor or body), `unsupported_audio`, `audio_too_large`, `rating_invalid`, `invalid_coded_span` or `session_too_long` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -1552,7 +1621,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description `invalid_parameters` (incl. a malformed id, cursor or body), `unsupported_audio`, `audio_too_large` or `rating_invalid` */
+            /** @description `invalid_parameters` (incl. a malformed id, cursor or body), `unsupported_audio`, `audio_too_large`, `rating_invalid`, `invalid_coded_span` or `session_too_long` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -1624,7 +1693,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description `invalid_parameters` (incl. a malformed id, cursor or body), `unsupported_audio`, `audio_too_large` or `rating_invalid` */
+            /** @description `invalid_parameters` (incl. a malformed id, cursor or body), `unsupported_audio`, `audio_too_large`, `rating_invalid`, `invalid_coded_span` or `session_too_long` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -1691,7 +1760,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description `invalid_parameters` (incl. a malformed id, cursor or body), `unsupported_audio`, `audio_too_large` or `rating_invalid` */
+            /** @description `invalid_parameters` (incl. a malformed id, cursor or body), `unsupported_audio`, `audio_too_large`, `rating_invalid`, `invalid_coded_span` or `session_too_long` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -1756,7 +1825,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description `invalid_parameters` (incl. a malformed id, cursor or body), `unsupported_audio`, `audio_too_large` or `rating_invalid` */
+            /** @description `invalid_parameters` (incl. a malformed id, cursor or body), `unsupported_audio`, `audio_too_large`, `rating_invalid`, `invalid_coded_span` or `session_too_long` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -1832,7 +1901,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description `invalid_parameters` (incl. a malformed id, cursor or body), `unsupported_audio`, `audio_too_large` or `rating_invalid` */
+            /** @description `invalid_parameters` (incl. a malformed id, cursor or body), `unsupported_audio`, `audio_too_large`, `rating_invalid`, `invalid_coded_span` or `session_too_long` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -1912,7 +1981,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description `invalid_parameters` (incl. a malformed id, cursor or body), `unsupported_audio`, `audio_too_large` or `rating_invalid` */
+            /** @description `invalid_parameters` (incl. a malformed id, cursor or body), `unsupported_audio`, `audio_too_large`, `rating_invalid`, `invalid_coded_span` or `session_too_long` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -1990,7 +2059,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description `invalid_parameters` (incl. a malformed id, cursor or body), `unsupported_audio`, `audio_too_large` or `rating_invalid` */
+            /** @description `invalid_parameters` (incl. a malformed id, cursor or body), `unsupported_audio`, `audio_too_large`, `rating_invalid`, `invalid_coded_span` or `session_too_long` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -2066,7 +2135,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description `invalid_parameters` (incl. a malformed id, cursor or body), `unsupported_audio`, `audio_too_large` or `rating_invalid` */
+            /** @description `invalid_parameters` (incl. a malformed id, cursor or body), `unsupported_audio`, `audio_too_large`, `rating_invalid`, `invalid_coded_span` or `session_too_long` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -2137,7 +2206,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description `invalid_parameters` (incl. a malformed id, cursor or body), `unsupported_audio`, `audio_too_large` or `rating_invalid` */
+            /** @description `invalid_parameters` (incl. a malformed id, cursor or body), `unsupported_audio`, `audio_too_large`, `rating_invalid`, `invalid_coded_span` or `session_too_long` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -2204,7 +2273,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description `invalid_parameters` (incl. a malformed id, cursor or body), `unsupported_audio`, `audio_too_large` or `rating_invalid` */
+            /** @description `invalid_parameters` (incl. a malformed id, cursor or body), `unsupported_audio`, `audio_too_large`, `rating_invalid`, `invalid_coded_span` or `session_too_long` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -2272,7 +2341,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description `invalid_parameters` (incl. a malformed id, cursor or body), `unsupported_audio`, `audio_too_large` or `rating_invalid` */
+            /** @description `invalid_parameters` (incl. a malformed id, cursor or body), `unsupported_audio`, `audio_too_large`, `rating_invalid`, `invalid_coded_span` or `session_too_long` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -2339,7 +2408,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description `invalid_parameters` (incl. a malformed id, cursor or body), `unsupported_audio`, `audio_too_large` or `rating_invalid` */
+            /** @description `invalid_parameters` (incl. a malformed id, cursor or body), `unsupported_audio`, `audio_too_large`, `rating_invalid`, `invalid_coded_span` or `session_too_long` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -2419,7 +2488,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description `invalid_parameters` (incl. a malformed id, cursor or body), `unsupported_audio`, `audio_too_large` or `rating_invalid` */
+            /** @description `invalid_parameters` (incl. a malformed id, cursor or body), `unsupported_audio`, `audio_too_large`, `rating_invalid`, `invalid_coded_span` or `session_too_long` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -2504,7 +2573,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description `invalid_parameters` (incl. a malformed id, cursor or body), `unsupported_audio`, `audio_too_large` or `rating_invalid` */
+            /** @description `invalid_parameters` (incl. a malformed id, cursor or body), `unsupported_audio`, `audio_too_large`, `rating_invalid`, `invalid_coded_span` or `session_too_long` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -2584,7 +2653,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description `invalid_parameters` (incl. a malformed id, cursor or body), `unsupported_audio`, `audio_too_large` or `rating_invalid` */
+            /** @description `invalid_parameters` (incl. a malformed id, cursor or body), `unsupported_audio`, `audio_too_large`, `rating_invalid`, `invalid_coded_span` or `session_too_long` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -2660,7 +2729,79 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description `invalid_parameters` (incl. a malformed id, cursor or body), `unsupported_audio`, `audio_too_large` or `rating_invalid` */
+            /** @description `invalid_parameters` (incl. a malformed id, cursor or body), `unsupported_audio`, `audio_too_large`, `rating_invalid`, `invalid_coded_span` or `session_too_long` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description `daily_cap_reached` (daily run cap), `concurrent_runs` (a run is already in progress) or `rate_limited` */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description `internal_error` */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    uploadTranscript: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": Record<string, never>;
+                "text/plain": string;
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreateSessionResponse"];
+                };
+            };
+            /** @description `unauthenticated`: missing, invalid or revoked credentials */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description `not_found`: no such resource for this user (never 403, so ids cannot be probed) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description `invalid_parameters` (incl. a malformed id, cursor or body), `unsupported_audio`, `audio_too_large`, `rating_invalid`, `invalid_coded_span` or `session_too_long` */
             422: {
                 headers: {
                     [name: string]: unknown;

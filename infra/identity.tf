@@ -14,6 +14,7 @@ locals {
       "${var.app_site_id}.web.app",
       "${var.app_staging_site_id}.web.app",
     ],
+    var.eval_enabled ? ["eval.onolys.com", "onolys-eval-staging.web.app"] : [],
     var.admin_enabled["prod"] ? ["${var.admin_site_id}.web.app"] : [],
     var.admin_enabled["staging"] ? ["admin.onolys.com", "${var.admin_staging_site_id}.web.app"] : [],
   ))

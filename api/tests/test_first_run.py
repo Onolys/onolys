@@ -13,7 +13,7 @@ from datetime import UTC, datetime
 import httpx
 import pytest
 from cards import valid_card
-from onolys_miti.transcript import Transcript, Turn
+from onolys_engine_core.transcript import Transcript, Turn
 from starlette.testclient import TestClient
 
 from onolys_api.app import create_app
@@ -600,3 +600,12 @@ async def test_confirm_then_rating_over_http_starts_exactly_one_run(env):
     assert r.status_code == 202
     _assert_one_run(repo, queue, uid, sid)
     assert (await c.get(f"/v1/sessions/{sid}", headers=h)).json()["status"] == "running"
+
+
+def test_transcript_view_uses_portable_turn_model():
+    from onolys_engine_core.transcript_v1 import TranscriptTurnV1, TranscriptV1
+
+    from onolys_api.routes.speakers import TranscriptView
+
+    assert issubclass(TranscriptView, TranscriptV1)
+    assert TranscriptView.model_fields["turns"].annotation == list[TranscriptTurnV1]

@@ -6,7 +6,9 @@
 from datetime import UTC, datetime
 from typing import Any, Literal
 
-from onolys_miti.transcript import Transcript
+from onolys_engine_core.transcript import Transcript
+from onolys_miti.result import CodedSpan
+from onolys_miti.stt import SttRun
 from pydantic import BaseModel, Field
 
 SessionState = Literal[
@@ -57,14 +59,10 @@ class UserDoc(Doc):
 
 
 class SttInfo(BaseModel):
+    run: SttRun | None = None
     provider: str = ""
     model: str = ""
     language: str = ""
-
-
-class CodedSpan(BaseModel):
-    from_s: float
-    to_s: float
 
 
 class StepRecord(BaseModel):
@@ -170,7 +168,18 @@ class RatingDraftDoc(Doc):
     updated_at: datetime = Field(default_factory=utcnow)
 
 
+class OutputValidationIssue(BaseModel):
+    path: str
+    message: str
+
+
+class OutputValidation(BaseModel):
+    attempts: int = Field(ge=1, le=2)
+    first_issues: list[OutputValidationIssue] = Field(default_factory=list, max_length=10)
+
+
 class RunDoc(Doc):
+    coded_span: CodedSpan | None = None
     uid: str
     session_id: str
     run_id: str
@@ -186,6 +195,7 @@ class RunDoc(Doc):
     ended: datetime | None = None
     error: str | None = None
     run_info: dict[str, Any] | None = None
+    validation: OutputValidation | None = None
     artifacts_prefix: str | None = None
     cap_date: str | None = None  # UTC day the cap slot was reserved on (R8)
     counted: bool = True  # False: run did not consume an eval slot (exempt first run, SP11 R5)

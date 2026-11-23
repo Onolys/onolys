@@ -7,6 +7,7 @@ import json
 import pytest
 from _report_fixtures import REPORT_NAMES, SCHEMA_PATH, load
 from jsonschema import Draft202012Validator
+from onolys_engine_core.transcript import Transcript
 from pydantic import ValidationError
 
 from onolys_miti.report import (
@@ -16,7 +17,6 @@ from onolys_miti.report import (
     schema_text,
 )
 from onolys_miti.result import MitiResult
-from onolys_miti.transcript import Transcript
 
 pytestmark = pytest.mark.unit
 

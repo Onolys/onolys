@@ -4,11 +4,11 @@ import sys
 from pathlib import Path
 
 import pytest
+from onolys_engine_core.transcript import Transcript, Turn
 from pydantic import ValidationError
 
-from onolys_miti.errors import ConfigError, InputError, OnolysError
-from onolys_miti.stt import AudioRef, SttAdapter, SttParams, SttRun, Word
-from onolys_miti.transcript import Span, Transcript, Turn
+from onolys_miti.stt import AudioRef, SttAdapter, SttCompletion, SttParams, SttRun, Word
+from onolys_miti.transcript import Span
 
 pytestmark = pytest.mark.unit
 
@@ -20,22 +20,21 @@ def _run() -> SttRun:
 
 
 def test_turn_defaults_and_required():
-    t = Turn(id="t1", text="hi")
-    assert t.speaker is None and t.start_ms is None and t.end_ms is None
-    assert t.role is None and t.language is None
+    t = Turn(id="t1", speaker="S1", text="hi")
+    assert t.speaker == "S1" and t.start_ms is None and t.end_ms is None
+    assert t.role is None
     with pytest.raises(ValidationError):
         Turn(id="t1")  # type: ignore[call-arg]
 
 
 def test_transcript_roundtrip():
     tr = Transcript(
-        turns=[Turn(id="t1", text="hi", start_ms=0, end_ms=5)],
+        turns=[Turn(id="t1", speaker="S1", text="hi", start_ms=0, end_ms=5)],
         language="en-US",
         duration_ms=5,
-        stt_run=_run(),
     )
     assert Transcript.model_validate(json.loads(tr.model_dump_json())) == tr
-    assert Transcript(turns=[]).stt_run is None
+    assert "stt_run" not in Transcript(turns=[]).model_dump()
 
 
 def test_span_requires_all_fields():
@@ -81,24 +80,18 @@ async def test_stt_adapter_protocol_usable():
             return "h1"
 
         async def poll(self, handle):
-            return Transcript(turns=[])
+            return SttCompletion(transcript=Transcript(turns=[]), run=_run())
 
     a: SttAdapter = Fake()
     assert await a.start(AudioRef(uri="u", mime="m"), SttParams(provider="p", model="m")) == "h1"
-    assert (await a.poll("h1")) == Transcript(turns=[])
-
-
-def test_error_hierarchy():
-    assert issubclass(InputError, OnolysError) and issubclass(ConfigError, OnolysError)
-    with pytest.raises(OnolysError):
-        raise InputError("bad")
+    assert (await a.poll("h1")).transcript == Transcript(turns=[])
 
 
 def test_miti_imports_no_sibling_packages():
     """Boundary: importing the package pulls in no sibling Onolys packages."""
     forbidden = ("api", "admin", "eval")
     code = (
-        "import sys, onolys_miti, onolys_miti.stt, onolys_miti.llm, onolys_miti.voice;"
+        "import sys, onolys_miti, onolys_miti.stt, onolys_engine_core.llm, onolys_miti.voice;"
         f"bad=[m for m in sys.modules if m.split('.')[0] in {forbidden!r}];"
         "print(bad)"
     )
@@ -106,8 +99,14 @@ def test_miti_imports_no_sibling_packages():
     assert out.stdout.strip() == "[]"
 
 
-def test_run_context_defaults():
-    from onolys_miti.context import RunContext
+def test_extracted_llm_has_no_miti_reexports():
+    import importlib.util
 
-    ctx = RunContext(llm=object(), metrics=object(), request_id="r1")
-    assert ctx.deadline is None and ctx.request_id == "r1"
+    import onolys_miti
+
+    assert importlib.util.find_spec("onolys_miti.llm") is None
+    for name in (
+        "LLMConfig", "LLMError", "LLMUnavailable", "LiteLLMClient",
+        "MetricsCollector", "StubClient", "resolve_preset",
+    ):
+        assert not hasattr(onolys_miti, name)

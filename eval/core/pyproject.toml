@@ -1,0 +1,30 @@
+[project]
+name = "onolys-eval"
+version = "0.1.0"
+description = "Dataset evaluation tools for MITI 4.2.1 coding"
+requires-python = ">=3.12,<3.13"
+dependencies = ["onolys-engine-core", "onolys-miti", "pyyaml>=6", "pydantic>=2.7", "google-cloud-storage>=2.18"]
+
+[project.optional-dependencies]
+convert = ["pdfplumber>=0.11"]
+
+[project.scripts]
+onolys-eval = "onolys_eval.cli:main"
+
+[tool.uv.sources]
+onolys-engine-core = { workspace = true }
+onolys-miti = { workspace = true }
+
+[dependency-groups]
+dev = ["pytest>=8", "ruff>=0.6"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/onolys_eval"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_default_fixture_loop_scope = "function"

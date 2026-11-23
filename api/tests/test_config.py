@@ -1,5 +1,5 @@
 import pytest
-from onolys_miti.errors import ConfigError
+from onolys_engine_core.errors import ConfigError
 
 from onolys_api.config import Settings
 

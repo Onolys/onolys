@@ -6,13 +6,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { mockBackend, server } from "../../mocks/server";
 import { here, renderApp } from "../../test/renderApp";
 import { MAX_AUDIO_BYTES } from "./precheck";
-import { getJob } from "./uploader";
+import { clearJobs, getJob } from "./uploader";
 
 const USER = { email: "rater@clinic.org", verified: true };
 const mp3 = () => new File([new Uint8Array(100)], "visit.mp3", { type: "audio/mpeg" });
 
 let seconds = 15 * 60;
 beforeEach(() => {
+  clearJobs();
   seconds = 15 * 60;
   // jsdom never loads media metadata; a stand-in that reports `seconds`.
   vi.stubGlobal(
@@ -30,7 +31,7 @@ beforeEach(() => {
   );
   vi.stubGlobal("URL", Object.assign(URL, { createObjectURL: () => "blob:x", revokeObjectURL: () => {} }));
 });
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => { clearJobs(); vi.unstubAllGlobals(); });
 
 async function open(path = "/sessions/new") {
   const r = renderApp(path, { user: USER });
@@ -292,5 +293,76 @@ describe("New session form: flag on", () => {
     await waitFor(() => expect(here(router)).toMatch(/^\/sessions\/(?!new$)[^/]+$/));
     expect(puts.filter((u) => u.endsWith("/rating"))).toHaveLength(0);
     server.events.removeAllListeners();
+  });
+});
+
+describe("Transcript upload", () => {
+  async function transcript(file = new File(["Alex: Hello\nSam: Hi"], "visit.txt")) {
+    await userEvent.click(screen.getByRole("radio", { name: "Transcript" }));
+    await userEvent.setup({ applyAccept: false }).upload(screen.getByLabelText("Transcript file"), file);
+  }
+  it("offers audio or transcript and clears picks when changing source", async () => {
+    await open();
+    expect(screen.getByRole("radio", { name: "Audio" })).toBeChecked();
+    await transcript();
+    expect(screen.getByLabelText("Transcript file")).toHaveAttribute("accept", ".json,.txt");
+    await goal();
+    expect(screen.getByRole("button", { name: "Start" })).toBeEnabled();
+    await userEvent.click(screen.getByRole("radio", { name: "Audio" }));
+    expect(screen.getByRole("button", { name: "Start" })).toBeDisabled();
+  });
+  it.each([['visit.pdf', 10, /json or txt/i], ['visit.txt', 1024 * 1024 + 1, /over 1 MB/i]])("blocks %s before submission", async (name, size, message) => {
+    await open();
+    const f = new File(["x"], name);
+    Object.defineProperty(f, "size", { value: size });
+    await transcript(f);
+    await goal();
+    expect(await screen.findByRole("alert")).toHaveTextContent(message);
+    expect(screen.getByRole("button", { name: "Start" })).toBeDisabled();
+  });
+  it.each([['visit.txt', 'text/plain', 'Alex: Hello\nSam: Hi'], ['visit.json', 'application/json', '{"turns":[]}']])("PUTs raw %s with auth and no audio steps", async (name, contentType, content) => {
+    const audio = vi.fn();
+    const received: unknown[] = [];
+    server.use(http.put("*/v1/sessions/:id/transcript", async ({ request, params }) => {
+      received.push({ content: await request.text(), type: request.headers.get("content-type"), auth: request.headers.get("authorization") });
+      return HttpResponse.json({ session: { id: params.id, status: "awaiting_input" } }, { status: 202 });
+    }), http.post("*/v1/sessions/:id/audio", () => { audio(); return HttpResponse.json({}); }));
+    const { router } = await open();
+    await transcript(new File([content], name, { type: "application/octet-stream" }));
+    await goal();
+    await userEvent.click(screen.getByRole("button", { name: "Start" }));
+    await waitFor(() => expect(here(router)).toMatch(/^\/sessions\/(?!new$)[^/]+$/));
+    expect(received).toEqual([{ content, type: contentType, auth: "Bearer test:u_rater_clinic_org" }]);
+    expect(audio).not.toHaveBeenCalled();
+  });
+  it.each([
+    ['transcript_invalid', /couldn't read this transcript/i], ['transcript_too_large', /over 1 MB/i],
+    ['empty_transcript', /at least 50 words/i], ['session_too_long', /narrower coded_span/i],
+  ])("shows the shared error card for %s", async (code, message) => {
+    server.use(http.put("*/v1/sessions/:id/transcript", () => HttpResponse.json({ status: 422, details: [{ code, message: 'private text' }], request_id: 'transcript_ref' }, { status: 422 })));
+    await open();
+    await transcript();
+    await goal();
+    await userEvent.click(screen.getByRole("button", { name: "Start" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(message);
+    expect(screen.getByRole("alert")).toHaveTextContent("transcript_ref");
+    expect(screen.getByRole("alert")).not.toHaveTextContent("private text");
+  });
+});
+
+describe("Transcript upload with the mock API", () => {
+  it.each([['Alex', 'Sam', true], ['T', 'C', false]])("%s/%s labels use the speaker gate appropriately", async (a, b, gate) => {
+    const content = `${a}: ${'A synthetic example about walking outside. '.repeat(5)}\n${b}: ${'Another synthetic example about walking outside. '.repeat(5)}`;
+    await open();
+    await userEvent.click(screen.getByRole('radio', { name: 'Transcript' }));
+    await userEvent.upload(screen.getByLabelText('Transcript file'), new File([content], 'walk.txt', { type: 'text/plain' }));
+    await goal();
+    await userEvent.click(screen.getByRole('button', { name: 'Start' }));
+    await screen.findByRole('list', { name: 'Progress' });
+    if (gate) expect(await screen.findByRole('heading', { name: 'Speaker Alex' })).toBeInTheDocument();
+    else {
+      await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('Coding the session'));
+      expect(screen.queryByRole('heading', { name: 'Who is the clinician?' })).toBeNull();
+    }
   });
 });

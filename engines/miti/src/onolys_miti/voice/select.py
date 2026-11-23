@@ -10,8 +10,8 @@ from importlib import resources
 from pathlib import Path
 
 import yaml
+from onolys_engine_core.errors import ConfigError, InputError
 
-from onolys_miti.errors import ConfigError, InputError
 from onolys_miti.voice import VoiceParams
 
 VOICE_FILE_NAME = "voice_providers.yaml"

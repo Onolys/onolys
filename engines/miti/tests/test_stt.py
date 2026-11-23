@@ -1,10 +1,15 @@
-import pytest
+import json
+from importlib.resources import files
 
-from onolys_miti.errors import InputError
+import pytest
+from jsonschema import Draft202012Validator
+from onolys_engine_core.config import locate_config_file
+from onolys_engine_core.errors import InputError
+
 from onolys_miti.stt import AudioRef, SttParams, Word
 from onolys_miti.stt.base import transcribe, words_to_turns
 from onolys_miti.stt.fixture import FixtureStt, uri_hash
-from onolys_miti.stt.select import locate_config_file, select_stt
+from onolys_miti.stt.select import DEFAULT_RESOURCE, STT_FILE_NAME, select_stt
 
 pytestmark = pytest.mark.unit
 
@@ -39,7 +44,7 @@ def test_no_gap_split_when_gap_within_limit():
 def test_none_speaker_and_empty():
     assert words_to_turns([]) == []
     t = words_to_turns([W(text="x", start_ms=0, end_ms=1)])
-    assert t[0].speaker is None
+    assert t[0].speaker == "unknown"
 
 
 async def test_fixture_two_speakers_and_ms_times():
@@ -48,7 +53,8 @@ async def test_fixture_two_speakers_and_ms_times():
     tr = await transcribe(stt, audio, SttParams(provider="fixture", model="f"))
     assert {t.speaker for t in tr.turns} == {"S1", "S2"}
     assert all(isinstance(t.start_ms, int) and isinstance(t.end_ms, int) for t in tr.turns)
-    assert tr.duration_ms == 9800 and tr.stt_run.provider == "fixture"
+    assert tr.duration_ms == 9800
+    assert "stt_run" not in tr.model_dump()
 
 
 async def test_handle_resume_without_second_submit():
@@ -107,7 +113,7 @@ def test_select_unknown_key():
 
 def test_packaged_default_and_routes_file_dir(tmp_path, monkeypatch):
     monkeypatch.delenv("ROUTES_FILE", raising=False)
-    packaged = locate_config_file()
+    packaged = locate_config_file(STT_FILE_NAME, DEFAULT_RESOURCE, "onolys_miti.stt")
     assert packaged.name == "stt_providers.default.yaml"
     assert select_stt(None, "en-US").provider == "google"
     (tmp_path / "routes.yaml").write_text("{}")
@@ -115,7 +121,7 @@ def test_packaged_default_and_routes_file_dir(tmp_path, monkeypatch):
         "providers: {x: {provider: px, model: mx}}\ndefault: x\n"
     )
     monkeypatch.setenv("ROUTES_FILE", str(tmp_path / "routes.yaml"))
-    assert locate_config_file() == tmp_path / "stt_providers.yaml"
+    assert locate_config_file(STT_FILE_NAME, DEFAULT_RESOURCE, "onolys_miti.stt") == tmp_path / "stt_providers.yaml"
     assert select_stt(None, None).provider == "px"
 
 
@@ -126,3 +132,24 @@ def test_max_audio_s_defaults_to_twenty_minutes_and_is_read_from_the_entry():
     from onolys_miti.stt.select import load_stt_config
 
     assert load_stt_config()["providers"]["google_chirp3"]["max_audio_s"] == 1200
+
+
+async def test_stt_output_validates_generated_transcript_v1_schema():
+    audio = AudioRef(uri="gs://b/a.flac", mime="audio/flac")
+    adapter = FixtureStt({uri_hash(audio.uri): WORDS})
+    handle = await adapter.start(audio, SttParams(provider="fixture", model="f"))
+    completion = await adapter.poll(handle)
+    transcript = completion.transcript
+    assert completion.run.provider == "fixture"
+    assert "stt_run" not in transcript.model_dump()
+    path = files("onolys_engine_core").joinpath("data/transcript.v1.schema.json")
+    Draft202012Validator(json.loads(path.read_text())).validate(transcript.model_dump())
+
+
+def test_engine_uses_shared_v1_model_and_default_language():
+    from onolys_engine_core.transcript import Transcript, Turn
+    from onolys_engine_core.transcript_v1 import TranscriptTurnV1, TranscriptV1
+
+    assert Transcript is TranscriptV1
+    assert Turn is TranscriptTurnV1
+    assert Transcript(turns=[]).language == "en"

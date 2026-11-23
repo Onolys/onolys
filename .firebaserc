@@ -8,7 +8,8 @@
         "app": ["onolys-app"],
         "app-staging": ["onolys-app-staging"],
         "admin": ["onolys-admin"],
-        "admin-staging": ["onolys-admin-staging"]
+        "admin-staging": ["onolys-admin-staging"],
+        "eval-staging": ["onolys-eval-staging"]
       }
     }
   }

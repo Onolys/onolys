@@ -114,6 +114,7 @@ interface SessionRec {
   error: { code: string; step?: string } | null;
   flags: S["Flags"];
   clinician_speaker: string | null;
+  transcript?: S["TranscriptView"];
   first_run_id: string | null;
   holdFirstStart: boolean;
   uploadId: string | null;
@@ -310,6 +311,7 @@ export class MockBackend {
   }
 
   private turns(s: SessionRec): Turn[] {
+    if (s.transcript) return s.transcript.turns;
     if (this.titleIs(s, "utf8-edge")) return edgeTranscript;
     if (this.titleIs(s, "three-speakers")) return threeSpeakerTranscript;
     return sampleTranscript;
@@ -550,6 +552,21 @@ export class MockBackend {
 
   // ---- speakers, transcript ----------------------------------------------
 
+  putTranscript(uid: string, sid: string, transcript: S["TranscriptView"]): S["CreateSessionResponse"] {
+    const s = this.own(uid, sid);
+    if (s.state !== "created") bad(409, "invalid_state", "Transcript upload needs a created session.");
+    s.transcript = transcript;
+    s.language = transcript.language ?? "en";
+    const complete = transcript.turns.every((t) => t.role != null);
+    s.clinician_speaker = complete ? transcript.turns.find((t) => t.role === "clinician")?.speaker ?? null : null;
+    s.flags.transcript_ready = true;
+    s.flags.speaker_confirmed = s.clinician_speaker !== null;
+    s.state = "awaiting_input";
+    this.emit(s);
+    this.maybeStartFirstRun(s);
+    return { session: { id: sid, status: s.state } };
+  }
+
   getSpeakers(uid: string, sid: string): S["SpeakersView"] {
     const s = this.own(uid, sid);
     if (!s.flags.transcript_ready) bad(409, "invalid_state", "Transcript is not ready.");
@@ -575,7 +592,7 @@ export class MockBackend {
       ...t,
       role:
         s.clinician_speaker === null
-          ? null
+          ? t.role ?? null
           : t.speaker === s.clinician_speaker
             ? ("clinician" as const)
             : ("client" as const),
@@ -583,8 +600,7 @@ export class MockBackend {
     return {
       turns,
       language: s.language === "auto" ? "en-US" : s.language,
-      duration_ms: turns.at(-1)?.end_ms ?? 0,
-      clinician_speaker: s.clinician_speaker,
+      duration_ms: s.transcript?.duration_ms ?? turns.at(-1)?.end_ms ?? null,
     };
   }
 

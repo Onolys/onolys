@@ -24,8 +24,8 @@ from collections import Counter
 from collections.abc import Callable
 from typing import Any
 
+from onolys_engine_core.transcript import Transcript
 from onolys_miti.stt import SttParams
-from onolys_miti.transcript import Transcript
 
 from onolys_api import logs
 from onolys_api.adapters.base import AdapterError, Stt
@@ -97,7 +97,7 @@ def check_transcript(transcript: Transcript) -> str | None:
     for turn in transcript.turns:
         n = len(turn.text.split())
         total += n
-        if turn.speaker is not None:
+        if turn.speaker != "unknown":
             per_speaker[turn.speaker] += n
     if not transcript.turns or total < MIN_WORDS:
         return "no_speech"
@@ -235,20 +235,22 @@ def make_poll_handler(
             ctx.enqueue(_poll_payload(ctx, n + 1), POLL_INTERVAL_S)
 
         try:
-            transcript = _run(stt.poll(rec.stt_operation))
+            completion = _run(stt.poll(rec.stt_operation))
         except AdapterError as e:
             raise _provider_error(e, ctx) from None
 
         logs.emit(
             "stt_poll", session_id=sid, step=STEP, request_id=ctx.request_id,
             stt_operation=operation_name(rec.stt_operation), poll_n=n,
-            elapsed_s=round(elapsed), outcome="pending" if transcript is None else "ready",
+            elapsed_s=round(elapsed), outcome="pending" if completion is None else "ready",
         )  # fmt: skip
-        if transcript is None:
+        if completion is None:
             if elapsed >= limit:
                 raise PermanentError("transcription_failed")
             return
 
+        transcript = completion.transcript
+        ctx.repo.update_session(uid, sid, {"stt.run": completion.run.model_dump()})
         code = check_transcript(transcript)
         if code is not None:
             raise PermanentError(code)

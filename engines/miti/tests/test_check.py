@@ -1,9 +1,9 @@
 """Offline tests for the pure parts of `onolys_miti.check` (no model, no network)."""
 
 import pytest
+from onolys_engine_core.transcript import Transcript
 
 from onolys_miti import check
-from onolys_miti.transcript import Transcript
 
 pytestmark = pytest.mark.unit
 

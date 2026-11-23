@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 from leak_helpers import find_leaks, secret_strings
-from onolys_miti.errors import ConfigError
+from onolys_engine_core.errors import ConfigError
 
 from onolys_api.app import create_app
 from onolys_api.voice.prompt import build_system_prompt

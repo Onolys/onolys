@@ -10,15 +10,16 @@ import os
 from collections.abc import Mapping
 from pathlib import Path
 
-from onolys_miti.errors import ConfigError, InputError
-from onolys_miti.llm.routes import (
+from onolys_engine_core.errors import ConfigError, InputError
+from onolys_engine_core.llm.routes import (
     DEFAULT_PRESET_ENV,
     RouteRegistry,
     default_preset_name,
     load_registry,
     resolve_preset,
 )
-from onolys_miti.stt.select import STT_FILE_NAME, load_stt_config, locate_config_file, select_stt
+from onolys_engine_core.presets import PresetInfo, list_presets
+from onolys_miti.stt.select import STT_FILE_NAME, load_stt_config, select_stt
 
 from onolys_api.audio import DEFAULT_MAX_DURATION_S
 from onolys_api.config import LOCAL_ENVS, Settings
@@ -46,7 +47,7 @@ class PresetResolver:
             stt_path = None
             if routes is not None and (routes.parent / STT_FILE_NAME).is_file():
                 stt_path = routes.parent / STT_FILE_NAME
-            self._stt_config = load_stt_config(stt_path or locate_config_file())
+            self._stt_config = load_stt_config(stt_path)
             self._registry = registry
         return self._registry, self._stt_config
 
@@ -58,6 +59,12 @@ class PresetResolver:
         if s.env != "prod":
             names |= {n for n in registry.presets if n.startswith(TEST_PRESET_PREFIX)}
         return names
+
+    def presets(self) -> list[PresetInfo]:
+        """Public preset metadata; availability stays in this API layer."""
+        registry, _ = self._load()
+        allowed = self.public_names()
+        return [p for p in list_presets(registry, self._default_name()) if p.name in allowed]
 
     def _default_name(self) -> str:
         return default_preset_name({DEFAULT_PRESET_ENV: self._settings.default_preset})

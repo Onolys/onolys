@@ -44,7 +44,7 @@ def sample() -> dict:
         "protocol": {"id": "demo", "version": "1.0.0", "pack_hash": "ab" * 8, "pack_format": "0.0.1"},
         "language": "en",
         "change_goal": "Quit smoking",
-        "coded_span": {"from_s": 0, "to_s": 600},
+        "coded_span": {"start_ms": 0, "end_ms": 600000},
         "subject_speaker": "S1",
         "n_runs": 1,
         "results": [{
@@ -173,7 +173,7 @@ def test_known_and_pack_defined_warning_codes_accepted(validator):
         assert list(validator.iter_errors(doc)) == []
         MitiResult.model_validate(doc)
     assert {"short_session", "quote_not_found", "overlap", "insufficient_evidence", "capped",
-            "span_ignored", "coded_window", "unknown_speaker", "language_not_validated", "run_failed"} == set(
+            "coded_window", "unknown_speaker", "language_not_validated", "run_failed"} == set(
         WARNING_CODES)
 
 

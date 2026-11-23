@@ -1,10 +1,10 @@
 import pytest
 from conftest import install_demo
+from onolys_engine_core.errors import InputError
+from onolys_engine_core.transcript import Transcript, Turn
 
 from onolys_miti import miti, rules
-from onolys_miti.errors import InputError
 from onolys_miti.prepare import RoleTurn, build_volleys, mark_roles, prepare, select_turns
-from onolys_miti.transcript import Transcript, Turn
 
 pytestmark = pytest.mark.unit
 
@@ -87,19 +87,18 @@ def test_under_ten_minutes_warns(tmp_path, pack_data):
 def test_unknown_speaker_treated_as_other(tmp_path, pack_data):
     t = convo()
     t.turns[1] = t.turns[1].model_copy(update={"speaker": "Z"})
-    t.turns[3] = t.turns[3].model_copy(update={"speaker": None})
+    t.turns[3] = t.turns[3].model_copy(update={"speaker": "unknown"})
     p = prepare(t, params())
     codes = [w.code for w in p.warnings]
     assert codes == ["unknown_speaker"]
     assert sum(rt.role == "other" for rt in p.turns) == 5
 
 
-def test_span_ignored_without_timestamps(tmp_path, pack_data):
+def test_time_span_rejected_without_timestamps(tmp_path, pack_data):
     make_pack(tmp_path, pack_data, checks=[])
     t = Transcript(turns=[Turn(id=x.id, speaker=x.speaker, text=x.text) for x in convo().turns])
-    p = prepare(t, params(), coded_span={"from_s": 0, "to_s": 60})
-    assert [w.code for w in p.warnings] == ["span_ignored"]
-    assert len(p.turns) == 10
+    with pytest.raises(InputError, match="invalid_coded_span"):
+        prepare(t, params(), coded_span={"start_ms": 0, "end_ms": 60000})
 
 
 def _rt(turns):
@@ -113,7 +112,7 @@ def test_partial_overlap_turn_included_whole():
         Turn(id="c", speaker="A", text="x", start_ms=29000, end_ms=40000),  # straddles to_s
         Turn(id="d", speaker="A", text="x", start_ms=30000, end_ms=40000),  # starts at to_s: out
     ]
-    kept, w = select_turns(_rt(turns), {"from_s": 10, "to_s": 30})
+    kept, w = select_turns(_rt(turns), {"start_ms": 10000, "end_ms": 30000})
     assert [r.turn.id for r in kept] == ["b", "c"] and w == []
     assert kept[0].turn.text == "x" and kept[0].turn.end_ms == 20000
 
@@ -123,7 +122,7 @@ def test_missing_end_ms_falls_back_to_start():
         Turn(id="a", speaker="A", text="x", start_ms=5000),
         Turn(id="b", speaker="A", text="x", start_ms=15000),
     ]
-    kept, _ = select_turns(_rt(turns), {"from_s": 10, "to_s": 30})
+    kept, _ = select_turns(_rt(turns), {"start_ms": 10000, "end_ms": 30000})
     assert [r.turn.id for r in kept] == ["b"]
 
 

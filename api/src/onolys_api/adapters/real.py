@@ -7,11 +7,11 @@ code. A new STT provider is one core adapter plus one `DEFAULT_REGISTRY` line (a
 
 `poll(handle)` carries no provider, so `start` wraps the core handle as
 `{"provider", "handle"}` JSON; `stt_operation` stores that string and `poll` routes on it.
-The `Transcript` (incl. `stt_run`) from the core adapter is returned unchanged.
+The completion carries transcript.v1 and separate STT provenance unchanged.
 
-`RealEvaluation` (SP09 R2, D5) is the single call into `onolys_miti.run_miti`; it names no model
+`RealEvaluation` calls the configured registry engine once; it names no model
 or provider: routes come from the run's preset (`resolve_preset`, unknown preset -> `InputError`).
-It passes no pack, rating or coded span; `seed` (the session id) lets the engine pick the span.
+It forwards the caller span and seed, without a pack or rating card.
 
 An unknown provider raises core `ConfigError` (an `OnolysError`): `error_map.to_public` maps it
 to `internal_error`, not retryable, and the worker logs the class, never the message.
@@ -22,19 +22,23 @@ import time
 from collections.abc import Callable, Mapping
 from typing import Any
 
-from onolys_miti.context import RunContext
-from onolys_miti.errors import ConfigError
-from onolys_miti.llm import LiteLLMClient, LLMConfig, MetricsCollector
-from onolys_miti.llm.routes import resolve_preset
-from onolys_miti.stt import AudioRef, SttAdapter, SttParams
+from onolys_engine_core.context import RunContext
+from onolys_engine_core.errors import ConfigError
+from onolys_engine_core.llm import LiteLLMClient, LLMConfig, MetricsCollector
+from onolys_engine_core.llm.routes import resolve_preset
+from onolys_engine_core.registry import EngineRegistry
+from onolys_engine_core.transcript import Transcript
+from onolys_engine_core.validated_run import run_validated
+from onolys_miti.stt import AudioRef, SttAdapter, SttCompletion, SttParams
 from onolys_miti.stt.fixture import FixtureStt
 from onolys_miti.stt.google_chirp import GoogleChirp3
-from onolys_miti.transcript import Transcript
 from onolys_miti.voice import VoiceAdapter, VoiceParams, VoiceSession
 from onolys_miti.voice.fixture import FixtureVoice
 from onolys_miti.voice.gemini_live_vertex import GeminiLiveVertex
 
 from onolys_api.adapters.base import EvaluationOutput, ProgressCb
+from onolys_api.config import Settings
+from onolys_api.engines import build_engine_registry
 
 SttFactory = Callable[[], SttAdapter]
 
@@ -66,7 +70,7 @@ class RealStt:
         handle = await self._adapter(params.provider).start(audio, params)
         return json.dumps({"provider": params.provider, "handle": handle})
 
-    async def poll(self, handle: str) -> Transcript | None:
+    async def poll(self, handle: str) -> SttCompletion | None:
         try:
             wrapped = json.loads(handle)
             provider, inner = wrapped["provider"], wrapped["handle"]
@@ -101,7 +105,9 @@ class RealVoice:
 
 
 RUN_DEADLINE_S = 8 * 60  # the whole evaluation; a shorter ctx.deadline (task budget) wins
-_ENGINE_PARAMS = ("change_goal", "seed", "language", "n_runs", "preset", "code_version")
+_ENGINE_PARAMS = (
+    "change_goal", "seed", "language", "n_runs", "preset", "code_version", "stt_run", "coded_span",
+)
 
 
 def _llm_from_routes(routes: dict) -> Any:
@@ -109,14 +115,20 @@ def _llm_from_routes(routes: dict) -> Any:
 
 
 class RealEvaluation:
-    """Implements `adapters.base.Evaluation`: one `run_miti` call, nothing else."""
+    """Implements `adapters.base.Evaluation` through the configured engine registry."""
+
+    # Trusted adapter contract: the job must not validate this result a second time.
+    validates_output = True
 
     def __init__(
         self,
-        run_miti: Callable[..., Any] | None = None,
+        settings: Settings | None = None,
+        *,
+        registry: EngineRegistry | None = None,
         llm_factory: Callable[[dict], Any] = _llm_from_routes,
     ) -> None:
-        self._run_miti = run_miti
+        self._settings = settings or Settings()
+        self._registry = registry if registry is not None else build_engine_registry(self._settings)
         self._llm_factory = llm_factory
 
     async def run(
@@ -127,9 +139,7 @@ class RealEvaluation:
         params: dict[str, Any],
         progress_cb: ProgressCb | None = None,
     ) -> EvaluationOutput:
-        run_miti = self._run_miti
-        if run_miti is None:
-            from onolys_miti import run_miti
+        engine = self._registry.get(self._settings.prod_engine)
         routes, _ = resolve_preset(params.get("preset"))  # unknown preset: InputError
         deadline = time.monotonic() + RUN_DEADLINE_S
         if ctx.deadline is not None:
@@ -140,9 +150,11 @@ class RealEvaluation:
             request_id=ctx.request_id,
             deadline=deadline,
         )
-        engine_params = {k: params.get(k) for k in _ENGINE_PARAMS}
-        out = await run_miti(rctx, transcript, speaker_map, engine_params, progress_cb)
+        engine_params = {k: params.get(k) for k in _ENGINE_PARAMS if k != "stt_run" or k in params}
+        engine_params["speaker_map"] = dict(speaker_map)
+        out = await run_validated(engine, rctx, transcript, engine_params, progress_cb)
+        payload = out.model_dump(mode="json")
         return EvaluationOutput(
-            report=json.loads(out.report.model_dump_json()),
-            artifacts=json.loads(out.artifacts.model_dump_json()),
+            report=payload["output"], artifacts=payload["artifacts"] or {},
+            run_info=payload["run_info"],
         )

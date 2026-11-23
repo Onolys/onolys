@@ -1,4 +1,4 @@
-"""R2/R3/D1/D2/D10: the engine seam. The run passes `seed` (the session id), never a coded span,
+"""R2/R3/D1/D2/D10: the engine seam. The run passes `seed` (the session id), the optional caller span,
 and never a rating: a run with or without a submitted card gives the same report."""
 
 import inspect
@@ -19,30 +19,35 @@ class Capture(FakeEvaluation):
         return await super().run(ctx, transcript, speaker_map, params, progress_cb)
 
 
-async def test_span_not_passed(env):  # noqa: F811
+async def test_absent_span_passes_whole_session(env):  # noqa: F811
     cap = Capture()
     swap_eval(env, cap)
     sid = await env.finished()
-    assert env.repo.get_session(env.uid, sid).coded_span is not None  # the card did set a span
+    assert env.repo.get_session(env.uid, sid).coded_span is None  # card span is ignored
     assert cap.seen["params"]["seed"] == sid
-    assert "coded_span" not in cap.seen["params"]
+    assert cap.seen["params"]["coded_span"] is None
 
 
-async def test_real_adapter_forwards_seed_and_drops_a_caller_span():
+async def test_real_adapter_forwards_seed_and_caller_span():
     seen = {}
 
-    async def run_miti(rctx, transcript, speaker_map, params, progress_cb=None):
+    async def run_engine(rctx, transcript, params, progress_cb=None):
         seen.update(params)
         raise RuntimeError("stop")
 
-    from onolys_miti import RunContext
+    from types import SimpleNamespace
 
-    ev = RealEvaluation(run_miti=run_miti, llm_factory=lambda routes: object())
+    from onolys_engine_core.context import RunContext
+    from onolys_engine_core.registry import EngineRegistry
+
+    registry = EngineRegistry()
+    registry.register(SimpleNamespace(name="miti", run=run_engine, accepts_feedback=False))
+    ev = RealEvaluation(registry=registry, llm_factory=lambda routes: object())
     ctx = RunContext(llm=None, metrics=None, request_id="r1")
-    params = {"seed": "sess-1", "coded_span": {"from_s": 1, "to_s": 2}, "preset": None}
+    params = {"seed": "sess-1", "coded_span": {"start_turn": 0, "end_turn": 2}, "preset": None}
     with pytest.raises(RuntimeError):
         await ev.run(ctx, None, {"subject": "S1"}, params)
-    assert seen["seed"] == "sess-1" and "coded_span" not in seen
+    assert seen["seed"] == "sess-1" and seen["coded_span"] == params["coded_span"]
 
 
 def test_seam_has_no_pack_or_rating():
@@ -70,3 +75,17 @@ async def test_rating_ignored(env):  # noqa: F811
         return rep
 
     assert body(rated) == body(unrated)
+
+
+@pytest.mark.parametrize("span", [{"start_turn": 0, "end_turn": 2},
+                                 {"start_ms": 0, "end_ms": 10000}])
+async def test_caller_span_reaches_worker_and_report(env, span):  # noqa: F811
+    cap = Capture()
+    swap_eval(env, cap)
+    sid = await env.finished(coded_span=span)
+    assert cap.seen["params"]["coded_span"] == span
+    report = env.repo.get_report_by_version(env.uid, sid, 1).report
+    assert report["header"]["coded_span"] == span
+    assert report["run_info"]["miti"]["span"]["mode"] == "explicit"
+    for key, value in span.items():
+        assert report["run_info"]["miti"]["span"][key] == value

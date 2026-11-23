@@ -1,0 +1,13 @@
+name: miti
+version: "1"
+route: oneshot
+max_output_tokens: 4096
+inputs: [transcript, params]
+schema_hint: true
+params_schema:
+  type: object
+  properties:
+    change_goal: {type: string, minLength: 1}
+    language: {type: string, minLength: 1}
+  required: [change_goal]
+  additionalProperties: false

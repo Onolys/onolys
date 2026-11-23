@@ -5,12 +5,13 @@ import json
 from pathlib import Path
 from typing import Any
 
+from onolys_engine_core.transcript import Transcript
+
 from onolys_miti import miti
 from onolys_miti.hashes import evaluation_prompt_hashes
 from onolys_miti.report import Tip
 from onolys_miti.result import MitiResult
 from onolys_miti.tips import TipsArtifact
-from onolys_miti.transcript import Transcript
 
 FIXTURES = miti.DATA_DIR / "fixtures" / "evaluation"
 SCHEMA_PATH = Path(miti.DATA_DIR) / "report.schema.json"
@@ -29,7 +30,8 @@ def inputs() -> dict[str, Any]:
     route = next(iter(result.run_info.routes.values())).litellm_id
     return {
         "transcript": Transcript.model_validate(load("transcript.json")),
-        "params": {"n_runs": 1, "preset": "fixture", "code_version": "fixture"},
+        "params": {"n_runs": 1, "preset": "fixture", "code_version": "fixture",
+                   "stt_run": golden["header"]["stt"]},
         "result": result,
         "tips": TipsArtifact(valid=[Tip.model_validate(t) for t in golden["tips"]],
                              proposals=[]),

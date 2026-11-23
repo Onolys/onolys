@@ -17,7 +17,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     outputs:
+      core: ${{ steps.flags.outputs.core }}
+      oneshot: ${{ steps.flags.outputs.oneshot }}
       miti: ${{ steps.flags.outputs.miti }}
+      eval: ${{ steps.flags.outputs.eval }}
+      eval-backend: ${{ steps.flags.outputs.eval-backend }}
+      eval-web: ${{ steps.flags.outputs.eval-web }}
       api: ${{ steps.flags.outputs.api }}
       admin-auth: ${{ steps.flags.outputs.admin-auth }}
       admin-backend: ${{ steps.flags.outputs.admin-backend }}
@@ -54,6 +59,8 @@ jobs:
         run: bash scripts/ci/test_deploy_prod.sh
       - name: Test deploy-admin workflow guard
         run: bash scripts/ci/test_deploy_admin.sh
+      - name: Test eval deployment workflow and image guard
+        run: bash scripts/ci/test_deploy_eval.sh
       - name: Test Hosting targets resolve per app (.firebaserc)
         run: bash scripts/ci/test_hosting_targets.sh
       - name: Test PR preview workflows and helpers
@@ -73,6 +80,46 @@ jobs:
             files="$(git diff --name-only "$BASE_SHA...$HEAD_SHA")"
           fi
           printf '%s\n' "$files" | bash scripts/ci/changes.sh
+
+  engine-core:
+    needs: changes
+    if: needs.changes.outputs.core == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      # Unit tests use bundled model metadata and fixture clients, never provider calls.
+      LITELLM_LOCAL_MODEL_COST_MAP: "True"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+      - run: uv sync --frozen --package onolys-engine-core
+      - run: uv run --no-sync --package onolys-engine-core ruff check engines/core
+      - name: Offline core tests (including the AST import boundary)
+        run: uv run --no-sync --package onolys-engine-core pytest engines/core -m "not live"
+
+  oneshot:
+    needs: changes
+    if: needs.changes.outputs.oneshot == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      # Bundled model pricing and replayed synthetic replies; no provider credentials.
+      LITELLM_LOCAL_MODEL_COST_MAP: "True"
+      MITI_LLM_RECORD: "0"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+      # Installs only one-shot and core; MITI reference data is read by path from checkout.
+      - run: uv sync --frozen --package onolys-oneshot
+      - run: uv run --no-sync --package onolys-oneshot ruff check engines/oneshot
+      - name: Offline unit tests, recorded goldens and AST import boundary
+        run: uv run --no-sync --package onolys-oneshot pytest engines/oneshot -m "not live"
 
   miti:
     needs: changes
@@ -95,6 +142,68 @@ jobs:
             echo "### Coverage: onolys-miti"
             uv run --no-sync --package onolys-miti coverage report --format=markdown
           } >> "$GITHUB_STEP_SUMMARY"
+
+  eval-core:
+    needs: changes
+    if: needs.changes.outputs.eval == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      # Use LiteLLM's bundled pricing data; unit tests need no provider/network access.
+      LITELLM_LOCAL_MODEL_COST_MAP: "True"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+      # convert is needed for tests that generate and parse synthetic PDFs.
+      # Package dev dependencies (pytest) are included by default.
+      - run: uv sync --frozen --package onolys-eval --extra convert
+      - name: Offline unit tests (synthetic fixtures and public-repo guard)
+        run: uv run --no-sync --package onolys-eval pytest eval/core/tests -m "not live"
+
+  eval-backend:
+    needs: changes
+    if: needs.changes.outputs.eval-backend == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      # Offline fixtures and bundled pricing metadata; provider credentials are unnecessary.
+      LITELLM_LOCAL_MODEL_COST_MAP: "True"
+      MITI_LLM_RECORD: "0"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+      - run: uv sync --frozen --package onolys-eval-backend
+      - run: uv run --no-sync --package onolys-eval-backend ruff check eval/backend
+      - run: uv run --no-sync --package onolys-eval-backend pytest eval/backend -m "not live"
+      - name: Build eval image and verify offline runtime, auth and data isolation
+        run: bash scripts/ci/test_eval_image.sh onolys-eval-backend:ci
+
+  eval-web:
+    needs: changes
+    if: needs.changes.outputs.eval-web == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: eval/web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: eval/web/package-lock.json
+      - run: npm ci
+      - run: npm test
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm run build
 
   # api is split so the critical path is max(api-unit, api-emulator) + api-coverage (~30s), not their sum.
   # Selection: conftest.py adds the `firestore` marker to every test that needs the emulator
@@ -335,15 +444,17 @@ jobs:
             | jq -e --arg sha "$GITHUB_SHA" '.service_mode == "combined" and .code_version == $sha'
           docker logs onolys-api
           docker rm -f onolys-api
-      - name: Image ships only the miti engine (no old packages, no protocols)
+      - name: Image ships core and MITI without eval packages or datasets
         run: |
-          for m in paudit onolys_core eaudit onolys_evaluation; do
+          for m in paudit onolys_core eaudit onolys_evaluation onolys_eval; do
             if docker run --rm --entrypoint python onolys-api:ci -c "import $m" 2>/dev/null; then
               echo "unexpected import $m in image"; exit 1
             fi
           done
-          docker run --rm --entrypoint python onolys-api:ci -c "import onolys_miti"
+          docker run --rm --entrypoint python onolys-api:ci -c "import onolys_engine_core, onolys_miti"
           docker run --rm --entrypoint test onolys-api:ci ! -e /app/protocols
+          docker run --rm --entrypoint test onolys-api:ci ! -e /app/eval
+          docker run --rm --entrypoint test onolys-api:ci ! -e /src/eval/datasets
           docker image inspect onolys-api:ci --format 'image size bytes: {{.Size}}'
 
   admin-auth:

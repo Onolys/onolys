@@ -5,12 +5,12 @@ import json
 import re
 
 import pytest
+from onolys_engine_core.transcript import Turn
 
 from onolys_miti import miti, rules
 from onolys_miti.formula import check, evaluate, label_for
 from onolys_miti.miti import PROMPT_FILES
 from onolys_miti.prepare import OTHER, SUBJECT, CheckInput, RoleTurn
-from onolys_miti.transcript import Turn
 
 pytestmark = pytest.mark.unit
 

@@ -2,7 +2,8 @@
 
 import hashlib
 
-from onolys_miti.errors import InputError
+from onolys_engine_core.errors import InputError
+
 from onolys_miti.stt import AudioRef, SttParams, SttRun, Word
 from onolys_miti.stt.base import BaseSttAdapter
 

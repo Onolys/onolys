@@ -14,7 +14,7 @@ from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from onolys_miti.result import WarningCode
+from onolys_miti.result import CodedSpan, WarningCode
 from onolys_miti.run_info import RunInfo
 from onolys_miti.stt import SttRun
 
@@ -87,11 +87,6 @@ class Protocol(_Model):
     version: str
     pack_hash: str
     label: str
-
-
-class CodedSpan(_Model):
-    from_s: float | None = None
-    to_s: float | None = None
 
 
 class RatingCoverage(_Model):

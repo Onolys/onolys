@@ -9,9 +9,9 @@ from types import SimpleNamespace as NS
 
 import pytest
 import yaml
+from onolys_engine_core.errors import ConfigError, InputError
+from onolys_engine_core.safe_log import log
 
-from onolys_miti.errors import ConfigError, InputError
-from onolys_miti.safe_log import log
 from onolys_miti.voice import (
     AudioOut,
     Closed,

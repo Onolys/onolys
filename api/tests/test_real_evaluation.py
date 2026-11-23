@@ -1,15 +1,15 @@
-"""SP09 R2/D5/AC1: the real `Evaluation` adapter is one call into `run_miti`.
-Unit tests stub `run_miti` and the LLM client; no live calls."""
+"""The real Evaluation adapter calls the configured registry engine once; no live calls."""
 
 import re
 import time
 from pathlib import Path
-from types import SimpleNamespace
 
 import pytest
-from onolys_miti.context import RunContext
-from onolys_miti.errors import InputError
-from onolys_miti.transcript import Transcript
+from onolys_engine_core.context import RunContext
+from onolys_engine_core.engine import EngineResult, RunInfo
+from onolys_engine_core.errors import InputError
+from onolys_engine_core.registry import EngineRegistry
+from onolys_engine_core.transcript import Transcript
 
 from onolys_api.adapters import real
 from onolys_api.adapters.base import EvaluationOutput
@@ -30,19 +30,30 @@ SPEAKERS = {"subject": "A"}
 
 
 class Engine:
+    name = "miti"
+    accepts_feedback = False
+
+    def output_schema(self):
+        return {"type": "object", "required": ["schema_version"]}
+
     def __init__(self) -> None:
         self.calls: list[tuple] = []
 
-    async def __call__(self, *args, **kw):
+    async def run(self, *args, **kw):
         self.calls.append((args, kw))
-        return SimpleNamespace(
-            report=SimpleNamespace(model_dump_json=lambda: '{"schema_version": "1"}'),
-            artifacts=SimpleNamespace(model_dump_json=lambda: '{"code": {"x": 1}}'),
+        return EngineResult(
+            output={"schema_version": "1"}, artifacts={"code": {"x": 1}}, run_info=RunInfo(),
         )
 
 
+def registry_for(engine):
+    registry = EngineRegistry()
+    registry.register(engine)
+    return registry
+
+
 def make(engine: Engine, llm=None) -> RealEvaluation:
-    return RealEvaluation(run_miti=engine, llm_factory=lambda routes: llm or "llm")
+    return RealEvaluation(registry=registry_for(engine), llm_factory=lambda routes: llm or "llm")
 
 
 def ctx() -> RunContext:
@@ -59,9 +70,10 @@ async def test_one_call_with_exact_params():
     out = await make(engine).run(ctx(), transcript(), SPEAKERS, PARAMS, cb)
     assert len(engine.calls) == 1
     (args, kw) = engine.calls[0]
-    c, tr, speakers, params, got_cb = args
+    c, tr, params, got_cb = args
+    speakers = params["speaker_map"]
     assert speakers == SPEAKERS and got_cb is cb and kw == {}
-    assert params == {k: v for k, v in PARAMS.items() if k != "stub_title"}
+    assert params == {**{k: v for k, v in PARAMS.items() if k != "stub_title"}, "coded_span": None, "speaker_map": SPEAKERS}
     assert c.request_id == "req-9" and c.llm == "llm" and c.metrics is not None
     assert isinstance(out, EvaluationOutput)
     assert out.report == {"schema_version": "1"} and out.artifacts == {"code": {"x": 1}}
@@ -70,7 +82,7 @@ async def test_one_call_with_exact_params():
 async def test_no_progress_cb_passes_none():
     engine = Engine()
     await make(engine).run(ctx(), transcript(), SPEAKERS, PARAMS)
-    assert engine.calls[0][0][4] is None
+    assert engine.calls[0][0][3] is None
 
 
 async def test_deadline_is_capped_at_eight_minutes():
@@ -90,17 +102,17 @@ async def test_shorter_ctx_deadline_wins():
 
 async def test_unknown_preset_is_input_error_and_no_engine_call():
     engine = Engine()
-    ev = RealEvaluation(run_miti=engine)  # real resolve
+    ev = RealEvaluation(registry=registry_for(engine))  # real resolve
     with pytest.raises(InputError):
         await ev.run(ctx(), transcript(), SPEAKERS, {**PARAMS, "preset": "no-such-preset"})
     assert engine.calls == []
 
 
 async def test_default_llm_factory_builds_litellm_client_from_routes():
-    from onolys_miti.llm import LiteLLMClient
+    from onolys_engine_core.llm import LiteLLMClient
 
     engine = Engine()
-    ev = RealEvaluation(run_miti=engine)
+    ev = RealEvaluation(registry=registry_for(engine))
     await ev.run(ctx(), transcript(), SPEAKERS, PARAMS)
     assert isinstance(engine.calls[0][0][0].llm, LiteLLMClient)
 
@@ -115,8 +127,63 @@ def test_adapter_names_no_model_or_provider():
     )
 
 
-async def test_a_caller_coded_span_never_reaches_the_engine():
+@pytest.mark.parametrize(
+    "coded_span",
+    [{"start_ms": 0, "end_ms": 600_000}, {"start_turn": 0, "end_turn": 2}],
+    ids=["milliseconds", "turns"],
+)
+async def test_a_caller_coded_span_reaches_the_engine_unchanged(coded_span):
     engine = Engine()
-    params = {**PARAMS, "coded_span": {"from_s": 0.0, "to_s": 600.0}}
+    params = {**PARAMS, "coded_span": coded_span}
     await make(engine).run(ctx(), transcript(), SPEAKERS, params)
-    assert "coded_span" not in engine.calls[0][0][3]
+    assert engine.calls[0][0][2]["coded_span"] == coded_span
+
+
+async def test_session_stt_provenance_passes_outside_transcript():
+    from onolys_miti.stt import SttRun
+
+    engine = Engine()
+    run = SttRun(provider="fixture", model="fixture", language_requested="en",
+                 adapter_version="fixture-1").model_dump()
+    await make(engine).run(ctx(), transcript(), SPEAKERS, {**PARAMS, "stt_run": run})
+    args, _ = engine.calls[0]
+    assert args[2]["stt_run"] == run
+    assert "stt_run" not in args[1].model_dump()
+
+
+async def test_invalid_engine_output_is_not_retried_or_exposed():
+    from onolys_engine_core.validated_run import OutputInvalid
+
+    class Invalid(Engine):
+        async def run(self, *args, **kw):
+            self.calls.append((args, kw))
+            return EngineResult(output={"private": "PHI-secret"}, run_info=RunInfo())
+
+    engine = Invalid()
+    with pytest.raises(OutputInvalid) as caught:
+        await make(engine).run(ctx(), transcript(), SPEAKERS, PARAMS)
+    assert len(engine.calls) == 1
+    assert caught.value.validation["attempts"] == 1
+    assert "PHI-secret" not in str(caught.value.validation)
+
+
+async def test_bad_provider_output_propagates_unchanged_without_wrapper_retry():
+    from onolys_engine_core.llm import LLMBadOutput
+
+    failure = LLMBadOutput("PHI-provider-output")
+
+    class BadProvider(Engine):
+        async def run(self, *args, **kw):
+            self.calls.append((args, kw))
+            raise failure
+
+    engine = BadProvider()
+    with pytest.raises(LLMBadOutput) as caught:
+        await make(engine).run(ctx(), transcript(), SPEAKERS, PARAMS)
+    assert caught.value is failure and len(engine.calls) == 1
+
+
+async def test_validation_metadata_is_preserved_outside_report():
+    out = await make(Engine()).run(ctx(), transcript(), SPEAKERS, PARAMS)
+    assert out.run_info["validation"] == {"attempts": 1}
+    assert "validation" not in out.report

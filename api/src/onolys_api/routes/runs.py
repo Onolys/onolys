@@ -13,10 +13,12 @@ from typing import Annotated, Any
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, Request, Response
+from onolys_miti.result import CodedSpan
 from pydantic import BaseModel, Field
 
 from onolys_api import logs
 from onolys_api.auth.deps import AuthUser, current_user
+from onolys_api.coded_span import validate_coded_input
 from onolys_api.errors import ApiError, ErrorResponse
 from onolys_api.jobs import caps
 from onolys_api.jobs.machine import (
@@ -32,7 +34,14 @@ from onolys_api.jobs.run import release_once
 from onolys_api.presets import UnknownPreset
 from onolys_api.repo.base import NotFoundError
 from onolys_api.repo.limits import LimitDefaults
-from onolys_api.repo.models import RunDoc, SessionDoc, SessionError, SessionState, SttInfo
+from onolys_api.repo.models import (
+    OutputValidation,
+    RunDoc,
+    SessionDoc,
+    SessionError,
+    SessionState,
+    SttInfo,
+)
 from onolys_api.routes.ids import ResourceId
 
 ERRORS = {"default": {"model": ErrorResponse, "description": "Error"}}
@@ -45,6 +54,9 @@ RERUN_STATES = ("awaiting_input", "failed")
 
 
 class RunRequest(BaseModel):
+    coded_span: CodedSpan | None = Field(
+        None, description="Half-open milliseconds or zero-based turn range; null codes all turns."
+    )
     n_runs: int | None = Field(None, ge=1, le=5, description="Default: the session's")
     preset: str | None = Field(None, max_length=64, description="Allowlisted; LLM routes only")
 
@@ -74,6 +86,7 @@ class RunView(BaseModel):
     ended: datetime | None = None
     error: str | None = None
     run_info: dict[str, Any] | None = None
+    validation: OutputValidation | None = None
 
 
 class RunList(BaseModel):
@@ -101,7 +114,7 @@ def _view(r: RunDoc) -> RunView:
         run_id=r.run_id, session_id=r.session_id, status=r.status, stage=r.stage,
         n_runs=r.n_runs, preset=r.preset, stt=r.stt, rating_id=r.rating_id,
         code_version=r.code_version, attempts=r.attempts, started=r.started, ended=r.ended,
-        error=r.error, run_info=r.run_info,
+        error=r.error, run_info=r.run_info, validation=r.validation,
     )  # fmt: skip
 
 
@@ -146,16 +159,24 @@ def start_run(
     ):
         raise invalid_state()
     preset, n_runs = s.preset, body.n_runs
+    span = s.coded_span
     if s.state == "failed":
         # Try again re-runs the SAME submission: the client's `preset`/`n_runs` are ignored
         prior = repo.list_runs(uid, id)
         if prior:
             preset, n_runs = prior[-1].preset, prior[-1].n_runs
+            span = prior[-1].coded_span
     elif body.preset is not None:
         try:
             preset, _ = app.state.presets.resolve(body.preset, s.language)
         except UnknownPreset as e:
             raise ApiError.of(422, "invalid_parameters", f"preset: {e}") from None
+    if "coded_span" in body.model_fields_set:
+        span = body.coded_span
+    transcript = repo.get_transcript(uid, id, "current").transcript
+    if transcript is None:
+        raise invalid_state()
+    validate_coded_input(transcript, span)
     settings = app.state.settings
     run_id = uuid4().hex
     date = caps.utc_date()
@@ -164,6 +185,7 @@ def start_run(
     outcome = repo.start_run(
         uid, id, run_id, date, LimitDefaults.from_settings(settings), settings.max_active_runs,
         settings.git_sha, RUN_START_PROGRESS, RERUN_STATES, n_runs, preset,
+        coded_span=span.model_dump(exclude_none=True) if span else None,
     )  # fmt: skip
     if outcome == "not_ready":
         raise invalid_state()

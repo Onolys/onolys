@@ -1,17 +1,17 @@
 """The only seam to the engines (PRD R6, D2, D20): `Stt`, `Evaluation`, and (SP10 R3) `Voice`.
 
 `Stt` is the provider-neutral SP01 `SttAdapter` (`start`/`poll`); `Evaluation` wraps
-`run_miti` (one call runs the whole `running` phase, asyncio inside). There are no
+the configured engine (one call runs the whole `running` phase, asyncio inside). There are no
 per-stage adapters. Fake implementations live in `fake.py`; real ones are SP09.
 """
 
 from typing import Any, Protocol
 
-from onolys_miti import ProgressCb, Stage, StageStatus
-from onolys_miti.context import RunContext
-from onolys_miti.errors import OnolysError
-from onolys_miti.stt import AudioRef, SttParams
-from onolys_miti.transcript import Transcript
+from onolys_engine_core.context import RunContext
+from onolys_engine_core.errors import OnolysError
+from onolys_engine_core.transcript import Transcript
+from onolys_miti.run import ProgressCb, Stage, StageStatus
+from onolys_miti.stt import AudioRef, SttCompletion, SttParams
 from onolys_miti.voice import VoiceParams, VoiceSession
 from pydantic import BaseModel, Field
 
@@ -40,6 +40,7 @@ class EvaluationOutput(BaseModel):
     """SP03 `EvaluationOutput`: the report JSON (incl. its `run_info`) plus run artifacts."""
 
     report: dict[str, Any]
+    run_info: dict[str, Any] = Field(default_factory=dict)
     artifacts: dict[str, Any] = Field(default_factory=dict)  # code, tips
 
 
@@ -48,12 +49,17 @@ class Stt(Protocol):
         """Begin transcription once; return an opaque, JSON-serialisable handle."""
         ...
 
-    async def poll(self, handle: str) -> Transcript | None:
-        """Return the Transcript, or None while still running. Never re-submits."""
+    async def poll(self, handle: str) -> SttCompletion | None:
+        """Return the completion, or None while still running. Never re-submits."""
         ...
 
 
 class Evaluation(Protocol):
+    """Evaluation seam. Trusted implementations may declare class-level
+    ``validates_output = True`` only when their public run uses run_validated;
+    the job bridges all other implementations through the shared wrapper.
+    """
+
     async def run(
         self,
         ctx: RunContext,

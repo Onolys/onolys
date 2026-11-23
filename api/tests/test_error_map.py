@@ -7,16 +7,22 @@ import pytest
 import test_run
 import test_worker
 from google.api_core.exceptions import ServiceUnavailable, TooManyRequests
-from onolys_miti.code_pass import CodePassFailed
-from onolys_miti.errors import ConfigError, InputError, OnolysError
-from onolys_miti.globals_pass import GlobalsPassFailed
-from onolys_miti.llm.errors import (
+from onolys_engine_core.errors import (
+    ConfigError,
+    InputError,
+    InvalidCodedSpan,
+    OnolysError,
+    SessionTooLong,
+)
+from onolys_engine_core.llm.errors import (
     FixtureMiss,
     LLMBadOutput,
     LLMRateLimited,
     LLMTimeout,
     LLMUnavailable,
 )
+from onolys_miti.code_pass import CodePassFailed
+from onolys_miti.globals_pass import GlobalsPassFailed
 from onolys_miti.run import AllRunsFailed
 from onolys_miti.stt.google_chirp import SttProviderError
 from test_logging import failed
@@ -35,9 +41,17 @@ repo = test_worker.repo
 SECRET = "SECRET-transcript-text"
 UPSTREAM, DEADLINE, TRANSCRIBE = "upstream_unavailable", "deadline_exceeded", "transcription_failed"
 
+
+class UnknownInputError(InputError):
+    code = SECRET
+
+
 # (id, exception factory, stage, attempt, public code, retryable)
 CASES = [
     ("input", lambda: InputError(SECRET), "run", 1, "invalid_parameters", False),
+    ("input_unknown_code", lambda: UnknownInputError(SECRET), "run", 1, "invalid_parameters", False),
+    ("invalid_span", lambda: InvalidCodedSpan(SECRET), "run", 1, "invalid_coded_span", False),
+    ("too_long", lambda: SessionTooLong(SECRET), "run", 1, "session_too_long", False),
     ("config", lambda: ConfigError(SECRET), "run", 1, "internal_error", False),
     ("llm_unavailable", lambda: LLMUnavailable(SECRET), "run", 1, UPSTREAM, True),
     ("llm_timeout", lambda: LLMTimeout(SECRET), "run", 1, UPSTREAM, True),
@@ -199,3 +213,16 @@ async def test_stubbed_engine_failure_maps_through_run_and_status_body(env, capl
     body = (await env.c.get(f"/v1/sessions/{sid}", headers=env.h)).text
     assert SECRET not in body and SECRET not in caplog.text
     assert env.counters()[0] == 0  # slot released once
+
+
+def test_output_invalid_has_a_fixed_public_message_and_never_retries():
+    from onolys_engine_core.validate import ValidationIssue
+    from onolys_engine_core.validated_run import OutputInvalid
+
+    from onolys_api.adapters.error_map import PUBLIC_MESSAGES, to_public
+    from onolys_api.errors import ERROR_CODES
+
+    failure = OutputInvalid(1, [ValidationIssue(path="/field", message="invalid type")])
+    assert to_public(failure) == ("output_invalid", False)
+    assert "output_invalid" in ERROR_CODES
+    assert PUBLIC_MESSAGES["output_invalid"] == "The engine returned an answer that did not match its schema."

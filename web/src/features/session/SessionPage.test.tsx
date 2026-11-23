@@ -725,3 +725,24 @@ describe("session page: delete", () => {
   });
 });
 
+
+describe("transcript speaker gate", () => {
+  it.each([false, true])("shows detected labels only when roles are missing (confirmed=%s)", async (confirmed) => {
+    const sid = create();
+    mockBackend.putTranscript(UID, sid, {
+      turns: [
+        { id: "t1", speaker: "Alex", role: confirmed ? "clinician" : null, text: "Let's talk about walking." },
+        { id: "t2", speaker: "Sam", role: confirmed ? "client" : null, text: "I want to walk more." },
+      ],
+    });
+    open(sid);
+    await ready();
+    if (confirmed) {
+      expect(screen.queryByRole("heading", { name: "Who is the clinician?" })).toBeNull();
+    } else {
+      expect(await screen.findByRole("heading", { name: "Speaker Alex" })).toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: "Speaker Sam" })).toBeInTheDocument();
+      expect(screen.getByText("Let's talk about walking.")).toBeInTheDocument();
+    }
+  });
+});

@@ -20,7 +20,7 @@ from google.api_core.exceptions import Aborted, AlreadyExists, InvalidArgument
 from google.api_core.exceptions import NotFound as GoogleNotFound
 from google.cloud import firestore
 from google.cloud.firestore_v1 import FieldFilter, Increment
-from onolys_miti.transcript import Transcript
+from onolys_engine_core.transcript import Transcript
 
 from onolys_api.config import Settings
 from onolys_api.repo import large
@@ -776,7 +776,7 @@ class FirestoreRepo:
                 uid=uid, session_id=sid, run_id=run_id, n_runs=sess.get("n_runs", 1),
                 preset=sess.get("preset"), rating_id=latest[0].id if latest else None,
                 stt=sess.get("stt"), code_version=code_version, cap_date=date,
-                counted=not exempt, units=units,
+                counted=not exempt, units=units, coded_span=sess.get("coded_span"),
             )  # fmt: skip
             txn.create(run_ref, run.to_store())
             if not exempt:
@@ -804,7 +804,7 @@ class FirestoreRepo:
     def start_run(
         self, uid: str, sid: str, run_id: str, date: str, defaults: LimitDefaults, max_active: int,
         code_version: str, start_progress: int, allowed_states: tuple[str, ...],
-        n_runs: int | None, preset: str | None,
+        n_runs: int | None, preset: str | None, coded_span: dict | None = None,
     ) -> StartOutcome:  # fmt: skip
         sref = self._session_ref(uid, sid)
         stref = self._top("session_status", sid)
@@ -852,7 +852,7 @@ class FirestoreRepo:
                 uid=uid, session_id=sid, run_id=run_id, n_runs=n_runs or sess.get("n_runs", 1),
                 preset=preset or sess.get("preset"), rating_id=latest[0].id if latest else None,
                 stt=sess.get("stt"), code_version=code_version, cap_date=date,
-                counted=not exempt, units=units,
+                counted=not exempt, units=units, coded_span=coded_span,
             )  # fmt: skip
             progress = (
                 start_progress

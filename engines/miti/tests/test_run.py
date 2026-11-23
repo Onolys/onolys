@@ -12,13 +12,13 @@ import time
 
 import jsonschema
 import pytest
+from onolys_engine_core.context import RunContext
+from onolys_engine_core.llm import LLMBadOutput, LLMResult, LLMUnavailable, MetricsCollector, Usage
+from onolys_engine_core.transcript import Transcript
 
 from onolys_miti import miti
-from onolys_miti.context import RunContext
-from onolys_miti.llm import LLMBadOutput, LLMResult, LLMUnavailable, MetricsCollector, Usage
 from onolys_miti.result import MitiResult
 from onolys_miti.run import AllRunsFailed, MitiOutput, aggregate, run_miti
-from onolys_miti.transcript import Transcript
 
 pytestmark = pytest.mark.unit
 
@@ -40,10 +40,8 @@ def _recorded(key):
 CODE, GLOBALS = _recorded("volleys"), _recorded("globals")
 
 
-def transcript(whole=True):
+def transcript():
     d = json.loads((FIX / "good_practice.json").read_text(encoding="utf-8"))
-    if whole:  # 1205 s is just past the 20-minute cap; trim so the whole session is coded
-        d["turns"][-1]["end_ms"] = 1195000
     return Transcript.model_validate(d)
 
 
@@ -180,23 +178,63 @@ async def test_whole_session_records_span_without_window():
     assert "coded_window" not in codes(out)
 
 
-async def test_long_session_codes_one_seeded_window():
-    a = await go(tr=transcript(whole=False))
-    b = await go(tr=transcript(whole=False), params={"n_runs": 2})
-    for out in (a, b):
-        assert out.artifacts.code.run_info.span.mode == "random_window"
-        assert "coded_window" in codes(out)
-    assert a.artifacts.code.coded_span == b.artifacts.code.coded_span  # one window for all runs
-    span = a.artifacts.code.coded_span
-    assert span is not None and span.to_s - span.from_s == 1200
-    other = await go(tr=transcript(whole=False), params={"seed": "another-session"})
-    assert other.artifacts.code.run_info.span.seed == "another-session"
-
-
-async def test_caller_cannot_pass_coded_span():
-    out = await go(params={"coded_span": {"from_s": 100, "to_s": 200}})
+async def test_over_twenty_minutes_codes_whole_session():
+    out = await go(tr=transcript())
+    assert out.artifacts.code.run_info.span.mode == "whole"
     assert out.artifacts.code.coded_span is None
-    assert "coded_span" not in out.report.header.params
+    assert "coded_window" not in codes(out)
+
+
+@pytest.mark.parametrize("span", [{"start_ms": 0, "end_ms": 600000}, {"start_turn": 0, "end_turn": 10}])
+async def test_explicit_span_is_honored_and_echoed(span):
+    client = FakeClient()
+    out = await go(client, params={"coded_span": span})
+    assert out.artifacts.code.coded_span.model_dump(exclude_none=True) == span
+    assert out.report.header.coded_span.model_dump(exclude_none=True) == span
+    assert out.artifacts.code.run_info.span.mode == "explicit"
+    assert out.report.run_info.miti.span.mode == "explicit"
+    asked = [v for req in client.requests if req.tier == "miti_code" for v in json.loads(req.user)["volleys"]]
+    assert len(asked) < len(CODE["volleys"])
+    schema = json.loads((miti.DATA_DIR / "report.schema.json").read_text())
+    jsonschema.validate(json.loads(out.report.model_dump_json()), schema)
+
+
+async def test_over_duration_fails_before_model_calls():
+    from onolys_engine_core.errors import InputError
+    t = transcript()
+    t.turns[-1] = t.turns[-1].model_copy(update={"end_ms": 1500001})
+    client = FakeClient()
+    with pytest.raises(InputError, match="narrower coded_span") as error:
+        await go(client, tr=t)
+    assert error.value.code == "session_too_long"
+    assert client.requests == []
+
+
+@pytest.mark.parametrize("span", [
+    {"start_ms": 0, "end_ms": 600000},
+    {"start_turn": 0, "end_turn": 999},
+])
+async def test_invalid_span_fails_before_model_calls(span):
+    from onolys_engine_core.errors import InputError
+    t = transcript().model_copy(update={"duration_ms": None, "turns": [
+        turn.model_copy(update={"start_ms": None, "end_ms": None}) for turn in transcript().turns
+    ]})
+    client = FakeClient()
+    with pytest.raises(InputError, match="invalid_coded_span") as error:
+        await go(client, tr=t, params={"coded_span": span})
+    assert error.value.code == "invalid_coded_span"
+    assert client.requests == []
+
+
+async def test_turn_span_on_untimed_transcript_reaches_report():
+    t = transcript().model_copy(update={"duration_ms": None, "turns": [
+        turn.model_copy(update={"start_ms": None, "end_ms": None}) for turn in transcript().turns
+    ]})
+    span = {"start_turn": 0, "end_turn": 10}
+    out = await go(tr=t, params={"coded_span": span})
+    assert out.report.header.coded_span.model_dump() == span
+    assert out.report.run_info.miti.span.model_dump()["end_turn"] == 10
+    assert "span_ignored" not in codes(out)
 
 
 async def test_n1_aggregate_equals_single_run():
@@ -311,7 +349,7 @@ async def test_language_warning():
 
 
 async def test_invalid_n_runs():
-    from onolys_miti.errors import InputError
+    from onolys_engine_core.errors import InputError
 
     with pytest.raises(InputError):
         await go(params={"n_runs": -1})
@@ -377,13 +415,13 @@ def test_public_reexports():
 
     for name in (
         "run_miti",
-        "MitiOutput",
-        "AllRunsFailed",
-        "RunContext",
-        "SttParams",
-        "LiteLLMClient",
-        "GoogleChirp3",
-        "resolve_preset",
-        "Transcript",
+        "MitiEngine",
     ):
         assert hasattr(m, name), name
+
+    for name in (
+        "RunContext", "ConfigError", "InputError", "OnolysError",
+        "LiteLLMClient", "resolve_preset", "MitiOutput", "AllRunsFailed",
+        "SttParams", "GoogleChirp3",
+    ):
+        assert not hasattr(m, name), name
