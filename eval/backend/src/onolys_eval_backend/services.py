@@ -94,7 +94,10 @@ class EvalServices:
             self.config.default_preset, self.routes, {"DEFAULT_PRESET": self.config.default_preset}
         )
         path = Path(self.config.routes_file).parent / "stt_providers.yaml"
-        return select_stt(key, language, config=load_stt_config(path if path.is_file() else None))
+        params = select_stt(key, language, config=load_stt_config(path if path.is_file() else None))
+        if params.provider in {"google", "google_chirp"} and params.language == "en":
+            params = params.model_copy(update={"language": "en-US"})
+        return params
 
     def stt_factory(self, provider):
         from onolys_miti.stt.fixture import FixtureStt

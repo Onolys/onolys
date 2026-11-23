@@ -407,3 +407,33 @@ def test_in_memory_queue_detaches_enqueued_payload():
     assert queue.tasks == [
         {"kind": "transcribe", "payload": {"upload_id": "first"}, "delay_seconds": 15}
     ]
+
+
+@pytest.mark.parametrize(
+    ("provider", "language", "expected"),
+    [
+        ("google", "en", "en-US"),
+        ("google_chirp", "en", "en-US"),
+        ("google", "en-US", "en-US"),
+        ("google", "en-GB", "en-GB"),
+        ("google", "fr", "fr"),
+        ("fixture", "en", "en"),
+    ],
+)
+def test_default_english_maps_to_supported_google_stt_locale_only(
+    tmp_path, provider, language, expected
+):
+    from onolys_engine_core.llm.routes import Preset, RouteRegistry
+    from test_app import ENV
+
+    from onolys_eval_backend.config import EvalConfig
+    from onolys_eval_backend.services import EvalServices
+
+    (tmp_path / "stt_providers.yaml").write_text(
+        f"default: selected\nproviders:\n  selected: {{provider: {provider}, model: chirp_3}}\n"
+    )
+    services = EvalServices(
+        EvalConfig.from_env({**ENV, "ROUTES_FILE": str(tmp_path / "routes.yaml")})
+    )
+    services.routes = RouteRegistry({}, {"configured-prod": Preset({}, stt="selected")})
+    assert services.stt_params(language).language == expected
