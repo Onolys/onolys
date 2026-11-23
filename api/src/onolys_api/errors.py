@@ -12,6 +12,8 @@ ERROR_CODES = (
     "unsupported_media_type",
     "schema_violation",
     "empty_transcript",
+    "transcript_invalid",
+    "transcript_too_large",
     "empty_assessment",
     "duplicate_ids",
     "invalid_parameters",
@@ -68,8 +70,9 @@ class ErrorDetailModel(BaseModel):
     field: str | None = Field(
         None,
         description=(
-            "`/`-joined path of the offending field in the rating card (e.g. "
-            "`globals/cct/reason`); `$` is the whole card. Set on `rating_invalid`. A path only, "
+            "`/`-joined path of the offending field in the rating card or transcript (e.g. "
+            "`globals/cct/reason`); `$` is the whole input. Set on `rating_invalid` "
+            "or transcript upload errors. A path only, "
             "never user text."
         ),
     )
@@ -85,7 +88,9 @@ class ErrorDetailModel(BaseModel):
             "too_large",
         ]
         | None
-    ) = Field(None, description="What is wrong at `field`. Set on `rating_invalid`.")
+    ) = Field(
+        None, description="What is wrong at `field`. Set on rating or transcript upload errors."
+    )
     period: Literal["day"] | None = Field(
         None,
         description=(

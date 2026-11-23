@@ -348,6 +348,8 @@
               "unsupported_media_type",
               "schema_violation",
               "empty_transcript",
+              "transcript_invalid",
+              "transcript_too_large",
               "empty_assessment",
               "duplicate_ids",
               "invalid_parameters",
@@ -397,7 +399,7 @@
                 "type": "null"
               }
             ],
-            "description": "`/`-joined path of the offending field in the rating card (e.g. `globals/cct/reason`); `$` is the whole card. Set on `rating_invalid`. A path only, never user text.",
+            "description": "`/`-joined path of the offending field in the rating card or transcript (e.g. `globals/cct/reason`); `$` is the whole input. Set on `rating_invalid` or transcript upload errors. A path only, never user text.",
             "title": "Field"
           },
           "issue": {
@@ -419,7 +421,7 @@
                 "type": "null"
               }
             ],
-            "description": "What is wrong at `field`. Set on `rating_invalid`.",
+            "description": "What is wrong at `field`. Set on rating or transcript upload errors.",
             "title": "Issue"
           },
           "message": {
@@ -4033,6 +4035,111 @@
         "summary": "The transcript, with roles once the clinician is confirmed",
         "tags": [
           "speakers"
+        ]
+      },
+      "put": {
+        "description": "Created sessions only. Maximum 1 MiB. May start the first run.",
+        "operationId": "uploadTranscript",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "pattern": "^[0-9a-f]{32}$",
+              "title": "Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            },
+            "text/plain": {
+              "schema": {
+                "type": "string"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateSessionResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "`unauthenticated`: missing, invalid or revoked credentials"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "`not_found`: no such resource for this user (never 403, so ids cannot be probed)"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "`invalid_parameters` (incl. a malformed id, cursor or body), `unsupported_audio`, `audio_too_large` or `rating_invalid`"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "`daily_cap_reached` (daily run cap), `concurrent_runs` (a run is already in progress) or `rate_limited`"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "`internal_error`"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "summary": "Upload a transcript.v1 JSON or label-prefixed UTF-8 text file",
+        "tags": [
+          "transcript"
         ]
       }
     },

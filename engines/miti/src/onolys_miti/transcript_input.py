@@ -78,3 +78,19 @@ def validate_transcript_input(value: object) -> TranscriptV1:
             "required",
         )
     return transcript
+
+
+def inferred_clinician_speaker(transcript: TranscriptV1) -> str | None:
+    """Resolve fully supplied roles; partial roles still require the speaker gate.
+
+    Transport-independent so the transcript module can move to core. Multiple
+    clinician labels are rejected even when other turns have missing roles.
+    """
+    clinicians = {turn.speaker for turn in transcript.turns if turn.role == "clinician"}
+    if len(clinicians) > 1:
+        raise _invalid(
+            "turns", "invalid", "The transcript may identify only one clinician speaker."
+        )
+    if not clinicians or any(turn.role is None for turn in transcript.turns):
+        return None
+    return next(iter(clinicians))

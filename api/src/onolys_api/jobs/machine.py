@@ -22,7 +22,7 @@ _NOT_DELETING = (
 )  # fmt: skip
 
 TRANSITIONS: dict[str, frozenset[str]] = {
-    "created": frozenset({"uploading", "upload_incomplete", "deleting"}),
+    "created": frozenset({"awaiting_input", "uploading", "upload_incomplete", "deleting"}),
     # uploading -> uploading: a fresh signed URL for the same session
     "uploading": frozenset({"uploading", "upload_incomplete", "validating", "deleting"}),
     # never uploaded (lazy stale check): a fresh URL resumes it; a late PUT still completes

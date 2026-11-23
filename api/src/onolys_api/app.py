@@ -45,6 +45,7 @@ from onolys_api.routes import scenarios as scenario_routes
 from onolys_api.routes import sessions as session_routes
 from onolys_api.routes import speakers as speaker_routes
 from onolys_api.routes import tasks as task_routes
+from onolys_api.routes import transcript as transcript_routes
 from onolys_api.routes import usage as usage_routes
 from onolys_api.storage.base import BlobStore
 from onolys_api.storage.fake import FAKE_ROUTE, FakeBlobStore
@@ -123,6 +124,13 @@ class BodyLimitMiddleware:
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope["type"] != "http" or scope["path"].startswith(FAKE_ROUTE):
+            await self.app(scope, receive, send)
+            return
+        # The authenticated transcript route rejects oversized streams before parsing;
+        # the generic truncation must never expose a valid prefix to persistence.
+        if scope["method"] == "PUT" and re.fullmatch(
+            r"/v1/sessions/[^/]+/transcript", scope["path"]
+        ):
             await self.app(scope, receive, send)
             return
         for k, v in scope["headers"]:
@@ -464,6 +472,7 @@ def create_app(
     router.include_router(audio_routes.router)
     router.include_router(rating_routes.router)
     router.include_router(speaker_routes.router)
+    router.include_router(transcript_routes.router)
     router.include_router(run_routes.router)
     router.include_router(run_routes.runs_router)
     router.include_router(usage_routes.router)
