@@ -20,6 +20,7 @@ WORKDIR /src
 COPY pyproject.toml uv.lock ./
 COPY engines/core/pyproject.toml engines/core/pyproject.toml
 COPY engines/miti/pyproject.toml engines/miti/pyproject.toml
+COPY engines/oneshot/pyproject.toml engines/oneshot/pyproject.toml
 COPY api/pyproject.toml api/pyproject.toml
 COPY admin/auth/pyproject.toml admin/auth/pyproject.toml
 COPY admin/backend/pyproject.toml admin/backend/pyproject.toml
