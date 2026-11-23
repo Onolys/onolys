@@ -69,7 +69,7 @@ Select = Radix Select (shadcn Select) for consistent styling [RESOLVED: 2026-11-
 | verdict-*, role-*, selected-claim-bg (admin) | --verdict-*, --role-*, --selected (shipped now, dark values added; consumed in SP4) |
 | --space-*, font sizes, --hdr, --gutter | kept as `--space-*`, `--text-*`, `--header-h`, `--gutter` in `@theme` |
 
-Compat: ship `legacy.css` aliasing old `--color-*` names so SP2/SP3 can migrate incrementally [OPEN: or drop].
+Compat: ship `legacy.css` aliasing old `--color-*` names so SP2/SP3 can migrate incrementally [RESOLVED: orchestrator default 2026-11-23 — keep `legacy.css` aliases for the migration period, removed in SP2's final cleanup phase; verified in Task 4].
 
 **Astro.** `import "@onolys/ui/theme.css"` plus Tailwind v4 Vite plugin in `astro.config` (Astro 7 supports `vite.plugins`). CSS-only; no React needed. Islands (e.g. SignupDialog) later add `@astrojs/react` + the same package. Fonts: package `fonts.css` replaces `@fontsource-variable/inter`.
 
@@ -80,7 +80,7 @@ Compat: ship `legacy.css` aliasing old `--color-*` names so SP2/SP3 can migrate 
 |---|---|---|---|---|
 | 1 | Git-dep install | Commit built `dist/` on release tag commit only (release workflow builds, commits to a detached tag commit, not main) | `prepare` script | `prepare` forces consumers (CI, Astro, Firebase) to install devDeps + build per install: slower, fragile on Node/npm differences, and npm git-dep `prepare` needs dev deps resolved. Tag-with-dist = zero build on install, deterministic. Cost: release workflow complexity |
 | 2 | Dark mode | `@media (prefers-color-scheme: dark)` vars, no `.dark` class | class + JS toggle | No storage allowed; automatic per brief |
-| 3 | Docs | Storybook | Ladle | Maintained a11y addon + test-runner; Ladle lighter but weaker a11y. [OPEN: Storybook 10 + Vite 8 compat to verify] |
+| 3 | Docs | Storybook | Ladle | Maintained a11y addon + test-runner; Ladle lighter but weaker a11y. [RESOLVED: orchestrator default 2026-11-23 — Storybook 10 if it supports Vite 8, else Ladle (spike decides, Storybook preferred); verified in Task 2] |
 | 4 | Modules | ESM only, peers: react >=19, tailwindcss 4 | dual CJS | All consumers are Vite ESM |
 | 5 | Select | Radix Select (shadcn); native styled `<select>` only if CSP smoke fails (owner-delegated 2026-11-23) | Native styled | Consistent styling now that build checks are relaxed; CSP smoke is the gate |
 | 6 | Versioning | semver, `CHANGELOG.md` (Keep a Changelog), pre-1.0 minor = may break; consumers pin tags | floating `main` | Reproducible builds |
@@ -89,6 +89,7 @@ Compat: ship `legacy.css` aliasing old `--color-*` names so SP2/SP3 can migrate 
 | 9 | Font | `woff2` shipped in package, `@font-face` in `fonts.css` with relative URL | per-app copy | One copy; consumer bundlers emit hashed asset (same-origin, font-src 'self') |
 | 10 | Variants | cva + tailwind-merge (shadcn standard) | CSS modules | Matches shadcn |
 | 11 | Build checks vs Radix | Owner 2026-11-23: build/hosting checks may be changed or removed when they block the design system (no one uses prod); CSP stays strict (`style-src 'self'`), proven by Playwright CSP smoke; prefer Radix Dialog/AlertDialog, native `<dialog>` only if smoke fails | Keep checks, bypass RemoveScroll / native dialog | Unblocks Radix; CSP strictness still verified at runtime |
+| 12 | Orchestrator defaults 2026-11-23 | Storybook 10 (Ladle if no Vite 8 support); shadcn Tailwind v4 conventions; `.d.ts` from TS 6.0.x, fixtures under TS 6 + 7; dist on tag commits only, no `prepare`, git+https install smoke on Node 22; woff2 files + consumer `assetsInlineLimit`; `legacy.css` kept until SP2 final cleanup | Owner delegated open items to orchestrator | Recommended defaults; each verified by a named task in TASKS.md |
 
 ## Manual steps
 - Owner: create public GitHub repo `Onolys/onolys-ui`, enable Actions, branch protection on `main`.
@@ -96,11 +97,11 @@ Compat: ship `legacy.css` aliasing old `--color-*` names so SP2/SP3 can migrate 
 
 ## Risks / Open Questions
 - [RESOLVED: owner 2026-11-23 — prefer Radix Dialog/AlertDialog with the build check adjusted; native `<dialog>` only if the CSP smoke fails] Dialog scroll lock. Only the runtime CSP verification remains as a task-level check.
-- [OPEN] Verify at implementation: current shadcn CLI conventions for Tailwind v4 (`@theme inline`, `tw-animate-css` dep, `data-slot` attrs, React 19 ref handling); Storybook/Vite 8/TS 6-7 compat; Tailwind `@source` resolution through git-dep symlink-free install.
-- [OPEN] TS version: web TS 6.0.3, admin TS 7; emitted `.d.ts` must typecheck under both.
-- [OPEN] Node 22 + `npm install github:` with committed dist: confirm no `prepare` runs (no `prepare` script defined).
-- [OPEN] Keep `legacy.css` aliases or force-migrate.
-- [OPEN] Hosting `font-src 'self'`: fonts bundled as assets, verify no data: inlining (Vite `assetsInlineLimit`) in consumers; woff2 > 4KB so ok, confirm in SP2.
+- [RESOLVED: orchestrator default 2026-11-23 — follow current shadcn CLI conventions for Tailwind v4 (`components.json` in package, `@theme inline` tokens, `tw-animate-css`, `data-slot`, React 19 refs); Storybook/Vite 8 compat decided by the setup spike; verified in Task 2] Tailwind `@source` through a symlink-free git install is proven in Task 11 and Task 13.
+- [RESOLVED: orchestrator default 2026-11-23 — emit `.d.ts` compiled with the lowest consumer TS (6.0.x); typecheck a fixture under TS 6 and TS 7 in CI; verified in Task 10]
+- [RESOLVED: orchestrator default 2026-11-23 — commit built dist only on release tag commits, no `prepare` script; consumer-install smoke in CI (Node 22, `npm install github:Onolys/onolys-ui#<tag>` via git+https); verified in Task 13]
+- [RESOLVED: orchestrator default 2026-11-23 — keep `legacy.css` aliases for the migration period, removed in SP2's final cleanup phase; verified in Task 4]
+- [RESOLVED: orchestrator default 2026-11-23 — fonts shipped as woff2 files; consumers set Vite `assetsInlineLimit` so fonts are never `data:` URIs (`font-src 'self'`); verified in Task 11] SP2 re-confirms in the app.
 - [RESOLVED: spec] Public repo + git dep needs no tokens.
 - [DEFERRED] Manual theme toggle, Toast/Sonner, RadioGroup/Switch, admin tokens merge (SP4), Renovate.
 

@@ -36,12 +36,12 @@ Rollout order: app, then landing, then admin/eval.
 **PRD 01 (onolys-ui)**
 - [RESOLVED: 2026-11-23 — Radix Select; native fallback only if CSP smoke fails]
 - [RESOLVED: owner 2026-11-23 — prefer Radix Dialog/AlertDialog with build check adjusted; native `<dialog>` only if CSP smoke fails; runtime CSP verification remains a task-level check.]
-- [OPEN: or drop] Keep `legacy.css` color aliases or force-migrate.
-- [OPEN: verify] Storybook 10 + Vite 8 compat (Storybook vs Ladle).
-- [OPEN] Verify current shadcn CLI conventions for Tailwind v4; Storybook/Vite 8/TS compat; Tailwind `@source` through git-dep install.
-- [OPEN] TS version: emitted `.d.ts` must typecheck under web TS 6.0.3 and admin TS 7.
-- [OPEN] Node 22 `npm install github:` with committed dist: confirm no `prepare` runs.
-- [OPEN] `font-src 'self'`: confirm fonts not inlined as data: (Vite `assetsInlineLimit`) in consumers.
+[RESOLVED: orchestrator default 2026-11-23 — keep `legacy.css` aliases; removed in SP2 final cleanup; verified in Task 4]
+[RESOLVED: orchestrator default 2026-11-23 — Storybook 10 if Vite 8 compatible, else Ladle; verified in Task 2]
+[RESOLVED: orchestrator default 2026-11-23 — follow current shadcn Tailwind v4 conventions; `@source` through git install proven in consumer fixture; verified in Task 2/11/13]
+[RESOLVED: orchestrator default 2026-11-23 — `.d.ts` from TS 6.0.x; fixture typechecked under TS 6 and 7 in CI; verified in Task 10]
+[RESOLVED: orchestrator default 2026-11-23 — dist on release tag commits only, no `prepare`; Node 22 git+https install smoke in CI; verified in Task 13]
+[RESOLVED: orchestrator default 2026-11-23 — woff2 files; consumers set `assetsInlineLimit` so no `data:` fonts; verified in Task 11]
 
 **PRD 02 (app-migration)**
 - [RESOLVED: orchestrator default 2026-11-23 — bridge via SP1 `legacy.css`, removed in final cleanup; private `legacy-tokens.css` only if SP1 drops it]
