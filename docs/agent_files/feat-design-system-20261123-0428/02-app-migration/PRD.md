@@ -35,7 +35,7 @@ Add `@onolys/ui` (git dep, tag-pinned) + Tailwind v4 Vite plugin. Phase 0 swaps 
    | 0 | deps, vite, CSS entry, test setup shims, CSP smoke skeleton | none |
    | 1 | Shell: `Layout.tsx`, `Footer.tsx`, `AccountMenu.tsx`, skip link, `RouteError`, 404 (`placeholders.tsx`) | AppHeader, SkipLink, Footer, DropdownMenu, Button |
    | 2 | Auth: Login, Signup, ForgotPassword, VerifyEmail, AuthAction (400 lines, many states), `parts.tsx` | Input, Label, Button, Alert, Card |
-   | 3 | Dashboard (session list, status chips, usage), NewSession/Upload (drop zone, file notices), NewInterview/Interview | Card, Badge, Select (native), Alert, UsageMeter, Skeleton |
+   | 3 | Dashboard (session list, status chips, usage), NewSession/Upload (drop zone, file notices), NewInterview/Interview | Card, Badge, Select (Radix), Alert, UsageMeter, Skeleton |
    | 4 | Session page (timeline, ErrorCard, DeleteDialog, speaker gate), RatingCard/Setup fields | AlertDialog, Alert, Card, Textarea, Select, Checkbox |
    | 5 | Report + SampleReport + Transcript: tabs, tables, chips, score scale, `mark` highlight | Tabs, Table, ScoreBadge, Badge, Card |
    | 6 | Settings + secret dialog (`Modal.tsx` deleted), legal pages (`LegalPage/PrivacyPolicy/Terms`), final cleanup (delete legacy CSS) | Dialog, Card, Separator |
@@ -53,8 +53,8 @@ Add `@onolys/ui` (git dep, tag-pinned) + Tailwind v4 Vite plugin. Phase 0 swaps 
    - Class assertions (`pulse`, `counter-over`, `ref-dot`) → `data-state`/`data-*` attributes (5 edits). `data-slot="upload|speaker-gate|rating-card|rating-fallback"` hooks kept [verified: `SessionPage.test.tsx:212-274`]; SP1/shadcn `data-slot` names (button, card…) don't collide, confirm in Phase 0.
    - `test/setup.ts` adds jsdom shims Radix needs (`ResizeObserver`, `hasPointerCapture`, `scrollIntoView`, `matchMedia`) [OPEN: confirm needed set].
    - New `e2e_review/csp.spec.cjs` (below), `visual.spec.cjs` (below).
-9. **CSP smoke** (gate, runs in `web-e2e`): `npm run build -- --mode mock` then `vite preview` with `preview.headers` carrying the exact CSP string read from `firebase.json` (via `src/hosting/csp.ts` `readHosting/cspOf`), so test and prod can't drift. Playwright listens for `securitypolicyviolation` and console CSP errors while: opening account menu; Settings secret dialog; session DeleteDialog; report tabs at mobile viewport; focus rings; tooltips (if used). Zero violations required. The dev-server e2e currently runs with no CSP [verified: `playwright.config.cjs` webServer = `dev:mock`], hence the separate project.
-10. **Visual + a11y**: `visual.spec.cjs` iterates `colorScheme: light|dark` × {login, signup, verify, dashboard, new session, session (each status), report, sample report, settings, dialogs open, privacy, 404, mobile 390px}; screenshots to `test-results/shots/` uploaded as CI artifact (no pixel diff gate). `@axe-core/playwright` (new devDep) gates `color-contrast` + critical violations in both schemes [OPEN: approve dep; `privacy.test.ts` only bans analytics names].
+9. **CSP smoke** (gate, runs in `web-e2e`): `npm run build -- --mode mock` then `vite preview` with `preview.headers` carrying the exact CSP string read from `firebase.json` (via `src/hosting/csp.ts` `readHosting/cspOf`), so test and prod can't drift. Playwright listens for `securitypolicyviolation` and console CSP errors while: opening account menu; Settings secret dialog; session DeleteDialog; report tabs at mobile viewport; focus rings; Select open/choose; tooltips (if used). Zero violations required. The dev-server e2e currently runs with no CSP [verified: `playwright.config.cjs` webServer = `dev:mock`], hence the separate project.
+10. **Visual + a11y**: `visual.spec.cjs` iterates `colorScheme: light|dark` × {login, signup, verify, dashboard, new session, session (each status), report, sample report, settings, dialogs open, privacy, 404, mobile 390px}; screenshots to `test-results/shots/` uploaded as CI artifact (no pixel diff gate). `@axe-core/playwright` (new devDep in web) gates `color-contrast` + critical violations in both schemes [RESOLVED: 2026-11-23 — approved; `privacy.test.ts` only bans analytics names].
 11. **Dark-mode checklist** per screen (PR template item): text/bg ≥4.5:1, UI/focus ≥3:1; status chips (`data-tone` agree/differs/flagged/progress/wait/done/failed → ScoreBadge/Badge variants), `mark` highlight + pulse, timeline borders, drop-zone border, disabled opacity, error card, footer; no images/SVG/canvas exist in `web/src` [verified: grep `<img|<svg|<canvas` → 0 non-test hits], so no asset inversion work; `color-scheme: light dark` comes from SP1 base so native controls/scrollbars follow.
 12. **Privacy/lint constraints** re-checked each phase: no storage, no absolute URLs, ≤2 console calls, no `dangerouslySetInnerHTML`, only `firebase/*` imports allowed by name (Radix/ui imports are fine) [verified: `privacy.test.ts` scans only non-test `web/src`, and `node_modules` is outside it]. `lint.test.ts`/jsx-a11y stay on; shadcn code lives in `node_modules`, not linted.
 
@@ -84,7 +84,7 @@ Class strategy: app-specific layout via Tailwind utilities in JSX; no new global
 - Firebase hosting CSP: no change (`style-src 'self'`; fonts under `default-src 'self'`). `hosting.test.ts` `style-src === ['self']` assertion stays.
 
 ## Bundle size
-No size budget exists [verified: `build.test.ts` has none]. Phase 0 records baseline (`vite build` asset table; firebase dominates JS). Expected add: Tailwind CSS tens of KB (min), Radix Dialog/Dropdown/Tabs/AlertDialog + cva ~30-50KB min JS. Soft budget reported in each PR: JS gzip +60KB, CSS gzip +15KB; exceeding it needs a note, not a hard fail [OPEN: pick numbers after baseline].
+No size budget exists [verified: `build.test.ts` has none]. Phase 0 records baseline (`vite build` asset table; firebase dominates JS). Expected add: Tailwind CSS tens of KB (min), Radix Dialog/Dropdown/Tabs/AlertDialog/Select + cva ~30-50KB min JS. Soft budget reported in each PR: JS gzip +60KB, CSS gzip +15KB; exceeding it needs a note, not a hard fail [OPEN: pick numbers after baseline].
 
 ## Rollback
 Each phase is a revert-able PR; Phase 0 alone is a no-op visually. If production shows a regression after Phase N: revert PR N (legacy layer still supplies old rules until Ph6, so partial state is coherent). Pin never floats, so SP1 changes cannot break web unplanned.
@@ -93,7 +93,7 @@ Each phase is a revert-able PR; Phase 0 alone is a no-op visually. If production
 `npm i github:Onolys/onolys-ui#vX.Y.Z` → read SP1 CHANGELOG → run `npm test`, `npm run e2e` (incl. CSP + axe) → review screenshot artifact → PR. Pre-1.0 minor = potential break, so never batch with feature work. Local dev: `file:../onolys-ui` + `build:watch` (do not commit).
 
 ## Manual steps
-- Owner: approve the new devDependency `@axe-core/playwright`.
+- Owner: approved the new devDependency `@axe-core/playwright` (2026-11-23, delegated).
 - Owner: after Phase 0 preview, eyeball staging in a dark-mode device (cannot be automated for taste).
 
 ## Risks / Open Questions

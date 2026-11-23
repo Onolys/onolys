@@ -34,7 +34,7 @@ Rollout order: app, then landing, then admin/eval.
 
 ## Risks / Open Questions (consolidated)
 **PRD 01 (onolys-ui)**
-- [OPEN: confirm] Select = native `<select>` styled, no Radix Select.
+- [RESOLVED: 2026-11-23 — Radix Select; native fallback only if CSP smoke fails]
 - [RESOLVED: owner 2026-11-23 — prefer Radix Dialog/AlertDialog with build check adjusted; native `<dialog>` only if CSP smoke fails; runtime CSP verification remains a task-level check.]
 - [OPEN: or drop] Keep `legacy.css` color aliases or force-migrate.
 - [OPEN: verify] Storybook 10 + Vite 8 compat (Storybook vs Ladle).
@@ -46,7 +46,7 @@ Rollout order: app, then landing, then admin/eval.
 **PRD 02 (app-migration)**
 - [OPEN in SP1] If SP1 drops `legacy.css`, web keeps private `legacy-tokens.css`.
 - [OPEN: confirm needed set] jsdom shims for Radix (`ResizeObserver`, `hasPointerCapture`, `scrollIntoView`, `matchMedia`).
-- [OPEN: approve dep] `@axe-core/playwright` devDep for contrast gate.
+- [RESOLVED: 2026-11-23 — approved] `@axe-core/playwright` devDep (web; also onolys-ui checks).
 - [verify: OPEN] `pr-preview.yml` has no separate install step.
 - [OPEN] `npm ci` must not use ssh URL; use `git+https`.
 - [OPEN: pick numbers after baseline] Soft bundle budget (JS gzip +60KB, CSS gzip +15KB).

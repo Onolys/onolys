@@ -8,7 +8,7 @@ date: 2026-11-23
 Repo/branch: new repo `Onolys/onolys-ui` (public), `main` + tags `vX.Y.Z` (design docs live in iaudit `feat/design-system`) · Depends on: none · Owns: whole `onolys-ui` repo (`src/tokens`, `src/styles`, `src/components`, `src/lib/cn.ts`, `components.json`, `fonts/`, `.storybook/`, `.github/workflows/`, `CHANGELOG.md`, `dist/`)
 
 ## TL;DR
-One repo, one package. Ships CSS (tokens + Tailwind v4 `@theme`, light and dark via `prefers-color-scheme`), ESM + types for React components (shadcn code we own, plus Onolys components), and self-hosted Inter. Consumers install `github:Onolys/onolys-ui#vX.Y.Z`. Built `dist/` is committed only on the tag commit (no `prepare` build in consumers). Radix is used without scroll-lock style injection, so `style-src 'self'` stays. Storybook for docs. Astro consumes the CSS only.
+One repo, one package. Ships CSS (tokens + Tailwind v4 `@theme`, light and dark via `prefers-color-scheme`), ESM + types for React components (shadcn code we own, plus Onolys components), and self-hosted Inter. Consumers install `github:Onolys/onolys-ui#vX.Y.Z`. Built `dist/` is committed only on the tag commit (no `prepare` build in consumers). Radix (Dialog, AlertDialog, DropdownMenu, Select) is used as-is; `style-src 'self'` stays strict and is proven by the Playwright CSP smoke (build checks relaxed 2026-11-23). Storybook for docs. Astro consumes the CSS only.
 
 ## Problem
 Tokens are copy-pasted (web == miti, light only; admin has a separate verdict set), primitives are hand-built per app, no dark theme, no radius/shadow tokens, two hand-rolled dialogs. [verified: web/src/styles/tokens.css identical to miti; web/src/styles/app.css 145 lines of `.btn`/`.auth-form`; frontend/src/tokens/tokens.css separate]
@@ -34,7 +34,7 @@ Tokens are copy-pasted (web == miti, light only; admin has a separate verdict se
 7. **Privacy**: no storage, network, absolute URLs, `dangerouslySetInnerHTML`; package CI runs a port of web's `privacy.test.ts` scan over `src/`. ≤0 console calls in components.
 8. **CSP-safe Radix**: see Architecture.
 9. **Docs**: Storybook per component, light/dark via `prefers-color-scheme` emulation, a11y addon.
-10. **CI**: lint (eslint + jsx-a11y), typecheck, vitest + RTL, contrast test, Storybook a11y (axe) test-runner, build, CSP smoke (Playwright against built Storybook/fixture with `style-src 'self'` header; fail on CSP violations).
+10. **CI**: lint (eslint + jsx-a11y), typecheck, vitest + RTL, contrast test, Storybook a11y (axe) test-runner (`@axe-core/playwright` devDep, approved 2026-11-23, also used for Storybook/Playwright checks), build, CSP smoke (Playwright against built Storybook/fixture with `style-src 'self'` header; fail on CSP violations).
 11. **Release**: see Decisions.
 
 ## Architecture
@@ -46,7 +46,7 @@ Tokens are copy-pasted (web == miti, light only; admin has a separate verdict se
 | Onolys | AppHeader (+AccountMenu slot), Footer, ScoreBadge (good/fair/low), UsageMeter, SkipLink, Page/Section | app.css chrome, chips, usage meter |
 | Later | RadioGroup, Switch, Toast | not needed by SP2 evidence; add on demand |
 
-Select = native `<select>` styled (no Radix Select/popper scroll lock; matches current a11y + mobile UX) [OPEN: confirm]. Tooltip optional until used.
+Select = Radix Select (shadcn Select) for consistent styling [RESOLVED: 2026-11-23 — Radix Select; native fallback only if CSP smoke fails]. Fallback: styled native `<select>` only if the Playwright CSP smoke shows Radix Select breaking under `style-src 'self'`. Tooltip optional until used.
 
 **CSP-compatible Radix.** `react-remove-scroll-bar` injects a `<style>` on Dialog/AlertDialog/DropdownMenu(modal)/Popover/Select, which `style-src 'self'` blocks. Choices: (a) DropdownMenu `modal={false}`; (b) Dialog/AlertDialog built on Radix Dialog with the scroll-lock replaced by our own `body[data-scroll-locked]` class in base.css (CSS file, no inline style) and Radix's `RemoveScroll` bypassed; (c) fallback: native `<dialog showModal()>` (already used on landing, no style injection, built-in focus trap and inert). Popper positioning writes via CSSOM style props (allowed). ScrollArea excluded. Owner 2026-11-23: build/hosting checks may be adjusted, so prefer (b) Radix Dialog/AlertDialog with the `build.test.ts` check changed as needed; native `<dialog>` (c) only if the CSP smoke fails. CSP smoke is the gate. [RESOLVED: owner 2026-11-23 — prefer Radix Dialog/AlertDialog with build check adjusted; native <dialog> only if CSP smoke fails; remaining task-level check = runtime CSP verification]
 
@@ -82,7 +82,7 @@ Compat: ship `legacy.css` aliasing old `--color-*` names so SP2/SP3 can migrate 
 | 2 | Dark mode | `@media (prefers-color-scheme: dark)` vars, no `.dark` class | class + JS toggle | No storage allowed; automatic per brief |
 | 3 | Docs | Storybook | Ladle | Maintained a11y addon + test-runner; Ladle lighter but weaker a11y. [OPEN: Storybook 10 + Vite 8 compat to verify] |
 | 4 | Modules | ESM only, peers: react >=19, tailwindcss 4 | dual CJS | All consumers are Vite ESM |
-| 5 | Select | Native styled | Radix Select | CSP scroll-lock/popper, mobile UX |
+| 5 | Select | Radix Select (shadcn); native styled `<select>` only if CSP smoke fails (owner-delegated 2026-11-23) | Native styled | Consistent styling now that build checks are relaxed; CSP smoke is the gate |
 | 6 | Versioning | semver, `CHANGELOG.md` (Keep a Changelog), pre-1.0 minor = may break; consumers pin tags | floating `main` | Reproducible builds |
 | 7 | Local dev | `file:../onolys-ui` or `npm link` (`npm run build:watch`) | publish snapshots | No registry |
 | 8 | Release | Tag `vX.Y.Z` triggers workflow: CI gate, build, commit dist to tag, GitHub Release notes | manual | Repeatable; Renovate/Dependabot optional later |
@@ -106,7 +106,7 @@ Compat: ship `legacy.css` aliasing old `--color-*` names so SP2/SP3 can migrate 
 
 ## Acceptance Criteria
 1. `npm i github:Onolys/onolys-ui#v0.1.0` in a clean Vite+Tailwind v4 fixture installs without build and renders Button/Dialog styled with the teal primary.
-2. Same fixture served with `style-src 'self'` (Playwright): zero CSP violations opening Dialog, AlertDialog, DropdownMenu.
+2. Same fixture served with `style-src 'self'` (Playwright): zero CSP violations opening Dialog, AlertDialog, DropdownMenu, Select (Select failing = fall back to styled native `<select>`).
 3. Contrast test passes in light and dark for all documented pairs; fails on a deliberately bad token (negative test).
 4. Dark theme applies under `prefers-color-scheme: dark`, no JS.
 5. All interactive components have >=44px hit area (test).
