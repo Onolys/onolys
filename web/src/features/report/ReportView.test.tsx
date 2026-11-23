@@ -1,26 +1,30 @@
 import { fireEvent, render, screen, within } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { drinkingSampleNotCoded, drinkingSampleReport, drinkingSampleTurns } from "../../mocks/fixtures/sample";
-import { CodedDialogContext } from "./codedDialogContext";
 import { ReportView } from "./ReportView";
 
 const ready = { status: "ready" as const, turns: drinkingSampleTurns };
 
-function view(props: Partial<React.ComponentProps<typeof ReportView>> = {}, open = vi.fn()) {
-  const out = render(
-    <CodedDialogContext.Provider value={{ open }}>
-      <ReportView
-        report={drinkingSampleReport}
-        turns={ready}
-        title="Sample report"
-        headerSlot={<p className="sub">Example report from a made-up role-play conversation.</p>}
-        notCoded={drinkingSampleNotCoded}
-        {...props}
-      />
-    </CodedDialogContext.Provider>,
+const scroll = vi.fn();
+beforeEach(() => {
+  scroll.mockClear();
+  Element.prototype.scrollIntoView = scroll as unknown as typeof Element.prototype.scrollIntoView;
+});
+
+function view(props: Partial<React.ComponentProps<typeof ReportView>> = {}) {
+  return render(
+    <ReportView
+      report={drinkingSampleReport}
+      turns={ready}
+      title="Sample report"
+      headerSlot={<p className="sub">Example report from a made-up role-play conversation.</p>}
+      notCoded={drinkingSampleNotCoded}
+      {...props}
+    />,
   );
-  return { ...out, open };
 }
+
+const dlg = () => document.querySelector("dialog") as HTMLDialogElement;
 
 const rowOf = (name: string) => screen.getByRole("row", { name: new RegExp(`^${name}\\b`) });
 
@@ -37,7 +41,7 @@ describe("ReportView", () => {
     ]);
     expect(screen.getByText("Example report from a made-up role-play conversation.")).toBeTruthy();
     expect(screen.queryByText(/Scorecard/i)).toBeNull();
-    expect(screen.queryByText(/disagrees/i)).toBeNull();
+    expect(screen.queryByText(/Where Onolys disagrees/i)).toBeNull();
     expect(screen.queryByRole("tab")).toBeNull();
     expect(screen.queryByRole("tablist")).toBeNull();
   });
@@ -64,12 +68,13 @@ describe("ReportView", () => {
   });
 
   it("renders Evidence utterance rows from evidence ids, sorted, and opens the dialog at that row", () => {
-    const { open } = view();
+    view();
     const cct = screen.getAllByRole("listitem").filter((li) => li.classList.contains("global"))[0];
     const row = cct.querySelector(".g-evidence")!;
     expect(row.textContent).toBe("Evidence: utterances 18, 19, 31, 40, 41");
     fireEvent.click(within(row as HTMLElement).getByRole("button", { name: "Open utterance 31" }));
-    expect(open).toHaveBeenCalledWith(31);
+    expect(dlg().hasAttribute("open")).toBe(true);
+    expect(scroll.mock.instances[0]).toBe(document.getElementById("utt-31"));
   });
 
   it("hides the Evidence row when there is no evidence or the transcript is not ready", () => {
@@ -77,11 +82,7 @@ describe("ReportView", () => {
     r.globals![0].onolys.evidence = [];
     const { container, rerender } = view({ report: r });
     expect(container.querySelectorAll(".g-evidence")).toHaveLength(3);
-    rerender(
-      <CodedDialogContext.Provider value={{ open: vi.fn() }}>
-        <ReportView report={drinkingSampleReport} turns={{ status: "loading" }} title="Report" />
-      </CodedDialogContext.Provider>,
-    );
+    rerender(<ReportView report={drinkingSampleReport} turns={{ status: "loading" }} title="Report" />);
     expect(container.querySelectorAll(".g-evidence")).toHaveLength(0);
   });
 
@@ -102,7 +103,7 @@ describe("ReportView", () => {
   });
 
   it("renders ranked tip cards with quote, utterance link, alternative and why", () => {
-    const { open } = view();
+    view();
     const tips = screen.getAllByRole("listitem").filter((li) => li.classList.contains("tip"));
     expect(tips).toHaveLength(3);
     expect(tips[0].textContent).toContain("Arguing against cutting down closed the client off");
@@ -112,7 +113,8 @@ describe("ReportView", () => {
     expect(within(tips[0]).getByText("Why it matters")).toBeTruthy();
     expect(tips[0].querySelector(".try .eg")!.textContent).toContain("You'd like to keep wine in your life");
     fireEvent.click(within(tips[0]).getByRole("button", { name: "Open utterance 25" }));
-    expect(open).toHaveBeenCalledWith(25);
+    expect(dlg().hasAttribute("open")).toBe(true);
+    expect(scroll.mock.instances[0]).toBe(document.getElementById("utt-25"));
   });
 
   it("hides Feedback when there are no tips, but shows a warning notice", () => {
@@ -123,6 +125,33 @@ describe("ReportView", () => {
     view({ report: { ...none, warnings: [{ code: "tips_failed" }] } });
     expect(screen.getByRole("heading", { name: /Feedback/ })).toBeTruthy();
     expect(screen.getByText("We couldn't write tips this time.")).toBeTruthy();
+  });
+
+  it("totals are round(sum of unrounded means), not the sum of rounded rows", () => {
+    const r = structuredClone(drinkingSampleReport);
+    const mean = (id: string, v: number) => {
+      r.behaviours!.find((b) => b.item_id === id)!.onolys_count.mean = v;
+    };
+    mean("affirm", 1.5);
+    mean("seek_collab", 1.5);
+    mean("emphasize_autonomy", 0);
+    view({ report: r });
+    const t = screen.getByRole("table", { name: "Behaviour counts" });
+    const cellOf = (label: string) => {
+      const row = within(t).getAllByRole("row").find((tr) => within(tr).queryAllByRole("cell")[1]?.textContent === label)!;
+      return within(row).getAllByRole("cell").at(-1)!.textContent;
+    };
+    expect(cellOf("Affirm")).toBe("2");
+    expect(cellOf("Seek Collaboration")).toBe("2");
+    expect(cellOf("Emphasize Autonomy")).toBe("0");
+    expect(cellOf("Total MI-adherent")).toBe("3");
+  });
+
+  it("builds the coded rows once: the section count and the dialog count agree", () => {
+    view();
+    fireEvent.click(screen.getByRole("button", { name: "Open coded transcript" }));
+    expect(within(dlg()).getByText(/54 utterances, 27 from the practitioner/)).toBeTruthy();
+    expect(document.querySelectorAll("dialog")).toHaveLength(1);
   });
 
   it("shows counts and totals from the sample, rounding the mean", () => {
@@ -150,10 +179,11 @@ describe("ReportView", () => {
   });
 
   it("shows the transcript count line and button; disabled while loading", () => {
-    const { open, unmount } = view();
-    expect(screen.getByText("54 utterances, 27 from the practitioner. Each code shows the reason it was given.")).toBeTruthy();
+    const { unmount } = view();
+    expect(screen.getAllByText("54 utterances, 27 from the practitioner. Each code shows the reason it was given.")).toHaveLength(2);
     fireEvent.click(screen.getByRole("button", { name: "Open coded transcript" }));
-    expect(open).toHaveBeenCalledWith();
+    expect(dlg().hasAttribute("open")).toBe(true);
+    expect(scroll).not.toHaveBeenCalled();
     unmount();
     view({ turns: { status: "loading" } });
     const b = screen.getByRole("button", { name: "Loading transcript…" }) as HTMLButtonElement;
@@ -163,8 +193,8 @@ describe("ReportView", () => {
   it("shows a transcript error with Try again when a retry is given", () => {
     const retry = vi.fn();
     view({ turns: { status: "error", retry } });
-    expect(screen.getByText("We couldn't load the transcript.")).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+    expect(screen.getAllByText("We couldn't load the transcript.")).toHaveLength(2);
+    fireEvent.click(screen.getAllByRole("button", { name: "Try again" })[0]);
     expect(retry).toHaveBeenCalled();
   });
 

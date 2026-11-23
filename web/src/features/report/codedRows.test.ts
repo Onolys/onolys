@@ -18,22 +18,30 @@ const report = (behaviours: unknown[], subject = "spk_0") =>
 const tr = turns as never;
 
 describe("buildCodedRows", () => {
-  it("joins several codes on one turn in instance order, with labels, groups and rationales", () => {
+  it("joins several codes on one turn in instance (text) order, not behaviour order, with rationales", () => {
+    // Behaviours listed in pack order (cr before emphasize_autonomy) but the text order is reversed.
     const rows = buildCodedRows(
       tr,
       report([
-        beh("cr", [inst("t4", 0, 22, "a", "reflects")]),
-        beh("emphasize_autonomy", [inst("t4", 24, 47, "b", "autonomy")]),
+        beh("cr", [inst("t4", 24, 47, "a", "reflects")]),
+        beh("emphasize_autonomy", [inst("t4", 0, 22, "b", "autonomy")]),
       ]),
     );
     const r = rows[3];
     expect(r.n).toBe(4);
     expect(r.speaker).toBe("P");
-    expect(r.codes.map((c) => c.item_id)).toEqual(["cr", "emphasize_autonomy"]);
-    expect(r.codes[0]).toMatchObject({ label: "Complex Reflection", group: "Questions & reflections" });
-    expect(r.codes[1]).toMatchObject({ label: "Emphasize Autonomy", group: "MI-adherent" });
-    expect(r.why).toEqual(["reflects", "autonomy"]);
+    expect(r.codes.map((c) => c.item_id)).toEqual(["emphasize_autonomy", "cr"]);
+    expect(r.why).toEqual(["autonomy", "reflects"]);
     expect(r.uncoded).toBe(false);
+  });
+
+  it("keeps encounter order for instances starting at the same offset", () => {
+    const r = buildCodedRows(
+      tr,
+      report([beh("sr", [inst("t4", 0, 5, "a", "one")]), beh("cr", [inst("t4", 0, 9, "b", "two")])]),
+    )[3];
+    expect(r.codes.map((c) => c.item_id)).toEqual(["sr", "cr"]);
+    expect(r.why).toEqual(["one", "two"]);
   });
 
   it("client turn with no codes is not flagged uncoded", () => {
@@ -77,7 +85,7 @@ describe("buildCodedRows", () => {
 
   it("falls back to the item id for unknown codes", () => {
     const r = buildCodedRows(tr, report([beh("zzz", [inst("t1", 0, 3, "a")])]))[0];
-    expect(r.codes[0]).toMatchObject({ item_id: "zzz", label: "zzz" });
+    expect(r.codes[0]).toEqual({ item_id: "zzz" });
   });
 
   it("recomputes counts from rows (dropped and bad-span instances do not count)", () => {

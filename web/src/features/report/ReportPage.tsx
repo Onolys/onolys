@@ -11,7 +11,6 @@ import { describeError, isNotFoundError } from "../../api/errors";
 import type { Report } from "../../api/report";
 import { useApiClient } from "../../auth/useApiClient";
 import { ErrorCard } from "../session/ErrorCard";
-import { CodedTranscriptProvider } from "./CodedTranscriptDialog";
 import { ReportView as ReportDocument, type TurnsState } from "./ReportView";
 
 /** Major version of the report schema this UI understands. */
@@ -137,8 +136,6 @@ function LoadedReport({ id, version }: { id: string; version: number }) {
   );
 
   return (
-    <CodedTranscriptProvider report={report} turns={turns}>
-      <ReportDocument report={report} turns={turns} headerSlot={headerSlot} />
-    </CodedTranscriptProvider>
+    <ReportDocument report={report} turns={turns} headerSlot={headerSlot} />
   );
 }

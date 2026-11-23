@@ -108,7 +108,6 @@ main { flex: 1; width: 100%; max-width: 64rem; margin: 0 auto; padding: var(--sp
 
 
 /* Report page (R4) */
-.report-page { max-width: 80rem; }
 .report-actions { display: flex; flex-wrap: wrap; gap: var(--space-3); align-items: center; }
 .report-actions .btn { min-height: 44px; }
 .chip { display: inline-block; padding: 2px var(--space-2); border-radius: 999px; border: 1px solid var(--color-gray-300); background: var(--color-gray-50); font-size: var(--font-size-sm); }

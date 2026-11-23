@@ -1,21 +1,26 @@
 /**
  * Coded transcript dialog (SP2): a native modal <dialog> with the Utt # | Speaker | Utterance |
- * Code(s) | Why table. `CodedTranscriptProvider` owns the dialog and exposes `open(n?)` through
- * context, so ReportView's button and every UtteranceLink open the real thing.
+ * Code(s) | Why table. `CodedTranscriptProvider` is mounted only by ReportView, which builds the
+ * rows once and passes them in; it owns the dialog and exposes `open(n?)` through context so
+ * ReportView's button and every UtteranceLink open it.
  */
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { Report } from "../../api/report";
-import { buildCodedRows, CODE_META } from "./codedRows";
+import type { CodedRow, TurnsState } from "./codedRows";
+import { CODE_META, SHORT } from "./codeMeta";
+import { CodeChip } from "./CodeChip";
 import { CodedDialogContext } from "./codedDialogContext";
-import { CodeChip, SHORT } from "./ReportView";
-import type { TurnsState } from "./ReportView";
 
 export interface CodedTranscriptProviderProps {
-  report: Report;
   turns: TurnsState;
-  /** Practitioner turn ids shown as "Not coded" (sample only). */
-  notCoded?: ReadonlySet<string>;
+  /** Built once by ReportView (empty until the transcript is ready). */
+  rows: readonly CodedRow[];
+  /** Number of practitioner utterances in `rows`. */
+  practitioner: number;
+  /** Distinct code ids for the legend, in report order. */
+  legendIds: readonly string[];
+  /** Show the "Not coded" legend entry (sample only). */
+  showNotCodedLegend?: boolean;
   children: ReactNode;
 }
 
@@ -25,9 +30,11 @@ const prefersReducedMotion = () =>
   window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 export function CodedTranscriptProvider({
-  report,
   turns,
-  notCoded,
+  rows,
+  practitioner,
+  legendIds,
+  showNotCodedLegend,
   children,
 }: CodedTranscriptProviderProps) {
   const dialogRef = useRef<HTMLDialogElement>(null);
@@ -36,23 +43,6 @@ export function CodedTranscriptProvider({
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const [req, setReq] = useState<{ id: number; n?: number } | null>(null);
   const counter = useRef(0);
-
-  const rows = useMemo(
-    () =>
-      turns.status === "ready"
-        ? buildCodedRows(turns.turns, report, { notCoded })
-        : [],
-    [turns, report, notCoded],
-  );
-  const practitioner = rows.filter(
-    (x) => x.speaker === "P" || x.codes.length > 0 || x.uncoded,
-  ).length;
-  const legendIds = useMemo(() => {
-    const ids: string[] = [];
-    for (const b of report.behaviours ?? [])
-      if (!ids.includes(b.item_id)) ids.push(b.item_id);
-    return ids;
-  }, [report]);
 
   const open = useCallback((n?: number) => {
     if (!dialogRef.current?.open)
@@ -93,15 +83,26 @@ export function CodedTranscriptProvider({
     [],
   );
 
-  // Backdrop click: the click lands on the <dialog> itself, not on its content.
+  // Backdrop click: the click lands on the <dialog> itself, not on its content, and the press
+  // must have started there too (a text drag that ends on the backdrop must not close it).
   useEffect(() => {
     const dlg = dialogRef.current;
     if (!dlg) return;
-    const onClick = (e: MouseEvent) => {
-      if (e.target === dlg) dlg.close();
+    let downOnDialog = false;
+    const onDown = (e: MouseEvent) => {
+      downOnDialog = e.target === dlg;
     };
+    const onClick = (e: MouseEvent) => {
+      const close = e.target === dlg && downOnDialog;
+      downOnDialog = false;
+      if (close) dlg.close();
+    };
+    dlg.addEventListener("mousedown", onDown);
     dlg.addEventListener("click", onClick);
-    return () => dlg.removeEventListener("click", onClick);
+    return () => {
+      dlg.removeEventListener("mousedown", onDown);
+      dlg.removeEventListener("click", onClick);
+    };
   }, []);
 
   const onClose = () => {
@@ -176,7 +177,7 @@ export function CodedTranscriptProvider({
                       <span className="code c-plain">P / C</span>
                       <b>P = practitioner, C = client</b>
                     </li>
-                    {notCoded && notCoded.size > 0 ? (
+                    {showNotCodedLegend ? (
                       <li>
                         <span className="code c-plain c-dim">Not coded</span>
                         <b>Not coded</b>

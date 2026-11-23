@@ -5,35 +5,20 @@ import {
   drinkingSampleReport,
   drinkingSampleTurns,
 } from "../../mocks/fixtures/sample";
-import { CodedTranscriptProvider } from "./CodedTranscriptDialog";
-import type { TurnsState } from "./ReportView";
-import { useCodedDialog } from "./codedDialogContext";
-import { UtteranceLink } from "./UtteranceLink";
+import { ReportView, type TurnsState } from "./ReportView";
 
 const ready: TurnsState = { status: "ready", turns: drinkingSampleTurns };
-
-function Opener() {
-  const { open } = useCodedDialog();
-  return (
-    <button type="button" onClick={() => open()}>
-      Open coded transcript
-    </button>
-  );
-}
 
 function view(
   turns: TurnsState = ready,
   notCoded: ReadonlySet<string> | undefined = drinkingSampleNotCoded,
 ) {
   return render(
-    <CodedTranscriptProvider
+    <ReportView
       report={drinkingSampleReport}
       turns={turns}
       notCoded={notCoded}
-    >
-      <Opener />
-      <UtteranceLink n={25} />
-    </CodedTranscriptProvider>,
+    />,
   );
 }
 
@@ -96,8 +81,33 @@ describe("CodedTranscriptDialog", () => {
     );
     fireEvent.click(screen.getByText("Utt #"));
     expect(dlg().hasAttribute("open")).toBe(true);
+    fireEvent.mouseDown(dlg());
     fireEvent.click(dlg());
     expect(dlg().hasAttribute("open")).toBe(false);
+  });
+
+  it("does not close when the press started inside the dialog and the click ends on the backdrop", () => {
+    view();
+    fireEvent.click(
+      screen.getByRole("button", { name: "Open coded transcript" }),
+    );
+    // Text-drag: mousedown on content, release (click) on the <dialog> backdrop.
+    fireEvent.mouseDown(screen.getByText("Utt #"));
+    fireEvent.click(dlg());
+    expect(dlg().hasAttribute("open")).toBe(true);
+    // The next full backdrop click still closes it.
+    fireEvent.mouseDown(dlg());
+    fireEvent.click(dlg());
+    expect(dlg().hasAttribute("open")).toBe(false);
+  });
+
+  it("ignores a click on the dialog with no mousedown on it", () => {
+    view();
+    fireEvent.click(
+      screen.getByRole("button", { name: "Open coded transcript" }),
+    );
+    fireEvent.click(dlg());
+    expect(dlg().hasAttribute("open")).toBe(true);
   });
 
   it("returns focus to the Close-button path opener too", () => {
@@ -136,7 +146,7 @@ describe("CodedTranscriptDialog", () => {
     );
     const row = dlg().querySelector("#utt-29")!;
     expect(
-      [...row.querySelectorAll(".code")].map((c) => c.textContent).sort(),
+      [...row.querySelectorAll(".code")].map((c) => c.textContent),
     ).toEqual(["EA", "PwP"]);
     expect(row.textContent).toContain("'your call'");
     expect(row.textContent).toContain(
@@ -193,9 +203,33 @@ describe("CodedTranscriptDialog", () => {
     expect(d.querySelector("table")).toBeNull();
   });
 
-  it("opens from a link even when the transcript errored (no row to scroll to)", () => {
+  it("mounts a single dialog and shows no utterance links while the transcript errored", () => {
     view({ status: "error" });
-    fireEvent.click(screen.getByRole("button", { name: "Open utterance 25" }));
-    expect(dlg().hasAttribute("open")).toBe(true);
+    expect(document.querySelectorAll("dialog")).toHaveLength(1);
+    expect(screen.queryByRole("button", { name: /^Open utterance/ })).toBeNull();
+  });
+
+  it("lists chips and rationales in text order on the multi-code rows (mockup order)", () => {
+    view();
+    fireEvent.click(
+      screen.getByRole("button", { name: "Open coded transcript" }),
+    );
+    const order: Record<number, string[]> = {
+      29: ["EA", "PwP"],
+      33: ["EA", "Q"],
+      35: ["AF", "Q"],
+      39: ["GI", "Q"],
+      49: ["AF", "Seek"],
+    };
+    for (const [n, chips] of Object.entries(order)) {
+      const row = dlg().querySelector(`#utt-${n}`)!;
+      expect(
+        [...row.querySelectorAll(".codes .code")].map((c) => c.textContent),
+      ).toEqual(chips);
+      const why = [...row.querySelectorAll("td:last-child > div")].map(
+        (d) => d.textContent!.split(":")[0],
+      );
+      expect(why).toEqual(chips);
+    }
   });
 });

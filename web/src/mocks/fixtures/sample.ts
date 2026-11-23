@@ -9,8 +9,11 @@ type Code =
   | "gi" | "persuade" | "persuade_permission" | "question" | "sr" | "cr"
   | "affirm" | "seek_collab" | "emphasize_autonomy" | "confront";
 
-/** [speaker P|C, text, [code, rationale][]]; one code instance per entry. */
-type Row = [sp: "P" | "C", text: string, codes: [Code, string][]];
+/**
+ * [speaker P|C, text, [code, rationale, span?][]]; one code instance per entry. `span` is the
+ * substring of the utterance the code covers; omitted means the whole utterance.
+ */
+type Row = [sp: "P" | "C", text: string, codes: [Code, string, string?][]];
 
 const ROWS: Row[] = [
   ["P", "Thanks for making time. To start, what has been on your mind about your drinking?", [["question", "Open question that invites the client's view"]]],
@@ -41,17 +44,17 @@ const ROWS: Row[] = [
   ["C", "What do you mean? I managed it before.", []],
   ["P", "Since you ask, many people who try cutting back drift to their old amounts within a few months, so stopping tends to hold up better.", [["persuade_permission", "Persuade with permission because client asked what was meant"]]],
   ["C", "So you're saying quitting is the only option?", []],
-  ["P", "It's your call and nobody else can make it, but stopping has the better track record.", [["emphasize_autonomy", "'your call'"], ["persuade_permission", "Persuade with permission because client asked"]]],
+  ["P", "It's your call and nobody else can make it, but stopping has the better track record.", [["emphasize_autonomy", "'your call'", "It's your call and nobody else can make it"], ["persuade_permission", "Persuade with permission because client asked", "but stopping has the better track record."]]],
   ["C", "I don't agree. I was fine at that level, so why can't I go back to it?", []],
   ["P", "Because it crept up once, so it can again. You should really think about quitting for good.", [["persuade", "Argues for quitting without the client asking"]]],
   ["C", "That feels like you're telling me what to do.", []],
-  ["P", "Fair enough. It's your decision, not mine. If you did go with cutting down, what would that look like for you?", [["emphasize_autonomy", "'your decision'"], ["question", "Asks for the client's own plan"]]],
+  ["P", "Fair enough. It's your decision, not mine. If you did go with cutting down, what would that look like for you?", [["emphasize_autonomy", "'your decision'", "It's your decision, not mine."], ["question", "Asks for the client's own plan", "If you did go with cutting down, what would that look like for you?"]]],
   ["C", "Maybe I could set a limit, like two glasses and nothing on weeknights. And write it down, since I didn't notice how much it grew.", []],
-  ["P", "Tracking it is a clever step, since you spotted it grew without you noticing. How would you keep track?", [["affirm", "Names a strength in the client's idea"], ["question", "Asks how"]]],
+  ["P", "Tracking it is a clever step, since you spotted it grew without you noticing. How would you keep track?", [["affirm", "Names a strength in the client's idea", "Tracking it is a clever step, since you spotted it grew without you noticing."], ["question", "Asks how", "How would you keep track?"]]],
   ["C", "A note on my phone, I guess. A tally each night.", []],
   ["P", "I have a few ideas other people have found useful. Would you like to hear them?", [["seek_collab", "Asks permission before sharing ideas"]]],
   ["C", "Sure.", []],
-  ["P", "Some people add a stress rating next to each tally, which shows what triggers drinking. Others pick a drink-free night and note how they feel. Would either suit you?", [["gi", "Neutral options with no push"], ["question", "Checks interest"]]],
+  ["P", "Some people add a stress rating next to each tally, which shows what triggers drinking. Others pick a drink-free night and note how they feel. Would either suit you?", [["gi", "Neutral options with no push", "Some people add a stress rating next to each tally, which shows what triggers drinking. Others pick a drink-free night and note how they feel."], ["question", "Checks interest", "Would either suit you?"]]],
   ["C", "The stress rating, definitely. That's the part I keep coming back to. I'd rather deal with it now than end up having to quit completely.", []],
   ["P", "You'd rather act early, while you still have choices, than be forced into a bigger change later.", [["cr", "Adds meaning: acting early keeps choices open"]]],
   ["C", "Right. And I could still have a glass at dinner.", []],
@@ -61,7 +64,7 @@ const ROWS: Row[] = [
   ["C", "It does. I'm just worried that stress will make me slip.", []],
   ["P", "Stress is the part you're unsure how to handle.", [["sr", "Rephrases the client's worry"]]],
   ["C", "Yes.", []],
-  ["P", "It's great that you spotted stress as a trigger. If you're open to it, we can plan for that next time.", [["affirm", "Praises noticing the trigger"], ["seek_collab", "Asks to plan together"]]],
+  ["P", "It's great that you spotted stress as a trigger. If you're open to it, we can plan for that next time.", [["affirm", "Praises noticing the trigger", "It's great that you spotted stress as a trigger."], ["seek_collab", "Asks to plan together", "If you're open to it, we can plan for that next time."]]],
   ["C", "Okay. For now I just track my drinks and my stress?", []],
   ["P", "Yes, try the tally and the stress rating for a week and see what shows up. I'll give you a sheet to use.", [["persuade_permission", "Persuade with permission because client asked what to do"]]],
   ["C", "Okay.", []],
@@ -84,10 +87,14 @@ export const drinkingSampleNotCoded: ReadonlySet<string> = new Set(["t53"]);
 const turnOf = (n: number): Turn => drinkingSampleTurns[n - 1];
 const cpLen = (s: string) => Array.from(s).length;
 
-/** Line covering a whole utterance (code-point offsets). */
-function lineOf(n: number): Line {
+/** Line covering `span` (a substring of utterance `n`; default the whole utterance), code-point offsets. */
+function lineOf(n: number, span?: string): Line {
   const t = turnOf(n);
-  return { turn_id: t.id, start: 0, end: cpLen(t.text), quote: t.text };
+  if (span === undefined) return { turn_id: t.id, start: 0, end: cpLen(t.text), quote: t.text };
+  const at = t.text.indexOf(span);
+  if (at < 0) throw new Error(`sample span not found in utterance ${n}: ${span}`);
+  const start = cpLen(t.text.slice(0, at));
+  return { turn_id: t.id, start, end: start + cpLen(span), quote: span };
 }
 
 const NO_EXPLANATION: Explanation = { headline: "", body: [], onolys_lines: [], clinician_support_lines: [] };
@@ -145,9 +152,9 @@ const COUNTS: { id: Code; label: string }[] = [
 const behaviours: Report["behaviours"] = COUNTS.map((c) => {
   const instances: Report["behaviours"][number]["instances"] = [];
   ROWS.forEach(([, , codes], i) => {
-    for (const [code, rationale] of codes) {
+    for (const [code, rationale, span] of codes) {
       if (code !== c.id) continue;
-      instances.push({ id: `${c.id}-${instances.length + 1}`, ...lineOf(i + 1), rationale });
+      instances.push({ id: `${c.id}-${instances.length + 1}`, ...lineOf(i + 1, span), rationale });
     }
   });
   return {
@@ -185,7 +192,7 @@ const scorecard: Report["scorecard"] = [
 
 const globals: Report["globals"] = GLOBALS.map((g) => ({
   item_id: g.id,
-  onolys: { score: g.score, source: "model", reason: g.reason, evidence: g.utts.map(lineOf) },
+  onolys: { score: g.score, source: "model", reason: g.reason, evidence: g.utts.map((u) => lineOf(u)) },
   clinician: { value: null },
   diff: { ...NOT_RATED },
   explanation: { ...NO_EXPLANATION },

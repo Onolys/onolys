@@ -212,7 +212,11 @@ describe("drinking sample fixture (/sample)", () => {
 
   it("multi-code rows keep one rationale per instance; turn 53 is the only not-coded turn", () => {
     for (const n of [29, 33, 35, 39, 49]) expect(rows[n - 1].codes).toHaveLength(2);
-    expect(rows[28].codes.map((c) => c.item_id).sort()).toEqual(["emphasize_autonomy", "persuade_permission"]);
+    expect(rows[28].codes.map((c) => c.item_id)).toEqual(["emphasize_autonomy", "persuade_permission"]);
+    expect(rows[32].codes.map((c) => c.item_id)).toEqual(["emphasize_autonomy", "question"]);
+    expect(rows[34].codes.map((c) => c.item_id)).toEqual(["affirm", "question"]);
+    expect(rows[38].codes.map((c) => c.item_id)).toEqual(["gi", "question"]);
+    expect(rows[48].codes.map((c) => c.item_id)).toEqual(["affirm", "seek_collab"]);
     expect(rows[28].why).toHaveLength(2);
     expect(rows.filter((x) => x.notCoded).map((x) => x.turn_id)).toEqual(["t53"]);
     expect(rows.filter((x) => x.uncoded).map((x) => x.turn_id)).toEqual(["t53"]);

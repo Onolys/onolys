@@ -4,11 +4,15 @@ import { codePointLength } from "../../lib/codepoints";
 
 type Turn = components["schemas"]["TranscriptTurnV1"];
 
+/** One code on a row; label and colour come from `codeMeta`. */
 export interface CodedChip {
   item_id: string;
-  label: string;
-  group: string;
 }
+
+export type TurnsState =
+  | { status: "loading" }
+  | { status: "error"; retry?: () => void }
+  | { status: "ready"; turns: readonly Turn[] };
 
 export interface CodedRow {
   /** 1-based utterance number (turn order). */
@@ -30,51 +34,27 @@ export interface CodedRowsOpts {
   notCoded?: ReadonlySet<string>;
 }
 
-const G_INFO = "Information & persuasion";
-const G_QR = "Questions & reflections";
-const G_ADH = "MI-adherent";
-const G_NON = "MI non-adherent";
-
-/** Pack ids (engines/miti pack.yaml) -> short label and group. The report carries no labels. */
-export const CODE_META: Record<string, { label: string; group: string }> = {
-  gi: { label: "Giving Information", group: G_INFO },
-  persuade: { label: "Persuade", group: G_INFO },
-  persuade_permission: { label: "Persuade with Permission", group: G_INFO },
-  question: { label: "Question", group: G_QR },
-  sr: { label: "Simple Reflection", group: G_QR },
-  cr: { label: "Complex Reflection", group: G_QR },
-  affirm: { label: "Affirm", group: G_ADH },
-  seek_collab: { label: "Seek Collaboration", group: G_ADH },
-  emphasize_autonomy: { label: "Emphasize Autonomy", group: G_ADH },
-  confront: { label: "Confront", group: G_NON },
-};
-
-function chip(item_id: string): CodedChip {
-  const m = CODE_META[item_id];
-  return { item_id, label: m?.label ?? item_id, group: m?.group ?? "" };
-}
-
 const validSpan = (text: string, start: number, end: number) =>
   Number.isInteger(start) && Number.isInteger(end) && start >= 0 && end > start && end <= codePointLength(text);
 
 /** Join transcript turns with report instances into one row per turn. Pure. */
 export function buildCodedRows(turns: readonly Turn[], report: Report, opts: CodedRowsOpts = {}): CodedRow[] {
-  const byTurn = new Map<string, { chips: CodedChip[]; why: string[] }>();
+  const byTurn = new Map<string, { item_id: string; start: number; rationale: string }[]>();
   const textOf = new Map(turns.map((t) => [t.id, t.text]));
   for (const b of report.behaviours ?? []) {
     for (const i of b.instances ?? []) {
       const text = textOf.get(i.turn_id);
       if (text === undefined || !validSpan(text, i.start, i.end)) continue;
-      const e = byTurn.get(i.turn_id) ?? { chips: [], why: [] };
-      e.chips.push(chip(b.item_id));
-      e.why.push(i.rationale);
+      const e = byTurn.get(i.turn_id) ?? [];
+      e.push({ item_id: b.item_id, start: i.start, rationale: i.rationale });
       byTurn.set(i.turn_id, e);
     }
   }
   const subject = report.header?.subject_speaker;
   return turns.map((t, idx) => {
-    const e = byTurn.get(t.id);
-    const codes = e?.chips ?? [];
+    // Instance (text) order; Array.sort is stable, so ties keep encounter order.
+    const e = [...(byTurn.get(t.id) ?? [])].sort((x, y) => x.start - y.start);
+    const codes: CodedChip[] = e.map((x) => ({ item_id: x.item_id }));
     const speaker = t.role === "clinician" ? "P" : t.role === "client" ? "C" : t.speaker;
     const practitioner = t.role === "clinician" || (t.role == null && subject !== undefined && t.speaker === subject);
     const uncoded = practitioner && codes.length === 0;
@@ -84,7 +64,7 @@ export function buildCodedRows(turns: readonly Turn[], report: Report, opts: Cod
       speaker,
       text: t.text,
       codes,
-      why: e?.why ?? [],
+      why: e.map((x) => x.rationale),
       uncoded,
       notCoded: uncoded && !!opts.notCoded?.has(t.id),
     };

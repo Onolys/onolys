@@ -7,21 +7,18 @@ import {
   drinkingSampleReport,
   drinkingSampleTurns,
 } from "../../mocks/fixtures/sample";
-import { CodedTranscriptProvider } from "./CodedTranscriptDialog";
 import { ReportView, type TurnsState } from "./ReportView";
 
 const TURNS: TurnsState = { status: "ready", turns: drinkingSampleTurns };
 
 export function SampleReportPage() {
   return (
-    <CodedTranscriptProvider report={drinkingSampleReport} turns={TURNS} notCoded={drinkingSampleNotCoded}>
-      <ReportView
-        report={drinkingSampleReport}
-        turns={TURNS}
-        title="Sample report"
-        notCoded={drinkingSampleNotCoded}
-        headerSlot={<p className="sub">Example report from a made-up role-play conversation.</p>}
-      />
-    </CodedTranscriptProvider>
+    <ReportView
+      report={drinkingSampleReport}
+      turns={TURNS}
+      title="Sample report"
+      notCoded={drinkingSampleNotCoded}
+      headerSlot={<p className="sub">Example report from a made-up role-play conversation.</p>}
+    />
   );
 }
