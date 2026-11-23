@@ -1,4 +1,4 @@
-import { screen, waitFor, within } from "@testing-library/react";
+import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { createFakeAuthService } from "../auth/fakeService";
@@ -7,8 +7,8 @@ import type { UploadJob } from "../features/upload/uploader";
 import { here, renderApp } from "../test/renderApp";
 
 const crash = vi.hoisted(() => ({ on: false }));
-vi.mock("../features/dashboard/Dashboard", () => ({
-  Dashboard: () => {
+vi.mock("../features/dashboard/SessionsPage", () => ({
+  SessionsPage: () => {
     if (crash.on) throw new Error("boom");
     return <h1>Sessions</h1>;
   },
@@ -30,9 +30,23 @@ describe("header nav by auth phase (D1)", () => {
     const signup = inNav().getByRole("link", { name: "Sign up" });
     expect(login).toHaveClass("nav-login");
     expect(signup).toHaveClass("nav-signup", "btn", "btn-primary");
+    const sample = inNav().getByRole("link", { name: "Sample report" });
+    expect(sample).toHaveAttribute("href", "/sample");
+    expect(sample).toHaveAttribute("target", "_blank");
+    expect(sample).toHaveAttribute("rel", "noopener noreferrer");
     expect(login.nextElementSibling).toBe(signup);
     expect(signup.nextElementSibling).toBeNull();
     expect(inNav().queryByRole("button", { name: "Sign out" })).not.toBeInTheDocument();
+  });
+
+  it("verified: the current page's nav button has aria-current; Sample report never does, even on /sample", async () => {
+    const { router } = renderApp("/new", { user: { email: "a@clinic.org", verified: true } });
+    await h1("New Session");
+    expect(inNav().getByRole("link", { name: "New Session" })).toHaveAttribute("aria-current", "page");
+    expect(inNav().getByRole("link", { name: "Sessions" })).not.toHaveAttribute("aria-current");
+    await act(() => router.navigate("/sample"));
+    await h1("Sample report");
+    expect(inNav().getByRole("link", { name: "Sample report" })).not.toHaveAttribute("aria-current");
   });
 
   it("unverified: header is the brand only (not a signed-in state)", async () => {
@@ -45,17 +59,25 @@ describe("header nav by auth phase (D1)", () => {
     expect(screen.getByRole("heading", { level: 1 }).closest("section")).toHaveClass("verify-page");
   });
 
-  it("verified: Sessions, New session in the nav; email and Sign out live in the account menu", async () => {
-    renderApp("/", { user: { email: "a@clinic.org", verified: true } });
+  it("verified: Sessions, New Session, Sample report buttons; email and Sign out live in the account menu", async () => {
+    renderApp("/sessions", { user: { email: "a@clinic.org", verified: true } });
     await h1("Sessions");
-    expect(navNames()).toEqual(["Sessions", "New session"]);
+    expect(navNames()).toEqual(["Sessions", "New Session", "Sample report"]);
+    for (const n of ["Sessions", "New Session", "Sample report"]) expect(inNav().getByRole("link", { name: n })).toHaveClass("btn", "btn-secondary");
+    expect(inNav().getByRole("link", { name: "Sessions" })).toHaveAttribute("href", "/sessions");
+    expect(inNav().getByRole("link", { name: "New Session" })).toHaveAttribute("href", "/new");
+    const sample = inNav().getByRole("link", { name: "Sample report" });
+    expect(sample).toHaveAttribute("href", "/sample");
+    expect(sample).toHaveAttribute("target", "_blank");
+    expect(sample).toHaveAttribute("rel", "noopener noreferrer");
+    expect(sample).not.toHaveAttribute("aria-current");
     expect(inNav().queryByText("a@clinic.org")).not.toBeInTheDocument();
     expect(inNav().queryByRole("button", { name: "Sign out" })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Account menu" })).toHaveTextContent("A");
   });
 
   it("account menu: opens with email, Settings and Sign out; closes on Escape, outside click and selection", async () => {
-    renderApp("/", { user: { email: "a@clinic.org", verified: true } });
+    renderApp("/sessions", { user: { email: "a@clinic.org", verified: true } });
     await h1("Sessions");
     const btn = screen.getByRole("button", { name: "Account menu" });
     expect(btn).toHaveAttribute("aria-haspopup", "menu");
@@ -78,7 +100,7 @@ describe("header nav by auth phase (D1)", () => {
   });
 
   it("account menu keyboard: open focuses first item; arrows, Home/End cycle; Escape returns focus; Tab closes", async () => {
-    renderApp("/", { user: { email: "a@clinic.org", verified: true } });
+    renderApp("/sessions", { user: { email: "a@clinic.org", verified: true } });
     await h1("Sessions");
     const btn = screen.getByRole("button", { name: "Account menu" });
     await userEvent.click(btn);
@@ -105,7 +127,7 @@ describe("header nav by auth phase (D1)", () => {
   });
 
   it("account menu: Settings navigates and closes", async () => {
-    const { router } = renderApp("/", { user: { email: "a@clinic.org", verified: true } });
+    const { router } = renderApp("/sessions", { user: { email: "a@clinic.org", verified: true } });
     await h1("Sessions");
     await userEvent.click(screen.getByRole("button", { name: "Account menu" }));
     await userEvent.click(screen.getByRole("menuitem", { name: "Settings" }));
@@ -117,7 +139,7 @@ describe("header nav by auth phase (D1)", () => {
   it("account menu: Sign out calls the service sign-out and lands on /login", async () => {
     const service = createFakeAuthService();
     const spy = vi.spyOn(service, "signOut");
-    const { router } = renderApp("/", { service, user: { email: "a@clinic.org", verified: true } });
+    const { router } = renderApp("/sessions", { service, user: { email: "a@clinic.org", verified: true } });
     await h1("Sessions");
     await userEvent.click(screen.getByRole("button", { name: "Account menu" }));
     await userEvent.click(screen.getByRole("menuitem", { name: "Sign out" }));
@@ -167,6 +189,14 @@ describe("header nav by auth phase (D1)", () => {
 });
 
 describe("404 by phase", () => {
+  it("verified: Back to your sessions goes to /sessions", async () => {
+    const { router } = renderApp("/nope", { user: { email: "a@clinic.org", verified: true } });
+    await h1("Page not found");
+    await userEvent.click(await within(screen.getByRole("main")).findByRole("link", { name: "Back to your sessions" }));
+    await h1("Sessions");
+    expect(here(router)).toBe("/sessions");
+  });
+
   it.each([
     [undefined, "Log in"],
     [{ email: "a@clinic.org", verified: false }, "Verify your email"],
@@ -209,7 +239,7 @@ describe("root error element", () => {
   it("a render crash keeps the header and a way back", async () => {
     const err = vi.spyOn(console, "error").mockImplementation(() => {});
     crash.on = true;
-    renderApp("/", { user: { email: "a@clinic.org", verified: true } });
+    renderApp("/sessions", { user: { email: "a@clinic.org", verified: true } });
     await h1("Something went wrong");
     expect(screen.getByRole("link", { name: "Onolys" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Back to the start" })).toBeInTheDocument();

@@ -3,17 +3,16 @@ import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { mockBackend, server } from "../../mocks/server";
+import { here } from "../../test/renderApp";
+import { renderPage } from "../../test/renderPage";
 import { DASHBOARD_POLL_MS, sessionsRefetchInterval } from "./chips";
-import { here, renderApp } from "../../test/renderApp";
+import { SessionsPage } from "./SessionsPage";
 
+const render = (opts: Parameters<typeof renderPage>[2]) => renderPage(<SessionsPage />, "/sessions", opts);
 const UID = "u_rater_clinic_org";
 const USER = { email: "rater@clinic.org", verified: true };
 
 const create = (title?: string) => mockBackend.createSession(UID, { title }).session.id;
-const upload = (sid: string) => {
-  mockBackend.requestAudio(UID, sid, { content_type: "audio/mpeg", size_bytes: 10, filename_ext: "mp3" });
-  mockBackend.completeAudio(UID, sid);
-};
 const main = () => within(screen.getByRole("main"));
 const rowOf = (name: RegExp | string) => main().getByRole("link", { name }).closest("li") as HTMLElement;
 
@@ -27,7 +26,7 @@ const item = (id: string, status: string, extra: object = {}) => ({
   ...extra,
 });
 
-describe("dashboard: session list", () => {
+describe("sessions page: list", () => {
   it("shows a status chip for every state, each row linking to the session", async () => {
     const cases: [string, string][] = [
       ["created", "Uploading"],
@@ -46,7 +45,7 @@ describe("dashboard: session list", () => {
         HttpResponse.json({ items: cases.map(([s], i) => item(`s${i}`, s, s === "report_ready" ? { latest_report_version: 2 } : {})) }),
       ),
     );
-    renderApp("/", { user: USER });
+    render({ user: USER });
     for (const [i, [, label]] of cases.entries()) {
       const li = await waitFor(() => rowOf(`Session s${i}`));
       expect(within(li).getByText(label)).toBeInTheDocument();
@@ -67,7 +66,7 @@ describe("dashboard: session list", () => {
       ),
     );
     const user = userEvent.setup();
-    const { router } = renderApp("/", { user: USER });
+    const { router } = render({ user: USER });
     expect(await main().findByRole("link", { name: "Session run1" })).toHaveAttribute("href", "/sessions/run1");
     expect(main().getByRole("link", { name: "Session bad1" })).toHaveAttribute("href", "/sessions/bad1");
     expect(within(rowOf("Session run1")).queryByRole("link", { name: /Report v/ })).toBeNull();
@@ -79,7 +78,7 @@ describe("dashboard: session list", () => {
 
   it("uses the date when a session has no title", async () => {
     server.use(http.get("*/v1/sessions", () => HttpResponse.json({ items: [item("x1", "failed", { title: null })] })));
-    renderApp("/", { user: USER });
+    render({ user: USER });
     const link = await main().findByRole("link", { name: /Nov 18, 2026/ });
     expect(link).toHaveAttribute("href", "/sessions/x1");
   });
@@ -92,7 +91,7 @@ describe("dashboard: session list", () => {
       const u = new URL(request.url);
       if (u.pathname.endsWith("/v1/sessions")) calls.push(u.search);
     });
-    renderApp("/", { user: USER });
+    render({ user: USER });
     await main().findByRole("link", { name: "S23" });
     expect(main().getAllByRole("listitem")).toHaveLength(20);
     expect(main().queryByRole("link", { name: "S03" })).toBeNull();
@@ -102,25 +101,6 @@ describe("dashboard: session list", () => {
     expect(main().queryByRole("button", { name: "Load more" })).toBeNull();
     expect(calls[1]).toContain("cursor=20");
     server.events.removeAllListeners();
-  });
-
-  it("shows the usage line and a New session link", async () => {
-    const sid = create("A");
-    upload(sid);
-    renderApp("/", { user: USER });
-    expect(await main().findByText("20 of 20 left today")).toBeInTheDocument();
-    expect(main().getByText("5 of 5 left today")).toBeInTheDocument();
-    expect(main().getByRole("link", { name: "New session" })).toHaveAttribute("href", "/sessions/new");
-  });
-
-  it("over the cap: says so with the reset time", async () => {
-    mockBackend.configure({ caps: { eval: { day: 0 } } });
-    server.use(
-      http.get("*/v1/sessions", () => HttpResponse.json({ items: [item("a", "report_ready", { latest_report_version: 1 })] })),
-    );
-    renderApp("/", { user: USER });
-    expect(await main().findByText("0 of 0 left today")).toBeInTheDocument();
-    expect(main().getByText(/reached today's limit/i)).toHaveTextContent(/after .+/);
   });
 
   it("shows an error with Try again when the list fails", async () => {
@@ -136,7 +116,7 @@ describe("dashboard: session list", () => {
       ),
     );
     const user = userEvent.setup();
-    renderApp("/", { user: USER });
+    render({ user: USER });
     const btn = await main().findByRole("button", { name: "Try again" });
     fail = false;
     await user.click(btn);
@@ -144,20 +124,30 @@ describe("dashboard: session list", () => {
   });
 });
 
-describe("dashboard: empty state", () => {
-  it("explains Onolys in one line and offers New session and a sample report", async () => {
-    const user = userEvent.setup();
-    const { router } = renderApp("/", { user: USER });
-    expect(await main().findByText(/Onolys .*MITI/i)).toBeInTheDocument();
-    expect(main().getByText(/evidence from your transcript and tips to improve/i)).toBeInTheDocument();
-    expect(main().queryByText(/your own rating/i)).toBeNull();
-    expect(main().getByRole("link", { name: "New session" })).toHaveAttribute("href", "/sessions/new");
-    await user.click(main().getByRole("link", { name: "See a sample report" }));
-    expect(here(router)).toBe("/sample-report");
+describe("sessions page: heading", () => {
+  it("has the Sessions h1 and no landing cards", async () => {
+    render({ user: USER });
+    expect(await screen.findByRole("heading", { level: 1, name: "Sessions" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { level: 2 })).toBeNull();
   });
 });
 
-describe("dashboard: freshness (W25, D8)", () => {
+describe("sessions page: empty state", () => {
+  it("explains Onolys in one line and links to /new, with no sample link", async () => {
+    const user = userEvent.setup();
+    const { router } = render({ user: USER });
+    expect(await main().findByText(/Onolys .*MITI/i)).toBeInTheDocument();
+    expect(main().getByText(/evidence from your transcript and tips to improve/i)).toBeInTheDocument();
+    expect(main().queryByText(/your own rating/i)).toBeNull();
+    expect(main().queryByRole("link", { name: /sample/i })).toBeNull();
+    const link = main().getByRole("link", { name: "Start a new session" });
+    expect(link).toHaveAttribute("href", "/new");
+    await user.click(link);
+    expect(here(router)).toBe("/new");
+  });
+});
+
+describe("sessions page: freshness (W25, D8)", () => {
   it("polls every 10 s only while a session is in progress", () => {
     expect(sessionsRefetchInterval([{ status: "report_ready" }, { status: "running" }])).toBe(DASHBOARD_POLL_MS);
     expect(DASHBOARD_POLL_MS).toBe(10_000);
@@ -174,18 +164,18 @@ describe("dashboard: freshness (W25, D8)", () => {
         return HttpResponse.json({ error: { code: "internal", message: "x" } }, { status: 500 });
       }),
     );
-    renderApp("/", { user: USER });
+    render({ user: USER });
     await userEvent.click(await screen.findByRole("button", { name: "Load more" }));
     expect(await screen.findByRole("alert")).toBeInTheDocument();
     expect(main().getByRole("link", { name: "Session a1" })).toBeInTheDocument();
   });
 });
 
-describe("dashboard: empty state, rating flag on", () => {
+describe("sessions page: empty state, rating flag on", () => {
   afterEach(() => vi.unstubAllEnvs());
   it("keeps the comparison sentence", async () => {
     vi.stubEnv("VITE_RATING_ENABLED", "true");
-    renderApp("/", { user: USER });
+    render({ user: USER });
     expect(await main().findByText(/agrees with your own rating/i)).toBeInTheDocument();
   });
 });

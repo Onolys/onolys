@@ -4,12 +4,12 @@ const { shot, collect, navLinks, path_ } = require("./helpers.cjs");
 const PROTECTED = ["/", "/sessions/new", "/sessions/abc123/reports/1", "/interviews/new", "/settings"];
 
 test.describe("signed-out gating", () => {
-  test("E1/W1: header does not offer Sessions / New session / Settings when signed out", async ({ page }) => {
+  test("E1/W1: header does not offer Sessions / New Session / Settings when signed out", async ({ page }) => {
     await page.goto("/login");
     await expect(page.getByRole("heading", { name: "Log in" })).toBeVisible();
     await shot(page, "so-login");
     const links = await navLinks(page);
-    for (const t of ["Sessions", "New session", "Settings"]) expect(links).not.toContain(t);
+    for (const t of ["Sessions", "New Session", "New session", "Settings"]) expect(links).not.toContain(t);
   });
 
   for (const route of PROTECTED) {
@@ -36,9 +36,10 @@ test.describe("signed-out gating", () => {
 
   test("Sample report is public from the signed-out nav", async ({ page }) => {
     await page.goto("/login");
-    await page.locator("header nav a", { hasText: "Sample report" }).click();
-    await expect(page.getByRole("heading", { name: "Sample report" })).toBeVisible();
-    await shot(page, "so-sample-report");
+    const [popup] = await Promise.all([page.waitForEvent("popup"), page.locator("header nav a", { hasText: "Sample report" }).click()]);
+    await expect(popup).toHaveURL(/\/sample$/);
+    await expect(popup.getByRole("heading", { name: "Sample report" })).toBeVisible();
+    await shot(popup, "so-sample");
   });
 
   test("back button after bounce never reveals protected UI; reload keeps next", async ({ page }) => {
@@ -70,6 +71,6 @@ test.describe("signed-out gating", () => {
     await page.goto("/auth/action?mode=resetPassword&oobCode=bogus");
     await expect(page.getByRole("heading", { name: "Reset link expired" })).toBeVisible();
     const links = await navLinks(page);
-    for (const t of ["Sessions", "New session", "Settings"]) expect(links).not.toContain(t);
+    for (const t of ["Sessions", "New Session", "New session", "Settings"]) expect(links).not.toContain(t);
   });
 });

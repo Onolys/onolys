@@ -46,7 +46,7 @@ test.describe("signup", () => {
     test("E1b/W1: unverified header offers only account-safe links", async ({ page }) => {
       await signUp(page, "unv3@example.com");
       const links = await navLinks(page);
-      for (const t of ["Sessions", "New session", "Settings"]) expect(links).not.toContain(t);
+      for (const t of ["Sessions", "New Session", "New session", "Settings"]) expect(links).not.toContain(t);
     });
 
     test("verifying lands on the dashboard (next restored)", async ({ page }) => {

@@ -1,11 +1,11 @@
 const { test, expect, devices } = require("@playwright/test");
-const { shot, FIX, signUp, spa, hasHScroll, accountMenu } = require("./helpers.cjs");
+const { shot, FIX, signUp, spa, openUpload, hasHScroll, accountMenu } = require("./helpers.cjs");
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 const { defaultBrowserType, ...iphone } = devices["iPhone 13"]; // run on chromium (only chromium is installed)
 test.use({ ...iphone, deviceScaleFactor: 1 });
 
-const PUBLIC = ["/login", "/signup", "/sample-report", "/nope", "/auth/action?mode=resetPassword&oobCode=x"];
+const PUBLIC = ["/login", "/signup", "/sample", "/nope", "/auth/action?mode=resetPassword&oobCode=x"];
 
 test.describe("mobile (iPhone 13 viewport)", () => {
   for (const r of PUBLIC) {
@@ -28,10 +28,12 @@ test.describe("mobile (iPhone 13 viewport)", () => {
     await shot(page, "m-verify");
     expect(await hasHScroll(page), "verify-email").toBe(false);
     await page.getByRole("button", { name: "I've verified" }).click();
-    await expect(page.getByRole("heading", { name: "Sessions" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "New Session", exact: true })).toBeVisible();
     await shot(page, "m-dashboard");
     expect(await hasHScroll(page), "dashboard").toBe(false);
-    await page.locator("header nav a", { hasText: "New session" }).click();
+    await shot(page, "m-new-session-chooser");
+    expect(await hasHScroll(page), "new session chooser").toBe(false);
+    await openUpload(page);
     await shot(page, "m-new-session");
     expect(await hasHScroll(page), "new session").toBe(false);
     await page.getByLabel("Change goal").fill("Walk more");
@@ -44,7 +46,7 @@ test.describe("mobile (iPhone 13 viewport)", () => {
     await expect(page.getByRole("status")).toContainText("Coding the session", { timeout: 30_000 });
     await expect(page.getByRole("link", { name: "View report" })).toBeVisible({ timeout: 30_000 });
     await page.getByRole("link", { name: "View report" }).click();
-    await expect(page.getByRole("heading", { name: "Scorecard" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "At a glance" })).toBeVisible();
     await expect(page.getByText(/Difference|Where Onolys disagrees/)).toHaveCount(0);
     await expect(page.getByRole("columnheader", { name: "You", exact: true })).toHaveCount(0);
     await shot(page, "m-report");

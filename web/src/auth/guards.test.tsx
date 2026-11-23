@@ -16,7 +16,7 @@ import { makeQueryClient } from "../queryClient";
 const h1 = (name: string) => screen.findByRole("heading", { level: 1, name });
 
 describe("guards", () => {
-  it.each(["/sessions/new", "/sessions/abc", "/sessions/abc/reports/1", "/settings"])(
+  it.each(["/new", "/sessions", "/sessions/new", "/sessions/abc", "/sessions/abc/reports/1", "/settings"])(
     "unauthenticated %s -> /login?next=",
     async (path) => {
       const { router } = renderApp(path);
@@ -25,16 +25,23 @@ describe("guards", () => {
     },
   );
 
-  it("unauthenticated users can read /sample-report", async () => {
-    renderApp("/sample-report");
+  it("unauthenticated users can read /sample", async () => {
+    const { router } = renderApp("/sample");
     await h1("Sample report");
+    expect(here(router)).toBe("/sample");
+  });
+
+  it("/sample-report redirects to /sample", async () => {
+    const { router } = renderApp("/sample-report");
+    await h1("Sample report");
+    expect(here(router)).toBe("/sample");
   });
 
   it("an unverified user cannot reach / and is sent to /verify-email", async () => {
     const { router } = renderApp("/", { user: { email: "a@clinic.org", verified: false } });
     await h1("Verify your email");
-    expect(here(router)).toBe("/verify-email");
-    expect(screen.queryByRole("heading", { level: 1, name: "Sessions" })).not.toBeInTheDocument();
+    expect(here(router)).toBe("/verify-email?next=%2Fnew");
+    expect(screen.queryByRole("heading", { level: 1, name: "New Session" })).not.toBeInTheDocument();
   });
 
   it("an unverified user is sent from a deep link to /verify-email keeping next", async () => {
@@ -43,14 +50,20 @@ describe("guards", () => {
     expect(here(router)).toBe("/verify-email?next=%2Fsessions%2Fabc");
   });
 
-  it("a verified user reaches /", async () => {
-    renderApp("/", { user: { email: "a@clinic.org", verified: true } });
+  it("a verified user at / ends at /new", async () => {
+    const { router } = renderApp("/", { user: { email: "a@clinic.org", verified: true } });
+    await h1("New Session");
+    expect(here(router)).toBe("/new");
+  });
+
+  it("a verified user reaches /sessions", async () => {
+    renderApp("/sessions", { user: { email: "a@clinic.org", verified: true } });
     await h1("Sessions");
   });
 
   it("a verified user on /login or /verify-email is sent on", async () => {
     renderApp("/login", { user: { email: "a@clinic.org", verified: true } });
-    await h1("Sessions");
+    await h1("New Session");
   });
 
   it("a signed-out user on /verify-email goes to /login", async () => {
@@ -160,9 +173,9 @@ describe("guard redirects carry next", () => {
     expect(here(router)).toBe("/settings");
   });
 
-  it("a signed-out deep link on / goes to plain /login", async () => {
+  it("a signed-out visit to / goes to /login?next=/new", async () => {
     const { router } = renderApp("/");
     await h1("Log in");
-    expect(here(router)).toBe("/login");
+    expect(here(router)).toBe("/login?next=%2Fnew");
   });
 });

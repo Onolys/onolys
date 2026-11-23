@@ -1,15 +1,11 @@
-/** `/` (PRD R5, D16): the caller's sessions, newest first, with status chips, usage and an empty state. */
+/** `/sessions` (PRD R5, D16): the caller's sessions, newest first, with status chips and an empty state. */
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { Link } from "react-router";
 import { unwrap } from "../../api/client";
-import { describeError, messageForCode } from "../../api/errors";
+import { describeError } from "../../api/errors";
 import { useApiClient } from "../../auth/useApiClient";
 import { ratingEnabled } from "../../config";
-import { interviewCapText } from "../interview/capText";
 import { ErrorCard } from "../session/ErrorCard";
-import { UsageLeft } from "../usage/UsageLeft";
-import { blockingPeriod, formatBlockingReset } from "../usage/usage";
-import { useUsage } from "../usage/useUsage";
 import type { components } from "../../api/schema";
 import { STATUS_CHIP, sessionsRefetchInterval } from "./chips";
 
@@ -17,7 +13,7 @@ type SessionListItem = components["schemas"]["SessionListItem"];
 const PAGE = 20;
 const date = (iso: string) => new Date(iso).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
 
-export function Dashboard() {
+export function SessionsPage() {
   const client = useApiClient();
   const sessions = useInfiniteQuery({
     queryKey: ["sessions"],
@@ -31,10 +27,6 @@ export function Dashboard() {
       unwrap(await client.GET("/sessions", { params: { query: { limit: PAGE, cursor: pageParam } } })),
     getNextPageParam: (last) => last.next_cursor ?? undefined,
   });
-  const usage = useUsage();
-  const blocking = blockingPeriod(usage.data, "eval");
-  const interviewBlocking = blockingPeriod(usage.data, "interview");
-
   const items = sessions.data?.pages.flatMap((p) => p.items) ?? [];
 
   let body;
@@ -58,7 +50,7 @@ export function Dashboard() {
             : "Onolys codes a recorded session against the MITI, with evidence from your transcript and tips to improve."}
         </p>
         <p>
-          <Link to="/sample-report">See a sample report</Link>
+          <Link to="/new">Start a new session</Link>
         </p>
       </div>
     );
@@ -107,54 +99,9 @@ export function Dashboard() {
       </>
     );
   }
-
   return (
     <>
       <h1>Sessions</h1>
-      <div className="landing-cards">
-        <section className="landing-card" aria-labelledby="card-interview">
-          <h2 id="card-interview">Practise with an AI client</h2>
-          <p className="form-note">
-            A 10-minute role-play, then rated like any recording.
-            {usage.data ? (
-              <>
-                {" "}
-                <UsageLeft kind="interview" period="day" />
-              </>
-            ) : null}
-          </p>
-          {interviewBlocking ? (
-            <>
-              <button type="button" className="btn btn-primary" disabled>
-                Start AI Interview
-              </button>
-              <p className="notice">{interviewCapText(interviewBlocking)}</p>
-            </>
-          ) : (
-            <Link className="btn btn-primary" to="/interviews/new">
-              Start AI Interview
-            </Link>
-          )}
-        </section>
-        <section className="landing-card" aria-labelledby="card-upload">
-          <h2 id="card-upload">Rate a recording</h2>
-          <p className="form-note">
-            Bring a session you recorded.
-            {usage.data ? (
-              <>
-                {" "}
-                <UsageLeft kind="eval" period="day" />
-              </>
-            ) : null}
-          </p>
-          <Link className="btn btn-primary" to="/sessions/new">
-            New session
-          </Link>
-          {blocking ? (
-            <p className="notice">{messageForCode("daily_cap_reached", { resetsAt: formatBlockingReset(blocking) })}</p>
-          ) : null}
-        </section>
-      </div>
       {body}
     </>
   );

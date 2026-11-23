@@ -37,14 +37,14 @@ test.describe("login / logout", () => {
 test.describe("?next= handling", () => {
   const SAFE_FALLBACK = ["//evil.com", "javascript:alert(1)"];
   for (const n of SAFE_FALLBACK) {
-    test(`next=${n} is never followed off-site; lands on /`, async ({ page }) => {
+    test(`next=${n} is never followed off-site; lands on /new`, async ({ page }) => {
       const hits = [];
       await page.route(/^https?:\/\/(www\.)?evil\.com/, (r) => { hits.push(r.request().url()); r.abort(); });
       await account(page);
       await spa(page, `/login?next=${encodeURIComponent(n)}`);
       await fillLogin(page, "u1@example.com");
-      await expect(page.getByRole("heading", { name: "Sessions" })).toBeVisible();
-      expect(path_(page)).toBe("/");
+      await expect(page.getByRole("heading", { name: "New Session", exact: true })).toBeVisible();
+      expect(path_(page)).toBe("/new");
       expect(hits).toEqual([]);
     });
   }

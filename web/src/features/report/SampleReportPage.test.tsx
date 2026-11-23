@@ -1,4 +1,5 @@
 import { screen, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { server } from "../../mocks/server";
 import { renderApp } from "../../test/renderApp";
@@ -9,43 +10,47 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 
-describe("/sample-report", () => {
-  it("renders the bundled report and transcript with zero network requests, signed out", async () => {
+describe("/sample", () => {
+  it("renders the new view with zero network requests, signed out", async () => {
     const requests: string[] = [];
     server.events.on("request:start", ({ request }) => void requests.push(`${request.method} ${request.url}`));
-    renderApp("/sample-report");
+    renderApp("/sample");
     const main = within(screen.getByRole("main"));
-    expect(await main.findByRole("heading", { name: "Sample report" })).toBeInTheDocument();
-    expect(main.getByText(/^Sample$/)).toBeInTheDocument();
-    expect(main.getByRole("region", { name: "Scorecard" })).toBeInTheDocument();
-    expect(main.getByRole("region", { name: "Transcript" })).toHaveTextContent("I'd like to start walking more");
+    expect(await main.findByRole("heading", { level: 1, name: "Sample report" })).toBeInTheDocument();
+    expect(main.getAllByRole("heading", { level: 2 }).map((h) => h.textContent)).toEqual([
+      "At a glance",
+      "Feedback: ideas to try",
+      "Behaviour counts",
+      "Coded transcript",
+      "Method & limits",
+    ]);
+    expect(main.getByRole("button", { name: "Open coded transcript" })).toBeEnabled();
     await new Promise((r) => setTimeout(r, 50));
     expect(requests).toEqual([]);
   });
 
-  it("has no Run again, rating or delete controls", async () => {
-    renderApp("/sample-report");
+  it("shows the grey example line and no yellow Sample banner", async () => {
+    renderApp("/sample");
     const main = within(screen.getByRole("main"));
-    await main.findByRole("region", { name: "Scorecard" });
-    expect(main.queryByRole("button", { name: /run again/i })).toBeNull();
-    expect(main.queryByRole("button", { name: /rating/i })).toBeNull();
-    expect(main.queryByRole("button", { name: /delete/i })).toBeNull();
+    expect(await main.findByText("Example report from a made-up role-play conversation.")).toBeInTheDocument();
+    expect(main.queryByText(/^Sample$/)).toBeNull();
+    expect(main.queryByRole("note")).toBeNull();
+    expect(document.querySelector(".notice")).toBeNull();
   });
 
-  it("shows the no-rating sample (Item + Onolys only) with the flag off", async () => {
-    renderApp("/sample-report");
+  it("opens the coded transcript with the closing pleasantry marked Not coded", async () => {
+    renderApp("/sample");
     const main = within(screen.getByRole("main"));
-    const score = within(await main.findByRole("region", { name: "Scorecard" }));
-    expect(score.getAllByRole("columnheader").map((h) => h.textContent)).toEqual(["Item", "Onolys"]);
-    expect(main.queryByRole("region", { name: "Disagreements" })).toBeNull();
+    await userEvent.click(await main.findByRole("button", { name: "Open coded transcript" }));
+    const dialog = within(await screen.findByRole("dialog"));
+    expect(dialog.getAllByText("Not coded").length).toBeGreaterThan(0);
   });
 
-  it("uses the no-rating fixture with the flag on too (PRD R5: unconditional): no Disagreements or reasons", async () => {
-    vi.stubEnv("VITE_RATING_ENABLED", "true");
-    renderApp("/sample-report");
+  it("has no Run again, rating, delete or version controls", async () => {
+    renderApp("/sample");
     const main = within(screen.getByRole("main"));
-    await main.findByRole("region", { name: "Scorecard" });
-    expect(main.queryByRole("region", { name: "Disagreements" })).toBeNull();
-    expect(main.queryByRole("region", { name: "Your reasons, checked" })).toBeNull();
+    await main.findByRole("heading", { name: "At a glance" });
+    expect(main.queryByRole("button", { name: /run again|rating|delete/i })).toBeNull();
+    expect(main.queryByLabelText("Version")).toBeNull();
   });
 });

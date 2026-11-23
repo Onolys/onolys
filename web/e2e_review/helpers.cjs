@@ -41,7 +41,7 @@ async function signUp(page, email, pw = PW) {
 async function signUpVerified(page, email = "user@example.com") {
   await signUp(page, email);
   await page.getByRole("button", { name: "I've verified" }).click();
-  await expect(page.getByRole("heading", { name: "Sessions" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "New Session", exact: true })).toBeVisible();
 }
 /** In-app navigation without reload (fake auth state lives in memory and a reload would sign the user out). */
 async function spa(page, url) {
@@ -60,8 +60,13 @@ async function signOutViaSettings(page) {
   await expect(page.getByRole("heading", { name: "Settings" })).toBeVisible();
   await accountMenu(page, "Sign out");
 }
+/** From the New Session chooser (nav "New Session"), open the upload page via the "Rate a recording" card. */
+async function openUpload(page) {
+  await page.locator("header nav a", { hasText: "New Session" }).click();
+  await page.getByRole("main").getByRole("link", { name: "New session", exact: true }).click();
+}
 const navLinks = (page) => page.locator("header nav a").allTextContents();
 const hasHScroll = (page) => page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 1);
 const path_ = (page) => { const u = new URL(page.url()); return u.pathname + u.search; };
 
-module.exports = { SHOTS, FIX, PW, shot, collect, field, signUp, signUpVerified, spa, accountMenu, signOutViaSettings, navLinks, hasHScroll, path_ };
+module.exports = { SHOTS, FIX, PW, shot, collect, field, signUp, signUpVerified, spa, openUpload, accountMenu, signOutViaSettings, navLinks, hasHScroll, path_ };

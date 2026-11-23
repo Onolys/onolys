@@ -9,7 +9,7 @@ import yaml
 PKG = Path(__file__).resolve().parents[1] / "src" / "onolys_miti"
 DATA = PKG / "data"
 # Current pack_hash (re-pinned after dropping dead reasons_audit config; also in the golden report fixture).
-KNOWN_PACK_HASH = "7a8c491377b4e2dd"
+KNOWN_PACK_HASH = "ce8d3b36cc4c3f11"
 
 
 def _hash_paths():
@@ -54,3 +54,11 @@ def test_data_files_present():
         "scenarios/scenario.schema.json",
     ):
         assert (DATA / rel).is_file(), rel
+
+
+def test_tips_prompt_states_concrete_change_and_example_wording():
+    text = (DATA / "prompts/tips_system.md").read_text()
+    assert "one concrete change" in text
+    assert "praise-only" in text
+    assert "example wording" in text
+    assert "ready to say" in text

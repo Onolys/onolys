@@ -9,7 +9,7 @@ describe("route table (flaky)", () => {
     const { router } = renderApp("/login");
     expect(await screen.findByRole("heading", { level: 1, name: "Log in" })).toHaveFocus();
     await userEvent.click(screen.getByRole("link", { name: "Sample report" }));
-    expect(router.state.location.pathname).toBe("/sample-report");
+    expect(router.state.location.pathname).toBe("/sample");
     expect(await screen.findByRole("heading", { level: 1, name: "Sample report" })).toHaveFocus();
   });
 });

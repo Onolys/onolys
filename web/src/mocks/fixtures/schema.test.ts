@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import Ajv2020 from "ajv/dist/2020";
 import { describe, expect, it } from "vitest";
-import { edgeReport, noRatingReport, noTipsReport, reasonsFailedReport, sampleReport } from ".";
+import { drinkingSampleReport, edgeReport, noRatingReport, noTipsReport, reasonsFailedReport, sampleReport } from ".";
 
 /** Validates every report fixture against the real contract (SP03 report.schema.json). */
 const repoRoot = resolve(__dirname, "../../../..");
@@ -15,6 +15,7 @@ const packFixture = (name: string): unknown =>
 
 const fixtures: [string, unknown][] = [
   ["sample (N=1, rated)", sampleReport],
+  ["drinking sample (54 utterances)", drinkingSampleReport],
   ["no-rating", noRatingReport],
   ["reasons_audit failed", reasonsFailedReport],
   ["no tips", noTipsReport],
