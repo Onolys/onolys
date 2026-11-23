@@ -17,8 +17,8 @@ Source of truth: /root/projects/onolys/iaudit/.worktrees/feat/miti-eval/docs/age
 | 6 | PDF convert with overrides | 2, 5 | done |
 | 7 | Convert the 8 sessions (rounder first) | 6 | done |
 | 8 | Staging bucket (Terraform) and upload | 2, 7 | done |
-| 9 | `run` CLI spike | 4, 7 | in-progress |
-| 10 | CI job for `eval/core` | 1 | todo |
+| 9 | `run` CLI spike | 4, 7 | done |
+| 10 | CI job for `eval/core` | 1 | in-progress |
 | 11 | Live acceptance pass | 8, 9, 10 | todo |
 
 ## Task 1 — Package skeleton, workspace line, repo guard
