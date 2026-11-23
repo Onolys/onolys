@@ -35,11 +35,14 @@ describe("header nav by auth phase (D1)", () => {
     expect(inNav().queryByRole("button", { name: "Sign out" })).not.toBeInTheDocument();
   });
 
-  it("unverified: Verify email + Sign out, no app links", async () => {
+  it("unverified: header is the brand only (not a signed-in state)", async () => {
     renderApp("/verify-email", { user: { email: "a@clinic.org", verified: false } });
     await h1("Verify your email");
-    expect(navNames()).toEqual(["Verify email"]);
-    expect(inNav().getByRole("button", { name: "Sign out" })).toBeInTheDocument();
+    const header = within(screen.getByRole("banner"));
+    expect(header.getAllByRole("link").map((a) => a.textContent)).toEqual(["Onolys"]);
+    expect(header.queryByRole("button")).not.toBeInTheDocument();
+    expect(header.queryByText("a@clinic.org")).not.toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 1 }).closest("section")).toHaveClass("verify-page");
   });
 
   it("verified: Sessions, New session in the nav; email and Sign out live in the account menu", async () => {

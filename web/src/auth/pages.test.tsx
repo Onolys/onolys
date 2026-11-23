@@ -101,8 +101,8 @@ describe("sign up", () => {
     renderApp("/signup?next=%2Fsettings", { service });
     await h1("Sign up");
     await user.type(screen.getByLabelText("Email"), "dup@clinic.org");
-    await user.type(screen.getByLabelText("Password"), "longenough1");
-    await user.type(screen.getByLabelText("Confirm password"), "longenough1");
+    await user.type(screen.getByLabelText("Password"), "differentpass1");
+    await user.type(screen.getByLabelText("Confirm password"), "differentpass1");
     await user.click(screen.getByRole("button", { name: "Create account" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("already exists");
     const link = screen.getByRole("link", { name: "Log in instead" });
@@ -383,4 +383,64 @@ describe("Google button busy and cancel handling (FX33)", () => {
       }
     });
   }
+});
+
+describe("unverified accounts coming back", () => {
+  async function fill(user: ReturnType<typeof userEvent.setup>, email: string, password: string, confirm?: string) {
+    await user.type(screen.getByLabelText("Email"), email);
+    await user.type(screen.getByLabelText("Password"), password);
+    if (confirm) await user.type(screen.getByLabelText("Confirm password"), confirm);
+  }
+
+  it("Log in with an unverified account lands on the verify page, without a new email", async () => {
+    const user = userEvent.setup();
+    const service = createFakeAuthService();
+    await service.signUp("u@clinic.org", "longenough1");
+    await service.signOut();
+    const { router } = renderApp("/login", { service });
+    await h1("Log in");
+    await fill(user, "u@clinic.org", "longenough1");
+    await user.click(screen.getByRole("button", { name: "Log in" }));
+    await h1("Verify your email");
+    expect(router.state.location.pathname).toBe("/verify-email");
+    expect(service.calls.verificationEmails).toBe(1);
+  });
+
+  it("Sign up with an existing unverified email and the right password lands on the verify page", async () => {
+    const user = userEvent.setup();
+    const service = createFakeAuthService();
+    await service.signUp("u@clinic.org", "longenough1");
+    await service.signOut();
+    const { router } = renderApp("/signup", { service });
+    await h1("Sign up");
+    await fill(user, "u@clinic.org", "longenough1", "longenough1");
+    await user.click(screen.getByRole("button", { name: "Create account" }));
+    await h1("Verify your email");
+    expect(router.state.location.pathname).toBe("/verify-email");
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(service.calls.verificationEmails).toBe(1);
+  });
+
+  it("Sign up with an existing verified email and the right password goes to the app", async () => {
+    const user = userEvent.setup();
+    const service = createFakeAuthService();
+    service.signedInAs("v@clinic.org", { verified: true });
+    await service.signOut();
+    const { router } = renderApp("/signup", { service });
+    await h1("Sign up");
+    await fill(user, "v@clinic.org", "password1", "password1");
+    await user.click(screen.getByRole("button", { name: "Create account" }));
+    await waitFor(() => expect(router.state.location.pathname).toBe("/"));
+  });
+
+  it("the verify page never sends an email on mount; only Resend does", async () => {
+    const user = userEvent.setup();
+    const service = createFakeAuthService();
+    renderApp("/verify-email", { service, user: { email: "u@clinic.org", verified: false } });
+    await h1("Verify your email");
+    expect(service.calls.verificationEmails).toBe(0);
+    await user.click(screen.getByRole("button", { name: "Resend email" }));
+    await screen.findByText("Verification email sent.");
+    expect(service.calls.verificationEmails).toBe(1);
+  });
 });

@@ -12,7 +12,7 @@ const NAV: Record<AuthPhase, { to: string; label: string; className?: string }[]
     { to: "/login", label: "Log in", className: "nav-login" },
     { to: "/signup", label: "Sign up", className: "btn btn-primary nav-signup" },
   ],
-  unverified: [{ to: "/verify-email", label: "Verify email" }],
+  unverified: [], // the verify screen is not a signed-in state: brand only
   verified: [
     { to: "/", label: "Sessions" },
     { to: "/sessions/new", label: "New session" },
@@ -49,14 +49,6 @@ export function Layout() {
               {l.label}
             </NavLink>
           ))}
-          {phase === "unverified" && (
-            <>
-              {user?.email && <span className="nav-user">{user.email}</span>}
-              <button type="button" className="btn btn-secondary" onClick={() => void signOut()}>
-                Sign out
-              </button>
-            </>
-          )}
         </nav>
         {phase === "verified" && <AccountMenu email={user?.email ?? null} onSignOut={() => void signOut()} />}
       </header>

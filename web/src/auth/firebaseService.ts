@@ -76,7 +76,20 @@ export function createFirebaseAuthService(config: FirebaseWebConfig): AuthServic
       return () => void listeners.delete(cb);
     },
     async signUp(email, password, next) {
-      const cred = await createUserWithEmailAndPassword(auth, email, password);
+      let cred;
+      try {
+        cred = await createUserWithEmailAndPassword(auth, email, password);
+      } catch (err) {
+        if ((err as { code?: string } | null)?.code !== "auth/email-already-in-use") throw err;
+        // Existing account (e.g. unverified, user came back to Sign up): the right password just signs in,
+        // and the guards route to the verify page or the app. No new verification email (each send voids earlier links).
+        try {
+          await signInWithEmailAndPassword(auth, email, password);
+        } catch {
+          throw err; // wrong password: keep the "already exists, log in instead" error
+        }
+        return;
+      }
       try {
         await sendEmailVerification(cred.user, { url: verifyContinueUrl(window.location.origin, next) });
       } catch {

@@ -91,7 +91,7 @@ export function VerifyEmail() {
   }
 
   return (
-    <>
+    <section className="verify-page">
       <h1>Verify your email</h1>
       <div className="auth-form">
         {form.error && <ErrorSummary error={form.error} search="" />}
@@ -113,6 +113,6 @@ export function VerifyEmail() {
           </button>
         </p>
       </div>
-    </>
+    </section>
   );
 }
