@@ -97,7 +97,7 @@ async def test_unknown_preset_is_input_error_and_no_engine_call():
 
 
 async def test_default_llm_factory_builds_litellm_client_from_routes():
-    from onolys_miti.llm import LiteLLMClient
+    from onolys_engine_core.llm import LiteLLMClient
 
     engine = Engine()
     ev = RealEvaluation(run_miti=engine)

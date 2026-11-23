@@ -11,14 +11,14 @@ from collections.abc import Mapping
 from pathlib import Path
 
 from onolys_engine_core.errors import ConfigError, InputError
-from onolys_miti.llm.routes import (
+from onolys_engine_core.llm.routes import (
     DEFAULT_PRESET_ENV,
     RouteRegistry,
     default_preset_name,
     load_registry,
     resolve_preset,
 )
-from onolys_miti.stt.select import STT_FILE_NAME, load_stt_config, locate_config_file, select_stt
+from onolys_miti.stt.select import STT_FILE_NAME, load_stt_config, select_stt
 
 from onolys_api.audio import DEFAULT_MAX_DURATION_S
 from onolys_api.config import LOCAL_ENVS, Settings
@@ -46,7 +46,7 @@ class PresetResolver:
             stt_path = None
             if routes is not None and (routes.parent / STT_FILE_NAME).is_file():
                 stt_path = routes.parent / STT_FILE_NAME
-            self._stt_config = load_stt_config(stt_path or locate_config_file())
+            self._stt_config = load_stt_config(stt_path)
             self._registry = registry
         return self._registry, self._stt_config
 

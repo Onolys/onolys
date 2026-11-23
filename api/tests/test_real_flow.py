@@ -17,7 +17,7 @@ from cards import valid_card
 from google.api_core import exceptions as gexc
 from miti_fixtures import TRANSCRIPT, patch_engine
 from onolys_engine_core.errors import InputError
-from onolys_miti.llm import LLMUnavailable, StubClient
+from onolys_engine_core.llm import LLMUnavailable, StubClient
 from onolys_miti.run import AllRunsFailed
 from onolys_miti.stt.fixture import FixtureStt, uri_hash
 from test_transcribe import words

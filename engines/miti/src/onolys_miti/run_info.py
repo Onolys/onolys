@@ -8,9 +8,9 @@ from collections.abc import Iterable
 from pathlib import Path
 from typing import Literal
 
+from onolys_engine_core.llm.routes import Route
 from pydantic import BaseModel, ConfigDict, model_serializer
 
-from onolys_miti.llm.routes import Route
 from onolys_miti.stt import SttRun
 
 

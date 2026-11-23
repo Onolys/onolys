@@ -67,7 +67,7 @@ async def test_real_mode_fixture_stt_real_llm_reaches_report_ready(settings, blo
         pytest.skip("set GEMINI_API_KEY (live LLM)")
     cfg = tmp_path / "cfg"
     cfg.mkdir()
-    default_routes = resources.files("onolys_miti.llm").joinpath("routes.default.yaml")
+    default_routes = resources.files("onolys_engine_core.llm").joinpath("routes.default.yaml")
     shutil.copy(str(default_routes), cfg / "routes.yaml")
     (cfg / "stt_providers.yaml").write_text(
         "providers:\n  fixture: {provider: fixture, model: fixture}\ndefault: fixture\n"

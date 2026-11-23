@@ -12,9 +12,9 @@ from pathlib import Path
 from typing import Any, Literal
 
 import yaml
-from onolys_engine_core.errors import ConfigError, InputError
 
-from onolys_miti.stt.select import locate_config_file
+from onolys_engine_core.config import locate_config_file
+from onolys_engine_core.errors import ConfigError, InputError
 
 ROUTES_ENV = "ROUTES_FILE"
 DEFAULT_PRESET_ENV = "DEFAULT_PRESET"
@@ -82,7 +82,7 @@ def routes_path() -> Path:
         if not p.is_file():
             raise ConfigError(f"{ROUTES_ENV}={env!r} is not a file")
         return p
-    return locate_config_file(DEFAULT_RESOURCE, DEFAULT_RESOURCE, "onolys_miti.llm")
+    return locate_config_file(DEFAULT_RESOURCE, DEFAULT_RESOURCE, "onolys_engine_core.llm")
 
 
 def _apply_env(raw: dict[str, dict], env: dict[str, str]) -> dict[str, dict]:

@@ -3,12 +3,13 @@ from pathlib import Path
 
 import pytest
 from jsonschema import Draft202012Validator
+from onolys_engine_core.config import locate_config_file
 from onolys_engine_core.errors import InputError
 
 from onolys_miti.stt import AudioRef, SttParams, Word
 from onolys_miti.stt.base import transcribe, words_to_turns
 from onolys_miti.stt.fixture import FixtureStt, uri_hash
-from onolys_miti.stt.select import locate_config_file, select_stt
+from onolys_miti.stt.select import DEFAULT_RESOURCE, STT_FILE_NAME, select_stt
 
 pytestmark = pytest.mark.unit
 
@@ -112,7 +113,7 @@ def test_select_unknown_key():
 
 def test_packaged_default_and_routes_file_dir(tmp_path, monkeypatch):
     monkeypatch.delenv("ROUTES_FILE", raising=False)
-    packaged = locate_config_file()
+    packaged = locate_config_file(STT_FILE_NAME, DEFAULT_RESOURCE, "onolys_miti.stt")
     assert packaged.name == "stt_providers.default.yaml"
     assert select_stt(None, "en-US").provider == "google"
     (tmp_path / "routes.yaml").write_text("{}")
@@ -120,7 +121,7 @@ def test_packaged_default_and_routes_file_dir(tmp_path, monkeypatch):
         "providers: {x: {provider: px, model: mx}}\ndefault: x\n"
     )
     monkeypatch.setenv("ROUTES_FILE", str(tmp_path / "routes.yaml"))
-    assert locate_config_file() == tmp_path / "stt_providers.yaml"
+    assert locate_config_file(STT_FILE_NAME, DEFAULT_RESOURCE, "onolys_miti.stt") == tmp_path / "stt_providers.yaml"
     assert select_stt(None, None).provider == "px"
 
 

@@ -14,15 +14,15 @@ from onolys_engine_core.errors import (
     OnolysError,
     SessionTooLong,
 )
-from onolys_miti.code_pass import CodePassFailed
-from onolys_miti.globals_pass import GlobalsPassFailed
-from onolys_miti.llm.errors import (
+from onolys_engine_core.llm.errors import (
     FixtureMiss,
     LLMBadOutput,
     LLMRateLimited,
     LLMTimeout,
     LLMUnavailable,
 )
+from onolys_miti.code_pass import CodePassFailed
+from onolys_miti.globals_pass import GlobalsPassFailed
 from onolys_miti.run import AllRunsFailed
 from onolys_miti.stt.google_chirp import SttProviderError
 from test_logging import failed

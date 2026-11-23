@@ -7,10 +7,10 @@ from dataclasses import replace
 from types import SimpleNamespace
 
 import pytest
-from onolys_engine_core.errors import ConfigError
 from pydantic import BaseModel
 
-from onolys_miti.llm import (
+from onolys_engine_core.errors import ConfigError
+from onolys_engine_core.llm import (
     LiteLLMClient,
     LLMBadOutput,
     LLMConfig,
@@ -19,7 +19,7 @@ from onolys_miti.llm import (
     LLMUnavailable,
     make_client,
 )
-from onolys_miti.llm.routes import Route
+from onolys_engine_core.llm.routes import Route
 
 
 class Out(BaseModel):
@@ -304,7 +304,7 @@ async def test_reasoning_effort_low_becomes_gemini_thinking_config(model, monkey
     import litellm
     from litellm.llms.custom_httpx.http_handler import AsyncHTTPHandler
 
-    from onolys_miti.llm.routes import resolve_preset
+    from onolys_engine_core.llm.routes import resolve_preset
 
     monkeypatch.delenv("ROUTES_FILE", raising=False)
     monkeypatch.setenv("GEMINI_API_KEY", "test-key")

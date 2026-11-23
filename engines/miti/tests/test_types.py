@@ -90,9 +90,22 @@ def test_miti_imports_no_sibling_packages():
     """Boundary: importing the package pulls in no sibling Onolys packages."""
     forbidden = ("api", "admin", "eval")
     code = (
-        "import sys, onolys_miti, onolys_miti.stt, onolys_miti.llm, onolys_miti.voice;"
+        "import sys, onolys_miti, onolys_miti.stt, onolys_engine_core.llm, onolys_miti.voice;"
         f"bad=[m for m in sys.modules if m.split('.')[0] in {forbidden!r}];"
         "print(bad)"
     )
     out = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, check=True)
     assert out.stdout.strip() == "[]"
+
+
+def test_extracted_llm_has_no_miti_reexports():
+    import importlib.util
+
+    import onolys_miti
+
+    assert importlib.util.find_spec("onolys_miti.llm") is None
+    for name in (
+        "LLMConfig", "LLMError", "LLMUnavailable", "LiteLLMClient",
+        "MetricsCollector", "StubClient", "resolve_preset",
+    ):
+        assert not hasattr(onolys_miti, name)

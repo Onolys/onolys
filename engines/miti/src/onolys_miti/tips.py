@@ -19,10 +19,10 @@ import re
 from dataclasses import dataclass
 from typing import Any
 
+from onolys_engine_core.llm import LLMBadOutput, LLMClient, LLMRequest, MetricsCollector
 from pydantic import BaseModel
 
 from onolys_miti import miti
-from onolys_miti.llm import LLMBadOutput, LLMClient, LLMRequest, MetricsCollector
 from onolys_miti.locate import locate
 from onolys_miti.prepare import OTHER, SUBJECT, RoleTurn, mark_roles, select_turns
 from onolys_miti.report import Tip, TipQuote, Warning

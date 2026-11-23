@@ -1,9 +1,9 @@
 import json
 
 import pytest
+from onolys_engine_core.llm.routes import Route
 from pydantic import ValidationError
 
-from onolys_miti.llm.routes import Route
 from onolys_miti.run_info import (
     PackFacts,
     RunInfo,

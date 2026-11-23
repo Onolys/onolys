@@ -13,9 +13,9 @@ import time
 import jsonschema
 import pytest
 from onolys_engine_core.context import RunContext
+from onolys_engine_core.llm import LLMBadOutput, LLMResult, LLMUnavailable, MetricsCollector, Usage
 
 from onolys_miti import miti
-from onolys_miti.llm import LLMBadOutput, LLMResult, LLMUnavailable, MetricsCollector, Usage
 from onolys_miti.result import MitiResult
 from onolys_miti.run import AllRunsFailed, MitiOutput, aggregate, run_miti
 from onolys_miti.transcript import Transcript
@@ -418,12 +418,13 @@ def test_public_reexports():
         "MitiOutput",
         "AllRunsFailed",
         "SttParams",
-        "LiteLLMClient",
         "GoogleChirp3",
-        "resolve_preset",
         "Transcript",
     ):
         assert hasattr(m, name), name
 
-    for name in ("RunContext", "ConfigError", "InputError", "OnolysError"):
+    for name in (
+        "RunContext", "ConfigError", "InputError", "OnolysError",
+        "LiteLLMClient", "resolve_preset",
+    ):
         assert not hasattr(m, name), name

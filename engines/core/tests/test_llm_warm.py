@@ -4,7 +4,7 @@ import asyncio
 
 import pytest
 
-from onolys_miti.llm.warm import warm_then_fanout
+from onolys_engine_core.llm.warm import warm_then_fanout
 
 
 async def test_no_second_call_starts_before_first_returns_and_order_kept():

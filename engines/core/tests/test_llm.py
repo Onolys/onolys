@@ -6,7 +6,7 @@ from types import SimpleNamespace
 import pytest
 from pydantic import BaseModel
 
-from onolys_miti.llm import (
+from onolys_engine_core.llm import (
     FailingClient,
     FixtureClient,
     LiteLLMClient,
@@ -16,13 +16,13 @@ from onolys_miti.llm import (
     StubClient,
     make_client,
 )
-from onolys_miti.llm.errors import (
+from onolys_engine_core.llm.errors import (
     FixtureMiss,
     LLMBadOutput,
     LLMTimeout,
     LLMUnavailable,
 )
-from onolys_miti.llm.routes import Route
+from onolys_engine_core.llm.routes import Route
 
 
 class Out(BaseModel):

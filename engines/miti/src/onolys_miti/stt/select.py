@@ -4,11 +4,10 @@ Precedence: preset stt key -> by_language[lang] -> default. The session language
 over any language on the entry. Never imports a concrete provider.
 """
 
-import os
-from importlib import resources
 from pathlib import Path
 
 import yaml
+from onolys_engine_core.config import locate_config_file
 from onolys_engine_core.errors import InputError
 
 from onolys_miti.stt import SttParams
@@ -17,22 +16,9 @@ STT_FILE_NAME = "stt_providers.yaml"
 DEFAULT_RESOURCE = "stt_providers.default.yaml"
 
 
-def locate_config_file(
-    name: str = STT_FILE_NAME,
-    default_resource: str = DEFAULT_RESOURCE,
-    package: str = "onolys_miti.stt",
-) -> Path:
-    """`name` next to the file named by env ROUTES_FILE if present, else the packaged default."""
-    routes = os.environ.get("ROUTES_FILE")
-    if routes:
-        candidate = Path(routes).parent / name
-        if candidate.is_file():
-            return candidate
-    return Path(str(resources.files(package).joinpath(default_resource)))
-
-
 def load_stt_config(path: Path | None = None) -> dict:
-    data = yaml.safe_load((path or locate_config_file()).read_text(encoding="utf-8")) or {}
+    source = path or locate_config_file(STT_FILE_NAME, DEFAULT_RESOURCE, "onolys_miti.stt")
+    data = yaml.safe_load(source.read_text(encoding="utf-8")) or {}
     if not isinstance(data.get("providers"), dict) or not data["providers"]:
         raise InputError("stt providers file has no `providers`")
     return data

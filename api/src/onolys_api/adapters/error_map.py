@@ -12,7 +12,7 @@ from typing import Literal
 
 from google.api_core import exceptions as gexc
 from onolys_engine_core.errors import InputError, OnolysError
-from onolys_miti.llm.errors import LLMError
+from onolys_engine_core.llm.errors import LLMError
 from onolys_miti.stt.google_chirp import SttProviderError
 
 Stage = Literal["run", "stt"]

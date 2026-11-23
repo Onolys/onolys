@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 import yaml
 from onolys_engine_core.errors import ConfigError
-from onolys_miti.llm.routes import allowed_presets, load_registry, resolve_preset
+from onolys_engine_core.llm.routes import allowed_presets, load_registry, resolve_preset
 
 from onolys_api.config import Settings
 from onolys_api.presets import PresetResolver, UnknownPreset

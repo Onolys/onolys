@@ -22,10 +22,10 @@ from typing import Any
 
 import yaml
 from onolys_engine_core.context import RunContext
+from onolys_engine_core.llm import LLMConfig, MetricsCollector, make_client
 
 from onolys_miti import miti
 from onolys_miti import tips as tips_mod
-from onolys_miti.llm import LLMConfig, MetricsCollector, make_client
 from onolys_miti.run import run_miti
 from onolys_miti.transcript import Transcript
 
