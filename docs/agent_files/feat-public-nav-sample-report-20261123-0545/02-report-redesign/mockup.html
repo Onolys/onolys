@@ -1,0 +1,445 @@
+<title>Onolys Sample Report</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+<style>
+/* Layout: one centered 880px column, one document; hairline-ruled sections, shaded tables, no side panels. */
+:root {
+  --bg: #ffffff;
+  --fg: #16302d;
+  --muted: #5a6f6c;
+  --line: #d6e2e0;
+  --surface: #f3f8f7;
+  --accent: #0b5f5a;
+  --accent-soft: #e2f0ee;
+  --on-accent: #ffffff;
+  --good: #1d6b3a;       --good-bg: #e3f3e8;
+  --fair: #7a5a00;       --fair-bg: #fbf0cf;
+  --low: #a3361f;        --low-bg: #fbe6e0;
+  --info: #3a5a78;       --info-bg: #e6eef5;
+  --seg-off: #dbe6e4;
+  --scrim: rgba(9, 22, 21, 0.55);
+  --font: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0d1918; --fg: #e3eeec; --muted: #9bb2af; --line: #2a3f3d; --surface: #142624;
+    --accent: #5fc7bd; --accent-soft: #163735; --on-accent: #08201e;
+    --good: #7fd69b; --good-bg: #163524; --fair: #e8c766; --fair-bg: #3a3012;
+    --low: #f09a85; --low-bg: #411d15; --info: #9cc1e3; --info-bg: #1a2c3d; --seg-off: #2a3f3d; --scrim: rgba(0, 0, 0, 0.7);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0d1918; --fg: #e3eeec; --muted: #9bb2af; --line: #2a3f3d; --surface: #142624;
+  --accent: #5fc7bd; --accent-soft: #163735; --on-accent: #08201e;
+  --good: #7fd69b; --good-bg: #163524; --fair: #e8c766; --fair-bg: #3a3012;
+  --low: #f09a85; --low-bg: #411d15; --info: #9cc1e3; --info-bg: #1a2c3d; --seg-off: #2a3f3d; --scrim: rgba(0, 0, 0, 0.7);
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--fg);
+  font-family: var(--font); font-size: 15px; line-height: 1.6;
+  font-variant-numeric: tabular-nums;
+}
+.topbar { border-bottom: 1px solid var(--line); }
+.topbar-in, .wrap, .foot-in {
+  max-width: 880px; margin: 0 auto;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+.topbar-in { padding-block: 14px; }
+.brand { font-weight: 700; font-size: 18px; letter-spacing: -0.01em; color: var(--accent); }
+.wrap { padding-block: 40px 32px; }
+h1 { font-size: 32px; line-height: 1.15; letter-spacing: -0.02em; margin: 0 0 8px; text-wrap: balance; }
+h2 { font-size: 20px; line-height: 1.3; letter-spacing: -0.01em; margin: 0 0 16px; text-wrap: balance; }
+h3 { font-size: 15px; margin: 0; }
+section { padding-top: 40px; margin-top: 40px; border-top: 1px solid var(--line); }
+header + section { margin-top: 32px; }
+p { margin: 0 0 12px; max-width: 68ch; }
+.sub { color: var(--muted); margin: 0 0 16px; }
+.goal { font-size: 16px; margin: 0 0 8px; }
+.goal b { font-weight: 600; }
+.meta { display: flex; flex-wrap: wrap; gap: 4px 20px; color: var(--muted); font-size: 13px; margin: 0; padding: 0; list-style: none; }
+.meta b { color: var(--fg); font-weight: 500; }
+.lead { color: var(--muted); font-size: 14px; margin-bottom: 20px; }
+.tbl { overflow-x: auto; border: 1px solid var(--line); border-radius: 6px; }
+table { width: 100%; border-collapse: collapse; font-size: 14px; }
+th { text-align: left; font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); font-weight: 600; background: var(--surface); padding: 9px 12px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+td { padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+tr:last-child td { border-bottom: 0; }
+td.num, th.num { text-align: right; }
+.subhead td { background: var(--surface); font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); font-weight: 600; padding: 7px 12px; }
+.total td { font-weight: 600; background: var(--accent-soft); }
+/* globals */
+.globals { display: grid; gap: 0; margin: 0 0 32px; padding: 0; list-style: none; border: 1px solid var(--line); border-radius: 6px; }
+.globals li { display: grid; grid-template-columns: 190px 150px 1fr; gap: 6px 20px; align-items: center; padding: 14px 16px; border-bottom: 1px solid var(--line); }
+.globals li:last-child { border-bottom: 0; }
+.g-name { font-weight: 600; }
+.scale { display: flex; align-items: center; gap: 4px; }
+.scale i { width: 20px; height: 8px; border-radius: 2px; background: var(--seg-off); display: block; }
+.scale i.on { background: var(--accent); }
+.scale .sc { margin-left: 8px; font-weight: 700; font-size: 15px; white-space: nowrap; }
+.scale .sc small { font-weight: 400; color: var(--muted); font-size: 12px; }
+.g-why { color: var(--muted); font-size: 14px; min-width: 0; }
+.chip { display: inline-block; padding: 1px 9px; border-radius: 999px; font-size: 12px; font-weight: 600; white-space: nowrap; line-height: 1.7; }
+.s-good { background: var(--good-bg); color: var(--good); }
+.s-fair { background: var(--fair-bg); color: var(--fair); }
+.s-low { background: var(--low-bg); color: var(--low); }
+.s-none { color: var(--muted); font-weight: 400; }
+/* tips */
+.tips { list-style: none; padding: 0; margin: 0; display: grid; gap: 20px; }
+.tip { border: 1px solid var(--line); border-radius: 8px; padding: 20px; display: grid; grid-template-columns: 36px minmax(0, 1fr); gap: 0 16px; }
+.rank { width: 32px; height: 32px; border-radius: 50%; background: var(--accent); color: var(--on-accent); font-weight: 700; display: grid; place-items: center; font-size: 15px; }
+.tip-title { font-weight: 600; font-size: 16px; margin: 3px 0 16px; display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; }
+.parts { display: grid; gap: 16px; grid-column: 2; }
+.lbl { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; font-weight: 600; color: var(--muted); display: block; margin-bottom: 4px; }
+.said { margin: 0; padding: 0 0 0 12px; border-left: 3px solid var(--line); font-style: italic; }
+.said cite { font-style: normal; font-size: 12px; color: var(--muted); margin-left: 6px; white-space: nowrap; }
+.try { background: var(--accent-soft); border-radius: 6px; padding: 12px 14px; }
+.try .lbl { color: var(--accent); }
+.try p { margin: 0 0 6px; font-weight: 500; }
+.try p:last-child { margin: 0; }
+.try .eg { font-weight: 600; font-size: 16px; color: var(--accent); }
+.why { margin: 0; }
+/* codes */
+.code { display: inline-block; font-family: var(--mono); font-size: 12px; font-weight: 600; padding: 1px 7px; border-radius: 4px; line-height: 1.6; white-space: nowrap; }
+.c-info { background: var(--info-bg); color: var(--info); }
+.c-qr { background: var(--accent-soft); color: var(--accent); }
+.c-mia { background: var(--good-bg); color: var(--good); }
+.c-mina { background: var(--low-bg); color: var(--low); }
+.legend { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 6px 20px; margin: 0 0 16px; padding: 0; list-style: none; font-size: 13px; color: var(--muted); }
+.legend li { display: flex; gap: 8px; align-items: baseline; }
+.legend .code { flex: none; min-width: 64px; text-align: center; }
+.legend b { font-weight: 500; color: var(--fg); }
+.tr table { min-width: 720px; }
+.tr td:nth-child(1) { white-space: nowrap; color: var(--muted); width: 52px; }
+.tr td:nth-child(2) { width: 56px; font-weight: 600; }
+.tr td:nth-child(4) { width: 96px; }
+.tr td:nth-child(5) { color: var(--muted); font-size: 13px; width: 24%; }
+.tr tr.p td { background: var(--surface); }
+.tr tr.c td { background: var(--bg); }
+.tr tr.c td:nth-child(3) { color: var(--muted); }
+.tr tr.p td:nth-child(2) { color: var(--accent); }
+.tr .codes { display: flex; flex-wrap: wrap; gap: 4px; }
+.pc-note { font-size: 12px; color: var(--muted); margin: 8px 0 0; }
+.cite { color: var(--muted); font-size: 13px; }
+.warn { font-weight: 600; background: var(--fair-bg); color: var(--fair); border-radius: 6px; padding: 10px 14px; max-width: none; }
+footer { border-top: 1px solid var(--line); background: var(--surface); }
+.foot-in { padding-block: 12px; font-size: 12px; color: var(--muted); line-height: 1.5; }
+.foot-in p { margin: 0; max-width: none; }
+.foot-in a { color: var(--muted); text-decoration: none; }
+.foot-in a:hover { text-decoration: underline; }
+a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+@media (max-width: 640px) {
+  h1 { font-size: 26px; }
+  .wrap { padding-block: 28px 24px; }
+  .globals li { grid-template-columns: 1fr; gap: 8px; }
+  .tip { grid-template-columns: 1fr; padding: 16px; }
+  .parts { grid-column: 1; }
+  .rank { margin-bottom: 8px; }
+}
+
+/* transcript dialog + utterance links */
+.btn-primary { font: inherit; font-weight: 600; background: var(--accent); color: var(--on-accent); border: 0; border-radius: 6px; padding: 10px 18px; cursor: pointer; }
+.btn-primary:hover { filter: brightness(1.08); }
+.uref { font: inherit; color: var(--accent); background: none; border: 0; padding: 0; margin: 0; cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
+.uref:hover { text-decoration-thickness: 2px; }
+button:focus-visible, summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 3px; }
+html.dlg-open { overflow: hidden; }
+#transcript-dialog { padding: 0; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); color: var(--fg); width: min(1100px, 100vw - 48px); max-width: none; height: 88vh; max-height: none; margin: auto; overflow: hidden; }
+#transcript-dialog[open] { display: flex; flex-direction: column; }
+#transcript-dialog::backdrop { background: var(--scrim); }
+.dlg-head { flex: none; display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; padding: 14px 20px; background: var(--bg); border-bottom: 1px solid var(--line); }
+.dlg-head h2 { margin: 0; font-size: 18px; }
+.dlg-count { margin: 2px 0 0; font-size: 13px; color: var(--muted); }
+.dlg-close { flex: none; width: 36px; height: 36px; font: inherit; font-size: 24px; line-height: 1; color: var(--fg); background: var(--surface); border: 1px solid var(--line); border-radius: 6px; cursor: pointer; }
+.dlg-close:hover { background: var(--accent-soft); }
+.dlg-body { flex: 1; min-height: 0; overflow: auto; padding: 16px 20px 20px; }
+.dlg-body .lead { margin-bottom: 12px; }
+.dlg-legend { margin-bottom: 16px; }
+.dlg-legend summary { cursor: pointer; font-weight: 600; font-size: 14px; margin-bottom: 10px; }
+.dlg-body .tbl { overflow: visible; }
+.dlg-body th { position: sticky; top: 0; z-index: 2; box-shadow: inset 0 -1px 0 var(--line); }
+.tr tr.hl td { animation: utt-hl 1.5s ease-out; }
+@keyframes utt-hl { from { background-color: var(--accent-soft); } }
+@media (prefers-reduced-motion: reduce) {
+  .tr tr.hl td { animation: none; background: var(--accent-soft); }
+}
+@media (max-width: 640px) {
+  #transcript-dialog { width: 100vw; height: 100dvh; border-radius: 0; border: 0; margin: 0; }
+  .dlg-head { padding: 12px 16px; }
+  .dlg-body { padding: 12px 16px 16px; }
+}
+</style>
+
+<div class="topbar"><div class="topbar-in"><span class="brand">Onolys</span></div></div>
+
+<main class="wrap">
+<header>
+  <h1>Sample report</h1>
+  <p class="sub">Example report from a made-up role-play conversation.</p>
+  <p class="goal"><b>Change goal:</b> Cut down on drinking</p>
+  <ul class="meta">
+    <li><b>Protocol</b> MITI 4.2.1</li>
+    <li><b>Coded span</b> Full conversation (54 utterances)</li>
+    <li><b>Date</b> 20 Nov 2026</li>
+  </ul>
+</header>
+
+<section id="glance">
+  <h2>At a glance</h2>
+  <ul class="globals">
+    <li>
+      <span class="g-name">Cultivating Change Talk</span>
+      <span class="scale" role="img" aria-label="2 out of 5"><i class="on"></i><i class="on"></i><i></i><i></i><i></i><span class="sc">2 <small>/ 5</small></span></span>
+      <span class="g-why">The client gives reasons to act (utterances <button type="button" class="uref" data-utt="18">18</button>, <button type="button" class="uref" data-utt="40">40</button>), but only utterance <button type="button" class="uref" data-utt="41">41</button> builds on them; <button type="button" class="uref" data-utt="19">19</button> and <button type="button" class="uref" data-utt="31">31</button> miss or work against them.</span>
+    </li>
+    <li>
+      <span class="g-name">Softening Sustain Talk</span>
+      <span class="scale" role="img" aria-label="2 out of 5"><i class="on"></i><i class="on"></i><i></i><i></i><i></i><span class="sc">2 <small>/ 5</small></span></span>
+      <span class="g-why">Reflections at <button type="button" class="uref" data-utt="9">9</button>, <button type="button" class="uref" data-utt="17">17</button> and <button type="button" class="uref" data-utt="21">21</button> respect the ambivalence, but the confront at <button type="button" class="uref" data-utt="25">25</button> and persuasion at <button type="button" class="uref" data-utt="31">31</button> draw pushback (<button type="button" class="uref" data-utt="26">26</button>, <button type="button" class="uref" data-utt="30">30</button>, <button type="button" class="uref" data-utt="32">32</button>).</span>
+    </li>
+    <li>
+      <span class="g-name">Partnership</span>
+      <span class="scale" role="img" aria-label="2 out of 5"><i class="on"></i><i class="on"></i><i></i><i></i><i></i><span class="sc">2 <small>/ 5</small></span></span>
+      <span class="g-why">The practitioner pushes quitting over the client's aim (<button type="button" class="uref" data-utt="25">25</button>, <button type="button" class="uref" data-utt="27">27</button>, <button type="button" class="uref" data-utt="31">31</button>) until the client says they feel told what to do (<button type="button" class="uref" data-utt="32">32</button>); autonomy is restored at <button type="button" class="uref" data-utt="33">33</button>.</span>
+    </li>
+    <li>
+      <span class="g-name">Empathy</span>
+      <span class="scale" role="img" aria-label="3 out of 5"><i class="on"></i><i class="on"></i><i class="on"></i><i></i><i></i><span class="sc">3 <small>/ 5</small></span></span>
+      <span class="g-why">Reflections at <button type="button" class="uref" data-utt="3">3</button>, <button type="button" class="uref" data-utt="7">7</button> and <button type="button" class="uref" data-utt="21">21</button> show real effort to grasp the client's view and stress, but <button type="button" class="uref" data-utt="25">25</button> and <button type="button" class="uref" data-utt="31">31</button> set it aside.</span>
+    </li>
+  </ul>
+
+  <div class="tbl">
+    <table>
+      <thead><tr><th>Summary score</th><th class="num">Value</th><th class="num">Fair</th><th class="num">Good</th><th>Status</th></tr></thead>
+      <tbody>
+        <tr><td>Technical Global <span class="cite">(CCT + SST) / 2</span></td><td class="num">2.0</td><td class="num">3.0</td><td class="num">4.0</td><td><span class="chip s-low">Below fair</span></td></tr>
+        <tr><td>Relational Global <span class="cite">(PAR + EMP) / 2</span></td><td class="num">2.5</td><td class="num">3.5</td><td class="num">4.0</td><td><span class="chip s-low">Below fair</span></td></tr>
+        <tr><td>% Complex Reflections <span class="cite">CR / (SR + CR)</span></td><td class="num">58%</td><td class="num">40%</td><td class="num">50%</td><td><span class="chip s-good">Good</span></td></tr>
+        <tr><td>Reflection-to-Question Ratio <span class="cite">(SR + CR) / Q</span></td><td class="num">1.7</td><td class="num">1.0</td><td class="num">2.0</td><td><span class="chip s-fair">Fair</span></td></tr>
+        <tr><td>Total MI-Adherent <span class="cite">Seek + AF + EA</span></td><td class="num">6</td><td class="num">&ndash;</td><td class="num">&ndash;</td><td><span class="s-none">No reference level</span></td></tr>
+        <tr><td>Total MI Non-Adherent <span class="cite">Confront + Persuade</span></td><td class="num">2</td><td class="num">&ndash;</td><td class="num">&ndash;</td><td><span class="s-none">No reference level</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="pc-note">Fair and good are reference levels, not pass marks.</p>
+</section>
+
+<section id="feedback">
+  <h2>Feedback: ideas to try</h2>
+  <p class="lead">Listed in order of priority. Start with the first.</p>
+  <ol class="tips">
+    <li class="tip">
+      <span class="rank">1</span>
+      <div class="tip-title">Arguing against cutting down closed the client off <span class="code c-mina">Confront</span></div>
+      <div class="parts">
+        <div><span class="lbl">What was said</span><blockquote class="said">&ldquo;That tends not to last. Most people slide back to where they started.&rdquo;<cite>Utterance <button type="button" class="uref" data-utt="25">25</button></cite></blockquote></div>
+        <div class="try"><span class="lbl">Try instead</span><p>Reflect what the client wants instead of arguing against it.</p><p class="eg">&ldquo;You'd like to keep wine in your life and bring it back to where it was.&rdquo;</p></div>
+        <div><span class="lbl">Why it matters</span><p class="why">Disagreeing makes people defend their view. The client pushed back right away (utterances <button type="button" class="uref" data-utt="26">26</button> and <button type="button" class="uref" data-utt="30">30</button>).</p></div>
+      </div>
+    </li>
+    <li class="tip">
+      <span class="rank">2</span>
+      <div class="tip-title">Persuading without asking made the client feel told what to do <span class="code c-info">Persuade</span></div>
+      <div class="parts">
+        <div><span class="lbl">What was said</span><blockquote class="said">&ldquo;Because it crept up once, so it can again. You should really think about quitting for good.&rdquo;<cite>Utterance <button type="button" class="uref" data-utt="31">31</button></cite></blockquote></div>
+        <div class="try"><span class="lbl">Try instead</span><p>Ask permission, share what you have seen, then ask what the client makes of it.</p><p class="eg">&ldquo;Would it be okay if I shared what I've seen when people cut back? ... What do you make of that?&rdquo;</p></div>
+        <div><span class="lbl">Why it matters</span><p class="why">Advice that is asked for is heard. Unasked advice led to "you're telling me what to do" (utterance <button type="button" class="uref" data-utt="32">32</button>).</p></div>
+      </div>
+    </li>
+    <li class="tip">
+      <span class="rank">3</span>
+      <div class="tip-title">A simple reflection missed the client's reason to change <span class="code c-qr">SR</span></div>
+      <div class="parts">
+        <div><span class="lbl">What was said</span><blockquote class="said">&ldquo;You snapped at your child.&rdquo;<cite>Utterance <button type="button" class="uref" data-utt="19">19</button></cite></blockquote></div>
+        <div class="try"><span class="lbl">Try instead</span><p>Reflect the value behind the words with a complex reflection.</p><p class="eg">&ldquo;Snapping at your child doesn't fit the parent you want to be, and the foggy mornings are part of that.&rdquo;</p></div>
+        <div><span class="lbl">Why it matters</span><p class="why">Reflecting the client's own reasons draws out more change talk. The client had just said "That's not me".</p></div>
+      </div>
+    </li>
+  </ol>
+</section>
+
+<section id="counts">
+  <h2>Behaviour counts</h2>
+  <div class="tbl">
+    <table>
+      <thead><tr><th>Code</th><th>Behaviour</th><th class="num">Count</th></tr></thead>
+      <tbody>
+        <tr class="subhead"><td colspan="3">Information &amp; persuasion</td></tr>
+        <tr><td><span class="code c-info">GI</span></td><td>Giving Information</td><td class="num">1</td></tr>
+        <tr><td><span class="code c-info">Persuade</span></td><td>Persuade</td><td class="num">1</td></tr>
+        <tr><td><span class="code c-info">PwP</span></td><td>Persuade with Permission</td><td class="num">3</td></tr>
+        <tr class="subhead"><td colspan="3">Questions &amp; reflections</td></tr>
+        <tr><td><span class="code c-qr">Q</span></td><td>Question</td><td class="num">7</td></tr>
+        <tr><td><span class="code c-qr">SR</span></td><td>Simple Reflection</td><td class="num">5</td></tr>
+        <tr><td><span class="code c-qr">CR</span></td><td>Complex Reflection</td><td class="num">7</td></tr>
+        <tr class="subhead"><td colspan="3">MI-adherent</td></tr>
+        <tr><td><span class="code c-mia">AF</span></td><td>Affirm</td><td class="num">2</td></tr>
+        <tr><td><span class="code c-mia">Seek</span></td><td>Seek Collaboration</td><td class="num">2</td></tr>
+        <tr><td><span class="code c-mia">EA</span></td><td>Emphasize Autonomy</td><td class="num">2</td></tr>
+        <tr class="total"><td></td><td>Total MI-adherent</td><td class="num">6</td></tr>
+        <tr class="subhead"><td colspan="3">MI non-adherent</td></tr>
+        <tr><td><span class="code c-mina">Confront</span></td><td>Confront</td><td class="num">1</td></tr>
+        <tr class="total"><td></td><td>Total MI non-adherent (Confront + Persuade)</td><td class="num">2</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section id="transcript">
+  <h2>Coded transcript</h2>
+  <p class="lead">54 utterances, 27 from the practitioner. Each code shows the reason it was given.</p>
+  <button type="button" class="btn-primary" id="open-transcript">Open coded transcript</button>
+</section>
+
+<section id="method">
+  <h2>Method &amp; limits</h2>
+  <p>Onolys reads the transcript against the MITI 4.2.1 coding manual and scores the four global ratings and the behaviour counts. Each code in the transcript shows the reason it was given.</p>
+  <p>Onolys reads the transcript only. Tone of voice, pauses and body language are not available to it. Speaker labels and timestamps come from automatic transcription and can contain errors. Behaviour counts depend on where each utterance is split, so small differences are expected.</p>
+  <p class="cite">Moyers, T. B., Manuel, J. K., &amp; Ernst, D. (2014). Motivational Interviewing Treatment Integrity Coding Manual 4.2.1.</p>
+  <p class="warn">Not official MITI coding and cannot be submitted as one.</p>
+</section>
+</main>
+
+<footer>
+  <div class="foot-in">
+    <p>Not official MITI coding &middot; Use it to practice and prepare &middot; Role-play or de-identified transcripts only</p>
+    <p><a href="#">Privacy</a> &middot; <a href="#">Terms</a> &middot; <a href="#">Contact</a> &middot; &copy; 2026 Onolys</p>
+  </div>
+</footer>
+
+<dialog id="transcript-dialog" aria-labelledby="dlg-title">
+  <div class="dlg-head">
+    <div class="dlg-titles">
+      <h2 id="dlg-title">Coded transcript</h2>
+      <p class="dlg-count">54 utterances, 27 from the practitioner. Each code shows the reason it was given.</p>
+    </div>
+    <button type="button" class="dlg-close" id="dlg-close" aria-label="Close">&times;</button>
+  </div>
+  <div class="dlg-body">
+    <p class="lead">Each practitioner utterance carries its code and the reason for it. Client utterances are not coded.</p>
+    <details class="dlg-legend">
+      <summary>Code legend</summary>
+      <ul class="legend">
+    <li><span class="code c-info">GI</span><b>Giving Information</b></li>
+    <li><span class="code c-info">Persuade</span><b>Persuade</b></li>
+    <li><span class="code c-info">PwP</span><b>Persuade with Permission</b></li>
+    <li><span class="code c-qr">Q</span><b>Question</b></li>
+    <li><span class="code c-qr">SR</span><b>Simple Reflection</b></li>
+    <li><span class="code c-qr">CR</span><b>Complex Reflection</b></li>
+    <li><span class="code c-mia">AF</span><b>Affirm</b></li>
+    <li><span class="code c-mia">Seek</span><b>Seek Collaboration</b></li>
+    <li><span class="code c-mia">EA</span><b>Emphasize Autonomy</b></li>
+    <li><span class="code c-mina">Confront</span><b>Confront</b></li>
+    <li><span class="code" style="background:var(--surface);color:var(--fg);border:1px solid var(--line)">P / C</span><b>P = practitioner, C = client</b></li>
+    <li><span class="code" style="background:var(--surface);color:var(--muted);border:1px solid var(--line)">Not coded</span><b>Not coded</b></li>
+  </ul>
+    </details>
+    <div class="tbl tr">
+    <table>
+      <thead><tr><th>Utt #</th><th>Speaker</th><th>Utterance</th><th>Code(s)</th><th>Why</th></tr></thead>
+      <tbody>
+        <tr class="p" id="utt-1"><td>1</td><td>P</td><td>Thanks for making time. To start, what has been on your mind about your drinking?</td><td><div class="codes"><span class="code c-qr" data-code="Q">Q</span></div></td><td>Open question that invites the client's view</td></tr>
+        <tr class="c" id="utt-2"><td>2</td><td>C</td><td>Honestly, it's crept up. I used to have a glass or two on weekends and now it's most nights.</td><td></td><td></td></tr>
+        <tr class="p" id="utt-3"><td>3</td><td>P</td><td>It's become part of your regular week, and that has caught your attention.</td><td><div class="codes"><span class="code c-qr" data-code="CR">CR</span></div></td><td>'caught your attention' adds meaning</td></tr>
+        <tr class="c" id="utt-4"><td>4</td><td>C</td><td>Yes, a bit.</td><td></td><td></td></tr>
+        <tr class="p" id="utt-5"><td>5</td><td>P</td><td>What made you notice it?</td><td><div class="codes"><span class="code c-qr" data-code="Q">Q</span></div></td><td>Open question that asks for the client's reasons</td></tr>
+        <tr class="c" id="utt-6"><td>6</td><td>C</td><td>My sister joked about how many bottles are in the recycling, and a coworker asked if I was okay after a team dinner. It stung a bit.</td><td></td><td></td></tr>
+        <tr class="p" id="utt-7"><td>7</td><td>P</td><td>Those comments landed, and they made you stop and look.</td><td><div class="codes"><span class="code c-qr" data-code="CR">CR</span></div></td><td>'landed' adds meaning about how the comments felt</td></tr>
+        <tr class="c" id="utt-8"><td>8</td><td>C</td><td>Sort of. I wouldn't say I'm worried though. They're probably exaggerating.</td><td></td><td></td></tr>
+        <tr class="p" id="utt-9"><td>9</td><td>P</td><td>Other people sound alarmed, but to you it's not that serious.</td><td><div class="codes"><span class="code c-qr" data-code="CR">CR</span></div></td><td>Adds the contrast between others' alarm and the client's view</td></tr>
+        <tr class="c" id="utt-10"><td>10</td><td>C</td><td>Right. I still do my job and I'm not missing school pickups or anything.</td><td></td><td></td></tr>
+        <tr class="p" id="utt-11"><td>11</td><td>P</td><td>What do you think they're seeing?</td><td><div class="codes"><span class="code c-qr" data-code="Q">Q</span></div></td><td>Open question about what others notice</td></tr>
+        <tr class="c" id="utt-12"><td>12</td><td>C</td><td>That I pour bigger glasses than I used to, and I start earlier in the evening.</td><td></td><td></td></tr>
+        <tr class="p" id="utt-13"><td>13</td><td>P</td><td>So the amount and the timing have both shifted.</td><td><div class="codes"><span class="code c-qr" data-code="SR">SR</span></div></td><td>Restates the client's words with little added</td></tr>
+        <tr class="c" id="utt-14"><td>14</td><td>C</td><td>Yeah.</td><td></td><td></td></tr>
+        <tr class="p" id="utt-15"><td>15</td><td>P</td><td>How does that sit with you?</td><td><div class="codes"><span class="code c-qr" data-code="Q">Q</span></div></td><td>Open question about the client's own reaction</td></tr>
+        <tr class="c" id="utt-16"><td>16</td><td>C</td><td>Mixed. Mornings are rough lately. I'm foggy until about ten and I snapped at my kid last week.</td><td></td><td></td></tr>
+        <tr class="p" id="utt-17"><td>17</td><td>P</td><td>The foggy mornings bother you, though you wouldn't call it a crisis.</td><td><div class="codes"><span class="code c-qr" data-code="CR">CR</span></div></td><td>'bother you' adds a feeling the client did not state</td></tr>
+        <tr class="c" id="utt-18"><td>18</td><td>C</td><td>No, not a crisis. But I hated that I snapped at my kid. That's not me.</td><td></td><td></td></tr>
+        <tr class="p" id="utt-19"><td>19</td><td>P</td><td>You snapped at your child.</td><td><div class="codes"><span class="code c-qr" data-code="SR">SR</span></div></td><td>Repeats what the client said and adds nothing</td></tr>
+        <tr class="c" id="utt-20"><td>20</td><td>C</td><td>Yeah. Anyway, I do like my wine. It's how I unwind after work, and work has been stressful.</td><td></td><td></td></tr>
+        <tr class="p" id="utt-21"><td>21</td><td>P</td><td>Drinking is how you unwind, and the stress at work has been pushing it up.</td><td><div class="codes"><span class="code c-qr" data-code="CR">CR</span></div></td><td>Links drinking to unwinding and work stress</td></tr>
+        <tr class="c" id="utt-22"><td>22</td><td>C</td><td>That's exactly it. I don't want to give it up. Maybe I just need to cut down to what I used to do.</td><td></td><td></td></tr>
+        <tr class="p" id="utt-23"><td>23</td><td>P</td><td>Cutting down is what you have in mind.</td><td><div class="codes"><span class="code c-qr" data-code="SR">SR</span></div></td><td>Repeats the client's plan</td></tr>
+        <tr class="c" id="utt-24"><td>24</td><td>C</td><td>Mm-hm.</td><td></td><td></td></tr>
+        <tr class="p" id="utt-25"><td>25</td><td>P</td><td>That tends not to last. Most people slide back to where they started.</td><td><div class="codes"><span class="code c-mina" data-code="Confront">Confront</span></div></td><td>Disagrees with the client's idea and discourages it</td></tr>
+        <tr class="c" id="utt-26"><td>26</td><td>C</td><td>What do you mean? I managed it before.</td><td></td><td></td></tr>
+        <tr class="p" id="utt-27"><td>27</td><td>P</td><td>Since you ask, many people who try cutting back drift to their old amounts within a few months, so stopping tends to hold up better.</td><td><div class="codes"><span class="code c-info" data-code="PwP">PwP</span></div></td><td>Persuade with permission because client asked what was meant</td></tr>
+        <tr class="c" id="utt-28"><td>28</td><td>C</td><td>So you're saying quitting is the only option?</td><td></td><td></td></tr>
+        <tr class="p" id="utt-29"><td>29</td><td>P</td><td>It's your call and nobody else can make it, but stopping has the better track record.</td><td><div class="codes"><span class="code c-mia" data-code="EA">EA</span><span class="code c-info" data-code="PwP">PwP</span></div></td><td>EA: 'your call'. Persuade with permission because client asked</td></tr>
+        <tr class="c" id="utt-30"><td>30</td><td>C</td><td>I don't agree. I was fine at that level, so why can't I go back to it?</td><td></td><td></td></tr>
+        <tr class="p" id="utt-31"><td>31</td><td>P</td><td>Because it crept up once, so it can again. You should really think about quitting for good.</td><td><div class="codes"><span class="code c-info" data-code="Persuade">Persuade</span></div></td><td>Argues for quitting without the client asking</td></tr>
+        <tr class="c" id="utt-32"><td>32</td><td>C</td><td>That feels like you're telling me what to do.</td><td></td><td></td></tr>
+        <tr class="p" id="utt-33"><td>33</td><td>P</td><td>Fair enough. It's your decision, not mine. If you did go with cutting down, what would that look like for you?</td><td><div class="codes"><span class="code c-mia" data-code="EA">EA</span><span class="code c-qr" data-code="Q">Q</span></div></td><td>EA: 'your decision'. Q asks for the client's own plan</td></tr>
+        <tr class="c" id="utt-34"><td>34</td><td>C</td><td>Maybe I could set a limit, like two glasses and nothing on weeknights. And write it down, since I didn't notice how much it grew.</td><td></td><td></td></tr>
+        <tr class="p" id="utt-35"><td>35</td><td>P</td><td>Tracking it is a clever step, since you spotted it grew without you noticing. How would you keep track?</td><td><div class="codes"><span class="code c-mia" data-code="AF">AF</span><span class="code c-qr" data-code="Q">Q</span></div></td><td>AF: names a strength in the client's idea. Q asks how</td></tr>
+        <tr class="c" id="utt-36"><td>36</td><td>C</td><td>A note on my phone, I guess. A tally each night.</td><td></td><td></td></tr>
+        <tr class="p" id="utt-37"><td>37</td><td>P</td><td>I have a few ideas other people have found useful. Would you like to hear them?</td><td><div class="codes"><span class="code c-mia" data-code="Seek">Seek</span></div></td><td>Asks permission before sharing ideas</td></tr>
+        <tr class="c" id="utt-38"><td>38</td><td>C</td><td>Sure.</td><td></td><td></td></tr>
+        <tr class="p" id="utt-39"><td>39</td><td>P</td><td>Some people add a stress rating next to each tally, which shows what triggers drinking. Others pick a drink-free night and note how they feel. Would either suit you?</td><td><div class="codes"><span class="code c-info" data-code="GI">GI</span><span class="code c-qr" data-code="Q">Q</span></div></td><td>GI: neutral options with no push. Q checks interest</td></tr>
+        <tr class="c" id="utt-40"><td>40</td><td>C</td><td>The stress rating, definitely. That's the part I keep coming back to. I'd rather deal with it now than end up having to quit completely.</td><td></td><td></td></tr>
+        <tr class="p" id="utt-41"><td>41</td><td>P</td><td>You'd rather act early, while you still have choices, than be forced into a bigger change later.</td><td><div class="codes"><span class="code c-qr" data-code="CR">CR</span></div></td><td>Adds meaning: acting early keeps choices open</td></tr>
+        <tr class="c" id="utt-42"><td>42</td><td>C</td><td>Right. And I could still have a glass at dinner.</td><td></td><td></td></tr>
+        <tr class="p" id="utt-43"><td>43</td><td>P</td><td>You'd still enjoy it, just in smaller amounts.</td><td><div class="codes"><span class="code c-qr" data-code="SR">SR</span></div></td><td>Restates the client's wish</td></tr>
+        <tr class="c" id="utt-44"><td>44</td><td>C</td><td>Yeah. I'm starting to see it's maybe more than I thought.</td><td></td><td></td></tr>
+        <tr class="p" id="utt-45"><td>45</td><td>P</td><td>You're noticing it more now, and it matters to you.</td><td><div class="codes"><span class="code c-qr" data-code="CR">CR</span></div></td><td>'it matters to you' adds meaning</td></tr>
+        <tr class="c" id="utt-46"><td>46</td><td>C</td><td>It does. I'm just worried that stress will make me slip.</td><td></td><td></td></tr>
+        <tr class="p" id="utt-47"><td>47</td><td>P</td><td>Stress is the part you're unsure how to handle.</td><td><div class="codes"><span class="code c-qr" data-code="SR">SR</span></div></td><td>Rephrases the client's worry</td></tr>
+        <tr class="c" id="utt-48"><td>48</td><td>C</td><td>Yes.</td><td></td><td></td></tr>
+        <tr class="p" id="utt-49"><td>49</td><td>P</td><td>It's great that you spotted stress as a trigger. If you're open to it, we can plan for that next time.</td><td><div class="codes"><span class="code c-mia" data-code="AF">AF</span><span class="code c-mia" data-code="Seek">Seek</span></div></td><td>AF: praises noticing the trigger. Seek asks to plan together</td></tr>
+        <tr class="c" id="utt-50"><td>50</td><td>C</td><td>Okay. For now I just track my drinks and my stress?</td><td></td><td></td></tr>
+        <tr class="p" id="utt-51"><td>51</td><td>P</td><td>Yes, try the tally and the stress rating for a week and see what shows up. I'll give you a sheet to use.</td><td><div class="codes"><span class="code c-info" data-code="PwP">PwP</span></div></td><td>Persuade with permission because client asked what to do</td></tr>
+        <tr class="c" id="utt-52"><td>52</td><td>C</td><td>Okay.</td><td></td><td></td></tr>
+        <tr class="p" id="utt-53"><td>53</td><td>P</td><td>Great. Thanks for coming in today.</td><td><div class="codes"><span class="code" style="background:var(--surface);color:var(--muted);border:1px solid var(--line)" data-code="Not coded">Not coded</span></div></td><td>Closing pleasantry</td></tr>
+        <tr class="c" id="utt-54"><td>54</td><td>C</td><td>Thanks.</td><td></td><td></td></tr>
+      </tbody>
+    </table>
+  </div>
+    <p class="pc-note">Totals from this table: GI 1, Persuade 1, PwP 3, Q 7, SR 5, CR 7, AF 2, Seek 2, EA 2, Confront 1.</p>
+  </div>
+</dialog>
+<script>
+(function () {
+  var dlg = document.getElementById('transcript-dialog');
+  var body = dlg.querySelector('.dlg-body');
+  var opener = null, timer = null;
+  var reduce = function () { return window.matchMedia('(prefers-reduced-motion: reduce)').matches; };
+  function open(from) {
+    opener = from || document.activeElement;
+    if (!dlg.open) { dlg.showModal(); document.documentElement.classList.add('dlg-open'); }
+  }
+  function goTo(n) {
+    var row = document.getElementById('utt-' + n);
+    if (!row) return;
+    row.scrollIntoView({ block: 'center', behavior: reduce() ? 'auto' : 'smooth' });
+    clearTimeout(timer);
+    document.querySelectorAll('.tr tr.hl').forEach(function (r) { r.classList.remove('hl'); });
+    void row.offsetWidth;
+    row.classList.add('hl');
+    timer = setTimeout(function () { row.classList.remove('hl'); }, 1500);
+  }
+  document.getElementById('open-transcript').addEventListener('click', function (e) {
+    open(e.currentTarget); body.scrollTop = 0;
+  });
+  document.addEventListener('click', function (e) {
+    var b = e.target.closest && e.target.closest('.uref');
+    if (!b) return;
+    open(b);
+    requestAnimationFrame(function () { goTo(b.getAttribute('data-utt')); });
+  });
+  document.getElementById('dlg-close').addEventListener('click', function () { dlg.close(); });
+  dlg.addEventListener('click', function (e) { if (e.target === dlg) dlg.close(); });
+  dlg.addEventListener('close', function () {
+    document.documentElement.classList.remove('dlg-open');
+    if (opener && opener.focus) opener.focus();
+    opener = null;
+  });
+})();
+</script>

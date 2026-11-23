@@ -1,6 +1,6 @@
 ---
 stage: brainstorm
-status: approved-pending-owner-signoff
+status: approved
 summary: Compact footer, three-button nav, New Session chooser and Sessions list split, and a MITI-style (CASAA coded-transcript) report with a public sample at app.onolys.com/sample
 date: 2026-11-23
 ---
