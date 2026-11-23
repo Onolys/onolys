@@ -159,7 +159,7 @@ describe("session page: status listener", () => {
     act(() => mockEmitter.emitError("s_nope", new Error("permission-denied")));
     const card = await screen.findByRole("alert");
     expect(card).toHaveTextContent(/couldn't find that/i);
-    expect(screen.getByRole("link", { name: /back to your sessions/i })).toHaveAttribute("href", "/");
+    expect(screen.getByRole("link", { name: /back to your sessions/i })).toHaveAttribute("href", "/sessions");
   });
 
   it("an unknown session id ends in the not-found card, not an endless spinner (E21)", async () => {
@@ -661,8 +661,8 @@ describe("session page: delete", () => {
     await ready();
     await user.click(screen.getByRole("button", { name: "Delete session" }));
     await user.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "Delete permanently" }));
-    await screen.findByRole("heading", { level: 1, name: "New Session" });
-    expect(here(router)).toBe("/new");
+    await screen.findByRole("heading", { level: 1, name: "Sessions" });
+    expect(here(router)).toBe("/sessions");
     expect(() => mockBackend.getSession(UID, sid)).toThrow();
     expect(getCalls).toEqual([]);
   });

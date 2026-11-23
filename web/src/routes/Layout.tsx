@@ -5,17 +5,18 @@ import { useSignOut } from "../auth/useSignOut";
 import { AccountMenu } from "./AccountMenu";
 import { Footer } from "./Footer";
 
-const NAV: Record<AuthPhase, { to: string; label: string; className?: string }[]> = {
+const NAV: Record<AuthPhase, { to: string; label: string; className?: string; external?: boolean }[]> = {
   loading: [],
   signedOut: [
-    { to: "/sample-report", label: "Sample report" },
+    { to: "/sample", label: "Sample report", className: "btn btn-secondary nav-sample", external: true },
     { to: "/login", label: "Log in", className: "nav-login" },
     { to: "/signup", label: "Sign up", className: "btn btn-primary nav-signup" },
   ],
   unverified: [], // the verify screen is not a signed-in state: brand only
   verified: [
-    { to: "/", label: "Sessions" },
-    { to: "/sessions/new", label: "New session" },
+    { to: "/sessions", label: "Sessions", className: "btn btn-secondary nav-btn" },
+    { to: "/new", label: "New Session", className: "btn btn-secondary nav-btn" },
+    { to: "/sample", label: "Sample report", className: "btn btn-secondary nav-btn nav-sample", external: true },
   ],
 };
 
@@ -44,11 +45,17 @@ export function Layout() {
           Onolys
         </Link>
         <nav aria-label="Main" className={phase === "signedOut" ? "nav-out" : undefined}>
-          {NAV[phase].map((l) => (
-            <NavLink key={l.to} to={l.to} end={l.to === "/"} className={l.className}>
-              {l.label}
-            </NavLink>
-          ))}
+          {NAV[phase].map((l) =>
+            l.external ? (
+              <Link key={l.to} to={l.to} target="_blank" rel="noopener noreferrer" className={l.className}>
+                {l.label}
+              </Link>
+            ) : (
+              <NavLink key={l.to} to={l.to} end className={l.className}>
+                {l.label}
+              </NavLink>
+            ),
+          )}
         </nav>
         {phase === "verified" && <AccountMenu email={user?.email ?? null} onSignOut={() => void signOut()} />}
       </header>

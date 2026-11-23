@@ -370,12 +370,12 @@ describe("live interview", () => {
 });
 
 describe("discard and leave prompt (AC9)", () => {
-  it("Discard abandons the interview, uploads nothing, creates no session and returns home", async () => {
+  it("Discard abandons the interview, uploads nothing, creates no session and returns to /sessions", async () => {
     const u = userEvent.setup();
     const { router } = renderApp("/interviews/new", { user: USER });
     const iid = await startLive(u, router);
     await u.click(main().getByRole("button", { name: "Discard" }));
-    await waitFor(() => expect(here(router)).toBe("/"));
+    await waitFor(() => expect(here(router)).toBe("/sessions"));
     expect(mockBackend.getInterview(UID, iid).state).toBe("abandoned");
     expect(mockBackend.listSessions(UID, {}).items).toHaveLength(0);
     expect(engines[0]!.stopped).toBe(0);
@@ -434,6 +434,42 @@ describe("leaving ends the interview (D6)", () => {
     expect(main().queryByRole("button", { name: "Start talking" })).toBeNull();
     expect(lastFakeRelay()).toBeUndefined();
     expect(engines).toHaveLength(0);
+  });
+
+  it("Back to your sessions on the ended page goes to /sessions", async () => {
+    const u = userEvent.setup();
+    const first = renderApp("/interviews/new", { user: USER });
+    const iid = await startLive(u, first.router);
+    mockBackend.setInterviewState(iid, "live");
+    cleanup();
+    resetFakeRelay();
+    const { router } = renderApp(`/interviews/${iid}`, { user: USER });
+    await u.click(await main().findByRole("link", { name: "Back to your sessions" }));
+    await waitFor(() => expect(here(router)).toBe("/sessions"));
+  });
+
+  it("Back to your sessions on the load-error card goes to /sessions", async () => {
+    const u = userEvent.setup();
+    const { router } = renderApp("/interviews/iv_nope", { user: USER });
+    await u.click(await main().findByRole("link", { name: "Back to your sessions" }));
+    await waitFor(() => expect(here(router)).toBe("/sessions"));
+  });
+
+  it("Not now on the pre-start page goes to /new", async () => {
+    const u = userEvent.setup();
+    const { router } = renderApp("/interviews/new", { user: USER });
+    await u.click(await main().findByRole("radio", { name: /Reluctant patient/ }));
+    await u.click(main().getByRole("button", { name: "Start interview" }));
+    await waitFor(() => expect(here(router)).toMatch(/^\/interviews\/iv_/));
+    await u.click(await main().findByRole("link", { name: "Not now" }));
+    await waitFor(() => expect(here(router)).toBe("/new"));
+  });
+
+  it("Cancel on the scenario picker goes to /new", async () => {
+    const u = userEvent.setup();
+    const { router } = renderApp("/interviews/new", { user: USER });
+    await u.click(await main().findByRole("link", { name: "Cancel" }));
+    await waitFor(() => expect(here(router)).toBe("/new"));
   });
 
   it("double Start talking makes one engine and one socket", async () => {

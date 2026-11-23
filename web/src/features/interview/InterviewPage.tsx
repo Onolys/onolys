@@ -181,7 +181,7 @@ function InterviewView({ id }: { id: string }) {
       leaving.current = true;
       void queryClient.invalidateQueries({ queryKey: USAGE_KEY });
       if (blocker.state === "blocked") blocker.proceed();
-      else void navigate("/");
+      else void navigate("/sessions");
     },
   });
 
@@ -221,7 +221,7 @@ function InterviewView({ id }: { id: string }) {
       <>
         <h1>Interview</h1>
         <ErrorCard code={e.code} reference={e.requestId}>
-          <Link to="/">Back to your sessions</Link>
+          <Link to="/sessions">Back to your sessions</Link>
         </ErrorCard>
       </>
     );
@@ -235,7 +235,7 @@ function InterviewView({ id }: { id: string }) {
         <p className="notice">{iv.state === "live" || wasStale ? "Interview ended" : "This interview has ended."}</p>
         {iv.state === "live" || wasStale ? <p className="form-note">You left this interview, so it was ended. Start a new one to practise again.</p> : null}
         <p>
-          <Link to="/">Back to your sessions</Link>
+          <Link to="/sessions">Back to your sessions</Link>
         </p>
       </>
     );
@@ -265,7 +265,7 @@ function InterviewView({ id }: { id: string }) {
             <button type="button" className="btn btn-primary" disabled={startingUi} onClick={() => void begin()}>
               Start talking
             </button>{" "}
-            <Link to="/">Not now</Link>
+            <Link to="/new">Not now</Link>
           </p>
         </>
       ) : (

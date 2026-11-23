@@ -17,7 +17,7 @@ export function NotFound() {
     <Page title="Page not found">
       {phase === "verified" && (
         <p>
-          <Link to="/">Back to your sessions</Link>
+          <Link to="/sessions">Back to your sessions</Link>
         </p>
       )}
       {phase === "unverified" && (

@@ -96,7 +96,7 @@ function SessionView({ id }: { id: string }) {
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["sessions"] });
-      void navigate("/");
+      void navigate("/sessions");
     },
   });
 
@@ -111,7 +111,7 @@ function SessionView({ id }: { id: string }) {
       <>
         <h1>Session</h1>
         <ErrorCard code={view.error.code} reference={view.error.requestId}>
-          <Link to="/">Back to your sessions</Link>
+          <Link to="/sessions">Back to your sessions</Link>
         </ErrorCard>
       </>
     );

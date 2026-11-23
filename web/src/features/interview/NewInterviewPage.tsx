@@ -137,7 +137,7 @@ export function NewInterviewPage() {
           <button type="submit" className="btn btn-primary" disabled={!chosen || blocking !== null || start.isPending}>
             {start.isPending ? "Starting…" : "Start interview"}
           </button>{" "}
-          <Link to="/">Cancel</Link>
+          <Link to="/new">Cancel</Link>
         </p>
       </form>
     </>

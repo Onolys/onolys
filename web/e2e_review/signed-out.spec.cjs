@@ -36,9 +36,10 @@ test.describe("signed-out gating", () => {
 
   test("Sample report is public from the signed-out nav", async ({ page }) => {
     await page.goto("/login");
-    await page.locator("header nav a", { hasText: "Sample report" }).click();
-    await expect(page.getByRole("heading", { name: "Sample report" })).toBeVisible();
-    await shot(page, "so-sample-report");
+    const [popup] = await Promise.all([page.waitForEvent("popup"), page.locator("header nav a", { hasText: "Sample report" }).click()]);
+    await expect(popup).toHaveURL(/\/sample$/);
+    await expect(popup.getByRole("heading", { name: "Sample report" })).toBeVisible();
+    await shot(popup, "so-sample");
   });
 
   test("back button after bounce never reveals protected UI; reload keeps next", async ({ page }) => {

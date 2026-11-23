@@ -5,7 +5,7 @@ const { shot, FIX, signUp, spa, hasHScroll, accountMenu } = require("./helpers.c
 const { defaultBrowserType, ...iphone } = devices["iPhone 13"]; // run on chromium (only chromium is installed)
 test.use({ ...iphone, deviceScaleFactor: 1 });
 
-const PUBLIC = ["/login", "/signup", "/sample-report", "/nope", "/auth/action?mode=resetPassword&oobCode=x"];
+const PUBLIC = ["/login", "/signup", "/sample", "/nope", "/auth/action?mode=resetPassword&oobCode=x"];
 
 test.describe("mobile (iPhone 13 viewport)", () => {
   for (const r of PUBLIC) {

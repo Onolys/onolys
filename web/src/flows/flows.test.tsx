@@ -95,7 +95,9 @@ const settle = (sid: string) => act(() => mockBackend.settle(sid));
 
 /** Dashboard -> New session -> choose file -> Start; ends on /sessions/:id. */
 async function uploadViaUi(u: ReturnType<typeof user>, router: Parameters<typeof here>[0], title?: string) {
-  await u.click(nav("New session"));
+  await u.click(nav("New Session"));
+  await h1("New Session");
+  await u.click(within(screen.getByRole("main")).getByRole("link", { name: "New session" }));
   await h1("New session");
   if (title) await u.type(screen.getByLabelText(/title/i), title);
   // default (flag off): the one required setup field; with the rating UI on it lives on the session card instead
@@ -196,7 +198,7 @@ describe("flow (rating on): sign-up, verify, upload, speaker + rating during tra
     service.markVerified(EMAIL);
     await u.click(screen.getByRole("button", { name: "I've verified" }));
     await h1("New Session");
-    await act(() => router.navigate("/sessions"));
+    await u.click(nav("Sessions"));
     await h1("Sessions");
     expect(await screen.findByRole("link", { name: "Start a new session" })).toBeInTheDocument(); // empty state
 
@@ -224,7 +226,7 @@ describe("flow (rating on): sign-up, verify, upload, speaker + rating during tra
     expect(screen.queryByRole("button", { name: /run again|edit my rating|submit/i })).toBeNull();
     const select = screen.getByLabelText("Version");
     expect(within(select).getAllByRole("option")).toHaveLength(1);
-    await act(() => router.navigate("/sessions")); // TODO(Task 4): nav "Sessions" -> /sessions, restore the click
+    await u.click(nav("Sessions"));
     await u.click(await screen.findByRole("link", { name: /Visit 3/ }));
     await h1("Session");
     expect(await screen.findByRole("textbox", { name: "Change goal" })).toBeDisabled();
@@ -312,10 +314,8 @@ describe("flow: delete a session (AC2)", () => {
     expect(here(router)).toBe(`/sessions/${sid}`);
     await u.click(await screen.findByRole("button", { name: "Delete session" }));
     await u.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "Delete permanently" }));
-    await h1("New Session"); // the in-app "/" navigation now lands on /new
-    expect(here(router)).toBe("/new");
-    await act(() => router.navigate("/sessions"));
-    await h1("Sessions");
+    await h1("Sessions"); // delete lands on the sessions list
+    expect(here(router)).toBe("/sessions");
     await screen.findByText(/Onolys codes a recorded session/i); // the empty state (the cards also say "New session")
     expect(screen.queryByRole("link", { name: /Doomed visit/ })).toBeNull();
     expect(() => mockBackend.getSession(UID, sid)).toThrow();
@@ -326,9 +326,8 @@ describe("flow: API key is shown once (AC7)", () => {
   it("secret visible in the modal only; gone after Done and after leaving and coming back; not stored or logged", async () => {
     const u = user();
     const spies = (["log", "info", "warn", "error", "debug"] as const).map((m) => vi.spyOn(console, m).mockImplementation(() => {}));
-    let router!: ReturnType<typeof renderApp>["router"];
     try {
-      ({ router } = renderApp("/sessions", { user: USER }));
+      renderApp("/sessions", { user: USER });
       await h1("Sessions");
       await u.click(screen.getByRole("button", { name: "Account menu" }));
       await u.click(screen.getByRole("menuitem", { name: "Settings" }));
@@ -342,7 +341,7 @@ describe("flow: API key is shown once (AC7)", () => {
       expect(screen.queryByRole("dialog")).toBeNull();
       expect(document.body.textContent).not.toContain(secret);
 
-      await act(() => router.navigate("/sessions")); // TODO(Task 4): nav "Sessions" -> /sessions, restore the click
+      await u.click(nav("Sessions"));
       await h1("Sessions");
       await u.click(screen.getByRole("button", { name: "Account menu" }));
       await u.click(screen.getByRole("menuitem", { name: "Settings" }));
@@ -359,12 +358,15 @@ describe("flow: API key is shown once (AC7)", () => {
 
 describe("flow: sample report works with no network (AC3a)", () => {
   it("login -> Sample report renders the report and transcript, with zero requests", async () => {
-    const u = user();
     const requests: string[] = [];
     server.events.on("request:start", ({ request }) => void requests.push(request.url));
     const { router } = renderApp("/login");
     await h1("Log in");
-    await u.click(nav("Sample report"));
+    // opens in a new tab (target=_blank), so assert the link, then the public route
+    const sample = nav("Sample report");
+    expect(sample).toHaveAttribute("href", "/sample");
+    expect(sample).toHaveAttribute("target", "_blank");
+    await act(() => router.navigate("/sample"));
     await h1("Sample report");
     expect(here(router)).toBe("/sample");
     expect(await screen.findByRole("region", { name: "Scorecard" })).toBeInTheDocument();
