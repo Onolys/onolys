@@ -22,10 +22,16 @@ const navNames = () =>
 const inNav = () => within(screen.getByRole("navigation", { name: "Main" }));
 
 describe("header nav by auth phase (D1)", () => {
-  it("signed out: Log in, Sign up, Sample report", async () => {
+  it("signed out: Sample report, then Log in and Sign up at the far right", async () => {
     renderApp("/login");
     await h1("Log in");
-    expect(navNames()).toEqual(["Log in", "Sign up", "Sample report"]);
+    expect(navNames()).toEqual(["Sample report", "Log in", "Sign up"]);
+    const login = inNav().getByRole("link", { name: "Log in" });
+    const signup = inNav().getByRole("link", { name: "Sign up" });
+    expect(login).toHaveClass("nav-login");
+    expect(signup).toHaveClass("nav-signup");
+    expect(login.nextElementSibling).toBe(signup);
+    expect(signup.nextElementSibling).toBeNull();
     expect(inNav().queryByRole("button", { name: "Sign out" })).not.toBeInTheDocument();
   });
 

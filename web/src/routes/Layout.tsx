@@ -3,12 +3,12 @@ import { Link, NavLink, Outlet, useLocation } from "react-router";
 import { useAuth, type AuthPhase } from "../auth/AuthProvider";
 import { useSignOut } from "../auth/useSignOut";
 
-const NAV: Record<AuthPhase, { to: string; label: string }[]> = {
+const NAV: Record<AuthPhase, { to: string; label: string; className?: string }[]> = {
   loading: [],
   signedOut: [
-    { to: "/login", label: "Log in" },
-    { to: "/signup", label: "Sign up" },
     { to: "/sample-report", label: "Sample report" },
+    { to: "/login", label: "Log in", className: "nav-login" },
+    { to: "/signup", label: "Sign up", className: "nav-signup" },
   ],
   unverified: [{ to: "/verify-email", label: "Verify email" }],
   verified: [
@@ -42,9 +42,9 @@ export function Layout() {
         <Link to="/" className="brand">
           Onolys
         </Link>
-        <nav aria-label="Main">
+        <nav aria-label="Main" className={phase === "signedOut" ? "nav-out" : undefined}>
           {NAV[phase].map((l) => (
-            <NavLink key={l.to} to={l.to} end={l.to === "/"}>
+            <NavLink key={l.to} to={l.to} end={l.to === "/"} className={l.className}>
               {l.label}
             </NavLink>
           ))}
