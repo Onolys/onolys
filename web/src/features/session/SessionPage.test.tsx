@@ -661,8 +661,8 @@ describe("session page: delete", () => {
     await ready();
     await user.click(screen.getByRole("button", { name: "Delete session" }));
     await user.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "Delete permanently" }));
-    await screen.findByRole("heading", { level: 1, name: "Sessions" });
-    expect(here(router)).toBe("/");
+    await screen.findByRole("heading", { level: 1, name: "New Session" });
+    expect(here(router)).toBe("/new");
     expect(() => mockBackend.getSession(UID, sid)).toThrow();
     expect(getCalls).toEqual([]);
   });

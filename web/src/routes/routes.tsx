@@ -1,11 +1,12 @@
-import type { RouteObject } from "react-router";
+import { Navigate, type RouteObject } from "react-router";
 import { AuthAction } from "../auth/pages/AuthAction";
 import { ForgotPassword } from "../auth/pages/ForgotPassword";
 import { Login } from "../auth/pages/Login";
 import { Signup } from "../auth/pages/Signup";
 import { VerifyEmail } from "../auth/pages/VerifyEmail";
 import { PublicOnly, RequireUnverified, RequireVerified } from "../auth/guards";
-import { Dashboard } from "../features/dashboard/Dashboard";
+import { NewSessionChooser } from "../features/dashboard/NewSessionChooser";
+import { SessionsPage } from "../features/dashboard/SessionsPage";
 import { SampleReportPage } from "../features/report/SampleReportPage";
 import { ReportPage } from "../features/report/ReportPage";
 import { InterviewPage } from "../features/interview/InterviewPage";
@@ -26,6 +27,7 @@ export const routes: RouteObject[] = [
       {
         errorElement: <RouteError />,
         children: [
+        { path: "/", element: <Navigate to="/new" replace /> },
         {
           element: <PublicOnly />,
           children: [
@@ -38,7 +40,8 @@ export const routes: RouteObject[] = [
         {
           element: <RequireVerified />,
           children: [
-            { path: "/", element: <Dashboard /> },
+            { path: "/new", element: <NewSessionChooser /> },
+            { path: "/sessions", element: <SessionsPage /> },
             { path: "/sessions/new", element: <NewSessionPage /> },
             { path: "/interviews/new", element: <NewInterviewPage /> },
             { path: "/interviews/:id", element: <InterviewPage /> },
@@ -51,7 +54,8 @@ export const routes: RouteObject[] = [
         { path: "/auth/action", element: <AuthAction /> },
         { path: "/privacy", element: <PrivacyPolicy /> },
         { path: "/terms", element: <Terms /> },
-        { path: "/sample-report", element: <SampleReportPage /> },
+        { path: "/sample", element: <SampleReportPage /> },
+        { path: "/sample-report", element: <Navigate to="/sample" replace /> },
         { path: "*", element: <P.NotFound /> },
         ],
       },

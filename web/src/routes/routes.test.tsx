@@ -5,8 +5,9 @@ import { renderApp } from "../test/renderApp";
 const VERIFIED = { email: "a@clinic.org", verified: true };
 
 const table: Array<[string, string]> = [
-  ["/sample-report", "Sample report"],
-  ["/", "Sessions"],
+  ["/sample", "Sample report"],
+  ["/new", "New Session"],
+  ["/sessions", "Sessions"],
   ["/sessions/new", "New session"],
   ["/sessions/abc123", "Session"],
   ["/sessions/abc123/reports/2", "Report"],
@@ -46,12 +47,18 @@ describe("route table", () => {
   });
 
   it("has banner, nav, main and contentinfo landmarks", async () => {
-    renderApp("/", { user: VERIFIED });
+    renderApp("/sessions", { user: VERIFIED });
     await screen.findByRole("heading", { level: 1, name: "Sessions" });
     expect(screen.getByRole("banner")).toBeInTheDocument();
     expect(screen.getByRole("navigation")).toBeInTheDocument();
     expect(screen.getByRole("main")).toBeInTheDocument();
     expect(screen.getByRole("contentinfo")).toBeInTheDocument();
+  });
+
+  it("/ redirects a verified user to /new", async () => {
+    const { router } = renderApp("/", { user: VERIFIED });
+    expect(await screen.findByRole("heading", { level: 1, name: "New Session" })).toBeInTheDocument();
+    expect(router.state.location.pathname).toBe("/new");
   });
 
   it("shows a not-found page for unknown paths", async () => {

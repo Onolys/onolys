@@ -148,7 +148,7 @@ describe("landing cards", () => {
         }),
       ),
     );
-    renderApp("/", { user: USER });
+    renderApp("/sessions", { user: USER });
     const row = (await main().findByRole("link", { name: "Practice" })).closest("li") as HTMLElement;
     expect(within(row).getByText("AI interview")).toBeInTheDocument();
     expect(within((main().getByRole("link", { name: "Recorded" })).closest("li") as HTMLElement).queryByText("AI interview")).toBeNull();

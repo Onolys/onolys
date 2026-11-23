@@ -7,8 +7,8 @@ import type { UploadJob } from "../features/upload/uploader";
 import { here, renderApp } from "../test/renderApp";
 
 const crash = vi.hoisted(() => ({ on: false }));
-vi.mock("../features/dashboard/Dashboard", () => ({
-  Dashboard: () => {
+vi.mock("../features/dashboard/SessionsPage", () => ({
+  SessionsPage: () => {
     if (crash.on) throw new Error("boom");
     return <h1>Sessions</h1>;
   },
@@ -46,7 +46,7 @@ describe("header nav by auth phase (D1)", () => {
   });
 
   it("verified: Sessions, New session in the nav; email and Sign out live in the account menu", async () => {
-    renderApp("/", { user: { email: "a@clinic.org", verified: true } });
+    renderApp("/sessions", { user: { email: "a@clinic.org", verified: true } });
     await h1("Sessions");
     expect(navNames()).toEqual(["Sessions", "New session"]);
     expect(inNav().queryByText("a@clinic.org")).not.toBeInTheDocument();
@@ -55,7 +55,7 @@ describe("header nav by auth phase (D1)", () => {
   });
 
   it("account menu: opens with email, Settings and Sign out; closes on Escape, outside click and selection", async () => {
-    renderApp("/", { user: { email: "a@clinic.org", verified: true } });
+    renderApp("/sessions", { user: { email: "a@clinic.org", verified: true } });
     await h1("Sessions");
     const btn = screen.getByRole("button", { name: "Account menu" });
     expect(btn).toHaveAttribute("aria-haspopup", "menu");
@@ -78,7 +78,7 @@ describe("header nav by auth phase (D1)", () => {
   });
 
   it("account menu keyboard: open focuses first item; arrows, Home/End cycle; Escape returns focus; Tab closes", async () => {
-    renderApp("/", { user: { email: "a@clinic.org", verified: true } });
+    renderApp("/sessions", { user: { email: "a@clinic.org", verified: true } });
     await h1("Sessions");
     const btn = screen.getByRole("button", { name: "Account menu" });
     await userEvent.click(btn);
@@ -105,7 +105,7 @@ describe("header nav by auth phase (D1)", () => {
   });
 
   it("account menu: Settings navigates and closes", async () => {
-    const { router } = renderApp("/", { user: { email: "a@clinic.org", verified: true } });
+    const { router } = renderApp("/sessions", { user: { email: "a@clinic.org", verified: true } });
     await h1("Sessions");
     await userEvent.click(screen.getByRole("button", { name: "Account menu" }));
     await userEvent.click(screen.getByRole("menuitem", { name: "Settings" }));
@@ -117,7 +117,7 @@ describe("header nav by auth phase (D1)", () => {
   it("account menu: Sign out calls the service sign-out and lands on /login", async () => {
     const service = createFakeAuthService();
     const spy = vi.spyOn(service, "signOut");
-    const { router } = renderApp("/", { service, user: { email: "a@clinic.org", verified: true } });
+    const { router } = renderApp("/sessions", { service, user: { email: "a@clinic.org", verified: true } });
     await h1("Sessions");
     await userEvent.click(screen.getByRole("button", { name: "Account menu" }));
     await userEvent.click(screen.getByRole("menuitem", { name: "Sign out" }));
@@ -209,7 +209,7 @@ describe("root error element", () => {
   it("a render crash keeps the header and a way back", async () => {
     const err = vi.spyOn(console, "error").mockImplementation(() => {});
     crash.on = true;
-    renderApp("/", { user: { email: "a@clinic.org", verified: true } });
+    renderApp("/sessions", { user: { email: "a@clinic.org", verified: true } });
     await h1("Something went wrong");
     expect(screen.getByRole("link", { name: "Onolys" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Back to the start" })).toBeInTheDocument();

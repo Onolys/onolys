@@ -137,7 +137,7 @@ describe("flow: one submit, no rating card (default)", () => {
     await h1("Verify your email");
     service.markVerified(EMAIL);
     await u.click(screen.getByRole("button", { name: "I've verified" }));
-    await h1("Sessions");
+    await h1("New Session");
 
     const sid = await uploadViaUi(u, router, "Visit 3");
     expect(screen.queryByLabelText("Cultivating Change Talk score")).toBeNull();
@@ -162,7 +162,7 @@ describe("flow: one submit, no rating card (default)", () => {
 
   it("system failure, then Try again re-runs", async () => {
     const u = user();
-    const { router } = renderApp("/", { user: USER });
+    const { router } = renderApp("/sessions", { user: USER });
     await h1("Sessions");
     const sid = await uploadViaUi(u, router, "fail-code");
     await confirmSpeakerViaUi(u, sid);
@@ -195,8 +195,10 @@ describe("flow (rating on): sign-up, verify, upload, speaker + rating during tra
     expect(await screen.findByRole("status")).toHaveTextContent("haven't seen your verification");
     service.markVerified(EMAIL);
     await u.click(screen.getByRole("button", { name: "I've verified" }));
+    await h1("New Session");
+    await act(() => router.navigate("/sessions"));
     await h1("Sessions");
-    expect(screen.getByRole("link", { name: "Start a new session" })).toBeInTheDocument(); // empty state
+    expect(await screen.findByRole("link", { name: "Start a new session" })).toBeInTheDocument(); // empty state
 
     const sid = await uploadViaUi(u, router, "Visit 3");
     expect(screen.getByRole("status")).not.toHaveTextContent(/start the rating|limit/i);
@@ -222,7 +224,7 @@ describe("flow (rating on): sign-up, verify, upload, speaker + rating during tra
     expect(screen.queryByRole("button", { name: /run again|edit my rating|submit/i })).toBeNull();
     const select = screen.getByLabelText("Version");
     expect(within(select).getAllByRole("option")).toHaveLength(1);
-    await u.click(nav("Sessions"));
+    await act(() => router.navigate("/sessions")); // TODO(Task 4): nav "Sessions" -> /sessions, restore the click
     await u.click(await screen.findByRole("link", { name: /Visit 3/ }));
     await h1("Session");
     expect(await screen.findByRole("textbox", { name: "Change goal" })).toBeDisabled();
@@ -236,7 +238,7 @@ describe("flow (rating on): no-rating run is final too (AC3)", () => {
   withRatingOn();
   it("shows an Onolys-only report and offers no way to add a rating or run again", async () => {
     const u = user();
-    const { router } = renderApp("/", { user: USER });
+    const { router } = renderApp("/sessions", { user: USER });
     await h1("Sessions");
     const sid = await uploadViaUi(u, router);
     await confirmSpeakerViaUi(u, sid);
@@ -260,7 +262,7 @@ describe("flow (rating on): system failure, then Try again (AC6a)", () => {
   withRatingOn();
   it("shows the failure card with a reference id, Try again re-runs the same rating", async () => {
     const u = user();
-    const { router } = renderApp("/", { user: USER });
+    const { router } = renderApp("/sessions", { user: USER });
     await h1("Sessions");
     const sid = await uploadViaUi(u, router, "fail-code");
     await confirmSpeakerViaUi(u, sid);
@@ -283,7 +285,7 @@ describe("flow (rating on): daily cap reached at auto-start, then Start (AC6a)",
   withRatingOn();
   it("says so with the reset time; Start runs once allowed", async () => {
     const u = user();
-    const { router } = renderApp("/", { user: USER });
+    const { router } = renderApp("/sessions", { user: USER });
     await h1("Sessions");
     const sid = await uploadViaUi(u, router, "cap-held");
     await rateViaUi(u);
@@ -304,14 +306,16 @@ describe("flow: delete a session (AC2)", () => {
   it("dashboard -> session -> confirm delete -> dashboard without it", async () => {
     const u = user();
     const sid = mockBackend.createSession(UID, { title: "Doomed visit" }).session.id;
-    const { router } = renderApp("/", { user: USER });
+    const { router } = renderApp("/sessions", { user: USER });
     await u.click(await screen.findByRole("link", { name: /Doomed visit/ }));
     await h1("Session");
     expect(here(router)).toBe(`/sessions/${sid}`);
     await u.click(await screen.findByRole("button", { name: "Delete session" }));
     await u.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "Delete permanently" }));
+    await h1("New Session"); // the in-app "/" navigation now lands on /new
+    expect(here(router)).toBe("/new");
+    await act(() => router.navigate("/sessions"));
     await h1("Sessions");
-    expect(here(router)).toBe("/");
     await screen.findByText(/Onolys codes a recorded session/i); // the empty state (the cards also say "New session")
     expect(screen.queryByRole("link", { name: /Doomed visit/ })).toBeNull();
     expect(() => mockBackend.getSession(UID, sid)).toThrow();
@@ -322,8 +326,9 @@ describe("flow: API key is shown once (AC7)", () => {
   it("secret visible in the modal only; gone after Done and after leaving and coming back; not stored or logged", async () => {
     const u = user();
     const spies = (["log", "info", "warn", "error", "debug"] as const).map((m) => vi.spyOn(console, m).mockImplementation(() => {}));
+    let router!: ReturnType<typeof renderApp>["router"];
     try {
-      renderApp("/", { user: USER });
+      ({ router } = renderApp("/sessions", { user: USER }));
       await h1("Sessions");
       await u.click(screen.getByRole("button", { name: "Account menu" }));
       await u.click(screen.getByRole("menuitem", { name: "Settings" }));
@@ -337,7 +342,7 @@ describe("flow: API key is shown once (AC7)", () => {
       expect(screen.queryByRole("dialog")).toBeNull();
       expect(document.body.textContent).not.toContain(secret);
 
-      await u.click(nav("Sessions"));
+      await act(() => router.navigate("/sessions")); // TODO(Task 4): nav "Sessions" -> /sessions, restore the click
       await h1("Sessions");
       await u.click(screen.getByRole("button", { name: "Account menu" }));
       await u.click(screen.getByRole("menuitem", { name: "Settings" }));
@@ -361,7 +366,7 @@ describe("flow: sample report works with no network (AC3a)", () => {
     await h1("Log in");
     await u.click(nav("Sample report"));
     await h1("Sample report");
-    expect(here(router)).toBe("/sample-report");
+    expect(here(router)).toBe("/sample");
     expect(await screen.findByRole("region", { name: "Scorecard" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /run again/i })).toBeNull();
     expect(requests).toEqual([]);

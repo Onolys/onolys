@@ -46,7 +46,7 @@ describe("privacy accuracy", () => {
 
 describe("footer", () => {
   it.each([[undefined], [{ email: "a@clinic.org", verified: true }]])("shows legal links and copyright (%o)", async (user) => {
-    renderApp("/sample-report", user ? { user } : {});
+    renderApp("/sample", user ? { user } : {});
     await screen.findByRole("heading", { level: 1, name: "Sample report" });
     const footer = screen.getByRole("contentinfo");
     expect(within(footer).getByRole("link", { name: "Privacy" })).toHaveAttribute("href", "/privacy");
