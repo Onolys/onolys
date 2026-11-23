@@ -366,7 +366,7 @@ describe("flow: sample report works with no network (AC3a)", () => {
     const { router } = renderApp("/login");
     await h1("Log in");
     // opens in a new tab (target=_blank), so assert the link, then the public route
-    const sample = nav("Sample report");
+    const sample = within(screen.getByRole("contentinfo")).getByRole("link", { name: "Sample report" });
     expect(sample).toHaveAttribute("href", "/sample");
     expect(sample).toHaveAttribute("target", "_blank");
     await act(() => router.navigate("/sample"));

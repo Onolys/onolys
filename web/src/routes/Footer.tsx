@@ -4,11 +4,11 @@ import { CONTACT_EMAIL } from "../config";
 
 const NOTICES = ["Not official MITI coding", "Use it to practice and prepare", "Role-play or de-identified transcripts only"];
 
-/** Compact two-row footer: three notices, then Privacy / Terms / Contact / copyright. */
+/** Compact two-row footer: three notices, then Privacy / Terms / Contact / Sample report, then copyright. */
 export function Footer() {
   return (
     <UiFooter
-      className="[&_a]:underline flex flex-wrap items-center justify-center gap-x-4 gap-y-0 space-y-0 px-gutter py-3 text-center text-xs [&>div]:text-xs"
+      className="relative [&_a]:min-w-0! [&_a]:underline flex flex-wrap items-center justify-center gap-x-4 gap-y-0 space-y-0 px-gutter py-3 text-center text-xs [&>div]:text-xs [&>nav]:w-full [&>nav]:justify-center [&>nav]:gap-x-5 [&>div:last-child]:w-full"
       notices={
         <ul className="m-0 flex w-full list-none flex-wrap justify-center gap-x-2 p-0">
           {NOTICES.map((n) => (
@@ -23,6 +23,9 @@ export function Footer() {
           <Link to="/privacy">Privacy</Link>
           <Link to="/terms">Terms</Link>
           <a href={`mailto:${CONTACT_EMAIL}`}>Contact</a>
+          <Link to="/sample" target="_blank" rel="noopener noreferrer">
+            Sample report
+          </Link>
         </>
       }
       copyright={<>© {new Date().getFullYear()} Onolys</>}

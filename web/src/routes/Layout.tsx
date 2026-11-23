@@ -1,35 +1,23 @@
 import { useEffect, useRef, type ReactNode } from "react";
 import { Link, NavLink, Outlet, useLocation } from "react-router";
-import { AppHeader, Button, SkipLink, cn } from "@onolys/ui";
+import { AppHeader, SkipLink } from "@onolys/ui";
 import { useAuth } from "../auth/AuthProvider";
 import { useSignOut } from "../auth/useSignOut";
 import { AccountMenu } from "./AccountMenu";
 import { Footer } from "./Footer";
 
-type Variant = "default" | "outline" | "ghost";
-
-/** Sample report always opens in a new tab (safe form), whatever the phase. */
-function SampleLink({ className }: { className?: string }) {
+/** Plain text nav link (not a button): muted, subtle hover, current page = primary colour + underline. AppHeader's nav supplies the even gap. */
+function NavItem({ to, children }: { to: string; children: ReactNode }) {
   return (
-    <Button asChild variant="outline" size="sm" className={cn("no-underline", className)}>
-      <Link to="/sample" target="_blank" rel="noopener noreferrer">
-        Sample report
-      </Link>
-    </Button>
+    <NavLink
+      to={to}
+      end
+      className="text-sm font-medium text-muted-foreground no-underline hover:text-foreground aria-[current=page]:text-primary aria-[current=page]:underline aria-[current=page]:decoration-2 aria-[current=page]:underline-offset-8"
+    >
+      {children}
+    </NavLink>
   );
 }
-
-function NavButton({ to, variant, className, children }: { to: string; variant: Variant; className?: string; children: ReactNode }) {
-  return (
-    <Button asChild variant={variant} size="sm" className={cn("no-underline", className)}>
-      <NavLink to={to} end>
-        {children}
-      </NavLink>
-    </Button>
-  );
-}
-
-const CURRENT = "aria-[current=page]:bg-primary aria-[current=page]:text-primary-foreground aria-[current=page]:hover:bg-primary";
 
 export function Layout() {
   const { pathname } = useLocation();
@@ -48,28 +36,17 @@ export function Layout() {
 
   let navigation: ReactNode = null; // loading and unverified: brand only (verify is not a signed-in state)
   if (phase === "signedOut") {
-    // Sample report centered in the free space; Log in + Sign up pushed to the far right.
     navigation = (
       <>
-        <SampleLink className="mx-auto" />
-        <NavButton to="/login" variant="ghost" className="ml-auto">
-          Log in
-        </NavButton>
-        <NavButton to="/signup" variant="default">
-          Sign up
-        </NavButton>
+        <NavItem to="/login">Log in</NavItem>
+        <NavItem to="/signup">Sign up</NavItem>
       </>
     );
   } else if (phase === "verified") {
     navigation = (
       <>
-        <NavButton to="/sessions" variant="outline" className={CURRENT}>
-          Sessions
-        </NavButton>
-        <NavButton to="/new" variant="outline" className={CURRENT}>
-          New Session
-        </NavButton>
-        <SampleLink />
+        <NavItem to="/sessions">Sessions</NavItem>
+        <NavItem to="/new">New Session</NavItem>
       </>
     );
   }
@@ -78,8 +55,8 @@ export function Layout() {
     <div className="flex min-h-screen flex-col">
       <SkipLink />
       <AppHeader
-        // signed-out: let the nav fill the header so Sample can center and Log in/Sign up sit right
-        className={phase === "signedOut" ? "[&>nav]:min-w-0 [&>nav]:flex-1" : undefined}
+        // verified: page nav sits at the true centre of the bar (brand left, account menu right); signed-out nav stays right via the brand's mr-auto
+        className={phase === "verified" ? "relative [&>nav]:absolute [&>nav]:left-1/2 [&>nav]:-translate-x-1/2" : undefined}
         brand={
           <Link to="/" className="font-bold text-primary no-underline">
             Onolys
