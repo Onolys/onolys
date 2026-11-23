@@ -16,7 +16,7 @@ Source of truth: /root/projects/onolys/iaudit/.worktrees/feat/miti-eval/docs/age
 | 5 | EngineRegistry and list_presets | 2, 4 | done |
 | 6 | MitiEngine adoption | 2, 3, 4, 5 | done |
 | 7 | API migration: engines.py, PROD_ENGINE, registry in RealEvaluation | 3, 5, 6 | done |
-| 8 | Dockerfile, CI core job, docs | 7 | in-progress |
+| 8 | Dockerfile, CI core job, docs | 7 | done |
 
 ## Task 1 — Core package scaffold + basics move + import boundary test
 What it is / what it means: Create the new `engines/core` workspace package (`onolys-engine_core`, module `onolys_engine_core`) and move the pieces with no MITI coupling: run context, errors, retry, safe logging. (R1, R2, D1, D7)
