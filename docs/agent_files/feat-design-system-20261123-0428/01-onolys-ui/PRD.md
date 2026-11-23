@@ -1,5 +1,5 @@
 ---
-status: draft
+status: done
 summary: New public repo Onolys/onolys-ui publishing @onolys/ui (tokens light/dark, Tailwind v4 theme, shadcn-owned + Onolys components) as a tag-pinned git dependency, CSP-safe.
 date: 2026-11-23
 ---
@@ -92,7 +92,7 @@ Compat: ship `legacy.css` aliasing old `--color-*` names so SP2/SP3 can migrate 
 | 12 | Orchestrator defaults 2026-11-23 | Storybook 10.6.8 builds on Vite 8.3.8 (Task 2 verified); shadcn 4.23.0 `diff` and `add --diff` work, using new-york, blank Tailwind config, CSS vars, `@theme inline`, `tw-animate-css`, `data-slot`, React 19 ref props (Task 2 verified); `.d.ts` from TS 6.0.x, fixtures under TS 6 + 7; dist on tag commits only, no `prepare`, git+https install smoke on Node 22; woff2 files + consumer `assetsInlineLimit`; `legacy.css` kept until SP2 final cleanup | Owner delegated open items to orchestrator | Recommended defaults; each verified by a named task in TASKS.md |
 
 ## Manual steps
-- Owner: create public GitHub repo `Onolys/onolys-ui`, enable Actions, branch protection on `main`.
+- Completed: public `Onolys/onolys-ui` created and Actions enabled. Owner still enables branch protection on `main`.
 - Owner: approve if CSP ever needs relaxing (not planned).
 
 ## Risks / Open Questions

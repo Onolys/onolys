@@ -1,5 +1,5 @@
 ---
-status: draft
+status: done
 summary: 13 tasks - repo, scaffold + spike, tokens + contrast, styles, shadcn and Onolys components, CSP-safe Radix, Storybook, build/types, CSP smoke + fixtures, CI, v0.1.0 release
 date: 2026-11-23
 ---
@@ -20,7 +20,7 @@ Source of truth: docs/agent_files/feat-design-system-20261123-0428/01-onolys-ui/
 | 10 | Build, exports, types under TS 6 and 7 | 8 | done |
 | 11 | CSP smoke, Vite/Tailwind and Astro fixtures | 9, 10 | done |
 | 12 | CI workflow | 9, 10, 11 | done |
-| 13 | Release workflow, CHANGELOG, tag v0.1.0 | 12 | todo |
+| 13 | Release workflow, CHANGELOG, tag v0.1.0 | 12 | done |
 
 ## Task 1 — Create public repo Onolys/onolys-ui
 What it is / what it means: The package needs its own home before anything else (PRD Manual steps, Decision 6, 7). Owner-only parts (branch protection) are noted, not blocked on.
@@ -88,3 +88,5 @@ Done when: a PR on the repo shows every job green; a deliberately failing contra
 What it is / what it means: The artifact SP2 consumes (Decisions 1, 6, 8, 12, AC 1, 8).
 What changes at a high level: Tag `vX.Y.Z` workflow: CI gate, build, commit `dist/` to a detached tag commit only, GitHub Release notes from `CHANGELOG.md` (Keep a Changelog). Consumer-install smoke on Node 22: `npm install github:Onolys/onolys-ui#<tag>` via git+https, no build run. Cut `v0.1.0`.
 Done when: tag `v0.1.0` exists with committed `dist/` and a GitHub Release; smoke installs into a clean Vite + Tailwind v4 fixture without building and renders styled Button and Dialog; `main` carries no `dist/`.
+
+Release verified: [v0.1.0](https://github.com/Onolys/onolys-ui/releases/tag/v0.1.0), [all eight workflow jobs passed](https://github.com/Onolys/onolys-ui/actions/runs/45127173578). Release commit `e503f2838bd2a860554f7dfcb34615f878a69f12` is a direct child of reviewed source `a055ed382173ce3e80b955b8f98d7ab00b89c692` and adds exactly 11 dist blobs; source/main track no dist. The credential-free GitHub install verified version 0.1.0, eight exports, no consumer build scripts, teal Button, working Dialog and zero CSP violations.

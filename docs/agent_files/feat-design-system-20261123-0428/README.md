@@ -8,8 +8,8 @@ date: 2026-11-23
 ## Sub-projects
 | # | Sub-project | Phase | Depends on | Status | PRD |
 |---|---|---|---|---|---|
-| 01 | onolys-ui | 1 | none | draft | [PRD](01-onolys-ui/PRD.md) |
-| 02 | app-migration | 2 | 01 v0.1.0 tag + merged #52/#54 baseline | draft | [PRD](02-app-migration/PRD.md) |
+| 01 | onolys-ui | 1 | none | complete | [PRD](01-onolys-ui/PRD.md) |
+| 02 | app-migration | 2 | 01 v0.1.0 tag + merged #52/#54 baseline | ready / planned | [PRD](02-app-migration/PRD.md) |
 | 03 | landing | 3 | 01 | not yet designed | - |
 | 04 | admin-eval-frontend | 4 | 01 | not yet designed | - |
 
@@ -58,3 +58,6 @@ SP2 preservation baseline refreshed after rebasing onto main `d88fbc6` (merged #
 - [RESOLVED: orchestrator default 2026-11-23 — cascade layers; Phase 0 screenshots]
 - [RESOLVED: orchestrator default 2026-11-23 — split only if >50% touched; decided in Phase 2]
 - [RESOLVED: orchestrator default 2026-11-23 — MSW only where needed; `worker-src 'self'` in test server config only]
+
+## Delivery evidence
+SP1 is complete: [public v0.1.0 release](https://github.com/Onolys/onolys-ui/releases/tag/v0.1.0), [implementation record](code-2026-11-23-0700.md), and [full review PASS](review-2026-11-23-0653.md). SP2 prerequisites (tag and merged #52) are met; all SP2 tasks remain todo. Owner still enables protection on onolys-ui main.
