@@ -16,7 +16,7 @@ Source of truth: /root/projects/onolys/iaudit/.worktrees/feat/miti-eval/docs/age
 | 5 | MITI config, schema generator, golden fixtures | 4 | done |
 | 6 | API rewiring and `output_invalid` error | 2 | done |
 | 7 | One-shot scoring adapter | 5 | done |
-| 8 | Workspace and CI for oneshot | 5, 6 | in-progress |
+| 8 | Workspace and CI for oneshot | 5, 6 | done |
 
 ## Task 1 — Core: dynamic schema, cost, `apply_coded_span`
 What it is / what it means: Small additions to the core LLM client and helpers so a config-driven JSON schema can be sent and priced. (R3, R5, R10, Decisions 2, 3, 8)
