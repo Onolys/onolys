@@ -23,6 +23,28 @@ def test_core_package_is_registered() -> None:
     assert "core:engines/core:python" in _array("PACKAGES")
 
 
+def test_oneshot_package_is_registered() -> None:
+    assert "oneshot:engines/oneshot:python" in _array("PACKAGES")
+
+
+def test_oneshot_ci_job_is_offline() -> None:
+    workflow = (ROOT / ".github/workflows/ci.yml").read_text()
+    assert "oneshot: ${{ steps.flags.outputs.oneshot }}" in workflow
+    match = re.search(r"^  oneshot:\n(.*?)(?=^  [a-z#]|\Z)", workflow, re.M | re.S)
+    assert match, "Missing isolated oneshot job"
+    job = match.group(1)
+    for required in (
+        "needs.changes.outputs.oneshot == 'true'",
+        'LITELLM_LOCAL_MODEL_COST_MAP: "True"',
+        'MITI_LLM_RECORD: "0"',
+        "uv sync --frozen --package onolys-oneshot",
+        "uv run --no-sync --package onolys-oneshot ruff check engines/oneshot",
+        'uv run --no-sync --package onolys-oneshot pytest engines/oneshot -m "not live"',
+    ):
+        assert required in job, required
+    assert "secrets." not in job
+
+
 def test_eval_package_is_registered() -> None:
     # Without this assertion, the dependency check silently ignores a new package.
     assert "eval:eval/core:python" in _array("PACKAGES")
@@ -53,6 +75,8 @@ def test_deps_map_matches_pyproject_dependencies() -> None:
 
 if __name__ == "__main__":
     test_core_package_is_registered()
+    test_oneshot_package_is_registered()
+    test_oneshot_ci_job_is_offline()
     test_eval_package_is_registered()
     test_deps_map_matches_pyproject_dependencies()
     print("ok   changes.sh DEPS map matches pyproject dependencies")

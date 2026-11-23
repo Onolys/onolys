@@ -18,6 +18,7 @@ jobs:
     timeout-minutes: 15
     outputs:
       core: ${{ steps.flags.outputs.core }}
+      oneshot: ${{ steps.flags.outputs.oneshot }}
       miti: ${{ steps.flags.outputs.miti }}
       eval: ${{ steps.flags.outputs.eval }}
       api: ${{ steps.flags.outputs.api }}
@@ -94,6 +95,27 @@ jobs:
       - run: uv run --no-sync --package onolys-engine-core ruff check engines/core
       - name: Offline core tests (including the AST import boundary)
         run: uv run --no-sync --package onolys-engine-core pytest engines/core -m "not live"
+
+  oneshot:
+    needs: changes
+    if: needs.changes.outputs.oneshot == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      # Bundled model pricing and replayed synthetic replies; no provider credentials.
+      LITELLM_LOCAL_MODEL_COST_MAP: "True"
+      MITI_LLM_RECORD: "0"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+      # Installs only one-shot and core; MITI reference data is read by path from checkout.
+      - run: uv sync --frozen --package onolys-oneshot
+      - run: uv run --no-sync --package onolys-oneshot ruff check engines/oneshot
+      - name: Offline unit tests, recorded goldens and AST import boundary
+        run: uv run --no-sync --package onolys-oneshot pytest engines/oneshot -m "not live"
 
   miti:
     needs: changes
