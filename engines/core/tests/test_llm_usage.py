@@ -1,5 +1,6 @@
 """Billable provider responses survive parsing failures and transport retries."""
 
+import asyncio
 import json
 from types import SimpleNamespace
 
@@ -173,3 +174,31 @@ async def test_final_provider_exception_preserves_only_received_usage(monkeypatc
         metrics, responses=int(received), price=0.01 if received else None, attempts=2, ok=False
     )
     assert metrics.records[0]["error_kind"] == "unavailable"
+
+
+@pytest.mark.parametrize("price", [0.01, None])
+async def test_cancellation_during_retry_retains_only_received_usage(monkeypatch, price):
+    client, req, metrics, calls = setup(
+        monkeypatch, response("PRIVATE malformed response", price=price)
+    )
+    first_call = client._acompletion
+    retry_started = asyncio.Event()
+
+    async def provider(**kwargs):
+        if not calls:
+            return await first_call(**kwargs)
+        calls.append(kwargs)
+        retry_started.set()
+        await asyncio.Future()  # No response or usage has arrived for this attempt.
+
+    client._acompletion = provider
+    task = asyncio.create_task(client.complete_json(req, metrics))
+    await asyncio.wait_for(retry_started.wait(), timeout=1)
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+    assert task.cancelled()
+    assert len(calls) == 2
+    assert_record(metrics, responses=1, price=price, attempts=2, ok=False)
+    assert metrics.records[0]["error_kind"] == "cancelled"
+    assert "PRIVATE" not in json.dumps(metrics.records)

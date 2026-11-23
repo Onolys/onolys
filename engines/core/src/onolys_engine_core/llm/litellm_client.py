@@ -264,6 +264,12 @@ class LiteLLMClient:
             )
             self._record(metrics, req, model, result.usage, result.latency_ms, attempts, True)
             return result
+        except asyncio.CancelledError:
+            self._record(
+                metrics, req, model, usage, (time.monotonic() - started) * 1000,
+                attempts, False, "cancelled",
+            )
+            raise
         except Exception:
             self._record(
                 metrics, req, model, usage, (time.monotonic() - started) * 1000, attempts, False,
