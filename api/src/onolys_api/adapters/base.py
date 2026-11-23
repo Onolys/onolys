@@ -10,7 +10,7 @@ from typing import Any, Protocol
 from onolys_engine_core.context import RunContext
 from onolys_engine_core.errors import OnolysError
 from onolys_engine_core.transcript import Transcript
-from onolys_miti import ProgressCb, Stage, StageStatus
+from onolys_miti.run import ProgressCb, Stage, StageStatus
 from onolys_miti.stt import AudioRef, SttCompletion, SttParams
 from onolys_miti.voice import VoiceParams, VoiceSession
 from pydantic import BaseModel, Field

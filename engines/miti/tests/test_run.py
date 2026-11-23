@@ -415,15 +415,13 @@ def test_public_reexports():
 
     for name in (
         "run_miti",
-        "MitiOutput",
-        "AllRunsFailed",
-        "SttParams",
-        "GoogleChirp3",
+        "MitiEngine",
     ):
         assert hasattr(m, name), name
 
     for name in (
         "RunContext", "ConfigError", "InputError", "OnolysError",
-        "LiteLLMClient", "resolve_preset",
+        "LiteLLMClient", "resolve_preset", "MitiOutput", "AllRunsFailed",
+        "SttParams", "GoogleChirp3",
     ):
         assert not hasattr(m, name), name
