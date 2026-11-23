@@ -690,6 +690,13 @@ describe("validation of upload calls", () => {
     expect(r.upload_url).toContain(r.upload_id);
   });
 
+  it("upload_url is same-origin in a browser (the prod CSP connect-src has no mock host; prod uses storage.googleapis.com)", () => {
+    const { backend } = ctx;
+    const { session } = backend.createSession(U, {});
+    const r = backend.requestAudio(U, session.id, { content_type: "audio/mpeg", size_bytes: 10, filename_ext: "mp3" });
+    expect(new URL(r.upload_url).origin).toBe(location.origin);
+  });
+
   it("422 unsupported_audio for an unknown type and 422 audio_too_large over 300 MB", () => {
     const { backend } = ctx;
     const { session } = backend.createSession(U, {});

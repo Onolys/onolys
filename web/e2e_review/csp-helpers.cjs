@@ -8,11 +8,10 @@ const SHOTS = path.join(__dirname, "test-results", "shots"); // gitignored; uplo
 
 /**
  * Violations that are not design-system regressions and are tracked elsewhere. Keep this list minimal and explained.
- * - uploads.mock.invalid: the MSW mock's signed-upload host; prod uploads go to storage.googleapis.com, which connect-src allows.
  * - media-src blob: precheck.ts probes audio duration via an <audio src=blob:>; default-src 'self' blocks it in prod today
  *   (pre-existing; fix is a firebase.json `media-src 'self' blob:` change, an owner call outside the design-system scope).
  */
-const KNOWN = [/uploads\.mock\.invalid/, /media-src blocked blob/, /Loading media from\s+'blob:/];
+const KNOWN = [/media-src blocked blob/, /Loading media from\s+'blob:/];
 
 /** Record every CSP violation: the DOM `securitypolicyviolation` event (survives navigations via an init script) and CSP console errors. */
 async function watchCsp(page) {

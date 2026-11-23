@@ -319,7 +319,8 @@ describe("session page: upload incomplete (D4)", () => {
     await waitFor(() => expect(resume).toBeEnabled());
     await userEvent.click(resume);
     await waitFor(() => expect(getJob(sid)).toBeDefined());
-    expect(mockBackend.getSession(UID, sid).status).toBe("uploading");
+    // the same-origin mock PUT may already have completed (validating); either way a new upload was registered
+    expect(mockBackend.getSession(UID, sid).status).toMatch(/^(uploading|validating)$/);
   });
 });
 

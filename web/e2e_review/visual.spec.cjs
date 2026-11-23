@@ -18,6 +18,18 @@ async function verified(page, email) {
   await expect(page.getByRole("heading", { name: "New Session", exact: true })).toBeVisible();
 }
 
+/** Upload ten-min.mp3 and land on the session page (mock upload URL is same-origin, so it passes the prod connect-src). */
+async function startSession(page, email, title) {
+  await verified(page, email);
+  await openUpload(page);
+  if (title) await page.getByLabel(/title/i).fill(title);
+  await page.getByLabel("Change goal").fill("Walk more");
+  await page.locator("input[type=file]").setInputFiles(FIX("ten-min.mp3"));
+  await page.getByRole("button", { name: "Start", exact: true }).click();
+  await expect(page).toHaveURL(/\/sessions\/(?!new$)[^/]+$/);
+}
+const gate = (page) => expect(page.getByRole("button", { name: "This is the clinician" }).first()).toBeVisible({ timeout: 45_000 });
+
 const SIGNED_OUT = {
   login: (p) => p.goto("/login"),
   signup: (p) => p.goto("/signup"),
@@ -64,6 +76,19 @@ const SIGNED_IN = {
     await p.getByRole("button", { name: "Start", exact: true }).click();
     await expect(p).toHaveURL(/\/sessions\/(?!new$)[^/]+$/);
     await expect(p.getByRole("button", { name: "Delete session" })).toBeVisible();
+  },
+  "session-speaker-gate": async (p) => { await startSession(p, "i@example.com"); await gate(p); },
+  "session-failed": async (p) => {
+    await startSession(p, "j@example.com", "fail-no_speech"); // mock title trigger: transcription fails with no_speech
+    await expect(p.getByRole("alert").first()).toBeVisible({ timeout: 45_000 });
+  },
+  report: async (p) => {
+    await startSession(p, "k@example.com");
+    await gate(p);
+    await p.getByRole("button", { name: "This is the clinician" }).first().click();
+    await expect(p.getByRole("link", { name: "View report" })).toBeVisible({ timeout: 60_000 });
+    await p.getByRole("link", { name: "View report" }).click();
+    await expect(p.getByRole("heading", { name: "At a glance" })).toBeVisible();
   },
   "session-delete-dialog": async (p) => {
     await SIGNED_IN.session(p);

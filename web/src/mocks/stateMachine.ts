@@ -138,6 +138,11 @@ const BAD_FILE_CODES = new Set([
   "transcription_failed",
 ]);
 
+/** Stand-in for the GCS signed-URL host. Same-origin in a browser so the built mock app passes the prod CSP connect-src (prod uses storage.googleapis.com). */
+function uploadOrigin(): string {
+  return typeof location !== "undefined" && location.origin !== "null" ? location.origin : "https://uploads.mock.invalid";
+}
+
 function bad(status: number, code: string, message: string, details?: S["ErrorDetailModel"][]): never {
   throw new MockHttpError(status, code, message, details);
 }
@@ -472,7 +477,7 @@ export class MockBackend {
     s.progress = 5;
     this.emit(s);
     return {
-      upload_url: `https://uploads.mock.invalid/uploads/${uid}/${sid}/${s.uploadId}`,
+      upload_url: `${uploadOrigin()}/uploads/${uid}/${sid}/${s.uploadId}`,
       upload_id: s.uploadId,
       required_headers: {
         "Content-Type": format.canonical,
