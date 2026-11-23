@@ -19,7 +19,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     ):
         command = commands.add_parser(name, help=description, description=description)
         command.add_argument("dataset", help="Dataset identifier")
-        if name in {"fetch", "convert"}:
+        if name in {"fetch", "convert", "upload"}:
             command.add_argument("--cache", type=Path, help="Cache directory (outside git)")
         if name == "convert":
             command.add_argument("--session", help="Convert only this session")
@@ -28,6 +28,19 @@ def main(argv: Sequence[str] | None = None) -> int:
         if name == "run":
             command.add_argument("session_id", help="Session identifier")
     args = parser.parse_args(argv)
+    if args.command == "upload":
+        from .manifest import load_manifest
+        from .upload import upload_dataset
+
+        if re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", args.dataset) is None:
+            parser.error("Invalid dataset identifier")
+        manifest_path = Path(__file__).resolve().parents[3] / "datasets" / args.dataset / "manifest.yaml"
+        try:
+            count = upload_dataset(load_manifest(manifest_path), args.cache)
+        except (OSError, ValueError) as error:
+            parser.error(str(error))
+        print(f"{args.dataset}: uploaded {count} objects to the private staging bucket")
+        return 0
     if args.command == "convert":
         from .convert import convert_dataset
 
