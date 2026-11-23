@@ -50,7 +50,8 @@ describe("route table", () => {
     renderApp("/sessions", { user: VERIFIED });
     await screen.findByRole("heading", { level: 1, name: "Sessions" });
     expect(screen.getByRole("banner")).toBeInTheDocument();
-    expect(screen.getByRole("navigation")).toBeInTheDocument();
+    expect(screen.getByRole("navigation", { name: "Main" })).toBeInTheDocument();
+    expect(screen.getByRole("navigation", { name: "Footer" })).toBeInTheDocument();
     expect(screen.getByRole("main")).toBeInTheDocument();
     expect(screen.getByRole("contentinfo")).toBeInTheDocument();
   });

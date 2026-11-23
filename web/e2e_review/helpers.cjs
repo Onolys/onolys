@@ -54,6 +54,7 @@ async function spa(page, url) {
 async function accountMenu(page, item) {
   await page.getByRole("button", { name: "Account menu" }).click();
   await page.getByRole("menuitem", { name: item, exact: true }).click();
+  await expect(page.getByRole("menu")).toHaveCount(0); // Radix exit animation: reopening the trigger mid-close re-dismisses it
 }
 async function signOutViaSettings(page) {
   await accountMenu(page, "Settings");

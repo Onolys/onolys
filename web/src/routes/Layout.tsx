@@ -1,24 +1,35 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 import { Link, NavLink, Outlet, useLocation } from "react-router";
-import { useAuth, type AuthPhase } from "../auth/AuthProvider";
+import { AppHeader, Button, SkipLink, cn } from "@onolys/ui";
+import { useAuth } from "../auth/AuthProvider";
 import { useSignOut } from "../auth/useSignOut";
 import { AccountMenu } from "./AccountMenu";
 import { Footer } from "./Footer";
 
-const NAV: Record<AuthPhase, { to: string; label: string; className?: string; external?: boolean }[]> = {
-  loading: [],
-  signedOut: [
-    { to: "/sample", label: "Sample report", className: "btn btn-secondary", external: true },
-    { to: "/login", label: "Log in", className: "nav-login" },
-    { to: "/signup", label: "Sign up", className: "btn btn-primary nav-signup" },
-  ],
-  unverified: [], // the verify screen is not a signed-in state: brand only
-  verified: [
-    { to: "/sessions", label: "Sessions", className: "btn btn-secondary nav-btn" },
-    { to: "/new", label: "New Session", className: "btn btn-secondary nav-btn" },
-    { to: "/sample", label: "Sample report", className: "btn btn-secondary nav-btn", external: true },
-  ],
-};
+type Variant = "default" | "outline" | "ghost";
+
+/** Sample report always opens in a new tab (safe form), whatever the phase. */
+function SampleLink({ className }: { className?: string }) {
+  return (
+    <Button asChild variant="outline" size="sm" className={cn("no-underline", className)}>
+      <Link to="/sample" target="_blank" rel="noopener noreferrer">
+        Sample report
+      </Link>
+    </Button>
+  );
+}
+
+function NavButton({ to, variant, className, children }: { to: string; variant: Variant; className?: string; children: ReactNode }) {
+  return (
+    <Button asChild variant={variant} size="sm" className={cn("no-underline", className)}>
+      <NavLink to={to} end>
+        {children}
+      </NavLink>
+    </Button>
+  );
+}
+
+const CURRENT = "aria-[current=page]:bg-primary aria-[current=page]:text-primary-foreground aria-[current=page]:hover:bg-primary";
 
 export function Layout() {
   const { pathname } = useLocation();
@@ -35,30 +46,48 @@ export function Layout() {
     }
   }, [pathname, status]);
 
+  let navigation: ReactNode = null; // loading and unverified: brand only (verify is not a signed-in state)
+  if (phase === "signedOut") {
+    // Sample report centered in the free space; Log in + Sign up pushed to the far right.
+    navigation = (
+      <>
+        <SampleLink className="mx-auto" />
+        <NavButton to="/login" variant="ghost" className="ml-auto">
+          Log in
+        </NavButton>
+        <NavButton to="/signup" variant="default">
+          Sign up
+        </NavButton>
+      </>
+    );
+  } else if (phase === "verified") {
+    navigation = (
+      <>
+        <NavButton to="/sessions" variant="outline" className={CURRENT}>
+          Sessions
+        </NavButton>
+        <NavButton to="/new" variant="outline" className={CURRENT}>
+          New Session
+        </NavButton>
+        <SampleLink />
+      </>
+    );
+  }
+
   return (
     <div className="app">
-      <a className="skip-link" href="#main">
-        Skip to main content
-      </a>
-      <header className="app-header">
-        <Link to="/" className="brand">
-          Onolys
-        </Link>
-        <nav aria-label="Main" className={phase === "signedOut" ? "nav-out" : undefined}>
-          {NAV[phase].map((l) =>
-            l.external ? (
-              <Link key={l.to} to={l.to} target="_blank" rel="noopener noreferrer" className={l.className}>
-                {l.label}
-              </Link>
-            ) : (
-              <NavLink key={l.to} to={l.to} end className={l.className}>
-                {l.label}
-              </NavLink>
-            ),
-          )}
-        </nav>
-        {phase === "verified" && <AccountMenu email={user?.email ?? null} onSignOut={() => void signOut()} />}
-      </header>
+      <SkipLink />
+      <AppHeader
+        // signed-out: let the nav fill the header so Sample can center and Log in/Sign up sit right
+        className={phase === "signedOut" ? "[&>nav]:min-w-0 [&>nav]:flex-1" : undefined}
+        brand={
+          <Link to="/" className="font-bold no-underline">
+            Onolys
+          </Link>
+        }
+        navigation={navigation}
+        accountMenu={phase === "verified" ? <AccountMenu email={user?.email ?? null} onSignOut={() => void signOut()} /> : undefined}
+      />
       {signOutError && <p role="alert">{signOutError}</p>}
       <main id="main" ref={mainRef}>
         <Outlet />

@@ -53,6 +53,8 @@ test.describe("CSP smoke: zero violations under the prod CSP", () => {
     await page.getByRole("button", { name: "Account menu" }).click();
     await expect(page.getByRole("menuitem", { name: "Settings" })).toBeVisible();
     await page.keyboard.press("Escape");
+    await expect(page.getByRole("menu")).toHaveCount(0); // let the exit animation finish before reopening
+    await expect(page.getByRole("button", { name: "Account menu" })).toBeFocused(); // Escape returns focus
     await accountMenu(page, "Settings");
     await page.getByRole("button", { name: "Create API key" }).click();
     await page.getByRole("button", { name: "Copy" }).click();

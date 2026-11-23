@@ -103,7 +103,7 @@ export function VerifyEmail() {
   }
 
   return (
-    <section className="verify-page">
+    <section className="verify-page" data-page="verify-email">
       <h1>Verify your email</h1>
       <div className="auth-form">
         {form.error && <ErrorSummary error={form.error} search="" />}

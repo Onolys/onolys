@@ -28,8 +28,8 @@ describe("header nav by auth phase (D1)", () => {
     expect(navNames()).toEqual(["Sample report", "Log in", "Sign up"]);
     const login = inNav().getByRole("link", { name: "Log in" });
     const signup = inNav().getByRole("link", { name: "Sign up" });
-    expect(login).toHaveClass("nav-login");
-    expect(signup).toHaveClass("nav-signup", "btn", "btn-primary");
+    expect(login).toHaveAttribute("data-variant", "ghost");
+    expect(signup).toHaveAttribute("data-variant", "default");
     const sample = inNav().getByRole("link", { name: "Sample report" });
     expect(sample).toHaveAttribute("href", "/sample");
     expect(sample).toHaveAttribute("target", "_blank");
@@ -56,14 +56,14 @@ describe("header nav by auth phase (D1)", () => {
     expect(header.getAllByRole("link").map((a) => a.textContent)).toEqual(["Onolys"]);
     expect(header.queryByRole("button")).not.toBeInTheDocument();
     expect(header.queryByText("a@clinic.org")).not.toBeInTheDocument();
-    expect(screen.getByRole("heading", { level: 1 }).closest("section")).toHaveClass("verify-page");
+    expect(screen.getByRole("heading", { level: 1 }).closest("section")).toHaveAttribute("data-page", "verify-email");
   });
 
   it("verified: Sessions, New Session, Sample report buttons; email and Sign out live in the account menu", async () => {
     renderApp("/sessions", { user: { email: "a@clinic.org", verified: true } });
     await h1("Sessions");
     expect(navNames()).toEqual(["Sessions", "New Session", "Sample report"]);
-    for (const n of ["Sessions", "New Session", "Sample report"]) expect(inNav().getByRole("link", { name: n })).toHaveClass("btn", "btn-secondary");
+    for (const n of ["Sessions", "New Session", "Sample report"]) expect(inNav().getByRole("link", { name: n })).toHaveAttribute("data-variant", "outline");
     expect(inNav().getByRole("link", { name: "Sessions" })).toHaveAttribute("href", "/sessions");
     expect(inNav().getByRole("link", { name: "New Session" })).toHaveAttribute("href", "/new");
     const sample = inNav().getByRole("link", { name: "Sample report" });
@@ -153,7 +153,7 @@ describe("header nav by auth phase (D1)", () => {
     service.onAuthStateChanged = () => () => {};
     renderApp("/settings", { service });
     await screen.findByRole("status");
-    expect(navNames()).toEqual([]);
+    expect(screen.queryByRole("navigation", { name: "Main" })).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Onolys" })).toBeInTheDocument();
   });
 
