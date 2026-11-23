@@ -13,11 +13,11 @@ Source of truth: /root/projects/onolys/iaudit/.worktrees/feat/miti-eval/docs/age
 | 2 | Storage layer: bucket, Firestore, prices | 1 | done |
 | 3 | Options and datasets endpoints | 2 | done |
 | 4 | Uploads, speaker pick, transcribe poll-chain | 2 | done |
-| 5 | Run creation, unit execution, finalisation | 3, 4 | in-progress |
-| 6 | Compare, history, rerun, tokens and $ | 5 | todo |
-| 7 | Infra: Terraform for eval and staging apply | 1 | in-progress |
+| 5 | Run creation, unit execution, finalisation | 3, 4 | done |
+| 6 | Compare, history, rerun, tokens and $ | 5 | in-progress |
+| 7 | Infra: Terraform for eval and staging apply | 1 | done |
 | 8 | Web app: shell, auth, New run | 1 | done |
-| 9 | Web app: progress, compare, history | 6, 8 | todo |
+| 9 | Web app: progress, compare, history | 6, 8 | in-progress |
 | 10 | CI jobs for eval backend and web | 6, 9 | todo |
 | 11 | Deploy workflow and image guard | 7, 10 | todo |
 | 12 | Live smoke, docs, reference page | 11 | todo |
