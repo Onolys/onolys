@@ -2,3 +2,4 @@
 # Members: engines/miti, api, admin/auth, admin/backend, eval/core.
 [tool.uv.workspace]
 members = ["engines/*", "api", "admin/*", "eval/*"]
+exclude = ["eval/datasets"]

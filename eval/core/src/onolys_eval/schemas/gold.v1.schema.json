@@ -1,0 +1,317 @@
+{
+  "$defs": {
+    "GoldSource": {
+      "additionalProperties": false,
+      "properties": {
+        "coded_url": {
+          "pattern": "^https?://[^\\s/]+(?:/[^\\s]*)?$",
+          "title": "Coded Url",
+          "type": "string"
+        },
+        "uncoded_url": {
+          "pattern": "^https?://[^\\s/]+(?:/[^\\s]*)?$",
+          "title": "Uncoded Url",
+          "type": "string"
+        },
+        "retrieved_at": {
+          "title": "Retrieved At",
+          "type": "string"
+        },
+        "sha256": {
+          "pattern": "^[a-f0-9]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "coded_url",
+        "uncoded_url",
+        "retrieved_at",
+        "sha256"
+      ],
+      "title": "GoldSource",
+      "type": "object"
+    },
+    "ParseInfo": {
+      "additionalProperties": false,
+      "properties": {
+        "method": {
+          "enum": [
+            "auto",
+            "auto+override"
+          ],
+          "title": "Method",
+          "type": "string"
+        },
+        "warnings": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Warnings",
+          "type": "array"
+        }
+      },
+      "required": [
+        "method",
+        "warnings"
+      ],
+      "title": "ParseInfo",
+      "type": "object"
+    },
+    "Summaries": {
+      "additionalProperties": false,
+      "properties": {
+        "technical": {
+          "title": "Technical",
+          "type": "number"
+        },
+        "relational": {
+          "title": "Relational",
+          "type": "number"
+        },
+        "pct_cr": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Pct Cr"
+        },
+        "reflection_question_ratio": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Reflection Question Ratio"
+        },
+        "total_mia": {
+          "title": "Total Mia",
+          "type": "number"
+        },
+        "total_mina": {
+          "title": "Total Mina",
+          "type": "number"
+        }
+      },
+      "required": [
+        "technical",
+        "relational",
+        "pct_cr",
+        "reflection_question_ratio",
+        "total_mia",
+        "total_mina"
+      ],
+      "title": "Summaries",
+      "type": "object"
+    },
+    "TimeSpan": {
+      "additionalProperties": false,
+      "properties": {
+        "start_ms": {
+          "minimum": 0,
+          "title": "Start Ms",
+          "type": "integer"
+        },
+        "end_ms": {
+          "minimum": 0,
+          "title": "End Ms",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "start_ms",
+        "end_ms"
+      ],
+      "title": "TimeSpan",
+      "type": "object"
+    },
+    "TurnSpan": {
+      "additionalProperties": false,
+      "description": "Zero-based half-open transcript turn range [start_turn, end_turn).",
+      "properties": {
+        "start_turn": {
+          "minimum": 0,
+          "title": "Start Turn",
+          "type": "integer"
+        },
+        "end_turn": {
+          "minimum": 0,
+          "title": "End Turn",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "start_turn",
+        "end_turn"
+      ],
+      "title": "TurnSpan",
+      "type": "object"
+    },
+    "UtteranceCodes": {
+      "additionalProperties": false,
+      "properties": {
+        "turn_id": {
+          "minLength": 1,
+          "title": "Turn Id",
+          "type": "string"
+        },
+        "codes": {
+          "items": {
+            "enum": [
+              "gi",
+              "persuade",
+              "persuade_permission",
+              "question",
+              "sr",
+              "cr",
+              "affirm",
+              "seek_collab",
+              "emphasize_autonomy",
+              "confront"
+            ],
+            "type": "string"
+          },
+          "title": "Codes",
+          "type": "array"
+        },
+        "note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Note"
+        }
+      },
+      "required": [
+        "turn_id",
+        "codes"
+      ],
+      "title": "UtteranceCodes",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema": {
+      "const": "gold.v1",
+      "title": "Schema",
+      "type": "string"
+    },
+    "dataset_id": {
+      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+      "title": "Dataset Id",
+      "type": "string"
+    },
+    "session_id": {
+      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+      "title": "Session Id",
+      "type": "string"
+    },
+    "source": {
+      "$ref": "#/$defs/GoldSource"
+    },
+    "coded_span": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/TimeSpan"
+        },
+        {
+          "$ref": "#/$defs/TurnSpan"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Coded Span"
+    },
+    "counts": {
+      "additionalProperties": {
+        "minimum": 0,
+        "type": "integer"
+      },
+      "maxProperties": 10,
+      "minProperties": 10,
+      "propertyNames": {
+        "enum": [
+          "gi",
+          "persuade",
+          "persuade_permission",
+          "question",
+          "sr",
+          "cr",
+          "affirm",
+          "seek_collab",
+          "emphasize_autonomy",
+          "confront"
+        ]
+      },
+      "title": "Counts",
+      "type": "object"
+    },
+    "globals": {
+      "additionalProperties": {
+        "maximum": 5,
+        "minimum": 1,
+        "type": "integer"
+      },
+      "maxProperties": 4,
+      "minProperties": 4,
+      "propertyNames": {
+        "enum": [
+          "cct",
+          "sst",
+          "partnership",
+          "empathy"
+        ]
+      },
+      "title": "Globals",
+      "type": "object"
+    },
+    "summaries": {
+      "$ref": "#/$defs/Summaries"
+    },
+    "utterance_codes": {
+      "anyOf": [
+        {
+          "items": {
+            "$ref": "#/$defs/UtteranceCodes"
+          },
+          "type": "array"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Utterance Codes"
+    },
+    "parse": {
+      "$ref": "#/$defs/ParseInfo"
+    }
+  },
+  "required": [
+    "schema",
+    "dataset_id",
+    "session_id",
+    "source",
+    "coded_span",
+    "counts",
+    "globals",
+    "summaries",
+    "parse"
+  ],
+  "title": "Gold",
+  "type": "object"
+}
