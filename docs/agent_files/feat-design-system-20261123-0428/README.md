@@ -1,0 +1,58 @@
+---
+status: draft
+summary: Index for the Onolys design-system initiative (shared @onolys/ui, app migration, landing, admin/eval): sub-projects, dependencies, locked decisions, open questions.
+date: 2026-11-23
+---
+# Design system: index
+
+## Sub-projects
+| # | Sub-project | Phase | Depends on | Status | PRD |
+|---|---|---|---|---|---|
+| 01 | onolys-ui | 1 | none | draft | [PRD](01-onolys-ui/PRD.md) |
+| 02 | app-migration | 2 | 01 v0.1.0 tag + `fix/email-verify-and-public-chrome` merged | draft | [PRD](02-app-migration/PRD.md) |
+| 03 | landing | 3 | 01 | not yet designed | - |
+| 04 | admin-eval-frontend | 4 | 01 | not yet designed | - |
+
+## Dependency graph
+```mermaid
+graph LR
+  F[fix/email-verify-and-public-chrome merged] --> SP2
+  SP1[01 onolys-ui v0.1.0] --> SP2[02 app-migration]
+  SP1 --> SP3[03 landing]
+  SP1 --> SP4[04 admin/eval]
+  SP2 --> SP3 --> SP4
+```
+Rollout order: app, then landing, then admin/eval.
+
+## Locked decisions
+- Tailwind v4 + shadcn/ui (Radix); CSS-variable tokens.
+- New public repo `Onolys/onolys-ui`, consumed as git dependency pinned to tags (no npm registry).
+- Dark mode follows device (`prefers-color-scheme`); no toggle.
+- Teal `#0b5f5a` brand, existing score colors, Inter self-hosted.
+- Strict CSP kept, Playwright CSP smoke test; any relaxation needs owner approval.
+- Rollout: app, landing, admin/eval.
+
+## Risks / Open Questions (consolidated)
+**PRD 01 (onolys-ui)**
+- [OPEN: confirm] Select = native `<select>` styled, no Radix Select.
+- [OPEN] Dialog scroll lock: Radix + custom class vs native `<dialog>`; task 1 CSP spike decides.
+- [OPEN: or drop] Keep `legacy.css` color aliases or force-migrate.
+- [OPEN: verify] Storybook 10 + Vite 8 compat (Storybook vs Ladle).
+- [OPEN] Verify current shadcn CLI conventions for Tailwind v4; Storybook/Vite 8/TS compat; Tailwind `@source` through git-dep install.
+- [OPEN] TS version: emitted `.d.ts` must typecheck under web TS 6.0.3 and admin TS 7.
+- [OPEN] Node 22 `npm install github:` with committed dist: confirm no `prepare` runs.
+- [OPEN] `font-src 'self'`: confirm fonts not inlined as data: (Vite `assetsInlineLimit`) in consumers.
+
+**PRD 02 (app-migration)**
+- [OPEN in SP1] If SP1 drops `legacy.css`, web keeps private `legacy-tokens.css`.
+- [OPEN: confirm needed set] jsdom shims for Radix (`ResizeObserver`, `hasPointerCapture`, `scrollIntoView`, `matchMedia`).
+- [OPEN: approve dep] `@axe-core/playwright` devDep for contrast gate.
+- [verify: OPEN] `pr-preview.yml` has no separate install step.
+- [OPEN] `npm ci` must not use ssh URL; use `git+https`.
+- [OPEN: pick numbers after baseline] Soft bundle budget (JS gzip +60KB, CSS gzip +15KB).
+- [OPEN] `build.test.ts` regex bans `createElement("style")`; `react-style-singleton` bundled; loosening needs owner sign-off.
+- [OPEN] Radix `aria-hidden` on siblings may break test helpers.
+- [OPEN] Tailwind `@source` through `file:` symlink (local dev).
+- [OPEN] Preflight impact on not-yet-migrated screens.
+- [OPEN] AuthAction (400 lines) may need splitting.
+- [OPEN] MSW service worker under CSP preview (`worker-src`).
