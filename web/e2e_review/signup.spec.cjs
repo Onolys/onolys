@@ -19,7 +19,8 @@ test.describe("signup", () => {
     await create(page).dblclick();
     await expect(page).toHaveURL(/verify-email/);
     expect(c.pageerrors).toEqual([]);
-    await page.locator("main").getByRole("button", { name: "Sign out" }).click();
+    await page.getByRole("button", { name: "Use a different email" }).click();
+    await expect(page).toHaveURL(/\/signup/);
     await spa(page, "/signup");
     await field(page, "Email").fill("enter@example.com");
     await field(page, "Password").fill(PW);

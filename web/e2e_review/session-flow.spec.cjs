@@ -1,5 +1,5 @@
 const { test, expect } = require("@playwright/test");
-const { shot, collect, FIX, signUpVerified, spa } = require("./helpers.cjs");
+const { shot, collect, FIX, signUpVerified, spa, accountMenu } = require("./helpers.cjs");
 
 async function newSession(page, file = "ten-min.mp3", { dbl = false } = {}) {
   await page.locator("header nav a", { hasText: "New session" }).click();
@@ -51,7 +51,7 @@ test.describe("browser behaviours (mock backend)", () => {
   test("W26/E19: Settings 'Copy' gives feedback and API key secret dialog restores focus", async ({ page, context }) => {
     await context.grantPermissions(["clipboard-read", "clipboard-write"]);
     await signUpVerified(page, "key@example.com");
-    await page.locator("header nav a", { hasText: "Settings" }).click();
+    await accountMenu(page, "Settings");
     await page.getByRole("button", { name: "Create API key" }).click();
     await shot(page, "settings-secret");
     await page.getByRole("button", { name: "Copy" }).click();

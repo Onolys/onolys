@@ -50,12 +50,18 @@ async function spa(page, url) {
     dispatchEvent(new PopStateEvent("popstate"));
   }, url);
 }
+/** Open the avatar account menu and choose an item (Settings link / Sign out button). */
+async function accountMenu(page, item) {
+  await page.getByRole("button", { name: "Account menu" }).click();
+  await page.getByRole("menuitem", { name: item, exact: true }).click();
+}
 async function signOutViaSettings(page) {
-  await page.locator("header nav a", { hasText: "Settings" }).click();
-  await page.locator("main").getByRole("button", { name: "Sign out" }).click();
+  await accountMenu(page, "Settings");
+  await expect(page.getByRole("heading", { name: "Settings" })).toBeVisible();
+  await accountMenu(page, "Sign out");
 }
 const navLinks = (page) => page.locator("header nav a").allTextContents();
 const hasHScroll = (page) => page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 1);
 const path_ = (page) => { const u = new URL(page.url()); return u.pathname + u.search; };
 
-module.exports = { SHOTS, FIX, PW, shot, collect, field, signUp, signUpVerified, spa, signOutViaSettings, navLinks, hasHScroll, path_ };
+module.exports = { SHOTS, FIX, PW, shot, collect, field, signUp, signUpVerified, spa, accountMenu, signOutViaSettings, navLinks, hasHScroll, path_ };

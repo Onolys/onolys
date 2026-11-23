@@ -1,5 +1,5 @@
 const { test, expect, devices } = require("@playwright/test");
-const { shot, FIX, signUp, spa, hasHScroll } = require("./helpers.cjs");
+const { shot, FIX, signUp, spa, hasHScroll, accountMenu } = require("./helpers.cjs");
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 const { defaultBrowserType, ...iphone } = devices["iPhone 13"]; // run on chromium (only chromium is installed)
@@ -49,7 +49,7 @@ test.describe("mobile (iPhone 13 viewport)", () => {
     await expect(page.getByRole("columnheader", { name: "You", exact: true })).toHaveCount(0);
     await shot(page, "m-report");
     expect(await hasHScroll(page), "report").toBe(false);
-    await page.locator("header nav a", { hasText: "Settings" }).click();
+    await accountMenu(page, "Settings");
     await expect(page.getByRole("heading", { name: "Settings" })).toBeVisible();
     await shot(page, "m-settings");
     expect(await hasHScroll(page), "settings").toBe(false);
