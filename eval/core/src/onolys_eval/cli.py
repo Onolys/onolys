@@ -1,6 +1,7 @@
-"""Command entry points; dataset operations are added by subsequent tasks."""
+"""Dataset preparation and session comparison command entry points."""
 
 import argparse
+import asyncio
 import re
 from collections.abc import Sequence
 from pathlib import Path
@@ -27,7 +28,27 @@ def main(argv: Sequence[str] | None = None) -> int:
             command.add_argument("--allow-warnings", action="store_true")
         if name == "run":
             command.add_argument("session_id", help="Session identifier")
+            command.add_argument("--preset", help="Engine route preset")
+            command.add_argument("--runs", type=int, default=1, help="Number of engine runs (default: 1)")
+            command.add_argument("--source", choices=("cache", "bucket"), default="cache")
+            command.add_argument("--json-out", type=Path, help="Comparison JSON path (outside git)")
     args = parser.parse_args(argv)
+    if args.command == "run":
+        from .manifest import load_manifest
+        from .run import run_session
+
+        if re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", args.dataset) is None:
+            parser.error("Invalid dataset identifier")
+        if args.runs < 1:
+            parser.error("runs must be at least 1")
+        manifest_path = Path(__file__).resolve().parents[3] / "datasets" / args.dataset / "manifest.yaml"
+        try:
+            asyncio.run(run_session(load_manifest(manifest_path), args.session_id,
+                                    preset=args.preset, n_runs=args.runs,
+                                    source=args.source, json_out=args.json_out))
+        except (OSError, ValueError) as error:
+            parser.error(str(error))
+        return 0
     if args.command == "upload":
         from .manifest import load_manifest
         from .upload import upload_dataset
