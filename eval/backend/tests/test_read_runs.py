@@ -8,6 +8,8 @@ from test_app import AUTH, client
 from test_runs import saved_upload, start
 from test_uploads import gold
 
+from onolys_eval_backend.storage import INLINE_OUTPUT_LIMIT, store_output
+
 pytest_plugins = ["test_runs"]
 
 
@@ -183,6 +185,46 @@ def test_protected_inline_and_spilled_output_and_cross_run_rejection(services):
     assert c.get(f"/v1/runs/{rid}/units/{uids[1]}/output", headers=AUTH).status_code == 404
     for suffix in ["/missing", f"/{rid}/units/missing/output", "/bad.id"]:
         assert c.get("/v1/runs" + suffix, headers=AUTH).status_code == 404
+
+
+def test_spilled_output_detail_omits_placeholder_and_private_reference(services):
+    c = client(services=services)
+    rid = start(c, engines=["miti"]).json()["run_id"]
+    uid = next(iter(finish(services, rid, [scores()])))
+    output = {"synthetic": "x" * INLINE_OUTPUT_LIMIT}
+    saved = store_output(services.bucket, rid, uid, output)
+    assert saved == {"output": None, "output_ref": f"runs/{rid}/{uid}.json"}
+    services.repository.update_unit(rid, uid, saved)
+    public_unit = detail(c, rid)["units"][0]
+    assert "output" not in public_unit
+    assert "output_ref" not in public_unit
+    assert saved["output_ref"] not in str(public_unit)
+    response = c.get(f"/v1/runs/{rid}/units/{uid}/output", headers=AUTH)
+    assert response.status_code == 200
+    assert response.json() == output
+
+
+@pytest.mark.parametrize("output", [None, False, 0, ""])
+def test_detail_preserves_inline_json_values(services, output):
+    c = client(services=services)
+    rid = start(c, engines=["miti"]).json()["run_id"]
+    uid = next(iter(finish(services, rid, [scores()])))
+    services.repository.update_unit(rid, uid, {"output": output, "output_ref": None})
+    public_unit = detail(c, rid)["units"][0]
+    assert "output" in public_unit and public_unit["output"] == output
+    assert "output_ref" not in public_unit
+
+
+def test_detail_only_omits_null_output_for_valid_unit_reference(services):
+    c = client(services=services)
+    rid = start(c, engines=["miti"]).json()["run_id"]
+    uid = next(iter(finish(services, rid, [scores()])))
+    services.repository.update_unit(
+        rid, uid, {"output": None, "output_ref": "runs/another/private.json"},
+    )
+    public_unit = detail(c, rid)["units"][0]
+    assert "output" in public_unit and public_unit["output"] is None
+    assert "output_ref" not in public_unit
 
 
 def test_rerun_saved_upload_preserves_effective_inputs_and_rechecks_hashes(services):

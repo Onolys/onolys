@@ -35,7 +35,7 @@ export interface RunSummary extends RunInput {
 }
 export interface RunUnit {
  unit_id: string; session_id: string; engine: string; preset?: string | null; repeat?: number | null;
- status: Exclude<RunStatus, 'partial'>; stage?: string; error?: { code: string; message?: string } | string; output?: unknown; output_ref?: string | null;
+ status: Exclude<RunStatus, 'partial'>; stage?: string; error?: { code: string; message?: string } | string; output?: unknown;
 }
 export interface ErrorMetric { mae: number | null; mean_bias: number | null; n: number }
 export interface Aggregate {

@@ -176,6 +176,18 @@ def history(request: Request):
     return {"runs": [run_summary(rid, run) for rid, run in repository.list_runs().items()]}
 
 
+def _public_unit(run_id, unit_id, unit):
+    spilled = unit.get("output_ref") == f"runs/{run_id}/{unit_id}.json"
+    return {
+        "unit_id": unit_id,
+        **{
+            key: value
+            for key, value in unit.items()
+            if key != "output_ref" and not (key == "output" and value is None and spilled)
+        },
+    }
+
+
 @router.get("/v1/runs/{run_id}")
 def run_detail(request: Request, run_id: str):
     repository = request.app.state.services.repository
@@ -184,7 +196,7 @@ def run_detail(request: Request, run_id: str):
     return {
         **run_summary(run_id, run),
         "units": [
-            {"unit_id": uid, **{key: value for key, value in unit.items() if key != "output_ref"}}
+            _public_unit(run_id, uid, unit)
             for uid, unit in units.items()
         ],
         "compare": build_compare(run, units),

@@ -26,9 +26,10 @@ it('selects sessions for signed differences', () => {
 it('polls at 3s, stops terminal, loads JSON lazily as escaped text and aborts unmount', async () => {
  vi.useFakeTimers(); const api = {...createEvalApi('',vi.fn()), run:vi.fn().mockResolvedValueOnce(detail('running')).mockResolvedValue(detail()), output:vi.fn().mockResolvedValue({text:'<img src=x onerror=alert(1)>'})}; const view=render(<RunView api={api} runId="r1" onRerun={vi.fn()}/>); await act(async()=>{}); expect(api.run).toHaveBeenCalledTimes(1); await act(async()=>{await vi.advanceTimersByTimeAsync(3000)}); expect(api.run).toHaveBeenCalledTimes(2); await act(async()=>{await vi.advanceTimersByTimeAsync(9000)}); expect(api.run).toHaveBeenCalledTimes(2); expect(api.output).not.toHaveBeenCalled(); fireEvent.click(screen.getByRole('button',{name:'View JSON u1'})); await act(async()=>{}); expect(api.output).toHaveBeenCalledWith('r1','u1',expect.any(AbortSignal)); expect(screen.getByText(/<img src=x/)).toBeTruthy(); expect(document.querySelector('img')).toBeNull(); const signal=api.run.mock.calls[0][1] as AbortSignal; view.unmount(); expect(signal.aborted).toBe(true);
 });
-it('loads bucket JSON lazily when the run detail includes output null and output_ref', async () => {
+it('loads spilled JSON lazily from the detail wire shape with output and private ref omitted', async () => {
   const saved = detail();
-  saved.units[0] = { ...saved.units[0], output: null, output_ref: 'runs/r1/u1.json' };
+  expect(saved.units[0]).not.toHaveProperty('output');
+  expect(saved.units[0]).not.toHaveProperty('output_ref');
   const api = { ...createEvalApi('', vi.fn()), run: vi.fn().mockResolvedValue(saved), output: vi.fn().mockResolvedValue({ stored: true }) };
   render(<RunView api={api} runId="r1" onRerun={vi.fn()} />);
   await act(async () => {});
