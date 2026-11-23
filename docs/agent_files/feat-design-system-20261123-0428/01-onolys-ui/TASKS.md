@@ -16,8 +16,8 @@ Source of truth: docs/agent_files/feat-design-system-20261123-0428/01-onolys-ui/
 | 6 | Onolys components | 5 | done |
 | 7 | CSP-safe Radix overlays | 5 | done |
 | 8 | Hit-area, privacy and RTL test suite | 6, 7 | done |
-| 9 | Storybook docs + axe tests | 6, 7 | todo |
-| 10 | Build, exports, types under TS 6 and 7 | 8 | todo |
+| 9 | Storybook docs + axe tests | 6, 7 | done |
+| 10 | Build, exports, types under TS 6 and 7 | 8 | done |
 | 11 | CSP smoke, Vite/Tailwind and Astro fixtures | 9, 10 | todo |
 | 12 | CI workflow | 9, 10, 11 | todo |
 | 13 | Release workflow, CHANGELOG, tag v0.1.0 | 12 | todo |
@@ -66,11 +66,13 @@ Done when: both suites pass; each fails when a violation is injected in a tempor
 What it is / what it means: Component docs in both themes with automated accessibility checks (Req 9-10, AC 9).
 What changes at a high level: Stories for every component and state; light/dark via `prefers-color-scheme` emulation; a11y addon; test-runner using `@axe-core/playwright` against the built Storybook.
 Done when: Storybook builds listing all components; axe run reports zero violations in light and dark; a story with a known violation proves the check fails.
+Verified: UI Task 9 commit `0b708b0fb9356c9a24d2b095b97c4028e151df17`, integrated as `36992b9`; 47 stories across 24 families, 94 light/dark axe scans with zero failures. Only Storybook’s documented page-level region fixture exception is disabled; WCAG rules remain active. Missing-name negative story fails as intended.
 
 ## Task 10 — Build, exports, types under TS 6 and 7
 What it is / what it means: The publishable shape (Req 2, Decisions 1, 4, 12).
 What changes at a high level: Build ESM plus `.d.ts` with TS 6.0.x; CSS and woff2 copied as plain files; `exports` for `.`, `./theme.css`, `./tokens.css`, `./base.css`, `./fonts.css`, `./legacy.css`, `./tokens`, `./components.json`; no `prepare` script; `build:watch` for local dev.
 Done when: a packaged-tarball test resolves every export; a fixture importing the types typechecks under TS 6.0.x and TS 7; test asserts package.json has no `prepare`.
+Verified: UI Task 10 commit `89cdb2c4c4e0addfd6a9ec365bf94c8eef18fb1d`; five package tests verify built ESM/declarations, exports, no prepare, and installed consumer types under exact TypeScript 6.0.3 and 7.0.2. Explicit build:watch source/script paths now refresh TypeScript/declarations, CSS, and token CSS.
 
 ## Task 11 — CSP smoke, Vite/Tailwind and Astro fixtures
 What it is / what it means: Runtime proof of the headline guarantees (AC 1, 2, 4, 7, Decision 12).
