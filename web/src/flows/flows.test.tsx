@@ -154,9 +154,10 @@ describe("flow: one submit, no rating card (default)", () => {
     await u.click(await screen.findByRole("link", { name: "View report" }));
     await waitFor(() => expect(here(router)).toBe(`/sessions/${sid}/reports/1`));
     await h1("Report");
-    const scorecard = await screen.findByRole("region", { name: "Scorecard" });
-    expect(within(scorecard).queryByText(/differs|Difference/)).toBeNull();
-    expect(within(scorecard).queryByRole("columnheader", { name: /^You$/ })).toBeNull();
+    const glance = await screen.findByRole("region", { name: "At a glance" });
+    expect(within(glance).getByText("Cultivating Change Talk")).toBeInTheDocument();
+    expect(within(glance).queryByText(/differs|Difference/)).toBeNull();
+    expect(within(glance).queryByRole("columnheader", { name: /^You$/ })).toBeNull();
     expect(screen.queryByRole("region", { name: "Where Onolys disagrees" })).toBeNull();
     expect(screen.queryByRole("button", { name: /run again|edit my rating|submit/i })).toBeNull();
     expect(mockBackend.listRuns(UID, sid)).toHaveLength(1);
@@ -218,9 +219,10 @@ describe("flow (rating on): sign-up, verify, upload, speaker + rating during tra
     await u.click(await screen.findByRole("link", { name: "View report" }));
     await waitFor(() => expect(here(router)).toBe(`/sessions/${sid}/reports/1`));
     await h1("Report");
-    const scorecard = await screen.findByRole("region", { name: "Scorecard" });
-    expect(within(scorecard).getByRole("row", { name: /Cultivating Change Talk/ })).toHaveTextContent("Onolys -2 (differs)");
-    expect(screen.getByRole("region", { name: "Where Onolys disagrees" })).toBeInTheDocument();
+    const glance = await screen.findByRole("region", { name: "At a glance" });
+    expect(within(glance).getByText("Cultivating Change Talk")).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Feedback: ideas to try" })).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Behaviour counts" })).toBeInTheDocument();
 
     // FX45: the report is final: no Run again, no rating edit, a single version
     expect(screen.queryByRole("button", { name: /run again|edit my rating|submit/i })).toBeNull();
@@ -251,8 +253,9 @@ describe("flow (rating on): no-rating run is final too (AC3)", () => {
     settle(sid);
     await u.click(await screen.findByRole("link", { name: "View report" }));
     await h1("Report");
-    const cct = within(await screen.findByRole("region", { name: "Scorecard" })).getByRole("row", { name: /Cultivating Change Talk/ });
-    expect(within(cct).queryByText(/differs/)).toBeNull();
+    const glance = within(await screen.findByRole("region", { name: "At a glance" }));
+    expect(glance.getByText("Cultivating Change Talk")).toBeInTheDocument();
+    expect(glance.queryByText(/differs/)).toBeNull();
     expect(screen.queryByRole("region", { name: "Where Onolys disagrees" })).toBeNull();
 
     expect(screen.queryByRole("button", { name: /run again|edit my rating/i })).toBeNull();
@@ -369,7 +372,8 @@ describe("flow: sample report works with no network (AC3a)", () => {
     await act(() => router.navigate("/sample"));
     await h1("Sample report");
     expect(here(router)).toBe("/sample");
-    expect(await screen.findByRole("region", { name: "Scorecard" })).toBeInTheDocument();
+    expect(await screen.findByRole("region", { name: "At a glance" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Open coded transcript" })).toBeEnabled();
     expect(screen.queryByRole("button", { name: /run again/i })).toBeNull();
     expect(requests).toEqual([]);
   });
