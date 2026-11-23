@@ -85,8 +85,12 @@ export function createFirebaseAuthService(config: FirebaseWebConfig): AuthServic
         // and the guards route to the verify page or the app. No new verification email (each send voids earlier links).
         try {
           await signInWithEmailAndPassword(auth, email, password);
-        } catch {
-          throw err; // wrong password: keep the "already exists, log in instead" error
+        } catch (signInErr) {
+          const code = (signInErr as { code?: string } | null)?.code;
+          // Wrong password / no such credential: keep the "already exists, log in instead" error.
+          // Anything else (rate limit, network, disabled account) is its own problem: surface it.
+          if (code === "auth/invalid-credential" || code === "auth/wrong-password" || code === "auth/user-not-found") throw err;
+          throw signInErr;
         }
         return;
       }

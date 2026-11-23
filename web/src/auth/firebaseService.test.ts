@@ -149,6 +149,19 @@ describe("firebase signUp", () => {
     m.signIn.mockRejectedValue({ code: "auth/invalid-credential" });
     await expect(make().signUp("a@b.co", "password1")).rejects.toMatchObject({ code: "auth/email-already-in-use" });
   });
+  it.each(["auth/wrong-password", "auth/user-not-found"])("existing email + %s sign-in error reports email-already-in-use", async (code) => {
+    m.createUser.mockRejectedValue({ code: "auth/email-already-in-use" });
+    m.signIn.mockRejectedValue({ code });
+    await expect(make().signUp("a@b.co", "password1")).rejects.toMatchObject({ code: "auth/email-already-in-use" });
+  });
+  it.each(["auth/too-many-requests", "auth/network-request-failed", "auth/user-disabled", "auth/internal-error"])(
+    "existing email + %s sign-in error surfaces that error, not email-already-in-use",
+    async (code) => {
+      m.createUser.mockRejectedValue({ code: "auth/email-already-in-use" });
+      m.signIn.mockRejectedValue({ code });
+      await expect(make().signUp("a@b.co", "password1")).rejects.toMatchObject({ code });
+    },
+  );
   it("other create failures are not retried as sign-in", async () => {
     m.createUser.mockRejectedValue({ code: "auth/weak-password" });
     await expect(make().signUp("a@b.co", "password1")).rejects.toMatchObject({ code: "auth/weak-password" });

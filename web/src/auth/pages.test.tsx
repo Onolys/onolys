@@ -257,6 +257,17 @@ describe("verify email", () => {
     expect(within(screen.getByRole("main")).getByText(/a@clinic\.org/)).toBeInTheDocument();
   });
 
+  it("offers no Sign out; Use a different email clears the session and goes to /signup", async () => {
+    const { service, router } = renderApp("/verify-email", { user: { email: "a@clinic.org", verified: false } });
+    await h1("Verify your email");
+    expect(screen.queryByRole("button", { name: /sign out/i })).not.toBeInTheDocument();
+    const spy = vi.spyOn(service, "signOut");
+    await userEvent.click(screen.getByRole("button", { name: "Use a different email" }));
+    await h1("Sign up");
+    expect(spy).toHaveBeenCalled();
+    expect(here(router)).toBe("/signup");
+  });
+
   it("Resend sends mail then locks for 60 seconds with a countdown", async () => {
     const { service } = renderApp("/verify-email", { user: { email: "a@clinic.org", verified: false } });
     await h1("Verify your email");

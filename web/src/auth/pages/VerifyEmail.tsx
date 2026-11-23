@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useLocation } from "react-router";
+import { useLocation, useNavigate } from "react-router";
 import { useAuth } from "../AuthProvider";
 import { readNext } from "../next";
-import { useSignOut } from "../useSignOut";
 import { ErrorSummary } from "./parts";
 import { useFormError } from "./useFormError";
 
@@ -27,10 +26,11 @@ export function resetResendCooldowns(): void {
 }
 
 export function VerifyEmail() {
-  const { service, user } = useAuth();
+  const { service, user, signOut: authSignOut } = useAuth();
+  const navigate = useNavigate();
   const { search } = useLocation();
   const next = readNext(search);
-  const { signOut, error: signOutError } = useSignOut();
+  const [leaveError, setLeaveError] = useState<string | null>(null);
   const [cooldown, setCooldown] = useState(() => remainingCooldown(user?.email));
   const [note, setNote] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -74,6 +74,18 @@ export function VerifyEmail() {
     return () => window.removeEventListener("focus", onFocus);
   }, [check]);
 
+  // Drop the pending (unverified) session and start over on Sign up.
+  async function switchEmail() {
+    setLeaveError(null);
+    try {
+      await authSignOut();
+    } catch {
+      setLeaveError("Couldn't switch just now. Check your connection and try again.");
+      return;
+    }
+    navigate("/signup", { replace: true });
+  }
+
   async function resend() {
     form.clear();
     setNote(null);
@@ -99,7 +111,7 @@ export function VerifyEmail() {
           Check your inbox — and your spam folder. We sent a verification link to <strong>{user?.email}</strong>.
         </p>
         {note && <p role="status">{note}</p>}
-        {signOutError && <p role="alert">{signOutError}</p>}
+        {leaveError && <p role="alert">{leaveError}</p>}
         <button type="button" className="primary" disabled={checkingNow} onClick={() => void check(true)}>
           {checkingNow ? "Checking…" : "I've verified"}
         </button>
@@ -108,8 +120,8 @@ export function VerifyEmail() {
         </button>
         <p>
           Wrong address?{" "}
-          <button type="button" className="secondary" onClick={() => void signOut()}>
-            Sign out
+          <button type="button" className="link-button" onClick={() => void switchEmail()}>
+            Use a different email
           </button>
         </p>
       </div>

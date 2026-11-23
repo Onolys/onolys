@@ -77,6 +77,33 @@ describe("header nav by auth phase (D1)", () => {
     expect(screen.queryByRole("menu")).not.toBeInTheDocument();
   });
 
+  it("account menu keyboard: open focuses first item; arrows, Home/End cycle; Escape returns focus; Tab closes", async () => {
+    renderApp("/", { user: { email: "a@clinic.org", verified: true } });
+    await h1("Sessions");
+    const btn = screen.getByRole("button", { name: "Account menu" });
+    await userEvent.click(btn);
+    const settings = screen.getByRole("menuitem", { name: "Settings" });
+    const signOut = screen.getByRole("menuitem", { name: "Sign out" });
+    expect(settings).toHaveFocus();
+    await userEvent.keyboard("{ArrowDown}");
+    expect(signOut).toHaveFocus();
+    await userEvent.keyboard("{ArrowDown}");
+    expect(settings).toHaveFocus();
+    await userEvent.keyboard("{ArrowUp}");
+    expect(signOut).toHaveFocus();
+    await userEvent.keyboard("{Home}");
+    expect(settings).toHaveFocus();
+    await userEvent.keyboard("{End}");
+    expect(signOut).toHaveFocus();
+    await userEvent.keyboard("{Escape}");
+    expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+    expect(btn).toHaveFocus();
+    await userEvent.click(btn);
+    expect(screen.getByRole("menu")).toBeInTheDocument();
+    await userEvent.tab();
+    expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+  });
+
   it("account menu: Settings navigates and closes", async () => {
     const { router } = renderApp("/", { user: { email: "a@clinic.org", verified: true } });
     await h1("Sessions");
