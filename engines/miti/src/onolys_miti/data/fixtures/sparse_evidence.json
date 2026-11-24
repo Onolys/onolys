@@ -1,0 +1,83 @@
+{
+  "language": "en",
+  "duration_ms": 240000,
+  "turns": [
+    {
+      "id": "s1",
+      "speaker": "B",
+      "text": "I brought the office timetable.",
+      "start_ms": 0,
+      "end_ms": 21718
+    },
+    {
+      "id": "s2",
+      "speaker": "A",
+      "text": "What does lunchtime usually look like?",
+      "start_ms": 21818,
+      "end_ms": 43536
+    },
+    {
+      "id": "s3",
+      "speaker": "B",
+      "text": "Lunch is at noon.",
+      "start_ms": 43636,
+      "end_ms": 65354
+    },
+    {
+      "id": "s4",
+      "speaker": "A",
+      "text": "You eat at noon.",
+      "start_ms": 65454,
+      "end_ms": 87172
+    },
+    {
+      "id": "s5",
+      "speaker": "B",
+      "text": "The meeting starts at one.",
+      "start_ms": 87272,
+      "end_ms": 108990
+    },
+    {
+      "id": "s6",
+      "speaker": "A",
+      "text": "The meeting follows lunch.",
+      "start_ms": 109090,
+      "end_ms": 130809
+    },
+    {
+      "id": "s7",
+      "speaker": "B",
+      "text": "The notebook has my timetable.",
+      "start_ms": 130909,
+      "end_ms": 152627
+    },
+    {
+      "id": "s8",
+      "speaker": "A",
+      "text": "Your timetable is in the notebook.",
+      "start_ms": 152727,
+      "end_ms": 174445
+    },
+    {
+      "id": "s9",
+      "speaker": "B",
+      "text": "I could try a walk.",
+      "start_ms": 174545,
+      "end_ms": 196263
+    },
+    {
+      "id": "s10",
+      "speaker": "A",
+      "text": "You decide whether to try a walk.",
+      "start_ms": 196363,
+      "end_ms": 218081
+    },
+    {
+      "id": "s11",
+      "speaker": "B",
+      "text": "Thank you for your time.",
+      "start_ms": 218181,
+      "end_ms": 239900
+    }
+  ]
+}
