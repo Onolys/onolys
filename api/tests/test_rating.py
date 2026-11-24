@@ -366,9 +366,15 @@ async def test_openapi_has_rating_and_no_upload_or_parse():
     p = spec["paths"]["/v1/sessions/{id}/rating"]
     assert set(p) == {"put", "get"} and p["put"]["operationId"] == "putRating"
     assert "202" in p["put"]["responses"]
-    for path in spec["paths"]:
+    # No audio-upload or parse routes; the only allowed "upload" path is the read-only limits
+    # endpoint (GET /v1/upload-limits, 03-failure-policy).
+    for path, ops in spec["paths"].items():
         low = path.lower()
-        assert "parse" not in low and "upload" not in low, path
+        assert "parse" not in low, path
+        if path == "/v1/upload-limits":
+            assert set(ops) == {"get"}, ops
+        else:
+            assert "upload" not in low, path
     assert not any("rating" in path and "audio" in path for path in spec["paths"])
 
 

@@ -33,6 +33,7 @@ ID_ROUTES: dict[tuple[str, str], dict | None] = {
     ("post", "/v1/sessions/{id}/audio/complete"): None,
     ("get", "/v1/sessions/{id}/rating"): None,
     ("put", "/v1/sessions/{id}/rating"): {"final": True, "card": CARD},
+    ("post", "/v1/sessions/{id}/retry"): None,
     ("get", "/v1/sessions/{id}/reports"): None,
     ("get", "/v1/sessions/{id}/reports/{version}"): None,
     ("get", "/v1/sessions/{id}/runs"): None,

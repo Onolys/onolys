@@ -13,6 +13,8 @@ from hypothesis import HealthCheck, settings
 from schemathesis.checks import not_a_server_error
 
 from onolys_api.app import create_app
+from onolys_api.adapters.base import AuthAccount
+from onolys_api.adapters.fake import FakeAuthLinks
 from onolys_api.config import Settings
 from onolys_api.repo.fake import FakeRepo
 from onolys_api.storage.fake import FakeBlobStore
@@ -32,6 +34,8 @@ def _build():
         ),
         repo=FakeRepo(blobs),
         blobs=blobs,
+        # the fake-auth caller (test:alice) needs an account for the email endpoints
+        auth_links=FakeAuthLinks({"alice": AuthAccount("alice@example.org")}),
     )
 
 
