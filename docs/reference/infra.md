@@ -258,19 +258,12 @@ Which provider/model the text routes (evaluation LLM calls) use, and where to ch
 
 ## Runbook: a user reports a failed session
 
-The web error card shows a **reference id** (the `request_id`). All app logs are one JSON line per event on Cloud Run stdout (Cloud Logging `jsonPayload.*`); lines carry ids and codes, never content.
+The failed session card shows the **session id** as its Reference. All app logs are one JSON line per event on Cloud Run stdout (Cloud Logging `jsonPayload.*`); lines carry ids and codes, never content. Fields, the link template and the `error_code` details are in [logging.md](logging.md).
 
-1. **Find the line by reference id** (Logs Explorer, project `onolys`):
-   ```
-   jsonPayload.request_id="<id>"
-   ```
-   Read `jsonPayload.session_id`, `run_id`, `step`, `error_code`, `exc_class` (and `code_version`, the deployed sha). Narrow to failures with `jsonPayload.status="failed"`; add `resource.labels.service_name=("onolys-api-prod" OR "onolys-worker-prod")` to pick the env.
-2. **Whole trail for that session:**
-   ```
-   jsonPayload.session_id="<sid>"
-   ```
-   For one run add `jsonPayload.run_id="<rid>"`. Sort ascending to read in order.
-3. **Match the `error_code`** below, fix or advise, then have the user run again.
+1. **Open the session trail** (Logs Explorer, project `onolys`; both envs share it): `jsonPayload.session_id="<session id>"`, or the link template in [logging.md](logging.md#reference). Add `resource.labels.service_name=("onolys-api-prod" OR "onolys-worker-prod")` to pick the env. Sort ascending to read in order; for one run add `jsonPayload.run_id="<rid>"`.
+2. **Find the failure:** add `jsonPayload.status="failed"`. Read `error_code`, `exc_class`, `step`, `code_version` (deployed sha). For a provider error read the `llm_provider_error` line just before it (`http_status`, `error_type`, `provider_error`).
+3. **Errors with no session** (Settings cards, API-only calls) show a `request_id` instead: `jsonPayload.request_id="<id>"`.
+4. **Match the `error_code`** below, fix or advise, then have the user run again.
 
 Verified 2026-11-20 against the task-10 test lines (staging, `error_code t10_test`, written for the alert check) through the REST API `POST https://logging.googleapis.com/v2/entries:list` with body `{"resourceNames":["projects/onolys"],"filter":"jsonPayload.request_id=\"t10b-1795181702\"","orderBy":"timestamp desc"}`: it returned the one `onolys-worker-staging` line (`status failed`, `session_id synthetic`, `step test`); the filter `jsonPayload.session_id="synthetic"` returned that line plus the `onolys-api-staging` one (`request_id t10-1795181472`); the alert filter (`resource.type="cloud_run_revision"`, service name in the two staging services, `jsonPayload.status="failed"`) matched both.
 
