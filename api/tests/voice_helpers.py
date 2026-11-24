@@ -30,7 +30,7 @@ class ManualClock:
         await fut
 
     async def _settle(self) -> None:
-        await asyncio.sleep(0.05)  # let real socket I/O and woken tasks run
+        await asyncio.sleep(0.01)  # let real socket I/O and woken tasks run
 
     async def advance(self, dt: float) -> None:
         target = self._t + dt

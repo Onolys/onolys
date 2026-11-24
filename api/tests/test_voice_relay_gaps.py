@@ -133,7 +133,7 @@ async def test_client_gone_before_ready_closes_upstream_and_marks_disconnected(
     monkeypatch.setattr(relay.Relay, "send_json", send_json)
     async with serve(env.app) as base:
         c = await connect(base)
-        await asyncio.sleep(0.2)
+        await asyncio.sleep(0.1)
         await c.ws.close()
     d = env.doc()
     assert d.state == "live" and d.disconnected_at is not None  # re-attach still possible
@@ -171,7 +171,7 @@ async def test_interrupted_clears_speaking_and_tells_the_client(tmp_path):
     async with serve(env.app) as base:
         c = await connect(base)
         await ready(c)
-        msgs = await c.drain_json(0.5)
+        msgs = await c.drain_json(0.15)
         assert [m["type"] for m in msgs] == ["ai_speaking", "ai_speaking", "interrupted"]
         assert [m.get("on") for m in msgs[:2]] == [True, False]
         await c.ws.close()
@@ -212,7 +212,7 @@ async def test_upstream_stream_ending_without_closed_is_reopened(tmp_path):
     async with serve(env.app) as base:
         c = await connect(base)
         await ready(c)
-        await c.drain_json(0.4)
+        await c.drain_json(0.15)
         assert voice.opened == 2  # reopened once, client still connected
         assert env.doc().state == "live" and env.doc().disconnected_at is None
         await c.ws.close()
@@ -226,7 +226,7 @@ async def test_reopen_that_fails_to_open_ends_with_upstream_unavailable(tmp_path
     async with serve(env.app) as base:
         c = await connect(base)
         await ready(c)
-        msgs = await c.drain_json(1.0)
+        msgs = await c.drain_json(0.3)
         assert {"type": "error", "code": "upstream_unavailable"} in msgs
     assert len(voice.opened) == 2
     d = env.doc()
@@ -249,7 +249,7 @@ async def test_checkpoint_for_a_deleted_interview_on_client_drop_is_a_noop(tmp_p
 
         monkeypatch.setattr(env.repo, "get_interview", gone)
         await c.ws.close()
-        await asyncio.sleep(0.3)
+        await asyncio.sleep(0.1)
         monkeypatch.setattr(env.repo, "get_interview", real)
     assert env.doc().disconnected_at is None  # nothing written, nothing crashed
     assert env.app.state.voice_connections == {}
@@ -267,7 +267,7 @@ async def test_poll_finding_the_interview_gone_closes_not_live(tmp_path, monkeyp
 
         monkeypatch.setattr(env.repo, "get_interview", gone)
         await env.clock.advance(10)
-        msgs = await c.drain_json(0.5)
+        msgs = await c.drain_json(0.15)
         assert NOT_LIVE in msgs
         await expect_close(c, 4409)
 
@@ -284,7 +284,7 @@ async def test_unexpected_error_in_a_pump_task_surfaces_internal_error(tmp_path,
 
         monkeypatch.setattr(env.repo, "update_interview", boom)
         await env.clock.advance(10)  # poll checkpoint hits the failing write
-        msgs = await c.drain_json(0.5)
+        msgs = await c.drain_json(0.15)
         assert {"type": "error", "code": "internal_error"} in msgs
         await expect_close(c, 1011)
     assert env.voice._inner.sessions[0].close_calls >= 1
