@@ -547,6 +547,6 @@ async def test_no_report_text_in_session_status(env):
     sid = await env.finished()
     st = env.repo.get_status(env.uid, sid).model_dump(mode="json")
     assert set(st) <= {
-        "id", "uid", "state", "step", "progress", "error_code", "latest_report_version",
-        "updated_at", "transcript_ready", "speaker_confirmed", "rating_submitted", "has_rating",
+        "id", "uid", "state", "step", "progress", "error_code", "error_kind", "retries_left",
+        "counted", "latest_report_version", "updated_at", "transcript_ready", "speaker_confirmed", "rating_submitted", "has_rating",
     }  # fmt: skip

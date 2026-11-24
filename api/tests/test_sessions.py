@@ -14,8 +14,8 @@ from onolys_api.repo.models import ClientInfo, IdempotencyDoc, SessionError
 A = {"Authorization": "Bearer test:alice"}
 B = {"Authorization": "Bearer test:bob"}
 STATUS_KEYS = {
-    "uid", "state", "step", "progress", "error_code", "latest_report_version", "updated_at",
-    "transcript_ready", "speaker_confirmed", "rating_submitted", "has_rating",
+    "uid", "state", "step", "progress", "error_code", "error_kind", "retries_left", "counted",
+    "latest_report_version", "updated_at", "transcript_ready", "speaker_confirmed", "rating_submitted", "has_rating",
 }  # fmt: skip
 
 
@@ -62,7 +62,7 @@ async def test_status_doc_schema_has_no_text(client, repo):
     assert "PHI-LOOKING TITLE" not in json.dumps(stored, default=str)
     for k, v in stored.items():
         assert not isinstance(v, (dict, list)), k
-        assert not isinstance(v, str) or k in {"uid", "state", "step", "error_code"}
+        assert not isinstance(v, str) or k in {"uid", "state", "step", "error_code", "error_kind"}
 
 
 async def test_session_defaults_and_stt_resolved_once_and_stored(client, repo):

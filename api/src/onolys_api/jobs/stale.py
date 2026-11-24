@@ -15,6 +15,7 @@ also fails its unfinished runs and hands their cap slots back (`release_once`).
 from datetime import datetime, timedelta
 
 from onolys_api import logs
+from onolys_api.adapters.error_map import kind_for_code
 from onolys_api.config import Settings
 from onolys_api.jobs.queue import MAX_ATTEMPTS
 from onolys_api.jobs.run import release_once
@@ -82,7 +83,11 @@ def settle_if_stale(repo: Repo, s: SessionDoc, now: datetime, settings: Settings
     code, step = failure
     try:
         failed = repo.fail_stale_session(
-            s.uid, s.id, s.state, cutoff, SessionError(code=code, step=step)
+            s.uid,
+            s.id,
+            s.state,
+            cutoff,
+            SessionError(code=code, step=step, kind=kind_for_code(code)),
         )
     except NotFoundError:
         return s

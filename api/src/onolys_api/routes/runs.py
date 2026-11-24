@@ -17,12 +17,12 @@ from onolys_miti.result import CodedSpan
 from pydantic import BaseModel, Field
 
 from onolys_api import logs
+from onolys_api.adapters.error_map import kind_for_code
 from onolys_api.auth.deps import AuthUser, current_user
 from onolys_api.coded_span import validate_coded_input
 from onolys_api.errors import ApiError, ErrorResponse
 from onolys_api.jobs import caps
 from onolys_api.jobs.machine import (
-    BAD_FILE_CODES,
     RUN_START_PROGRESS,
     advance,
     has_final_report,
@@ -152,7 +152,7 @@ def start_run(
     s = _open_session(request, user, id)
     if has_final_report(repo, uid, id, s.state):
         raise rating_final()
-    if s.state == "failed" and s.error is not None and s.error.code in BAD_FILE_CODES:
+    if s.state == "failed" and s.error is not None and s.error.kind == "user_file":
         raise invalid_state()
     if s.state not in RERUN_STATES or not (
         s.transcript_ready and s.speaker_confirmed and s.clinician_speaker
@@ -212,7 +212,9 @@ def start_run(
         _compensate(repo, uid, id, run_id, date)
         advance(
             repo, uid, id, to="failed", step=None,
-            error=SessionError(code="upstream_unavailable", step="run"),
+            error=SessionError(
+                code="upstream_unavailable", step="run", kind=kind_for_code("upstream_unavailable")
+            ),
         )  # fmt: skip
         raise ApiError.of(503, "upstream_unavailable", "Could not start the run.") from None
     return RunStarted(run_id=run_id, session=RunSessionRef(id=id, status="running"))

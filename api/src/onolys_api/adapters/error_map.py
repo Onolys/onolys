@@ -87,7 +87,21 @@ KIND_BY_CODE: dict[str, Kind] = {
     TRANSCRIPTION: USER_FILE,
     "no_speech": USER_FILE,
     "speakers_not_separated": USER_FILE,
+    # file-check codes: still session failures until SP03 Task 6 turns them into upload failures;
+    # the file is at fault (the retired file-code set)
+    "audio_unreadable": USER_FILE,
+    "audio_too_large": USER_FILE,
+    "unsupported_audio": USER_FILE,
+    "audio_too_long": USER_FILE,
+    "interview_too_long": USER_FILE,
 }
+
+
+def kind_for_code(code: str | None) -> Kind:
+    """The kind of a stored error code; an unknown or missing code is `permanent_internal`
+    (03-failure-policy R6): never offer a retry that cannot help."""
+    return KIND_BY_CODE.get(code or "", PERMANENT)
+
 
 # AdapterError codes that already are public codes
 _ADAPTER_CODES = frozenset(

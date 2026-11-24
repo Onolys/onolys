@@ -22,7 +22,7 @@ from typing import Literal
 from onolys_engine_core.log_context import log_context
 
 from onolys_api import logs
-from onolys_api.adapters.error_map import to_public
+from onolys_api.adapters.error_map import kind_for_code, to_public
 from onolys_api.errors import ApiError
 from onolys_api.jobs.machine import advance
 from onolys_api.jobs.queue import MAX_ATTEMPTS, TaskPayload, TaskQueue
@@ -235,7 +235,7 @@ class TaskRunner:
         label = spec.step or "run"
         self._safe(
             advance, self.repo, p.uid, p.sid, to="failed", step=label,
-            error=SessionError(code=code, step=label),
+            error=SessionError(code=code, step=label, kind=kind_for_code(code)),
         )  # fmt: skip
 
     @staticmethod

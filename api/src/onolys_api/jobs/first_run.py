@@ -17,6 +17,7 @@ import logging
 from uuid import uuid4
 
 from onolys_api import logs
+from onolys_api.adapters.error_map import kind_for_code
 from onolys_api.config import Settings
 from onolys_api.jobs import caps
 from onolys_api.jobs.machine import RUN_START_PROGRESS, advance
@@ -63,5 +64,7 @@ def maybe_start_first_run(
         release_once(repo, uid, sid, run_id, True, date)  # refunds its units unless it was free
         advance(
             repo, uid, sid, to="failed", step=None,
-            error=SessionError(code="upstream_unavailable", step="run"),
+            error=SessionError(
+                code="upstream_unavailable", step="run", kind=kind_for_code("upstream_unavailable")
+            ),
         )  # fmt: skip

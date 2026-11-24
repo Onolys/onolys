@@ -60,6 +60,7 @@ from onolys_api.repo.models import (
     TranscriptDoc,
     UsageDoc,
     UserDoc,
+    error_status_fields,
     interview_refundable,
     utcnow,
 )
@@ -373,7 +374,7 @@ class FirestoreRepo:
                 stref,
                 {
                     "state": to,
-                    "error_code": error.code if error else None,
+                    **error_status_fields(error, sess.get("retry_count", 0)),
                     "uid": uid,
                     "updated_at": now,
                 },  # fmt: skip

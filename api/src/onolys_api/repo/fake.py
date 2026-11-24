@@ -51,6 +51,7 @@ from onolys_api.repo.models import (
     TranscriptDoc,
     UsageDoc,
     UserDoc,
+    error_status_fields,
     interview_refundable,
     utcnow,
 )
@@ -265,7 +266,8 @@ class FakeRepo:
             self._put(f"sessions/{sid}", sess)
             status = self._get(f"session_status/{sid}") or {}
             status.update(
-                state=to, error_code=error.code if error else None, uid=uid, updated_at=now
+                state=to, **error_status_fields(error, sess.get("retry_count", 0)),
+                uid=uid, updated_at=now,
             )
             self._put(f"session_status/{sid}", status)
             self._record_status(uid, sid)

@@ -30,10 +30,10 @@ from onolys_engine_core.validated_run import OutputInvalid
 
 from onolys_api import logs
 from onolys_api.adapters.base import Evaluation
-from onolys_api.adapters.error_map import to_public
+from onolys_api.adapters.error_map import kind_for_code, to_public
 from onolys_api.adapters.validated import evaluate_validated
 from onolys_api.jobs.alive import ensure_alive
-from onolys_api.jobs.machine import RUN_START_PROGRESS, STAGE_WEIGHTS, advance, is_system_failure
+from onolys_api.jobs.machine import RUN_START_PROGRESS, STAGE_WEIGHTS, advance
 from onolys_api.jobs.queue import MAX_ATTEMPTS
 from onolys_api.jobs.transcribe import TRANSCRIPT_ID
 from onolys_api.jobs.transcribe import _run as run_coro
@@ -74,7 +74,7 @@ def _refund(repo, uid: str, sid: str, run_id: str, code: str) -> bool:
     that allow Try again), whether or not the LLM was called (owner decision). A bad-file code is
     the user's: refunded only if no attempt called the evaluation (`llm_started` on the run doc,
     persisted across attempts)."""
-    if is_system_failure(code):
+    if kind_for_code(code) != "user_file":
         return True
     try:
         return not repo.get_run(uid, sid, run_id).llm_started

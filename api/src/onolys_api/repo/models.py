@@ -9,7 +9,7 @@ from typing import Any, Literal
 from onolys_engine_core.transcript import Transcript
 from onolys_miti.result import CodedSpan
 from onolys_miti.stt import SttRun
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 SessionState = Literal[
     "created",
@@ -115,9 +115,40 @@ class UploadInfo(BaseModel):
     size_bytes: int
 
 
+FailureKind = Literal["transient", "permanent_internal", "user_file"]
+
+
+def _derive_kind(code: str | None) -> FailureKind:
+    from onolys_api.adapters.error_map import kind_for_code  # lazy: error_map pulls the engines
+
+    return kind_for_code(code)
+
+
+def error_status_fields(error: "SessionError | None", retry_count: int) -> dict[str, Any]:
+    """The status-doc mirror of a session error: `error_code`, `error_kind`, `counted`,
+    `retries_left` (retries still allowed when the kind is transient, else 0). One place for
+    every writer (advance, fail_stale_session in both repos)."""
+    from onolys_api.config import MAX_SESSION_RETRIES
+
+    if error is None:
+        return {"error_code": None, "error_kind": None, "retries_left": 0, "counted": None}
+    kind = error.kind or _derive_kind(error.code)
+    left = max(0, MAX_SESSION_RETRIES - retry_count) if kind == "transient" else 0
+    return {"error_code": error.code, "error_kind": kind, "retries_left": left,
+            "counted": error.counted}  # fmt: skip
+
+
 class SessionError(BaseModel):
     code: str
     step: str | None = None
+    kind: FailureKind | None = None  # filled from the code on write and on read (old docs)
+    counted: bool | None = None  # did this failure use a unit of the user's limit (None: n/a)
+
+    @model_validator(mode="after")
+    def _fill_kind(self) -> "SessionError":
+        if self.kind is None:
+            self.kind = _derive_kind(self.code)
+        return self
 
 
 class SessionDoc(Doc):
@@ -137,6 +168,7 @@ class SessionDoc(Doc):
     rating_submitted: bool = False
     has_rating: bool = False
     first_run_id: str | None = None
+    retry_count: int = 0  # user-visible retries used; capped at MAX_SESSION_RETRIES (D4)
     client: ClientInfo = Field(default_factory=ClientInfo)  # web build / browser that created it
     interview_id: str | None = None  # set by the AI interview (SP10): its first run is free (SP11)
     # set by `validate`: the upload is not the audio the interview's relay recorded, so the free
@@ -160,12 +192,27 @@ class SessionStatusDoc(Doc):
     step: str | None = None
     progress: int = 0
     error_code: str | None = None
+    error_kind: FailureKind | None = None
+    retries_left: int = 0
+    counted: bool | None = None
     latest_report_version: int | None = None
     updated_at: datetime = Field(default_factory=utcnow)
     transcript_ready: bool = False
     speaker_confirmed: bool = False
     rating_submitted: bool = False
     has_rating: bool = False
+
+    @model_validator(mode="after")
+    def _derive_old_failure(self) -> "SessionStatusDoc":
+        """A failed doc written before `error_kind` existed: derive it from the code. Such a
+        doc has never been retried, so a transient one has every retry left."""
+        if self.state == "failed" and self.error_code and self.error_kind is None:
+            self.error_kind = _derive_kind(self.error_code)
+            if self.error_kind == "transient":
+                from onolys_api.config import MAX_SESSION_RETRIES
+
+                self.retries_left = MAX_SESSION_RETRIES
+        return self
 
 
 class RecordingDoc(Doc):

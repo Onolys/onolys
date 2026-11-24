@@ -12,7 +12,7 @@ from typing import Any, get_args
 
 from onolys_api.errors import ApiError
 from onolys_api.repo.base import Repo
-from onolys_api.repo.models import SessionError, SessionState, utcnow
+from onolys_api.repo.models import SessionError, SessionState, error_status_fields, utcnow
 
 STATES: tuple[str, ...] = get_args(SessionState)
 
@@ -56,7 +56,8 @@ STAGES = tuple(STAGE_WEIGHTS)  # 45 + 51 = 96: under the 99 cap
 # fields of session_status/{sid} (everything the web may read; no text)
 STATUS_FIELDS = frozenset(
     {
-        "uid", "state", "step", "progress", "error_code", "latest_report_version", "updated_at",
+        "uid", "state", "step", "progress", "error_code", "error_kind", "retries_left", "counted",
+        "latest_report_version", "updated_at",
         *FLAGS,
     }
 )  # fmt: skip
@@ -72,21 +73,6 @@ def rating_final() -> ApiError:
     return ApiError.of(
         409, "rating_final", "The rating is final once submitted and cannot be changed or re-run."
     )
-
-
-# FX45: failure codes that need a different file (no Try again); every other failure is a system
-# failure, which refunds its units (owner decision) and allows Try again.
-BAD_FILE_CODES = frozenset(
-    {
-        "unsupported_audio", "audio_too_long", "interview_too_long", "audio_too_large",
-        "invalid_coded_span", "session_too_long",
-        "audio_unreadable", "no_speech", "speakers_not_separated", "transcription_failed",
-    }
-)  # fmt: skip
-
-
-def is_system_failure(code: str | None) -> bool:
-    return code not in BAD_FILE_CODES
 
 
 def has_final_report(repo, uid: str, sid: str, state: str) -> bool:
@@ -160,7 +146,7 @@ def advance(
         st_fields["step"] = step
     if error is not _KEEP:
         s_fields["error"] = error.model_dump() if error else None
-        st_fields["error_code"] = error.code if error else None
+        st_fields.update(error_status_fields(error, session.retry_count))
     if latest_report_version is not _KEEP:
         s_fields["latest_report_version"] = latest_report_version
         st_fields["latest_report_version"] = latest_report_version
