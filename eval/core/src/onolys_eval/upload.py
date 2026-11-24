@@ -6,6 +6,7 @@ from pathlib import Path
 from .fetch import default_cache, require_external_path
 from .gold import load_gold
 from .manifest import DatasetManifest
+from .publicsets import resolve_sessions
 
 BUCKET = "onolys-eval-data-staging"
 
@@ -19,6 +20,7 @@ def upload_dataset(
     A supplied storage client is useful for callers with an existing ADC client.
     """
     cache_path = require_external_path(Path(cache) if cache is not None else default_cache())
+    manifest = resolve_sessions(manifest, cache_path)
     dataset_path = cache_path / manifest.dataset_id
     prefix = f"datasets/{manifest.dataset_id}/"
     assets = []

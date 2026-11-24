@@ -321,7 +321,15 @@ def test_catalog_lists_committed_public_datasets(services):
     root = Path(__file__).resolve().parents[2] / "datasets"
     for ident in ("casaa-miti-practice", "mi-tags-sample", "annomi", "hlqc", "automisc-human", "welivita-mi", "phac-en", "phac-fr"):
         manifest = load_manifest(root / ident / "manifest.yaml")
-        services.bucket.write_json(f"datasets/{ident}/manifest.json", manifest.model_dump(mode="json"))
+        data = manifest.model_dump(mode="json")
+        if manifest.sessions_from_source:
+            # The committed YAML omits sessions; the bucket manifest.json lists all of them.
+            data["sessions"] = [{
+                "session_id": f"counsel-chat-{n}", "title": f"CounselChat thread {n}",
+                "clinician_labels": ["helper"], "code_header": None, "change_goal": "x",
+                "change_goal_source": "curated", "coded_span": None, "notes": ""}
+                for n in range(2000)]
+        services.bucket.write_json(f"datasets/{ident}/manifest.json", data)
     c = client(services)
     rows = {r["dataset_id"]: r for r in c.get("/v1/datasets", headers=AUTH).json()["datasets"]}
     assert rows["casaa-miti-practice"]["session_count"] == 12

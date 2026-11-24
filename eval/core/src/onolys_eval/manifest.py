@@ -90,11 +90,22 @@ class DatasetManifest(Contract):
     # (CSV/zip) read by that format's converter module.
     source_format: SourceFormat = "pdf"
     source_files: list[HttpURL] = Field(default_factory=list)
-    sessions: list[SessionManifest] = Field(min_length=1)
+    # True: the session list is derived from the source file at convert/upload time
+    # (``publicsets.resolve_sessions``) so a thousand-session manifest stays small; the
+    # committed YAML then has no ``sessions``. The resolved manifest (and the bucket
+    # manifest.json) lists every session and never carries this flag.
+    sessions_from_source: bool = Field(default=False, exclude=True)
+    sessions: list[SessionManifest] = Field(default_factory=list)
 
     @model_validator(mode="after")
     def unique_sessions(self):
         _unique_media(self.source_media)
+        if self.sessions_from_source:
+            if self.sessions or self.source_format == "pdf":
+                raise ValueError("sessions_from_source needs a non-pdf format and no listed sessions")
+            return self
+        if not self.sessions:
+            raise ValueError("sessions must list at least one session")
         if self.source_format == "pdf":
             if any(s.coded_url is None or s.uncoded_url is None for s in self.sessions):
                 raise ValueError("pdf datasets need coded_url and uncoded_url for every session")

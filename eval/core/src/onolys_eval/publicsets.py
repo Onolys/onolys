@@ -101,10 +101,37 @@ def bootstrap_raw(dataset_id: str, source_format: str, source_files: list[str],
     return fetch_dataset(stub, cache)
 
 
+_SESSION_DERIVERS = {"welivita_csv": "welivita"}
+
+
+def resolve_sessions(manifest: DatasetManifest, cache: Path | None = None) -> DatasetManifest:
+    """Return the manifest with its session list; derive it from the cached source if declared.
+
+    Manifests with ``sessions_from_source`` keep the repo YAML small. The derived list is
+    the one written to the bucket ``manifest.json``. Needs the fetched raw files.
+    """
+    if not manifest.sessions_from_source:
+        return manifest
+    import importlib
+
+    cache = require_external_path(cache if cache is not None else default_cache())
+    module = importlib.import_module(f".{_SESSION_DERIVERS[manifest.source_format]}", __package__)
+    raw = cache / manifest.dataset_id / "raw"
+    try:
+        sessions = module.derive_sessions(raw)
+    except FileNotFoundError as error:
+        raise ValueError(f"Missing source file {error.filename}; run fetch first") from error
+    data = manifest.model_dump(mode="json")
+    return DatasetManifest.model_validate({**data, "sessions": sessions})
+
+
 def write_manifest(path: Path, header: dict, sessions: list[dict]) -> DatasetManifest:
     """Validate and write a manifest YAML (metadata only, never dataset text)."""
     manifest = DatasetManifest.model_validate({**header, "sessions": sessions})
     data = manifest.model_dump(mode="json")
+    if manifest.sessions_from_source:
+        data["sessions_from_source"] = True
+        data.pop("sessions")
     for key in ("label_scheme", "transcript_origin", "labels_summary"):
         if data.get(key) is None:
             data.pop(key, None)
@@ -113,7 +140,7 @@ def write_manifest(path: Path, header: dict, sessions: list[dict]) -> DatasetMan
     for key in ("overlaps_with", "source_files"):
         if not data[key]:
             data.pop(key)
-    for session in data["sessions"]:
+    for session in data.get("sessions", []):
         for key in ("pdf_layout", "uncoded_pdf_layout"):
             session.pop(key, None)
         for key in ("uncoded_url", "coded_url", "audio_url", "source_media"):
@@ -121,9 +148,10 @@ def write_manifest(path: Path, header: dict, sessions: list[dict]) -> DatasetMan
                 session.pop(key, None)
     # Stable, readable key order: header fields first, sessions last.
     order = [k for k in data if k not in ("source_format", "source_files", "overlaps_with",
-                                          "sessions")]
+                                          "sessions", "sessions_from_source")]
     top = {k: data[k] for k in order}
-    for key in ("source_format", "source_files", "overlaps_with", "sessions"):
+    for key in ("source_format", "source_files", "overlaps_with", "sessions_from_source",
+                "sessions"):
         if key in data:
             top[key] = data[key]
     path.write_text(yaml.safe_dump(top, sort_keys=False, allow_unicode=True, width=10_000))

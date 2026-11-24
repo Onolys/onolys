@@ -69,6 +69,7 @@ A dataset `manifest.yaml` records what the dataset ORIGINALLY provides (we alway
 | `miti_version` | required key: `4.2.1`, `4.2`, `4.0` or `null` | `null` = labels are not MITI-coded; the picker then shows `Not MITI-coded` instead of `MITI x` |
 | `label_scheme` | optional non-empty string | Shown as `Scheme: ...`, e.g. `MITI 4.2`, `MISC 2.5 mapped to MITI`, `AnnoMI codes mapped to MITI`, `none` |
 | `source_format` | `pdf` (default) or `mitags_csv` | `pdf`: per-session `coded_url`/`uncoded_url`. `mitags_csv`: dataset-level `source_files` (CSV URLs) and no per-session URLs |
+| `sessions_from_source` | `false` (default) or `true` | `true` (non-pdf formats only): the YAML lists no `sessions`; they are derived from the fetched source file at `convert`/`upload`/`run` time and only the bucket `manifest.json` carries the full list. Keeps thousand-session datasets under the 200,000-byte repo guard (`welivita-mi`) |
 | `overlaps_with` | optional list of `{dataset_id, note}` | Datasets sharing interviews |
 | `sessions[].source_media` | optional per-session override, same values | |
 

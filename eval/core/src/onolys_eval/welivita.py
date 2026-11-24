@@ -141,8 +141,10 @@ def read_dialogues(path: Path):
 def convert_welivita_dataset(manifest: DatasetManifest, cache: Path | None = None,
                              session_id: str | None = None):
     from .fetch import default_cache, require_external_path
+    from .publicsets import resolve_sessions
 
     cache = require_external_path(cache if cache is not None else default_cache())
+    manifest = resolve_sessions(manifest, cache)
     raw = cache / manifest.dataset_id / "raw"
     files = read_provenance(raw, manifest.dataset_id)
     dialogues = read_dialogues(raw / SOURCE_FILE)
@@ -172,11 +174,12 @@ HEADER = {
                       "short forum threads, not counselling sessions; no globals",
     "source_format": "welivita_csv",
     "source_files": [SOURCE_URL],
+    "sessions_from_source": True,
 }
 
 
-def build_manifest(path: Path, cache: Path | None = None):
-    raw = bootstrap_raw(DATASET_ID, "welivita_csv", [SOURCE_URL], cache)
+def derive_sessions(raw: Path):
+    """Session manifest rows for every dialogue in the fetched source file (file order)."""
     sessions = []
     for key, (dialog_id, rows) in read_dialogues(raw / SOURCE_FILE).items():
         turns = turns_from_rows(rows)
@@ -195,7 +198,13 @@ def build_manifest(path: Path, cache: Path | None = None):
                       f"{len(turns)} turns; helper sentences: {stats['mapped']} mapped, "
                       f"{stats['unmapped']} labelled but not mapped, "
                       f"{stats['unresolved']} unresolved (not counted)")})
-    return write_manifest(path, HEADER, sessions)
+    return sessions
+
+
+def build_manifest(path: Path, cache: Path | None = None):
+    """Write the small committed manifest: no sessions, derived by ``derive_sessions``."""
+    bootstrap_raw(DATASET_ID, "welivita_csv", [SOURCE_URL], cache)
+    return write_manifest(path, HEADER, [])
 
 
 if __name__ == "__main__":

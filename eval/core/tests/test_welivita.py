@@ -129,4 +129,51 @@ def test_committed_manifest_is_valid():
     manifest = load_manifest(Path(__file__).resolve().parents[2] / "datasets/welivita-mi/manifest.yaml")
     assert manifest.source_format == "welivita_csv" and manifest.transcript_origin == "human"
     assert manifest.source_media == ["transcript"] and "CC BY-NC-SA" in manifest.license_note
-    assert len(manifest.sessions) == 2000
+    assert manifest.sessions_from_source and manifest.sessions == []
+
+
+def _generated_manifest(**changes):
+    data = {"dataset_id": "ds", "title": "t", "license_note": "l", "source_page": "https://example.org",
+            "miti_version": None, "source_media": ["transcript"], "source_format": "welivita_csv",
+            "source_files": ["https://example.org/MI%20Dataset.csv"], "sessions": []}
+    return DatasetManifest.model_validate({**data, "sessions_from_source": True, **changes})
+
+
+def test_generated_sessions_resolve_from_source_and_are_not_flagged(tmp_path):
+    raw = tmp_path / "ds" / "raw"
+    raw.mkdir(parents=True)
+    (raw / "MI Dataset.csv").write_text(_csv_text(dialogue(CC) + dialogue(RED)), encoding="utf-8")
+    manifest = _generated_manifest()
+    assert manifest.sessions == []
+    from onolys_eval.publicsets import resolve_sessions
+    resolved = resolve_sessions(manifest, tmp_path)
+    assert [s.session_id for s in resolved.sessions] == ["counsel-chat-7", "red-123-somesub"]
+    assert resolved.sessions[0].title == "CounselChat thread 7"
+    assert "9 mapped" in resolved.sessions[0].notes
+    assert resolved.sessions_from_source is False
+    assert "sessions_from_source" not in resolved.model_dump(mode="json")
+    DatasetManifest.model_validate(resolved.model_dump(mode="json"))
+    with pytest.raises(ValueError, match="fetch"):
+        resolve_sessions(manifest, tmp_path / "empty")
+
+
+def test_convert_resolves_generated_sessions(tmp_path):
+    raw = tmp_path / "ds" / "raw"
+    raw.mkdir(parents=True)
+    (raw / "MI Dataset.csv").write_text(_csv_text(dialogue(CC)), encoding="utf-8")
+    (raw / "fetch.json").write_text(json.dumps({"dataset_id": "ds", "files": {"MI Dataset.csv": {
+        "url": "https://example.org/MI%20Dataset.csv", "sha256": "e" * 64,
+        "retrieved_at": "2026-11-24T00:00:00+00:00"}}}))
+    status, report = welivita.convert_welivita_dataset(_generated_manifest(), tmp_path, None)
+    assert status == 0 and report[-1] == "1 sessions processed"
+    assert (tmp_path / "ds" / "counsel-chat-7" / "gold.json").is_file()
+
+
+def test_manifest_validation_of_generated_sessions():
+    with pytest.raises(ValueError, match="at least one session"):
+        _generated_manifest(sessions_from_source=False)
+    with pytest.raises(ValueError, match="no listed sessions"):
+        _generated_manifest(sessions=[{"session_id": "a", "title": "a", "clinician_labels": ["x"],
+                                       "code_header": None, "change_goal": "x",
+                                       "change_goal_source": "curated", "coded_span": None,
+                                       "notes": ""}])
