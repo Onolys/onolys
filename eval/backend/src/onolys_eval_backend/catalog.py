@@ -65,6 +65,10 @@ class DatasetMetadata(BaseModel):
     license_note: str
     source_page: str
     miti_version: Literal["4.2.1"]
+    source_media: list[Literal["audio", "video", "transcript"]]
+    transcript_origin: Literal["human", "auto_captions", "translated", "stt_ours"] | None = None
+    labels_summary: str | None = None
+    overlaps_with: list[dict[str, str]] = []
     session_count: int
 
 

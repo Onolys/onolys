@@ -29,7 +29,7 @@ The API base is `https://onolys-eval-backend-staging-1054076260967.us-central1.r
 | GET | `/v1/me` | Confirm access |
 | GET | `/v1/options?mode=dataset` | Engines, models/tiers/efforts, defaults and production labels |
 | GET | `/v1/options?mode=upload&upload_id=ID` | Upload-specific Human eligibility |
-| GET | `/v1/datasets` | Available manifests |
+| GET | `/v1/datasets` | Available manifests with original-source metadata (`source_media`, `transcript_origin`, `labels_summary`, `miti_version`, `overlaps_with`) |
 | GET | `/v1/datasets/{id}` | Sessions, gold availability and coded spans |
 | POST | `/v1/uploads` | Multipart `file`, optional `gold`, `change_goal`, `language`, JSON `coded_span` |
 | GET | `/v1/uploads/{id}` | Transcription/speaker readiness |
@@ -56,3 +56,16 @@ For an upload, use `"input":{"upload_id":"ID"}`. Engine, model, tier and effort 
 Only staging is supported. `eval/web` is the SPA; `eval/backend` authenticates users, schedules work and reads results. The backend calls registered engines in process rather than the main application API. Firestore database `staging` stores `eval_uploads`, `eval_runs`, and run `units`; browser clients have no direct database access. The private `onolys-eval-data-staging` bucket stores `datasets/<dataset>/manifest.json`, session `transcript.json`/`gold.json`, `uploads/<id>/` input and transcript artifacts, and large `runs/<run>/<unit>.json` outputs. Dataset source files are excluded from the deployment image.
 
 These are transcript-based MITI 4.2.1 comparisons, not diagnosis or judgments of clinical correctness. Automatic speaker labels and times may be wrong. Utterance splitting and CASAA row coding rules can change counts. One consensus reference does not establish inter-rater reliability, validation or official MITI status. Review evidence with human judgment; this is not an official MITI product.
+
+## Dataset manifest: original source fields
+
+A dataset `manifest.yaml` records what the dataset ORIGINALLY provides (we always store `transcript.v1`). The Dataset picker shows it as `Original: Video + audio + transcript · Transcript: human · Labels: ... · MITI 4.2.1`, or `Original: Transcript only (no audio)`.
+
+| Field | Type / allowed values | Notes |
+|---|---|---|
+| `source_media` | required list, unique, any of `audio`, `video`, `transcript` | What the original source offers |
+| `transcript_origin` | optional: `human`, `auto_captions`, `translated`, `stt_ours` | Where the transcript came from |
+| `labels_summary` | optional non-empty string | Human labels available, e.g. `MITI 4.2.1 behavior counts + 4 global ratings` |
+| `miti_version` | required, `4.2.1` | |
+| `overlaps_with` | optional list of `{dataset_id, note}` | Datasets sharing interviews |
+| `sessions[].source_media` | optional per-session override, same values | |

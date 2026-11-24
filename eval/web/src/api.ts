@@ -9,7 +9,12 @@ export interface Options {
   models: ModelOption[];
   defaults: Record<Mode, { engines: string[]; selection: Selection; label: string }>;
 }
-export interface DatasetMetadata { dataset_id: string; title: string }
+export type SourceMedia = 'audio' | 'video' | 'transcript';
+export type TranscriptOrigin = 'human' | 'auto_captions' | 'translated' | 'stt_ours';
+export interface DatasetMetadata {
+  dataset_id: string; title: string;
+  source_media?: SourceMedia[]; transcript_origin?: TranscriptOrigin; labels_summary?: string; miti_version?: string;
+}
 export interface Dataset extends DatasetMetadata { sessions: { session_id: string; title: string; has_gold?: boolean; coded_span?: CodedSpan }[] }
 export interface Upload {
   upload_id: string;

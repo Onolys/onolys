@@ -21,6 +21,8 @@ def manifest():
     return {
         "dataset_id": "synthetic", "title": "Synthetic", "license_note": "Test only",
         "source_page": "https://example.org", "miti_version": "4.2.1",
+        "source_media": ["video", "transcript"], "transcript_origin": "human",
+        "labels_summary": "MITI counts", "overlaps_with": [{"dataset_id": "other", "note": "Shared"}],
         "sessions": [{"session_id": "one", "title": "One",
                       "coded_url": "https://example.org/coded.pdf",
                       "uncoded_url": "https://example.org/uncoded.pdf",
@@ -157,9 +159,13 @@ def test_dataset_list_detail_and_gold_presence(services):
     assert response.status_code == 200
     expected = {k: v for k, v in source.items() if k != "sessions"}
     assert response.json() == {"datasets": [{**expected, "session_count": 1}]}
+    row = response.json()["datasets"][0]
+    assert row["source_media"] == ["video", "transcript"] and row["transcript_origin"] == "human"
+    assert row["labels_summary"] == "MITI counts" and row["miti_version"] == "4.2.1"
     detail = c.get("/v1/datasets/synthetic", headers=AUTH)
     assert detail.status_code == 200
     result = detail.json()
+    assert result["source_media"] == ["video", "transcript"]
     assert result["dataset_id"] == "synthetic"
     session = result["sessions"][0]
     assert session["session_id"] == "one" and session["has_gold"] is True

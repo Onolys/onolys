@@ -17,6 +17,7 @@ def manifest_data():
     return {
         "dataset_id": "synthetic", "title": "Synthetic", "license_note": "Test only",
         "source_page": "https://example.org", "miti_version": "4.2.1",
+        "source_media": ["video", "transcript"],
         "sessions": [{"session_id": "one", "title": "One",
                       "coded_url": "https://example.org/coded.pdf",
                       "uncoded_url": "https://example.org/uncoded.pdf",
@@ -97,6 +98,13 @@ def test_gold_accepts_optional_utterance_codes_and_zero_denominators():
 @pytest.mark.parametrize("change", [
     lambda d: d.update(dataset_id="../escape"),
     lambda d: d.update(unknown="x"),
+    lambda d: d.pop("source_media"),
+    lambda d: d.update(source_media=[]),
+    lambda d: d.update(source_media=["pdf"]),
+    lambda d: d.update(source_media=["audio", "audio"]),
+    lambda d: d.update(transcript_origin="guess"),
+    lambda d: d.update(overlaps_with=[{"dataset_id": "x"}]),
+    lambda d: d["sessions"][0].update(source_media=["gif"]),
     lambda d: d["sessions"][0].update(unknown="x"),
     lambda d: d["sessions"][0].update(session_id="bad/id"),
     lambda d: d["sessions"][0].update(change_goal=""),
@@ -233,3 +241,22 @@ def test_full_gold_summaries_still_enforced_and_unchanged_dump():
     data["summaries"]["total_mia"] = 99
     with pytest.raises(ValidationError, match="summaries"):
         Gold.model_validate(data)
+
+
+def test_manifest_source_media_and_optional_fields():
+    data = manifest_data()
+    data.update(source_media=["video", "audio", "transcript"], transcript_origin="auto_captions",
+                labels_summary="MITI counts", overlaps_with=[{"dataset_id": "other", "note": "Shared"}])
+    data["sessions"][0]["source_media"] = ["transcript"]
+    m = DatasetManifest.model_validate(data)
+    assert m.source_media == ["video", "audio", "transcript"]
+    assert m.transcript_origin == "auto_captions" and m.overlaps_with[0].dataset_id == "other"
+    assert m.sessions[0].source_media == ["transcript"]
+    base = DatasetManifest.model_validate(manifest_data())
+    assert base.transcript_origin is None and base.labels_summary is None and base.overlaps_with == []
+
+
+def test_committed_casaa_manifest_source_media():
+    m = load_manifest(ROOT / "datasets/casaa-miti421-video2013/manifest.yaml")
+    assert m.source_media == ["video", "transcript"] and m.transcript_origin == "human"
+    assert "MITI 4.2.1" in m.labels_summary

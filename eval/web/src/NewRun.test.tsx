@@ -17,7 +17,7 @@ function makeApi(sessionCount = 2) {
     ...createEvalApi('', vi.fn()),
     me: vi.fn().mockResolvedValue({}),
     options: vi.fn(async (_mode: string, uploadId?: string) => ({ ...options, engines: uploadId === 'gold' || _mode === 'dataset' ? options.engines : options.engines.filter(e => e.id !== 'human') })),
-    datasets: vi.fn().mockResolvedValue({ datasets: [{ dataset_id: 'sample', title: 'Sample dataset' }] }),
+    datasets: vi.fn().mockResolvedValue({ datasets: [{ dataset_id: 'sample', title: 'Sample dataset', source_media: ['video', 'transcript'], transcript_origin: 'human', labels_summary: 'MITI counts', miti_version: '4.2.1' }] }),
     dataset: vi.fn().mockResolvedValue({ dataset_id: 'sample', title: 'Sample dataset', sessions: sessionCount === 2 ? [{ session_id: 's1', title: 'First session' }, { session_id: 's2', title: 'Second session' }] : Array.from({ length: sessionCount }, (_, i) => ({ session_id: i === 0 ? 's1' : `x${i}`, title: i === 0 ? 'First session' : `Session ${i}` })) }),
     upload: vi.fn().mockResolvedValue({ upload_id: 'plain', status: 'ready', has_gold: false, speakers: [] }),
     getUpload: vi.fn().mockResolvedValue({ upload_id: 'plain', status: 'ready', has_gold: false, speakers: [] }),
@@ -47,6 +47,11 @@ const checked = (name: string) => (screen.getByLabelText(name) as HTMLInputEleme
 const start = () => screen.getByRole('button', { name: 'Start run' }) as HTMLButtonElement;
 
 describe('new run', () => {
+  it('shows the original source media line for the selected dataset', async () => {
+    await mount();
+    expect(screen.getByTestId('dataset-source').textContent).toBe('Original: Video + transcript · Transcript: human · Labels: MITI counts · MITI 4.2.1');
+    expect(screen.getByRole('option', { name: 'Sample dataset (Video + transcript)' })).toBeTruthy();
+  });
   it('loads configured dataset defaults, all sessions, prod labels and starts with a selection', async () => {
     const { api, onRunCreated } = await mount();
     expect(checked('First session')).toBe(true); expect(checked('Second session')).toBe(true);

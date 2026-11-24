@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { sourceLine, originalMedia } from './sourceMedia';
 import type { CodedSpan, Dataset, DatasetMetadata, EvalApi, Mode, Options, RunInput, RunSummary, Selection, Upload } from './api';
 import { MAX_UNITS, countText, effortsFor, modelMap, planCount, skippedText, tiersFor, tooLargeMessage, validateSelection, comboKey } from './matrix';
 
@@ -161,7 +162,8 @@ export function NewRun({ api, onRunCreated, initialRun }: { api: EvalApi; onRunC
       {initialRun ? <fieldset><legend>Saved input</legend><p>Rerun of {rerunSourceID}. Original input and session configuration are preserved.</p><pre>{JSON.stringify({ input: initialRun.input, change_goal: initialRun.change_goal, language: initialRun.language, coded_span: initialRun.coded_span }, null, 2)}</pre></fieldset> : <fieldset disabled={busy}><legend>Input</legend>
         <div className="choice-row">{(['dataset', 'upload'] as const).map(value => <label key={value}><input type="radio" name="mode" checked={mode === value} onChange={() => changeMode(value)} />{value === 'dataset' ? 'Dataset' : 'Upload'}</label>)}</div>
         {mode === 'dataset' ? <>
-          <label>Choose dataset<select value={datasetId} onChange={event => { setDatasetId(event.target.value); setDataset(undefined); setSessionIds([]); setError(''); }}><option value="" disabled>Select a dataset</option>{datasets.map(d => <option key={d.dataset_id} value={d.dataset_id}>{d.title}</option>)}</select></label>
+          <label>Choose dataset<select value={datasetId} onChange={event => { setDatasetId(event.target.value); setDataset(undefined); setSessionIds([]); setError(''); }}><option value="" disabled>Select a dataset</option>{datasets.map(d => <option key={d.dataset_id} value={d.dataset_id}>{d.title} ({originalMedia(d.source_media)})</option>)}</select></label>
+          {datasets.find(d => d.dataset_id === datasetId) && <p className="dataset-source" data-testid="dataset-source">{sourceLine(datasets.find(d => d.dataset_id === datasetId)!)}</p>}
           {dataset?.dataset_id === datasetId && <fieldset><legend>Sessions</legend>{dataset.sessions.map(s => <label key={s.session_id}><input type="checkbox" checked={sessionIds.includes(s.session_id)} onChange={() => setSessionIds(ids => toggle(ids, s.session_id))} />{s.title}</label>)}</fieldset>}
         </> : <>
           <label>Session file<input type="file" accept="audio/*,.json,.txt" onChange={event => { invalidateUpload(); setFile(event.target.files?.[0]); }} /></label>
