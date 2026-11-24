@@ -120,6 +120,8 @@ Run `cd infra && terraform output` (needs ADC; see Operating Terraform).
 | `wif_provider` | GitHub var `WIF_PROVIDER`. Now: `projects/1054076260967/locations/global/workloadIdentityPools/github/providers/github` |
 | `deployer_staging_email` | GitHub var `DEPLOYER_STAGING_SA`. Now: `deployer-staging@onolys.iam.gserviceaccount.com` |
 | `deployer_prod_email` | GitHub var `DEPLOYER_PROD_SA`. Now: `deployer-prod@onolys.iam.gserviceaccount.com` |
+| `nightly_wif_provider` | GitHub var `NIGHTLY_WIF_PROVIDER`; isolated `github-nightly` pool/provider, available after applying `infra/nightly.tf` |
+| `nightly_gemini_email` | GitHub var `NIGHTLY_GEMINI_SA`; `nightly-gemini@onolys.iam.gserviceaccount.com`, available after apply |
 | `web_env_staging` | map with `VITE_FIREBASE_API_KEY`, `_AUTH_DOMAIN`, `_APP_ID`, `_STORAGE_BUCKET`, `_MESSAGING_SENDER_ID`, `_PROJECT_ID`, and `VITE_FIRESTORE_DATABASE` (= `staging`). Sensitive: read with `terraform output -json web_env_staging` |
 | `web_env_prod` | same keys; `VITE_FIRESTORE_DATABASE` = `(default)` |
 | `web_env_admin_staging`, `web_env_admin_prod` | `null` until `admin_enabled` is true for that env (`web_env_admin_prod` stays `null`) |
@@ -156,6 +158,8 @@ Environments: create `production` with Tejit as required reviewer (all prod jobs
 | `WIF_PROVIDER` | deploy-staging, deploy-prod, deploy-admin, `_deploy-cloudrun` | `wif_provider` |
 | `DEPLOYER_STAGING_SA` | same (and the read-only `resolve` step of deploy-prod) | `deployer_staging_email` |
 | `DEPLOYER_PROD_SA` | deploy-prod, deploy-admin, `_deploy-cloudrun` | `deployer_prod_email` |
+| `NIGHTLY_WIF_PROVIDER` | Nightly `api-real-mode`, trusted `main` only | `nightly_wif_provider` |
+| `NIGHTLY_GEMINI_SA` | Nightly `api-real-mode`, staging secret reader | `nightly_gemini_email` |
 | `GCP_PROJECT`, `GCP_REGION` | optional; default `onolys`, `us-central1` | leave unset |
 | `STAGING_VITE_FIREBASE_API_KEY`, `_AUTH_DOMAIN`, `_APP_ID`, `_STORAGE_BUCKET`, `_MESSAGING_SENDER_ID` | deploy-staging (web build) | `web_env_staging` keys `VITE_FIREBASE_*` (same names without the `STAGING_` prefix) |
 | `PROD_VITE_FIREBASE_API_KEY`, `_AUTH_DOMAIN`, `_APP_ID`, `_STORAGE_BUCKET`, `_MESSAGING_SENDER_ID` | deploy-prod (web build) | `web_env_prod` keys |
@@ -164,7 +168,20 @@ Environments: create `production` with Tejit as required reviewer (all prod jobs
 
 `VITE_FIREBASE_PROJECT_ID` is taken from `GCP_PROJECT`/`onolys` in the workflow; `VITE_FIRESTORE_DATABASE` is hard-coded per workflow (see Terraform outputs).
 
-Secrets: the only one is `GEMINI_API_KEY`, read by `nightly.yml` (job `api-real-mode`, a live Gemini run); it should hold the staging/test key, never the prod key (prod's key lives only in Secret Manager as `gemini-api-key-prod`). Deploys use WIF, so no JSON key and no deploy secret exists. Do not add a GCP key.
+### Gemini key: Secret Manager is the source
+
+`nightly.yml` (`api-real-mode`) reads `gemini-api-key-staging` from Secret Manager, the same secret used by staging runtime services. The action masks the fetched value and exposes it only to the live-test step as `GEMINI_API_KEY`. It does not export the key to the job environment or store it in a GitHub repository secret. Runtime references stay `gemini-api-key-staging` and `gemini-api-key-prod` for their respective environments; the production key stays only in Secret Manager and is never copied into GitHub.
+
+Nightly uses keyless GitHub OIDC with the dedicated `nightly-gemini` service account and isolated `github-nightly` pool/provider in `infra/nightly.tf`. Both the workflow job and provider admit only scheduled/manual runs from `main`; the provider also requires the exact repository and `.github/workflows/nightly.yml@refs/heads/main` workflow identity. The account's impersonation binding accepts only the main-branch subject from that pool, and its sole resource grant is Secret Accessor on `gemini-api-key-staging`. PR/fork runs, other refs and other workflows cannot use it. Existing deployer accounts receive no secret access.
+
+Activate in this order:
+
+1. Review and apply the Terraform changes, creating the isolated pool/provider, reader account and exact-secret IAM grants. Confirm `gemini-api-key-staging` has an enabled current version without printing its payload.
+2. Set repository variables `NIGHTLY_WIF_PROVIDER` and `NIGHTLY_GEMINI_SA` from the two Terraform outputs above. Keep the existing GitHub `GEMINI_API_KEY` secret during activation.
+3. After the workflow is on `main`, manually dispatch **Nightly on `main`** and verify `api-real-mode` succeeds through OIDC, masked Secret Manager retrieval and the live Gemini test. A dispatch from another ref skips this job. No key or credentials should be printed or uploaded as an artifact.
+4. Only after that successful verification, delete the now-unused GitHub `GEMINI_API_KEY` repository secret. No workflow consumes it after this change. Deploys and Nightly require no GCP JSON key or provider-key repository secret.
+
+Offline guards: `uv run --package onolys-admin-auth pytest infra/scripts/test_nightly_gemini_secret.py -q`, `python3 scripts/ci/check_no_llm_keys_in_pr_workflows.py`, `actionlint .github/workflows/nightly.yml`, and Terraform `fmt -check` / `validate`. These validate configuration, not live IAM propagation; the trusted-main Nightly run completes activation.
 
 Workflows: `deploy-staging.yml` runs after the `CI` workflow succeeds on `main` (also manual). `deploy-prod.yml` is manual (`workflow_dispatch`, input `sha` or `version`) or on a `v*` tag. `deploy-admin.yml` deploys the staging admin only (backend + `onolys-admin-staging` site): automatically on push to `main` touching `admin/`, `frontend/`, root `pyproject.toml`/`uv.lock`, `.dockerignore`, or `deploy-admin.yml`/`_deploy-cloudrun.yml`; also manual. There is no prod admin. `nightly.yml` runs 06:17 UTC daily.
 

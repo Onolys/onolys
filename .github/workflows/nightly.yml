@@ -18,11 +18,15 @@ jobs:
     uses: ./.github/workflows/ci.yml
 
   api-real-mode:
-    # SP09 R5: real evaluation with no GCP (fixture STT, real Gemini LLM, fake repo and blobs).
+    # Fixture STT/repo/blobs; real Gemini uses the same staging key as the runtime.
+    if: >-
+      github.ref == 'refs/heads/main' &&
+      (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    env:
-      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+    permissions:
+      contents: read
+      id-token: write
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
@@ -30,7 +34,24 @@ jobs:
           enable-cache: true
           cache-dependency-glob: uv.lock
       - run: uv sync --frozen --package onolys-api
-      - run: uv run --no-sync --package onolys-api pytest api/tests/test_live_real_mode.py -m live -s
+      - name: Authenticate Nightly secret reader (keyless)
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.NIGHTLY_WIF_PROVIDER }}
+          service_account: ${{ vars.NIGHTLY_GEMINI_SA }}
+      - name: Read staging Gemini key
+        id: gemini
+        uses: google-github-actions/get-secretmanager-secrets@v2
+        with:
+          secrets: gemini:${{ vars.GCP_PROJECT || 'onolys' }}/gemini-api-key-staging
+          min_mask_length: 1
+          export_to_environment: false
+      - name: Run live Gemini check
+        run: |
+          test -n "$GEMINI_API_KEY"
+          uv run --no-sync --package onolys-api pytest api/tests/test_live_real_mode.py -m live -s
+        env:
+          GEMINI_API_KEY: ${{ steps.gemini.outputs.gemini }}
 
   api-nightly:
     # Long tests excluded from PR CI (marker `nightly`): dev script + combined quickstart (needs uv, ffmpeg, curl, jq).
