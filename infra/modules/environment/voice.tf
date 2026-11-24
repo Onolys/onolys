@@ -4,7 +4,7 @@
 locals {
   # Deterministic like worker_url, so the api service can carry it without depending on the voice service.
   voice_host = "onolys-voice-${var.env}-${data.google_project.this.number}.${var.region}.run.app"
-  voice_env = [
+  voice_env = concat(local.interview_env, [
     { name = "ENV", value = var.env },
     { name = "GCP_PROJECT", value = var.project },
     { name = "GOOGLE_CLOUD_PROJECT", value = var.project },
@@ -14,17 +14,7 @@ locals {
     { name = "CORS_ORIGINS", value = join(",", var.cors_origins) },
     { name = "VOICE_PROVIDERS_FILE", value = "config/${var.env}/voice_providers.yaml" },
     { name = "ADAPTERS", value = "real" },
-    { name = "AI_CAP_DAY", value = tostring(var.ai_cap_day) },
-    { name = "AI_MAX_SECONDS", value = tostring(var.ai_max_seconds) },
-    { name = "AI_WARN_SECONDS", value = tostring(var.ai_warn_seconds) },
-    { name = "AI_MIN_SECONDS", value = tostring(var.ai_min_seconds) },
-    { name = "AI_TOLERANCE_SECONDS", value = tostring(var.ai_tolerance_seconds) },
-    { name = "AI_MISMATCH_MIN_SECONDS", value = tostring(var.ai_mismatch_min_seconds) },
-    { name = "AI_MISMATCH_PCT", value = tostring(var.ai_mismatch_pct) },
-    { name = "AI_ABANDON_COUNT_SECONDS", value = tostring(var.ai_abandon_count_seconds) },
-    { name = "AI_RECONNECT_SECONDS", value = tostring(var.ai_reconnect_seconds) },
-    { name = "AI_MIC_GATE", value = tostring(var.ai_mic_gate) },
-  ]
+  ])
 }
 
 resource "google_service_account" "voice" {

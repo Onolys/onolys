@@ -94,7 +94,10 @@ def make_run_handler(
             if isinstance(e, OutputInvalid):
                 fields = {"validation": e.validation}
                 if e.usage is not None:
-                    fields["run_info"] = {"usage": e.usage.model_dump(mode="json")}
+                    fields["run_info"] = {
+                        **(repo.get_run(uid, sid, run_id).run_info or {}),
+                        "usage": e.usage.model_dump(mode="json"),
+                    }
                 repo.update_run(uid, sid, run_id, fields)
             code, retryable = to_public(e, ctx.attempt)
             if not retryable or ctx.attempt >= MAX_ATTEMPTS:
@@ -206,13 +209,25 @@ def _evaluate(ctx, blobs, evaluation, run_doc, session) -> None:
         deadline=time.monotonic() + max(0.0, ctx.remaining_s()),
     )  # fmt: skip
     repo.update_run(uid, sid, run_id, {"llm_started": True})  # survives retries: a unit is spent
-    # no catch here: any engine exception reaches the worker, which maps it with `to_public`
-    out = run_coro(
-        evaluate_validated(
-            evaluation, rctx, transcript, {"subject": session.clinician_speaker},
-            params, progress_cb,
-        )
-    )  # fmt: skip
+    # Preserve call accounting before the worker maps the original engine exception.
+    try:
+        out = run_coro(
+            evaluate_validated(
+                evaluation, rctx, transcript, {"subject": session.clinician_speaker},
+                params, progress_cb,
+            )
+        )  # fmt: skip
+    except Exception:
+        if rctx.metrics is not None:
+            # The collector contains call metadata and token/cost totals, never prompt text.
+            try:
+                repo.update_run(
+                    uid, sid, run_id, {"run_info": {"metrics": rctx.metrics.snapshot()}}
+                )
+            except Exception as exc:
+                logs.emit("run_metrics_write_failed", logging.WARNING,
+                          session_id=sid, run_id=run_id, exc_class=type(exc).__name__)
+        raise
 
     prefix = f"{uid}/{sid}/runs/{run_id}/"
     for name in ARTIFACTS:

@@ -25,3 +25,11 @@ def test_cli_writes_file(tmp_path):
     out = tmp_path / "o.json"
     openapi.main(["--out", str(out)])
     assert out.read_text() == openapi.render()
+
+
+def test_authenticated_operations_document_email_verification_failure():
+    doc = json.loads(openapi.render())
+    for path, item in doc["paths"].items():
+        for operation in item.values():
+            if operation.get("security"):
+                assert "403" in operation["responses"], path

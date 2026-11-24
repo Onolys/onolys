@@ -1527,6 +1527,15 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
+            /** @description `forbidden` (API keys cannot manage API keys) or `email_unverified` (valid sign-in, email address not verified yet) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
             /** @description `daily_cap_reached` (daily run cap), `concurrent_runs` (a run is already in progress) or `rate_limited` */
             429: {
                 headers: {
@@ -1571,6 +1580,15 @@ export interface operations {
             };
             /** @description `unauthenticated`: missing, invalid or revoked credentials */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description `forbidden` (API keys cannot manage API keys) or `email_unverified` (valid sign-in, email address not verified yet) */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -1658,6 +1676,15 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
+            /** @description `forbidden` (API keys cannot manage API keys) or `email_unverified` (valid sign-in, email address not verified yet) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
             /** @description `invalid_parameters` (incl. a malformed id, cursor or body), `unsupported_audio`, `audio_too_large`, `rating_invalid`, `invalid_coded_span` or `session_too_long` */
             422: {
                 headers: {
@@ -1709,6 +1736,15 @@ export interface operations {
             };
             /** @description `unauthenticated`: missing, invalid or revoked credentials */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description `forbidden` (API keys cannot manage API keys) or `email_unverified` (valid sign-in, email address not verified yet) */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -1787,6 +1823,15 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
+            /** @description `forbidden` (API keys cannot manage API keys) or `email_unverified` (valid sign-in, email address not verified yet) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
             /** @description `not_found`: no such resource for this user (never 403, so ids cannot be probed) */
             404: {
                 headers: {
@@ -1847,6 +1892,15 @@ export interface operations {
             };
             /** @description `unauthenticated`: missing, invalid or revoked credentials */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description `forbidden` (API keys cannot manage API keys) or `email_unverified` (valid sign-in, email address not verified yet) */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -1919,6 +1973,15 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
+            /** @description `forbidden` (API keys cannot manage API keys) or `email_unverified` (valid sign-in, email address not verified yet) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
             /** @description `daily_cap_reached` (daily run cap), `concurrent_runs` (a run is already in progress) or `rate_limited` */
             429: {
                 headers: {
@@ -1962,6 +2025,15 @@ export interface operations {
             };
             /** @description `unauthenticated`: missing, invalid or revoked credentials */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description `forbidden` (API keys cannot manage API keys) or `email_unverified` (valid sign-in, email address not verified yet) */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -2025,6 +2097,15 @@ export interface operations {
             };
             /** @description `unauthenticated`: missing, invalid or revoked credentials */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description `forbidden` (API keys cannot manage API keys) or `email_unverified` (valid sign-in, email address not verified yet) */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -2099,6 +2180,15 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
+            /** @description `forbidden` (API keys cannot manage API keys) or `email_unverified` (valid sign-in, email address not verified yet) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
             /** @description `not_found`: no such resource for this user (never 403, so ids cannot be probed) */
             404: {
                 headers: {
@@ -2157,6 +2247,15 @@ export interface operations {
             };
             /** @description `unauthenticated`: missing, invalid or revoked credentials */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description `forbidden` (API keys cannot manage API keys) or `email_unverified` (valid sign-in, email address not verified yet) */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -2240,6 +2339,15 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
+            /** @description `forbidden` (API keys cannot manage API keys) or `email_unverified` (valid sign-in, email address not verified yet) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
             /** @description `not_found`: no such resource for this user (never 403, so ids cannot be probed) */
             404: {
                 headers: {
@@ -2304,6 +2412,15 @@ export interface operations {
             };
             /** @description `unauthenticated`: missing, invalid or revoked credentials */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description `forbidden` (API keys cannot manage API keys) or `email_unverified` (valid sign-in, email address not verified yet) */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -2382,6 +2499,15 @@ export interface operations {
             };
             /** @description `unauthenticated`: missing, invalid or revoked credentials */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description `forbidden` (API keys cannot manage API keys) or `email_unverified` (valid sign-in, email address not verified yet) */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -2474,6 +2600,15 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
+            /** @description `forbidden` (API keys cannot manage API keys) or `email_unverified` (valid sign-in, email address not verified yet) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
             /** @description `not_found`: no such resource for this user (never 403, so ids cannot be probed) */
             404: {
                 headers: {
@@ -2534,6 +2669,15 @@ export interface operations {
             };
             /** @description `unauthenticated`: missing, invalid or revoked credentials */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description `forbidden` (API keys cannot manage API keys) or `email_unverified` (valid sign-in, email address not verified yet) */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -2612,6 +2756,15 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
+            /** @description `forbidden` (API keys cannot manage API keys) or `email_unverified` (valid sign-in, email address not verified yet) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
             /** @description `not_found`: no such resource for this user (never 403, so ids cannot be probed) */
             404: {
                 headers: {
@@ -2672,6 +2825,15 @@ export interface operations {
             };
             /** @description `unauthenticated`: missing, invalid or revoked credentials */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description `forbidden` (API keys cannot manage API keys) or `email_unverified` (valid sign-in, email address not verified yet) */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -2747,6 +2909,15 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
+            /** @description `forbidden` (API keys cannot manage API keys) or `email_unverified` (valid sign-in, email address not verified yet) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
             /** @description `not_found`: no such resource for this user (never 403, so ids cannot be probed) */
             404: {
                 headers: {
@@ -2807,6 +2978,15 @@ export interface operations {
             };
             /** @description `unauthenticated`: missing, invalid or revoked credentials */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description `forbidden` (API keys cannot manage API keys) or `email_unverified` (valid sign-in, email address not verified yet) */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -2881,6 +3061,15 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
+            /** @description `forbidden` (API keys cannot manage API keys) or `email_unverified` (valid sign-in, email address not verified yet) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
             /** @description `not_found`: no such resource for this user (never 403, so ids cannot be probed) */
             404: {
                 headers: {
@@ -2945,6 +3134,15 @@ export interface operations {
             };
             /** @description `unauthenticated`: missing, invalid or revoked credentials */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description `forbidden` (API keys cannot manage API keys) or `email_unverified` (valid sign-in, email address not verified yet) */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -3037,6 +3235,15 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
+            /** @description `forbidden` (API keys cannot manage API keys) or `email_unverified` (valid sign-in, email address not verified yet) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
             /** @description `not_found`: no such resource for this user (never 403, so ids cannot be probed) */
             404: {
                 headers: {
@@ -3117,6 +3324,15 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
+            /** @description `forbidden` (API keys cannot manage API keys) or `email_unverified` (valid sign-in, email address not verified yet) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
             /** @description `not_found`: no such resource for this user (never 403, so ids cannot be probed) */
             404: {
                 headers: {
@@ -3186,6 +3402,15 @@ export interface operations {
             };
             /** @description `unauthenticated`: missing, invalid or revoked credentials */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description `forbidden` (API keys cannot manage API keys) or `email_unverified` (valid sign-in, email address not verified yet) */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -3274,6 +3499,15 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
+            /** @description `forbidden` (API keys cannot manage API keys) or `email_unverified` (valid sign-in, email address not verified yet) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
             /** @description `not_found`: no such resource for this user (never 403, so ids cannot be probed) */
             404: {
                 headers: {
@@ -3339,6 +3573,15 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
+            /** @description `forbidden` (API keys cannot manage API keys) or `email_unverified` (valid sign-in, email address not verified yet) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
             /** @description `daily_cap_reached` (daily run cap), `concurrent_runs` (a run is already in progress) or `rate_limited` */
             429: {
                 headers: {
@@ -3379,6 +3622,15 @@ export interface operations {
             };
             /** @description `unauthenticated`: missing, invalid or revoked credentials */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description `forbidden` (API keys cannot manage API keys) or `email_unverified` (valid sign-in, email address not verified yet) */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };

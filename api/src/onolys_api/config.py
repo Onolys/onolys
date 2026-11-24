@@ -249,3 +249,16 @@ class Settings:
             scheme = ("ws://", "wss://") if self.env in LOCAL_ENVS else ("wss://",)
             if not self.voice_url.startswith(scheme) or self.voice_url.endswith("/"):
                 raise ConfigError("VOICE_URL must be a wss:// base URL without a trailing slash")
+
+        if self.env not in LOCAL_ENVS:
+            if self.service_mode == "combined":
+                raise ConfigError("SERVICE_MODE=combined is only allowed for local or test")
+            if self.adapters == "real":
+                required = ["GCP_PROJECT", "REGION", "AUTH_PROJECT"]
+                if self.service_mode in ("api", "worker"):
+                    required += ["AUDIO_BUCKET", "TASKS_QUEUE", "TASKS_SA", "WORKER_URL"]
+                if self.service_mode == "api":
+                    required += ["VOICE_URL"]
+                for name in required:
+                    if not getattr(self, name.lower()).strip():
+                        raise ConfigError(f"{name} is required for deployed {self.service_mode}")

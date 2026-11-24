@@ -112,7 +112,10 @@ def test_voice_service_settings():
 
 
 def test_voice_env_and_defaults():
-    names = set(re.findall(r'\{ name = "(\w+)"', VOICE))
+    shared = (MOD / "services.tf").read_text().split("  platform_env", 1)[0]
+    names = set(re.findall(r'\{ name = "(\w+)"', VOICE + shared))
+    assert "concat(local.interview_env" in VOICE
+    assert "platform_env = concat(local.interview_env" in (MOD / "services.tf").read_text()
     assert {"VOICE_PROVIDERS_FILE", "GOOGLE_CLOUD_PROJECT", "FIRESTORE_DATABASE", "AUTH_PROJECT", "CORS_ORIGINS", "ENV",
             "AI_CAP_DAY", "AI_MAX_SECONDS", "AI_WARN_SECONDS", "AI_MIN_SECONDS",
             "AI_TOLERANCE_SECONDS", "AI_MISMATCH_MIN_SECONDS", "AI_MISMATCH_PCT", "AI_ABANDON_COUNT_SECONDS", "AI_RECONNECT_SECONDS", "AI_MIC_GATE"} <= names

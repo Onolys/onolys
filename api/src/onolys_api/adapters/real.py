@@ -146,9 +146,11 @@ class RealEvaluation:
         deadline = time.monotonic() + RUN_DEADLINE_S
         if ctx.deadline is not None:
             deadline = min(deadline, ctx.deadline)
+        if ctx.metrics is None:
+            ctx.metrics = MetricsCollector()
         rctx = RunContext(
             llm=self._llm_factory(routes),
-            metrics=MetricsCollector(),
+            metrics=ctx.metrics,
             request_id=ctx.request_id,
             deadline=deadline,
         )

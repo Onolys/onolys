@@ -718,3 +718,22 @@ async def test_cancel_after_the_last_active_check_publishes_no_report(env, monke
     s = env.repo.get_session(env.uid, sid)
     assert s.state == "cancelled" and s.latest_report_version is None
     assert env.counters()[0] == 0  # the slot is free
+
+
+async def test_failed_run_persists_completed_call_metrics(env):
+    from onolys_engine_core.errors import InputError
+    from onolys_engine_core.llm import LLMRequest, MetricsCollector, Usage
+
+    class RecordedFailure(FakeEvaluation):
+        async def run(self, ctx, *args, **kwargs):
+            ctx.metrics = MetricsCollector()
+            ctx.metrics.record(LLMRequest(tier="mid", system="", user="", response_schema={}),
+                               "fixture", Usage(input_tokens=11, cost_usd=0.02), 1, 1, True)
+            raise InputError("fixture failure")
+
+    swap_eval(env, RecordedFailure())
+    sid = await env.start()
+    env.drain()
+    run = env.repo.list_runs(env.uid, sid)[0]
+    assert run.status == "failed"
+    assert run.run_info["metrics"]["records"][0]["input_tokens"] == 11

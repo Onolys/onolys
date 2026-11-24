@@ -28,9 +28,9 @@ PACKAGES=(
 
 # Shared paths: Python-shared hit python packages; CI-shared hits everything.
 PY_SHARED_RE='^(pyproject\.toml|uv\.lock)'
-CI_SHARED_RE='^(\.github/workflows/|scripts/ci/)'
+CI_SHARED_RE='^(\.github/workflows/|\.github/actions/|scripts/ci/)'
 # Extra paths per package: Firestore rules and their emulator tests run in the api job.
-API_EXTRA_RE='^(firestore\.rules|firebase\.json|firestore-rules-test/)'
+API_EXTRA_RE='^(config/|docs/contracts/public/|firestore\.rules|firebase\.json|firestore-rules-test/)'
 # The web job also runs on the contracts its generated types come from (gen:api staleness check).
 WEB_EXTRA_RE='^(api/openapi\.json$|engines/miti/src/onolys_miti/data/report\.schema\.json$|engines/miti/src/onolys_miti/data/fixtures/evaluation/)'
 

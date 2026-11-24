@@ -9,7 +9,19 @@ locals {
     { name = "ROUTES_FILE", value = "config/${var.env}/routes.yaml" },
     { name = "DEFAULT_PRESET", value = var.default_preset },
   ]
-  platform_env = [
+  interview_env = [
+    { name = "AI_CAP_DAY", value = tostring(var.ai_cap_day) },
+    { name = "AI_MAX_SECONDS", value = tostring(var.ai_max_seconds) },
+    { name = "AI_WARN_SECONDS", value = tostring(var.ai_warn_seconds) },
+    { name = "AI_MIN_SECONDS", value = tostring(var.ai_min_seconds) },
+    { name = "AI_TOLERANCE_SECONDS", value = tostring(var.ai_tolerance_seconds) },
+    { name = "AI_MISMATCH_MIN_SECONDS", value = tostring(var.ai_mismatch_min_seconds) },
+    { name = "AI_MISMATCH_PCT", value = tostring(var.ai_mismatch_pct) },
+    { name = "AI_ABANDON_COUNT_SECONDS", value = tostring(var.ai_abandon_count_seconds) },
+    { name = "AI_RECONNECT_SECONDS", value = tostring(var.ai_reconnect_seconds) },
+    { name = "AI_MIC_GATE", value = tostring(var.ai_mic_gate) },
+  ]
+  platform_env = concat(local.interview_env, [
     { name = "ENV", value = var.env },
     { name = "GCP_PROJECT", value = var.project },
     { name = "REGION", value = var.region },
@@ -17,12 +29,11 @@ locals {
     { name = "AUTH_PROJECT", value = var.project },
     { name = "AUDIO_BUCKET", value = google_storage_bucket.audio.name },
     { name = "EVAL_CAP_DAY", value = tostring(var.eval_cap_day) },
-    { name = "AI_CAP_DAY", value = tostring(var.ai_cap_day) },
     { name = "ADAPTERS", value = "real" },
     { name = "TASKS_QUEUE", value = google_cloud_tasks_queue.steps.name },
     { name = "TASKS_SA", value = google_service_account.tasks_invoker.email },
     { name = "WORKER_URL", value = local.worker_url },
-  ]
+  ])
 }
 
 resource "google_cloud_run_v2_service" "api" {

@@ -6,8 +6,8 @@ bytes, probes with ffprobe, then transcodes to the one format STT sees: FLAC, 16
 """
 
 import json
-import resource
 import subprocess
+import sys
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
@@ -96,21 +96,6 @@ class AudioTools(Protocol):
 
 # ffmpeg input demuxer per sniffed format: no autodetect, so a crafted header cannot pick another
 _DEMUXERS = {"wav": "wav", "mp3": "mp3", "ogg": "ogg", "m4a": "mov", "webm": "matroska,webm"}
-_CPU_LIMIT_S = 600
-_ADDRESS_SPACE_BYTES = 4 * 1024**3
-_OUTPUT_FILE_BYTES = 2 * 1024**3
-_OPEN_FILES = 256
-
-
-def _limit_child() -> None:
-    """Runs in the forked ffmpeg/ffprobe child before exec: cap CPU, memory, output, handles."""
-    for which, value in (
-        (resource.RLIMIT_CPU, _CPU_LIMIT_S),
-        (resource.RLIMIT_AS, _ADDRESS_SPACE_BYTES),
-        (resource.RLIMIT_FSIZE, _OUTPUT_FILE_BYTES),
-        (resource.RLIMIT_NOFILE, _OPEN_FILES),
-    ):
-        resource.setrlimit(which, (value, value))
 
 
 def _input_opts(fmt: str | None) -> list[str]:
@@ -128,12 +113,11 @@ class FfmpegTools:
         cmd += ["-show_streams", "-show_format", "-of", "json", str(path)]
         try:
             out = subprocess.run(
-                cmd,
+                [sys.executable, "-m", "onolys_api.audio_child", *cmd],
                 capture_output=True,
                 timeout=PROBE_TIMEOUT_S,
                 check=True,
                 stdin=subprocess.DEVNULL,
-                preexec_fn=_limit_child,
             ).stdout
             info = json.loads(out)
         except (subprocess.SubprocessError, OSError, ValueError):
@@ -165,8 +149,9 @@ class FfmpegTools:
         cmd += ["-ac", "1", "-ar", str(FLAC_RATE_HZ), "-c:a", "flac", str(dst)]
         try:
             subprocess.run(
-                cmd, capture_output=True, timeout=TRANSCODE_TIMEOUT_S, check=True,
-                stdin=subprocess.DEVNULL, preexec_fn=_limit_child,
+                [sys.executable, "-m", "onolys_api.audio_child", *cmd],
+                capture_output=True, timeout=TRANSCODE_TIMEOUT_S, check=True,
+                stdin=subprocess.DEVNULL,
             )  # fmt: skip
         except (subprocess.SubprocessError, OSError):
             raise ToolError("ffmpeg failed") from None

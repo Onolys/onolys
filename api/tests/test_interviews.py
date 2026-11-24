@@ -297,7 +297,7 @@ def test_settings_ai_and_voice_url():
         False,
         "ws://localhost:8081",
     )
-    t = Settings.from_env({"APP_BASE_URL": "https://app.onolys.com", "ENV": "prod", "UID_HMAC_KEY": "k", "VOICE_URL": "wss://v.x", "AI_MIC_GATE": "true",
+    t = Settings.from_env({"APP_BASE_URL": "https://app.onolys.com", "ENV": "prod", "GCP_PROJECT": "p", "REGION": "r", "AUTH_PROJECT": "p", "AUDIO_BUCKET": "b", "TASKS_QUEUE": "q", "TASKS_SA": "sa", "WORKER_URL": "https://worker.example", "UID_HMAC_KEY": "k", "VOICE_URL": "wss://v.x", "AI_MIC_GATE": "true",
                            "AI_MAX_SECONDS": "300", "AI_WARN_SECONDS": "200"})  # fmt: skip
     assert (t.voice_url, t.ai_mic_gate, t.ai_max_seconds) == ("wss://v.x", True, 300)
     for bad in (

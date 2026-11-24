@@ -8,15 +8,26 @@ from onolys_api.config import Settings
 pytestmark = pytest.mark.unit
 
 
+DEPLOYED = {"ENV": "prod", "UID_HMAC_KEY": "k", "GCP_PROJECT": "p",
+            "REGION": "r", "AUTH_PROJECT": "p", "AUDIO_BUCKET": "b",
+            "TASKS_QUEUE": "q", "TASKS_SA": "sa", "WORKER_URL": "https://worker.example",
+            "VOICE_URL": "wss://voice.example"}
+
+def _settings_from_env(env):
+    if env.get("ENV") in ("staging", "prod"):
+        env = {**DEPLOYED, **env}
+    return Settings.from_env(env)
+
+
 def test_defaults_local():
-    s = Settings.from_env({"APP_BASE_URL": "https://app.onolys.com", "ENV": "local"})
+    s = _settings_from_env({"APP_BASE_URL": "https://app.onolys.com", "ENV": "local"})
     assert (s.env, s.service_mode, s.auth_mode, s.adapters) == ("local", "combined", "fake", "stub")
     assert s.firestore_database == "(default)"
     assert (s.eval_cap_day, s.ai_cap_day) == (10, 5)
 
 
 def test_parses_all_vars():
-    s = Settings.from_env(
+    s = _settings_from_env(
         {
             "APP_BASE_URL": "https://app.onolys.com",
             "ENV": "staging",
@@ -47,7 +58,7 @@ def test_parses_all_vars():
 
 
 def test_non_local_defaults_are_api_idp_real():
-    s = Settings.from_env(
+    s = _settings_from_env(
         {"APP_BASE_URL": "https://app.onolys.com", "ENV": "prod", "UID_HMAC_KEY": "k"}
     )
     assert (s.service_mode, s.auth_mode, s.adapters) == ("api", "idp", "real")
@@ -56,7 +67,7 @@ def test_non_local_defaults_are_api_idp_real():
 @pytest.mark.parametrize("env", ["staging", "prod"])
 def test_fake_auth_rejected_outside_local(env):
     with pytest.raises(ConfigError, match="AUTH_MODE=fake"):
-        Settings.from_env(
+        _settings_from_env(
             {"APP_BASE_URL": "https://app.onolys.com", "ENV": env, "AUTH_MODE": "fake"}
         )
 
@@ -64,7 +75,7 @@ def test_fake_auth_rejected_outside_local(env):
 @pytest.mark.parametrize("env", ["local", "test"])
 def test_fake_auth_allowed_locally(env):
     assert (
-        Settings.from_env(
+        _settings_from_env(
             {"APP_BASE_URL": "https://app.onolys.com", "ENV": env, "AUTH_MODE": "fake"}
         ).auth_mode
         == "fake"
@@ -89,13 +100,13 @@ def test_fake_auth_allowed_locally(env):
 )
 def test_invalid_values(bad):
     with pytest.raises(ConfigError):
-        Settings.from_env(bad)
+        _settings_from_env(bad)
 
 
 def test_stt_cap_defaults_and_overrides():
-    d = Settings.from_env({"APP_BASE_URL": "https://app.onolys.com", "ENV": "local"})
+    d = _settings_from_env({"APP_BASE_URL": "https://app.onolys.com", "ENV": "local"})
     assert (d.stt_cap_factor, d.stt_cap_min_s, d.stt_time_limit_s) == (3.0, 300.0, 1200.0)
-    s = Settings.from_env(
+    s = _settings_from_env(
         {
             "APP_BASE_URL": "https://app.onolys.com",
             "ENV": "local",
@@ -126,19 +137,19 @@ def test_daily_run_cap_removed_everywhere():
 def test_env_is_required():
     """A8: an unset ENV must not silently mean local (fake auth, no /tasks OIDC)."""
     with pytest.raises(ConfigError, match="ENV is required"):
-        Settings.from_env({})
+        _settings_from_env({})
 
 
 @pytest.mark.parametrize("env", ["local", "test"])
 def test_local_env_refused_on_cloud_run(env):
     with pytest.raises(ConfigError, match="Cloud Run"):
-        Settings.from_env(
+        _settings_from_env(
             {"APP_BASE_URL": "https://app.onolys.com", "ENV": env, "K_SERVICE": "onolys-api"}
         )
 
 
 def test_cloud_run_with_prod_env_is_fine():
-    s = Settings.from_env(
+    s = _settings_from_env(
         {
             "APP_BASE_URL": "https://app.onolys.com",
             "ENV": "prod",
@@ -155,7 +166,7 @@ def test_uid_hmac_key_required_outside_local(env):
     with pytest.raises(ConfigError, match="UID_HMAC_KEY"):
         Settings.from_env({"APP_BASE_URL": "https://app.onolys.com", "ENV": env})
     assert (
-        Settings.from_env(
+        _settings_from_env(
             {"APP_BASE_URL": "https://app.onolys.com", "ENV": env, "UID_HMAC_KEY": "k"}
         ).uid_hmac_key
         == "k"
@@ -164,7 +175,7 @@ def test_uid_hmac_key_required_outside_local(env):
 
 def test_uid_hmac_key_optional_locally():
     assert (
-        Settings.from_env({"APP_BASE_URL": "https://app.onolys.com", "ENV": "local"}).uid_hmac_key
+        _settings_from_env({"APP_BASE_URL": "https://app.onolys.com", "ENV": "local"}).uid_hmac_key
         == ""
     )
 
@@ -180,7 +191,7 @@ def test_uid_hmac_key_optional_locally():
     ],
 )
 def test_app_base_url_allowed(env, url):
-    s = Settings.from_env({"ENV": env, "UID_HMAC_KEY": "k", "APP_BASE_URL": url})
+    s = _settings_from_env({"ENV": env, "UID_HMAC_KEY": "k", "APP_BASE_URL": url})
     assert s.app_base_url == url
     assert s.email_from == "Onolys <no-reply@onolys.com>"
     assert s.resend_api_key == ""
@@ -208,13 +219,17 @@ def test_app_base_url_allowed(env, url):
 )
 def test_app_base_url_rejects_invalid_origin(url):
     with pytest.raises(ConfigError, match="APP_BASE_URL"):
-        Settings.from_env({"ENV": "test", "APP_BASE_URL": url})
+        _settings_from_env({"ENV": "test", "APP_BASE_URL": url})
 
 
 @pytest.mark.parametrize("env", ["local", "test", "staging", "prod"])
 @pytest.mark.parametrize("mode", ["api", "worker", "voice", "combined"])
 def test_app_base_url_is_optional_in_every_mode(env, mode):
-    s = Settings.from_env({"ENV": env, "SERVICE_MODE": mode, "UID_HMAC_KEY": "k",
+    if env in ("prod", "staging") and mode == "combined":
+        with pytest.raises(ConfigError, match="combined"):
+            _settings_from_env({"ENV": env, "SERVICE_MODE": mode, "UID_HMAC_KEY": "k"})
+        return
+    s = _settings_from_env({"ENV": env, "SERVICE_MODE": mode, "UID_HMAC_KEY": "k",
                            "AUTH_MODE": "fake" if env in ("local", "test") else "idp"})  # fmt: skip
     assert s.app_base_url == ""
 
@@ -222,29 +237,29 @@ def test_app_base_url_is_optional_in_every_mode(env, mode):
 @pytest.mark.parametrize("mode", ["api", "worker", "voice"])
 def test_invalid_app_base_url_still_rejected_in_any_mode(mode):
     with pytest.raises(ConfigError, match="APP_BASE_URL"):
-        Settings.from_env({"ENV": "staging", "SERVICE_MODE": mode, "UID_HMAC_KEY": "k",
+        _settings_from_env({"ENV": "staging", "SERVICE_MODE": mode, "UID_HMAC_KEY": "k",
                            "APP_BASE_URL": "https://evil.example.com"})  # fmt: skip
 
 
 def test_client_ip_trusted_hops_setting():
     base = {"ENV": "local"}
-    assert Settings.from_env(base).client_ip_trusted_hops == 1
-    assert Settings.from_env({**base, "CLIENT_IP_TRUSTED_HOPS": "0"}).client_ip_trusted_hops == 0
+    assert _settings_from_env(base).client_ip_trusted_hops == 1
+    assert _settings_from_env({**base, "CLIENT_IP_TRUSTED_HOPS": "0"}).client_ip_trusted_hops == 0
     for bad in ("-1", "x"):
         with pytest.raises(ConfigError, match="CLIENT_IP_TRUSTED_HOPS"):
-            Settings.from_env({**base, "CLIENT_IP_TRUSTED_HOPS": bad})
+            _settings_from_env({**base, "CLIENT_IP_TRUSTED_HOPS": bad})
 
 
 @pytest.mark.parametrize("env", ["staging", "prod"])
 def test_localhost_not_allowed_outside_local(env):
     with pytest.raises(ConfigError, match="APP_BASE_URL"):
-        Settings.from_env(
+        _settings_from_env(
             {"ENV": env, "UID_HMAC_KEY": "k", "APP_BASE_URL": "http://localhost:5173"}
         )
 
 
 def test_email_settings_read_overrides():
-    s = Settings.from_env(
+    s = _settings_from_env(
         {
             "ENV": "test",
             "APP_BASE_URL": "http://localhost:5173",
@@ -269,7 +284,7 @@ def test_staging_startup_without_resend_key():
     from onolys_api.repo.fake import FakeRepo
     from onolys_api.storage.fake import FakeBlobStore
 
-    s = Settings.from_env(
+    s = _settings_from_env(
         {
             "ENV": "staging",
             "UID_HMAC_KEY": "k",
@@ -318,13 +333,35 @@ def test_api_mode_real_adapters_valid_or_unset_llm_override_starts_without_keys(
 
 
 def test_mismatch_settings_defaults_env_and_validation():
-    s = Settings.from_env({"APP_BASE_URL": "https://app.onolys.com", "ENV": "local"})
+    s = _settings_from_env({"APP_BASE_URL": "https://app.onolys.com", "ENV": "local"})
     assert (s.ai_mismatch_min_seconds, s.ai_mismatch_pct, s.ai_tolerance_seconds) == (60, 15, 30)
-    t = Settings.from_env(
+    t = _settings_from_env(
         {"APP_BASE_URL": "https://app.onolys.com", "ENV": "local",
          "AI_MISMATCH_MIN_SECONDS": "45", "AI_MISMATCH_PCT": "20"}
     )  # fmt: skip
     assert (t.ai_mismatch_min_seconds, t.ai_mismatch_pct) == (45, 20)
     for bad in ("AI_MISMATCH_MIN_SECONDS", "AI_MISMATCH_PCT"):
         with pytest.raises(ConfigError):
-            Settings.from_env({"APP_BASE_URL": "https://app.onolys.com", "ENV": "local", bad: "-1"})
+            _settings_from_env({"APP_BASE_URL": "https://app.onolys.com", "ENV": "local", bad: "-1"})
+
+
+@pytest.mark.parametrize("mode,missing", [
+    ("api", "AUDIO_BUCKET"), ("api", "TASKS_QUEUE"), ("api", "WORKER_URL"),
+    ("api", "TASKS_SA"), ("api", "VOICE_URL"), ("worker", "AUDIO_BUCKET"),
+    ("worker", "TASKS_QUEUE"), ("worker", "WORKER_URL"), ("worker", "TASKS_SA"),
+])
+def test_deployed_service_rejects_missing_dependencies(mode, missing):
+    env = {**DEPLOYED, "SERVICE_MODE": mode}
+    del env[missing]
+    with pytest.raises(ConfigError, match=missing):
+        Settings.from_env(env)
+
+
+def test_combined_is_local_only():
+    with pytest.raises(ConfigError, match="combined"):
+        Settings.from_env({**DEPLOYED, "SERVICE_MODE": "combined"})
+
+
+@pytest.mark.parametrize("mode", ["api", "worker", "voice"])
+def test_deployed_service_complete_configuration(mode):
+    assert Settings.from_env({**DEPLOYED, "SERVICE_MODE": mode}).service_mode == mode

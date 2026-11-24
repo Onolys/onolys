@@ -80,7 +80,7 @@ DESCRIPTION = (
 )
 
 # statuses every operation can return, plus per-operation ones (kept in step with the routes)
-COMMON = (401, 429, 500)
+COMMON = (401, 403, 429, 500)
 EXTRA: dict[str, tuple[int, ...]] = {
     "createSession": (409, 422),
     "listSessions": (422,),

@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from onolys_api import audio
+from onolys_api import audio, audio_child
 
 pytestmark = pytest.mark.unit
 
@@ -18,7 +18,7 @@ def captured(monkeypatch):
 
     def fake_run(cmd, **kw):
         calls.append((cmd, kw))
-        if cmd[0] == "ffmpeg":
+        if "ffmpeg" in cmd:
             Path(cmd[-1]).write_bytes(b"fLaC")
         return subprocess.CompletedProcess(cmd, 0, stdout=b'{"streams": [], "format": {}}')
 
@@ -40,7 +40,8 @@ def test_whitelist_and_explicit_demuxer(captured, tmp_path, fmt, demuxer):
         assert cmd[cmd.index("-protocol_whitelist") + 1] == "file"
         assert cmd[cmd.index("-f") + 1] == demuxer
         assert cmd.index("-f") < cmd.index(str(src))  # an input option, before -i / the path
-        assert callable(kw["preexec_fn"])
+        assert "preexec_fn" not in kw
+        assert "onolys_api.audio_child" in cmd
 
 
 def test_no_demuxer_flag_when_format_unknown(captured, tmp_path):
@@ -54,5 +55,16 @@ def test_no_demuxer_flag_when_format_unknown(captured, tmp_path):
 def test_rlimits_are_applied_in_the_child(monkeypatch):
     seen = {}
     monkeypatch.setattr(resource, "setrlimit", lambda which, lim: seen.__setitem__(which, lim))
-    audio._limit_child()
+    audio_child._limit_child()
     assert {resource.RLIMIT_CPU, resource.RLIMIT_AS, resource.RLIMIT_FSIZE} <= set(seen)
+
+
+def test_audio_child_applies_limits_before_exec():
+    import json
+    import sys
+
+    script = "import json,resource; print(json.dumps([resource.getrlimit(resource.RLIMIT_CPU), resource.getrlimit(resource.RLIMIT_NOFILE)]))"
+    result = subprocess.run([sys.executable, "-m", "onolys_api.audio_child",
+                             sys.executable, "-c", script],
+                            capture_output=True, check=True, timeout=2)
+    assert json.loads(result.stdout) == [[audio_child._CPU_LIMIT_S] * 2, [audio_child._OPEN_FILES] * 2]

@@ -187,3 +187,19 @@ async def test_validation_metadata_is_preserved_outside_report():
     out = await make(Engine()).run(ctx(), transcript(), SPEAKERS, PARAMS)
     assert out.run_info["validation"] == {"attempts": 1}
     assert "validation" not in out.report
+
+
+async def test_failed_engine_keeps_completed_call_metrics_on_caller_context():
+    from onolys_engine_core.llm import LLMRequest, Usage
+
+    class Fails(Engine):
+        async def run(self, c, *args):
+            c.metrics.record(LLMRequest(tier="mid", system="", user="", response_schema={}), "fixture",
+                             Usage(input_tokens=12, output_tokens=3, cost_usd=0.01),
+                             5.0, 1, True)
+            raise InputError("failed after a completed call")
+
+    caller = ctx()
+    with pytest.raises(InputError):
+        await make(Fails()).run(caller, transcript(), SPEAKERS, PARAMS)
+    assert caller.metrics.snapshot()["records"][0]["input_tokens"] == 12
