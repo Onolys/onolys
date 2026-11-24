@@ -4,16 +4,35 @@
  * `onSnapshot` (a later task); mock mode uses the in-memory emitter below,
  * driven by the MSW state machine.
  */
+import type { FailureKind } from "./errors";
 import type { SessionState } from "./types";
 
 export interface SessionStatusDoc {
   uid: string;
-  state: SessionState;
+  /** `upload_failed` is a status-doc-only state (a bad upload leaves no session), so it is not in the OpenAPI enum. */
+  state: SessionState | "upload_failed";
   step: string | null;
   progress: number;
   error_code: string | null;
+  /** The status doc is a Firestore document, not an OpenAPI schema. Absent on docs written before 03-failure-policy. */
+  error_kind?: FailureKind | null;
+  retries_left?: number | null;
+  counted?: boolean | null;
   latest_report_version: number | null;
   updated_at: string;
+  /** Progress fields (05-processing-screen R2): PHI-free numbers and ISO timestamps, absent on older docs. */
+  /** First entry to `uploading` (a re-run: its start); null before. */
+  started_at?: string | null;
+  /** When the current state was entered. */
+  stage_started_at?: string | null;
+  /** Total ms spent in `awaiting_input`. */
+  waited_ms?: number;
+  /** Recording duration in seconds, set once validated. */
+  audio_s?: number | null;
+  /** Base % of the next stage (99 on the last stage); null when there is none. */
+  progress_next?: number | null;
+  /** Typical seconds the current stage takes; null when untimed. */
+  stage_expected_s?: number | null;
   transcript_ready: boolean;
   speaker_confirmed: boolean;
   rating_submitted: boolean;

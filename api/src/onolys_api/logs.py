@@ -9,12 +9,14 @@ Values are ids, codes and numbers only.
 
 import hashlib
 import hmac
-import json
 import logging
-import sys
+import re
 import threading
 
-from onolys_engine_core.safe_log import MAX_VALUE_CHARS, register_fields, safe_fields
+from onolys_engine_core.json_logging import NoExceptionDetail, configure_logging
+from onolys_engine_core.log_context import bind
+from onolys_engine_core.safe_log import clean_value, register_fields, safe_fields
+from starlette.requests import HTTPConnection
 
 from onolys_api.config import Settings
 
@@ -22,56 +24,22 @@ API_FIELDS = frozenset({
     "uid_hash", "session_id", "run_id", "step", "status", "attempt", "duration_ms",
     "auth_kind", "error_code", "exc_class", "request_id", "code_version",
     "method", "route", "stt_operation", "stt_started", "poll_n", "elapsed_s", "outcome",
+    "email_kind", "provider_status", "from_state", "counted",
 })  # fmt: skip
 register_fields(API_FIELDS)
 
 log = logging.getLogger("onolys_api.events")
-_LEVELS = {logging.DEBUG: "DEBUG", logging.INFO: "INFO", logging.WARNING: "WARNING",
-           logging.ERROR: "ERROR", logging.CRITICAL: "CRITICAL"}  # fmt: skip
 _state = {"key": b"", "code_version": "dev"}
 _lock = threading.Lock()
 
 
-class _StderrHandler(logging.StreamHandler):
-    """Writes to whatever sys.stderr is at emit time (survives stream swaps)."""
-
-    _onolys = True
-
-    def __init__(self) -> None:
-        super().__init__(sys.stderr)
-
-    @property
-    def stream(self):
-        return sys.stderr
-
-    @stream.setter
-    def stream(self, _value) -> None:
-        pass
-
-
-class _NoTraceback(logging.Filter):
-    """Reduce a record carrying an exception to its class name (S1).
-
-    uvicorn logs `Exception in ASGI application` with the full traceback, and a FastAPI
-    ResponseValidationError's text embeds the offending `input` (transcript/rating/report PHI).
-    """
-
-    def filter(self, record: logging.LogRecord) -> bool:
-        exc = record.exc_info
-        if exc or record.exc_text:
-            name = exc[0].__name__ if exc and exc[0] else "Exception"
-            record.msg = f"Unhandled exception in ASGI application: {name} (details suppressed)"
-            record.args = None
-            record.exc_info = record.exc_text = None
-            record.stack_info = None
-        return True
-
-
 def _guard_uvicorn() -> None:
+    """uvicorn's loggers keep their own handlers (no propagation to root), so give them the
+    same exception rule the JSON handler applies to everything else."""
     for name in ("uvicorn", "uvicorn.error"):
         lg = logging.getLogger(name)
-        if not any(isinstance(f, _NoTraceback) for f in lg.filters):
-            lg.addFilter(_NoTraceback())
+        if not any(isinstance(f, NoExceptionDetail) for f in lg.filters):
+            lg.addFilter(NoExceptionDetail())
 
 
 def configure(settings: Settings) -> None:
@@ -80,12 +48,7 @@ def configure(settings: Settings) -> None:
     with _lock:
         _state["key"] = settings.uid_hmac_key.encode()
         _state["code_version"] = settings.git_sha
-        if log.level == logging.NOTSET:
-            log.setLevel(logging.INFO)
-        if not any(getattr(h, "_onolys", False) for h in log.handlers):
-            h = _StderrHandler()
-            h.setFormatter(logging.Formatter("%(message)s"))
-            log.addHandler(h)
+    configure_logging(settings)
 
 
 def uid_hash(uid: str) -> str:
@@ -93,20 +56,15 @@ def uid_hash(uid: str) -> str:
     return hmac.new(_state["key"], uid.encode(), hashlib.sha256).hexdigest()[:16]
 
 
-def _clean(value):
-    if value is None:
-        return None
-    if isinstance(value, bool | int | float):
-        return value
-    return str(value)[:MAX_VALUE_CHARS]
+def _clean(name, value):
+    return None if value is None else clean_value(name, value)
 
 
 def emit(event: str, level: int = logging.INFO, **fields) -> None:
     """Log one line. None values are omitted; `code_version` is always added."""
-    kept = {k: _clean(v) for k, v in safe_fields(fields).items() if v is not None}
+    kept = {k: _clean(k, v) for k, v in safe_fields(fields).items() if v is not None}
     kept.setdefault("code_version", _state["code_version"])
-    line = {"severity": _LEVELS.get(level, "INFO"), "message": event, "event": event, **kept}
-    log.log(level, "%s", json.dumps(line, sort_keys=False))
+    log.log(level, "%s", event, extra={"fields": kept})
 
 
 def failed(
@@ -117,3 +75,21 @@ def failed(
         event, logging.ERROR, status="failed", session_id=session_id, run_id=run_id, step=step,
         error_code=error_code, exc_class=exc_class, request_id=request_id,
     )  # fmt: skip
+
+
+_ID_PARAMS = ("id", "sid", "iid", "interview_id")
+_RESOURCE_ID = re.compile(r"^[0-9a-f]{32}$")
+
+
+async def bind_session(conn: HTTPConnection) -> None:
+    """Router dependency: bind the `{id}` path param (session or interview id) as `session_id`.
+
+    Async on purpose: a sync dependency runs in a threadpool copy of the context and its set
+    would be lost. Only well-formed resource ids are bound; the request-scoped middleware resets
+    the context when the request ends.
+    """
+    for name in _ID_PARAMS:
+        value = conn.path_params.get(name)
+        if isinstance(value, str) and _RESOURCE_ID.match(value):
+            bind(session_id=value)
+            return

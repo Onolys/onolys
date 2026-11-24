@@ -11,52 +11,56 @@ transaction (`start_first_run`, `start_run`) for the check-and-move to `running`
 from typing import Any, get_args
 
 from onolys_api.errors import ApiError
+from onolys_api.progress import (  # noqa: F401  (re-exported: the tables moved to `progress`)
+    MAX_PROGRESS,
+    RUN_START_PROGRESS,
+    STAGE_WEIGHTS,
+    STAGES,
+    STATE_PROGRESS,
+    entry_fields,
+    stage_fields,
+)
 from onolys_api.repo.base import Repo
-from onolys_api.repo.models import SessionError, SessionState, utcnow
+from onolys_api.repo.models import SessionError, SessionState, error_status_fields, utcnow
 
 STATES: tuple[str, ...] = get_args(SessionState)
 
 _NOT_DELETING = (
     "created", "uploading", "validating", "transcribing", "awaiting_input",
-    "running", "report_ready", "failed", "upload_incomplete",
+    "running", "report_ready", "failed", "upload_incomplete", "cancelled",
 )  # fmt: skip
 
 TRANSITIONS: dict[str, frozenset[str]] = {
-    "created": frozenset({"awaiting_input", "uploading", "upload_incomplete", "deleting"}),
+    "created": frozenset(
+        {"awaiting_input", "uploading", "upload_incomplete", "deleting", "cancelled"}
+    ),
     # uploading -> uploading: a fresh signed URL for the same session
-    "uploading": frozenset({"uploading", "upload_incomplete", "validating", "deleting"}),
+    "uploading": frozenset(
+        {"uploading", "upload_incomplete", "validating", "deleting", "cancelled"}
+    ),
     # never uploaded (lazy stale check): a fresh URL resumes it; a late PUT still completes
-    "upload_incomplete": frozenset({"uploading", "validating", "deleting"}),
-    "validating": frozenset({"transcribing", "failed", "deleting"}),
-    "transcribing": frozenset({"awaiting_input", "failed", "deleting"}),
-    "awaiting_input": frozenset({"running", "deleting"}),
-    "running": frozenset({"report_ready", "failed", "deleting"}),
+    "upload_incomplete": frozenset({"uploading", "validating", "deleting", "cancelled"}),
+    "validating": frozenset({"transcribing", "failed", "deleting", "cancelled"}),
+    "transcribing": frozenset({"awaiting_input", "failed", "deleting", "cancelled"}),
+    "awaiting_input": frozenset({"running", "deleting", "cancelled"}),
+    "running": frozenset({"report_ready", "failed", "deleting", "cancelled"}),
     "report_ready": frozenset({"running", "deleting"}),  # re-run
-    "failed": frozenset({"running", "deleting"}),  # re-run
+    # one retry path (R4): re-enter the step that failed (`POST /sessions/{id}/retry`)
+    "failed": frozenset({"running", "validating", "transcribing", "deleting"}),
+    "cancelled": frozenset({"deleting"}),  # terminal (04-cancel R1): only Delete leaves it
     "deleting": frozenset(),
 }
 assert set(TRANSITIONS) == set(STATES) and all("deleting" in TRANSITIONS[s] for s in _NOT_DELETING)
 
 FLAGS = ("transcript_ready", "speaker_confirmed", "rating_submitted", "has_rating")
 
-# R4 progress table
-STATE_PROGRESS: dict[str, int] = {
-    "created": 0,
-    "uploading": 5,
-    "validating": 10,
-    "transcribing": 20,
-    "awaiting_input": 40,
-    "running": 45,
-    "report_ready": 100,
-}
-RUN_START_PROGRESS = STATE_PROGRESS["running"]
-STAGE_WEIGHTS: dict[str, int] = {"code": 40, "tips": 8, "assemble": 3}
-STAGES = tuple(STAGE_WEIGHTS)  # 45 + 51 = 96: under the 99 cap
-
 # fields of session_status/{sid} (everything the web may read; no text)
 STATUS_FIELDS = frozenset(
     {
-        "uid", "state", "step", "progress", "error_code", "latest_report_version", "updated_at",
+        "uid", "state", "step", "progress", "error_code", "error_kind", "retries_left", "counted",
+        "latest_report_version", "updated_at", "expire_at",
+        "started_at", "stage_started_at", "waited_ms", "audio_s", "progress_next",
+        "stage_expected_s",
         *FLAGS,
     }
 )  # fmt: skip
@@ -72,21 +76,6 @@ def rating_final() -> ApiError:
     return ApiError.of(
         409, "rating_final", "The rating is final once submitted and cannot be changed or re-run."
     )
-
-
-# FX45: failure codes that need a different file (no Try again); every other failure is a system
-# failure, which refunds its units (owner decision) and allows Try again.
-BAD_FILE_CODES = frozenset(
-    {
-        "unsupported_audio", "audio_too_long", "interview_too_long", "audio_too_large",
-        "invalid_coded_span", "session_too_long",
-        "audio_unreadable", "no_speech", "speakers_not_separated", "transcription_failed",
-    }
-)  # fmt: skip
-
-
-def is_system_failure(code: str | None) -> bool:
-    return code not in BAD_FILE_CODES
 
 
 def has_final_report(repo, uid: str, sid: str, state: str) -> bool:
@@ -152,15 +141,26 @@ def advance(
     if error is _KEEP and to is not None and to != "failed":
         error = None
     s_fields: dict[str, Any] = {"state": new_state}
-    if to is not None:
-        s_fields["stage_started_at"] = utcnow()  # the stale check keys off this, not updated_at
     st_fields: dict[str, Any] = {"state": new_state, "progress": progress}
+    new_step = session.step if step is _KEEP else step
+    if to is not None:
+        now = utcnow()
+        s_fields["stage_started_at"] = now  # the stale check keys off this, not updated_at
+        st_fields.update(
+            entry_fields(session.state, session.stage_started_at, status.model_dump(), to,
+                         new_step, now)
+        )  # fmt: skip
+    elif step is not _KEEP or stage_done is not None:
+        st_fields.update(stage_fields(new_state, new_step, status.audio_s))
+    if stage_done is not None and new_state == "running":
+        after = STAGES[STAGES.index(stage_done) + 1 :][:1]
+        st_fields.update(stage_fields("running", after[0] if after else STAGES[-1], None))
     if step is not _KEEP:
         s_fields["step"] = step
         st_fields["step"] = step
     if error is not _KEEP:
         s_fields["error"] = error.model_dump() if error else None
-        st_fields["error_code"] = error.code if error else None
+        st_fields.update(error_status_fields(error, session.retry_count))
     if latest_report_version is not _KEEP:
         s_fields["latest_report_version"] = latest_report_version
         st_fields["latest_report_version"] = latest_report_version

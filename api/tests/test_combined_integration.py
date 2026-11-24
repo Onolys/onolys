@@ -45,7 +45,7 @@ def test_combined_mode_serves_healthz():
                 break
             except httpx.TransportError:
                 assert time.time() < deadline and proc.poll() is None, "server did not start"
-                time.sleep(0.2)
+                time.sleep(0.05)
         assert r.status_code == 200
         assert r.json() == {"status": "ok", "service_mode": "combined", "code_version": "itest"}
         assert httpx.get(f"http://127.0.0.1:{port}/v1/openapi.json").status_code == 200

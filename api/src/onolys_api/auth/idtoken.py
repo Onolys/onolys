@@ -27,7 +27,7 @@ CertFetcher = Callable[[], dict[str, str]]
 
 
 class TokenVerifier(Protocol):
-    def verify(self, token: str) -> str:
+    def verify(self, token: str, *, allow_unverified: bool = False) -> str:
         """Return the uid or raise `InvalidToken`."""
         ...
 
@@ -136,7 +136,7 @@ class IdTokenVerifier:
             clock_skew_in_seconds=CLOCK_SKEW_S,
         )
 
-    def verify(self, token: str) -> str:
+    def verify(self, token: str, *, allow_unverified: bool = False) -> str:
         try:
             header = jwt.decode_header(token)
             if header.get("alg") != "RS256":
@@ -160,6 +160,6 @@ class IdTokenVerifier:
         sub = claims.get("sub")
         if not isinstance(sub, str) or not sub or len(sub) > 128 or "/" in sub:
             raise InvalidToken
-        if claims.get("email_verified") is not True:
+        if not allow_unverified and claims.get("email_verified") is not True:
             raise EmailNotVerified  # only after signature, iss, aud and sub all checked out
         return sub

@@ -34,7 +34,9 @@ export interface AuthService {
   signInWithGoogle(): Promise<void>;
   /** Error code of a failed redirect sign-in (mobile Google), reported once; undefined if none. */
   consumeRedirectError(): Promise<string | undefined>;
+  /** Server-sent reset email (no auth). Rejects with `email/rate-limited` or `email/unavailable` only. */
   sendPasswordReset(email: string): Promise<void>;
+  /** Server-sent verification email for the signed-in user. Rejects with `email/rate-limited` or `email/unavailable`. */
   sendVerificationEmail(next?: string): Promise<void>;
   /** Reload the user and force-refresh the ID token (the cached one lacks `email_verified`). */
   refreshUser(): Promise<AuthUser | null>;

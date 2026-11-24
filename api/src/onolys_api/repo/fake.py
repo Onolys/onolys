@@ -7,8 +7,11 @@ from typing import Any, Literal
 
 from onolys_engine_core.transcript import Transcript
 
+from onolys_api import logs
+from onolys_api.progress import entry_fields
 from onolys_api.repo import large
 from onolys_api.repo.base import (
+    CancelOutcome,
     Claim,
     ConflictError,
     InterviewLinkOutcome,
@@ -25,12 +28,14 @@ from onolys_api.repo.firestore import (
     _idem_id,
 )
 from onolys_api.repo.limits import (
+    CANCELLABLE_STATES,
     HELD_ERROR_CODE,
     KIND_FIELD,
     START_OUTCOME,
     Kind,
     LimitDefaults,
     ReserveUsageOutcome,
+    decide_cancel,
     decide_reserve,
     decide_start,
 )
@@ -48,10 +53,14 @@ from onolys_api.repo.models import (
     SessionDoc,
     SessionError,
     SessionStatusDoc,
+    StepRecord,
     TranscriptDoc,
     UsageDoc,
     UserDoc,
+    error_status_fields,
     interview_refundable,
+    retry_allowed,
+    upload_failed_stub,
     utcnow,
 )
 from onolys_api.storage.base import BlobStore
@@ -205,9 +214,7 @@ class FakeRepo:
             self._put(f"session_status/{sid}", st)
             self._record_status(uid, sid)
 
-    def confirm_speaker(
-        self, uid: str, sid: str, clinician: str, states: tuple[str, ...]
-    ) -> bool:
+    def confirm_speaker(self, uid: str, sid: str, clinician: str, states: tuple[str, ...]) -> bool:
         with self._claim_lock:  # the fake's "transaction"
             doc = self._owned(f"sessions/{sid}", uid)
             if doc.get("state") not in states:
@@ -265,7 +272,10 @@ class FakeRepo:
             self._put(f"sessions/{sid}", sess)
             status = self._get(f"session_status/{sid}") or {}
             status.update(
-                state=to, error_code=error.code if error else None, uid=uid, updated_at=now
+                state=to,
+                **error_status_fields(error, sess.get("retry_count", 0)),
+                uid=uid,
+                updated_at=now,
             )
             self._put(f"session_status/{sid}", status)
             self._record_status(uid, sid)
@@ -281,6 +291,19 @@ class FakeRepo:
         if st is not None:
             del self._docs[f"session_status/{sid}"]
         return s is not None or st is not None
+
+    def discard_failed_upload(self, uid: str, sid: str, code: str) -> None:
+        with self._claim_lock:
+            doc = self._owned(f"sessions/{sid}", uid)
+            if doc.get("state") == "deleting":
+                raise NotFoundError()
+            if doc.get("state") == "cancelled":
+                raise ConflictError()  # cancel deletes nothing (04-cancel R5)
+            self._put(f"session_status/{sid}", upload_failed_stub(uid, code, utcnow()).to_store())
+            self._record_status(uid, sid)
+            for p in [p for p in self._docs if p.startswith(f"sessions/{sid}/")]:
+                del self._docs[p]
+            del self._docs[f"sessions/{sid}"]
 
     # ---- recordings ----
 
@@ -546,6 +569,21 @@ class FakeRepo:
                 if doc and doc.get(field, 0) > 0:
                     self._put(path, {**doc, field: max(0, doc[field] - units)})
 
+    def _release_run_locked(
+        self, uid: str, path: str, d: dict[str, Any], refund: bool, date: str | None
+    ) -> bool:
+        """The in-transaction release (caller holds `_claim_lock`): shared by `release_run_slot`
+        and `cancel_session`."""
+        if d.get("released"):
+            return False
+        date = d.get("cap_date") or date
+        counted = d.get("counted", True)
+        refunded = bool(date) and refund and counted
+        self._put(path, {**d, "released": True, "unit_kept": counted and not refunded})
+        if date:
+            self.release_usage(uid, "eval", date, refunded, d.get("units", 1))
+        return True
+
     def release_run_slot(
         self, uid: str, sid: str, run_id: str, refund: bool, date: str | None
     ) -> bool:
@@ -555,15 +593,58 @@ class FakeRepo:
             d = self._get(path)
             if d is None:
                 raise NotFoundError()
-            if d.get("released"):
-                return False
-            self._put(path, {**d, "released": True})
-            date = d.get("cap_date") or date
-            if date:
-                self.release_usage(
-                    uid, "eval", date, refund and d.get("counted", True), d.get("units", 1)
+            return self._release_run_locked(uid, path, d, refund, date)
+
+    def cancel_session(
+        self, uid: str, sid: str, date: str, defaults: LimitDefaults
+    ) -> CancelOutcome:
+        with self._claim_lock:  # the fake's "transaction"
+            sess = self._owned(f"sessions/{sid}", uid)
+            assert sess is not None
+            state = sess.get("state")
+            if state == "deleting":
+                raise NotFoundError()
+            if state == "cancelled":
+                return ("cancelled", bool((sess.get("cancel") or {}).get("counted")))
+            if state not in CANCELLABLE_STATES:
+                return ("invalid",)
+            now = utcnow()
+            run_id, run = None, None
+            if state == "running":
+                for rid, rd in self._children(sid, "runs"):
+                    if not rd.get("released"):
+                        run_id, run = rid, rd
+                        break
+            op = ((sess.get("steps") or {}).get("transcribe") or {}).get("stt_operation")
+            charge = decide_cancel(
+                state, bool(op), run.get("counted", True) if run else None,
+                sess.get("interview_id"),
+            )  # fmt: skip
+            if run is not None and run_id is not None:
+                path = f"sessions/{sid}/runs/{run_id}"
+                if run.get("status") != "done":
+                    run = {**run, "status": "failed", "error": "cancelled", "ended": now}
+                    self._put(path, run)
+                self._release_run_locked(uid, path, run, False, date)
+            if charge.units:
+                usage = self._get(f"usage/{uid}_{date}") or {"uid": uid, "date": date, "runs": 0}
+                self._put(
+                    f"usage/{uid}_{date}", {**usage, "runs": usage.get("runs", 0) + charge.units}
                 )
-            return True
+            self._put(
+                f"sessions/{sid}",
+                {**sess, "state": "cancelled", "updated_at": now, "stage_started_at": now,
+                 "cancel": {"counted": charge.counted, "units": charge.units, "at": now}},
+            )  # fmt: skip
+            status = self._get(f"session_status/{sid}") or {}
+            self._put(
+                f"session_status/{sid}",
+                {**status, "state": "cancelled", "counted": charge.counted, "updated_at": now,
+                 "stage_started_at": now, "progress_next": None, "stage_expected_s": None},
+            )
+            self._record_status(uid, sid)
+            logs.emit("session_cancelled", from_state=state, counted=charge.counted, run_id=run_id)
+            return ("cancelled", charge.counted)
 
     def get_usage_doc(self, uid: str, date: str) -> UsageDoc:
         day = self._get(f"usage/{uid}_{date}")
@@ -586,7 +667,7 @@ class FakeRepo:
             user = self._get(f"users/{uid}") or {}
             usage = self._get(f"usage/{uid}_{date}") or {"uid": uid, "date": date, "runs": 0}
             now = utcnow()
-            exempt = bool(sess.get("interview_id")) and not sess.get("free_run_void")
+            exempt = bool(sess.get("interview_id"))  # never counted (03-failure-policy R5)
             units = sess.get("n_runs", 1)
             decided = decide_start(user, usage, defaults, max_active, exempt, units)
             if decided != "ok":
@@ -619,7 +700,9 @@ class FakeRepo:
             self._put(
                 f"session_status/{sid}",
                 {**status, "state": "running", "step": None, "error_code": None,
-                 "progress": max(status.get("progress", 0), start_progress), "updated_at": now},
+                 "progress": max(status.get("progress", 0), start_progress), "updated_at": now,
+                 **entry_fields(sess["state"], sess.get("stage_started_at"), status, "running",
+                                None, now)},
             )  # fmt: skip
             self._record_status(uid, sid)
             return "started"
@@ -628,6 +711,7 @@ class FakeRepo:
         self, uid: str, sid: str, run_id: str, date: str, defaults: LimitDefaults, max_active: int,
         code_version: str, start_progress: int, allowed_states: tuple[str, ...],
         n_runs: int | None, preset: str | None, coded_span: dict | None = None,
+        retry_max: int | None = None,
     ) -> StartOutcome:  # fmt: skip
         with self._claim_lock:  # the fake's "transaction"
             sess = self._owned(f"sessions/{sid}", uid)
@@ -637,6 +721,8 @@ class FakeRepo:
                 and sess.get("speaker_confirmed")
                 and sess.get("clinician_speaker")
             ):
+                return "not_ready"
+            if retry_max is not None and not retry_allowed(sess, retry_max, "run"):
                 return "not_ready"
             status = self._get(f"session_status/{sid}") or {}
             user = self._get(f"users/{uid}") or {}
@@ -650,7 +736,6 @@ class FakeRepo:
             # Try again after a failed free run stays free (review R1): the free rating is owed
             exempt = (
                 bool(sess.get("interview_id"))
-                and not sess.get("free_run_void")
                 and (not sess.get("first_run_id")
                      or (sess.get("state") == "failed" and first is not None
                          and first.get("counted") is False))
@@ -681,15 +766,47 @@ class FakeRepo:
             self._put(
                 f"sessions/{sid}",
                 {**sess, "first_run_id": sess.get("first_run_id") or run_id, "state": "running",
-                 "step": None, "error": None, "updated_at": now, "stage_started_at": now},
+                 "step": None, "error": None, "updated_at": now, "stage_started_at": now,
+                 "retry_count": sess.get("retry_count", 0) + (retry_max is not None)},
             )  # fmt: skip
             self._put(
                 f"session_status/{sid}",
-                {**status, "state": "running", "step": None, "error_code": None,
-                 "progress": progress, "updated_at": now},
+                {**status, "state": "running", "step": None, **error_status_fields(None, 0),
+                 "progress": progress, "updated_at": now,
+                 **entry_fields(sess["state"], sess.get("stage_started_at"), status, "running",
+                                None, now)},
             )  # fmt: skip
             self._record_status(uid, sid)
             return "started"
+
+    def retry_step(
+        self, uid: str, sid: str, step: str, to: str, max_retries: int, progress: int
+    ) -> bool:
+        with self._claim_lock:  # the fake's "transaction"
+            sess = self._owned(f"sessions/{sid}", uid)
+            assert sess is not None
+            if not retry_allowed(sess, max_retries, step):
+                return False
+            now = utcnow()
+            status = self._get(f"session_status/{sid}") or {}
+            steps = dict(sess.get("steps") or {})
+            steps[step] = StepRecord().model_dump()
+            self._put(
+                f"sessions/{sid}",
+                {**sess, "state": to, "step": step, "error": None, "steps": steps,
+                 "retry_count": sess.get("retry_count", 0) + 1, "updated_at": now,
+                 "stage_started_at": now},
+            )  # fmt: skip
+            self._put(
+                f"session_status/{sid}",
+                {**status, "state": to, "step": step, **error_status_fields(None, 0),
+                 "progress": max(status.get("progress", 0), progress), "uid": uid,
+                 "updated_at": now,
+                 **entry_fields(sess["state"], sess.get("stage_started_at"), status, to, step,
+                                now)},
+            )  # fmt: skip
+            self._record_status(uid, sid)
+            return True
 
     # ---- interviews ----
 

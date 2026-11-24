@@ -5,6 +5,7 @@ the configured engine (one call runs the whole `running` phase, asyncio inside).
 per-stage adapters. Fake implementations live in `fake.py`; real ones are SP09.
 """
 
+from dataclasses import dataclass
 from typing import Any, Protocol
 
 from onolys_engine_core.context import RunContext
@@ -16,7 +17,10 @@ from onolys_miti.voice import VoiceParams, VoiceSession
 from pydantic import BaseModel, Field
 
 __all__ = [
+    "AuthAccount",
+    "AuthLinks",
     "AdapterError",
+    "EmailSender",
     "Evaluation",
     "EvaluationOutput",
     "ProgressCb",
@@ -79,3 +83,24 @@ class Voice(Protocol):
     `params.provider` picks the core adapter; nothing else in the API names a provider."""
 
     async def open(self, params: VoiceParams) -> VoiceSession: ...
+
+
+class EmailSender(Protocol):
+    """Transactional email delivery; failures contain safe codes only."""
+
+    def send(self, to: str, subject: str, html: str, text: str) -> None: ...
+
+
+@dataclass(frozen=True)
+class AuthAccount:
+    email: str
+    email_verified: bool = False
+    disabled: bool = False
+
+
+class AuthLinks(Protocol):
+    """Trusted account lookup and action codes; SDK links never leave this boundary."""
+
+    def get_user(self, uid: str) -> AuthAccount: ...
+    def verification(self, uid: str) -> str: ...
+    def password_reset(self, email: str) -> str | None: ...

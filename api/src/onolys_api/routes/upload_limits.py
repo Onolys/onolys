@@ -1,0 +1,41 @@
+"""`GET /v1/upload-limits`: the limits the validator enforces, for web pre-checks (R10)."""
+
+from typing import Annotated
+
+from fastapi import APIRouter, Depends, Request
+from pydantic import BaseModel
+
+from onolys_api.audio import ACCEPTED_EXTENSIONS, ACCEPTED_MIME_TYPES, SHORT_RECORDING_S
+from onolys_api.auth.deps import AuthUser, current_user
+from onolys_api.errors import ErrorResponse
+from onolys_api.storage.base import MAX_UPLOAD_BYTES
+
+ERRORS = {"default": {"model": ErrorResponse, "description": "Error"}}
+router = APIRouter(prefix="/upload-limits", tags=["upload"], responses=ERRORS)
+User = Annotated[AuthUser, Depends(current_user)]
+
+
+class UploadLimits(BaseModel):
+    max_bytes: int
+    max_duration_s: float
+    interview_max_duration_s: float
+    short_warning_s: float
+    extensions: list[str]
+    mime_types: list[str]
+
+
+@router.get(
+    "", operation_id="getUploadLimits", response_model=UploadLimits, summary="Upload limits"
+)
+def get_upload_limits(request: Request, user: User) -> UploadLimits:
+    settings = request.app.state.settings
+    presets = request.app.state.presets
+    stt = presets.resolve(None, "en")[1]  # the default STT preset
+    return UploadLimits(
+        max_bytes=MAX_UPLOAD_BYTES,
+        max_duration_s=presets.max_audio_s(stt.provider, stt.model),
+        interview_max_duration_s=settings.ai_max_seconds + settings.ai_tolerance_seconds,
+        short_warning_s=SHORT_RECORDING_S,
+        extensions=list(ACCEPTED_EXTENSIONS),
+        mime_types=list(ACCEPTED_MIME_TYPES),
+    )

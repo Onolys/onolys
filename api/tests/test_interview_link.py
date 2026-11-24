@@ -1,11 +1,15 @@
 """SP10 Task 7: session link + validate rules for AI interviews (R6, R7, D10, AC7, AC8)."""
 
+import dataclasses
+
 import httpx
 import pytest
 from audio_helpers import MAGIC, A, StubTools
 
 from onolys_api.app import create_app
 from onolys_api.audio import ProbeResult
+from onolys_api.jobs import caps
+from onolys_api.repo.base import NotFoundError
 from onolys_api.repo.fake import FakeRepo
 from onolys_api.repo.models import InterviewDoc
 
@@ -193,9 +197,9 @@ async def upload(settings, repo, blobs, seconds, iid=None):
 async def test_640s_interview_fails_interview_too_long(settings, repo, blobs):
     iid = interview(repo)
     sid = await upload(settings, repo, blobs, 640.0, iid)
-    s = repo.get_session("alice", sid)
-    assert s.state == "failed" and s.error.code == "interview_too_long"
-    assert s.error.step == "validate"
+    with pytest.raises(NotFoundError):  # an upload failure leaves no session (SP03 R11)
+        repo.get_session("alice", sid)
+    assert repo.get_status("alice", sid).error_code == "interview_too_long"
     assert blobs.list_keys(f"alice/{sid}/") == []
 
 
@@ -240,24 +244,35 @@ async def test_failed_validation_leaves_interview_linked_uploaded(settings, repo
     assert (iv.state, iv.session_id) == ("uploaded", sid)
 
 
-# ---- FX44 (A10): the free first run is bound to the audio the interview's relay recorded ----
+# ---- 03-failure-policy R9: a relay/upload mismatch beyond max(60 s, 15 %) is OUR error ----
 
 
 @pytest.mark.parametrize(
-    ("relay_s", "upload_s", "void"),
-    [
-        (300.0, 310.0, False),  # same recording: within the tolerance
-        (300.0, 330.0, False),  # exactly AI_TOLERANCE_SECONDS (30) apart
-        (300.0, 331.0, True),  # a different file
-        (120.0, 600.0, True),  # an arbitrary upload on a linked session
-        (None, 310.0, True),  # the relay never recorded a duration
-    ],
+    ("relay_s", "upload_s"),
+    [(300.0, 310.0), (300.0, 331.0), (600.0, 689.0), (180.0, 240.0), (None, 310.0)],
 )
-async def test_free_first_run_needs_audio_matching_the_relay_duration(
-    settings, repo, blobs, relay_s, upload_s, void
-):
+async def test_linked_upload_within_the_threshold_proceeds(settings, repo, blobs, relay_s, upload_s):
+    # a long relay is capped at AI_MAX_SECONDS (600): raise the ceiling so only the match rule decides
+    settings = dataclasses.replace(settings, ai_max_seconds=700)
     iid = interview(repo, duration_s=relay_s)
     sid = await upload(settings, repo, blobs, upload_s, iid)
     s = repo.get_session("alice", sid)
     assert s.state == "transcribing"
-    assert s.free_run_void is void
+
+
+@pytest.mark.parametrize(("relay_s", "upload_s"), [(600.0, 691.0), (180.0, 241.0), (120.0, 600.0)])
+async def test_linked_upload_beyond_the_threshold_stops_as_our_error(
+    settings, repo, blobs, relay_s, upload_s
+):
+    settings = dataclasses.replace(settings, ai_max_seconds=700)
+    iid = interview(repo, duration_s=relay_s)
+    sid = await upload(settings, repo, blobs, upload_s, iid)
+    s, st = repo.get_session("alice", sid), repo.get_status("alice", sid)
+    assert s.state == "failed" and s.warnings == []
+    assert (s.error.code, s.error.kind, s.error.counted) == ("internal_error", "permanent_internal", False)
+    assert (st.error_code, st.error_kind, st.counted, st.retries_left) == (
+        "internal_error", "permanent_internal", False, 0,
+    )  # fmt: skip
+    assert blobs.list_keys(f"alice/{sid}/audio/")  # data kept (the audio passed validation)
+    assert repo.get_usage("alice", caps.utc_date()).runs == 0
+    assert (repo.get_user("alice") is None) or repo.get_user("alice").active_runs == 0

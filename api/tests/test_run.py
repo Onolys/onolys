@@ -7,6 +7,7 @@ import os
 import time
 import uuid
 from dataclasses import replace
+from datetime import UTC, datetime
 
 import httpx
 import pytest
@@ -259,11 +260,14 @@ async def test_try_again_after_a_failure_reuses_transcript_and_stored_rating(env
 
     swap_eval(env, Ok())
     (first,) = env.repo.list_runs(env.uid, sid)
-    # Try again re-runs the SAME submission: client-supplied preset / n_runs are ignored
-    r = await env.c.post(
-        f"/v1/sessions/{sid}/runs", json={"preset": "fast", "n_runs": 3}, headers=env.h
+    # the stub's `[fail:code]` is a permanent failure (no retry): make it the transient kind
+    env.repo.update_session(
+        env.uid, sid, {"error": {"code": "upstream_unavailable", "step": "run"}}
     )
+    # the retry re-runs the SAME submission (the failed run's preset / n_runs), one capped path
+    r = await env.c.post(f"/v1/sessions/{sid}/retry", headers=env.h)
     assert r.status_code == 202
+    assert env.repo.get_session(env.uid, sid).retry_count == 1
     assert env.counters() == (1, first.n_runs)  # the retry takes a fresh unit
     assert env.repo.get_status(env.uid, sid).progress == 45  # a retry restarts at 45
     env.drain()
@@ -340,6 +344,35 @@ async def test_retry_within_the_task_refunds_once_never_twice(env):
     for _ in range(2):  # a redelivered release is a no-op
         release_once(env.repo, env.uid, sid, run.run_id, True, run.cap_date)
     assert env.counters() == (0, 0)
+
+
+async def test_each_run_stage_resets_stage_started_at(env, monkeypatch):
+    """Web interpolates from `stage_started_at`: tips must start its own clock, not count from run start."""
+    from onolys_api.jobs import run as run_mod
+    from onolys_api.progress import progress_next
+
+    clock = [time.time()]
+    monkeypatch.setattr(run_mod, "utcnow", lambda: datetime.fromtimestamp(clock[0], UTC))
+    seen = {}
+
+    class Timed(FakeEvaluation):
+        async def run(self, ctx, transcript, speaker_map, params, progress_cb=None):
+            def cb(stage, status):
+                clock[0] += 50
+                progress_cb(stage, status)
+                if status == "started":
+                    seen[stage] = env.repo.get_status(env.uid, sid)
+
+            return await super().run(ctx, transcript, speaker_map, params, cb)
+
+    swap_eval(env, Timed())
+    sid = await env.start()
+    env.drain()
+    code, tips = seen["code"], seen["tips"]
+    assert tips.stage_started_at > code.stage_started_at
+    # pct from the tips clock (t=0) is the tips base, not ~92 as with the run-start clock
+    assert tips.progress == 85 and progress_next("running", "tips") == 93
+    assert (tips.stage_started_at - code.stage_started_at).total_seconds() >= 50
 
 
 class Capture(FakeEvaluation):
@@ -547,6 +580,82 @@ async def test_no_report_text_in_session_status(env):
     sid = await env.finished()
     st = env.repo.get_status(env.uid, sid).model_dump(mode="json")
     assert set(st) <= {
-        "id", "uid", "state", "step", "progress", "error_code", "latest_report_version",
-        "updated_at", "transcript_ready", "speaker_confirmed", "rating_submitted", "has_rating",
+        "id", "uid", "state", "step", "progress", "error_code", "error_kind", "retries_left",
+        "counted", "latest_report_version", "updated_at", "expire_at", "transcript_ready", "speaker_confirmed", "rating_submitted", "has_rating",
+        "started_at", "stage_started_at", "waited_ms", "audio_s", "progress_next", "stage_expected_s",
     }  # fmt: skip
+    for k in ("started_at", "stage_started_at", "waited_ms", "audio_s", "progress_next", "stage_expected_s"):  # numbers and timestamps only: no text
+        assert st[k] is None or isinstance(st[k], (int, float)) or st[k][:2] == "20", k
+
+
+# ---- 03-failure-policy Task 3: `counted` on the failed session, interview never counted ----------
+
+
+class AlwaysDown(FakeEvaluation):
+    async def run(self, *a, **kw):
+        raise AdapterError("upstream_unavailable")
+
+
+async def test_transient_run_failure_refunds_and_is_not_counted(env):
+    swap_eval(env, AlwaysDown())
+    sid = await env.finished()
+    s = env.repo.get_session(env.uid, sid)
+    assert s.state == "failed" and s.error.kind == "transient" and s.error.counted is False
+    assert env.repo.get_status(env.uid, sid).counted is False
+    assert env.counters() == (0, 0)
+
+
+async def test_permanent_internal_run_failure_refunds_and_is_not_counted(env):
+    sid = await env.start()
+    env.repo.update_session(env.uid, sid, {"clinician_speaker": None})  # internal_error, no LLM
+    env.drain()
+    s = env.repo.get_session(env.uid, sid)
+    assert s.error.kind == "permanent_internal" and s.error.counted is False
+    assert env.counters() == (0, 0)
+
+
+async def test_user_file_failure_after_llm_keeps_the_unit_and_is_counted(env):
+    class BadFile(FakeEvaluation):
+        async def run(self, *a, **kw):
+            raise AdapterError("no_speech")
+
+    swap_eval(env, BadFile())
+    sid = await env.finished()
+    s = env.repo.get_session(env.uid, sid)
+    assert s.error.kind == "user_file" and s.error.counted is True
+    assert env.repo.get_status(env.uid, sid).counted is True
+    assert env.counters() == (0, 1)
+
+
+async def _interview_session(env):
+    sid = await env.new_session()
+    env.repo.update_session(env.uid, sid, {"interview_id": "iv1"})
+    await env.c.post(
+        f"/v1/sessions/{sid}/speakers/confirm", json={"clinician_speaker": "S1"}, headers=env.h
+    )
+    await env.c.put(
+        f"/v1/sessions/{sid}/rating", json={"final": True, "card": CARD}, headers=env.h
+    )
+    return sid
+
+
+async def test_interview_first_run_success_is_never_counted(env):
+    sid = await _interview_session(env)
+    (run,) = env.repo.list_runs(env.uid, sid)
+    assert run.counted is False and env.counters() == (1, 0)
+    env.drain()
+    assert env.repo.get_session(env.uid, sid).state == "report_ready"
+    assert env.counters() == (0, 0)
+
+
+async def test_interview_first_run_failure_is_never_counted(env):
+    class BadFile(FakeEvaluation):
+        async def run(self, *a, **kw):
+            raise AdapterError("no_speech")  # user_file after the LLM: would be counted otherwise
+
+    swap_eval(env, BadFile())
+    sid = await _interview_session(env)
+    env.drain()
+    s = env.repo.get_session(env.uid, sid)
+    assert s.state == "failed" and s.error.counted is False
+    assert env.counters() == (0, 0)

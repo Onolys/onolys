@@ -30,6 +30,13 @@ function status(b: MockBackend, sid: string, uid = U) {
   return b.getSession(uid, sid);
 }
 
+function docOf(emitter: ReturnType<typeof createMemoryStatusEmitter>, sid: string): SessionStatusDoc {
+  let doc: SessionStatusDoc | null = null;
+  emitter.subscribe(sid, (d) => (doc = d), () => {})();
+  if (!doc) throw new Error("no status doc");
+  return doc;
+}
+
 function expectHttp(fn: () => unknown, status: number, code: string) {
   try {
     fn();
@@ -46,10 +53,29 @@ beforeEach(() => {
   ctx = make();
 });
 
+describe("per-stage start time", () => {
+  it("each run stage restarts stage_started_at (so the web interpolates inside the stage)", () => {
+    let t = Date.parse("2026-11-24T10:00:00Z");
+    const emitter = createMemoryStatusEmitter();
+    const backend = new MockBackend({ emitter, now: () => new Date(t) });
+    const sid = started(backend);
+    backend.advance(sid);
+    backend.advance(sid);
+    backend.confirmSpeaker(U, sid, "spk_0");
+    backend.putRating(U, sid, { final: true, card: SCORED });
+    const codeStart = docOf(emitter, sid).stage_started_at;
+    t += 60_000;
+    backend.advance(sid); // -> tips
+    const tips = docOf(emitter, sid);
+    expect(tips.step).toBe("tips");
+    expect(Date.parse(tips.stage_started_at!) - Date.parse(codeStart!)).toBe(60_000);
+  });
+});
+
 describe("happy path walks every state", () => {
   it("created -> uploading -> validating -> transcribing -> awaiting_input -> running -> report_ready -> deleting", () => {
     const { backend, emitter } = ctx;
-    const seen: SessionState[] = [];
+    const seen: (SessionState | "upload_failed")[] = [];
     const { session } = backend.createSession(U, {});
     const sid = session.id;
     emitter.subscribe(sid, (d) => d && seen.push(d.state), () => {});
@@ -77,6 +103,11 @@ describe("happy path walks every state", () => {
     backend.putRating(U, sid, { final: true, card: SCORED });
     expect(status(backend, sid)).toMatchObject({ status: "running", progress: 45, step: "code" });
 
+    // progress and progress_next follow the server table (api progress.py): 45 + 40 + 8 + 3 = 96, last next is the 99 cap
+    expect(docOf(emitter, sid)).toMatchObject({ progress: 45, progress_next: 85, stage_expected_s: 120 });
+    const docs: SessionStatusDoc[] = [];
+    emitter.subscribe(sid, (d) => d && docs.push(d), () => {});
+    docs.length = 0;
     const progress: number[] = [];
     const steps: (string | null)[] = [];
     while (status(backend, sid).status === "running") {
@@ -86,6 +117,13 @@ describe("happy path walks every state", () => {
     }
     expect(progress).toEqual([85, 93, 100]);
     expect(steps).toEqual(["tips", "assemble", null]);
+    expect(docs.map((d) => [d.state, d.step, d.progress, d.progress_next])).toEqual([
+      ["running", "tips", 85, 93],
+      ["running", "assemble", 93, 99],
+      ["running", "assemble", 96, 99],
+      ["report_ready", null, 100, null],
+    ]);
+    expect(Math.max(...docs.filter((d) => d.state === "running").map((d) => d.progress_next ?? 0))).toBe(99);
     expect(status(backend, sid)).toMatchObject({
       status: "report_ready",
       latest_report_version: 1,
@@ -124,17 +162,25 @@ describe("session_status mirror", () => {
     expect(docs).toHaveLength(1);
     expect(Object.keys(docs[0]).sort()).toEqual(
       [
+        "counted",
         "error_code",
+        "error_kind",
         "has_rating",
         "latest_report_version",
         "progress",
+        "progress_next",
         "rating_submitted",
+        "retries_left",
         "speaker_confirmed",
+        "stage_expected_s",
+        "stage_started_at",
+        "started_at",
         "state",
         "step",
         "transcript_ready",
         "uid",
         "updated_at",
+        "waited_ms",
       ].sort(),
     );
     expect(JSON.stringify(docs[0])).not.toContain("My private title");
@@ -581,6 +627,72 @@ describe("final ratings and report versions (FX45)", () => {
     expect([second.preset, second.n_runs]).toEqual([first.preset, first.n_runs]);
   });
 
+  it("a transient failure carries kind + retries_left; retry moves it on and is capped at 3", () => {
+    const { backend, emitter } = ctx;
+    const sid = started(backend, "fail-transient");
+    backend.settle(sid);
+    backend.confirmSpeaker(U, sid, "spk_0");
+    backend.putRating(U, sid, { final: true, card: SCORED });
+    backend.settle(sid);
+    const docs: SessionStatusDoc[] = [];
+    emitter.subscribe(sid, (d) => d && docs.push(d), () => {});
+    expect(docs.at(-1)).toMatchObject({ error_code: "upstream_unavailable", error_kind: "transient", retries_left: 3 });
+    for (let left = 2; left >= 0; left--) {
+      backend.retrySession(U, sid);
+      backend.settle(sid);
+      expect(docs.at(-1)).toMatchObject({ error_kind: "transient", retries_left: left });
+    }
+    expectHttp(() => backend.retrySession(U, sid), 409, "invalid_state");
+  });
+
+  it("session detail carries kind + retries_left, and a transcribe retry clears sttSubmitted", () => {
+    const { backend } = ctx;
+    const sid = started(backend, "fail-transient");
+    backend.settle(sid);
+    backend.confirmSpeaker(U, sid, "spk_0");
+    backend.putRating(U, sid, { final: true, card: SCORED });
+    backend.settle(sid);
+    expect(backend.getSession(U, sid)).toMatchObject({ error_kind: "transient", retries_left: 3 });
+    const bad = started(backend, "fail-no_speech");
+    backend.settle(bad);
+    expect(backend.getSession(U, bad)).toMatchObject({ error_kind: "user_file", retries_left: 0, counted: false });
+    // transcribe retry: the API's retry_step drops stt_operation, so the mock is not submitted again
+    const t = started(backend, "fail-transient");
+    const rec = (backend as unknown as { sessions: Map<string, { state: string; step: string | null; error: unknown; sttSubmitted: boolean }> }).sessions.get(t)!;
+    rec.state = "failed";
+    rec.step = "transcribe";
+    rec.error = { code: "upstream_unavailable", step: "transcribe" };
+    rec.sttSubmitted = true;
+    backend.retrySession(U, t);
+    expect(rec.sttSubmitted).toBe(false);
+  });
+
+  it("retry is 409 for a permanent or user_file failure; their docs carry the kind", () => {
+    const { backend, emitter } = ctx;
+    const sid = started(backend, "fail-code");
+    backend.settle(sid);
+    backend.confirmSpeaker(U, sid, "spk_0");
+    backend.putRating(U, sid, { final: true, card: SCORED });
+    backend.settle(sid);
+    expectHttp(() => backend.retrySession(U, sid), 409, "invalid_state");
+    const bad = started(backend, "fail-no_speech");
+    const docs: SessionStatusDoc[] = [];
+    emitter.subscribe(bad, (d) => d && docs.push(d), () => {});
+    backend.settle(bad);
+    expect(docs.at(-1)).toMatchObject({ error_kind: "user_file", counted: false });
+    expectHttp(() => backend.retrySession(U, bad), 409, "invalid_state");
+  });
+
+  it("fail-upload_failed leaves only an upload_failed status doc", () => {
+    const { backend, emitter } = ctx;
+    const sid = started(backend, "fail-upload_failed");
+    const docs: SessionStatusDoc[] = [];
+    emitter.subscribe(sid, (d) => d && docs.push(d), () => {});
+    backend.settle(sid);
+    expect(docs.at(-1)).toMatchObject({ state: "upload_failed", error_code: "audio_unreadable" });
+    expectHttp(() => backend.getSession(U, sid), 404, "not_found");
+  });
+
   it("run records carry stt, preset, code_version and the rating snapshot", () => {
     const { backend, sid } = reported({ final: true, card: SCORED });
     const [run] = backend.listRuns(U, sid);
@@ -809,5 +921,123 @@ describe("tenancy, list, delete, idempotency", () => {
     const { backend } = ctx;
     expectHttp(() => backend.createSession(U, { n_runs: 9 }), 422, "invalid_parameters");
     expectHttp(() => backend.createSession(U, { preset: "nope" }), 422, "invalid_parameters");
+  });
+});
+
+describe("cancelSession (04-cancel R2/R4)", () => {
+  const usedEval = (b: MockBackend) => b.getUsage(U).eval.day.used;
+
+  it.each(["created", "uploading", "validating"] as const)("an early state (%s) is cancelled without a charge", (state) => {
+    const { backend } = ctx;
+    const { session } = backend.createSession(U, {});
+    const sid = session.id;
+    if (state !== "created") backend.requestAudio(U, sid, MP3);
+    if (state === "validating") backend.completeAudio(U, sid);
+    expect(status(backend, sid).status).toBe(state);
+    expect(backend.cancelSession(U, sid)).toEqual({ counted: false });
+    expect(status(backend, sid)).toMatchObject({ status: "cancelled", counted: false, cancel: { counted: false, units: 0 } });
+    expect(usedEval(backend)).toBe(0);
+  });
+
+  it("transcribing without an STT job is free; with the job submitted it counts once", () => {
+    const { backend } = ctx;
+    const free = started(backend);
+    backend.advance(free); // validating -> transcribing
+    expect(status(backend, free).status).toBe("transcribing");
+    expect(backend.cancelSession(U, free)).toEqual({ counted: false });
+    const paid = started(backend);
+    backend.advance(paid);
+    backend.submitStt(paid);
+    expect(backend.cancelSession(U, paid)).toEqual({ counted: true });
+    expect(status(backend, paid).cancel).toMatchObject({ counted: true, units: 1 });
+    expect(usedEval(backend)).toBe(1);
+  });
+
+  it("awaiting_input counts", () => {
+    const { backend } = ctx;
+    const sid = started(backend);
+    backend.advance(sid);
+    backend.advance(sid);
+    expect(status(backend, sid).status).toBe("awaiting_input");
+    expect(backend.cancelSession(U, sid)).toEqual({ counted: true });
+  });
+
+  it("running reports the run's counted and adds no new charge", () => {
+    const { backend } = ctx;
+    const sid = started(backend);
+    backend.settle(sid);
+    backend.confirmSpeaker(U, sid, "spk_0");
+    backend.putRating(U, sid, { final: true, card: SCORED });
+    expect(status(backend, sid).status).toBe("running");
+    const before = usedEval(backend);
+    expect(backend.cancelSession(U, sid)).toEqual({ counted: true });
+    expect(usedEval(backend)).toBe(before);
+    expect(backend.listRuns(U, sid).at(-1)?.status).toBe("failed");
+  });
+
+  it("an interview-linked session is never counted", () => {
+    const { backend } = ctx;
+    const sid = started(backend);
+    backend.advance(sid);
+    backend.advance(sid);
+    (backend as unknown as { sessions: Map<string, { interview_id?: string }> }).sessions.get(sid)!.interview_id = "iv_1";
+    expect(backend.cancelSession(U, sid)).toEqual({ counted: false });
+  });
+
+  it("repeating returns the same counted and charges nothing more", () => {
+    const { backend } = ctx;
+    const sid = started(backend);
+    backend.advance(sid);
+    backend.advance(sid);
+    expect(backend.cancelSession(U, sid)).toEqual({ counted: true });
+    expect(backend.cancelSession(U, sid)).toEqual({ counted: true });
+    expect(usedEval(backend)).toBe(1);
+  });
+
+  it("is 409 for report_ready and failed, 404 for another user's session", () => {
+    const { backend } = ctx;
+    const failed = started(backend, "fail-no_speech");
+    backend.settle(failed);
+    expectHttp(() => backend.cancelSession(U, failed), 409, "invalid_state");
+    const ok = started(backend);
+    backend.settle(ok);
+    backend.confirmSpeaker(U, ok, "spk_0");
+    backend.putRating(U, ok, { final: true, card: SCORED });
+    backend.settle(ok);
+    expect(status(backend, ok).status).toBe("report_ready");
+    expectHttp(() => backend.cancelSession(U, ok), 409, "invalid_state");
+    expectHttp(() => backend.cancelSession("other", ok), 404, "not_found");
+  });
+
+  it("is allowed over the cap and the worker no longer moves a cancelled session", () => {
+    const { backend } = make({ caps: { eval: { day: 0 } } });
+    const sid = started(backend);
+    backend.advance(sid);
+    backend.advance(sid);
+    expect(backend.cancelSession(U, sid)).toEqual({ counted: true });
+    expect(backend.advance(sid)).toBe(false);
+  });
+});
+
+describe("cancelled sessions answer 409 invalid_state (04-cancel R6)", () => {
+  it("rating, speakers, runs, retry, upload and transcript routes", () => {
+    const { backend: b } = make();
+    const uid = "u1";
+    const sid = b.createSession(uid, {}).session.id;
+    b.cancelSession(uid, sid);
+    const code = (fn: () => unknown) => {
+      try {
+        fn();
+      } catch (e) {
+        return (e as { status?: number }).status;
+      }
+      return "no error";
+    };
+    expect(code(() => b.putRating(uid, sid, { card: {} } as never))).toBe(409);
+    expect(code(() => b.confirmSpeaker(uid, sid, "A"))).toBe(409);
+    expect(code(() => b.startRun(uid, sid, {}))).toBe(409);
+    expect(code(() => b.retrySession(uid, sid))).toBe(409);
+    expect(code(() => b.requestAudio(uid, sid, { content_type: "audio/mpeg", size_bytes: 1, filename_ext: "mp3" }))).toBe(409);
+    expect(code(() => b.completeAudio(uid, sid))).toBe(409);
   });
 });

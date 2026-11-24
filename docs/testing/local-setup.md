@@ -84,7 +84,7 @@ Terminal 2, api on port 8000 (`mkdir -p /tmp/onolys-blobs` first; env vars are i
 ```bash
 FIRESTORE_EMULATOR_HOST=127.0.0.1:8081 ENV=local SERVICE_MODE=combined AUTH_MODE=fake ADAPTERS=stub \
 GCP_PROJECT=demo-onolys AUTH_PROJECT=demo-onolys FIRESTORE_DATABASE='(default)' \
-CORS_ORIGINS=http://localhost:5173 FAKE_BLOB_DIR=/tmp/onolys-blobs FAKE_BLOB_BASE_URL=http://127.0.0.1:8000 \
+APP_BASE_URL=http://localhost:5173 CORS_ORIGINS=http://localhost:5173 FAKE_BLOB_DIR=/tmp/onolys-blobs FAKE_BLOB_BASE_URL=http://127.0.0.1:8000 \
 uv run --package onolys-api uvicorn --factory onolys_api.app:create_app --host 127.0.0.1 --port 8000
 ```
 

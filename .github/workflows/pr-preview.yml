@@ -27,6 +27,22 @@ name: pr-preview
 on:
   pull_request:
     types: [opened, synchronize, reopened]
+    # Only what the preview consumes: the api image (api/Dockerfile, build context = repo root), the web build, the
+    # pr_preview helper. No ruleset/branch protection requires this check (verified 2026-11-24), so a skipped run is fine.
+    paths:
+      - api/**
+      - web/**
+      - engines/**
+      - infra/**
+      - config/**
+      - pyproject.toml
+      - uv.lock
+      - .dockerignore
+      - eval/core/pyproject.toml
+      - admin/auth/pyproject.toml
+      - admin/backend/pyproject.toml
+      - scripts/ci/pr_preview.sh
+      - .github/workflows/pr-preview.yml
 
 concurrency:
   group: pr-preview-${{ github.event.number }}

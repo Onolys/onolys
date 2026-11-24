@@ -4,6 +4,7 @@ import copy
 import logging
 
 import pytest
+from onolys_engine_core.json_logging import render
 
 from onolys_miti import miti
 from onolys_miti.rating import is_no_rating, validate_rating
@@ -139,6 +140,10 @@ def test_issue_has_no_text():
     assert all(secret not in i.code and secret * 2 not in i.path for i in got)
 
 
+def rendered(caplog):
+    return "\n".join(render(r) for r in caplog.records)
+
+
 def test_no_text_logged(caplog):
     secret = "SECRET-PHI-TEXT"
     g = ids("global")[0]
@@ -148,4 +153,4 @@ def test_no_text_logged(caplog):
         validate_rating(card, True)
         validate_rating({"notes": secret * 1000, "globals": {g: {"score": 99}}}, False)
     assert caplog.records, "expected a validation log event"
-    assert secret not in caplog.text
+    assert secret not in rendered(caplog)

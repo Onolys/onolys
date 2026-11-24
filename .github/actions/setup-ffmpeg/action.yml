@@ -1,0 +1,37 @@
+name: Setup ffmpeg
+description: >
+  Pinned static ffmpeg + ffprobe from a cache (no apt). On a cache miss it downloads one pinned,
+  immutable build, verifies its sha256 and caches the two binaries. Fails fast (curl --max-time) so
+  a stall costs about a minute, not the job's whole timeout. Callers should also set
+  `timeout-minutes: 2` on the step that uses this action.
+runs:
+  using: composite
+  steps:
+    - name: Restore ffmpeg cache
+      id: cache
+      uses: actions/cache@v4
+      with:
+        path: ~/.cache/ffmpeg-static
+        key: ffmpeg-static-${{ runner.os }}-${{ runner.arch }}-7.0.2-abda8d77
+    - name: Download pinned static ffmpeg (cache miss only)
+      if: steps.cache.outputs.cache-hit != 'true'
+      shell: bash
+      env:
+        # johnvansickle.com release builds are versioned and never rewritten. Linux x64 only (ubuntu-latest).
+        FFMPEG_URL: https://johnvansickle.com/ffmpeg/releases/ffmpeg-7.0.2-amd64-static.tar.xz
+        FFMPEG_SHA256: abda8d77ce8309141f83ab8edf0596834087c52467f6badf376a6a2a4c87cf67
+      run: |
+        set -euo pipefail
+        dest="$HOME/.cache/ffmpeg-static"
+        tmp="$(mktemp -d)"
+        curl -fsSL --retry 2 --connect-timeout 15 --max-time 90 -o "$tmp/ffmpeg.tar.xz" "$FFMPEG_URL"
+        echo "$FFMPEG_SHA256  $tmp/ffmpeg.tar.xz" | sha256sum -c -
+        mkdir -p "$dest"
+        tar -xJf "$tmp/ffmpeg.tar.xz" -C "$dest" --strip-components=1 --wildcards '*/ffmpeg' '*/ffprobe'
+    - name: Add ffmpeg to PATH
+      shell: bash
+      run: |
+        set -euo pipefail
+        echo "$HOME/.cache/ffmpeg-static" >> "$GITHUB_PATH"
+        "$HOME/.cache/ffmpeg-static/ffmpeg" -version | head -1
+        "$HOME/.cache/ffmpeg-static/ffprobe" -version | head -1

@@ -2,6 +2,19 @@
   "$defs": {
     "SessionListItem": {
       "properties": {
+        "counted": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Did the session end (cancelled or failed) having used a unit; null n/a",
+          "title": "Counted"
+        },
         "created_at": {
           "format": "date-time",
           "title": "Created At",
@@ -59,7 +72,8 @@
             "report_ready",
             "failed",
             "deleting",
-            "upload_incomplete"
+            "upload_incomplete",
+            "cancelled"
           ],
           "title": "Status",
           "type": "string"

@@ -28,6 +28,31 @@
       "title": "Flags",
       "type": "object"
     },
+    "SessionCancel": {
+      "description": "The result of a user cancel (04-cancel R7): did it use a unit, how many, and when.",
+      "properties": {
+        "at": {
+          "format": "date-time",
+          "title": "At",
+          "type": "string"
+        },
+        "counted": {
+          "title": "Counted",
+          "type": "boolean"
+        },
+        "units": {
+          "title": "Units",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "counted",
+        "units",
+        "at"
+      ],
+      "title": "SessionCancel",
+      "type": "object"
+    },
     "SessionErrorInfo": {
       "properties": {
         "code": {
@@ -45,6 +70,44 @@
   "$id": "session-detail.schema.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "properties": {
+    "audio_s": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Recording duration in seconds",
+      "title": "Audio S"
+    },
+    "cancel": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/SessionCancel"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Set once cancelled: whether it used a unit, how many, and when"
+    },
+    "counted": {
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Did the session end (cancelled or failed) having used a unit; null n/a",
+      "title": "Counted"
+    },
     "created_at": {
       "format": "date-time",
       "title": "Created At",
@@ -60,6 +123,24 @@
         }
       ],
       "default": null
+    },
+    "error_kind": {
+      "anyOf": [
+        {
+          "enum": [
+            "transient",
+            "permanent_internal",
+            "user_file"
+          ],
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Failure kind: transient, permanent_internal or user_file; null if ok",
+      "title": "Error Kind"
     },
     "flags": {
       "$ref": "#/$defs/Flags"
@@ -130,6 +211,73 @@
       "title": "Progress",
       "type": "integer"
     },
+    "progress_next": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Base percent of the next stage (99 on the last); null when none",
+      "title": "Progress Next"
+    },
+    "retries_left": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Retries left after a transient failure (0 otherwise); null if ok",
+      "title": "Retries Left"
+    },
+    "stage_expected_s": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Typical seconds the current stage takes; null when untimed",
+      "title": "Stage Expected S"
+    },
+    "stage_started_at": {
+      "anyOf": [
+        {
+          "format": "date-time",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Entered the current state",
+      "title": "Stage Started At"
+    },
+    "started_at": {
+      "anyOf": [
+        {
+          "format": "date-time",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "First entry to uploading (a re-run: its start); null before",
+      "title": "Started At"
+    },
     "status": {
       "enum": [
         "created",
@@ -141,7 +289,8 @@
         "report_ready",
         "failed",
         "deleting",
-        "upload_incomplete"
+        "upload_incomplete",
+        "cancelled"
       ],
       "title": "Status",
       "type": "string"
@@ -174,6 +323,12 @@
       "format": "date-time",
       "title": "Updated At",
       "type": "string"
+    },
+    "waited_ms": {
+      "default": 0,
+      "description": "Total milliseconds spent waiting for the user input",
+      "title": "Waited Ms",
+      "type": "integer"
     },
     "warnings": {
       "items": {

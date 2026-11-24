@@ -34,6 +34,7 @@
 !eval/backend/src/
 !eval/backend/src/**
 !config/
+!config/models.yaml
 !config/staging/
 !config/staging/*.yaml
 !config/prod/

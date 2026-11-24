@@ -1,8 +1,10 @@
 """Task queue (R5): Cloud Tasks in the cloud, an in-memory queue for SERVICE_MODE=combined.
 
 Task names make enqueue idempotent inside Cloud Tasks' dedup window: `{sid}-validate`,
-`{sid}-transcribe`, `{sid}-poll-{n}`, `{run_id}-run`, `{sid}-delete`, `{sid}-interview-sweep[-{n}]`
-(`sid` holds the interview id there). The payload carries the request id (never any text).
+`{sid}-transcribe`, `{sid}-poll-{n}`, `{run_id}-run`, `{sid}-delete`,
+`{sid}-interview-sweep[-{n}]` (`sid` holds the interview id there). A user-visible retry of a
+step adds `-r{retry}` (validate, transcribe, polls) so Cloud Tasks does not drop it as a repeat.
+The payload carries the request id (never any text).
 `enqueue` is sync: routes and handlers run in threadpool workers.
 """
 
@@ -36,6 +38,7 @@ class TaskPayload(BaseModel):
     run_id: str | None = None
     n: int | None = None  # poll sequence number
     request_id: str | None = None
+    retry: int = 0  # the session's `retry_count` when a user-visible retry enqueued it (R4)
 
 
 def task_name(p: TaskPayload) -> str:
@@ -43,13 +46,16 @@ def task_name(p: TaskPayload) -> str:
         if not p.run_id:
             raise ValueError("run task needs run_id")
         return f"{p.run_id}-run"
+    # a user-visible retry re-enters a step whose task name Cloud Tasks has already seen: its
+    # tasks (and the polls after it) carry the retry number so the name is new
+    suffix = f"-r{p.retry}" if p.retry else ""
     if p.kind == "transcribe-poll":
         if p.n is None:
             raise ValueError("poll task needs n")
-        return f"{p.sid}-poll-{p.n}"
+        return f"{p.sid}-poll-{p.n}{suffix}"
     if p.kind == "interview-sweep" and p.n:
         return f"{p.sid}-interview-sweep-{p.n}"  # a re-check: the first sweep's name is spent
-    return f"{p.sid}-{p.kind}"
+    return f"{p.sid}-{p.kind}{suffix}"
 
 
 class TaskQueue(Protocol):

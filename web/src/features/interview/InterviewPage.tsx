@@ -31,6 +31,7 @@ import { ErrorCard } from "../session/ErrorCard";
 import { prepareUpload } from "../upload/startUpload";
 import { getJob } from "../upload/uploader";
 import { USAGE_KEY } from "../usage/useUsage";
+import { clientInfo } from "./audio/clientInfo";
 import { createAudioEngine, type AudioEngine } from "./audio/engine";
 import { clock, recordingFile } from "./capText";
 import { createLiveController, type LiveController, type LiveState } from "./live/controller";
@@ -158,9 +159,10 @@ function InterviewView({ id }: { id: string }) {
     mutationFn: async () => {
       await ctlRef.current?.requestEnd();
       blob.current ??= await (engineRef.current as AudioEngine).stopRecording();
+      const info = clientInfo(engineRef.current as AudioEngine);
       engineRef.current?.close();
-      unwrap(await client.POST("/interviews/{id}/end", { params: { path: { id } }, body: { discard: false } }));
-      sessionId.current ??= unwrap(await client.POST("/sessions", { body: { interview_id: id } })).session.id;
+      unwrap(await client.POST("/interviews/{id}/end", { params: { path: { id } }, body: { discard: false, client: info } }));
+      sessionId.current ??= unwrap(await client.POST("/sessions", { body: { interview_id: id, client: info } })).session.id;
       if (!ratingEnabled() && !goalSaved.current) {
         // D3c: the goal is the scenario's seeded draft; set it so the first run can start.
         const data = unwrap(await client.GET("/sessions/{id}/rating", { params: { path: { id: sessionId.current } } }));

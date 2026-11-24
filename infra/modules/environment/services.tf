@@ -81,6 +81,28 @@ resource "google_cloud_run_v2_service" "api" {
         value = join(",", var.cors_origins)
       }
       env {
+        # Only the api builds auth-email links; unset elsewhere is fine (Settings treats it as optional).
+        name  = "APP_BASE_URL"
+        value = var.app_base_url
+      }
+      env {
+        name  = "EMAIL_FROM"
+        value = var.email_from
+      }
+      dynamic "env" {
+        # PRD 07 D2: only once the owner has seeded a secret version; otherwise the api runs and answers 503 email_unavailable.
+        for_each = var.resend_secret_wired ? [1] : []
+        content {
+          name = "RESEND_API_KEY"
+          value_source {
+            secret_key_ref {
+              secret  = google_secret_manager_secret.resend.secret_id
+              version = "latest"
+            }
+          }
+        }
+      }
+      env {
         # Relay base the api hands to the browser in POST /interviews (voice.tf).
         name  = "VOICE_URL"
         value = "wss://${local.voice_host}"
@@ -118,7 +140,10 @@ resource "google_cloud_run_v2_service" "api" {
     ]
   }
 
-  depends_on = [google_secret_manager_secret_iam_member.hmac]
+  depends_on = [
+    google_secret_manager_secret_iam_member.hmac,
+    google_secret_manager_secret_iam_member.resend_api,
+  ]
 }
 
 resource "google_cloud_run_v2_service" "worker" {

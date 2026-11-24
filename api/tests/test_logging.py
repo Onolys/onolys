@@ -8,6 +8,7 @@ import logging
 import pytest
 import test_run
 import test_worker
+from onolys_engine_core.json_logging import render
 from onolys_engine_core.safe_log import ALLOWED_FIELDS
 from test_run import CARD
 from test_worker import SID, payload, runner_with
@@ -31,16 +32,16 @@ def lines(caplog) -> list[dict]:
     for r in caplog.records:
         if r.name.startswith("onolys_api"):
             try:
-                out.append(json.loads(r.getMessage()))
+                out.append(json.loads(render(r)))
             except ValueError:
-                out.append({"_unstructured": r.getMessage()})
+                out.append({"_unstructured": render(r)})
     return out
 
 
 def server_text(caplog) -> str:
     """Server-side lines only: httpx/asyncio lines are the test client's own."""
     return "\n".join(
-        r.getMessage() for r in caplog.records if r.name.split(".")[0] not in CLIENT_LOGGERS
+        render(r) for r in caplog.records if r.name.split(".")[0] not in CLIENT_LOGGERS
     )
 
 
@@ -73,7 +74,7 @@ def test_uid_hash_is_keyed_hmac_sha256_prefix():
 
 
 def test_settings_reads_uid_hmac_key_env():
-    assert Settings.from_env({"ENV": "local", "UID_HMAC_KEY": "abc"}).uid_hmac_key == "abc"
+    assert Settings.from_env({"APP_BASE_URL": "https://app.onolys.com", "ENV": "local", "UID_HMAC_KEY": "abc"}).uid_hmac_key == "abc"
 
 
 # ---- request logging middleware ----
@@ -89,9 +90,9 @@ async def test_request_line_has_method_route_template_status_latency(env, caplog
     assert (req["method"], req["route"], req["status"]) == ("GET", "/v1/sessions/{id}", 200)
     assert isinstance(req["duration_ms"], int | float) and req["request_id"] == "req-1"
     assert req["auth_kind"] == "token"
-    assert sid not in server_text(caplog) and env.uid not in server_text(
-        caplog
-    )  # no ids from the path
+    assert req["session_id"] == sid  # bound by `bind_session` (02-logging R2)
+    assert env.uid not in server_text(caplog)  # no uid; the path itself is never logged
+    assert f"/v1/sessions/{sid}" not in server_text(caplog)
 
 
 async def test_request_line_for_unmatched_route_has_no_path_or_query(env, caplog):
@@ -270,3 +271,24 @@ def test_uvicorn_error_log_has_no_traceback_or_input(capsys):
     assert "PHI-SENTINEL" not in out
     assert "Traceback" not in out
     assert "ResponseValidationError" in out
+
+
+def test_auth_email_fields_are_logged_without_recipient_or_links(caplog):
+    with caplog.at_level(logging.INFO):
+        logs.emit("auth_email", email_kind="verify", outcome="send_failed", provider_status=503,
+                  email="person@example.com", link="https://example.com?oobCode=secret", oobCode="secret")
+    (entry,) = lines(caplog)
+    assert entry["email_kind"] == "verify"
+    assert entry["outcome"] == "send_failed"
+    assert entry["provider_status"] == 503
+    assert "person@example.com" not in caplog.text
+    assert "oobCode" not in caplog.text
+    assert "secret" not in caplog.text
+
+
+def test_images_running_litellm_use_local_cost_map():
+    import pathlib
+
+    root = pathlib.Path(__file__).resolve().parents[2]
+    for df in ("api/Dockerfile", "eval/backend/Dockerfile"):
+        assert "LITELLM_LOCAL_MODEL_COST_MAP=True" in (root / df).read_text(), df

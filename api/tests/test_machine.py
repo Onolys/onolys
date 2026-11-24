@@ -30,7 +30,7 @@ def walk(repo, *states):
 def test_states_match_the_prd_enum():
     assert set(m.STATES) == {
         "created", "uploading", "validating", "transcribing", "awaiting_input",
-        "running", "report_ready", "failed", "deleting", "upload_incomplete",
+        "running", "report_ready", "failed", "deleting", "upload_incomplete", "cancelled",
     }  # fmt: skip
     assert set(m.TRANSITIONS) == set(m.STATES)
 

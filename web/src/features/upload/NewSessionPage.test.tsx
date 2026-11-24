@@ -5,7 +5,7 @@ import { http, HttpResponse } from "msw";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { mockBackend, server } from "../../mocks/server";
 import { here, renderApp } from "../../test/renderApp";
-import { MAX_AUDIO_BYTES } from "./precheck";
+import { UPLOAD_LIMITS } from "../../mocks/handlers";
 import { clearJobs, getJob } from "./uploader";
 
 const USER = { email: "rater@clinic.org", verified: true };
@@ -55,7 +55,7 @@ describe("New session form", () => {
   it("blocks an oversized file with the export message", async () => {
     await open();
     const big = new File([new Uint8Array(1)], "big.wav", { type: "audio/wav" });
-    Object.defineProperty(big, "size", { value: MAX_AUDIO_BYTES + 1 });
+    Object.defineProperty(big, "size", { value: UPLOAD_LIMITS.max_bytes + 1 });
     await choose(big);
     expect(await screen.findByRole("alert")).toHaveTextContent("Export it as m4a or mp3");
     expect(screen.getByRole("button", { name: /start/i })).toBeDisabled();

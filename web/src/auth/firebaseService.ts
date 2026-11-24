@@ -10,8 +10,6 @@ import {
   getRedirectResult,
   onIdTokenChanged,
   reload,
-  sendEmailVerification,
-  sendPasswordResetEmail,
   signInWithEmailAndPassword,
   signInWithPopup,
   signInWithRedirect,
@@ -19,7 +17,7 @@ import {
   verifyPasswordResetCode as fbVerifyPasswordResetCode,
   type User,
 } from "firebase/auth";
-import { verifyContinueUrl } from "./next";
+import { createApiClient, DEFAULT_BASE_URL } from "../api/client";
 import { AuthError, type AuthService, type AuthUser, type EmailChangeKind } from "./types";
 
 const OPERATION: Record<EmailChangeKind, string> = {
@@ -45,6 +43,18 @@ const POPUP_FALLBACK = new Set([
 
 const isMobile = () => /Android|iPhone|iPad|iPod/i.test(globalThis.navigator?.userAgent ?? "");
 
+/** Both email routes answer 202 on success; anything else maps to a code `mapAuthError` words (no fallback sender, PRD D3). */
+async function emailCall(run: () => Promise<{ response: Response }>): Promise<void> {
+  let status: number;
+  try {
+    status = (await run()).response.status;
+  } catch {
+    throw new AuthError("email/unavailable");
+  }
+  if (status === 429) throw new AuthError("email/rate-limited");
+  if (status < 200 || status >= 300) throw new AuthError("email/unavailable");
+}
+
 export function createFirebaseAuthService(config: FirebaseWebConfig): AuthService {
   const app = initializeApp(config);
   const auth = getAuth(app);
@@ -60,6 +70,16 @@ export function createFirebaseAuthService(config: FirebaseWebConfig): AuthServic
     (err: unknown) => (err as { code?: string } | null)?.code ?? "auth/unknown",
   );
   onIdTokenChanged(auth, emit);
+
+  // Same-origin `/v1` in prod; the verification route takes the user's ID token, the reset route none.
+  const emailApi = (getToken: () => Promise<string | null>) =>
+    createApiClient({
+      baseUrl: new URL(import.meta.env.VITE_API_BASE_URL ?? DEFAULT_BASE_URL, window.location.origin).href.replace(/\/$/, ""),
+      getToken,
+      onSessionExpired: () => {},
+    });
+  const requestVerification = (user: User, next?: string) =>
+    emailCall(() => emailApi(() => user.getIdToken()).POST("/auth/email/verification", { body: { next } }));
 
   const need = (): User => {
     if (!auth.currentUser) throw new AuthError("auth/requires-recent-login");
@@ -95,7 +115,7 @@ export function createFirebaseAuthService(config: FirebaseWebConfig): AuthServic
         return;
       }
       try {
-        await sendEmailVerification(cred.user, { url: verifyContinueUrl(window.location.origin, next) });
+        await requestVerification(cred.user, next);
       } catch {
         // The account exists and the user is signed in; the verify page offers Resend and shows its own error.
       }
@@ -121,10 +141,10 @@ export function createFirebaseAuthService(config: FirebaseWebConfig): AuthServic
       }
     },
     async sendPasswordReset(email) {
-      await sendPasswordResetEmail(auth, email);
+      await emailCall(() => emailApi(async () => null).POST("/auth/email/password-reset", { body: { email } }));
     },
     async sendVerificationEmail(next) {
-      await sendEmailVerification(need(), { url: verifyContinueUrl(window.location.origin, next) });
+      await requestVerification(need(), next);
     },
     async refreshUser() {
       const user = auth.currentUser;

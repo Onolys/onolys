@@ -142,6 +142,36 @@ resource "google_service_account_iam_member" "api_self_token_creator" {
   member             = "serviceAccount:${google_service_account.api.email}"
 }
 
+# api generates verify/reset links with the Admin SDK (SP07). Start broad, narrow after smoke (PRD 07 Open Questions).
+# Gated with the Resend wiring so an environment without email gets no extra IAM.
+resource "google_project_iam_member" "api_firebaseauth_admin" {
+  count   = var.resend_secret_wired ? 1 : 0
+  project = var.project
+  role    = "roles/firebaseauth.admin"
+  member  = "serviceAccount:${google_service_account.api.email}"
+}
+
+# Auth-email rate counters (api/src/onolys_api/email/rate.py) expire via Firestore TTL on `expires_at`.
+resource "google_firestore_field" "email_rate_ttl" {
+  project    = var.project
+  database   = google_firestore_database.db.name
+  collection = "email_rate"
+  field      = "expires_at"
+
+  ttl_config {}
+}
+
+# Status stubs of discarded uploads (api/src/onolys_api/jobs/validate.py, upload_failed) expire
+# 7 days after the failure via Firestore TTL on `expire_at`; other status docs never set it.
+resource "google_firestore_field" "session_status_ttl" {
+  project    = var.project
+  database   = google_firestore_database.db.name
+  collection = "session_status"
+  field      = "expire_at"
+
+  ttl_config {}
+}
+
 resource "google_project_iam_member" "worker_speech_client" {
   project = var.project
   role    = "roles/speech.client"

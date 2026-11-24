@@ -26,6 +26,7 @@ staging: same shape, site onolys-app-staging, Firestore DB `staging`, *-staging 
 | Cloud Tasks queue | `steps-staging` | `steps-prod` |
 | Service accounts (`@onolys.iam.gserviceaccount.com`) | `api-staging`, `worker-staging`, `tasks-invoker-staging`, `deployer-staging` | `api-prod`, `worker-prod`, `tasks-invoker-prod`, `deployer-prod` |
 | Secret `uid-hmac-key-{env}` | `uid-hmac-key-staging` | `uid-hmac-key-prod` |
+| Secret `resend-api-key-{env}` (shell; owner seeds the value) | `resend-api-key-staging` | `resend-api-key-prod` (shell only; not wired) |
 | Secret `<base>-{env}` per `llm_secrets` / `stt_secrets` entry (default bases `gemini-api-key`, `anthropic-api-key`) | `gemini-api-key-staging`, `anthropic-api-key-staging` | `gemini-api-key-prod`, `anthropic-api-key-prod` |
 | Log-based metric (5xx) | `onolys-api-5xx-staging` | `onolys-api-5xx-prod` |
 | Alert policies | none while `staging_alerts=false` | `Onolys failed step/run (prod)`, `Onolys api 5xx rate (prod)` |
@@ -72,12 +73,25 @@ Set by Terraform (`infra/modules/environment/services.tf`). Values below are the
 | `DEFAULT_PRESET` | yes | yes | `default` |
 | `CORS_ORIGINS` | yes | no | staging `https://onolys-app-staging.web.app,http://localhost:5173`; prod `https://app.onolys.com` |
 | `UID_HMAC_KEY` | yes | yes | secret ref `uid-hmac-key-{env}` (keys the `uid_hash` log field) |
+| `APP_BASE_URL` | yes | no | staging `https://onolys-app-staging.web.app`, prod `https://app.onolys.com` (root/module var `app_base_url`; api only, `deploy-staging.yml` re-sets it on the api). Optional for `Settings`: when unset the service starts and `POST /v1/auth/email/verification` answers 503 `email_unavailable` (password reset stays 202 and logs `outcome=unconfigured`). When set it must be an HTTPS origin on a known app host or startup fails. The PR preview does not set it, so its auth-email endpoints answer 503 |
+| `CLIENT_IP_TRUSTED_HOPS` | no | no | integer >= 0, default `1`. Number of proxy entries to skip from the right of `X-Forwarded-For` when picking the client IP for the password-reset per-IP cap (`parts[-(hops+1)]`, clamped to the leftmost; non-IP values fall back to the `unknown` bucket). See "Client IP and `X-Forwarded-For`" below |
+| `EMAIL_FROM` | yes | no | `Onolys <no-reply@onolys.com>` (module var `email_from`; also in `deploy-staging.yml`) |
+| `RESEND_API_KEY` | yes | no | secret ref `resend-api-key-{env}`, only when root map var `resend_secret_wired[env]` is true (default false for both; a revision fails if the secret has no version). Without it the api answers 503 `email_unavailable` |
 | `GEMINI_API_KEY` (evaluation LLM) and `ANTHROPIC_API_KEY` (only for the `claude` preset) | no | yes | secret refs `gemini-api-key-{env}` and `anthropic-api-key-{env}` (one ref per `llm_secrets` / `stt_secrets` entry, always the env's own secret; staging and prod use separate provider keys) |
+| `LLM_PROVIDER`, `LLM_MODEL` | yes | yes | staging only, set by `deploy-staging.yml` from GitHub repo variables `LLM_PROVIDER` / `LLM_MODEL`; not set by Terraform. Empty = no override. See "LLM provider and model" |
 | `GIT_SHA` | yes | yes | set by CI at deploy. `unset` until the first CI deploy (the services still run the placeholder image `us-docker.pkg.dev/cloudrun/container/hello`) |
 
 There are no STT env vars. No model id appears in infra.
 
 The two cap vars are integers >= 0 (0 disables that kind). There are no monthly caps: one daily limit per flow (evaluation, AI interview). The old single daily-run-cap var and the `EVAL_CAP_MONTH` / `AI_CAP_MONTH` vars were removed; a leftover value on a service is ignored. `MAX_ACTIVE_RUNS` (concurrent evaluation runs per user) defaults to `1`: one run at a time; `users/{uid}.max_active_runs` overrides per user.
+
+## Client IP and `X-Forwarded-For`
+
+Each Google front end appends the address it saw to whatever `X-Forwarded-For` the caller sent, so entries on the left are client-controlled and entries on the right are ours. The reset endpoint's per-IP cap (20/h) takes entry `parts[-(CLIENT_IP_TRUSTED_HOPS+1)]`.
+
+- Default `1` is chosen for the Firebase Hosting `/v1/**` rewrite (the path the web uses). Third-party reports (not Google documentation) show that path arriving as `client, hosting-hop`, so one hop from the right is the client and any prefix the caller injects sits to its left and is ignored.
+- Direct calls to the api's `run.app` URL (ingress is `ALL`) arrive as `<caller-supplied>, client`. With the default, such a caller can choose the bucket by sending a second entry, so the per-IP cap can be evaded on that path (set `0` to protect the direct path instead, at the cost of putting every Hosting user in one shared bucket). Per-email caps (1/min, 5/h) still apply either way.
+- Not verified against live traffic. Before relying on it, check on staging: send one reset request through the Hosting URL and one directly to `run.app` with a forged `X-Forwarded-For`, and compare the chain lengths and the entry that lands in the bucket. Adjust `CLIENT_IP_TRUSTED_HOPS` if the Hosting chain length differs.
 
 ## Per-user limits (Firebase console)
 
@@ -214,6 +228,19 @@ ADMIN_ALLOWED_EMAILS="a@x.com,b@y.com" python3 infra/scripts/seed-secrets.py --e
 
 Then deploy a new revision as above. First-time order for an env: `terraform apply -target='module.<env>.google_secret_manager_secret.admin_allowed_emails'`, run the seed command, then the full `terraform apply` (a revision that references a secret with no version fails).
 
+## LLM provider and model
+
+Which provider/model the text routes (evaluation LLM calls) use, and where to change it.
+
+- **Default:** `config/{env}/routes.yaml` (baked into the image). Staging routes point at Claude (`anthropic/claude-sonnet-5-5`); prod is unchanged.
+- **Override (staging):** set GitHub repo variables (Settings > Secrets and variables > Actions > Variables) `LLM_PROVIDER` (`anthropic` or `gemini`) and `LLM_MODEL` (a tier id listed in `config/models.yaml`, e.g. `claude-sonnet-5-5`, `gemini-4-neon`), then re-run `deploy-staging` (or push to `main`). `deploy-staging.yml` passes both to the api and worker services (the voice relay never loads routes, so it does not get them). Set both or neither: one without the other, or an unknown value, fails startup with a config error on both the api and the worker (the api loads the routes at startup but does not need provider keys). Empty variables mean no override.
+- **Precedence (low to high):** `routes.yaml` < `MITI_MODEL_*` < `LLM_PROVIDER`/`LLM_MODEL` < preset overlay. Only concrete text routes are rewritten; aliases follow their target.
+- **models.yaml:** the override reads `config/models.yaml`, found at `<ROUTES_FILE dir>/../models.yaml` (`/app/config/models.yaml` in the images; `MODELS_FILE` overrides the path). It is shipped in the api/worker image (`COPY config /app/config`) and the eval backend image (whitelisted in `eval/backend/Dockerfile.dockerignore`). `scripts/ci/check_config.sh` fails the build if it is missing in the repo or image.
+- **Secret names:** `anthropic-api-key-staging` mounted as `ANTHROPIC_API_KEY` and `gemini-api-key-staging` as `GEMINI_API_KEY` on the worker (Terraform `llm_secrets`; prod uses `-prod`). Nothing to add in Terraform to switch between the two. The worker fails at startup if the key for the selected provider is missing.
+- **Rollback (back to Gemini):** set `LLM_PROVIDER=gemini` and `LLM_MODEL=gemini-4-neon`, then re-run `deploy-staging`. To drop the override entirely, clear both variables and re-run the deploy; routes.yaml applies again.
+- **Terraform drift:** `LLM_PROVIDER`/`LLM_MODEL` are set only by CI, not by Terraform. A `terraform apply` on the staging services rewrites the env and removes them (the routes.yaml default applies until the next deploy). After any apply, re-run `deploy-staging` to restore the override. Same drift pattern as `GIT_SHA` above.
+- **Eval service:** unchanged; it reads routes from its image config and has no `LLM_*` env (`deploy-eval`/Terraform not touched). It still ships `models.yaml` so an override can be added later.
+
 ## Adding an LLM or STT provider
 
 1. **tfvars line.** The committed default already holds the two shipped providers (`GEMINI_API_KEY = "gemini-api-key"` for the evaluation routes, `ANTHROPIC_API_KEY = "anthropic-api-key"` for the `claude` preset). For a further provider, in a `terraform.tfvars` (local, not committed) extend the map, keeping the default entries (shown here with a hypothetical `OPENAI_API_KEY`):
@@ -231,19 +258,12 @@ Then deploy a new revision as above. First-time order for an env: `terraform app
 
 ## Runbook: a user reports a failed session
 
-The web error card shows a **reference id** (the `request_id`). All app logs are one JSON line per event on Cloud Run stdout (Cloud Logging `jsonPayload.*`); lines carry ids and codes, never content.
+The failed session card shows the **session id** as its Reference. All app logs are one JSON line per event on Cloud Run stdout (Cloud Logging `jsonPayload.*`); lines carry ids and codes, never content. Fields, the link template and the `error_code` details are in [logging.md](logging.md).
 
-1. **Find the line by reference id** (Logs Explorer, project `onolys`):
-   ```
-   jsonPayload.request_id="<id>"
-   ```
-   Read `jsonPayload.session_id`, `run_id`, `step`, `error_code`, `exc_class` (and `code_version`, the deployed sha). Narrow to failures with `jsonPayload.status="failed"`; add `resource.labels.service_name=("onolys-api-prod" OR "onolys-worker-prod")` to pick the env.
-2. **Whole trail for that session:**
-   ```
-   jsonPayload.session_id="<sid>"
-   ```
-   For one run add `jsonPayload.run_id="<rid>"`. Sort ascending to read in order.
-3. **Match the `error_code`** below, fix or advise, then have the user run again.
+1. **Open the session trail** (Logs Explorer, project `onolys`; both envs share it): `jsonPayload.session_id="<session id>"`, or the link template in [logging.md](logging.md#reference). Add `resource.labels.service_name=("onolys-api-prod" OR "onolys-worker-prod")` to pick the env. Sort ascending to read in order; for one run add `jsonPayload.run_id="<rid>"`.
+2. **Find the failure:** add `jsonPayload.status="failed"`. Read `error_code`, `exc_class`, `step`, `code_version` (deployed sha). For a provider error read the `llm_provider_error` line just before it (`http_status`, `error_type`, `provider_error`).
+3. **Errors with no session** (Settings cards, API-only calls) show a `request_id` instead: `jsonPayload.request_id="<id>"`.
+4. **Match the `error_code`** below, fix or advise, then tell the user what the code says: Try again (transient), start a new session (`permanent_internal`) or upload a different file (`user_file`).
 
 Verified 2026-11-20 against the task-10 test lines (staging, `error_code t10_test`, written for the alert check) through the REST API `POST https://logging.googleapis.com/v2/entries:list` with body `{"resourceNames":["projects/onolys"],"filter":"jsonPayload.request_id=\"t10b-1795181702\"","orderBy":"timestamp desc"}`: it returned the one `onolys-worker-staging` line (`status failed`, `session_id synthetic`, `step test`); the filter `jsonPayload.session_id="synthetic"` returned that line plus the `onolys-api-staging` one (`request_id t10-1795181472`); the alert filter (`resource.type="cloud_run_revision"`, service name in the two staging services, `jsonPayload.status="failed"`) matched both.
 
@@ -261,8 +281,8 @@ The code in the failed log line is the public code `to_public` (`api/src/onolys_
 
 | `error_code` | Meaning | Usual fix |
 |---|---|---|
-| `upstream_unavailable` | LLM or STT provider failed or timed out (retryable; one retry is automatic) | Check Google (Gemini) / Anthropic status; check the worker has its secret ref and a valid key (`GEMINI_API_KEY`); user runs again shortly |
-| `transcription_failed` | STT failed twice, or a non-transient STT error | Ask for a different file; look at `exc_class` (`SttProviderError`); check `config/{env}/stt_providers.yaml` and the STT service agent's bucket access |
+| `upstream_unavailable` | LLM or STT provider failed or timed out (retryable; one retry is automatic) | Check Google (Gemini) / Anthropic status; check the worker has its secret ref and a valid key (`GEMINI_API_KEY`); user presses Try again shortly (at most 3 times) |
+| `transcription_failed` | A non-transient STT error (a transient one stays `upstream_unavailable`) | Ask for a different file; look at `exc_class` (`SttProviderError`); check `config/{env}/stt_providers.yaml` and the STT service agent's bucket access |
 | `no_speech` | No usable speech found | Nothing to fix; user uploads another recording |
 | `speakers_not_separated` | Diarization could not separate speakers | Nothing to fix; another recording |
 | `deadline_exceeded` | Run exceeded its time limit (retryable) | Run again; if repeated check the provider's latency and worker timeout (900 s) |

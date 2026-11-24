@@ -8,6 +8,7 @@ from audio_helpers import MAGIC, A, StubTools, tiny_wav
 
 from onolys_api.app import create_app
 from onolys_api.audio import ProbeResult
+from onolys_api.repo.base import NotFoundError
 from onolys_api.repo.fake import FakeRepo
 from onolys_api.storage.base import MAX_UPLOAD_BYTES
 
@@ -44,10 +45,11 @@ async def run_validate(settings, repo, blobs, data: bytes, tools, ct="audio/wav"
 
 
 def assert_failed(repo, blobs, sid, code):
-    s = repo.get_session("alice", sid)
-    assert s.state == "failed" and s.error.code == code and s.error.step == "validate"
-    assert repo.get_status("alice", sid).error_code == code
-    assert s.steps["validate"].status == "failed"
+    """A file-check failure is an upload failure (03-failure-policy R11): no session is left."""
+    with pytest.raises(NotFoundError):
+        repo.get_session("alice", sid)
+    st = repo.get_status("alice", sid)
+    assert st.state == "upload_failed" and st.error_code == code
     assert blobs.list_keys(f"uploads/alice/{sid}/") == []  # object removed
     assert blobs.list_keys(f"alice/{sid}/") == []
 

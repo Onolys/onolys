@@ -7,9 +7,14 @@ export function ErrorCard({
   code,
   reference,
   resetsAt,
+  message,
+  note,
   children,
 }: {
   code: string | undefined;
+  /** Overrides the per-code message (failure cards, where the kind picks the copy). */
+  message?: string;
+  note?: string;
   reference?: string;
   resetsAt?: string;
   children?: ReactNode;
@@ -17,7 +22,8 @@ export function ErrorCard({
   return (
     <Alert variant="destructive" className="border-destructive">
       <AlertDescription>
-        <p className="font-semibold">{messageForCode(code, { resetsAt })}</p>
+        <p className="font-semibold">{message ?? messageForCode(code, { resetsAt })}</p>
+        {note ? <p>{note}</p> : null}
         {reference ? <p className="text-muted-foreground">Reference: {reference}</p> : null}
         {children ? <div className="flex flex-wrap gap-3">{children}</div> : null}
       </AlertDescription>

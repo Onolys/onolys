@@ -49,11 +49,13 @@ def test_broken_llm_points_every_route_at_a_missing_model(staging):
 
 def test_broken_tiers_breaks_tiers_only(staging):
     routes, _ = resolve_preset("test-broken-tiers", staging, {})
-    good, _ = resolve_preset("default", staging, {})
     for name in TIERS:
         assert "does-not-exist" in routes[name].litellm_id
     for name in TASK:
-        assert routes[name] == good[name]
+        # This forced preset intentionally retains its original healthy Gemini routes,
+        # independently of staging's current default text provider.
+        assert routes[name].litellm_id == "gemini/gemini-4-neon"
+        assert routes[name].extra_params == {"reasoning_effort": "low"}
         assert "does-not-exist" not in routes[name].litellm_id
 
 
@@ -125,17 +127,21 @@ def test_extra_presets_flag_enables_claude():
 
 
 def test_extra_presets_env_parsed_and_unknown_name_fails_fast():
-    s = Settings.from_env({"ENV": "test", "ENABLED_EXTRA_PRESETS": "claude, other"})
+    s = Settings.from_env({"APP_BASE_URL": "https://app.onolys.com", "ENV": "test", "ENABLED_EXTRA_PRESETS": "claude, other"})
     assert s.extra_presets == ("claude", "other")
-    assert Settings.from_env({"ENV": "test"}).extra_presets == ()
+    assert Settings.from_env({"APP_BASE_URL": "https://app.onolys.com", "ENV": "test"}).extra_presets == ()
     with pytest.raises(ConfigError, match="nope"):
         _resolver("test", extra_presets=("nope",)).check_keys({})
 
 
 def test_enabled_preset_missing_key_fails_in_staging_warns_locally(caplog):
+    both = {"GEMINI_API_KEY": "k", "ANTHROPIC_API_KEY": "k"}
+    # The staging default routes text steps through Claude, so the default preset needs its key.
+    with pytest.raises(ConfigError, match="ANTHROPIC_API_KEY"):
+        _resolver("staging").check_keys({"GEMINI_API_KEY": "k"})
     with pytest.raises(ConfigError, match="ANTHROPIC_API_KEY"):
         _resolver("staging", extra_presets=("claude",)).check_keys({"GEMINI_API_KEY": "k"})
-    _resolver("staging").check_keys({"GEMINI_API_KEY": "k"})  # claude not enabled: not needed
+    _resolver("staging").check_keys(both)
     _resolver("test", extra_presets=("claude",)).check_keys({"GEMINI_API_KEY": "k"})
     assert "ANTHROPIC_API_KEY" in caplog.text
 

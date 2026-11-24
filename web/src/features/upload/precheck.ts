@@ -1,28 +1,29 @@
 /** Advisory client pre-checks (PRD R3 step 2). The server stays authoritative. */
-export const MAX_AUDIO_BYTES = 300 * 1024 * 1024;
-export const MAX_DURATION_S = 20 * 60;
-export const MIN_DURATION_S = 10 * 60;
+/** Limits served by `GET /v1/upload-limits`; the only source of numbers and accepted types here. */
+export interface UploadLimits {
+  max_bytes: number;
+  max_duration_s: number;
+  interview_max_duration_s: number;
+  short_warning_s: number;
+  extensions: string[];
+  mime_types: string[];
+}
 
-const EXTENSIONS = new Set(["mp3", "wav", "m4a", "webm", "ogg"]);
-const MIME_TYPES = new Set([
-  "audio/mpeg",
-  "audio/mp3",
-  "audio/wav",
-  "audio/x-wav",
-  "audio/wave",
-  "audio/m4a",
-  "audio/x-m4a",
-  "audio/mp4",
-  "audio/webm",
-  "audio/ogg",
-  "video/webm",
-]);
+const BYTES_PER_MB = 1024 * 1024;
+const SECONDS_PER_MINUTE = 60;
+const minutes = (s: number) => Math.round((s / SECONDS_PER_MINUTE) * 10) / 10;
 
-export const SIZE_MESSAGE = "This file is over 300 MB. Export it as m4a or mp3 and upload that instead.";
-export const TYPE_MESSAGE = "We can't use this file type. Upload an mp3, wav, m4a, webm or ogg recording.";
-export const LONG_MESSAGE = "This recording is longer than 20 minutes. Upload a shorter one.";
-export const SHORT_WARNING =
-  "This recording is under 10 minutes. Global scores can be unreliable on short sessions.";
+function listOf(items: string[]): string {
+  return items.length < 2 ? items.join("") : `${items.slice(0, -1).join(", ")} or ${items[items.length - 1]}`;
+}
+
+const sizeMessage = (l: UploadLimits) =>
+  `This file is over ${Math.round(l.max_bytes / BYTES_PER_MB)} MB. Export it as m4a or mp3 and upload that instead.`;
+const typeMessage = (l: UploadLimits) => `We can't use this file type. Upload an ${listOf(l.extensions)} recording.`;
+const longMessage = (l: UploadLimits) =>
+  `This recording is longer than ${minutes(l.max_duration_s)} minutes. Upload a shorter one.`;
+const shortWarning = (l: UploadLimits) =>
+  `This recording is under ${minutes(l.short_warning_s)} minutes. Global scores can be unreliable on short sessions.`;
 
 export interface PrecheckResult {
   blocked: string | null;
@@ -40,14 +41,22 @@ export function fileExtension(name: string): string {
   return i < 0 ? "" : name.slice(i + 1).toLowerCase();
 }
 
-export function checkFile(file: FileInfo, durationSeconds?: number | null): PrecheckResult {
-  if (file.size > MAX_AUDIO_BYTES) return { blocked: SIZE_MESSAGE, warning: null };
-  if (!EXTENSIONS.has(fileExtension(file.name)) && !MIME_TYPES.has(file.type.toLowerCase())) {
-    return { blocked: TYPE_MESSAGE, warning: null };
-  }
+/** Blocks/warns per the served limits. No limits (not loaded, request failed) = skip: the server decides. */
+export function checkFile(
+  file: FileInfo,
+  durationSeconds?: number | null,
+  limits?: UploadLimits | null,
+): PrecheckResult {
+  if (!limits) return { blocked: null, warning: null };
+  if (file.size > limits.max_bytes) return { blocked: sizeMessage(limits), warning: null };
+  // By extension or by MIME: browsers report webm audio inconsistently (webm often arrives as video), so a
+  // served extension alone is enough.
+  const typeOk =
+    limits.extensions.includes(fileExtension(file.name)) || limits.mime_types.includes(file.type.toLowerCase());
+  if (!typeOk) return { blocked: typeMessage(limits), warning: null };
   if (typeof durationSeconds === "number" && Number.isFinite(durationSeconds)) {
-    if (durationSeconds > MAX_DURATION_S) return { blocked: LONG_MESSAGE, warning: null };
-    if (durationSeconds < MIN_DURATION_S) return { blocked: null, warning: SHORT_WARNING };
+    if (durationSeconds > limits.max_duration_s) return { blocked: longMessage(limits), warning: null };
+    if (durationSeconds < limits.short_warning_s) return { blocked: null, warning: shortWarning(limits) };
   }
   return { blocked: null, warning: null };
 }

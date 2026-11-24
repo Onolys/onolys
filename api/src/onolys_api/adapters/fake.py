@@ -18,7 +18,7 @@ from onolys_miti.stt.base import BaseSttAdapter
 from onolys_miti.voice import VoiceParams, VoiceSession
 from onolys_miti.voice.fixture import FixtureVoice
 
-from onolys_api.adapters.base import AdapterError, EvaluationOutput, ProgressCb
+from onolys_api.adapters.base import AdapterError, AuthAccount, EvaluationOutput, ProgressCb
 
 # failure injection
 FAIL_CODE = "[fail:code]"  # run and session `failed`
@@ -353,3 +353,36 @@ class FakeVoice:
     async def open(self, params: VoiceParams) -> VoiceSession:
         self.opened.append(params)
         return await self._inner.open(params)
+
+
+class FakeEmailSender:
+    """In-memory email outbox, used only with stub adapters."""
+
+    def __init__(self) -> None:
+        self.messages: list[dict[str, str]] = []
+
+    def send(self, to: str, subject: str, html: str, text: str) -> None:
+        self.messages.append({"to": to, "subject": subject, "html": html, "text": text})
+
+
+class FakeAuthLinks:
+    def __init__(self, accounts: dict[str, AuthAccount] | None = None) -> None:
+        self.accounts = dict(accounts or {})
+        self.codes: list[tuple[str, str]] = []
+
+    def get_user(self, uid: str) -> AuthAccount:
+        try:
+            return self.accounts[uid]
+        except KeyError:
+            raise AdapterError("auth_links_failed") from None
+
+    def verification(self, uid: str) -> str:
+        self.get_user(uid)
+        self.codes.append(("verify", uid))
+        return f"fake-verify-{len(self.codes)}"
+
+    def password_reset(self, email: str) -> str | None:
+        if not any(a.email == email and not a.disabled for a in self.accounts.values()):
+            return None
+        self.codes.append(("reset", email))
+        return f"fake-reset-{len(self.codes)}"

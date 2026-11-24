@@ -4,7 +4,7 @@ set -uo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
 fail=0
-mk() { for e in staging prod; do mkdir -p "$T/config/$e"; for f in routes stt_providers; do echo "x: 1" > "$T/config/$e/$f.yaml"; done; done; }
+mk() { mkdir -p "$T/config"; echo "x: 1" > "$T/config/models.yaml"; for e in staging prod; do mkdir -p "$T/config/$e"; for f in routes stt_providers; do echo "x: 1" > "$T/config/$e/$f.yaml"; done; done; }
 expect() { # <want rc> <label> [args...]
   local want="$1" label="$2"; shift 2
   ROOT="$T" bash "$HERE/check_config.sh" "$@" >/dev/null 2>&1; local rc=$?
@@ -18,6 +18,8 @@ mk; rm "$T/config/staging/routes.yaml"
 expect nz "missing staging/routes.yaml"
 mk; : > "$T/config/staging/routes.yaml"
 expect nz "empty file"
+mk; rm "$T/config/models.yaml"
+expect nz "missing models.yaml"
 mk
 # image mode: fake docker that lists files; one missing
 mkdir -p "$T/bin"

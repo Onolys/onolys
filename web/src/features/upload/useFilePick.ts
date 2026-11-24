@@ -1,5 +1,6 @@
 /** Shared file pick with source-specific advisory pre-checks. */
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useUploadLimits } from "./useUploadLimits";
 import { checkFile, checkTranscript, readDuration, type PrecheckResult } from "./precheck";
 
 export interface FilePick {
@@ -18,6 +19,12 @@ export function useFilePick(kind: "audio" | "transcript" = "audio"): FilePick {
   const [check, setCheck] = useState<PrecheckResult | null>(null);
   const [checking, setChecking] = useState(false);
   const latest = useRef<File | undefined>(undefined);
+  // Served limits (R10). Read at pick time through a ref; unloaded = the checks skip (server decides).
+  const limits = useUploadLimits();
+  const limitsRef = useRef(limits);
+  useEffect(() => {
+    limitsRef.current = limits;
+  }, [limits]);
 
   const pick = useCallback(async (f: File | undefined) => {
     latest.current = f;
@@ -26,12 +33,12 @@ export function useFilePick(kind: "audio" | "transcript" = "audio"): FilePick {
     setChecking(false);
     if (!f) return;
     if (kind === "transcript") return setCheck(checkTranscript(f));
-    const quick = checkFile(f, null);
+    const quick = checkFile(f, null, limitsRef.current);
     if (quick.blocked) return setCheck(quick);
     setChecking(true);
     const duration = await readDuration(f);
     if (latest.current !== f) return; // a newer pick owns the state now
-    setCheck(checkFile(f, duration));
+    setCheck(checkFile(f, duration, limitsRef.current));
     setChecking(false);
   }, [kind]);
 

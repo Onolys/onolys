@@ -10,7 +10,6 @@ const m = {
   reload: vi.fn(),
   getRedirectResult: vi.fn(),
   createUser: vi.fn(),
-  sendEmailVerification: vi.fn(),
   signOut: vi.fn(),
   signIn: vi.fn(),
 };
@@ -27,8 +26,6 @@ vi.mock("firebase/auth", () => ({
   confirmPasswordReset: (...a: unknown[]) => m.confirmPasswordReset(...a),
   reload: (...a: unknown[]) => m.reload(...a),
   createUserWithEmailAndPassword: (...a: unknown[]) => m.createUser(...a),
-  sendEmailVerification: (...a: unknown[]) => m.sendEmailVerification(...a),
-  sendPasswordResetEmail: vi.fn(),
   signInWithEmailAndPassword: (...a: unknown[]) => m.signIn(...a),
   signInWithPopup: vi.fn(),
   signInWithRedirect: vi.fn(),
@@ -39,8 +36,18 @@ import { createFirebaseAuthService } from "./firebaseService";
 
 const make = () => createFirebaseAuthService({ apiKey: "AIzaSy", authDomain: "d", projectId: "p", appId: "a" });
 
+const fetchMock = vi.fn();
+const sent = () => {
+  const req = fetchMock.mock.calls.at(-1)![0] as Request;
+  return req;
+};
+const reply = (status: number, body: unknown = {}) =>
+  fetchMock.mockImplementation(async () => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } }));
+
 beforeEach(() => {
   vi.resetAllMocks();
+  vi.stubGlobal("fetch", fetchMock);
+  reply(202);
   auth.currentUser = currentUser;
   currentUser.getIdToken.mockResolvedValue("t");
   m.getRedirectResult.mockResolvedValue(null);
@@ -127,14 +134,23 @@ describe("firebase email-change action codes", () => {
 describe("firebase signUp", () => {
   it("still resolves when the verification email cannot be sent (VerifyEmail has Resend)", async () => {
     m.createUser.mockResolvedValue({ user: currentUser });
-    m.sendEmailVerification.mockRejectedValue({ code: "auth/too-many-requests" });
+    reply(503, { error: { code: "email_unavailable" } });
     await expect(make().signUp("a@b.co", "password1")).resolves.toBeUndefined();
-    expect(m.sendEmailVerification).toHaveBeenCalledOnce();
+    expect(fetchMock).toHaveBeenCalledOnce();
   });
-  it("sends the verification email exactly once, only at sign-up", async () => {
+  it("still resolves when the network is down", async () => {
     m.createUser.mockResolvedValue({ user: currentUser });
-    await make().signUp("a@b.co", "password1");
-    expect(m.sendEmailVerification).toHaveBeenCalledOnce();
+    fetchMock.mockRejectedValue(new TypeError("Failed to fetch"));
+    await expect(make().signUp("a@b.co", "password1")).resolves.toBeUndefined();
+  });
+  it("sends the verification email exactly once, only at sign-up, via the API with the ID token", async () => {
+    m.createUser.mockResolvedValue({ user: currentUser });
+    await make().signUp("a@b.co", "password1", "/settings");
+    expect(fetchMock).toHaveBeenCalledOnce();
+    const req = sent();
+    expect(new URL(req.url).pathname).toBe("/v1/auth/email/verification");
+    expect(req.headers.get("authorization")).toBe("Bearer t");
+    expect(await req.json()).toEqual({ next: "/settings" });
     expect(m.signIn).not.toHaveBeenCalled();
   });
   it("existing email + right password signs in instead, without sending another verification email", async () => {
@@ -142,7 +158,7 @@ describe("firebase signUp", () => {
     m.signIn.mockResolvedValue({ user: currentUser });
     await expect(make().signUp("a@b.co", "password1")).resolves.toBeUndefined();
     expect(m.signIn).toHaveBeenCalledWith(auth, "a@b.co", "password1");
-    expect(m.sendEmailVerification).not.toHaveBeenCalled();
+    expect(fetchMock).not.toHaveBeenCalled();
   });
   it("existing email + wrong password still reports email-already-in-use", async () => {
     m.createUser.mockRejectedValue({ code: "auth/email-already-in-use" });
@@ -178,5 +194,53 @@ describe("firebase redirect sign-in result", () => {
   });
   it("reports nothing when there was no redirect or it succeeded", async () => {
     expect(await make().consumeRedirectError()).toBeUndefined();
+  });
+});
+
+describe("firebase email endpoints", () => {
+  it("sendVerificationEmail POSTs with the current user's ID token", async () => {
+    await make().sendVerificationEmail("/x");
+    const req = sent();
+    expect(req.method).toBe("POST");
+    expect(new URL(req.url).pathname).toBe("/v1/auth/email/verification");
+    expect(req.headers.get("authorization")).toBe("Bearer t");
+    expect(await req.json()).toEqual({ next: "/x" });
+  });
+  it("sendVerificationEmail with nobody signed in rejects without calling the API", async () => {
+    auth.currentUser = null;
+    await expect(make().sendVerificationEmail()).rejects.toMatchObject({ code: "auth/requires-recent-login" });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+  it("sendVerificationEmail maps 429 to email/rate-limited", async () => {
+    reply(429, { error: { code: "rate_limited" } });
+    await expect(make().sendVerificationEmail()).rejects.toMatchObject({ code: "email/rate-limited" });
+  });
+  it.each([503, 500])("sendVerificationEmail maps %i to email/unavailable", async (status) => {
+    reply(status);
+    await expect(make().sendVerificationEmail()).rejects.toMatchObject({ code: "email/unavailable" });
+  });
+  it("sendVerificationEmail maps a network failure to email/unavailable", async () => {
+    fetchMock.mockRejectedValue(new TypeError("Failed to fetch"));
+    await expect(make().sendVerificationEmail()).rejects.toMatchObject({ code: "email/unavailable" });
+  });
+  it("sendPasswordReset POSTs the email with no Authorization header", async () => {
+    await make().sendPasswordReset("a@b.co");
+    const req = sent();
+    expect(new URL(req.url).pathname).toBe("/v1/auth/email/password-reset");
+    expect(req.headers.get("authorization")).toBeNull();
+    expect(await req.json()).toEqual({ email: "a@b.co" });
+    expect(currentUser.getIdToken).not.toHaveBeenCalled();
+  });
+  it("sendPasswordReset works signed out and resolves the same for any 202", async () => {
+    auth.currentUser = null;
+    await expect(make().sendPasswordReset("nobody@b.co")).resolves.toBeUndefined();
+  });
+  it("sendPasswordReset maps 429 and 503/network to the email/* codes", async () => {
+    reply(429);
+    await expect(make().sendPasswordReset("a@b.co")).rejects.toMatchObject({ code: "email/rate-limited" });
+    reply(503);
+    await expect(make().sendPasswordReset("a@b.co")).rejects.toMatchObject({ code: "email/unavailable" });
+    fetchMock.mockRejectedValue(new TypeError("Failed to fetch"));
+    await expect(make().sendPasswordReset("a@b.co")).rejects.toMatchObject({ code: "email/unavailable" });
   });
 });

@@ -23,6 +23,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/auth/email/password-reset": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Email a password-reset link if the account exists (no auth)
+         * @description Always `202 {}`: known, unknown, disabled, rate-limited and failed sends are indistinguishable, so account existence cannot be probed.
+         */
+        post: operations["sendPasswordResetEmail"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/auth/email/verification": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Email the signed-in user a verification link (unverified tokens allowed)
+         * @description Sends to the account's own address, never one from the request. An already verified account gets `202` and no email. `429 rate_limited` after 1 per minute / 5 per hour; `503 email_unavailable` when the email could not be sent.
+         */
+        post: operations["sendVerificationEmail"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/healthz": {
         parameters: {
             query?: never;
@@ -220,6 +260,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/sessions/{id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Cancel a session that is still being processed
+         * @description Moves a session in any in-progress state (`created` ... `running`) to the terminal `cancelled` state in one transaction; workers stop at their next check and nothing is deleted. `counted` says whether a unit was used: transcription had started and no run was reserved (interview sessions never count). Repeating it answers 200 with the same `counted` and charges nothing more. Never 429, even over the cap. `report_ready` and `failed` are 409 `invalid_state`; `deleting`, unknown or another user's is 404.
+         */
+        post: operations["cancelSession"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/sessions/{id}/rating": {
         parameters: {
             query?: never;
@@ -231,7 +291,7 @@ export interface paths {
         get: operations["getRating"];
         /**
          * Save the rating card (draft autosave or final revision)
-         * @description `final=false`: overwrites the draft; the shape and size limits are checked (an unset `change_goal` is fine) and nothing else changes. `final=true`: validates the card (`change_goal` required), writes a new revision and sets `rating_submitted`/`has_rating`; `no_rating=true`, or a card with no scores, counts or notes, is a "no rating" revision (`has_rating=false`). Over 1,000 chars per reason/note/example or 3,000 for `notes` is 422 `rating_invalid`. Allowed in every state but `deleting`; a final card is refused with 409 `rating_final` once a rating was submitted (or a report exists): the rating is final, only drafts stay open. A final card may start the first run (R4).
+         * @description `final=false`: overwrites the draft; the shape and size limits are checked (an unset `change_goal` is fine) and nothing else changes. `final=true`: validates the card (`change_goal` required), writes a new revision and sets `rating_submitted`/`has_rating`; `no_rating=true`, or a card with no scores, counts or notes, is a "no rating" revision (`has_rating=false`). Over 1,000 chars per reason/note/example or 3,000 for `notes` is 422 `rating_invalid`. Allowed in every state but `deleting` (404) and `cancelled` (409 `invalid_state`); a final card is refused with 409 `rating_final` once a rating was submitted (or a report exists): the rating is final, only drafts stay open. A final card may start the first run (R4).
          */
         put: operations["putRating"];
         post?: never;
@@ -278,6 +338,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/sessions/{id}/retry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Retry the step that failed (capped, one path for every step)
+         * @description Allowed only for a `failed` session whose error kind is `transient`, with retries left (`MAX_SESSION_RETRIES`, 3) and no final rating; otherwise 409 `invalid_state`. One transaction counts the retry and moves the state: `validate` re-enters `validating` (409 if the staged upload is gone), `transcribe` re-enters `transcribing` with a fresh step record, `run` starts a new run with the failed run's preset, n_runs and span, reserving a unit like a fresh start (429 `daily_cap_reached` or `concurrent_runs`; a refused retry is not counted).
+         */
+        post: operations["retrySession"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/sessions/{id}/runs": {
         parameters: {
             query?: never;
@@ -289,8 +369,8 @@ export interface paths {
         get: operations["listRuns"];
         put?: never;
         /**
-         * Start a run by hand (Try again after a system failure, or the first run held back)
-         * @description Needs the transcript and the confirmed speaker; uses the stored final rating revision or runs as no-rating. `preset` changes LLM routes only (the transcript is reused). On Try again (a failed session) `preset` and `n_runs` are ignored: the failed run's values are reused. Counts against the daily cap: 429 `daily_cap_reached`; 429 `concurrent_runs` while another run is in progress. 409 `rating_final` once a report exists (the rating is final: no re-run, interview sessions included). 409 `invalid_state` while a run is in progress, before the inputs exist, or after a bad-file failure (upload a different file instead).
+         * Start the first run by hand (held back by the cap)
+         * @description Needs the transcript and the confirmed speaker; uses the stored final rating revision or runs as no-rating. `preset` changes LLM routes only (the transcript is reused). Counts against the daily cap: 429 `daily_cap_reached`; 429 `concurrent_runs` while another run is in progress. 409 `rating_final` once a report exists (the rating is final: no re-run, interview sessions included). 409 `invalid_state` while a run is in progress, before the inputs exist, or on a failed session (use `POST /sessions/{id}/retry`).
          */
         post: operations["startRun"];
         delete?: never;
@@ -356,6 +436,23 @@ export interface paths {
          * @description Created sessions only. Maximum 1 MiB. May start the first run.
          */
         put: operations["uploadTranscript"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/upload-limits": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Upload limits */
+        get: operations["getUploadLimits"];
+        put?: never;
         post?: never;
         delete?: never;
         options?: never;
@@ -451,6 +548,42 @@ export interface components {
             /** Upload Url */
             upload_url: string;
         };
+        /** CancelResult */
+        CancelResult: {
+            /**
+             * Counted
+             * @description Did the cancel use a unit of the daily limit
+             */
+            counted: boolean;
+        };
+        /**
+         * ClientInfo
+         * @description What produced a session or interview (02-logging R13). Client-reported, so every field is
+         *     optional and sanitized, never rejected: non-strings become absent, control characters are
+         *     stripped, and values are cut to a cap. Unknown keys are ignored.
+         */
+        ClientInfo: {
+            /**
+             * Audio Engine
+             * @description Web audio engine name and version
+             */
+            audio_engine?: string | null;
+            /**
+             * Recorder Mime
+             * @description MediaRecorder container the web chose
+             */
+            recorder_mime?: string | null;
+            /**
+             * User Agent
+             * @description Browser User-Agent, trimmed to 200 chars
+             */
+            user_agent?: string | null;
+            /**
+             * Web Version
+             * @description Web build id (git SHA, or `dev`)
+             */
+            web_version?: string | null;
+        };
         /**
          * CodedSpan
          * @description Exactly one half-open time (milliseconds) or zero-based turn range.
@@ -494,10 +627,12 @@ export interface components {
              * Status
              * @enum {string}
              */
-            status: "created" | "uploading" | "validating" | "transcribing" | "awaiting_input" | "running" | "report_ready" | "failed" | "deleting" | "upload_incomplete";
+            status: "created" | "uploading" | "validating" | "transcribing" | "awaiting_input" | "running" | "report_ready" | "failed" | "deleting" | "upload_incomplete" | "cancelled";
         };
         /** CreateInterviewRequest */
         CreateInterviewRequest: {
+            /** @description Optional: web build and recorder info */
+            client?: components["schemas"]["ClientInfo"] | null;
             /** Scenario Id */
             scenario_id: string;
             /**
@@ -508,6 +643,8 @@ export interface components {
         };
         /** CreateSessionRequest */
         CreateSessionRequest: {
+            /** @description Optional: which web build, recorder and audio engine made the request */
+            client?: components["schemas"]["ClientInfo"] | null;
             /** @description Half-open milliseconds or zero-based turn range; null codes all turns. */
             coded_span?: components["schemas"]["CodedSpan"] | null;
             /**
@@ -550,8 +687,12 @@ export interface components {
              */
             updated_at: string;
         };
+        /** Empty */
+        Empty: Record<string, never>;
         /** EndInterviewRequest */
         EndInterviewRequest: {
+            /** @description Optional: recorder container and audio engine, added to the interview */
+            client?: components["schemas"]["ClientInfo"] | null;
             /**
              * Discard
              * @description Throw the interview away (state `abandoned`)
@@ -565,7 +706,7 @@ export interface components {
              * Code
              * @enum {string}
              */
-            code: "invalid_json" | "unsupported_media_type" | "schema_violation" | "empty_transcript" | "invalid_coded_span" | "session_too_long" | "transcript_invalid" | "transcript_too_large" | "empty_assessment" | "duplicate_ids" | "invalid_parameters" | "output_invalid" | "body_too_large" | "too_many_turns" | "too_many_sections" | "rate_limited" | "not_found" | "method_not_allowed" | "cors_rejected" | "request_rejected" | "upstream_unavailable" | "deadline_exceeded" | "internal_error" | "missing_parameter" | "unknown_pack" | "input_rejected" | "run_failed" | "unauthenticated" | "forbidden" | "invalid_state" | "rating_final" | "unsupported_audio" | "audio_too_long" | "audio_too_large" | "audio_unreadable" | "no_speech" | "speakers_not_separated" | "transcription_failed" | "rating_invalid" | "daily_cap_reached" | "interview_cap_reached" | "concurrent_runs" | "email_unverified" | "conflict" | "interview_too_long";
+            code: "invalid_json" | "unsupported_media_type" | "schema_violation" | "empty_transcript" | "invalid_coded_span" | "session_too_long" | "transcript_invalid" | "transcript_too_large" | "empty_assessment" | "duplicate_ids" | "invalid_parameters" | "output_invalid" | "body_too_large" | "too_many_turns" | "too_many_sections" | "rate_limited" | "not_found" | "method_not_allowed" | "cors_rejected" | "request_rejected" | "upstream_unavailable" | "deadline_exceeded" | "internal_error" | "missing_parameter" | "unknown_pack" | "input_rejected" | "run_failed" | "unauthenticated" | "forbidden" | "invalid_state" | "rating_final" | "unsupported_audio" | "audio_too_long" | "audio_too_large" | "audio_unreadable" | "no_speech" | "speakers_not_separated" | "transcription_failed" | "rating_invalid" | "daily_cap_reached" | "interview_cap_reached" | "concurrent_runs" | "email_unverified" | "conflict" | "interview_too_long" | "email_unavailable";
             /**
              * Field
              * @description `/`-joined path of the offending field in the rating card or transcript (e.g. `globals/cct/reason`); `$` is the whole input. Set on `rating_invalid` or transcript upload errors. A path only, never user text.
@@ -784,6 +925,20 @@ export interface components {
             /** Version */
             version: number;
         };
+        /** ResetRequest */
+        ResetRequest: {
+            /** Email */
+            email: string;
+        };
+        /** RetryStarted */
+        RetryStarted: {
+            /**
+             * Run Id
+             * @description The new run, when the failed step was `run`
+             */
+            run_id?: string | null;
+            session: components["schemas"]["SessionRef"];
+        };
         /** RunList */
         RunList: {
             /** Items */
@@ -812,7 +967,7 @@ export interface components {
              * Status
              * @enum {string}
              */
-            status: "created" | "uploading" | "validating" | "transcribing" | "awaiting_input" | "running" | "report_ready" | "failed" | "deleting" | "upload_incomplete";
+            status: "created" | "uploading" | "validating" | "transcribing" | "awaiting_input" | "running" | "report_ready" | "failed" | "deleting" | "upload_incomplete" | "cancelled";
         };
         /** RunStarted */
         RunStarted: {
@@ -881,14 +1036,46 @@ export interface components {
              */
             voice: string;
         };
+        /**
+         * SessionCancel
+         * @description The result of a user cancel (04-cancel R7): did it use a unit, how many, and when.
+         */
+        SessionCancel: {
+            /**
+             * At
+             * Format: date-time
+             */
+            at: string;
+            /** Counted */
+            counted: boolean;
+            /** Units */
+            units: number;
+        };
         /** SessionDetail */
         SessionDetail: {
+            /**
+             * Audio S
+             * @description Recording duration in seconds
+             */
+            audio_s?: number | null;
+            /** @description Set once cancelled: whether it used a unit, how many, and when */
+            cancel?: components["schemas"]["SessionCancel"] | null;
+            /**
+             * Counted
+             * @description Did the session end (cancelled or failed) having used a unit; null n/a
+             */
+            counted?: boolean | null;
             /**
              * Created At
              * Format: date-time
              */
             created_at: string;
             error?: components["schemas"]["SessionErrorInfo"] | null;
+            /**
+             * Error Kind
+             * @description Failure kind: transient, permanent_internal or user_file; null if ok
+             */
+            error_kind?: ("transient" | "permanent_internal" | "user_file") | null;
             flags: components["schemas"]["Flags"];
             /**
              * Free Run
@@ -918,10 +1105,35 @@ export interface components {
             /** Progress */
             progress: number;
             /**
+             * Progress Next
+             * @description Base percent of the next stage (99 on the last); null when none
+             */
+            progress_next?: number | null;
+            /**
+             * Retries Left
+             * @description Retries left after a transient failure (0 otherwise); null if ok
+             */
+            retries_left?: number | null;
+            /**
+             * Stage Expected S
+             * @description Typical seconds the current stage takes; null when untimed
+             */
+            stage_expected_s?: number | null;
+            /**
+             * Stage Started At
+             * @description Entered the current state
+             */
+            stage_started_at?: string | null;
+            /**
+             * Started At
+             * @description First entry to uploading (a re-run: its start); null before
+             */
+            started_at?: string | null;
+            /**
              * Status
              * @enum {string}
              */
-            status: "created" | "uploading" | "validating" | "transcribing" | "awaiting_input" | "running" | "report_ready" | "failed" | "deleting" | "upload_incomplete";
+            status: "created" | "uploading" | "validating" | "transcribing" | "awaiting_input" | "running" | "report_ready" | "failed" | "deleting" | "upload_incomplete" | "cancelled";
             /** Step */
             step?: string | null;
             /** Title */
@@ -931,6 +1143,12 @@ export interface components {
              * Format: date-time
              */
             updated_at: string;
+            /**
+             * Waited Ms
+             * @description Total milliseconds spent waiting for the user input
+             * @default 0
+             */
+            waited_ms?: number;
             /** Warnings */
             warnings: string[];
         };
@@ -948,6 +1166,11 @@ export interface components {
         };
         /** SessionListItem */
         SessionListItem: {
+            /**
+             * Counted
+             * @description Did the session end (cancelled or failed) having used a unit; null n/a
+             */
+            counted?: boolean | null;
             /**
              * Created At
              * Format: date-time
@@ -968,7 +1191,7 @@ export interface components {
              * Status
              * @enum {string}
              */
-            status: "created" | "uploading" | "validating" | "transcribing" | "awaiting_input" | "running" | "report_ready" | "failed" | "deleting" | "upload_incomplete";
+            status: "created" | "uploading" | "validating" | "transcribing" | "awaiting_input" | "running" | "report_ready" | "failed" | "deleting" | "upload_incomplete" | "cancelled";
             /** Title */
             title?: string | null;
         };
@@ -980,7 +1203,7 @@ export interface components {
              * Status
              * @enum {string}
              */
-            status: "created" | "uploading" | "validating" | "transcribing" | "awaiting_input" | "running" | "report_ready" | "failed" | "deleting" | "upload_incomplete";
+            status: "created" | "uploading" | "validating" | "transcribing" | "awaiting_input" | "running" | "report_ready" | "failed" | "deleting" | "upload_incomplete" | "cancelled";
         };
         /** SpeakerInfo */
         SpeakerInfo: {
@@ -1070,10 +1293,33 @@ export interface components {
             /** Turns */
             turns: components["schemas"]["TranscriptTurnV1"][];
         };
+        /** UploadLimits */
+        UploadLimits: {
+            /** Extensions */
+            extensions: string[];
+            /** Interview Max Duration S */
+            interview_max_duration_s: number;
+            /** Max Bytes */
+            max_bytes: number;
+            /** Max Duration S */
+            max_duration_s: number;
+            /** Mime Types */
+            mime_types: string[];
+            /** Short Warning S */
+            short_warning_s: number;
+        };
         /** Usage */
         Usage: {
             eval: components["schemas"]["KindUsage"];
             interview: components["schemas"]["KindUsage"];
+        };
+        /** VerificationRequest */
+        VerificationRequest: {
+            /**
+             * Next
+             * @description Optional in-app path to continue to after verifying.
+             */
+            next?: string | null;
         };
     };
     responses: never;
@@ -1223,6 +1469,108 @@ export interface operations {
             };
             /** @description `forbidden` (API keys cannot manage API keys) or `email_unverified` (valid sign-in, email address not verified yet) */
             403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description `daily_cap_reached` (daily run cap), `concurrent_runs` (a run is already in progress) or `rate_limited` */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description `internal_error` */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    sendPasswordResetEmail: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ResetRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Empty"];
+                };
+            };
+            /** @description `unauthenticated`: missing, invalid or revoked credentials */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description `daily_cap_reached` (daily run cap), `concurrent_runs` (a run is already in progress) or `rate_limited` */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description `internal_error` */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    sendVerificationEmail: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VerificationRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Empty"];
+                };
+            };
+            /** @description `unauthenticated`: missing, invalid or revoked credentials */
+            401: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -2097,6 +2445,73 @@ export interface operations {
             };
         };
     };
+    cancelSession: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CancelResult"];
+                };
+            };
+            /** @description `unauthenticated`: missing, invalid or revoked credentials */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description `not_found`: no such resource for this user (never 403, so ids cannot be probed) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description `invalid_parameters` (incl. a malformed id, cursor or body), `unsupported_audio`, `audio_too_large`, `rating_invalid`, `invalid_coded_span` or `session_too_long` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description `daily_cap_reached` (daily run cap), `concurrent_runs` (a run is already in progress) or `rate_limited` */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description `internal_error` */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     getRating: {
         parameters: {
             query?: never;
@@ -2321,6 +2736,73 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ReportView"];
+                };
+            };
+            /** @description `unauthenticated`: missing, invalid or revoked credentials */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description `not_found`: no such resource for this user (never 403, so ids cannot be probed) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description `invalid_parameters` (incl. a malformed id, cursor or body), `unsupported_audio`, `audio_too_large`, `rating_invalid`, `invalid_coded_span` or `session_too_long` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description `daily_cap_reached` (daily run cap), `concurrent_runs` (a run is already in progress) or `rate_limited` */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description `internal_error` */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    retrySession: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetryStarted"];
                 };
             };
             /** @description `unauthenticated`: missing, invalid or revoked credentials */
@@ -2803,6 +3285,53 @@ export interface operations {
             };
             /** @description `invalid_parameters` (incl. a malformed id, cursor or body), `unsupported_audio`, `audio_too_large`, `rating_invalid`, `invalid_coded_span` or `session_too_long` */
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description `daily_cap_reached` (daily run cap), `concurrent_runs` (a run is already in progress) or `rate_limited` */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description `internal_error` */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    getUploadLimits: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UploadLimits"];
+                };
+            };
+            /** @description `unauthenticated`: missing, invalid or revoked credentials */
+            401: {
                 headers: {
                     [name: string]: unknown;
                 };

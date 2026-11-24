@@ -14,9 +14,10 @@ failures arrive as report warnings and still ship (the adapter handles them). A 
 retried task finds the stored report and only finishes the bookkeeping: one report per run.
 
 Cap slot: every run is released exactly once (`released` flag on the run record), when the run
-ends for good: success or failure (`refund=True` for a system failure; for a bad-file code
-only if no attempt called the evaluation: `llm_started` on the run
-record), but not on a retryable failure with an attempt left.
+ends for good: success or failure (refunded per `charging.should_refund`: a system failure
+always, a user/file fault only if no attempt called the evaluation, `llm_started` on the run
+record), but not on a retryable failure with an attempt left. The refund runs here, before the
+worker's `_fail`, which reads the outcome (`unit_kept`) into `SessionError.counted`.
 """
 
 import json
@@ -30,25 +31,27 @@ from onolys_engine_core.validated_run import OutputInvalid
 
 from onolys_api import logs
 from onolys_api.adapters.base import Evaluation
-from onolys_api.adapters.error_map import to_public
+from onolys_api.adapters.error_map import kind_for_code, to_public
 from onolys_api.adapters.validated import evaluate_validated
-from onolys_api.jobs.alive import ensure_alive
-from onolys_api.jobs.machine import RUN_START_PROGRESS, STAGE_WEIGHTS, advance, is_system_failure
+from onolys_api.jobs.alive import ensure_active
+from onolys_api.jobs.charging import release_failed_run, release_once
+from onolys_api.jobs.machine import RUN_START_PROGRESS, STAGE_WEIGHTS, STAGES, advance, stage_fields
 from onolys_api.jobs.queue import MAX_ATTEMPTS
 from onolys_api.jobs.transcribe import TRANSCRIPT_ID
 from onolys_api.jobs.transcribe import _run as run_coro
 from onolys_api.jobs.worker import (
+    Cancelled,
     Handler,
     PermanentError,
     TaskContext,
     TaskError,
 )
 from onolys_api.repo.base import NotFoundError
-from onolys_api.repo.models import ReportDoc
+from onolys_api.repo.models import ReportDoc, utcnow
 from onolys_api.storage.base import BlobStore
 
 ARTIFACTS = ("code", "tips")
-MAX_PROGRESS = 99
+MAX_PROGRESS = 99  # same as `progress.MAX_PROGRESS`
 
 
 def artifact_key(uid: str, sid: str, run_id: str, name: str) -> str:
@@ -57,29 +60,6 @@ def artifact_key(uid: str, sid: str, run_id: str, name: str) -> str:
 
 def _dumps(obj: Any) -> bytes:
     return json.dumps(obj, ensure_ascii=False, default=str).encode()
-
-
-def release_once(repo, uid: str, sid: str, run_id: str, refund: bool, date: str | None) -> None:
-    """Hand the cap slot back at most once per run: one repo transaction checks and sets the
-    `released` flag and moves the counters, so a crash or a concurrent caller can neither leak
-    the slot nor refund twice."""
-    try:
-        repo.release_run_slot(uid, sid, run_id, refund, date)
-    except NotFoundError:  # session deleted under the run: the delete already freed the slot
-        return
-
-
-def _refund(repo, uid: str, sid: str, run_id: str, code: str) -> bool:
-    """A run that ends in a failure refunds its units when the failure is the system's (the codes
-    that allow Try again), whether or not the LLM was called (owner decision). A bad-file code is
-    the user's: refunded only if no attempt called the evaluation (`llm_started` on the run doc,
-    persisted across attempts)."""
-    if is_system_failure(code):
-        return True
-    try:
-        return not repo.get_run(uid, sid, run_id).llm_started
-    except NotFoundError:
-        return False  # nothing to refund on a vanished run
 
 
 def make_run_handler(
@@ -95,11 +75,13 @@ def make_run_handler(
         date = run_doc.cap_date
         try:
             _execute(ctx, blobs, get_evaluation(), run_doc)
+        except Cancelled:
+            raise  # the cancel already released the slot (released=true) and marked the run
         except (TaskError, TimeoutError) as e:
             retryable = isinstance(e, TimeoutError) or e.retryable
             if not retryable or ctx.attempt >= MAX_ATTEMPTS:
                 code = e.code if isinstance(e, TaskError) else "deadline_exceeded"
-                release_once(repo, uid, sid, run_id, _refund(repo, uid, sid, run_id, code), date)
+                release_failed_run(repo, uid, sid, run_id, kind_for_code(code), date)
             raise
         except Exception as e:
             if isinstance(e, OutputInvalid):
@@ -109,7 +91,7 @@ def make_run_handler(
                 repo.update_run(uid, sid, run_id, fields)
             code, retryable = to_public(e, ctx.attempt)
             if not retryable or ctx.attempt >= MAX_ATTEMPTS:
-                release_once(repo, uid, sid, run_id, _refund(repo, uid, sid, run_id, code), date)
+                release_failed_run(repo, uid, sid, run_id, kind_for_code(code), date)
             raise
         release_once(repo, uid, sid, run_id, False, date)
 
@@ -121,6 +103,8 @@ def _execute(ctx, blobs, evaluation, run_doc) -> None:
     session = repo.get_session(uid, sid)
     if session.state == "deleting":
         raise NotFoundError()
+    if session.state == "cancelled":
+        raise Cancelled()
 
     try:  # a retry or redelivery after the report was stored only finishes the bookkeeping
         existing = repo.get_report(uid, sid, run_id, resolve=False)
@@ -147,8 +131,9 @@ def _evaluate(ctx, blobs, evaluation, run_doc, session) -> ReportDoc:
     params = {
         "change_goal": session.change_goal or "",
         "seed": sid,
-        "coded_span": (run_doc.coded_span.model_dump(exclude_none=True)
-                       if run_doc.coded_span else None),
+        "coded_span": (
+            run_doc.coded_span.model_dump(exclude_none=True) if run_doc.coded_span else None
+        ),
         "language": transcript.language or session.language,
         "n_runs": run_doc.n_runs,
         "preset": run_doc.preset,
@@ -162,16 +147,30 @@ def _evaluate(ctx, blobs, evaluation, run_doc, session) -> ReportDoc:
         if stage not in STAGE_WEIGHTS:
             return
         try:
+            ensure_active(repo, blobs, uid, sid)  # stage boundary: stop when cancelled/deleted
             if status == "started":
-                repo.update_session(uid, sid, {"step": stage}, status={"step": stage})
+                repo.update_session(
+                    uid, sid, {"step": stage},
+                    status={
+                        "step": stage,
+                        "stage_started_at": utcnow(),  # web interpolates from here
+                        **stage_fields("running", stage, None),
+                    },
+                )
             elif stage not in done:
                 done.add(stage)
                 total = RUN_START_PROGRESS + sum(STAGE_WEIGHTS[s] for s in done)
                 shown = repo.get_status(uid, sid).progress
+                after = STAGES[STAGES.index(stage) + 1 :][:1]  # the stage that starts next
                 repo.update_session(
-                    uid, sid, {}, status={"progress": max(shown, min(MAX_PROGRESS, total))}
+                    uid, sid, {},
+                    status={
+                        "progress": max(shown, min(MAX_PROGRESS, total)),
+                        "stage_started_at": utcnow(),
+                        **stage_fields("running", after[0] if after else stage, None),
+                    },
                 )
-        except NotFoundError:
+        except (NotFoundError, Cancelled):
             raise
         except Exception as e:  # progress is best effort: never fail the run for it
             logs.emit(
@@ -200,7 +199,8 @@ def _evaluate(ctx, blobs, evaluation, run_doc, session) -> ReportDoc:
         if out.artifacts.get(name) is not None:
             blobs.put_bytes(artifact_key(uid, sid, run_id, name), _dumps(out.artifacts[name]),
                             "application/json")  # fmt: skip
-    ensure_alive(repo, blobs, uid, sid)  # a DELETE during the run must not leave artifacts
+    ensure_active(repo, blobs, uid, sid)  # a DELETE during the run must not leave artifacts
+    # (and a cancel must not get a report: ensure_active raises Cancelled)
     versions = [r.version for r in repo.list_reports(uid, sid)]
     doc = ReportDoc(
         version=max(versions, default=0) + 1,

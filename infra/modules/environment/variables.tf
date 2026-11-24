@@ -139,6 +139,17 @@ variable "ai_tolerance_seconds" {
   default = 30
 }
 
+variable "ai_mismatch_min_seconds" {
+  description = "Relay/upload duration mismatch tolerated up to max(this, ai_mismatch_pct % of the relay duration); beyond it the session stops as our error."
+  type        = number
+  default     = 60
+}
+
+variable "ai_mismatch_pct" {
+  type    = number
+  default = 15
+}
+
 variable "ai_abandon_count_seconds" {
   type    = number
   default = 30
@@ -152,4 +163,21 @@ variable "ai_reconnect_seconds" {
 variable "ai_mic_gate" {
   type    = bool
   default = false
+}
+
+variable "app_base_url" {
+  description = "Public web app origin the api puts in auth-email links (api only; unset means the auth-email endpoints answer 503 email_unavailable)."
+  type        = string
+}
+
+variable "email_from" {
+  description = "From header for auth emails (api EMAIL_FROM)."
+  type        = string
+  default     = "Onolys <no-reply@onolys.com>"
+}
+
+variable "resend_secret_wired" {
+  description = "Wire RESEND_API_KEY on the api via secret_key_ref. Keep false until the owner has seeded a version of resend-api-key-<env> (a revision fails to start if the secret has no version)."
+  type        = bool
+  default     = false
 }

@@ -6,7 +6,15 @@ import logging
 import pytest
 import test_run
 import test_worker
-from google.api_core.exceptions import ServiceUnavailable, TooManyRequests
+from google.api_core.exceptions import (
+    FailedPrecondition,
+    InvalidArgument,
+    NotFound,
+    PermissionDenied,
+    ServiceUnavailable,
+    TooManyRequests,
+    Unauthenticated,
+)
 from onolys_engine_core.errors import (
     ConfigError,
     InputError,
@@ -17,6 +25,7 @@ from onolys_engine_core.errors import (
 from onolys_engine_core.llm.errors import (
     FixtureMiss,
     LLMBadOutput,
+    LLMError,
     LLMRateLimited,
     LLMTimeout,
     LLMUnavailable,
@@ -30,7 +39,7 @@ from test_run import swap_eval
 from test_worker import SID, payload, runner_with
 
 from onolys_api.adapters import AdapterError, FakeEvaluation
-from onolys_api.adapters.error_map import PUBLIC_MESSAGES, to_public
+from onolys_api.adapters.error_map import KIND_BY_CODE, PUBLIC_MESSAGES, classify, to_public
 from onolys_api.errors import ERROR_CODES
 from onolys_api.jobs.worker import MAX_ATTEMPTS
 
@@ -56,9 +65,9 @@ CASES = [
     ("llm_unavailable", lambda: LLMUnavailable(SECRET), "run", 1, UPSTREAM, True),
     ("llm_timeout", lambda: LLMTimeout(SECRET), "run", 1, UPSTREAM, True),
     ("llm_rate_limited", lambda: LLMRateLimited(SECRET, 3.0), "run", 1, UPSTREAM, True),
-    ("llm_bad_output", lambda: LLMBadOutput(SECRET), "run", 1, UPSTREAM, True),
+    ("llm_bad_output", lambda: LLMBadOutput(SECRET), "run", 1, "internal_error", False),
     ("llm_fixture_miss", lambda: FixtureMiss(SECRET), "run", 1, "internal_error", False),
-    ("llm_bad_output_a2", lambda: LLMBadOutput(SECRET), "run", 2, UPSTREAM, True),
+    ("llm_bad_output_a2", lambda: LLMBadOutput(SECRET), "run", 2, "internal_error", False),
     ("deadline_builtin", lambda: TimeoutError(SECRET), "run", 1, DEADLINE, True),
     ("code_pass_failed", lambda: CodePassFailed(SECRET), "run", 1, "internal_error", False),
     ("globals_pass_failed", lambda: GlobalsPassFailed(SECRET), "run", 1, "internal_error", False),
@@ -72,14 +81,14 @@ CASES = [
     ("run_google_transient_last", lambda: ServiceUnavailable(SECRET), "run", 2, UPSTREAM, True),
     ("stt_transient_a1", lambda: ServiceUnavailable(SECRET), "stt", 1, UPSTREAM, True),
     ("stt_429_a1", lambda: TooManyRequests(SECRET), "stt", 1, UPSTREAM, True),
-    ("stt_transient_a2", lambda: ServiceUnavailable(SECRET), "stt", 2, TRANSCRIBE, False),
+    ("stt_transient_a2", lambda: ServiceUnavailable(SECRET), "stt", 2, UPSTREAM, True),
     ("stt_flagged_a1", lambda: _transient_provider_error(), "stt", 1, UPSTREAM, True),
-    ("stt_flagged_a2", lambda: _transient_provider_error(), "stt", 2, TRANSCRIBE, False),
+    ("stt_flagged_a2", lambda: _transient_provider_error(), "stt", 2, UPSTREAM, True),
     ("stt_permanent", lambda: SttProviderError(SECRET), "stt", 1, TRANSCRIBE, False),
     ("stt_permanent_a2", lambda: SttProviderError(SECRET), "stt", 2, TRANSCRIBE, False),
     ("stt_adapter_code", lambda: AdapterError(TRANSCRIBE), "stt", 1, TRANSCRIBE, False),
     ("stt_adapter_upstream", lambda: AdapterError(UPSTREAM), "stt", 1, UPSTREAM, True),
-    ("stt_adapter_upstream_a2", lambda: AdapterError(UPSTREAM), "stt", 2, TRANSCRIBE, False),
+    ("stt_adapter_upstream_a2", lambda: AdapterError(UPSTREAM), "stt", 2, UPSTREAM, True),
     ("stt_unknown", lambda: ValueError(SECRET), "stt", 1, "internal_error", False),
     # transcript outcomes carried by adapter codes (SP04 R4 checks)
     ("no_speech", lambda: AdapterError("no_speech"), "stt", 1, "no_speech", False),
@@ -189,7 +198,7 @@ def test_wrapper_records_code_and_one_failed_line(repo, caplog, make, stage, att
         (lambda: InputError(SECRET), "invalid_parameters"),
         (lambda: AllRunsFailed(SECRET), "internal_error"),
         pytest.param(lambda: LLMUnavailable(SECRET), UPSTREAM, marks=pytest.mark.firestore_smoke),
-        (lambda: LLMBadOutput(SECRET), UPSTREAM),
+        (lambda: LLMBadOutput(SECRET), "internal_error"),
         (lambda: CodePassFailed(SECRET), "internal_error"),
         (lambda: TimeoutError(SECRET), DEADLINE),
     ],
@@ -226,3 +235,101 @@ def test_output_invalid_has_a_fixed_public_message_and_never_retries():
     assert to_public(failure) == ("output_invalid", False)
     assert "output_invalid" in ERROR_CODES
     assert PUBLIC_MESSAGES["output_invalid"] == "The engine returned an answer that did not match its schema."
+
+
+# ---- 03-failure-policy R1: kind per source, stages validate/stt/run ----
+
+T, P, U = "transient", "permanent_internal", "user_file"
+INT = "internal_error"
+
+
+def _llm(status=None, etype=None, cls=LLMUnavailable):
+    e = cls(SECRET)
+    e.http_status, e.error_type = status, etype
+    e.provider_error = "503 timeout overloaded " + SECRET  # never read
+    return e
+
+
+KIND_CASES = [
+    ("timeout", lambda: LLMTimeout(SECRET), UPSTREAM, T),
+    ("rate_limited", lambda: LLMRateLimited(SECRET), UPSTREAM, T),
+    *[(f"llm_{n}", (lambda n=n: _llm(n)), UPSTREAM, T) for n in (408, 429, 500, 502, 503, 504, 529)],
+    ("llm_conn", lambda: _llm(None, "APIConnectionError", LLMError), UPSTREAM, T),
+    ("llm_timeout_type", lambda: _llm(None, "Timeout", LLMError), UPSTREAM, T),
+    *[(f"llm_{n}", (lambda n=n: _llm(n)), INT, P) for n in (400, 401, 403, 404)],
+    ("fixture_miss", lambda: FixtureMiss(SECRET), INT, P),
+    ("bad_output", lambda: LLMBadOutput(SECRET), INT, P),
+    ("output_invalid", lambda: _output_invalid(), "output_invalid", P),
+    ("google_transient", lambda: ServiceUnavailable(SECRET), UPSTREAM, T),
+    ("google_429", lambda: TooManyRequests(SECRET), UPSTREAM, T),
+    ("google_perm_denied", lambda: PermissionDenied(SECRET), INT, P),
+    ("google_unauth", lambda: Unauthenticated(SECRET), INT, P),
+    ("google_not_found", lambda: NotFound(SECRET), INT, P),
+    ("google_precondition", lambda: FailedPrecondition(SECRET), INT, P),
+    ("timeout_builtin", lambda: TimeoutError(SECRET), DEADLINE, T),
+    ("adapter_upstream", lambda: AdapterError(UPSTREAM), UPSTREAM, T),
+    ("adapter_deadline", lambda: AdapterError(DEADLINE), DEADLINE, T),
+    ("adapter_rate", lambda: AdapterError("rate_limited"), "rate_limited", T),
+    ("adapter_unknown", lambda: AdapterError("zzz"), INT, P),
+    ("unknown", lambda: ValueError(SECRET), INT, P),
+    ("all_runs_perm_cause", lambda: _chained(AllRunsFailed(SECRET), _llm(404)), INT, P),
+    ("all_runs_transient_cause", lambda: _chained(AllRunsFailed(SECRET), _llm(503)), UPSTREAM, T),
+    ("all_runs_no_cause", lambda: AllRunsFailed(SECRET), INT, P),
+    ("code_pass", lambda: CodePassFailed(SECRET), INT, P),
+    ("globals_pass", lambda: GlobalsPassFailed(SECRET), INT, P),
+    ("input", lambda: InputError(SECRET), "invalid_parameters", U),
+    ("span", lambda: InvalidCodedSpan(SECRET), "invalid_coded_span", U),
+    ("too_long", lambda: SessionTooLong(SECRET), "session_too_long", U),
+    ("no_speech", lambda: AdapterError("no_speech"), "no_speech", U),
+    ("not_separated", lambda: AdapterError("speakers_not_separated"), "speakers_not_separated", U),
+    ("adapter_transcription", lambda: AdapterError(TRANSCRIBE), TRANSCRIBE, U),
+]  # fmt: skip
+
+
+def _output_invalid():
+    from onolys_engine_core.validate import ValidationIssue
+    from onolys_engine_core.validated_run import OutputInvalid
+
+    return OutputInvalid(1, [ValidationIssue(path="/f", message="bad")])
+
+
+@pytest.mark.parametrize("stage", ["validate", "stt", "run"])
+@pytest.mark.parametrize("make,code,kind", [c[1:] for c in KIND_CASES], ids=[c[0] for c in KIND_CASES])
+def test_classify_table(make, code, kind, stage):
+    f = classify(make(), stage)
+    assert (f.code, f.kind) == (code, kind)
+    assert KIND_BY_CODE[f.code] == kind
+
+
+@pytest.mark.parametrize("stage", ["validate", "stt", "run"])
+def test_classify_never_reads_provider_error_text(stage):
+    assert classify(_llm(404), stage).kind == P  # provider_error says "503 timeout"
+
+
+def test_stt_stage_kinds():
+    assert classify(SttProviderError(SECRET), "stt") == ("transcription_failed", U)
+    assert classify(InvalidArgument(SECRET), "stt") == ("transcription_failed", U)
+    assert classify(ServiceUnavailable(SECRET), "stt") == (UPSTREAM, T)
+    assert classify(_transient_provider_error(), "stt") == (UPSTREAM, T)
+
+
+def test_second_transient_stt_stays_upstream_unavailable_d6():
+    # classify has no attempt: the second failure is classified exactly like the first
+    assert to_public(ServiceUnavailable(SECRET), 2, "stt") == (UPSTREAM, True)
+    assert classify(ServiceUnavailable(SECRET), "stt") == (UPSTREAM, T)
+    assert classify(_transient_provider_error(), "stt") == (UPSTREAM, T)
+    assert classify(SttProviderError(SECRET), "stt") == ("transcription_failed", U)
+
+
+def test_kind_by_code_covers_every_public_message_code():
+    assert set(PUBLIC_MESSAGES) <= set(KIND_BY_CODE)
+    assert set(KIND_BY_CODE.values()) <= {T, P, U}
+
+
+def test_every_session_state_is_a_valid_status_state():
+    """StatusState derives from SessionState: a new session state must validate in status docs."""
+    from typing import get_args
+
+    from onolys_api.repo.models import SessionState, StatusState
+
+    assert set(get_args(SessionState)) | {"upload_failed"} == set(get_args(StatusState))

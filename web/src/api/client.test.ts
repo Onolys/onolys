@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import { server } from "../mocks/server";
 import { createApiClient, unwrap } from "./client";
 import { ApiError } from "./errors";
+import { WEB_VERSION } from "./buildInfo";
 
 const BASE = "http://localhost/v1";
 
@@ -226,5 +227,23 @@ describe("unwrap", () => {
       expect((e as ApiError).status).toBe(429);
       expect((e as ApiError).requestId).toBe("req_9");
     }
+  });
+});
+
+describe("client version header", () => {
+  it("sends X-Client-Version (the build id) on every request, signed in or out", async () => {
+    const seen: (string | null)[] = [];
+    server.use(
+      http.get(`${BASE}/usage`, ({ request }) => {
+        seen.push(request.headers.get("x-client-version"));
+        return HttpResponse.json({ eval: { day: { used: 1, cap: 20, resets_at: "x" } }, interview: { day: { used: 0, cap: 5, resets_at: "x" } } });
+      }),
+    );
+    const { client } = setup();
+    await client.GET("/usage");
+    const anon = createApiClient({ baseUrl: BASE, getToken: async () => null, onSessionExpired: vi.fn() });
+    await anon.GET("/usage");
+    expect(seen).toEqual([WEB_VERSION, WEB_VERSION]);
+    expect(WEB_VERSION).toMatch(/^[A-Za-z0-9._+-]{1,64}$/);
   });
 });

@@ -3,6 +3,8 @@
 Model choice is data: a YAML file (packaged default, or the path in env ROUTES_FILE).
 Engines ask for a route by name. Back-compat env overrides (applied to the base routes,
 before a preset's overrides): MITI_MODEL_CHEAP/MID/STRONG set that route's `litellm_id`;
+LLM_PROVIDER + LLM_MODEL (both or neither; validated against models.yaml) set the text routes'
+`litellm_id`, `api_key_env` and `caching_mode`, and win over MITI_MODEL_*;
 MITI_LLM_RESPONSE_FORMAT sets `structured_output_mode` on every full route.
 """
 
@@ -15,6 +17,7 @@ import yaml
 
 from onolys_engine_core.config import locate_config_file
 from onolys_engine_core.errors import ConfigError, InputError
+from onolys_engine_core.llm.models import Model, find_model, load_models
 
 ROUTES_ENV = "ROUTES_FILE"
 DEFAULT_PRESET_ENV = "DEFAULT_PRESET"
@@ -28,6 +31,10 @@ _TIER_ENV = {
     "strong": "MITI_MODEL_STRONG",
 }
 _FORMAT_ENV = "MITI_LLM_RESPONSE_FORMAT"
+PROVIDER_ENV = "LLM_PROVIDER"
+MODEL_ENV = "LLM_MODEL"
+# Text routes overridden by LLM_PROVIDER/LLM_MODEL; `oneshot` (eval baseline) never is.
+_TEXT_ROUTES = ("cheap", "mid", "strong", "miti_code", "miti_globals", "tips")
 _FIELDS = {
     "litellm_id",
     "api_key_env",
@@ -85,11 +92,43 @@ def routes_path() -> Path:
     return locate_config_file(DEFAULT_RESOURCE, DEFAULT_RESOURCE, "onolys_engine_core.llm")
 
 
-def _apply_env(raw: dict[str, dict], env: dict[str, str]) -> dict[str, dict]:
+def _llm_override(env: dict[str, str], models_path: Path | None) -> dict[str, str] | None:
+    """Validate LLM_PROVIDER/LLM_MODEL against models.yaml; None when neither is set."""
+    provider = (env.get(PROVIDER_ENV) or "").strip()
+    model = (env.get(MODEL_ENV) or "").strip()
+    if not provider and not model:
+        return None
+    if not provider or not model:
+        raise ConfigError(f"{PROVIDER_ENV} and {MODEL_ENV} must be set together")
+    path = Path(env["MODELS_FILE"]) if env.get("MODELS_FILE") else models_path
+    entries = load_models(path)
+    providers = sorted({m.provider for m in entries.values()})
+    owners = [m for m in entries.values() if m.provider == provider]
+    if not owners:
+        raise ConfigError(f"{PROVIDER_ENV}={provider!r} unknown; expected one of {providers}")
+    if m := find_model(entries, provider, model):
+        return {
+            "litellm_id": f"{provider}/{model}",
+            "api_key_env": m.api_key_env,
+            "caching_mode": m.caching_mode,
+        }
+    known = sorted(t for m in owners for t in m.tiers)
+    raise ConfigError(f"{MODEL_ENV}={model!r} unknown for provider {provider!r}; expected {known}")
+
+
+def _apply_env(
+    raw: dict[str, dict], env: dict[str, str], models_path: Path | None = None
+) -> dict[str, dict]:
     out = {k: dict(v) for k, v in raw.items()}
     for name, var in _TIER_ENV.items():
         if env.get(var) and name in out and "alias" not in out[name]:
             out[name]["litellm_id"] = env[var]
+    override = _llm_override(env, models_path)
+    if override:
+        # Aliases follow their target, so only concrete text routes are rewritten.
+        for name in _TEXT_ROUTES:
+            if name in out and "alias" not in out[name]:
+                out[name].update(override)
     fmt = env.get(_FORMAT_ENV)
     if fmt:
         for entry in out.values():
@@ -116,7 +155,7 @@ def load_registry(path: Path | None = None, env: dict[str, str] | None = None) -
     for pname, p in presets_raw.items():
         p = p or {}
         presets[str(pname)] = Preset(routes=dict(p.get("routes") or {}), stt=p.get("stt"))
-    reg = RouteRegistry(_apply_env(raw, env), presets)
+    reg = RouteRegistry(_apply_env(raw, env, src.parent.parent / "models.yaml"), presets)
     reg.routes()  # validate base
     for pname in presets:
         _resolve_all(_overlay(reg.raw_routes, presets[pname].routes))
@@ -206,17 +245,48 @@ def check_api_keys(routes: dict[str, Route], env: dict[str, str] | None = None) 
         raise ConfigError("LLM API key environment variable not set: " + "; ".join(parts))
 
 
+EFFORT_OUTPUT_CAP = {"low": 16000, "medium": 32000, "high": 48000, "max": 64000}
+COMBO_TIMEOUT_S = 300
+
+
+def combo_routes(base: dict[str, Route], model: Model, tier: str, effort: str) -> dict[str, Route]:
+    """Pure: every route of `base` re-pointed at one (model, tier, effort) combo (PRD R6, D2, D9).
+
+    `model` is the models.yaml block owning `tier`. Structured-output mode, concurrency and
+    retries are inherited; output cap is min(model max, EFFORT_OUTPUT_CAP[effort]).
+    """
+    cap = min(model.max_output_tokens, EFFORT_OUTPUT_CAP[effort])
+    out = {}
+    for name, r in base.items():
+        extra = {k: v for k, v in r.extra_params.items() if k != "reasoning_effort"}
+        extra["reasoning_effort"] = effort
+        out[name] = replace(
+            r,
+            litellm_id=f"{model.provider}/{tier}",
+            api_key_env=model.api_key_env,
+            caching_mode=model.caching_mode,
+            supports_temperature=model.supports_temperature,
+            context_tokens=model.context_tokens,
+            max_output_tokens=cap,
+            timeout_s=COMBO_TIMEOUT_S,
+            extra_params=extra,
+        )
+    return out
+
+
 def allowed_presets(registry: RouteRegistry | None = None) -> list[str]:
     reg = registry or load_registry()
     return sorted(reg.presets) or [DEFAULT_PRESET_NAME]
 
 
 __all__ = [
+    "EFFORT_OUTPUT_CAP",
     "Preset",
     "Route",
     "RouteRegistry",
     "allowed_presets",
     "check_api_keys",
+    "combo_routes",
     "default_preset_name",
     "load_registry",
     "resolve_preset",

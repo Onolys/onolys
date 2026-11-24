@@ -4,6 +4,7 @@
  * instance values (R8: no PHI in error messages).
  */
 import type { components } from "./schema";
+import type { SessionStatusDoc } from "./statusListener";
 
 export const GENERIC_MESSAGE = "Something went wrong. Please try again.";
 
@@ -38,6 +39,10 @@ const MESSAGES = {
   rating_final: "Your rating is final. It can't be changed or run again.",
   conflict: "That request clashes with an earlier one. Refresh and try again.",
   internal_error: GENERIC_MESSAGE,
+  // Server-side failure codes (03-failure-policy): internal copy, no detail for the user.
+  output_invalid: GENERIC_MESSAGE,
+  deadline_exceeded: GENERIC_MESSAGE,
+  run_failed: GENERIC_MESSAGE,
 } as const satisfies Record<string, string>;
 
 export type ErrorCode = keyof typeof MESSAGES;
@@ -60,31 +65,56 @@ export function messageForCode(code: string | undefined, ctx: MessageContext = {
   return MESSAGES[code];
 }
 
-/** Which recovery the error card offers (R4 Failure). */
-export type FailureAction = "upload_new" | "try_again";
+/** Cancel copy (04-cancel R9): a 409 means the session already ended; anything else is a retryable failure. */
+export const CANCEL_CONFLICT_MESSAGE = "This session already finished or failed.";
+export const CANCEL_FAILED_MESSAGE = "We couldn't cancel this session. Try again.";
 
-const UPLOAD_NEW = new Set<string>([
-  "transcript_invalid",
-  "transcript_too_large",
-  "empty_transcript",
-  "session_too_long",
-  "unsupported_audio",
-  "audio_too_long",
-  "interview_too_long",
-  "audio_too_large",
-  "audio_unreadable",
-  "no_speech",
-  "speakers_not_separated",
-  "transcription_failed",
-]);
+export function cancelErrorMessage(err: unknown): string {
+  return err instanceof ApiError && err.status === 409 ? CANCEL_CONFLICT_MESSAGE : CANCEL_FAILED_MESSAGE;
+}
+
+/** Failure kinds the server persists on the status doc (D2). */
+export type FailureKind = "transient" | "permanent_internal" | "user_file";
+
+/** The status-doc fields `failureView` reads, derived from `SessionStatusDoc`. */
+export type FailureDoc = Partial<Pick<SessionStatusDoc, "error_code" | "error_kind" | "retries_left" | "counted">>;
+
+export type FailureAction = "retry" | "new_session" | "upload_different";
+
+export interface FailureView {
+  action: FailureAction;
+  message: string;
+  /** A second sentence shown under the message, when the policy needs one. */
+  note?: string;
+}
+
+const NOT_COUNTED = "This did not count toward your limit.";
+const INTERNAL_MESSAGE = `Something went wrong on our side. ${NOT_COUNTED} Please start a new session.`;
 
 /**
- * FX45: a rating is final once submitted. A system failure offers "Try again" (re-runs the same
- * submission); a bad file, or no ready transcript (a retry is rejected with 409), needs a new upload.
+ * PRD R6: what a failed session's card says and offers, driven by the server's `error_kind`
+ * (no code lists here). No kind, or an unknown kind, reads as a permanent internal failure.
  */
-export function failureAction(code: string | undefined, transcriptReady: boolean): FailureAction {
-  if (!transcriptReady) return "upload_new";
-  return code !== undefined && UPLOAD_NEW.has(code) ? "upload_new" : "try_again";
+export function failureView(doc: FailureDoc): FailureView {
+  const code = doc.error_code ?? undefined;
+  switch (doc.error_kind) {
+    case "transient":
+      if ((doc.retries_left ?? 0) > 0) {
+        return { action: "retry", message: messageForCode(code), note: NOT_COUNTED };
+      }
+      return {
+        action: "new_session",
+        message: "We couldn't finish this after several tries. Start a new session.",
+      };
+    case "user_file":
+      return {
+        action: "upload_different",
+        message: messageForCode(code),
+        note: doc.counted === true ? "This counted toward your limit." : undefined,
+      };
+    default:
+      return { action: "new_session", message: INTERNAL_MESSAGE };
+  }
 }
 
 type ErrorDetail = components["schemas"]["ErrorDetailModel"];

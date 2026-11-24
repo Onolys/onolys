@@ -22,6 +22,20 @@ variable "admin_enabled" {
   }
 }
 
+variable "resend_secret_wired" {
+  description = "Per environment: wire RESEND_API_KEY on the api. Set staging true only after the owner seeds resend-api-key-staging; prod stays false (prod rollout deferred)."
+  type        = map(bool)
+  default = {
+    staging = false
+    prod    = false
+  }
+
+  validation {
+    condition     = toset(keys(var.resend_secret_wired)) == toset(["staging", "prod"])
+    error_message = "resend_secret_wired needs exactly the keys staging and prod."
+  }
+}
+
 variable "staging_alerts" {
   description = "Enable the failure alerts on staging (prod is always on)."
   type        = bool

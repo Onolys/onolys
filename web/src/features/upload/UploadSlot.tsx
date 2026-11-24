@@ -1,7 +1,7 @@
 /** Upload progress, cancel, "Retry upload" and "Resume upload" on the session page (PRD R3, D4). */
 import { Button, Input } from "@onolys/ui";
 import { useMutation } from "@tanstack/react-query";
-import { useRef, useSyncExternalStore } from "react";
+import { useEffect, useRef, useSyncExternalStore } from "react";
 import { describeError } from "../../api/errors";
 import type { SessionStatusDoc } from "../../api/statusListener";
 import { useApiClient } from "../../auth/useApiClient";
@@ -66,12 +66,29 @@ function ResumeUpload({ sessionId }: { sessionId: string }) {
   );
 }
 
-export function UploadSlot({ sessionId, doc }: { sessionId: string; doc: SessionStatusDoc }) {
+/**
+ * `onFraction` reports this tab's real byte fraction (0-1) for the overall progress bar (05-processing-screen D4),
+ * or null when there is no counter (a reload, no job). This component draws no overall bar itself.
+ */
+export function UploadSlot({
+  sessionId,
+  doc,
+  onFraction,
+}: {
+  sessionId: string;
+  doc: SessionStatusDoc;
+  onFraction?: (fraction: number | null) => void;
+}) {
   const job = useJob(sessionId);
   const state = useSyncExternalStore(
     (fn) => (job ? job.subscribe(fn) : () => undefined),
     () => (job ? job.getState() : NO_STATE),
   );
+
+  const fraction = job && state.total > 0 ? Math.min(1, state.loaded / state.total) : null;
+  useEffect(() => {
+    onFraction?.(fraction);
+  }, [fraction, onFraction]);
 
   const running = job !== undefined && (state.phase === "uploading" || state.phase === "completing");
   if (doc.state === "upload_incomplete" && !running) {

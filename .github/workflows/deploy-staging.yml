@@ -105,6 +105,10 @@ jobs:
         SERVICE_MODE=api
         ADAPTERS=real
         CORS_ORIGINS=https://onolys-app-staging.web.app\,http://localhost:5173
+        APP_BASE_URL=https://onolys-app-staging.web.app
+        EMAIL_FROM=Onolys <no-reply@onolys.com>
+        LLM_PROVIDER=${{ vars.LLM_PROVIDER }}
+        LLM_MODEL=${{ vars.LLM_MODEL }}
       flags: --cpu-throttling
       pin_traffic: true
     secrets: inherit
@@ -143,6 +147,10 @@ jobs:
       image: ${{ needs.build.outputs.image }}
       region: us-central1
       git_sha: ${{ needs.build.outputs.sha }}
+      # Empty vars = no override (routes.yaml wins). See docs/reference/infra.md "LLM provider and model".
+      env_vars: |-
+        LLM_PROVIDER=${{ vars.LLM_PROVIDER }}
+        LLM_MODEL=${{ vars.LLM_MODEL }}
     secrets: inherit
 
   deploy-voice:

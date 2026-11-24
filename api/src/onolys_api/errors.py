@@ -55,6 +55,7 @@ ERROR_CODES = (
     "email_unverified",
     "conflict",
     "interview_too_long",
+    "email_unavailable",
 )
 ErrorCode = Literal[ERROR_CODES]  # type: ignore[valid-type]
 

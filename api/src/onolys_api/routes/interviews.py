@@ -7,12 +7,13 @@ from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel, Field
 
 from onolys_api.auth.deps import AuthUser, current_user
+from onolys_api.client_info import client_info
 from onolys_api.errors import ApiError, ErrorResponse
 from onolys_api.jobs import caps
 from onolys_api.jobs.caps import release, start_interview
 from onolys_api.jobs.interview_sweep import enqueue_sweep
 from onolys_api.jobs.interviews import abandon_open_interviews, settle_interview
-from onolys_api.repo.models import InterviewDoc, InterviewState
+from onolys_api.repo.models import ClientInfo, InterviewDoc, InterviewState
 from onolys_api.routes.ids import ResourceId
 from onolys_api.routes.scenarios import ScenarioPublic
 from onolys_api.voice.scenarios import public_view
@@ -27,10 +28,14 @@ class CreateInterviewRequest(BaseModel):
     voice: str | None = Field(
         None, max_length=64, description="One of the configured voices; default: the scenario's"
     )
+    client: ClientInfo | None = Field(None, description="Optional: web build and recorder info")
 
 
 class EndInterviewRequest(BaseModel):
     discard: bool = Field(False, description="Throw the interview away (state `abandoned`)")
+    client: ClientInfo | None = Field(
+        None, description="Optional: recorder container and audio engine, added to the interview"
+    )
 
 
 class InterviewLimits(BaseModel):
@@ -93,7 +98,7 @@ def create_interview(
         repo, settings, uid, iid,
         InterviewDoc(
             uid=uid, scenario_id=body.scenario_id, voice=voice, created_at=now,
-            reservation_date=caps.utc_date(now),
+            reservation_date=caps.utc_date(now), client=client_info(request, body.client),
         ),
     )  # fmt: skip
     try:
@@ -114,6 +119,18 @@ def get_interview(request: Request, id: ResourceId, user: User) -> InterviewResp
     return _view(request, request.app.state.repo.get_interview(user.uid, id))
 
 
+def _merge_client(request: Request, uid: str, iid: str, reported: ClientInfo | None) -> None:
+    """Add what the end call knows (recorder, engine) to the client info stored at create."""
+    repo = request.app.state.repo
+    new = client_info(request, reported)
+    old = repo.get_interview(uid, iid).client
+    # web build and browser are fixed at create; the end call adds the recorder and engine
+    merged = {k: getattr(old, k) or getattr(new, k) for k in ("web_version", "user_agent")}
+    merged |= {k: getattr(new, k) or getattr(old, k) for k in ("recorder_mime", "audio_engine")}
+    if merged != old.model_dump():
+        repo.update_interview(uid, iid, {"client": merged})
+
+
 @router.post(
     "/{id}/end", operation_id="endInterview", response_model=InterviewResponse,
     summary="End (or discard) an interview; idempotent",
@@ -128,5 +145,6 @@ def end_interview(
     state = request.app.state
     state.repo.get_interview(user.uid, id)  # 404 for a foreign or missing id
     to_state = "abandoned" if body is not None and body.discard else "ended"
+    _merge_client(request, user.uid, id, body.client if body is not None else None)
     doc = settle_interview(state.repo, state.settings, user.uid, id, to_state, state.clock())
     return _view(request, doc)

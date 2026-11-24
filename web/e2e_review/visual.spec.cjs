@@ -127,6 +127,68 @@ for (const scheme of ["light", "dark"]) {
       });
     }
 
+    // 05-processing-screen: one shot per phase (upload / background / waiting). Mock steps advance every 1.5s.
+    test("processing screen: upload, background, waiting phases", async ({ page }) => {
+      const csp = await watchCsp(page);
+      // Hold the upload PUT so the upload phase stays visible. The mock answers it from the MSW service worker, which
+      // `page.route` never sees (Playwright does not route service-worker-handled requests), so hold the XHR itself:
+      // `send()` of the PUT to /uploads/ is deferred until `window.__releaseUpload()`.
+      await page.addInitScript(() => {
+        const queue = [];
+        let released = false;
+        const open = XMLHttpRequest.prototype.open;
+        const send = XMLHttpRequest.prototype.send;
+        XMLHttpRequest.prototype.open = function (method, url, ...rest) {
+          this.__hold = String(method).toUpperCase() === "PUT" && String(url).includes("/uploads/");
+          return open.call(this, method, url, ...rest);
+        };
+        XMLHttpRequest.prototype.send = function (body) {
+          if (this.__hold && !released) { queue.push(() => send.call(this, body)); return; }
+          return send.call(this, body);
+        };
+        window.__releaseUpload = () => { released = true; queue.splice(0).forEach((f) => f()); };
+      });
+      await verified(page, `p-${scheme}@example.com`);
+      await openUpload(page);
+      await page.getByLabel("Change goal").fill("Walk more");
+      await page.locator("input[type=file]").setInputFiles(FIX("ten-min.mp3"));
+      await page.getByRole("button", { name: "Start", exact: true }).click();
+      await expect(page).toHaveURL(/\/sessions\/(?!new$)[^/]+$/);
+
+      const phase = async (name, hint) => {
+        await expect(page.locator("[data-slot=hint]")).toHaveText(hint, { timeout: 45_000 });
+        const current = page.locator("li[data-status=current]");
+        await expect(current.getByText("In progress")).toBeVisible();
+        await expect(current.locator("[data-slot=spinner]").first()).toBeVisible();
+        await expect(page.getByRole("progressbar", { name: "Overall progress" })).toBeVisible();
+        await expect(page.getByText(/^\d+%$/)).toBeVisible();
+        await expect(page.getByText(/^Elapsed /)).toBeVisible();
+        await wait(page);
+        await shotTo(page, `${scheme}-processing-${name}`);
+        const bad = await axeGate(page);
+        expect(bad, `axe ${scheme} processing ${name}`).toEqual([]);
+      };
+
+      await phase("upload", "Keep this tab open until upload finishes");
+      await page.evaluate(() => window.__releaseUpload());
+      await phase("background", "You can close this tab — we'll keep working");
+      await gate(page);
+      await phase("waiting", "We'll wait here for your choice");
+      expect(await csp.all()).toEqual([]);
+    });
+
+    test("processing screen: reduced motion shows no spinner animation", async ({ page }) => {
+      await page.emulateMedia({ reducedMotion: "reduce" });
+      await startSession(page, `rm-${scheme}@example.com`);
+      const spinner = page.locator("li[data-status=current] [data-slot=spinner]").first();
+      await expect(spinner).toBeVisible({ timeout: 45_000 });
+      const anim = () => spinner.evaluate((el) => (el.isConnected ? getComputedStyle(el).animationName : "detached"));
+      await expect.poll(anim).toBe("none");
+      // control: with motion allowed the same spinner animates
+      await page.emulateMedia({ reducedMotion: "no-preference" });
+      await expect.poll(anim).toBe("spin");
+    });
+
     test("mobile 390px: shell + chooser + sample", async ({ browser }) => {
       const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, colorScheme: scheme, baseURL: test.info().project.use.baseURL });
       const page = await ctx.newPage();

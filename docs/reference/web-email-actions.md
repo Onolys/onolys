@@ -2,6 +2,8 @@
 
 Every Firebase email action link (verification, password reset, change of email, recover email) points to our own page, `/auth/action` (`web/src/auth/pages/AuthAction.tsx`), not Google's hosted handler (`https://onolys.firebaseapp.com/__/auth/action`).
 
+**Who sends.** Verification and password-reset emails are sent by the API through Resend (`POST /v1/auth/email/verification`, `POST /v1/auth/email/password-reset`; see `public-api.md`). The API generates the link with the Admin SDK and rewrites it to `<APP_BASE_URL>/auth/action?mode=...&oobCode=...`. Web no longer calls `sendEmailVerification` / `sendPasswordResetEmail`. Change-email and recover-email emails still come from Firebase's sender and use the project-wide action URL below.
+
 **Why.** The project's Identity Platform config carries a Google `AQ.` key as `client.apiKey`. Google puts that key in the email link, and the hosted handler calls `identitytoolkit/v3/relyingparty/setAccountInfo?key=AQ...`, which answers `401 CREDENTIALS_MISSING`. The hosted page shows that as "Try verifying your email again ... expired or already used", although the code is fine. Our handler uses the app's own Firebase auth instance (web `AIzaSy...` key) and ignores the link's `apiKey` parameter.
 
 **Behaviour.**

@@ -25,6 +25,6 @@ Reproduce: `uv run --package onolys-api python api/scripts/measure_validate_memo
 ## Local run and image
 One command, combined mode with fakes (no GCP): `api/scripts/dev.sh` (serves on `$PORT`, default 8000; `--quickstart` runs the OpenAPI quickstart against it and exits; `--check` preflights only).
 
-Image (build from the repo root): `docker build -f api/Dockerfile --build-arg GIT_SHA=$(git rev-parse HEAD) -t onolys-api .` then `docker run --rm -p 8080:8080 -e ENV=local -e SERVICE_MODE=combined onolys-api`. The entrypoint (`api/docker-entrypoint.sh`) accepts `SERVICE_MODE=api|worker|combined` and serves on `$PORT` (Cloud Run injects it). Contains ffmpeg and the vendored Redoc; runs as non-root.
+Image (build from the repo root): `docker build -f api/Dockerfile --build-arg GIT_SHA=$(git rev-parse HEAD) -t onolys-api .` then `docker run --rm -p 8080:8080 -e ENV=local -e SERVICE_MODE=combined -e APP_BASE_URL=http://localhost:5173 onolys-api`. The entrypoint (`api/docker-entrypoint.sh`) accepts `SERVICE_MODE=api|worker|combined` and serves on `$PORT` (Cloud Run injects it). Contains ffmpeg and the vendored Redoc; runs as non-root.
 
 Acceptance: `uv run --package onolys-api pytest api -q -m "not live"` (add `FIRESTORE_EMULATOR_HOST` for the emulator params). `tests/test_acceptance_checklist.py` maps AC1-AC18 to their tests.

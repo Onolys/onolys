@@ -86,7 +86,8 @@
               "concurrent_runs",
               "email_unverified",
               "conflict",
-              "interview_too_long"
+              "interview_too_long",
+              "email_unavailable"
             ]
           },
           "message": {

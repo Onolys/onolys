@@ -22,9 +22,12 @@ from google.cloud import firestore
 from google.cloud.firestore_v1 import FieldFilter, Increment
 from onolys_engine_core.transcript import Transcript
 
+from onolys_api import logs
 from onolys_api.config import Settings
+from onolys_api.progress import entry_fields
 from onolys_api.repo import large
 from onolys_api.repo.base import (
+    CancelOutcome,
     Claim,
     ConflictError,
     InterviewLinkOutcome,
@@ -34,12 +37,14 @@ from onolys_api.repo.base import (
     decide_claim,
 )
 from onolys_api.repo.limits import (
+    CANCELLABLE_STATES,
     HELD_ERROR_CODE,
     KIND_FIELD,
     START_OUTCOME,
     Kind,
     LimitDefaults,
     ReserveUsageOutcome,
+    decide_cancel,
     decide_reserve,
     decide_start,
 )
@@ -57,10 +62,14 @@ from onolys_api.repo.models import (
     SessionDoc,
     SessionError,
     SessionStatusDoc,
+    StepRecord,
     TranscriptDoc,
     UsageDoc,
     UserDoc,
+    error_status_fields,
     interview_refundable,
+    retry_allowed,
+    upload_failed_stub,
     utcnow,
 )
 from onolys_api.storage.base import BlobStore
@@ -280,9 +289,7 @@ class FirestoreRepo:
                     raise
                 time.sleep(random.uniform(0.01, 0.15))
 
-    def confirm_speaker(
-        self, uid: str, sid: str, clinician: str, states: tuple[str, ...]
-    ) -> bool:
+    def confirm_speaker(self, uid: str, sid: str, clinician: str, states: tuple[str, ...]) -> bool:
         """Record the clinician only while the session is still in one of `states` (checked and
         written in one transaction, so a run starting concurrently cannot be overwritten)."""
         sref = self._top("sessions", sid)  # read inside the txn only: a plain read can abort
@@ -301,9 +308,7 @@ class FirestoreRepo:
                 sref,
                 {"clinician_speaker": clinician, "speaker_confirmed": True, "updated_at": now},
             )
-            txn.set(
-                stref, {"speaker_confirmed": True, "uid": uid, "updated_at": now}, merge=True
-            )
+            txn.set(stref, {"speaker_confirmed": True, "uid": uid, "updated_at": now}, merge=True)
             return True
 
         return self._contended(txn_fn, uid)
@@ -373,7 +378,7 @@ class FirestoreRepo:
                 stref,
                 {
                     "state": to,
-                    "error_code": error.code if error else None,
+                    **error_status_fields(error, sess.get("retry_count", 0)),
                     "uid": uid,
                     "updated_at": now,
                 },  # fmt: skip
@@ -391,6 +396,23 @@ class FirestoreRepo:
         if stsnap is not None:
             stref.delete()
         return ssnap is not None or stsnap is not None
+
+    def discard_failed_upload(self, uid: str, sid: str, code: str) -> None:
+        sref, _ = self._owned_session(uid, sid)
+        stref = self._top("session_status", sid)
+
+        @firestore.transactional
+        def txn_fn(txn) -> None:
+            sess = sref.get(transaction=txn).to_dict() or {}
+            if sess.get("uid") != uid or sess.get("state") == "deleting":
+                raise NotFoundError()
+            if sess.get("state") == "cancelled":
+                raise ConflictError()  # cancel deletes nothing (04-cancel R5)
+            stub = upload_failed_stub(uid, code, utcnow())
+            txn.set(stref, stub.to_store())  # overwrite: no leftover fields
+
+        self._contended(txn_fn, uid)
+        self._client.recursive_delete(sref)  # doc + recordings, runs, ...
 
     # ---- recordings ----
 
@@ -696,6 +718,27 @@ class FirestoreRepo:
 
         self._contended(txn_fn, uid)
 
+    @staticmethod
+    def _release_run_in_txn(
+        txn, run_ref, run: dict, user_ref, user: dict, day_ref, day: dict, refund: bool
+    ) -> bool:
+        """The in-transaction release (all reads already done): shared by `release_run_slot` and
+        `cancel_session`. `day_ref` is None when the run has no cap day to touch."""
+        if run.get("released"):
+            return False
+        counted = run.get("counted", True)
+        refunded = day_ref is not None and refund and counted
+        txn.update(run_ref, {"released": True, "unit_kept": counted and not refunded})
+        if day_ref is not None:
+            if user.get("active_runs", 0) > 0:
+                txn.set(user_ref, {"active_runs": user["active_runs"] - 1}, merge=True)
+            if refunded:
+                field = KIND_FIELD["eval"]
+                if day.get(field, 0) > 0:
+                    units = run.get("units", 1)
+                    txn.set(day_ref, {field: max(0, day[field] - units)}, merge=True)
+        return True
+
     def release_run_slot(
         self, uid: str, sid: str, run_id: str, refund: bool, date: str | None
     ) -> bool:
@@ -714,21 +757,100 @@ class FirestoreRepo:
             user = user_ref.get(transaction=txn).to_dict() or {}
             day_ref = self._top("usage", f"{uid}_{day_key}") if day_key else None
             day = (day_ref.get(transaction=txn).to_dict() or {}) if day_ref else {}
-            txn.update(run_ref, {"released": True})
-            if day_key:
-                if user.get("active_runs", 0) > 0:
-                    txn.set(user_ref, {"active_runs": user["active_runs"] - 1}, merge=True)
-                if refund and run.get("counted", True):
-                    field = KIND_FIELD["eval"]
-                    units = run.get("units", 1)
-                    if day.get(field, 0) > 0:
-                        txn.set(day_ref, {field: max(0, day[field] - units)}, merge=True)
-            return True
+            return self._release_run_in_txn(txn, run_ref, run, user_ref, user, day_ref, day, refund)
 
         try:
             return self._contended(txn_fn, uid)
         except GoogleNotFound:  # the run's session was deleted under it
             raise NotFoundError() from None
+
+    def _unreleased_run(self, uid: str, sid: str, txn):
+        """First unreleased run, read inside `txn`; uid-scoped via the owned session ref."""
+        for rs in self._session_ref(uid, sid).collection("runs").stream(transaction=txn):
+            rd = rs.to_dict() or {}
+            if not rd.get("released"):
+                return rs.reference, rd
+        return None, None
+
+    def cancel_session(
+        self, uid: str, sid: str, date: str, defaults: LimitDefaults
+    ) -> CancelOutcome:
+        sref = self._session_ref(uid, sid)
+        stref = self._top("session_status", sid)
+        usage_ref = self._top("usage", f"{uid}_{date}")
+        user_ref = self._top("users", uid)
+        done: dict[str, Any] = {}  # filled by the committing pass; logged after the commit
+
+        @firestore.transactional
+        def txn_fn(txn) -> CancelOutcome:
+            done.clear()
+            snap = sref.get(transaction=txn)
+            sess = snap.to_dict() or {}
+            if not snap.exists or sess.get("uid") != uid:
+                raise NotFoundError()
+            state = sess.get("state")
+            if state == "deleting":
+                raise NotFoundError()
+            if state == "cancelled":
+                return ("cancelled", bool((sess.get("cancel") or {}).get("counted")))
+            if state not in CANCELLABLE_STATES:
+                return ("invalid",)
+            # all reads before any write
+            usage = usage_ref.get(transaction=txn).to_dict() or {}
+            user = user_ref.get(transaction=txn).to_dict() or {}
+            run_ref, run = None, None
+            if state == "running":
+                run_ref, run = self._unreleased_run(uid, sid, txn)
+            run_day = (run.get("cap_date") or date) if run else None
+            run_day_ref = self._top("usage", f"{uid}_{run_day}") if run_day else None
+            run_day_doc = {}
+            if run_day_ref is not None:
+                run_day_doc = (
+                    usage if run_day == date
+                    else (run_day_ref.get(transaction=txn).to_dict() or {})
+                )  # fmt: skip
+            op = ((sess.get("steps") or {}).get("transcribe") or {}).get("stt_operation")
+            charge = decide_cancel(
+                state, bool(op), run.get("counted", True) if run else None,
+                sess.get("interview_id"),
+            )  # fmt: skip
+            now = utcnow()
+            if run is not None and run_ref is not None:
+                if run.get("status") != "done":
+                    txn.update(run_ref, {"status": "failed", "error": "cancelled", "ended": now})
+                self._release_run_in_txn(
+                    txn, run_ref, run, user_ref, user, run_day_ref, run_day_doc, False
+                )
+            if charge.units:
+                txn.set(
+                    usage_ref,
+                    {"uid": uid, "date": date, "runs": usage.get("runs", 0) + charge.units},
+                    merge=True,
+                )
+            txn.update(
+                sref,
+                {"state": "cancelled", "updated_at": now, "stage_started_at": now,
+                 "cancel": {"counted": charge.counted, "units": charge.units, "at": now}},
+            )  # fmt: skip
+            txn.set(
+                stref,
+                {"state": "cancelled", "counted": charge.counted, "uid": uid, "updated_at": now,
+                 "stage_started_at": now, "progress_next": None, "stage_expected_s": None},
+                merge=True,
+            )
+            done.update(
+                from_state=state, counted=charge.counted,
+                run_id=run_ref.id if run_ref is not None else None,
+            )  # fmt: skip
+            return ("cancelled", charge.counted)
+
+        try:
+            outcome = self._contended(txn_fn, uid)
+        except GoogleNotFound:
+            raise NotFoundError() from None
+        if done:  # a real transition, not an idempotent repeat
+            logs.emit("session_cancelled", **done)
+        return outcome
 
     def get_usage_doc(self, uid: str, date: str) -> UsageDoc:
         day = self._top("usage", f"{uid}_{date}").get()
@@ -763,7 +885,7 @@ class FirestoreRepo:
             usage = usage_ref.get(transaction=txn).to_dict() or {}
             latest = [s for s in newest.get(transaction=txn) if s.id != DRAFT_ID]
             now = utcnow()
-            exempt = bool(sess.get("interview_id")) and not sess.get("free_run_void")
+            exempt = bool(sess.get("interview_id"))  # never counted (03-failure-policy R5)
             units = sess.get("n_runs", 1)
             decided = decide_start(user, usage, defaults, max_active, exempt, units)
             if decided != "ok":
@@ -794,7 +916,9 @@ class FirestoreRepo:
             txn.set(
                 stref,
                 {"state": "running", "step": None, "error_code": None, "uid": uid,
-                 "progress": max(status.get("progress", 0), start_progress), "updated_at": now},
+                 "progress": max(status.get("progress", 0), start_progress), "updated_at": now,
+                 **entry_fields(sess["state"], sess.get("stage_started_at"), status, "running",
+                                None, now)},
                 merge=True,
             )  # fmt: skip
             return "started"
@@ -805,6 +929,7 @@ class FirestoreRepo:
         self, uid: str, sid: str, run_id: str, date: str, defaults: LimitDefaults, max_active: int,
         code_version: str, start_progress: int, allowed_states: tuple[str, ...],
         n_runs: int | None, preset: str | None, coded_span: dict | None = None,
+        retry_max: int | None = None,
     ) -> StartOutcome:  # fmt: skip
         sref = self._session_ref(uid, sid)
         stref = self._top("session_status", sid)
@@ -826,21 +951,27 @@ class FirestoreRepo:
                 and sess.get("clinician_speaker")
             ):
                 return "not_ready"
+            if retry_max is not None and not retry_allowed(sess, retry_max, "run"):
+                return "not_ready"
             status = stref.get(transaction=txn).to_dict() or {}
             user = user_ref.get(transaction=txn).to_dict() or {}
             usage = usage_ref.get(transaction=txn).to_dict() or {}
             latest = [s for s in newest.get(transaction=txn) if s.id != DRAFT_ID]
             # the free first run of an interview-linked session (SP11 R5), same as start_first_run
             first = (
-                (sref.collection("runs").document(sess["first_run_id"]).get(transaction=txn)
-                 .to_dict() or {})
+                (
+                    sref.collection("runs")
+                    .document(sess["first_run_id"])
+                    .get(transaction=txn)
+                    .to_dict()
+                    or {}
+                )
                 if sess.get("first_run_id")
                 else {}
             )
             # Try again after a failed free run stays free (review R1): the free rating is owed
             exempt = (
                 bool(sess.get("interview_id"))
-                and not sess.get("free_run_void")
                 and (not sess.get("first_run_id")
                      or (sess.get("state") == "failed" and first.get("counted") is False))
             )  # fmt: skip
@@ -869,6 +1000,8 @@ class FirestoreRepo:
             }
             if not sess.get("first_run_id"):
                 fields["first_run_id"] = run_id
+            if retry_max is not None:
+                fields["retry_count"] = sess.get("retry_count", 0) + 1
             txn.create(run_ref, run.to_store())
             if not exempt:
                 txn.set(
@@ -880,11 +1013,47 @@ class FirestoreRepo:
             txn.update(sref, fields)
             txn.set(
                 stref,
-                {"state": "running", "step": None, "error_code": None, "uid": uid,
-                 "progress": progress, "updated_at": fields["updated_at"]},
+                {"state": "running", "step": None, **error_status_fields(None, 0), "uid": uid,
+                 "progress": progress, "updated_at": fields["updated_at"],
+                 **entry_fields(sess["state"], sess.get("stage_started_at"), status, "running",
+                                None, now_)},
                 merge=True,
             )  # fmt: skip
             return "started"
+
+        return self._contended(txn_fn, uid)
+
+    def retry_step(
+        self, uid: str, sid: str, step: str, to: str, max_retries: int, progress: int
+    ) -> bool:
+        sref, _ = self._owned_session(uid, sid)
+        stref = self._top("session_status", sid)
+
+        @firestore.transactional
+        def txn_fn(txn) -> bool:
+            snap = sref.get(transaction=txn)
+            sess = snap.to_dict() or {}
+            if not snap.exists or sess.get("uid") != uid:
+                raise NotFoundError()
+            if not retry_allowed(sess, max_retries, step):
+                return False
+            status = stref.get(transaction=txn).to_dict() or {}
+            now = utcnow()
+            txn.update(sref, {
+                "state": to, "step": step, "error": None,
+                f"steps.{step}": StepRecord().model_dump(),
+                "retry_count": sess.get("retry_count", 0) + 1,
+                "updated_at": now, "stage_started_at": now,
+            })  # fmt: skip
+            txn.set(
+                stref,
+                {"state": to, "step": step, **error_status_fields(None, 0), "uid": uid,
+                 "progress": max(status.get("progress", 0), progress), "updated_at": now,
+                 **entry_fields(sess["state"], sess.get("stage_started_at"), status, to, step,
+                                now)},
+                merge=True,
+            )  # fmt: skip
+            return True
 
         return self._contended(txn_fn, uid)
 

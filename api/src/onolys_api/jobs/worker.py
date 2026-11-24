@@ -19,8 +19,11 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Literal
 
+from onolys_engine_core.errors import RunAborted
+from onolys_engine_core.log_context import log_context
+
 from onolys_api import logs
-from onolys_api.adapters.error_map import to_public
+from onolys_api.adapters.error_map import kind_for_code, to_public
 from onolys_api.errors import ApiError
 from onolys_api.jobs.machine import advance
 from onolys_api.jobs.queue import MAX_ATTEMPTS, TaskPayload, TaskQueue
@@ -30,6 +33,11 @@ from onolys_api.repo.models import SessionError
 DEADLINE_S = 8 * 60  # internal deadline (RunContext.deadline) for validate and run
 LEASE_GRACE_S = 60  # lease = deadline + 60 s
 RETRYABLE_CODES = ("upstream_unavailable", "deadline_exceeded", "rate_limited")
+
+
+class Cancelled(RunAborted):
+    """The session was cancelled (04-cancel R5): stop quietly, answer 200 `cancelled`, write no
+    failure. Not a TaskError: it is neither retried nor recorded."""
 
 
 class TaskError(Exception):
@@ -42,6 +50,10 @@ class TaskError(Exception):
 
 class PermanentError(TaskError):
     """Record `failed` with this public error code; Cloud Tasks gets 2xx."""
+
+
+class UploadFailedError(PermanentError):
+    """The handler already discarded the upload (R11): log it, record no `failed` session."""
 
 
 class RetryableError(TaskError):
@@ -100,7 +112,7 @@ class HandlerSpec:
 @dataclass(frozen=True)
 class TaskResult:
     status_code: int
-    outcome: str  # done | duplicate | busy | retry | failed | gone | skipped
+    outcome: str  # done | duplicate | busy | retry | failed | gone | cancelled | skipped
 
 
 class TaskRunner:
@@ -127,7 +139,20 @@ class TaskRunner:
     # ---- delivery ----
 
     def handle(self, payload: TaskPayload, retry_count: int = 0) -> TaskResult:
+        """Run one delivery with the log ids bound (reset when it ends, however it ends).
+
+        Interview tasks carry the interview id in `sid`, so it is bound as `session_id`.
+        """
         spec = self._registry.get(payload.kind)
+        with log_context(
+            session_id=payload.sid,
+            run_id=payload.run_id,
+            request_id=payload.request_id,
+            step=(spec.step if spec else None) or payload.kind,
+        ):
+            return self._handle(spec, payload, retry_count)
+
+    def _handle(self, spec: HandlerSpec | None, payload: TaskPayload, retry_count: int):
         if spec is None:
             logs.emit(
                 "no_handler",
@@ -162,13 +187,29 @@ class TaskRunner:
             return TaskResult(200, "done")
         except NotFoundError:
             return TaskResult(200, "gone")  # session deleted: nothing left to do
+        except Cancelled:
+            return self._cancelled(spec, payload)
         except TaskError as e:
+            if self._is_cancelled(payload):  # a late error must not overwrite the cancel
+                return self._cancelled(spec, payload)
             return self._on_error(spec, payload, e, last)
         except Exception as e:
+            if self._is_cancelled(payload):  # backstop (D4): e.g. `advance` -> invalid_state
+                return self._cancelled(spec, payload)
             stage = "stt" if spec.step == "transcribe" else "run"
             code, retryable = to_public(e, attempt, stage)
             err = RetryableError(code) if retryable else PermanentError(code)
             return self._on_error(spec, payload, err, last, e)
+
+    def _is_cancelled(self, p: TaskPayload) -> bool:
+        try:
+            return self.repo.get_session(p.uid, p.sid).state == "cancelled"
+        except Exception:  # noqa: BLE001 - the backstop must never mask the real error
+            return False
+
+    def _cancelled(self, spec: HandlerSpec, p: TaskPayload) -> TaskResult:
+        logs.emit("task_cancelled", step=spec.step or "run")  # ids come from the log context
+        return TaskResult(200, "cancelled")
 
     # ---- records ----
 
@@ -207,20 +248,38 @@ class TaskRunner:
                 request_id=p.request_id,
             )  # fmt: skip
             return TaskResult(503, "retry")
-        self._fail(spec, p, e.code, exc_class)
+        self._fail(spec, p, e.code, exc_class, bookkeeping=not isinstance(e, UploadFailedError))
         return TaskResult(200, "failed")
 
-    def _fail(self, spec: HandlerSpec, p: TaskPayload, code: str, exc_class: str) -> None:
+    def _fail(
+        self, spec: HandlerSpec, p: TaskPayload, code: str, exc_class: str, bookkeeping: bool = True
+    ) -> None:
         logs.failed(
             "run_failed" if spec.scope == "run" else "step_failed", session_id=p.sid,
             run_id=p.run_id, step=spec.step or "run", error_code=code, exc_class=exc_class,
             request_id=p.request_id,
         )  # fmt: skip
+        if not bookkeeping:  # the session is gone (an upload failure): nothing to mark
+            return
+        if self._is_cancelled(p):  # never write `failed` over `cancelled` (R5)
+            return
         self._safe(self._record, spec, p, status="failed", ended=self.clock(), error=code)
         label = spec.step or "run"
+        counted = None
+        if spec.scope == "run" and p.run_id:  # the refund already ran in `run.py`
+            try:
+                counted = self.repo.get_run(p.uid, p.sid, p.run_id).unit_kept
+            except NotFoundError:
+                pass
+        elif spec.scope != "run":  # interview sessions are never counted (R5, R9)
+            try:
+                if self.repo.get_session(p.uid, p.sid).interview_id:
+                    counted = False
+            except NotFoundError:
+                pass
         self._safe(
             advance, self.repo, p.uid, p.sid, to="failed", step=label,
-            error=SessionError(code=code, step=label),
+            error=SessionError(code=code, step=label, kind=kind_for_code(code), counted=counted),
         )  # fmt: skip
 
     @staticmethod

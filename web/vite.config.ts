@@ -29,6 +29,13 @@ function prodCspHeader(): string {
 
 export default defineConfig(({ mode }) => ({
   plugins: [react(), tailwindcss(), dropMockWorker(mode)],
+  // Build id for `X-Client-Version` (02-logging R13): an explicit VITE_BUILD_SHA wins, else CI's GITHUB_SHA
+  // (so no workflow needs an env edit), else `dev`.
+  define: {
+    "import.meta.env.VITE_BUILD_SHA": JSON.stringify(
+      (process.env.VITE_BUILD_SHA || process.env.GITHUB_SHA || "dev").slice(0, 12),
+    ),
+  },
   // `vite preview` only: the dev server has no CSP, so the e2e `csp` project builds and previews with the prod header (PRD R9).
   preview: { headers: { "Content-Security-Policy": prodCspHeader() } },
   test: {

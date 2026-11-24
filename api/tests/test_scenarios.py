@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 from leak_helpers import find_leaks, secret_strings
 from onolys_engine_core.errors import ConfigError
+from onolys_engine_core.json_logging import render
 
 from onolys_api.app import create_app
 from onolys_api.voice.prompt import build_system_prompt
@@ -127,6 +128,6 @@ async def test_no_leak_in_responses_or_logs(app, client, sample, caplog):
         texts.append(r.text)
     bad = await client.get("/v1/scenarios", headers={"Authorization": "Bearer nope"})
     texts.append(bad.text)
-    texts.append("\n".join(r.getMessage() for r in caplog.records))
+    texts.append("\n".join(render(r) for r in caplog.records))
     for t in texts:
         assert find_leaks(t, sample) == []

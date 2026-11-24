@@ -24,3 +24,19 @@ jobs:
           cache-dependency-glob: uv.lock
       - run: uv sync --frozen --package onolys-api
       - run: uv run --no-sync --package onolys-api pytest api/tests/test_live_real_mode.py -m live -s
+
+  api-nightly:
+    # Long tests excluded from PR CI (marker `nightly`): dev script + combined quickstart (needs uv, ffmpeg, curl, jq).
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+      - name: Setup cached static ffmpeg
+        uses: ./.github/actions/setup-ffmpeg
+        timeout-minutes: 2
+      - run: uv sync --frozen --package onolys-api
+      - run: uv run --no-sync --package onolys-api pytest api -m "nightly and not live" --durations=10

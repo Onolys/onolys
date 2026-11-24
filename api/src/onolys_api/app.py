@@ -6,26 +6,36 @@ import time
 import uuid
 from datetime import UTC, datetime
 
-from fastapi import APIRouter, FastAPI, Request
+from fastapi import APIRouter, Depends, FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from onolys_engine_core.errors import ConfigError
+from onolys_engine_core.log_context import bind, reset
 from onolys_miti.voice.select import allowed_voices, load_voice_config
 from pydantic import BaseModel
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from onolys_api import logs
-from onolys_api.adapters import Adapters, build_adapters, build_voice_adapter
+from onolys_api.adapters import (
+    Adapters,
+    build_adapters,
+    build_auth_links,
+    build_email_sender,
+    build_voice_adapter,
+)
+from onolys_api.adapters.base import AuthLinks, EmailSender
 from onolys_api.audio import AudioTools, FfmpegTools
 from onolys_api.auth.deps import Authenticator
 from onolys_api.auth.idtoken import InvalidToken, TokenVerifier
 from onolys_api.auth.oidc import OidcVerifier
 from onolys_api.config import LOCAL_ENVS, Settings
 from onolys_api.docs import DESCRIPTION, add_error_responses, make_docs_router
+from onolys_api.email.rate import EmailRateLimiter, RateStore
+from onolys_api.email.service import AuthEmailService
 from onolys_api.errors import ApiError, ErrorDetail, ErrorResponse, error_body
-from onolys_api.factory import build_blobs, build_repo
+from onolys_api.factory import build_blobs, build_email_rate_store, build_repo
 from onolys_api.jobs.delete import make_delete_handler
 from onolys_api.jobs.interview_sweep import make_interview_sweep_handler
 from onolys_api.jobs.queue import build_queue
@@ -38,6 +48,7 @@ from onolys_api.rating import load_schema as load_rating_schema
 from onolys_api.repo.base import Repo
 from onolys_api.routes import api_key as api_key_routes
 from onolys_api.routes import audio as audio_routes
+from onolys_api.routes import auth_email as auth_email_routes
 from onolys_api.routes import interviews as interview_routes
 from onolys_api.routes import rating as rating_routes
 from onolys_api.routes import runs as run_routes
@@ -46,6 +57,7 @@ from onolys_api.routes import sessions as session_routes
 from onolys_api.routes import speakers as speaker_routes
 from onolys_api.routes import tasks as task_routes
 from onolys_api.routes import transcript as transcript_routes
+from onolys_api.routes import upload_limits as upload_limits_routes
 from onolys_api.routes import usage as usage_routes
 from onolys_api.storage.base import BlobStore
 from onolys_api.storage.fake import FAKE_ROUTE, FakeBlobStore
@@ -56,6 +68,7 @@ from onolys_api.voice.scenarios import load_scenarios
 
 log = logging.getLogger("onolys_api")
 _REQUEST_ID_OK = re.compile(r"^[A-Za-z0-9._-]{1,64}$")
+_CLIENT_VERSION_OK = re.compile(r"^[A-Za-z0-9._+-]{1,64}$")
 ERROR_RESPONSES = {"default": {"model": ErrorResponse, "description": "Error"}}
 
 
@@ -76,9 +89,12 @@ class RequestIdMiddleware:
             await self.app(scope, receive, send)
             return
         rid = ""
+        client_version = ""
         for k, v in scope["headers"]:
             if k == b"x-request-id":
                 rid = v.decode("latin-1")
+            elif k == b"x-client-version":
+                client_version = v.decode("latin-1")
         if not _REQUEST_ID_OK.match(rid):
             rid = uuid.uuid4().hex
         scope.setdefault("state", {})["request_id"] = rid
@@ -90,7 +106,16 @@ class RequestIdMiddleware:
                 message = {**message, "headers": headers}
             await send(message)
 
-        await self.app(scope, receive, send_with_id)
+        # bound before RequestLogMiddleware (inside us) logs, reset when the request ends
+        token = bind(
+            session_id=None,  # `bind_session` sets it later; reset below clears it
+            request_id=rid,
+            client_version=client_version if _CLIENT_VERSION_OK.match(client_version) else None,
+        )
+        try:
+            await self.app(scope, receive, send_with_id)
+        finally:
+            reset(token)
 
 
 MAX_JSON_BODY_BYTES = (
@@ -336,6 +361,9 @@ def create_app(
     oidc_verifier: OidcVerifier | None = None,
     audio_tools: AudioTools | None = None,
     adapters: Adapters | None = None,
+    email_sender: EmailSender | None = None,
+    auth_links: AuthLinks | None = None,
+    email_rate_store: RateStore | None = None,
 ) -> FastAPI:
     settings = settings or Settings.from_env()
     logs.configure(settings)
@@ -360,6 +388,8 @@ def create_app(
     app.state.presets = PresetResolver(settings)
     if settings.adapters == "real" and settings.service_mode in ("worker", "combined"):
         app.state.presets.check_keys()  # the worker runs the LLM: its keys must be there
+    elif settings.adapters == "real" and settings.service_mode == "api":
+        app.state.presets.public_names()  # load routes now: bad LLM_* fails startup, no keys needed
     app.state.auth = Authenticator(settings, app.state.repo, token_verifier)
     queue = build_queue(settings)
     if queue is not None:
@@ -439,7 +469,7 @@ def create_app(
         allow_origins=list(settings.cors_origins),
         allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
         allow_headers=[
-            "Authorization", "X-API-Key", "Idempotency-Key", "Content-Type",
+            "Authorization", "X-API-Key", "Idempotency-Key", "Content-Type", "X-Client-Version",
             # local Mode B only: the browser PUTs the audio to the fake blob route here with the
             # signed upload headers; deployed, the PUT goes to GCS, which answers its own CORS
             *(("x-goog-content-length-range",) if settings.env in LOCAL_ENVS else ()),
@@ -451,6 +481,7 @@ def create_app(
     register_error_handlers(app)
 
     router = APIRouter(prefix="/v1")
+    by_id = [Depends(logs.bind_session)]  # sets session_id for lines logged during the request
 
     @router.get(
         "/healthz",
@@ -465,20 +496,37 @@ def create_app(
 
     if voice_mode:  # the relay serves only its socket and a health check
         app.include_router(router)
-        app.include_router(voice_relay.router)
+        app.include_router(voice_relay.router, dependencies=[Depends(logs.bind_session)])
         return app
 
+    cached: list = []
+
+    def auth_email() -> tuple[AuthEmailService, EmailRateLimiter]:
+        """Built on first use: the app starts and serves without Resend or Admin SDK set up."""
+        if not cached:
+            store = email_rate_store or build_email_rate_store(settings)
+            service = AuthEmailService(
+                settings,
+                auth_links or build_auth_links(settings),
+                email_sender or build_email_sender(settings),
+            )
+            cached.append((service, EmailRateLimiter(store, settings.uid_hmac_key.encode())))
+        return cached[0]
+
+    app.state.auth_email = auth_email
     router.include_router(api_key_routes.router)
-    router.include_router(session_routes.router)
-    router.include_router(audio_routes.router)
-    router.include_router(rating_routes.router)
-    router.include_router(speaker_routes.router)
-    router.include_router(transcript_routes.router)
-    router.include_router(run_routes.router)
+    router.include_router(auth_email_routes.router)
+    router.include_router(session_routes.router, dependencies=by_id)
+    router.include_router(audio_routes.router, dependencies=by_id)
+    router.include_router(rating_routes.router, dependencies=by_id)
+    router.include_router(speaker_routes.router, dependencies=by_id)
+    router.include_router(transcript_routes.router, dependencies=by_id)
+    router.include_router(run_routes.router, dependencies=by_id)
     router.include_router(run_routes.runs_router)
     router.include_router(usage_routes.router)
+    router.include_router(upload_limits_routes.router)
     router.include_router(scenario_routes.router)
-    router.include_router(interview_routes.router)
+    router.include_router(interview_routes.router, dependencies=by_id)
     app.include_router(router)
     app.include_router(make_docs_router())
 

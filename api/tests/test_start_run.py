@@ -45,10 +45,15 @@ def _widen(r):
         r.__class__ = SlowReadRepo
 
 
-def _post(app, h, sid, barrier):
+def _post(app, h, sid, barrier, path="runs"):
     with TestClient(app) as c:
         barrier.wait()
-        return c.post(f"/v1/sessions/{sid}/runs", json={}, headers=h)
+        return c.post(f"/v1/sessions/{sid}/{path}", json={}, headers=h)
+
+
+def _fail_run_step(repo_, uid, sid):
+    """A transient failure of the run step: the only thing `POST /retry` re-enters as a run."""
+    repo_.update_session(uid, sid, {"error": {"code": "upstream_unavailable", "step": "run"}})
 
 
 @pytest.mark.parametrize("state", ["awaiting_input", "failed"])
@@ -59,9 +64,13 @@ def test_two_concurrent_manual_starts_exactly_one_wins(repo, state):  # noqa: F8
     uid = f"u{uuid.uuid4().hex[:10]}"
     h = {"Authorization": f"Bearer test:{uid}"}
     sid = new_session(repo, uid, state=state, ready=True, **READY)
+    path = "runs"
+    if state == "failed":  # a failed session is re-run through the one retry path (03-failure R4)
+        _fail_run_step(repo, uid, sid)
+        path = "retry"
     barrier = threading.Barrier(2)
     with ThreadPoolExecutor(2) as ex:
-        rs = [f.result() for f in [ex.submit(_post, app, h, sid, barrier) for _ in range(2)]]
+        rs = [f.result() for f in [ex.submit(_post, app, h, sid, barrier, path) for _ in range(2)]]
     assert sorted(r.status_code for r in rs) == [202, 409], [r.text for r in rs]
     loser = next(r for r in rs if r.status_code == 409)
     assert loser.json()["details"][0]["code"] == "invalid_state"
@@ -122,16 +131,21 @@ def test_refused_start_reserves_nothing(repo):  # noqa: F811
     app = make_client(repo, mk_settings(max_active_runs=2, eval_cap_day=0), queue)
     uid = f"u{uuid.uuid4().hex[:10]}"
     h = {"Authorization": f"Bearer test:{uid}"}
-    sid = new_session(repo, uid, state="failed", ready=True, **READY)
+    sid = new_session(repo, uid, state="awaiting_input", ready=True, **READY)
     with TestClient(app) as c:
         r = c.post(f"/v1/sessions/{sid}/runs", json={}, headers=h)
     assert r.status_code == 429 and r.json()["details"][0]["code"] == "daily_cap_reached"
-    assert repo.get_session(uid, sid).state == "failed"
+    assert repo.get_session(uid, sid).state == "awaiting_input"
     assert repo.list_runs(uid, sid) == []
     assert user_counters(repo, uid, caps.utc_date()) == (0, 0)
 
 
 # ---- the free first run of an interview-linked session also works through POST /runs (SP11 AC6)
+
+
+def _post_retry(app, uid, sid):
+    with TestClient(app) as c:
+        return c.post(f"/v1/sessions/{sid}/retry", headers={"Authorization": f"Bearer test:{uid}"})
 
 
 def _post_run(app, uid, sid):
@@ -214,8 +228,10 @@ def test_try_again_after_a_system_failure_reuses_the_stored_rating(repo):  # noq
     uid = f"u{uuid.uuid4().hex[:10]}"
     sid = _linked_ready(repo, uid)
     rid = rate(repo, uid, sid)
-    repo.update_session(uid, sid, {"state": "failed", "error": {"code": "upstream_unavailable"}})
-    r = _post_run(make_client(repo, mk_settings(), RecordingQueue()), uid, sid)
+    repo.update_session(
+        uid, sid, {"state": "failed", "error": {"code": "upstream_unavailable", "step": "run"}}
+    )
+    r = _post_retry(make_client(repo, mk_settings(), RecordingQueue()), uid, sid)
     assert r.status_code == 202, r.text
     assert repo.get_run(uid, sid, r.json()["run_id"]).rating_id == rid
 
@@ -296,24 +312,6 @@ def test_auto_first_run_costs_the_session_n_runs(repo):  # noqa: F811
     assert user_counters(repo, uid, caps.utc_date()) == (1, 2)
 
 
-# ---- FX44 (A10): an interview session whose audio is not the relay's recording pays -----------
-
-
-def test_linked_session_with_unmatched_audio_is_charged(repo):  # noqa: F811
-    uid = f"u{uuid.uuid4().hex[:10]}"
-    sid = _linked_ready(repo, uid, interview_id="iv1", free_run_void=True)
-    maybe_start_first_run(repo, RecordingQueue(), uid, sid, mk_settings())
-    (run,) = repo.list_runs(uid, sid)
-    assert run.counted is True
-    assert user_counters(repo, uid, caps.utc_date()) == (1, 1)
-    # and it is held by the cap like any upload
-    sid2 = _linked_ready(repo, uid, interview_id="iv2", free_run_void=True)
-    maybe_start_first_run(repo, RecordingQueue(), uid, sid2, mk_settings(eval_cap_day=1))
-    assert repo.get_session(uid, sid2).first_run_id is None
-    r = _post_run(make_client(repo, mk_settings(eval_cap_day=1), RecordingQueue()), uid, sid2)
-    assert r.status_code == 429
-
-
 # ---- review R1: Try again after a failed FREE interview run stays free -------------------------
 
 
@@ -322,7 +320,9 @@ def _fail_system(repo_, uid, sid, run_id):
 
     repo_.update_run(uid, sid, run_id, {"status": "failed", "error": "upstream_unavailable"})
     release_once(repo_, uid, sid, run_id, True, caps.utc_date())  # refund: free run, nothing given
-    repo_.update_session(uid, sid, {"state": "failed", "error": {"code": "upstream_unavailable"}})
+    repo_.update_session(
+        uid, sid, {"state": "failed", "error": {"code": "upstream_unavailable", "step": "run"}}
+    )
 
 
 def test_try_again_after_failed_free_interview_run_is_free_even_at_eval_cap(repo):  # noqa: F811
@@ -336,7 +336,7 @@ def test_try_again_after_failed_free_interview_run_is_free_even_at_eval_cap(repo
     _fail_system(repo, uid, sid, first.run_id)
     assert user_counters(repo, uid, date) == (0, 0)
     queue = RecordingQueue()
-    r = _post_run(make_client(repo, cap1, queue), uid, sid)
+    r = _post_retry(make_client(repo, cap1, queue), uid, sid)
     assert r.status_code == 202, r.text
     second = repo.get_run(uid, sid, r.json()["run_id"])
     assert second.counted is False and second.n_runs == 2  # same submission, still free
@@ -347,28 +347,14 @@ def test_try_again_after_failed_free_interview_run_is_free_even_at_eval_cap(repo
     assert repo.get_usage_doc(uid, date).runs == 0
 
 
-def test_try_again_after_failed_charged_run_is_still_charged(repo):  # noqa: F811
-    uid = f"u{uuid.uuid4().hex[:10]}"
-    date = caps.utc_date()
-    sid = _linked_ready(repo, uid, interview_id="iv1", free_run_void=True)
-    maybe_start_first_run(repo, RecordingQueue(), uid, sid, mk_settings())
-    (first,) = repo.list_runs(uid, sid)
-    assert first.counted is True
-    _fail_system(repo, uid, sid, first.run_id)
-    assert repo.get_usage_doc(uid, date).runs == 0  # refunded
-    r = _post_run(make_client(repo, mk_settings(eval_cap_day=0), RecordingQueue()), uid, sid)
-    assert r.status_code == 429  # a charged run is charged again
-
-
 def test_session_detail_exposes_free_run(repo):  # noqa: F811
     uid = f"u{uuid.uuid4().hex[:10]}"
     free = _linked_ready(repo, uid, interview_id="iv1")
-    void = _linked_ready(repo, uid, interview_id="iv2", free_run_void=True)
     plain = _linked_ready(repo, uid)
     h = {"Authorization": f"Bearer test:{uid}"}
     with TestClient(make_client(repo)) as c:
-        got = [c.get(f"/v1/sessions/{s}", headers=h).json()["free_run"] for s in (free, void, plain)]
-    assert got == [True, False, False]
+        got = [c.get(f"/v1/sessions/{s}", headers=h).json()["free_run"] for s in (free, plain)]
+    assert got == [True, False]
 
 
 # ---- review R2: an auto-start held by an active run says so, not "daily cap" -------------------

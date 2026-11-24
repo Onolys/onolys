@@ -6,7 +6,7 @@ import { messageForCode } from "../../api/errors";
 import { ratingEnabled } from "../../config";
 import type { SessionStatusDoc } from "../../api/statusListener";
 
-export type StepKey = "upload" | "validate" | "transcribe" | "speaker" | "rating" | "run" | "report";
+export type StepKey = "upload" | "transcribe" | "speaker" | "rating" | "run" | "report";
 export type StepStatus = "done" | "current" | "pending" | "failed";
 
 export interface TimelineStep {
@@ -20,8 +20,10 @@ export interface Timeline {
   steps: TimelineStep[];
   /** One or more plain lines for the `aria-live` status text. */
   lines: string[];
-  /** Show "Usually under 5 minutes ..." (only once the run has started). */
+  /** Show the run-progress block (elapsed time, bar) once the run has started. */
   showRunCopy: boolean;
+  /** One-line leave/stay hint for the phase (PRD R5); null in terminal states. */
+  hint: string | null;
   /** `awaiting_input` stopped by the daily cap: offer Start. */
   capReached: boolean;
 }
@@ -33,7 +35,6 @@ export type TimelineInput = Pick<
 
 const LABELS: Record<StepKey, string> = {
   upload: "Upload",
-  validate: "Check audio",
   transcribe: "Transcribe",
   speaker: "Confirm speaker",
   rating: "Your rating",
@@ -50,20 +51,40 @@ const RUN_SUBLABELS: Record<string, string> = {
 };
 const DEFAULT_SUBLABEL = RUN_SUBLABELS.code;
 
-const VALIDATE_CODES = new Set(["unsupported_audio", "audio_too_long", "interview_too_long", "audio_too_large", "audio_unreadable"]);
 const TRANSCRIBE_CODES = new Set(["no_speech", "speakers_not_separated", "transcription_failed"]);
 
 /** Which step a `failed` session stopped at, from the error code and what had finished. */
 function failedAt(code: string | null, transcriptReady: boolean): StepKey {
-  if (code && VALIDATE_CODES.has(code)) return "validate";
   if (code && TRANSCRIBE_CODES.has(code)) return "transcribe";
   return transcriptReady ? "run" : "transcribe";
+}
+
+const HINT_UPLOAD = "Keep this tab open until upload finishes";
+const HINT_BACKGROUND = "You can close this tab — we'll keep working";
+const HINT_WAITING = "We'll wait here for your choice";
+
+/** PRD R5: the one-line leave/stay hint per phase; null for terminal states. */
+function hintFor(state: TimelineInput["state"]): string | null {
+  switch (state) {
+    case "created":
+    case "uploading":
+    case "upload_incomplete":
+      return HINT_UPLOAD;
+    case "validating":
+    case "transcribing":
+    case "running":
+      return HINT_BACKGROUND;
+    case "awaiting_input":
+      return HINT_WAITING;
+    default:
+      return null;
+  }
 }
 
 export interface TimelineOptions {
   /** Reset time for the cap message, already formatted for display. */
   resetsAt?: string;
-  /** Show the clinician-rating wording ("Your rating"); off says "Session setup". Defaults to the build flag. */
+  /** Show the "Your rating" step; off drops it. Defaults to the build flag. */
   ratingEnabled?: boolean;
 }
 
@@ -73,11 +94,10 @@ export function deriveTimeline(doc: TimelineInput, opts: TimelineOptions = {}): 
   const inputs = state === "awaiting_input";
   const afterTranscribe = inputs || state === "running" || state === "report_ready";
   const failedStep = state === "failed" ? failedAt(doc.error_code, tr) : null;
-  const deleting = state === "deleting";
+  const allPending = state === "deleting" || state === "cancelled" || state === "upload_failed";
 
   const status: Record<StepKey, StepStatus> = {
     upload: "pending",
-    validate: "pending",
     transcribe: "pending",
     speaker: "pending",
     rating: "pending",
@@ -85,25 +105,22 @@ export function deriveTimeline(doc: TimelineInput, opts: TimelineOptions = {}): 
     report: "pending",
   };
 
-  if (!deleting) {
-    // Upload / Check audio / Transcribe follow the pipeline state.
+  if (!allPending) {
+    // Upload / Transcribe (validating folds into it) follow the pipeline state.
     const uploadPhase = state === "created" || state === "uploading" || state === "upload_incomplete";
     status.upload = uploadPhase ? "current" : "done";
-    status.validate = state === "validating" ? "current" : uploadPhase ? "pending" : "done";
     status.transcribe =
-      state === "transcribing"
+      state === "transcribing" || state === "validating"
         ? "current"
-        : uploadPhase || state === "validating"
+        : uploadPhase
           ? "pending"
-          : tr || afterTranscribe
+          : tr || afterTranscribe || state === "failed"
             ? "done"
             : "pending";
     if (state === "failed") {
-      // Everything before the failing step finished; the failing step failed; the rest stays pending.
-      const idx = ORDER.indexOf(failedStep!);
-      ORDER.slice(0, 3).forEach((k, i) => {
-        status[k] = i < idx ? "done" : i === idx ? "failed" : "pending";
-      });
+      // Upload finished; Transcribe or Run failed; the rest stays pending.
+      status.upload = "done";
+      status.transcribe = failedStep === "transcribe" ? "failed" : "done";
       if (failedStep === "run") status.run = "failed";
     }
 
@@ -117,7 +134,12 @@ export function deriveTimeline(doc: TimelineInput, opts: TimelineOptions = {}): 
     }
   }
 
-  const steps: TimelineStep[] = ORDER.map((key) => ({ key, label: key === "rating" && !rating ? "Session setup" : LABELS[key], status: status[key] }));
+  const steps: TimelineStep[] = ORDER.filter((key) => key !== "rating" || rating).map((key) => ({
+    key,
+    label: LABELS[key],
+    status: status[key],
+  }));
+  if (state === "validating") steps.find((s) => s.key === "transcribe")!.subLabel = "Checking audio";
   const runStep = steps.find((s) => s.key === "run")!;
   const runLabel = state === "running" ? (RUN_SUBLABELS[doc.step ?? ""] ?? DEFAULT_SUBLABEL) : undefined;
   if (runLabel) runStep.subLabel = runLabel;
@@ -154,7 +176,7 @@ export function deriveTimeline(doc: TimelineInput, opts: TimelineOptions = {}): 
       }
       lines = [];
       if (!sp) lines.push("Confirm who the clinician is");
-      if (!rt) lines.push(rating ? "Waiting for your rating" : "Waiting for session setup");
+      if (!rt) lines.push(rating ? "Waiting for your rating" : "Waiting for your change goal");
       if (lines.length === 0) lines.push("Starting the rating.");
       break;
     }
@@ -165,12 +187,21 @@ export function deriveTimeline(doc: TimelineInput, opts: TimelineOptions = {}): 
       lines = ["Your report is ready."];
       break;
     case "failed":
+    case "upload_failed": // SessionPage shows its own view; this keeps the switch exhaustive
       lines = ["This session couldn't be completed."];
+      break;
+    case "cancelled": // SessionPage shows CancelledView before the timeline
+      lines = ["This session was cancelled."];
       break;
     case "deleting":
       lines = ["Deleting this session."];
       break;
+    default: {
+      // A new SessionState must be handled above: this fails typecheck until it is.
+      const unhandled: never = state;
+      lines = [String(unhandled)];
+    }
   }
 
-  return { steps, lines, showRunCopy: state === "running", capReached };
+  return { steps, lines, showRunCopy: state === "running", hint: hintFor(state), capReached };
 }

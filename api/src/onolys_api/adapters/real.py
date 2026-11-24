@@ -18,9 +18,11 @@ to `internal_error`, not retryable, and the worker logs the class, never the mes
 """
 
 import json
+import threading
 import time
 from collections.abc import Callable, Mapping
 from typing import Any
+from urllib.parse import parse_qs, urlsplit
 
 from onolys_engine_core.context import RunContext
 from onolys_engine_core.errors import ConfigError
@@ -36,7 +38,7 @@ from onolys_miti.voice import VoiceAdapter, VoiceParams, VoiceSession
 from onolys_miti.voice.fixture import FixtureVoice
 from onolys_miti.voice.gemini_live_vertex import GeminiLiveVertex
 
-from onolys_api.adapters.base import EvaluationOutput, ProgressCb
+from onolys_api.adapters.base import AdapterError, AuthAccount, EvaluationOutput, ProgressCb
 from onolys_api.config import Settings
 from onolys_api.engines import build_engine_registry
 
@@ -158,3 +160,115 @@ class RealEvaluation:
             report=payload["output"], artifacts=payload["artifacts"] or {},
             run_info=payload["run_info"],
         )
+
+
+class UnconfiguredEmailSender:
+    def send(self, to: str, subject: str, html: str, text: str) -> None:
+        raise AdapterError("email_unconfigured")
+
+
+class ResendEmailSender:
+    """One bounded request, without retries or provider error text."""
+
+    def __init__(self, api_key: str, sender: str) -> None:
+        self._api_key = api_key
+        self._sender = sender
+
+    def send(self, to: str, subject: str, html: str, text: str) -> None:
+        import requests
+
+        try:
+            response = requests.post(
+                "https://api.resend.com/emails",
+                headers={"Authorization": f"Bearer {self._api_key}"},
+                json={
+                    "from": self._sender,
+                    "to": [to],
+                    "subject": subject,
+                    "html": html,
+                    "text": text,
+                },
+                timeout=5,
+                allow_redirects=False,
+            )
+        except requests.RequestException:
+            raise AdapterError("email_send_failed") from None
+        if not 200 <= response.status_code < 300:
+            error = AdapterError("email_send_failed")
+            error.provider_status = response.status_code
+            raise error
+
+
+_FIREBASE_INIT_LOCK = threading.Lock()
+
+
+class FirebaseAuthLinks:
+    """Lazy Admin SDK access. Only action codes and trusted account data escape."""
+
+    def __init__(self, project: str, app_base_url: str, *, auth_sdk=None) -> None:
+        self._project = project
+        self._base_url = app_base_url
+        self._sdk = auth_sdk
+        self._app = None
+
+    def _auth(self):
+        if self._sdk is not None:
+            return self._sdk
+        import firebase_admin
+        from firebase_admin import auth
+
+        name = f"onolys-auth-email-{self._project}"
+        with _FIREBASE_INIT_LOCK:
+            try:
+                self._app = firebase_admin.get_app(name)
+            except ValueError:
+                self._app = firebase_admin.initialize_app(
+                    options={"projectId": self._project}, name=name
+                )
+        self._sdk = auth
+        return auth
+
+    def get_user(self, uid: str) -> AuthAccount:
+        try:
+            sdk = self._auth()
+            user = sdk.get_user(uid, **self._app_kwargs())
+            if not isinstance(user.email, str) or not user.email:
+                raise AdapterError("auth_links_failed")
+            return AuthAccount(user.email, user.email_verified, user.disabled)
+        except Exception:
+            raise AdapterError("auth_links_failed") from None
+
+    def _app_kwargs(self) -> dict:
+        return {"app": self._app} if self._app is not None else {}
+
+    def _generate(self, email: str, kind: str) -> str | None:
+        try:
+            sdk = self._auth()
+            settings = sdk.ActionCodeSettings(url=self._base_url)
+            generate = (
+                sdk.generate_email_verification_link
+                if kind == "verify"
+                else sdk.generate_password_reset_link
+            )
+            link = generate(email, action_code_settings=settings, **self._app_kwargs())
+            codes = parse_qs(urlsplit(link).query).get("oobCode", [])
+            if len(codes) != 1 or not codes[0]:
+                raise AdapterError("auth_links_failed")
+            return codes[0]
+        except Exception as exc:
+            ineligible = tuple(  # no such account / disabled: nothing to send, not an error
+                c for n in ("UserNotFoundError", "EmailNotFoundError", "UserDisabledError")
+                if isinstance(c := getattr(self._sdk, n, None), type)
+            )
+            if kind == "reset" and ineligible and isinstance(exc, ineligible):
+                return None
+            raise AdapterError("auth_links_failed") from None
+
+    def verification(self, uid: str) -> str:
+        user = self.get_user(uid)
+        code = self._generate(user.email, "verify")
+        assert code is not None
+        return code
+
+    def password_reset(self, email: str) -> str | None:
+        return self._generate(email, "reset")

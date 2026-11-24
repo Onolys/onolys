@@ -4,6 +4,7 @@ import os
 from pathlib import Path
 
 from onolys_api.config import LOCAL_ENVS, Settings
+from onolys_api.email.rate import MemoryRateStore, RateStore
 from onolys_api.repo.base import Repo
 from onolys_api.storage.base import BlobStore
 from onolys_api.storage.fake import FakeBlobStore
@@ -34,3 +35,13 @@ def build_repo(settings: Settings, blobs: BlobStore) -> Repo:
     from onolys_api.repo.firestore import FirestoreRepo, make_firestore_client
 
     return FirestoreRepo(make_firestore_client(settings), blobs)
+
+
+def build_email_rate_store(settings: Settings) -> RateStore:
+    """Firestore (emulator if FIRESTORE_EMULATOR_HOST is set) except plain local/test: in-memory."""
+    if settings.env in LOCAL_ENVS and not os.environ.get("FIRESTORE_EMULATOR_HOST"):
+        return MemoryRateStore()
+    from onolys_api.email.rate import FirestoreRateStore
+    from onolys_api.repo.firestore import make_firestore_client
+
+    return FirestoreRateStore(make_firestore_client(settings))

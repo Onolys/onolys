@@ -9,13 +9,14 @@ import pytest
 from onolys_api.app import create_app
 from onolys_api.jobs import machine as m
 from onolys_api.repo.fake import FakeRepo
-from onolys_api.repo.models import IdempotencyDoc, SessionError
+from onolys_api.repo.models import ClientInfo, IdempotencyDoc, SessionError
 
 A = {"Authorization": "Bearer test:alice"}
 B = {"Authorization": "Bearer test:bob"}
 STATUS_KEYS = {
-    "uid", "state", "step", "progress", "error_code", "latest_report_version", "updated_at",
-    "transcript_ready", "speaker_confirmed", "rating_submitted", "has_rating",
+    "uid", "state", "step", "progress", "error_code", "error_kind", "retries_left", "counted",
+    "latest_report_version", "updated_at", "expire_at", "transcript_ready", "speaker_confirmed", "rating_submitted", "has_rating",
+    "started_at", "stage_started_at", "waited_ms", "audio_s", "progress_next", "stage_expected_s",
 }  # fmt: skip
 
 
@@ -62,7 +63,7 @@ async def test_status_doc_schema_has_no_text(client, repo):
     assert "PHI-LOOKING TITLE" not in json.dumps(stored, default=str)
     for k, v in stored.items():
         assert not isinstance(v, (dict, list)), k
-        assert not isinstance(v, str) or k in {"uid", "state", "step", "error_code"}
+        assert not isinstance(v, str) or k in {"uid", "state", "step", "error_code", "error_kind"}
 
 
 async def test_session_defaults_and_stt_resolved_once_and_stored(client, repo):
@@ -211,6 +212,7 @@ async def test_list_newest_first_with_pagination_and_isolation(client, repo):
         "latest_report_version",
         "error_code",
         "interview_id",
+        "counted",
     }
     assert len((await client.get("/v1/sessions", headers=B)).json()["items"]) == 1
 
@@ -276,6 +278,22 @@ async def test_get_failed_session_reports_error_code_only(client, repo):
     assert d["status"] == "failed" and d["error"] == {"code": "audio_unreadable"}
 
 
+async def test_get_failed_session_carries_kind_and_retries_left(client, repo):
+    for code, step, kind, left in (
+        ("upstream_unavailable", "transcribe", "transient", 3),
+        ("audio_unreadable", "validate", "user_file", 0),
+    ):
+        sid = (await create(client)).json()["session"]["id"]
+        for to in ("uploading", "validating"):
+            m.advance(repo, "alice", sid, to=to)
+        m.advance(repo, "alice", sid, to="failed", error=SessionError(code=code, step=step))
+        d = (await client.get(f"/v1/sessions/{sid}", headers=A)).json()
+        assert (d["error"], d["error_kind"], d["retries_left"]) == ({"code": code}, kind, left)
+    ok = (await create(client)).json()["session"]["id"]
+    d = (await client.get(f"/v1/sessions/{ok}", headers=A)).json()
+    assert d["error_kind"] is None and d["retries_left"] is None
+
+
 async def test_get_foreign_or_missing_is_404(client):
     sid = (await create(client)).json()["session"]["id"]
     r1 = await client.get(f"/v1/sessions/{sid}", headers=B)
@@ -291,3 +309,60 @@ async def test_errors_validate_against_public_schema(client, schema):
         await client.get("/v1/sessions/" + "0" * 32, headers=A),
     ):
         jsonschema.validate(r.json(), schema)
+
+
+# ---- client version capture (02-logging R13) ----
+
+
+async def test_client_version_header_and_user_agent_are_stored_on_the_session(client, repo):
+    r = await client.post(
+        "/v1/sessions", json={}, headers={**A, "X-Client-Version": "abc123", "User-Agent": "UA/1"}
+    )
+    sid = r.json()["session"]["id"]
+    c = repo.get_session("alice", sid).client
+    assert (c.web_version, c.user_agent) == ("abc123", "UA/1")
+
+
+async def test_client_body_is_stored_and_sanitized(client, repo):
+    body = {
+        "client": {
+            "web_version": "v" * 500,
+            "recorder_mime": "audio/webm\x00;codecs=opus\n",
+            "audio_engine": "worklet@" + "9" * 500,
+            "unknown_key": "ignored",
+        }
+    }
+    r = await client.post("/v1/sessions", json=body, headers={**A, "User-Agent": "U" * 500})
+    assert r.status_code == 202
+    c = repo.get_session("alice", r.json()["session"]["id"]).client
+    assert c.recorder_mime == "audio/webm;codecs=opus"
+    assert len(c.web_version) <= 64 and len(c.audio_engine) <= 100
+    assert c.user_agent == "U" * 200  # trimmed
+    assert ClientInfo(user_agent="Moz\x07\x00illa" + "x" * 500).user_agent.startswith("Mozilla")
+
+
+async def test_bad_header_value_is_dropped_not_rejected(client, repo):
+    r = await client.post("/v1/sessions", json={}, headers={**A, "X-Client-Version": "bad value!"})
+    assert r.status_code == 202
+    assert repo.get_session("alice", r.json()["session"]["id"]).client.web_version is None
+
+
+async def test_old_client_without_client_object_still_works(client, repo):
+    r = await create(client)
+    assert r.status_code == 202
+    assert repo.get_session("alice", r.json()["session"]["id"]).client.web_version is None
+
+
+async def test_get_session_returns_the_progress_fields(client, repo):
+    sid = (await create(client)).json()["session"]["id"]
+    m.advance(repo, "alice", sid, to="uploading")
+    for to in ("validating", "transcribing"):
+        m.advance(repo, "alice", sid, to=to)
+    repo.update_session("alice", sid, {}, status={"audio_s": 400.0})
+    m.advance(repo, "alice", sid, to="awaiting_input")
+    d = (await client.get(f"/v1/sessions/{sid}", headers=A)).json()
+    st = repo.get_status("alice", sid)
+    assert d["started_at"] and d["stage_started_at"]
+    assert (d["waited_ms"], d["audio_s"], d["progress_next"]) == (0, 400.0, 45)
+    assert d["stage_expected_s"] is None  # awaiting_input has no timed stage
+    assert d["started_at"].startswith(st.started_at.strftime("%Y-%m-%dT%H:%M:%S"))

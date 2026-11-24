@@ -1,4 +1,4 @@
-import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -31,7 +31,7 @@ const progress = () => screen.getByRole("list", { name: "Progress" });
 const stepItem = (label: string) =>
   within(progress())
     .getAllByRole("listitem")
-    .find((li) => li.textContent?.startsWith(label))!;
+    .find((li) => li.textContent?.replace(/^✓/, "").startsWith(label))!;
 
 let getCalls: string[] = [];
 beforeEach(() => {
@@ -72,7 +72,7 @@ describe("session page: status listener", () => {
     await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Checking your audio."));
     tick(sid);
     await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Transcribing the recording."));
-    expect(stepItem("Check audio")).toHaveTextContent(/done/i);
+    expect(stepItem("Transcribe")).toHaveTextContent(/in progress/i);
     expect(screen.getByRole("status")).toHaveAttribute("aria-live", "polite");
     expect(getCalls).toEqual([]);
   });
@@ -84,11 +84,11 @@ describe("session page: status listener", () => {
     const status = await ready();
     await waitFor(() => {
       expect(status).toHaveTextContent("Confirm who the clinician is");
-      expect(status).toHaveTextContent("Waiting for session setup");
+      expect(status).toHaveTextContent("Waiting for your change goal");
     });
     act(() => void mockBackend.confirmSpeaker(UID, sid, "spk_0"));
     await waitFor(() => expect(status).not.toHaveTextContent("Confirm who the clinician is"));
-    expect(status).toHaveTextContent("Waiting for session setup");
+    expect(status).toHaveTextContent("Waiting for your change goal");
   });
 
   it("shows run sub-labels, the stay-or-leave copy and elapsed time, then links the report", async () => {
@@ -97,10 +97,10 @@ describe("session page: status listener", () => {
     mockBackend.confirmSpeaker(UID, sid, "spk_0");
     open(sid);
     await ready();
-    expect(screen.queryByText(/Usually under 5 minutes/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/close this tab/)).not.toBeInTheDocument();
     act(() => void mockBackend.putRating(UID, sid, { final: true, no_rating: true, card: { change_goal: "g" } }));
     await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Coding the session"));
-    expect(screen.getByText(/Usually under 5 minutes/)).toBeInTheDocument();
+    expect(screen.getByText(/You can close this tab/)).toBeInTheDocument();
     expect(screen.getByText(/Elapsed \d+:\d\d/)).toBeInTheDocument();
     tick(sid);
     await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Writing tips"));
@@ -158,14 +158,14 @@ describe("session page: status listener", () => {
     await waitFor(() => expect(subscribed).toBeGreaterThanOrEqual(1));
     act(() => mockEmitter.emitError("s_nope", new Error("permission-denied")));
     const card = await screen.findByRole("alert");
-    expect(card).toHaveTextContent(/couldn't find that/i);
+    expect(card).toHaveTextContent(/upload didn't go through, or the session no longer exists/i);
     expect(screen.getByRole("link", { name: /back to your sessions/i })).toHaveAttribute("href", "/sessions");
   });
 
   it("an unknown session id ends in the not-found card, not an endless spinner (E21)", async () => {
     open("s_nope");
     const card = await screen.findByRole("alert", undefined, { timeout: 4000 });
-    expect(card).toHaveTextContent(/couldn't find that/i);
+    expect(card).toHaveTextContent(/upload didn't go through, or the session no longer exists/i);
   });
 
   it("a malformed session id (422 invalid_parameters) shows the same not-found card (E21)", async () => {
@@ -179,7 +179,7 @@ describe("session page: status listener", () => {
     );
     open("not-hex");
     const card = await screen.findByRole("alert", undefined, { timeout: 4000 });
-    expect(card).toHaveTextContent(/couldn't find that/i);
+    expect(card).toHaveTextContent(/upload didn't go through, or the session no longer exists/i);
   });
 
   it("unsubscribes when the user leaves the page", async () => {
@@ -324,160 +324,142 @@ describe("session page: upload incomplete (D4)", () => {
   });
 });
 
-describe("session page: error cards", () => {
-  const UPLOAD_NEW = [
+describe("session page: failure cards (PRD R6)", () => {
+  const withKind = (sid: string, code: string, extra: Record<string, unknown>): SessionStatusDoc =>
+    ({ ...failedDoc(sid, code), ...extra }) as SessionStatusDoc;
+  const show = async (extra: Record<string, unknown>, code = "upstream_unavailable") => {
+    const sid = create();
+    open(sid);
+    await ready();
+    act(() => mockEmitter.emit(sid, withKind(sid, code, extra)));
+    return { sid, card: await screen.findByRole("alert") };
+  };
+
+  it("transient with retries left: message, not-counted sentence, Reference, disabled Retry (5)", async () => {
+    const { sid, card } = await show({ error_kind: "transient", retries_left: 2, counted: false });
+    expect(card).toHaveTextContent(/busy right now/i);
+    expect(card).toHaveTextContent("This did not count toward your limit.");
+    expect(card).toHaveTextContent(`Reference: ${sid}`);
+    expect(within(card).getByRole("button", { name: "Retry (5)" })).toHaveAttribute("aria-disabled", "true");
+    expect(within(card).queryByRole("link", { name: /Start a new session|Upload a different file/ })).not.toBeInTheDocument();
+  });
+
+  it("Retry enables after 5 s and POSTs /sessions/{id}/retry", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      let posts = 0;
+      server.use(
+        http.post("*/v1/sessions/:id/retry", () => {
+          posts += 1;
+          return HttpResponse.json({ session_id: "x" }, { status: 202 });
+        }),
+      );
+      const { card } = await show({ error_kind: "transient", retries_left: 1 });
+      await act(async () => void vi.advanceTimersByTime(5000));
+      const btn = within(card).getByRole("button", { name: "Retry" });
+      await act(async () => btn.click());
+      await waitFor(() => expect(posts).toBe(1));
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("Retry unlocks again when a failed->failed snapshot changes retries_left after a successful retry", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      let posts = 0;
+      server.use(
+        http.post("*/v1/sessions/:id/retry", () => {
+          posts += 1;
+          return HttpResponse.json({ session_id: "x" }, { status: 202 });
+        }),
+      );
+      const { sid, card } = await show({ error_kind: "transient", retries_left: 2 });
+      await act(async () => void vi.advanceTimersByTime(5000));
+      await act(async () => within(card).getByRole("button", { name: "Retry" }).click());
+      await waitFor(() => expect(posts).toBe(1));
+      // locked while the successful POST waits for the status doc to move
+      await waitFor(() => expect(within(card).getByRole("button", { name: /Retry/ })).toHaveAttribute("aria-disabled", "true"));
+      act(() => mockEmitter.emit(sid, withKind(sid, "upstream_unavailable", { error_kind: "transient", retries_left: 1 })));
+      await act(async () => void vi.advanceTimersByTime(5000));
+      await waitFor(() =>
+        expect(within(screen.getByRole("alert")).getByRole("button", { name: "Retry" })).not.toHaveAttribute("aria-disabled", "true"),
+      );
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("transient at retries_left=0: several-tries copy and a new-session CTA, no Retry", async () => {
+    const { sid, card } = await show({ error_kind: "transient", retries_left: 0 });
+    expect(card).toHaveTextContent("We couldn't finish this after several tries. Start a new session.");
+    expect(card).toHaveTextContent(`Reference: ${sid}`);
+    expect(within(card).getByRole("link", { name: "Start a new session" })).toHaveAttribute("href", "/sessions/new");
+    expect(within(card).queryByRole("button", { name: /Retry/ })).not.toBeInTheDocument();
+  });
+
+  it("permanent_internal: our-side copy, new-session CTA, no Retry", async () => {
+    const { sid, card } = await show({ error_kind: "permanent_internal", retries_left: 0 }, "internal_error");
+    expect(card).toHaveTextContent(
+      "Something went wrong on our side. This did not count toward your limit. Please start a new session.",
+    );
+    expect(card).toHaveTextContent(`Reference: ${sid}`);
+    expect(within(card).getByRole("link", { name: "Start a new session" })).toBeInTheDocument();
+    expect(within(card).queryByRole("button", { name: /Retry/ })).not.toBeInTheDocument();
+  });
+
+  it.each([
     ["unsupported_audio", /can't use this file type/i],
-    ["audio_too_long", /longer than 20 minutes/i],
-    ["audio_too_large", /over 300 MB/i],
     ["audio_unreadable", /couldn't read this audio file/i],
     ["no_speech", /couldn't hear enough speech in this recording/i],
     ["speakers_not_separated", /couldn't tell the two speakers apart in this recording/i],
     ["transcription_failed", /Transcription didn't finish/i],
-  ] as const;
-  const TRY_AGAIN = [
-    ["rating_invalid", /needs a change/i],
-    ["upstream_unavailable", /busy right now/i],
-    ["daily_cap_reached", /reached today's limit/i],
-    ["concurrent_runs", /already have a rating running/i],
-    ["email_unverified", /verify your email/i],
-    ["invalid_state", /isn't possible at this stage/i],
-    ["rate_limited", /a little fast/i],
-    ["internal_error", /something went wrong/i],
-    ["some_new_code", /something went wrong/i],
-  ] as const;
-
-  it.each(UPLOAD_NEW)("%s: message, reference id and a new-upload recovery", async (code, message) => {
-    const sid = create();
-    open(sid);
-    await ready();
-    act(() => mockEmitter.emit(sid, { ...failedDoc(sid, code), transcript_ready: false, speaker_confirmed: false, rating_submitted: false }));
-    const card = await screen.findByRole("alert");
+  ] as const)("user_file %s: per-code text, Reference, Upload a different file", async (code, message) => {
+    const { sid, card } = await show({ error_kind: "user_file", retries_left: 0, counted: false }, code);
     expect(card).toHaveTextContent(message);
     expect(card).toHaveTextContent(`Reference: ${sid}`);
     expect(within(card).getByRole("link", { name: "Upload a different file" })).toHaveAttribute(
       "href",
       `/sessions/new?from=${sid}`,
     );
-    expect(within(card).queryByRole("button", { name: "Try again" })).not.toBeInTheDocument();
+    expect(card).not.toHaveTextContent("counted toward your limit");
+    expect(within(card).queryByRole("button", { name: /Retry/ })).not.toBeInTheDocument();
   });
 
-  it.each(TRY_AGAIN)("%s: message, reference id and Try again", async (code, message) => {
-    const sid = create();
-    open(sid);
-    await ready();
-    act(() => mockEmitter.emit(sid, failedDoc(sid, code)));
-    const card = await screen.findByRole("alert");
-    expect(card).toHaveTextContent(message);
+  it("user_file with counted=true appends the counted sentence", async () => {
+    const { card } = await show({ error_kind: "user_file", retries_left: 0, counted: true }, "no_speech");
+    expect(card).toHaveTextContent("This counted toward your limit.");
+  });
+
+  it("unknown code and no kind falls back to permanent_internal copy", async () => {
+    const { sid, card } = await show({}, "some_new_code");
+    expect(card).toHaveTextContent(/on our side/);
     expect(card).toHaveTextContent(`Reference: ${sid}`);
-    expect(within(card).getByRole("button", { name: "Try again" })).toBeEnabled();
-    expect(within(card).queryByRole("link", { name: "Upload a different file" })).not.toBeInTheDocument();
+    expect(within(card).queryByRole("button", { name: /Retry/ })).not.toBeInTheDocument();
   });
 
-  it.each(["internal_error", "upstream_unavailable"])("%s before a transcript offers a new upload, not Try again (BH2)", async (code) => {
-    const sid = create();
-    open(sid);
-    await ready();
-    act(() => mockEmitter.emit(sid, { ...failedDoc(sid, code), transcript_ready: false, speaker_confirmed: false, rating_submitted: false }));
-    const card = await screen.findByRole("alert");
-    expect(within(card).getByRole("link", { name: "Upload a different file" })).toBeInTheDocument();
-    expect(within(card).queryByRole("button", { name: "Try again" })).not.toBeInTheDocument();
-  });
-
-  it("Try again starts a new run and the timeline moves on", async () => {
-    const user = userEvent.setup();
-    const sid = create("fail-code");
-    toAwaiting(sid);
-    mockBackend.confirmSpeaker(UID, sid, "spk_0");
-    mockBackend.putRating(UID, sid, { final: true, no_rating: true, card: { change_goal: "g" } });
-    mockBackend.settle(sid);
-    open(sid);
-    const card = await screen.findByRole("alert");
-    expect(card).toHaveTextContent(/something went wrong/i);
-    await user.click(within(card).getByRole("button", { name: "Try again" }));
-    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Coding the session"));
-    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
-  });
-
-  it("keeps Try again locked after a successful POST until the session state changes (W15)", async () => {
-    const user = userEvent.setup();
-    const sid = create();
-    open(sid);
-    await ready();
-    act(() => mockEmitter.emit(sid, failedDoc(sid, "internal_error")));
-    let posts = 0;
-    server.use(
-      http.post("*/v1/sessions/:id/runs", () => {
-        posts += 1;
-        return HttpResponse.json({ session_id: sid }, { status: 202 });
-      }),
-    );
-    const btn = await screen.findByRole("button", { name: "Try again" });
-    await user.click(btn);
-    await waitFor(() => expect(posts).toBe(1));
-    await waitFor(() => expect(btn).toBeDisabled());
-    await user.click(btn);
-    expect(posts).toBe(1);
-  });
-
-  it("shows the API's message and request id when Try again itself fails", async () => {
-    const user = userEvent.setup();
-    const sid = create();
-    open(sid);
-    await ready();
-    act(() => mockEmitter.emit(sid, failedDoc(sid, "internal_error")));
-    server.use(
-      http.post("*/v1/sessions/:id/runs", () =>
-        HttpResponse.json(
-          {
-            schema_version: "0.0.1",
-            status: 503,
-            message: "x",
-            details: [{ code: "upstream_unavailable", message: "x" }],
-            request_id: "req_abc123",
-          },
-          { status: 503 },
+  it("shows the API's message when Retry itself fails", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      server.use(
+        http.post("*/v1/sessions/:id/retry", () =>
+          HttpResponse.json(
+            { schema_version: "0.0.1", status: 409, message: "x", details: [{ code: "invalid_state", message: "x" }], request_id: "req_abc123" },
+            { status: 409 },
+          ),
         ),
-      ),
-    );
-    await user.click(await screen.findByRole("button", { name: "Try again" }));
-    const alerts = await screen.findAllByRole("alert");
-    const text = alerts.map((a) => a.textContent).join(" ");
-    expect(text).toMatch(/busy right now/i);
-    expect(text).toContain("Reference: req_abc123");
-  });
-
-  it("cap reached at auto-start shows the limit message with Start, and Start runs", async () => {
-    const user = userEvent.setup();
-    const sid = create("cap-held");
-    toAwaiting(sid);
-    mockBackend.confirmSpeaker(UID, sid, "spk_0");
-    mockBackend.putRating(UID, sid, { final: true, no_rating: true, card: { change_goal: "g" } });
-    open(sid);
-    const status = await ready();
-    await waitFor(() => expect(status).toHaveTextContent(/You've reached today's limit\. You can start the rating after .+\./));
-    await user.click(screen.getByRole("button", { name: "Start" }));
-    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Coding the session"));
-  });
-
-  it("disables Try again and Start with the reset time when today's runs are used up", async () => {
-    const sid = create("cap-held");
-    toAwaiting(sid);
-    mockBackend.confirmSpeaker(UID, sid, "spk_0");
-    mockBackend.putRating(UID, sid, { final: true, no_rating: true, card: { change_goal: "g" } });
-    mockBackend.configure({ caps: { eval: { day: 1 } } });
-    const other = create();
-    toAwaiting(other);
-    mockBackend.confirmSpeaker(UID, other, "spk_0");
-    mockBackend.putRating(UID, other, { final: true, no_rating: true, card: { change_goal: "g" } }); // uses the one run
-    open(sid);
-    const start = await screen.findByRole("button", { name: "Start" });
-    await waitFor(() => expect(start).toBeDisabled());
-    expect(screen.getByRole("status")).toHaveTextContent(/start the rating after/i);
-
-    act(() => mockEmitter.emit(sid, failedDoc(sid, "internal_error")));
-    const run = await screen.findByRole("button", { name: "Try again" });
-    await waitFor(() => expect(run).toBeDisabled());
-    expect(screen.getByRole("alert")).toHaveTextContent(/after .+/i);
+      );
+      const { card } = await show({ error_kind: "transient", retries_left: 1 });
+      await act(async () => void vi.advanceTimersByTime(5000));
+      await act(async () => within(card).getByRole("button", { name: "Retry" }).click());
+      await waitFor(() => {
+        const text = screen.getAllByRole("alert").map((a) => a.textContent).join(" ");
+        expect(text).toMatch(/isn't possible at this stage/i);
+        expect(text).toContain("Reference: req_abc123");
+      });
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 
@@ -582,61 +564,6 @@ describe("session page: start held by an active run (review R2)", () => {
     );
     expect(screen.getByRole("status")).not.toHaveTextContent(/limit|start the rating after/i);
     expect(await screen.findByRole("button", { name: "Start" })).toBeEnabled();
-  });
-});
-
-describe("session page: Try again after a failed free interview run (review R1)", () => {
-  const failedAtCap = (freeRun: boolean) => {
-    const sid = create();
-    toAwaiting(sid);
-    mockBackend.configure({ caps: { eval: { day: 0 } } });
-    server.use(
-      http.get("*/v1/sessions/:id", ({ params }) =>
-        HttpResponse.json({
-          ...mockBackend.getSession(UID, String(params.id)),
-          interview_id: "iv1",
-          free_run: freeRun,
-        }),
-      ),
-    );
-    return sid;
-  };
-
-  it("keeps Try again enabled at a full eval cap when the failed run was free", async () => {
-    const sid = failedAtCap(true);
-    open(sid);
-    await ready();
-    act(() => mockEmitter.emit(sid, failedDoc(sid, "internal_error")));
-    const run = await screen.findByRole("button", { name: "Try again" });
-    await waitFor(() => expect(getCalls.length).toBeGreaterThan(0)); // the detail (free_run) loads
-    await waitFor(() => expect(run).toBeEnabled());
-    expect(screen.getByRole("alert")).not.toHaveTextContent(/reached today's limit/i);
-  });
-
-  it("still disables Try again at a full eval cap when the interview's free run was voided", async () => {
-    const sid = failedAtCap(false);
-    open(sid);
-    await ready();
-    act(() => mockEmitter.emit(sid, failedDoc(sid, "internal_error")));
-    const run = await screen.findByRole("button", { name: "Try again" });
-    await waitFor(() => expect(getCalls.length).toBeGreaterThan(0));
-    await waitFor(() => expect(run).toBeDisabled());
-  });
-});
-
-describe("session page: period-aware caps", () => {
-  it.each([
-    [{ eval: { day: 0 } }, /reached today's limit/i],
-  ] as const)("disables Try again with the matching message for caps %j", async (caps, message) => {
-    const sid = create();
-    toAwaiting(sid);
-    mockBackend.configure({ caps });
-    open(sid);
-    await ready();
-    act(() => mockEmitter.emit(sid, failedDoc(sid, "internal_error")));
-    const run = await screen.findByRole("button", { name: "Try again" });
-    await waitFor(() => expect(run).toBeDisabled());
-    expect(screen.getByRole("alert")).toHaveTextContent(message);
   });
 });
 
@@ -745,5 +672,307 @@ describe("transcript speaker gate", () => {
       expect(screen.getByRole("heading", { name: "Speaker Sam" })).toBeInTheDocument();
       expect(screen.getByText("Let's talk about walking.")).toBeInTheDocument();
     }
+  });
+});
+
+describe("session page: upload failed (PRD R11)", () => {
+  const stub = (code: string): SessionStatusDoc =>
+    ({ ...failedDoc("x", code), state: "upload_failed", progress: 0, transcript_ready: false, speaker_confirmed: false, rating_submitted: false, has_rating: false }) as unknown as SessionStatusDoc;
+
+  it("shows UploadFailedView (reason, way back, Reference) when the status is upload_failed", async () => {
+    const sid = create();
+    open(sid);
+    await ready();
+    act(() => mockEmitter.emit(sid, stub("audio_too_long")));
+    const card = await screen.findByRole("alert");
+    expect(card).toHaveTextContent("Upload failed: This recording is longer than 20 minutes. Upload a shorter one. Choose a different file.");
+    expect(card).toHaveTextContent(`Reference: ${sid}`);
+    expect(screen.getByRole("link", { name: /choose a different file/i })).toHaveAttribute("href", "/sessions/new");
+    expect(screen.queryByRole("button", { name: /delete session/i })).not.toBeInTheDocument();
+  });
+
+  it("a stale link whose stub exists shows the same view", async () => {
+    // The status listener's first snapshot is the stub doc (the session itself is gone: GET would 404).
+    setStatusListener({
+      subscribe(_id, onStatus) {
+        queueMicrotask(() => onStatus(stub("audio_unreadable")));
+        return () => {};
+      },
+    });
+    open("s_gone");
+    expect(await screen.findByRole("alert")).toHaveTextContent(/^Upload failed: We couldn't read this audio file/);
+  });
+
+  it("a stale link without a stub shows the not-found notice with a way to start a new upload", async () => {
+    open("s_nope");
+    const card = await screen.findByRole("alert", undefined, { timeout: 4000 });
+    expect(card).toHaveTextContent("This upload didn't go through, or the session no longer exists. Start a new upload.");
+    expect(screen.getByRole("link", { name: /start a new upload/i })).toHaveAttribute("href", "/sessions/new");
+  });
+});
+
+describe("session page: cancel (04-cancel R9)", () => {
+  const link = () => screen.getByRole("button", { name: "Cancel session" });
+  const confirm = async () => {
+    await userEvent.click(link());
+    const dlg = await screen.findByRole("alertdialog", { name: "Cancel this session?" });
+    return dlg;
+  };
+  const confirmBtn = (dlg: HTMLElement) => within(dlg).getByRole("button", { name: "Cancel session" });
+
+  it("link is blue with red hover and shown only in the seven states", async () => {
+    const sid = create();
+    open(sid);
+    await ready();
+    expect(link()).toHaveClass("text-primary", "hover:text-destructive");
+    for (const state of ["report_ready", "failed", "cancelled"] as const) {
+      act(() => mockEmitter.emit(sid, { ...failedDoc(sid, "x"), state }));
+      await waitFor(() => expect(screen.queryByRole("button", { name: "Cancel session" })).not.toBeInTheDocument());
+    }
+  });
+
+  it("variant A copy before transcription, variant B once it started", async () => {
+    const sid = create();
+    upload(sid);
+    open(sid);
+    await ready();
+    let dlg = await confirm();
+    expect(dlg).toHaveTextContent("Your upload stays until you delete the session. This won't count toward your limit.");
+    await userEvent.click(within(dlg).getByRole("button", { name: "Keep processing" }));
+    tick(sid);
+    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Transcribing the recording."));
+    dlg = await confirm();
+    expect(dlg).toHaveTextContent("Transcription has started, so this counts toward your daily limit.");
+  });
+
+  it("confirm shows Cancelling… with a spinner, then the not-counted message", async () => {
+    const sid = create();
+    upload(sid);
+    let release!: () => void;
+    server.use(
+      http.post("*/v1/sessions/:id/cancel", async () => {
+        await new Promise<void>((r) => (release = r));
+        return HttpResponse.json(mockBackend.cancelSession(UID, sid));
+      }),
+    );
+    open(sid);
+    await ready();
+    await userEvent.click(confirmBtn(await confirm()));
+    const busy = await screen.findByRole("button", { name: /Cancelling…/ });
+    expect(busy).toBeDisabled();
+    expect(busy).toHaveAttribute("aria-busy", "true");
+    expect(busy.querySelector('[data-slot="spinner"]')).not.toBeNull();
+    act(() => release());
+    expect(await screen.findByRole("heading", { name: "Cancelled" })).toBeInTheDocument();
+    expect(screen.getByText("Session cancelled. This did not count toward your limit.")).toBeInTheDocument();
+  });
+
+  it("a counted cancel says so, and a reload shows the persisted message", async () => {
+    const sid = create();
+    toAwaiting(sid);
+    open(sid);
+    await ready();
+    await userEvent.click(confirmBtn(await confirm()));
+    expect(await screen.findByText("Session cancelled. This counted toward your limit.")).toBeInTheDocument();
+    cleanup();
+    open(sid);
+    expect(await screen.findByText("Session cancelled. This counted toward your limit.")).toBeInTheDocument();
+  });
+
+  it("the cancelled view has Delete only: no rating, speaker gate, retry or cancel link", async () => {
+    const sid = create();
+    toAwaiting(sid);
+    open(sid);
+    await ready();
+    await userEvent.click(confirmBtn(await confirm()));
+    await screen.findByRole("heading", { name: "Cancelled" });
+    expect(screen.getByRole("button", { name: "Delete session" })).toBeInTheDocument();
+    for (const name of [/cancel session/i, /start/i, /retry/i, /submit/i, /confirm/i]) {
+      expect(screen.queryByRole("button", { name })).not.toBeInTheDocument();
+    }
+    expect(screen.queryByRole("heading", { name: /rating|speaker/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("list", { name: "Progress" })).not.toBeInTheDocument();
+    expect(screen.queryByText(/retry/i)).not.toBeInTheDocument();
+  });
+
+  it("an omitted counted shows no sentence", async () => {
+    const sid = create();
+    open(sid);
+    await ready();
+    act(() => mockEmitter.emit(sid, { ...failedDoc(sid, "x"), state: "cancelled", counted: null }));
+    expect(await screen.findByRole("heading", { name: "Cancelled" })).toBeInTheDocument();
+    expect(screen.queryByText(/Session cancelled/)).not.toBeInTheDocument();
+  });
+
+  it("a 500 shows the error card with Reference and the link returns", async () => {
+    const sid = create();
+    upload(sid);
+    server.use(http.post("*/v1/sessions/:id/cancel", () => new HttpResponse(null, { status: 500 })));
+    open(sid);
+    await ready();
+    await userEvent.click(confirmBtn(await confirm()));
+    const card = await screen.findByRole("alert");
+    expect(card).toHaveTextContent("We couldn't cancel this session. Try again.");
+    expect(card).toHaveTextContent(`Reference: ${sid}`);
+    expect(link()).toBeEnabled();
+    expect(screen.queryByRole("heading", { name: "Cancelled" })).not.toBeInTheDocument();
+  });
+
+  it("a 409 shows the already-finished copy and the page follows the live status", async () => {
+    const sid = create();
+    upload(sid);
+    server.use(
+      http.post("*/v1/sessions/:id/cancel", () =>
+        HttpResponse.json({ schema_version: "0.0.1", status: 409, message: "x", details: [{ code: "invalid_state", message: "x" }], request_id: "r" }, { status: 409 }),
+      ),
+    );
+    open(sid);
+    await ready();
+    await userEvent.click(confirmBtn(await confirm()));
+    expect(await screen.findByRole("alert")).toHaveTextContent("This session already finished or failed.");
+    act(() => mockEmitter.emit(sid, { ...failedDoc(sid, "x"), state: "report_ready", latest_report_version: 1 }));
+    await waitFor(() => expect(screen.queryByRole("button", { name: "Cancel session" })).not.toBeInTheDocument());
+    expect(screen.getByRole("link", { name: "View report" })).toBeInTheDocument();
+  });
+});
+
+describe("session page: processing screen (05-processing-screen R4, R5, R7, R8)", () => {
+  const emit = (sid: string, patch: Partial<SessionStatusDoc>) =>
+    act(() => mockEmitter.emit(sid, { ...failedDoc(sid, "x"), error_code: null, ...patch } as SessionStatusDoc));
+  const bar = () => screen.queryByRole("progressbar", { name: "Overall progress" });
+  const slot = () => document.querySelector('[data-slot="cancel"]');
+  const CANCELLABLE = ["created", "uploading", "upload_incomplete", "validating", "transcribing", "awaiting_input", "running"] as const;
+
+  it("shows the hint per phase, outside the live region", async () => {
+    const sid = create();
+    open(sid);
+    const status = await ready();
+    const cases: [SessionStatusDoc["state"], RegExp][] = [
+      ["created", /Keep this tab open until upload finishes/],
+      ["uploading", /Keep this tab open until upload finishes/],
+      ["validating", /You can close this tab/],
+      ["transcribing", /You can close this tab/],
+      ["running", /You can close this tab/],
+      ["awaiting_input", /We'll wait here for your choice/],
+    ];
+    for (const [state, re] of cases) {
+      emit(sid, { state });
+      expect(await screen.findByText(re)).toBeInTheDocument();
+      expect(status).not.toHaveTextContent(re);
+      expect(screen.getAllByText(re)).toHaveLength(1);
+    }
+    for (const state of ["report_ready", "failed"] as const) {
+      emit(sid, { state });
+      await waitFor(() => expect(screen.queryByText(/close this tab|Keep this tab open|wait here/)).not.toBeInTheDocument());
+    }
+  });
+
+  it("shows bar, N% and Elapsed from created through transcribing; none at report_ready, failed, cancelled", async () => {
+    const sid = create();
+    open(sid);
+    await ready();
+    const startedAt = new Date(Date.now() - 65_000).toISOString();
+    for (const state of ["created", "uploading", "transcribing"] as const) {
+      emit(sid, { state, progress: 10, started_at: startedAt, stage_started_at: startedAt, progress_next: 40 });
+      await waitFor(() => expect(state && bar()).toBeInTheDocument());
+      expect(screen.getByText(/^\d+%$/)).toBeInTheDocument();
+      expect(screen.getByText(/Elapsed \d+:\d\d/)).toBeInTheDocument();
+    }
+    for (const state of ["report_ready", "failed", "cancelled"] as const) {
+      emit(sid, { state, progress: 100 });
+      await waitFor(() => expect(bar()).not.toBeInTheDocument());
+      expect(screen.queryByText(/^\d+%$/)).not.toBeInTheDocument();
+      expect(screen.queryByText(/Elapsed/)).not.toBeInTheDocument();
+    }
+  });
+
+  it("bar has an accessible name, value and valuetext, outside the live region", async () => {
+    const sid = create();
+    open(sid);
+    const status = await ready();
+    emit(sid, { state: "awaiting_input", progress: 40 });
+    await waitFor(() => expect(bar()).toBeInTheDocument());
+    expect(bar()).toHaveAttribute("value", "40");
+    expect(bar()).toHaveAttribute("max", "100");
+    expect(bar()).toHaveAttribute("aria-valuetext", "40 percent");
+    expect(status.contains(bar())).toBe(false);
+    expect(status.closest("[aria-live]")?.contains(bar())).toBeFalsy();
+  });
+
+  it("marks the current step with In progress, a spinner and the accent; done has a check; pending is muted", async () => {
+    const sid = create();
+    open(sid);
+    await ready();
+    emit(sid, { state: "transcribing", progress: 20, transcript_ready: false, speaker_confirmed: false, rating_submitted: false });
+    await waitFor(() => expect(stepItem("Transcribe")).toHaveAttribute("data-status", "current"));
+    const cur = stepItem("Transcribe");
+    expect(within(cur).getByText("In progress")).toBeVisible();
+    expect(cur).toHaveClass("text-primary", "border-primary");
+    expect(cur.querySelector('[data-slot="spinner"]')).not.toBeNull();
+    const done = stepItem("Upload");
+    expect(done).toHaveClass("text-score-good");
+    expect(done.querySelector('[data-slot="step-check"]')).not.toBeNull();
+    expect(stepItem("Report")).toHaveClass("text-muted-foreground");
+    emit(sid, { state: "failed", error_code: "transcription_failed", transcript_ready: false });
+    await waitFor(() => expect(stepItem("Transcribe")).toHaveAttribute("data-status", "failed"));
+    expect(stepItem("Transcribe")).toHaveClass("text-destructive");
+  });
+
+  it("spinner honours reduced motion: spin is motion-safe only", async () => {
+    const sid = create();
+    open(sid);
+    await ready();
+    emit(sid, { state: "transcribing" });
+    await waitFor(() => expect(stepItem("Transcribe").querySelector('[data-slot="spinner"]')).not.toBeNull());
+    const tokens = stepItem("Transcribe").querySelector('[data-slot="spinner"]')!.className.split(/\s+/);
+    expect(tokens).not.toContain("animate-spin");
+    expect(tokens).toContain("motion-safe:animate-spin");
+  });
+
+  it("keeps the live-region text unchanged across ticks and progress changes", async () => {
+    const sid = create();
+    open(sid);
+    const status = await ready();
+    const startedAt = new Date(Date.now() - 65_000).toISOString();
+    emit(sid, { state: "transcribing", progress: 20, progress_next: 40, started_at: startedAt, stage_started_at: startedAt });
+    await waitFor(() => expect(status).toHaveTextContent("Transcribing the recording."));
+    const elapsed = () => screen.getByText(/Elapsed \d+:\d\d/).textContent;
+    const before = elapsed();
+    let mutations = 0;
+    const obs = new MutationObserver((m) => (mutations += m.length));
+    obs.observe(status, { subtree: true, childList: true, characterData: true, attributes: true });
+    await waitFor(() => expect(elapsed()).not.toBe(before), { timeout: 3000 });
+    emit(sid, { state: "transcribing", progress: 30, progress_next: 40, started_at: startedAt, stage_started_at: startedAt });
+    await waitFor(() => expect(Number(bar()!.getAttribute("value"))).toBeGreaterThanOrEqual(30));
+    obs.disconnect();
+    expect(mutations).toBe(0);
+    expect(status).toHaveTextContent("Transcribing the recording.");
+  });
+
+  it("renders the cancel slot (right-aligned, under the hint) for every cancellable state and no other", async () => {
+    const sid = create();
+    open(sid);
+    await ready();
+    for (const state of CANCELLABLE) {
+      emit(sid, { state });
+      await waitFor(() => expect(slot()).not.toBeNull());
+      expect(slot()).toHaveClass("justify-end");
+      expect(within(slot() as HTMLElement).getByRole("button", { name: "Cancel session" })).toBeInTheDocument();
+      const hint = document.querySelector('[data-slot="hint"]');
+      expect(hint!.compareDocumentPosition(slot()!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    }
+    for (const state of ["report_ready", "failed"] as const) {
+      emit(sid, { state });
+      await waitFor(() => expect(slot()).toBeNull());
+    }
+  });
+
+  it("has no inline spinner SVG or hand-rolled spin class in the session screen", () => {
+    const files = import.meta.glob(["./*.tsx", "!./*.test.tsx"], { query: "?raw", import: "default", eager: true }) as Record<string, string>;
+    for (const [name, src] of Object.entries(files)) {
+      expect(src, name).not.toMatch(/(?<!motion-safe:)\banimate-spin\b/);
+      expect(src, name).not.toMatch(/<svg[^>]*(spin|spinner)/i);
+    }
+    expect(files["./CancelLink.tsx"]).toContain("Spinner");
   });
 });

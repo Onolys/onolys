@@ -66,3 +66,10 @@ describe("per-code messages (FX19/FX56)", () => {
     expect(errorCode({ code: "auth/x" })).toBe("auth/x");
   });
 });
+
+describe("email endpoint codes", () => {
+  it("maps rate limit and unavailable to the PRD copy", () => {
+    expect(mapAuthError("email/rate-limited").message).toBe("Too many requests. Wait a minute and try again.");
+    expect(mapAuthError("email/unavailable").message).toBe("We couldn't send the email. Try again in a moment.");
+  });
+});

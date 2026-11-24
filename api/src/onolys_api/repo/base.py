@@ -51,6 +51,8 @@ class Page[T]:
 
 
 StartOutcome = Literal["started", "not_ready", "already", "daily_cap", "concurrent"]
+# `cancel_session` result: ("cancelled", counted) | ("invalid",)
+CancelOutcome = tuple[Literal["cancelled"], bool] | tuple[Literal["invalid"]]
 InterviewLinkOutcome = Literal["linked", "not_ended", "already_linked", "refunded"]
 ClaimOutcome = Literal["claimed", "done", "failed", "busy"]
 
@@ -104,6 +106,11 @@ class Repo(Protocol):
         self, uid: str, limit: int = 20, cursor: str | None = None
     ) -> Page[SessionDoc]: ...
     def delete_session(self, uid: str, sid: str) -> bool: ...
+    # R11: a validation file-check failure is an upload failure. Writes the data-free status stub
+    # (`state=upload_failed`, `error_code`, `expire_at` +7 days), then deletes the session doc and
+    # every subcollection (recordings, runs). NotFoundError if the session is not the caller's,
+    # is gone or is `deleting` (the Delete path owns it). Idempotent for a redelivered task.
+    def discard_failed_upload(self, uid: str, sid: str, code: str) -> None: ...
 
     # One transaction: if the session is still in `state` with `updated_at < before`, set it
     # `to` (default `failed`) with `error` (mirrored to session_status; `steps.<error.step>`
@@ -207,13 +214,35 @@ class Repo(Protocol):
     # counted unless free: an interview session's free run, or Try again after a failed free
     # run), sets `first_run_id` if absent, `state=running`, the status mirror
     # (progress `start_progress`, or the max with it when entering from `awaiting_input`) and
-    # clears the error. Exactly one of two racing callers (two manual starts, or a manual start
+    # clears the error. With `retry_max` (R4 retry of a failed run) the start is a retry: only
+    # `retry_allowed(session, retry_max, "run")` passes (else "not_ready"), and it also bumps
+    # `retry_count` in the same transaction; a cap/concurrent refusal bumps nothing.
+    # Exactly one of two racing callers (two manual starts, or a manual start
     # and the first-run gate) wins; the loser reserved nothing, so there is nothing to release.
     def start_run(
         self, uid: str, sid: str, run_id: str, date: str, defaults: LimitDefaults, max_active: int,
         code_version: str, start_progress: int, allowed_states: tuple[str, ...],
         n_runs: int | None, preset: str | None, coded_span: dict | None = None,
+        retry_max: int | None = None,
     ) -> StartOutcome: ...  # fmt: skip
+    # R4 retry of a validate/transcribe failure, ONE transaction: if `retry_allowed(session,
+    # max_retries, step)` (failed, transient, under the cap, failed at `step`), set `state=to`,
+    # `retry_count`+1, clear the error, reset `steps.{step}` to a fresh record, restamp
+    # `stage_started_at`, mirror the status (progress max'd with `progress`) and return True;
+    # otherwise write nothing and return False.
+    def retry_step(
+        self, uid: str, sid: str, step: str, to: str, max_retries: int, progress: int
+    ) -> bool: ...
+    # 04-cancel R3, ONE transaction over session + status + usage + user (+ the active run):
+    # `cancelled` -> ("cancelled", stored counted), nothing written; a state outside the seven
+    # cancellable ones -> ("invalid",); `deleting`/foreign/missing -> NotFoundError. In `running`
+    # the unreleased run is marked `failed` (`error="cancelled"`) and its slot released without
+    # refund (the same in-txn code as `release_run_slot`). Then `decide_cancel` charges
+    # `usage.runs` (also past the cap), and session `state/cancel` + status `state/counted` and
+    # `stage_started_at` are set. Nothing is deleted.
+    def cancel_session(
+        self, uid: str, sid: str, date: str, defaults: LimitDefaults
+    ) -> CancelOutcome: ...
     # interviews (SP10 R5): uid-scoped `interviews/{id}`; foreign or missing -> NotFoundError.
     def create_interview(self, uid: str, iid: str, doc: InterviewDoc) -> None: ...
     # ONE transaction (A9): refuse with "open_exists" when the caller has an interview in

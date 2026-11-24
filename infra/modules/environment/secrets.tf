@@ -35,6 +35,23 @@ resource "google_secret_manager_secret" "provider" {
   }
 }
 
+# Resend API key shell (SP07 auth emails). The value is seeded by the owner (infra/scripts/seed-secrets.py or console).
+resource "google_secret_manager_secret" "resend" {
+  project   = var.project
+  secret_id = "resend-api-key-${var.env}"
+
+  replication {
+    auto {}
+  }
+}
+
+resource "google_secret_manager_secret_iam_member" "resend_api" {
+  project   = var.project
+  secret_id = google_secret_manager_secret.resend.secret_id
+  role      = "roles/secretmanager.secretAccessor"
+  member    = "serviceAccount:${google_service_account.api.email}"
+}
+
 resource "google_secret_manager_secret_iam_member" "hmac" {
   for_each  = local.runtime_sas
   project   = var.project

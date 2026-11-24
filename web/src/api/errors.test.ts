@@ -8,7 +8,8 @@ import {
   describeError,
   describeLookupError,
   isNotFoundError,
-  failureAction,
+  failureView,
+  cancelErrorMessage,
   messageForCode,
   parseErrorBody,
 } from "./errors";
@@ -146,12 +147,10 @@ describe("known-code guards (FX56 / M20)", () => {
     }
   });
 
-  it("failureAction: no code or unknown code with a transcript is try_again (FX45); without one upload_new", () => {
-    expect(failureAction(undefined, true)).toBe("try_again");
-    expect(failureAction("something_new", true)).toBe("try_again");
-    expect(failureAction("toString", true)).toBe("try_again");
-    expect(failureAction(undefined, false)).toBe("upload_new");
-    expect(failureAction("no_speech", true)).toBe("upload_new");
+  it("new internal codes read as the generic message", () => {
+    for (const c of ["output_invalid", "deadline_exceeded", "run_failed"]) {
+      expect(messageForCode(c)).toBe(GENERIC_MESSAGE);
+    }
   });
 });
 
@@ -172,35 +171,6 @@ describe("describeError", () => {
       requestId: undefined,
     });
   });
-});
-
-describe("failureAction", () => {
-  it.each([
-    "unsupported_audio",
-    "audio_too_long",
-    "interview_too_long",
-    "audio_too_large",
-    "audio_unreadable",
-    "no_speech",
-    "speakers_not_separated",
-    "transcription_failed",
-  ])("%s offers a new upload", (code) => {
-    expect(failureAction(code, true)).toBe("upload_new");
-  });
-
-  it.each(["upstream_unavailable", "internal_error", "unknown", undefined])(
-    "%s offers Try again",
-    (code) => {
-      expect(failureAction(code, true)).toBe("try_again");
-    },
-  );
-
-  it.each(["upstream_unavailable", "internal_error", "unknown", undefined])(
-    "%s with no transcript offers a new upload (BH2)",
-    (code) => {
-      expect(failureAction(code, false)).toBe("upload_new");
-    },
-  );
 });
 
 describe("enum parity with the public schema", () => {
@@ -233,5 +203,63 @@ describe("isNotFoundError / describeLookupError", () => {
     expect(isNotFoundError(e(500, "internal_error"))).toBe(false);
     expect(describeLookupError(e(422, "invalid_parameters")).code).toBe("not_found");
     expect(describeLookupError(e(500, "internal_error")).code).toBe("internal_error");
+  });
+});
+
+describe("failureView (PRD R6, D2)", () => {
+  const doc = (o: Record<string, unknown>) => ({ error_code: null, ...o }) as Parameters<typeof failureView>[0];
+
+  it("transient with retries left: code message, not-counted note, retry action", () => {
+    const v = failureView(doc({ error_code: "upstream_unavailable", error_kind: "transient", retries_left: 2, counted: false }));
+    expect(v).toEqual({
+      action: "retry",
+      message: messageForCode("upstream_unavailable"),
+      note: "This did not count toward your limit.",
+    });
+  });
+
+  it("transient with no retries left: start a new session", () => {
+    const v = failureView(doc({ error_code: "upstream_unavailable", error_kind: "transient", retries_left: 0 }));
+    expect(v.action).toBe("new_session");
+    expect(v.message).toBe("We couldn't finish this after several tries. Start a new session.");
+    expect(v.note).toBeUndefined();
+  });
+
+  it("permanent_internal: our-side copy, new session, no retry", () => {
+    const v = failureView(doc({ error_code: "internal_error", error_kind: "permanent_internal", retries_left: 0 }));
+    expect(v.action).toBe("new_session");
+    expect(v.message).toBe(
+      "Something went wrong on our side. This did not count toward your limit. Please start a new session.",
+    );
+  });
+
+  it("user_file: per-code text and upload action; counted sentence only when counted", () => {
+    const base = { error_code: "no_speech", error_kind: "user_file", retries_left: 0 };
+    const no = failureView(doc({ ...base, counted: false }));
+    expect(no).toEqual({ action: "upload_different", message: messageForCode("no_speech"), note: undefined });
+    const yes = failureView(doc({ ...base, counted: true }));
+    expect(yes.note).toBe("This counted toward your limit.");
+  });
+
+  it("unknown code and no kind falls back to permanent_internal copy", () => {
+    for (const d of [doc({ error_code: "something_new" }), doc({}), doc({ error_code: "toString" })]) {
+      const v = failureView(d);
+      expect(v.action).toBe("new_session");
+      expect(v.message).toMatch(/on our side/);
+    }
+  });
+
+  it("counted=true never adds the sentence outside user_file", () => {
+    expect(failureView(doc({ error_kind: "transient", error_code: "run_failed", retries_left: 1, counted: true })).note).toBe(
+      "This did not count toward your limit.",
+    );
+  });
+});
+
+describe("cancelErrorMessage", () => {
+  it("409 reads as already finished; anything else as a retryable failure", () => {
+    expect(cancelErrorMessage(parseErrorBody(409, "invalid_state"))).toBe("This session already finished or failed.");
+    expect(cancelErrorMessage(parseErrorBody(500, "internal_error"))).toBe("We couldn't cancel this session. Try again.");
+    expect(cancelErrorMessage(new TypeError("network"))).toBe("We couldn't cancel this session. Try again.");
   });
 });

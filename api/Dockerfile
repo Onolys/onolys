@@ -34,7 +34,8 @@ COPY --from=build /opt/venv /opt/venv
 COPY config /app/config
 COPY api/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 ARG GIT_SHA=dev
-ENV PATH=/opt/venv/bin:$PATH PYTHONUNBUFFERED=1 PORT=8080 GIT_SHA=${GIT_SHA}
+ENV PATH=/opt/venv/bin:$PATH PYTHONUNBUFFERED=1 PORT=8080 GIT_SHA=${GIT_SHA} \
+    LITELLM_LOCAL_MODEL_COST_MAP=True
 WORKDIR /app
 USER onolys
 EXPOSE 8080

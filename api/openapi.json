@@ -148,6 +148,75 @@
         "title": "AudioUploadResponse",
         "type": "object"
       },
+      "CancelResult": {
+        "properties": {
+          "counted": {
+            "description": "Did the cancel use a unit of the daily limit",
+            "title": "Counted",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "counted"
+        ],
+        "title": "CancelResult",
+        "type": "object"
+      },
+      "ClientInfo": {
+        "description": "What produced a session or interview (02-logging R13). Client-reported, so every field is\noptional and sanitized, never rejected: non-strings become absent, control characters are\nstripped, and values are cut to a cap. Unknown keys are ignored.",
+        "properties": {
+          "audio_engine": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Web audio engine name and version",
+            "title": "Audio Engine"
+          },
+          "recorder_mime": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "MediaRecorder container the web chose",
+            "title": "Recorder Mime"
+          },
+          "user_agent": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Browser User-Agent, trimmed to 200 chars",
+            "title": "User Agent"
+          },
+          "web_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Web build id (git SHA, or `dev`)",
+            "title": "Web Version"
+          }
+        },
+        "title": "ClientInfo",
+        "type": "object"
+      },
       "CodedSpan": {
         "additionalProperties": false,
         "description": "Exactly one half-open time (milliseconds) or zero-based turn range.",
@@ -295,7 +364,8 @@
               "report_ready",
               "failed",
               "deleting",
-              "upload_incomplete"
+              "upload_incomplete",
+              "cancelled"
             ],
             "title": "Status",
             "type": "string"
@@ -310,6 +380,17 @@
       },
       "CreateInterviewRequest": {
         "properties": {
+          "client": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ClientInfo"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Optional: web build and recorder info"
+          },
           "scenario_id": {
             "maxLength": 100,
             "minLength": 1,
@@ -338,6 +419,17 @@
       },
       "CreateSessionRequest": {
         "properties": {
+          "client": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ClientInfo"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Optional: which web build, recorder and audio engine made the request"
+          },
           "coded_span": {
             "anyOf": [
               {
@@ -437,8 +529,24 @@
         "title": "DraftRating",
         "type": "object"
       },
+      "Empty": {
+        "properties": {},
+        "title": "Empty",
+        "type": "object"
+      },
       "EndInterviewRequest": {
         "properties": {
+          "client": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ClientInfo"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Optional: recorder container and audio engine, added to the interview"
+          },
           "discard": {
             "default": false,
             "description": "Throw the interview away (state `abandoned`)",
@@ -497,7 +605,8 @@
               "concurrent_runs",
               "email_unverified",
               "conflict",
-              "interview_too_long"
+              "interview_too_long",
+              "email_unavailable"
             ],
             "title": "Code",
             "type": "string"
@@ -1023,6 +1132,45 @@
         "title": "ReportView",
         "type": "object"
       },
+      "ResetRequest": {
+        "properties": {
+          "email": {
+            "maxLength": 254,
+            "minLength": 3,
+            "title": "Email",
+            "type": "string"
+          }
+        },
+        "required": [
+          "email"
+        ],
+        "title": "ResetRequest",
+        "type": "object"
+      },
+      "RetryStarted": {
+        "properties": {
+          "run_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The new run, when the failed step was `run`",
+            "title": "Run Id"
+          },
+          "session": {
+            "$ref": "#/components/schemas/SessionRef"
+          }
+        },
+        "required": [
+          "session"
+        ],
+        "title": "RetryStarted",
+        "type": "object"
+      },
       "RunList": {
         "properties": {
           "items": {
@@ -1100,7 +1248,8 @@
               "report_ready",
               "failed",
               "deleting",
-              "upload_incomplete"
+              "upload_incomplete",
+              "cancelled"
             ],
             "title": "Status",
             "type": "string"
@@ -1332,8 +1481,68 @@
         "title": "ScenarioPublic",
         "type": "object"
       },
+      "SessionCancel": {
+        "description": "The result of a user cancel (04-cancel R7): did it use a unit, how many, and when.",
+        "properties": {
+          "at": {
+            "format": "date-time",
+            "title": "At",
+            "type": "string"
+          },
+          "counted": {
+            "title": "Counted",
+            "type": "boolean"
+          },
+          "units": {
+            "title": "Units",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "counted",
+          "units",
+          "at"
+        ],
+        "title": "SessionCancel",
+        "type": "object"
+      },
       "SessionDetail": {
         "properties": {
+          "audio_s": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Recording duration in seconds",
+            "title": "Audio S"
+          },
+          "cancel": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SessionCancel"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Set once cancelled: whether it used a unit, how many, and when"
+          },
+          "counted": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Did the session end (cancelled or failed) having used a unit; null n/a",
+            "title": "Counted"
+          },
           "created_at": {
             "format": "date-time",
             "title": "Created At",
@@ -1348,6 +1557,23 @@
                 "type": "null"
               }
             ]
+          },
+          "error_kind": {
+            "anyOf": [
+              {
+                "enum": [
+                  "transient",
+                  "permanent_internal",
+                  "user_file"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Failure kind: transient, permanent_internal or user_file; null if ok",
+            "title": "Error Kind"
           },
           "flags": {
             "$ref": "#/components/schemas/Flags"
@@ -1415,6 +1641,68 @@
             "title": "Progress",
             "type": "integer"
           },
+          "progress_next": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Base percent of the next stage (99 on the last); null when none",
+            "title": "Progress Next"
+          },
+          "retries_left": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Retries left after a transient failure (0 otherwise); null if ok",
+            "title": "Retries Left"
+          },
+          "stage_expected_s": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Typical seconds the current stage takes; null when untimed",
+            "title": "Stage Expected S"
+          },
+          "stage_started_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Entered the current state",
+            "title": "Stage Started At"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "First entry to uploading (a re-run: its start); null before",
+            "title": "Started At"
+          },
           "status": {
             "enum": [
               "created",
@@ -1426,7 +1714,8 @@
               "report_ready",
               "failed",
               "deleting",
-              "upload_incomplete"
+              "upload_incomplete",
+              "cancelled"
             ],
             "title": "Status",
             "type": "string"
@@ -1457,6 +1746,12 @@
             "format": "date-time",
             "title": "Updated At",
             "type": "string"
+          },
+          "waited_ms": {
+            "default": 0,
+            "description": "Total milliseconds spent waiting for the user input",
+            "title": "Waited Ms",
+            "type": "integer"
           },
           "warnings": {
             "items": {
@@ -1523,6 +1818,18 @@
       },
       "SessionListItem": {
         "properties": {
+          "counted": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Did the session end (cancelled or failed) having used a unit; null n/a",
+            "title": "Counted"
+          },
           "created_at": {
             "format": "date-time",
             "title": "Created At",
@@ -1577,7 +1884,8 @@
               "report_ready",
               "failed",
               "deleting",
-              "upload_incomplete"
+              "upload_incomplete",
+              "cancelled"
             ],
             "title": "Status",
             "type": "string"
@@ -1619,7 +1927,8 @@
               "report_ready",
               "failed",
               "deleting",
-              "upload_incomplete"
+              "upload_incomplete",
+              "cancelled"
             ],
             "title": "Status",
             "type": "string"
@@ -1887,6 +2196,50 @@
         "title": "TranscriptView",
         "type": "object"
       },
+      "UploadLimits": {
+        "properties": {
+          "extensions": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Extensions",
+            "type": "array"
+          },
+          "interview_max_duration_s": {
+            "title": "Interview Max Duration S",
+            "type": "number"
+          },
+          "max_bytes": {
+            "title": "Max Bytes",
+            "type": "integer"
+          },
+          "max_duration_s": {
+            "title": "Max Duration S",
+            "type": "number"
+          },
+          "mime_types": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Mime Types",
+            "type": "array"
+          },
+          "short_warning_s": {
+            "title": "Short Warning S",
+            "type": "number"
+          }
+        },
+        "required": [
+          "max_bytes",
+          "max_duration_s",
+          "interview_max_duration_s",
+          "short_warning_s",
+          "extensions",
+          "mime_types"
+        ],
+        "title": "UploadLimits",
+        "type": "object"
+      },
       "Usage": {
         "properties": {
           "eval": {
@@ -1901,6 +2254,25 @@
           "interview"
         ],
         "title": "Usage",
+        "type": "object"
+      },
+      "VerificationRequest": {
+        "properties": {
+          "next": {
+            "anyOf": [
+              {
+                "maxLength": 512,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Optional in-app path to continue to after verifying.",
+            "title": "Next"
+          }
+        },
+        "title": "VerificationRequest",
         "type": "object"
       }
     },
@@ -2118,6 +2490,138 @@
         "summary": "Create a key (revokes the current one); the secret is shown once",
         "tags": [
           "api-key"
+        ]
+      }
+    },
+    "/v1/auth/email/password-reset": {
+      "post": {
+        "description": "Always `202 {}`: known, unknown, disabled, rate-limited and failed sends are indistinguishable, so account existence cannot be probed.",
+        "operationId": "sendPasswordResetEmail",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResetRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Empty"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "`unauthenticated`: missing, invalid or revoked credentials"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "`daily_cap_reached` (daily run cap), `concurrent_runs` (a run is already in progress) or `rate_limited`"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "`internal_error`"
+          }
+        },
+        "summary": "Email a password-reset link if the account exists (no auth)",
+        "tags": [
+          "auth-email"
+        ]
+      }
+    },
+    "/v1/auth/email/verification": {
+      "post": {
+        "description": "Sends to the account's own address, never one from the request. An already verified account gets `202` and no email. `429 rate_limited` after 1 per minute / 5 per hour; `503 email_unavailable` when the email could not be sent.",
+        "operationId": "sendVerificationEmail",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VerificationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Empty"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "`unauthenticated`: missing, invalid or revoked credentials"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "`daily_cap_reached` (daily run cap), `concurrent_runs` (a run is already in progress) or `rate_limited`"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "`internal_error`"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "summary": "Email the signed-in user a verification link (unverified tokens allowed)",
+        "tags": [
+          "auth-email"
         ]
       }
     },
@@ -3295,6 +3799,98 @@
         ]
       }
     },
+    "/v1/sessions/{id}/cancel": {
+      "post": {
+        "description": "Moves a session in any in-progress state (`created` ... `running`) to the terminal `cancelled` state in one transaction; workers stop at their next check and nothing is deleted. `counted` says whether a unit was used: transcription had started and no run was reserved (interview sessions never count). Repeating it answers 200 with the same `counted` and charges nothing more. Never 429, even over the cap. `report_ready` and `failed` are 409 `invalid_state`; `deleting`, unknown or another user's is 404.",
+        "operationId": "cancelSession",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "pattern": "^[0-9a-f]{32}$",
+              "title": "Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CancelResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "`unauthenticated`: missing, invalid or revoked credentials"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "`not_found`: no such resource for this user (never 403, so ids cannot be probed)"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "`invalid_parameters` (incl. a malformed id, cursor or body), `unsupported_audio`, `audio_too_large`, `rating_invalid`, `invalid_coded_span` or `session_too_long`"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "`daily_cap_reached` (daily run cap), `concurrent_runs` (a run is already in progress) or `rate_limited`"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "`internal_error`"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "summary": "Cancel a session that is still being processed",
+        "tags": [
+          "sessions"
+        ]
+      }
+    },
     "/v1/sessions/{id}/rating": {
       "get": {
         "operationId": "getRating",
@@ -3386,7 +3982,7 @@
         ]
       },
       "put": {
-        "description": "`final=false`: overwrites the draft; the shape and size limits are checked (an unset `change_goal` is fine) and nothing else changes. `final=true`: validates the card (`change_goal` required), writes a new revision and sets `rating_submitted`/`has_rating`; `no_rating=true`, or a card with no scores, counts or notes, is a \"no rating\" revision (`has_rating=false`). Over 1,000 chars per reason/note/example or 3,000 for `notes` is 422 `rating_invalid`. Allowed in every state but `deleting`; a final card is refused with 409 `rating_final` once a rating was submitted (or a report exists): the rating is final, only drafts stay open. A final card may start the first run (R4).",
+        "description": "`final=false`: overwrites the draft; the shape and size limits are checked (an unset `change_goal` is fine) and nothing else changes. `final=true`: validates the card (`change_goal` required), writes a new revision and sets `rating_submitted`/`has_rating`; `no_rating=true`, or a card with no scores, counts or notes, is a \"no rating\" revision (`has_rating=false`). Over 1,000 chars per reason/note/example or 3,000 for `notes` is 422 `rating_invalid`. Allowed in every state but `deleting` (404) and `cancelled` (409 `invalid_state`); a final card is refused with 409 `rating_final` once a rating was submitted (or a report exists): the rating is final, only drafts stay open. A final card may start the first run (R4).",
         "operationId": "putRating",
         "parameters": [
           {
@@ -3678,6 +4274,98 @@
         ]
       }
     },
+    "/v1/sessions/{id}/retry": {
+      "post": {
+        "description": "Allowed only for a `failed` session whose error kind is `transient`, with retries left (`MAX_SESSION_RETRIES`, 3) and no final rating; otherwise 409 `invalid_state`. One transaction counts the retry and moves the state: `validate` re-enters `validating` (409 if the staged upload is gone), `transcribe` re-enters `transcribing` with a fresh step record, `run` starts a new run with the failed run's preset, n_runs and span, reserving a unit like a fresh start (429 `daily_cap_reached` or `concurrent_runs`; a refused retry is not counted).",
+        "operationId": "retrySession",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "pattern": "^[0-9a-f]{32}$",
+              "title": "Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RetryStarted"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "`unauthenticated`: missing, invalid or revoked credentials"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "`not_found`: no such resource for this user (never 403, so ids cannot be probed)"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "`invalid_parameters` (incl. a malformed id, cursor or body), `unsupported_audio`, `audio_too_large`, `rating_invalid`, `invalid_coded_span` or `session_too_long`"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "`daily_cap_reached` (daily run cap), `concurrent_runs` (a run is already in progress) or `rate_limited`"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "`internal_error`"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "summary": "Retry the step that failed (capped, one path for every step)",
+        "tags": [
+          "sessions"
+        ]
+      }
+    },
     "/v1/sessions/{id}/runs": {
       "get": {
         "operationId": "listRuns",
@@ -3769,7 +4457,7 @@
         ]
       },
       "post": {
-        "description": "Needs the transcript and the confirmed speaker; uses the stored final rating revision or runs as no-rating. `preset` changes LLM routes only (the transcript is reused). On Try again (a failed session) `preset` and `n_runs` are ignored: the failed run's values are reused. Counts against the daily cap: 429 `daily_cap_reached`; 429 `concurrent_runs` while another run is in progress. 409 `rating_final` once a report exists (the rating is final: no re-run, interview sessions included). 409 `invalid_state` while a run is in progress, before the inputs exist, or after a bad-file failure (upload a different file instead).",
+        "description": "Needs the transcript and the confirmed speaker; uses the stored final rating revision or runs as no-rating. `preset` changes LLM routes only (the transcript is reused). Counts against the daily cap: 429 `daily_cap_reached`; 429 `concurrent_runs` while another run is in progress. 409 `rating_final` once a report exists (the rating is final: no re-run, interview sessions included). 409 `invalid_state` while a run is in progress, before the inputs exist, or on a failed session (use `POST /sessions/{id}/retry`).",
         "operationId": "startRun",
         "parameters": [
           {
@@ -3890,7 +4578,7 @@
             "APIKeyHeader": []
           }
         ],
-        "summary": "Start a run by hand (Try again after a system failure, or the first run held back)",
+        "summary": "Start the first run by hand (held back by the cap)",
         "tags": [
           "runs"
         ]
@@ -4314,6 +5002,65 @@
         "summary": "Upload a transcript.v1 JSON or label-prefixed UTF-8 text file",
         "tags": [
           "transcript"
+        ]
+      }
+    },
+    "/v1/upload-limits": {
+      "get": {
+        "operationId": "getUploadLimits",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UploadLimits"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "`unauthenticated`: missing, invalid or revoked credentials"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "`daily_cap_reached` (daily run cap), `concurrent_runs` (a run is already in progress) or `rate_limited`"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "`internal_error`"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "summary": "Upload limits",
+        "tags": [
+          "upload"
         ]
       }
     },

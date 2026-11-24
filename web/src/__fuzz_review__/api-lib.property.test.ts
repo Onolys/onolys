@@ -6,7 +6,7 @@ import {
   ERROR_CODES,
   GENERIC_MESSAGE,
   describeError,
-  failureAction,
+  failureView,
   messageForCode,
   parseErrorBody,
 } from "../api/errors";
@@ -99,11 +99,19 @@ describe("api/errors", () => {
     );
   });
 
-  it("failureAction is total and returns one of two values", () => {
+
+  it("failureView is total and always yields a message and a known action", () => {
     fc.assert(
-      fc.property(fc.option(fc.string(), { nil: undefined }), fc.boolean(), (c, t) => {
-        expect(["upload_new", "try_again"]).toContain(failureAction(c, t));
-      }),
+      fc.property(
+        fc.option(fc.string(), { nil: undefined }),
+        fc.option(fc.string(), { nil: undefined }),
+        fc.option(fc.integer({ min: 0, max: 5 }), { nil: undefined }),
+        (code, kind, left) => {
+          const v = failureView({ error_code: code ?? null, error_kind: kind as never, retries_left: left });
+          expect(["retry", "new_session", "upload_different"]).toContain(v.action);
+          expect(v.message.length).toBeGreaterThan(0);
+        },
+      ),
     );
   });
 });

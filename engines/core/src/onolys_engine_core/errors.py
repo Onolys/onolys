@@ -5,6 +5,13 @@ class OnolysError(Exception):
     """Base class for all Onolys errors."""
 
 
+class RunAborted(Exception):
+    """Raised by a progress callback to stop a run on purpose (e.g. the user cancelled).
+
+    Engines must let it propagate out of the callback; every other callback error is ignored.
+    Deliberately not an `OnolysError`: it is a stop signal, not a failure to map."""
+
+
 class InputError(OnolysError):
     """The caller supplied invalid input (bad transcript, unknown preset, ...)."""
 

@@ -10,6 +10,7 @@ import type { ErrorCode, RatingCard, SessionState } from "../api/types";
 
 type RunStage = "code" | "tips" | "assemble";
 import type { MemoryStatusEmitter, SessionStatusDoc } from "../api/statusListener";
+import type { FailureKind } from "../api/errors";
 import {
   edgeTranscript,
   reportFor,
@@ -67,6 +68,34 @@ const STAGES: RunStage[] = ["code", "tips", "assemble"];
 /** Progress weights added as each stage finishes (SP02 STAGE_WEIGHTS: peaks at 96, then 100 when the report is ready). */
 const STAGE_WEIGHT: Record<RunStage, number> = { code: 40, tips: 8, assemble: 3 };
 const RUN_START_PROGRESS = 45;
+/** Mirrors api progress.py (the single server table): base % per state, the 99 cap, expected stage seconds. */
+const STATE_PROGRESS: Record<string, number> = {
+  created: 0, uploading: 5, validating: 10, transcribing: 20, awaiting_input: 40, running: 45, report_ready: 100,
+};
+const NEXT_STATE: Record<string, string> = {
+  created: "uploading", uploading: "validating", validating: "transcribing",
+  transcribing: "awaiting_input", awaiting_input: "running",
+};
+const MAX_PROGRESS = 99;
+const STAGE_EXPECTED_S: Record<string, number> = { uploading: 30, validating: 15, code: 120, tips: 40, assemble: 15 };
+/** Mock recording length (the mock has no real audio), so the transcription estimate is clamp(20 + 0.2 x 300, 30, 600) = 80. */
+const MOCK_AUDIO_S = 300;
+
+function stageExpectedS(state: string, step: string | null): number | null {
+  if (state === "transcribing") return Math.round(Math.min(600, Math.max(30, 20 + 0.2 * MOCK_AUDIO_S)));
+  if (state === "running") return STAGE_EXPECTED_S[step && step in STAGE_WEIGHT ? step : STAGES[0]];
+  return STAGE_EXPECTED_S[state] ?? null;
+}
+
+function progressNext(state: string, step: string | null): number | null {
+  if (state === "running") {
+    const stage = (step && step in STAGE_WEIGHT ? step : STAGES[0]) as RunStage;
+    if (stage === STAGES[STAGES.length - 1]) return MAX_PROGRESS;
+    return RUN_START_PROGRESS + STAGES.slice(0, STAGES.indexOf(stage) + 1).reduce((n, s) => n + STAGE_WEIGHT[s], 0);
+  }
+  const next = NEXT_STATE[state];
+  return next ? STATE_PROGRESS[next] : null;
+}
 
 const CANONICAL: Record<string, { ext: string; types: string[]; canonical: string }> = {
   mp3: { ext: "mp3", types: ["audio/mpeg", "audio/mp3"], canonical: "audio/mpeg" },
@@ -112,6 +141,8 @@ interface SessionRec {
   step: string | null;
   progress: number;
   error: { code: string; step?: string } | null;
+  /** Retries already used (the API's `retries`; at most MAX_SESSION_RETRIES). */
+  retries: number;
   flags: S["Flags"];
   clinician_speaker: string | null;
   transcript?: S["TranscriptView"];
@@ -120,6 +151,12 @@ interface SessionRec {
   uploadId: string | null;
   uploadType: string | null;
   interview_id?: string;
+  /** Whether a (mock) Chirp job has been submitted while transcribing: decides the cancel charge (R4). */
+  sttSubmitted: boolean;
+  /** Set once cancelled (the API's `cancel`). */
+  cancel: S["SessionCancel"] | null;
+  /** Progress timing (05-processing-screen R2): when the state was entered, first upload, ms spent awaiting input. */
+  timing: { state: string; step: string | null; entered: number; started_at: string | null; waited_ms: number; audio_s: number | null };
   finals: Rating[];
   draft: { card: RatingCard; updated_at: string; seq: number } | null;
   runs: RunRec[];
@@ -137,6 +174,18 @@ const BAD_FILE_CODES = new Set([
   "speakers_not_separated",
   "transcription_failed",
 ]);
+
+/** Mirrors the API's KIND_BY_CODE (03-failure-policy D2); a code not listed here is permanent. */
+const TRANSIENT_CODES = new Set(["upstream_unavailable", "deadline_exceeded", "rate_limited"]);
+const MAX_SESSION_RETRIES = 3;
+
+function kindFor(code: string | undefined): FailureKind | null {
+  if (!code) return null;
+  if (TRANSIENT_CODES.has(code)) return "transient";
+  return BAD_FILE_CODES.has(code) || code === "invalid_coded_span" || code === "session_too_long" || code === "invalid_parameters"
+    ? "user_file"
+    : "permanent_internal";
+}
 
 /** Stand-in for the GCS signed-URL host. Same-origin in a browser so the built mock app passes the prod CSP connect-src (prod uses storage.googleapis.com). */
 function uploadOrigin(): string {
@@ -203,16 +252,49 @@ export class MockBackend {
     return s as SessionRec;
   }
 
+  /** Stamp the timing fields when the state changed since the last emit (mirrors api `timing_fields`). */
+  private stamp(s: SessionRec): void {
+    const tm = s.timing;
+    if (tm.state === s.state) {
+      if (s.state === "running" && tm.step !== s.step) {
+        tm.step = s.step; // each run stage restarts its own clock (api run.py progress_cb)
+        tm.entered = this.now().getTime();
+      }
+      return;
+    }
+    const now = this.now();
+    if (tm.state === "awaiting_input") tm.waited_ms += Math.max(0, now.getTime() - tm.entered);
+    if (s.state === "uploading" && !tm.started_at) tm.started_at = now.toISOString();
+    if (s.state === "running" && tm.state === "report_ready") {
+      tm.started_at = now.toISOString();
+      tm.waited_ms = 0;
+    }
+    if (s.state === "transcribing") tm.audio_s = MOCK_AUDIO_S; // set by the validate step in the API
+    tm.state = s.state;
+    tm.step = s.step;
+    tm.entered = now.getTime();
+  }
+
   private emit(s: SessionRec): void {
     s.updated_at = this.now().toISOString();
+    this.stamp(s);
     const doc: SessionStatusDoc = {
       uid: s.uid,
       state: s.state,
       step: s.step,
       progress: s.progress,
       error_code: s.error?.code ?? null,
+      error_kind: s.state === "failed" ? kindFor(s.error?.code) : null,
+      retries_left: s.state === "failed" && kindFor(s.error?.code) === "transient" ? MAX_SESSION_RETRIES - s.retries : 0,
+      counted: s.state === "failed" ? this.failureCounted(s) : s.state === "cancelled" ? (s.cancel?.counted ?? false) : null,
       latest_report_version: s.reports.at(-1)?.version ?? null,
       updated_at: this.now().toISOString(),
+      started_at: s.timing.started_at,
+      stage_started_at: new Date(s.timing.entered).toISOString(),
+      waited_ms: s.timing.waited_ms,
+      progress_next: progressNext(s.state, s.step),
+      stage_expected_s: stageExpectedS(s.state, s.step),
+      ...(s.timing.audio_s != null ? { audio_s: s.timing.audio_s } : {}),
       ...s.flags,
     };
     this.emitter.emit(s.id, doc);
@@ -322,6 +404,32 @@ export class MockBackend {
     return sampleTranscript;
   }
 
+  /** Whether a failed session's run was counted against the cap (a failed validate/transcribe never is). */
+  private failureCounted(s: SessionRec): boolean {
+    return s.error?.step === "code" || s.error?.step === "run" ? (s.runs.at(-1)?.counted ?? false) : false;
+  }
+
+  /** A bad upload leaves no session: only a data-free `upload_failed` status stub remains (R11). */
+  private uploadFailed(s: SessionRec, code: string): void {
+    this.emitter.emit(s.id, {
+      uid: s.uid,
+      state: "upload_failed",
+      step: null,
+      progress: 0,
+      error_code: code,
+      error_kind: "user_file",
+      retries_left: 0,
+      counted: false,
+      latest_report_version: null,
+      updated_at: this.now().toISOString(),
+      transcript_ready: false,
+      speaker_confirmed: false,
+      rating_submitted: false,
+      has_rating: false,
+    });
+    this.sessions.delete(s.id);
+  }
+
   private fail(s: SessionRec, code: string, step: string): void {
     s.state = "failed";
     s.error = { code, step };
@@ -381,11 +489,15 @@ export class MockBackend {
       step: null,
       progress: 0,
       error: null,
+      retries: 0,
       flags: { transcript_ready: false, speaker_confirmed: false, rating_submitted: false, has_rating: false },
       clinician_speaker: null,
       first_run_id: null,
       holdFirstStart: false,
       uploadId: null,
+      sttSubmitted: false,
+      cancel: null,
+      timing: { state: "created", step: null, entered: this.now().getTime(), started_at: null, waited_ms: 0, audio_s: null },
       uploadType: null,
       finals: [],
       draft: null,
@@ -442,8 +554,24 @@ export class MockBackend {
       interview_id: s.interview_id ?? null,
       free_run: Boolean(s.interview_id), // the mock has no void concept: interview_id alone
       links: { self: `/v1/sessions/${s.id}` },
+      started_at: s.timing.started_at,
+      stage_started_at: new Date(s.timing.entered).toISOString(),
+      waited_ms: s.timing.waited_ms,
+      audio_s: s.timing.audio_s,
+      progress_next: progressNext(s.state, s.step),
+      stage_expected_s: stageExpectedS(s.state, s.step),
     };
-    if (s.error) detail.error = { ...s.error };
+    if (s.error) {
+      detail.error = { ...s.error };
+      const kind = kindFor(s.error.code);
+      detail.error_kind = kind;
+      detail.retries_left = kind === "transient" ? Math.max(0, MAX_SESSION_RETRIES - s.retries) : 0;
+      detail.counted = this.failureCounted(s);
+    }
+    if (s.cancel) {
+      detail.cancel = { ...s.cancel };
+      detail.counted = s.cancel.counted;
+    }
     return detail;
   }
 
@@ -508,6 +636,7 @@ export class MockBackend {
   putRating(uid: string, sid: string, body: S["RatingRequest"]): S["RatingSaved"] {
     const s = this.own(uid, sid);
     if (s.state === "deleting") bad(409, "invalid_state", "Session is being deleted.");
+    if (s.state === "cancelled") bad(409, "invalid_state", "This session was cancelled.");
     const card = (body.card ?? {}) as RatingCard;
     validateCard(card, body.final === true);
     if (body.final === true && (s.flags.rating_submitted || s.state === "report_ready" || s.reports.length > 0)) {
@@ -580,7 +709,7 @@ export class MockBackend {
 
   confirmSpeaker(uid: string, sid: string, speaker: string): S["CreateSessionResponse"] {
     const s = this.own(uid, sid);
-    if (!s.flags.transcript_ready || s.state === "running" || s.state === "deleting")
+    if (!s.flags.transcript_ready || s.state === "running" || s.state === "deleting" || s.state === "cancelled")
       bad(409, "invalid_state", "Speakers cannot be confirmed now.");
     if (!this.turns(s).some((t) => t.speaker === speaker)) invalidParam("clinician_speaker is not a speaker");
     s.clinician_speaker = speaker;
@@ -694,6 +823,65 @@ export class MockBackend {
     return { run_id: run.run_id, session: { id: s.id, status: s.state } };
   }
 
+  /** POST /sessions/{id}/retry: only a failed, transient session with retries left; counts the retry. */
+  retrySession(uid: string, sid: string): S["RetryStarted"] {
+    const s = this.own(uid, sid);
+    const kind = s.state === "failed" ? kindFor(s.error?.code) : null;
+    if (kind !== "transient" || s.retries >= MAX_SESSION_RETRIES || s.reports.length > 0)
+      bad(409, "invalid_state", "A retry cannot start in this state.");
+    const step = s.error?.step;
+    if (step === "validate" || step === "transcribe") {
+      s.retries += 1;
+      s.error = null;
+      if (step === "transcribe") s.sttSubmitted = false; // the API's retry_step clears stt_operation
+      s.state = step === "validate" ? "validating" : "transcribing";
+      s.step = step;
+      this.emit(s);
+      return { run_id: null, session: { id: s.id, status: s.state } };
+    }
+    if (!s.flags.transcript_ready || !s.flags.speaker_confirmed) bad(409, "invalid_state", "A retry cannot start in this state.");
+    if (!this.isFreeRun(s)) this.checkCap(uid, "eval");
+    for (const o of this.sessions.values()) {
+      if (o.uid === uid && o.state === "running") bad(429, "concurrent_runs", "A rating is already running.");
+    }
+    s.retries += 1;
+    const prior = s.runs.at(-1);
+    const run = this.createRun(s, prior ? { preset: prior.preset, n_runs: prior.n_runs } : {});
+    return { run_id: run.run_id, session: { id: s.id, status: s.state } };
+  }
+
+  /** Test hook: the mock STT job is submitted (a cancel from here on is charged, R4). */
+  submitStt(sid: string): void {
+    const s = this.sessions.get(sid);
+    if (s) s.sttSubmitted = true;
+  }
+
+  /**
+   * POST /sessions/{id}/cancel (04-cancel R2/R4): any in-progress state becomes `cancelled`; a repeat answers
+   * the stored `counted`; report_ready/failed are 409. Charged states: transcribing with the STT job
+   * submitted, awaiting_input. A running session reports its run's `counted` (no new charge). Interview
+   * sessions never count. Cancel is allowed over the cap.
+   */
+  cancelSession(uid: string, sid: string): S["CancelResult"] {
+    const s = this.own(uid, sid);
+    if (s.state === "cancelled") return { counted: s.cancel?.counted ?? false };
+    if (s.state === "report_ready" || s.state === "failed" || s.state === "deleting")
+      bad(409, "invalid_state", "This session already finished or failed.");
+    let counted: boolean;
+    if (s.state === "running") {
+      const run = s.runs.at(-1);
+      counted = run?.counted ?? false;
+      if (run && run.status !== "done") run.status = "failed";
+    } else if (s.interview_id) counted = false;
+    else if (s.state === "awaiting_input") counted = true;
+    else counted = s.state === "transcribing" && s.sttSubmitted;
+    if (counted && s.state !== "running") this.count(uid, "eval");
+    s.cancel = { counted, units: counted ? 1 : 0, at: this.now().toISOString() };
+    s.state = "cancelled";
+    this.emit(s);
+    return { counted };
+  }
+
   listRuns(uid: string, sid: string): S["RunView"][] {
     return this.own(uid, sid).runs.map(publicRun);
   }
@@ -772,7 +960,8 @@ export class MockBackend {
 
     if (s.state === "validating") {
       const code = this.injected(s, VALIDATE_FAILS);
-      if (code) this.fail(s, code, "validate");
+      if (this.titleIs(s, "fail-upload_failed")) this.uploadFailed(s, "audio_unreadable");
+      else if (code) this.fail(s, code, "validate");
       else {
         s.state = "transcribing";
         s.step = "transcribe";
@@ -800,12 +989,13 @@ export class MockBackend {
       const run = s.runs.at(-1);
       if (!run) return false;
       const stage = STAGES[run.stageIdx];
-      if (stage === "code" && this.titleIs(s, "fail-code")) {
+      const codeFail = this.titleIs(s, "fail-code") ? "internal_error" : this.titleIs(s, "fail-transient") ? "upstream_unavailable" : null;
+      if (stage === "code" && codeFail) {
         run.status = "failed";
-        this.fail(s, "internal_error", "code");
+        this.fail(s, codeFail, "code");
         return true;
       }
-      s.progress += STAGE_WEIGHT[stage];
+      s.progress = Math.min(MAX_PROGRESS, s.progress + STAGE_WEIGHT[stage]);
       run.stageIdx += 1;
       if (run.stageIdx < STAGES.length) {
         run.stage = STAGES[run.stageIdx];
@@ -813,6 +1003,7 @@ export class MockBackend {
       } else {
         run.status = "done";
         run.stage = null;
+        this.emit(s); // the last stage peaks at 96 (under the 99 cap) before the report is ready
         this.finishRun(s, run);
       }
       this.emit(s);

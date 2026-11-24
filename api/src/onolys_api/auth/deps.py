@@ -64,7 +64,7 @@ class Authenticator:
                 self._seen.clear()
             self._seen.add(uid)
 
-    def _from_bearer(self, token: str) -> AuthUser:
+    def _from_bearer(self, token: str, *, allow_unverified: bool = False) -> AuthUser:
         if self._fake:
             uid = token.removeprefix(FAKE_PREFIX) if token.startswith(FAKE_PREFIX) else ""
             if not _UID_OK.match(uid):
@@ -72,7 +72,12 @@ class Authenticator:
             return AuthUser(uid, "token")
         assert self._verifier is not None
         try:
-            return AuthUser(self._verifier.verify(token), "token")
+            uid = (
+                self._verifier.verify(token, allow_unverified=True)
+                if allow_unverified
+                else self._verifier.verify(token)
+            )
+            return AuthUser(uid, "token")
         except EmailNotVerified:
             raise ApiError.of(
                 403, "email_unverified", "Verify your email address to continue."
@@ -96,9 +101,11 @@ class Authenticator:
             self._repo.mark_api_key_used(doc.uid, key_id, now)
         return AuthUser(doc.uid, "api_key")
 
-    def authenticate(self, bearer: str | None, api_key: str | None) -> AuthUser:
+    def authenticate(
+        self, bearer: str | None, api_key: str | None, *, allow_unverified: bool = False
+    ) -> AuthUser:
         if bearer:
-            user = self._from_bearer(bearer)
+            user = self._from_bearer(bearer, allow_unverified=allow_unverified)
         elif api_key:
             user = self._from_api_key(api_key)
         else:
@@ -123,4 +130,18 @@ def current_user_token_only(user: Annotated[AuthUser, Depends(current_user)]) ->
     """API keys may not manage API keys or delete the account (R1)."""
     if user.auth_kind != "token":
         raise ApiError.of(403, "forbidden", "Not allowed.")
+    return user
+
+
+def current_user_unverified_ok(
+    request: Request,
+    creds: Annotated[HTTPAuthorizationCredentials | None, Depends(_bearer)] = None,
+    api_key: Annotated[str | None, Depends(_api_key)] = None,
+) -> AuthUser:
+    """Signed ID tokens only, including tokens awaiting email verification."""
+    if not creds and api_key:
+        raise ApiError.of(403, "forbidden", "Not allowed.")
+    auth: Authenticator = request.app.state.auth
+    user = auth.authenticate(creds.credentials if creds else None, None, allow_unverified=True)
+    request.state.auth_kind = user.auth_kind
     return user

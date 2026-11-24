@@ -2,6 +2,8 @@
 
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
+from dataclasses import replace
+from pathlib import Path
 from threading import Event
 from types import SimpleNamespace
 from unittest.mock import Mock
@@ -9,6 +11,7 @@ from unittest.mock import Mock
 import pytest
 from fastapi.testclient import TestClient
 from onolys_engine_core.engine import EngineResult, RunInfo, RunUsage
+from onolys_engine_core.llm.models import load_models
 from onolys_engine_core.llm.routes import Preset, RouteRegistry
 from onolys_engine_core.registry import EngineRegistry
 from onolys_miti.engine import MitiEngine
@@ -32,6 +35,7 @@ def services():
         bucket=InMemoryBucket(),
         queue=InMemoryTaskQueue(),
         registry=registry,
+        models=load_models(Path(__file__).parents[3] / "config" / "models.yaml"),
         routes=RouteRegistry(
             {"oneshot": {"litellm_id": "synthetic/model"}},
             {"configured-prod": Preset({}), "other": Preset({}), "test-hidden": Preset({})},
@@ -47,6 +51,10 @@ def services():
     return s
 
 
+SEL1 = {"models": ["claude"], "tiers": ["claude-sonnet-5-5"], "efforts": ["low"]}
+SEL2 = {"models": ["claude"], "tiers": ["claude-sonnet-5-5"], "efforts": ["low", "high"]}
+
+
 def start(c, **overrides):
     return c.post(
         "/v1/runs",
@@ -54,7 +62,7 @@ def start(c, **overrides):
         json={
             "input": {"dataset_id": "synthetic", "session_ids": ["one"]},
             "engines": ["human", "miti"],
-            "presets": ["configured-prod"],
+            "selection": SEL1,
             "repeats": 1,
             **overrides,
         },
@@ -97,7 +105,7 @@ def test_expansion_human_once_and_immutable_provenance(services):
     response = start(
         c,
         engines=["human", "miti", "oneshot:miti"],
-        presets=["configured-prod", "other"],
+        selection=SEL2,
         repeats=3,
     )
     assert response.status_code == 200, response.text
@@ -109,7 +117,12 @@ def test_expansion_human_once_and_immutable_provenance(services):
     assert all(t["kind"] == "unit" and t["payload"]["run_id"] == rid for t in services.queue.tasks)
     assert run["created_by"] == "alice@example.com"
     assert run["engine_versions"]["oneshot:miti"] and run["engine_git_sha"]
-    assert run["resolved_presets"]["other"] == {"oneshot": "synthetic/model"}
+    assert "presets" not in run and "resolved_presets" not in run
+    assert set(run["resolved_combos"]) == {
+        "claude/claude-sonnet-5-5/low",
+        "claude/claude-sonnet-5-5/high",
+    }
+    assert all(u["preset"] is None for u in units.values())
     saved = run["input_ref"]["sessions"][0]
     assert saved["coded_span"] == {"start_turn": 0, "end_turn": 2}
     assert saved["change_goal"] == "Test goal" and saved["transcript_sha256"]
@@ -120,7 +133,8 @@ def test_expansion_human_once_and_immutable_provenance(services):
     "overrides",
     [
         {"engines": ["unknown"]},
-        {"presets": ["test-hidden"]},
+        {"selection": {"models": ["claude"], "tiers": ["claude-sonnet-5-5"], "efforts": ["xhigh"]}},
+        {"presets": ["configured-prod"]},
         {"repeats": 2},
         {"input": {"dataset_id": "synthetic", "session_ids": ["missing"]}},
         {"coded_span": {"start_turn": 0, "end_turn": 1}},
@@ -158,7 +172,7 @@ def test_shared_wrapper_attempts_and_billable_failures(services, invalid, feedba
     engine = services.fake_engine = FakeEngine(invalid=invalid)
     engine.accepts_feedback = feedback
     c = client(services=services)
-    rid = start(c, engines=["oneshot:miti"]).json()["run_id"]
+    rid = start_ai(services, c, engines=["oneshot:miti"]).json()["run_id"]
     uid = next(iter(services.repository.list_units(rid)))
     assert dispatch(c, rid, uid).status_code == 200
     assert dispatch(c, rid, uid).status_code == 200
@@ -245,12 +259,12 @@ def test_transient_execution_snapshot_read_failure_can_retry(services, monkeypat
     assert len(engine.calls) == 1
 
 
-@pytest.mark.parametrize("changed", ["sha", "version", "routes"])
+@pytest.mark.parametrize("changed", ["sha", "version", "models"])
 def test_execution_config_drift_fails_before_provider_work(services, monkeypatch, changed):
     engine = services.fake_engine = FakeEngine()
     monkeypatch.setenv("GIT_SHA", "before-deployment")
     c = client(services=services)
-    rid = start(c, engines=["oneshot:miti"]).json()["run_id"]
+    rid = start_ai(services, c, engines=["oneshot:miti"]).json()["run_id"]
     uid = next(iter(services.repository.list_units(rid)))
     factory = services.llm_factory = Mock(wraps=services.llm_factory)
     if changed == "sha":
@@ -258,13 +272,15 @@ def test_execution_config_drift_fails_before_provider_work(services, monkeypatch
     elif changed == "version":
         engine.version = "after-deployment"
     else:
-        services.routes.raw_routes["oneshot"]["litellm_id"] = "synthetic/changed-model"
+        services.models = {
+            k: replace(m, provider="changed-provider") for k, m in services.models.items()
+        }
     assert dispatch(c, rid, uid).status_code == 200
     assert dispatch(c, rid, uid).status_code == 200
     unit = services.repository.get_unit(rid, uid)
     run = services.repository.get_run(rid)
     assert unit["status"] == "failed"
-    assert unit["error"] == {"code": "execution_config_changed"}
+    assert unit["error"] == {"code": "execution_config_changed", "retryable": False}
     assert run["status"] == "failed" and run["completed_units"] == 1
     assert run["usage"]["calls"] == 0 and run["cost_usd_est"] == 0
     assert engine.calls == []
@@ -278,19 +294,20 @@ def test_rerun_uses_current_execution_snapshot_and_matching_config_runs(services
     rid = start(c, engines=["oneshot:miti"]).json()["run_id"]
     original = services.repository.get_run(rid)
     monkeypatch.setenv("GIT_SHA", "after-deployment")
-    services.routes.raw_routes["oneshot"]["litellm_id"] = "synthetic/changed-model"
     engine.version = "after-deployment"
     monkeypatch.setattr(services.registry.get("oneshot"), "version", engine.version)
     response = c.post(
         f"/v1/runs/{rid}/rerun", headers=AUTH,
-        json={"engines": ["oneshot:miti"], "presets": ["configured-prod"], "repeats": 1},
+        json={"engines": ["oneshot:miti"], "selection": SEL1, "repeats": 1},
     )
     assert response.status_code == 200, response.text
     rerun_id = response.json()["run_id"]
     saved = services.repository.get_run(rerun_id)
     assert saved["engine_git_sha"] == "after-deployment" != original["engine_git_sha"]
     assert saved["engine_versions"]["oneshot:miti"] == engine.version
-    assert saved["resolved_presets"] == {"configured-prod": {"oneshot": "synthetic/changed-model"}}
+    assert saved["resolved_combos"]["claude/claude-sonnet-5-5/low"]["litellm_id"] == (
+        "anthropic/claude-sonnet-5-5"
+    )
     uid = next(iter(services.repository.list_units(rerun_id)))
     assert dispatch(c, rerun_id, uid).status_code == 200
     assert services.repository.get_unit(rerun_id, uid)["status"] == "done"
@@ -328,6 +345,12 @@ def test_queue_partial_failure_finishes_unqueued_units(services):
         assert dispatch(c, **task["payload"]).status_code == 200
     run = services.repository.get_run(rid)
     assert run["status"] == "partial" and run["completed_units"] == 2
+
+
+def start_ai(services, c, **overrides):
+    """AI-only run: an upload without gold, since dataset runs always add human."""
+    saved_upload(services)
+    return start(c, input={"upload_id": "saved"}, **overrides)
 
 
 def saved_upload(services, *, ready=True, has_gold=False):
@@ -501,7 +524,7 @@ def test_real_oneshot_with_fake_llm_and_real_lean_invalid_wrapper(services, monk
 
     monkeypatch.setattr(MitiEngine, "run", invalid_lean)
     c = client(services=services)
-    rid = start(c, engines=["miti", "oneshot:miti"]).json()["run_id"]
+    rid = start_ai(services, c, engines=["miti", "oneshot:miti"]).json()["run_id"]
     for uid in services.repository.list_units(rid):
         assert dispatch(c, rid, uid).status_code == 200
     assert len(lean_calls) == 1 and len(calls) == 2
@@ -586,7 +609,7 @@ def test_eight_session_defaults_and_two_session_matrix(services):
         c,
         input={"dataset_id": "synthetic", "session_ids": ids[:2]},
         engines=["human", "miti", "oneshot:miti"],
-        presets=["configured-prod", "other"],
+        selection=SEL2,
         repeats=3,
     ).json()["run_id"]
     assert services.repository.get_run(rid)["total_units"] == 26
@@ -599,7 +622,7 @@ def test_concurrent_terminal_accounting_once_and_last_unit_status(services):
     rid = start(
         c,
         engines=["human", "miti", "oneshot:miti"],
-        presets=["configured-prod", "other"],
+        selection=SEL2,
         repeats=3,
     ).json()["run_id"]
     uids = list(services.repository.list_units(rid))
@@ -623,12 +646,12 @@ def test_firestore_batch_capacity_checked_before_writes(services):
         {
             "input": {"dataset_id": "synthetic", "session_ids": [f"s-{i}" for i in range(500)]},
             "engines": ["human"],
-            "presets": [],
+            "selection": {},
             "repeats": 1,
         }
     )
     before = services.bucket.list("")
-    with pytest.raises(ValueError, match="batch capacity"):
+    with pytest.raises(ValueError, match="maximum is 499"):
         create_run(services, EvalConfig.from_env(ENV), body, "alice@example.com")
     assert services.repository.list_runs() == {} and services.bucket.list("") == before
 
@@ -639,7 +662,7 @@ def test_success_spills_large_output_and_uses_model_price_fallback(services):
 
     services.prices = PriceBook(
         {
-            "synthetic/model": {
+            "anthropic/claude-sonnet-5-5": {
                 "input_usd_per_million": 2,
                 "output_usd_per_million": 8,
             }
@@ -691,7 +714,7 @@ def test_price_metadata_failure_cannot_strand_billable_unit(services):
 
     engine.run = unpriced
     c = client(services=services)
-    rid = start(c, engines=["oneshot:miti"]).json()["run_id"]
+    rid = start_ai(services, c, engines=["oneshot:miti"]).json()["run_id"]
     uid = next(iter(services.repository.list_units(rid)))
     assert dispatch(c, rid, uid).status_code == 200
     run = services.repository.get_run(rid)
@@ -714,7 +737,7 @@ def test_internal_creation_helper_can_reuse_immutable_saved_input(services):
         {
             "input": {"dataset_id": "synthetic", "session_ids": ["one"]},
             "engines": ["oneshot:miti"],
-            "presets": ["other"],
+            "selection": SEL1,
             "repeats": 3,
         }
     )
@@ -725,7 +748,7 @@ def test_internal_creation_helper_can_reuse_immutable_saved_input(services):
     assert saved["transcript_sha256"] == snapshot["sessions"][0]["transcript_sha256"]
     assert saved["change_goal"] == snapshot["sessions"][0]["change_goal"]
     assert saved["coded_span"] == snapshot["sessions"][0]["coded_span"]
-    assert status == "queued" and services.repository.get_run(rid)["total_units"] == 3
+    assert status == "queued" and services.repository.get_run(rid)["total_units"] == 4
 
 
 def test_dataset_full_session_null_span_creates_and_executes_human_unit(services):
@@ -733,7 +756,7 @@ def test_dataset_full_session_null_span_creates_and_executes_human_unit(services
     source["sessions"][0]["coded_span"] = None
     services.bucket.write_json("datasets/synthetic/manifest.json", source)
     c = client(services=services)
-    response = start(c, engines=["human"], presets=[])
+    response = start(c, engines=["human"], selection={})
     assert response.status_code == 200, response.text
     rid = response.json()["run_id"]
     saved = services.repository.get_run(rid)["input_ref"]["sessions"][0]
@@ -742,3 +765,297 @@ def test_dataset_full_session_null_span_creates_and_executes_human_unit(services
     assert dispatch(c, rid, uid).status_code == 200
     assert services.repository.get_run(rid)["status"] == "done"
     assert services.repository.get_unit(rid, uid)["scores"]["counts"] == gold()["counts"]
+
+
+def test_dataset_session_without_gold_is_422_without_orphans(services):
+    # Human is auto-added for datasets, so a missing gold must be rejected cleanly (no
+    # TypeError/503) even when the body omits `human`.
+    services.bucket._objects.pop("datasets/synthetic/one/gold.json")
+    before = services.bucket.list("")
+    response = start(client(services=services), engines=["miti"])
+    assert response.status_code == 422, response.text
+    assert services.repository.list_runs() == {} and services.queue.tasks == []
+    assert services.bucket.list("") == before
+
+
+def test_combo_unit_executes_on_combo_routes(services):
+    engine = services.fake_engine = FakeEngine()
+    seen = []
+    services.llm_factory = lambda routes, metrics: seen.append(routes) or SimpleNamespace(
+        routes=routes
+    )
+    c = client(services=services)
+    rid = start_ai(services, c, engines=["oneshot:miti"], selection=SEL2).json()["run_id"]
+    run = services.repository.get_run(rid)
+    assert run["resolved_combos"]["claude/claude-sonnet-5-5/high"] == {
+        "litellm_id": "anthropic/claude-sonnet-5-5",
+        "effort": "high",
+        "max_output_tokens": 48000,
+        "context_tokens": 1000000,
+        "supports_temperature": False,
+        "caching_mode": "anthropic_ephemeral",
+    }
+    units = services.repository.list_units(rid)
+    uid = next(u for u, v in units.items() if v["combo"]["effort"] == "high")
+    assert dispatch(c, rid, uid).status_code == 200
+    assert services.repository.get_unit(rid, uid)["status"] == "done"
+    (routes,) = seen
+    route = routes["oneshot"]
+    assert route.litellm_id == "anthropic/claude-sonnet-5-5"
+    assert route.extra_params["reasoning_effort"] == "high"
+    assert route.max_output_tokens == 48000 and route.timeout_s == 300
+    ((_, params),) = engine.calls
+    assert params["preset"] is None
+
+
+def test_legacy_preset_unit_still_executes_via_preset_branch(services):
+    engine = services.fake_engine = FakeEngine()
+    seen = []
+    services.llm_factory = lambda routes, metrics: seen.append(routes) or SimpleNamespace(
+        routes=routes
+    )
+    c = client(services=services)
+    rid = start_ai(services, c, engines=["oneshot:miti"]).json()["run_id"]
+    uid = next(iter(services.repository.list_units(rid)))
+    services.repository.update_run(
+        rid,
+        {"resolved_presets": {"configured-prod": {"oneshot": "synthetic/model"}},
+         "resolved_combos": {}},
+    )
+    services.repository.update_unit(
+        rid, uid, {"preset": "configured-prod", "combo": None, "combo_key": None}
+    )
+    assert dispatch(c, rid, uid).status_code == 200
+    assert services.repository.get_unit(rid, uid)["status"] == "done"
+    assert seen[0]["oneshot"].litellm_id == "synthetic/model"
+    ((_, params),) = engine.calls
+    assert params["preset"] == "configured-prod"
+
+
+# ---- Task 5: unit retry on transient errors (R7, D5, D6, AC5) ----
+
+
+class _Err:
+    @staticmethod
+    def make(cls, **attrs):
+        e = cls("provider said no")
+        for k, v in attrs.items():
+            setattr(e, k, v)
+        return e
+
+
+def _scripted(services, script, usage_per_attempt=True):
+    """Engine whose n-th call raises script[n] (an exception) or succeeds when it is None."""
+    from onolys_engine_core.llm.types import LLMRequest, Usage
+
+    engine = services.fake_engine = FakeEngine()
+    ok = engine.run
+    engine.n = 0
+
+    async def run(ctx, value, params, progress_cb=None):
+        step = script[min(engine.n, len(script) - 1)]
+        engine.n += 1
+        if usage_per_attempt:
+            ctx.metrics.record(
+                LLMRequest(tier="oneshot", system="", user="", call_tag="t", response_schema={}),
+                "unknown/model",
+                Usage(input_tokens=7, output_tokens=1),
+                1,
+                1,
+                False,
+            )
+        if step is not None:
+            raise step
+        return await ok(ctx, value, params, progress_cb)
+
+    engine.run = run
+    sleeps = []
+
+    async def fake_sleep(s):
+        sleeps.append(s)
+
+    services.sleep = fake_sleep
+    return engine, sleeps
+
+
+def _one_unit(services, **kw):
+    c = client(services=services)
+    rid = start_ai(services, c, engines=["oneshot:miti"], **kw).json()["run_id"]
+    uid = next(iter(services.repository.list_units(rid)))
+    return c, rid, uid
+
+
+def test_retry_503_then_success(services):
+    from onolys_engine_core.llm.errors import LLMUnavailable
+
+    engine, sleeps = _scripted(services, [_Err.make(LLMUnavailable, http_status=503), None])
+    c, rid, uid = _one_unit(services)
+    assert dispatch(c, rid, uid).status_code == 200
+    unit = services.repository.get_unit(rid, uid)
+    assert unit["status"] == "done" and unit["attempts"] == 2
+    assert len(sleeps) == 1 and 2.5 <= sleeps[0] <= 5
+    assert services.repository.get_run(rid)["status"] == "done"
+    # failed attempt's metrics usage (7 in) is summed with the success usage (10 in)
+    assert unit["run_info"]["usage"]["input_tokens"] == 17
+
+
+def test_three_429_fail_with_all_attempt_usage(services):
+    from onolys_engine_core.llm.errors import LLMRateLimited
+
+    # Real shape: the client marks no_retry=True once its own backoff has used the deadline.
+    err = _Err.make(LLMRateLimited, no_retry=True, http_status=429, retry_after=None)
+    engine, sleeps = _scripted(services, [err])
+    c, rid, uid = _one_unit(services)
+    assert dispatch(c, rid, uid).status_code == 200
+    unit = services.repository.get_unit(rid, uid)
+    assert unit["status"] == "failed" and unit["attempts"] == 3 and engine.n == 3
+    assert unit["error"] == {"code": "llm_rate_limited", "retryable": True}
+    assert unit["run_info"]["usage"]["input_tokens"] == 21
+    assert services.repository.get_run(rid)["usage"]["input_tokens"] == 21
+    assert len(sleeps) == 2
+    assert 2.5 <= sleeps[0] <= 5 and 10 <= sleeps[1] <= 20
+
+
+def test_all_runs_failed_wrapping_transient_is_retried(services):
+    from onolys_engine_core.llm.errors import LLMTimeout
+    from onolys_miti.run import AllRunsFailed
+
+    try:
+        try:
+            raise LLMTimeout("t")
+        except LLMTimeout as inner:
+            raise AllRunsFailed("all 1 run(s) failed") from inner
+    except AllRunsFailed as wrapped:
+        err = wrapped
+    engine, _ = _scripted(services, [err, None])
+    c, rid, uid = _one_unit(services)
+    dispatch(c, rid, uid)
+    unit = services.repository.get_unit(rid, uid)
+    assert unit["status"] == "done" and unit["attempts"] == 2
+
+
+def _with_cause(err, cause):
+    err.__cause__ = cause
+    return err
+
+
+def _permanent_cases():
+    from onolys_engine_core.errors import ConfigError, InputError
+    from onolys_engine_core.llm.errors import LLMBadOutput, LLMUnavailable
+    from onolys_miti.run import AllRunsFailed
+
+    def wrapped(inner):
+        try:
+            try:
+                raise inner
+            except Exception as e:
+                raise AllRunsFailed("all failed") from e
+        except AllRunsFailed as w:
+            return w
+
+    return {
+        "bad_output": LLMBadOutput("truncated"),
+        "auth_401": _Err.make(LLMUnavailable, http_status=401),
+        "bad_request_400": _Err.make(LLMUnavailable, http_status=400),
+        "not_found_404": _Err.make(LLMUnavailable, http_status=404),
+        "context_window_400_cause": _with_cause(
+            _Err.make(LLMUnavailable, http_status=400, error_type="ContextWindowExceededError"),
+            _Err.make(Exception, status_code=400),
+        ),
+        "unprocessable_422_cause": _with_cause(
+            _Err.make(LLMUnavailable, http_status=422), _Err.make(Exception, status_code=422)
+        ),
+        "auth_error_type": _Err.make(LLMUnavailable, error_type="auth"),
+        "all_runs_failed_auth": wrapped(_Err.make(LLMUnavailable, http_status=401)),
+        "input_error": InputError("bad"),
+        "config_error": ConfigError("bad"),
+    }
+
+
+@pytest.mark.parametrize("name", list(_permanent_cases()))
+def test_permanent_errors_make_one_attempt(services, name):
+    err = _permanent_cases()[name]
+    engine, sleeps = _scripted(services, [err])
+    c, rid, uid = _one_unit(services)
+    dispatch(c, rid, uid)
+    unit = services.repository.get_unit(rid, uid)
+    assert unit["status"] == "failed" and unit["attempts"] == 1 and engine.n == 1
+    assert unit["error"]["retryable"] is False and sleeps == []
+
+
+def test_cancel_requested_during_attempt_stops_retrying(services):
+    from onolys_engine_core.llm.errors import LLMUnavailable
+
+    engine, sleeps = _scripted(services, [_Err.make(LLMUnavailable, http_status=503), None])
+    c, rid, uid = _one_unit(services)
+    scripted = engine.run
+
+    async def run_then_cancel(ctx, value, params, progress_cb=None):
+        services.repository.cancel_run(rid)  # cancel lands while the attempt is in flight
+        return await scripted(ctx, value, params, progress_cb)
+
+    engine.run = run_then_cancel
+    dispatch(c, rid, uid)
+    unit = services.repository.get_unit(rid, uid)
+    assert engine.n == 1 and sleeps == []
+    assert unit["status"] == "failed" and unit["attempts"] == 1
+    assert unit["error"] == {"code": "llm_unavailable", "retryable": True}
+    assert unit["run_info"]["usage"]["input_tokens"] == 7
+
+
+def test_unit_attempt_log_lines_carry_run_unit_combo_attempt(services, capsys):
+    import json
+
+    from onolys_engine_core.llm.errors import LLMUnavailable
+
+    _scripted(services, [_Err.make(LLMUnavailable, http_status=503), None])
+    c, rid, uid = _one_unit(services)  # create_app installs the JSON handler
+    capsys.readouterr()
+    dispatch(c, rid, uid)
+    lines = [json.loads(x) for x in capsys.readouterr().err.splitlines() if x.startswith("{")]
+    attempts = [x for x in lines if x["message"] == "unit attempt"]
+    combo = services.repository.get_unit(rid, uid)["combo_key"]
+    assert [(x["run_id"], x["unit_id"], x["combo_key"], x["attempt"]) for x in attempts] == [
+        (rid, uid, combo, "1"),
+        (rid, uid, combo, "2"),
+    ]
+    assert attempts[0]["logger"].startswith("onolys_eval_backend")
+
+
+def test_drift_guard_is_not_retried(services, monkeypatch):
+    engine, sleeps = _scripted(services, [None])
+    c, rid, uid = _one_unit(services)
+    monkeypatch.setattr("onolys_eval_backend.runs._git_sha", lambda: "changed")
+    dispatch(c, rid, uid)
+    unit = services.repository.get_unit(rid, uid)
+    assert unit["error"] == {"code": "execution_config_changed", "retryable": False}
+    assert engine.n == 0 and sleeps == []
+
+
+def test_no_retry_when_budget_under_120s(services, monkeypatch):
+    from onolys_engine_core.llm.errors import LLMUnavailable
+
+    engine, sleeps = _scripted(services, [_Err.make(LLMUnavailable, http_status=503), None])
+    # clock: 800 s elapse during the first attempt, leaving 40 s of the 840 s budget
+    ticks = iter([0, 0, 800, 800, 800, 800, 800])
+    monkeypatch.setattr("onolys_eval_backend.runs.monotonic", lambda: next(ticks, 800))
+    c, rid, uid = _one_unit(services)
+    dispatch(c, rid, uid)
+    unit = services.repository.get_unit(rid, uid)
+    assert unit["status"] == "failed" and unit["attempts"] == 1 and sleeps == []
+    assert unit["error"] == {"code": "llm_unavailable", "retryable": True}
+
+
+def test_sibling_units_unaffected(services):
+    from onolys_engine_core.llm.errors import LLMUnavailable
+
+    engine, _ = _scripted(
+        services, [_Err.make(LLMUnavailable, http_status=503), None, None], usage_per_attempt=False
+    )
+    c, rid, _ = _one_unit(services, selection=SEL2)
+    units = list(services.repository.list_units(rid))
+    for u in units:
+        dispatch(c, rid, u)
+    got = [services.repository.get_unit(rid, u) for u in units]
+    assert sorted(u["attempts"] for u in got if u["engine"] != "human") == [1, 2]
+    assert all(u["status"] == "done" for u in got)

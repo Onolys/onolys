@@ -3,13 +3,13 @@
 `id` is the document id: filled on read, never written. Datetimes are tz-aware UTC.
 """
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any, Literal
 
 from onolys_engine_core.transcript import Transcript
 from onolys_miti.result import CodedSpan
 from onolys_miti.stt import SttRun
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 SessionState = Literal[
     "created",
@@ -22,7 +22,11 @@ SessionState = Literal[
     "failed",
     "deleting",
     "upload_incomplete",
+    "cancelled",
 ]
+# Only the status doc has this state (R11): the session doc of a discarded upload is gone.
+StatusState = Literal[SessionState, "upload_failed"]
+UPLOAD_FAILED_TTL = timedelta(days=7)
 InterviewState = Literal["created", "live", "ended", "abandoned", "uploaded"]
 RunStatus = Literal["pending", "running", "done", "failed"]
 StepStatus = Literal["pending", "running", "done", "failed"]
@@ -37,6 +41,36 @@ class Doc(BaseModel):
 
     def to_store(self) -> dict[str, Any]:
         return self.model_dump(mode="python", exclude={"id"})
+
+
+_CONTROL = dict.fromkeys([*range(32), 127])  # str.translate table: drop control characters
+CLIENT_CAPS = {"web_version": 64, "user_agent": 200, "recorder_mime": 100, "audio_engine": 100}
+
+
+class ClientInfo(BaseModel):
+    """What produced a session or interview (02-logging R13). Client-reported, so every field is
+    optional and sanitized, never rejected: non-strings become absent, control characters are
+    stripped, and values are cut to a cap. Unknown keys are ignored."""
+
+    web_version: str | None = Field(None, description="Web build id (git SHA, or `dev`)")
+    user_agent: str | None = Field(None, description="Browser User-Agent, trimmed to 200 chars")
+    recorder_mime: str | None = Field(None, description="MediaRecorder container the web chose")
+    audio_engine: str | None = Field(None, description="Web audio engine name and version")
+
+    @field_validator("web_version", "user_agent", "recorder_mime", "audio_engine", mode="before")
+    @classmethod
+    def _clean(cls, v: Any, info: Any) -> str | None:
+        if not isinstance(v, str):
+            return None
+        out = v.translate(_CONTROL).strip()[: CLIENT_CAPS[info.field_name]]
+        return out or None
+
+
+class RelayInfo(BaseModel):
+    """Which voice relay build served an interview; written by the relay at connect (R13)."""
+
+    relay_version: str | None = None  # GIT_SHA
+    relay_revision: str | None = None  # K_REVISION
 
 
 class BlobPointer(BaseModel):
@@ -85,9 +119,60 @@ class UploadInfo(BaseModel):
     size_bytes: int
 
 
+FailureKind = Literal["transient", "permanent_internal", "user_file"]
+
+
+def _derive_kind(code: str | None) -> FailureKind:
+    from onolys_api.adapters.error_map import kind_for_code  # lazy: error_map pulls the engines
+
+    return kind_for_code(code)
+
+
+def error_status_fields(error: "SessionError | None", retry_count: int) -> dict[str, Any]:
+    """The status-doc mirror of a session error: `error_code`, `error_kind`, `counted`,
+    `retries_left` (retries still allowed when the kind is transient, else 0). One place for
+    every writer (advance, fail_stale_session in both repos)."""
+    from onolys_api.config import MAX_SESSION_RETRIES
+
+    if error is None:
+        return {"error_code": None, "error_kind": None, "retries_left": 0, "counted": None}
+    kind = error.kind or _derive_kind(error.code)
+    left = max(0, MAX_SESSION_RETRIES - retry_count) if kind == "transient" else 0
+    return {"error_code": error.code, "error_kind": kind, "retries_left": left,
+            "counted": error.counted}  # fmt: skip
+
+
+def retry_allowed(sess: dict[str, Any], max_retries: int, step: str | None = None) -> bool:
+    """The one retry rule (R4) on a stored session dict, for the repo transactions: `failed`, a
+    `transient` error (derived from the code on old docs), room under the cap, and the failed
+    `step` when the caller names one."""
+    if sess.get("state") != "failed" or not sess.get("error"):
+        return False
+    err = SessionError.model_validate(sess["error"])
+    if err.kind != "transient" or sess.get("retry_count", 0) >= max_retries:
+        return False
+    return step is None or err.step == step
+
+
 class SessionError(BaseModel):
     code: str
     step: str | None = None
+    kind: FailureKind | None = None  # filled from the code on write and on read (old docs)
+    counted: bool | None = None  # did this failure use a unit of the user's limit (None: n/a)
+
+    @model_validator(mode="after")
+    def _fill_kind(self) -> "SessionError":
+        if self.kind is None:
+            self.kind = _derive_kind(self.code)
+        return self
+
+
+class SessionCancel(BaseModel):
+    """The result of a user cancel (04-cancel R7): did it use a unit, how many, and when."""
+
+    counted: bool
+    units: int
+    at: datetime
 
 
 class SessionDoc(Doc):
@@ -107,14 +192,14 @@ class SessionDoc(Doc):
     rating_submitted: bool = False
     has_rating: bool = False
     first_run_id: str | None = None
+    retry_count: int = 0  # user-visible retries used; capped at MAX_SESSION_RETRIES (D4)
+    client: ClientInfo = Field(default_factory=ClientInfo)  # web build / browser that created it
     interview_id: str | None = None  # set by the AI interview (SP10): its first run is free (SP11)
-    # set by `validate`: the upload is not the audio the interview's relay recorded, so the free
-    # first run is void (A10); an unset flag on an interview session means the free run stands
-    free_run_void: bool = False
     upload: UploadInfo | None = None
     steps: dict[str, StepRecord] = Field(default_factory=dict)
     warnings: list[str] = Field(default_factory=list)
     error: SessionError | None = None
+    cancel: SessionCancel | None = None
     created_at: datetime = Field(default_factory=utcnow)
     updated_at: datetime = Field(default_factory=utcnow)
     stage_started_at: datetime | None = None  # entered this state; other writes never bump it
@@ -125,16 +210,47 @@ class SessionStatusDoc(Doc):
     """The only client-readable document: no transcript, rating, report text or PHI."""
 
     uid: str
-    state: SessionState = "created"
+    state: StatusState = "created"
     step: str | None = None
     progress: int = 0
     error_code: str | None = None
+    error_kind: FailureKind | None = None
+    retries_left: int = 0
+    counted: bool | None = None
     latest_report_version: int | None = None
     updated_at: datetime = Field(default_factory=utcnow)
+    expire_at: datetime | None = None  # only an `upload_failed` stub: Firestore TTL deletes it
+    # 05-processing-screen R2: numbers and timestamps the processing screen interpolates
+    started_at: datetime | None = None  # first `uploading` (a re-run: its start)
+    stage_started_at: datetime | None = None  # entered the current state
+    waited_ms: int = 0  # total time spent in `awaiting_input`
+    audio_s: float | None = None  # recording duration
+    progress_next: int | None = None  # base % of the next stage (99 on the last)
+    stage_expected_s: int | None = None  # typical duration of the current stage
     transcript_ready: bool = False
     speaker_confirmed: bool = False
     rating_submitted: bool = False
     has_rating: bool = False
+
+    @model_validator(mode="after")
+    def _derive_old_failure(self) -> "SessionStatusDoc":
+        """A failed doc written before `error_kind` existed: derive it from the code. Such a
+        doc has never been retried, so a transient one has every retry left."""
+        if self.state == "failed" and self.error_code and self.error_kind is None:
+            self.error_kind = _derive_kind(self.error_code)
+            if self.error_kind == "transient":
+                from onolys_api.config import MAX_SESSION_RETRIES
+
+                self.retries_left = MAX_SESSION_RETRIES
+        return self
+
+
+def upload_failed_stub(uid: str, code: str, now: datetime) -> SessionStatusDoc:
+    """The data-free status doc left by a discarded upload (R11): reason only, gone in 7 days."""
+    return SessionStatusDoc(
+        uid=uid, state="upload_failed", error_code=code, updated_at=now,
+        expire_at=now + UPLOAD_FAILED_TTL,
+    )  # fmt: skip
 
 
 class RecordingDoc(Doc):
@@ -202,6 +318,7 @@ class RunDoc(Doc):
     units: int = 1  # usage units charged when `counted` (= n_runs); a refund gives all back
     released: bool = False  # the cap slot was handed back: guards double release
     llm_started: bool = False  # the evaluation was called on some attempt: a unit is spent
+    unit_kept: bool | None = None  # set on release: a unit of the limit stays spent (None: open)
 
 
 class ReportDoc(Doc):
@@ -258,6 +375,8 @@ class InterviewDoc(Doc):
     conn_id: str | None = None  # connection lease: the newest relay connection owns the interview
     refunded: bool = False  # set with the settle transition: a refunded interview never links
     connects: int = 0  # relay connections that went live; capped by AI_MAX_CONNECTS
+    client: ClientInfo = Field(default_factory=ClientInfo)  # web build / browser / recorder
+    relay: RelayInfo | None = None  # relay build that last served it (written at connect)
 
 
 def interview_refundable(data: dict[str, Any], now: datetime, threshold_s: float) -> bool:
