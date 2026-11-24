@@ -14,7 +14,7 @@ from onolys_miti.prepare import OTHER, SUBJECT, CheckInput, RoleTurn
 
 pytestmark = pytest.mark.unit
 
-KNOWN_PACK_HASH = "90176563e1bf97b0"
+KNOWN_PACK_HASH = "2913ee4eaed0bc33"
 
 GLOBALS = ["cct", "sst", "partnership", "empathy"]
 CODES = ["gi", "persuade", "persuade_permission", "question", "sr", "cr", "affirm",
@@ -175,3 +175,12 @@ def test_hook_warns_once_for_consecutive_opening_turns(pack):
 
 def test_hook_no_turns(pack):
     assert run_hook(pack, []) == []
+
+
+def test_globals_prompt_requires_behavior_evidence_for_low_scores(pack):
+    text = (pack.data_dir / "prompts/globals_system.md").read_text()
+    assert "Low scores need evidence of clinician behavior that meets the low-score anchors." in text
+    assert "Start from the default 3" in text
+    assert "Rate four global dimensions" in text
+    assert "a high score is allowed when no sustain talk occurs" in text
+    assert "do not penalize the clinician when the client offers no change talk" in text

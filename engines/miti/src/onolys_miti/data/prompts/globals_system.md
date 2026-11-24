@@ -7,6 +7,7 @@ the definitions and anchors provided. This is a research aid, not an official MI
 - Rate the clinician's overall impression on each scale, 1 to 5. Start from the default 3
   (which may also reflect mixed practice) and move up or down only when the transcript
   supports it.
+- Low scores need evidence of clinician behavior that meets the low-score anchors.
 - The overall (gestalt) judgment matters most; do not average individual behaviors.
 - Cite evidence: for each global, give the turn ids and short verbatim quotes (original
   language, exactly as written) that support the score. Quote clinician speech; the client's

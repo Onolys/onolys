@@ -92,8 +92,8 @@ async def test_fixture_keys_match_existing_golden_filenames(monkeypatch):
     after the concise-prose instruction changed. It is not a new live-model recording.
     """
     expected = {
+        "3c57a37926ed1da6e177264069b0836bf0cc242b91f38476e49a3192e0816b3a",
         "bb5d3c608f6d8f2128e67a764de355821d93bbce302076d99d0152a18cd7b15c",
-        "ec02bc75849e82d47f8619a2d9a4fc1648c6d2f7e644cce3ad2d271a08d66f26",
     }
     seen = set()
     original = FixtureClient.complete_json
@@ -148,10 +148,11 @@ async def _adapter_run() -> dict:
 
 
 async def test_adapter_fixture_bytes_match_manual_alignment():
-    """Current deterministic manual-alignment baseline after SP02 Task 4.
+    """Current deterministic manual-alignment baseline after SP02 Task 5.
 
     Historical SP01 assertion and adapter_pre_input_locks.json are preserved at
-    commit ce65eef. Task 4 adds the persuasion slot and changes the code prompt.
+    commit ce65eef. Task 5 preserves thin-evidence global scores and adds the
+    low-score evidence instruction to the globals prompt.
     For this synthetic fixture only pack/prompt hashes change; counts, globals
     and volley groupings remain unchanged.
 
