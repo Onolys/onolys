@@ -266,8 +266,8 @@ function SessionView({ id }: { id: string }) {
           {runError ? <ErrorCard code={runError.code} reference={runError.requestId} resetsAt={resetsAt} /> : null}
 
           {doc.state === "created" || doc.state === "uploading" || doc.state === "upload_incomplete" ? <UploadSlot sessionId={id} doc={doc} onFraction={setUploadFraction} /> : null}
-          {doc.state !== "deleting" ? <RatingCardSlot sessionId={id} doc={doc} readOnly={doc.rating_submitted || doc.state === "report_ready"} /> : null}
-          {doc.transcript_ready && doc.state !== "deleting" && (!doc.speaker_confirmed || doc.state === "failed") ? (
+          {doc.state !== "deleting" ? <RatingCardSlot sessionId={id} doc={doc} readOnly={doc.rating_submitted || doc.state === "running" || doc.state === "failed" || doc.state === "report_ready"} /> : null}
+          {doc.transcript_ready && !doc.speaker_confirmed && doc.state === "awaiting_input" ? (
             <SpeakerGateSlot sessionId={id} doc={doc} />
           ) : null}
 

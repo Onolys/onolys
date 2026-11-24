@@ -1,10 +1,9 @@
-import { screen, waitFor, within } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
-import { describe, expect, it, onTestFinished } from "vitest";
+import { screen } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { SessionStatusDoc } from "../../api/statusListener";
-import { mockBackend, server } from "../../mocks/server";
+import { mockBackend } from "../../mocks/server";
 import { renderPage } from "../../test/renderPage";
-import { SpeakerGateSlot } from "./slots";
+import { RatingCardSlot, SpeakerGateSlot } from "./slots";
 
 const UID = "u_rater_clinic_org";
 const USER = { email: "rater@clinic.org", verified: true };
@@ -34,36 +33,50 @@ const failed = (extra: Partial<SessionStatusDoc>): SessionStatusDoc => ({
 });
 const mount = (sid: string, doc: SessionStatusDoc) => renderPage(<SpeakerGateSlot sessionId={sid} doc={doc} />, "/x", { user: USER });
 
-describe("speaker gate slot: failed session that never confirmed a speaker (C-gate)", () => {
-  it("retryable failure: confirming saves the clinician and then re-runs via /retry", async () => {
-    const user = userEvent.setup();
-    const sid = awaiting();
-    const hits: string[] = [];
-    const log = ({ request }: { request: Request }) => void hits.push(`${request.method} ${new URL(request.url).pathname}`);
-    server.events.on("request:start", log);
-    onTestFinished(() => void server.events.removeListener("request:start", log));
-    mount(sid, failed({}));
-    const list = await screen.findByRole("list", { name: "Speakers" });
-    const cards = within(list).getAllByRole("listitem").filter((li) => li.parentElement === list);
-    await user.click(within(cards[1]!).getByRole("radio", { name: "This is the clinician" }));
-    await user.click(screen.getByRole("button", { name: "Save and try again" }));
-    await waitFor(() => expect(hits.filter((h) => /speakers\/confirm|\/retry|\/runs$/.test(h))).toEqual([
-      `POST /v1/sessions/${sid}/speakers/confirm`,
-      `POST /v1/sessions/${sid}/retry`,
-    ]));
-  });
+afterEach(() => vi.unstubAllEnvs());
 
-  it("permanent failure: the gate is not offered", async () => {
-    const sid = awaiting();
-    mount(sid, failed({ error_kind: "permanent_internal" }));
-    await waitFor(() => expect(screen.getByRole("main")).toBeInTheDocument());
-    expect(screen.queryByRole("list", { name: "Speakers" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /this is the clinician/i })).not.toBeInTheDocument();
-  });
-
-  it("a non-failed session still gets the first-mode gate (confirm only)", async () => {
-    const sid = awaiting();
-    mount(sid, failed({ state: "awaiting_input", error_code: null, error_kind: null }));
+describe("speaker gate slot: first confirmation only", () => {
+  it("shows the gate for a ready, unconfirmed transcript awaiting input", async () => {
+    mount(awaiting(), failed({ state: "awaiting_input", error_code: null, error_kind: null }));
     expect(await screen.findAllByRole("button", { name: "This is the clinician" })).toHaveLength(2);
+  });
+
+  it.each([
+    { state: "awaiting_input", speaker_confirmed: true },
+    { state: "awaiting_input", transcript_ready: false },
+    { state: "failed", error_kind: "transient" },
+    { state: "failed", error_kind: "permanent_internal" },
+    { state: "running" },
+    { state: "report_ready" },
+    { state: "transcribing" },
+    { state: "deleting" },
+  ] satisfies Partial<SessionStatusDoc>[])("hides the gate for %j", (patch) => {
+    mount(awaiting(), failed(patch));
+    expect(document.querySelector('[data-slot="speaker-gate"]')).toBeNull();
+    expect(screen.queryByRole("button", { name: "Change who the clinician is" })).not.toBeInTheDocument();
+  });
+});
+
+describe("rating card slot: locked inputs", () => {
+  it.each([
+    { state: "awaiting_input", rating_submitted: true },
+    { state: "running" },
+    { state: "failed" },
+    { state: "report_ready" },
+  ] satisfies Partial<SessionStatusDoc>[])("locks the card for %j", async (patch) => {
+    vi.stubEnv("VITE_RATING_ENABLED", "true");
+    const sid = awaiting();
+    renderPage(<RatingCardSlot sessionId={sid} doc={failed(patch)} />, "/x", { user: USER });
+    expect(await screen.findByLabelText("Change goal")).toBeDisabled();
+    expect(screen.queryByRole("button", { name: "Submit rating" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /No rating/ })).not.toBeInTheDocument();
+  });
+
+  it("keeps an unsubmitted awaiting-input card editable", async () => {
+    vi.stubEnv("VITE_RATING_ENABLED", "true");
+    const sid = awaiting();
+    renderPage(<RatingCardSlot sessionId={sid} doc={failed({ state: "awaiting_input" })} />, "/x", { user: USER });
+    expect(await screen.findByLabelText("Change goal")).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Submit rating" })).toBeEnabled();
   });
 });

@@ -1,7 +1,7 @@
 import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
-import { describe, expect, it, onTestFinished } from "vitest";
+import { describe, expect, it } from "vitest";
 import { mockBackend, server } from "../../mocks/server";
 import { renderApp } from "../../test/renderApp";
 
@@ -21,7 +21,7 @@ const cards = async () => {
     .getAllByRole("listitem")
     .filter((li) => li.parentElement === ul);
 };
-/** A session whose first run is finished, so the report is ready and the clinician can be changed. */
+/** A session whose first run is finished, so the report is ready or the run failed. */
 const reportReady = (title?: string) => {
   const sid = create(title);
   toAwaiting(sid);
@@ -155,81 +155,15 @@ describe("speaker gate", () => {
   });
 });
 
-describe("change who the clinician is", () => {
-  it("is not offered once the report is ready: the rating is final (FX45)", async () => {
-    const sid = reportReady();
+describe("clinician choice is final", () => {
+  it.each([undefined, "fail-transient", "fail-code"])("does not offer speaker changes after the first run (%s)", async (title) => {
+    const sid = reportReady(title);
     open(sid);
-    expect(await screen.findByRole("heading", { level: 1, name: "Report" })).toBeInTheDocument();
+    if (title === "fail-transient") await screen.findByRole("button", { name: /^Retry/ });
+    else if (title === "fail-code") await screen.findByRole("link", { name: "Start a new session" });
+    else await screen.findByRole("heading", { level: 1, name: "Report" });
+    expect(screen.queryByRole("list", { name: "Speakers" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Change who the clinician is" })).not.toBeInTheDocument();
     expect(mockBackend.listRuns(UID, sid)).toHaveLength(1);
-  });
-
-  it("after a transient failure, preselects the current clinician, saves, then re-runs via /retry (never /runs)", async () => {
-    const user = userEvent.setup();
-    const sid = reportReady("fail-transient");
-    const hits: string[] = [];
-    const log = ({ request }: { request: Request }) => void hits.push(`${request.method} ${new URL(request.url).pathname}`);
-    server.events.on("request:start", log);
-    onTestFinished(() => void server.events.removeListener("request:start", log));
-    open(sid);
-    await user.click(await screen.findByRole("button", { name: "Change who the clinician is" }));
-    const list = await cards();
-    const radios = list.map((c) => within(c).getByRole("radio", { name: "This is the clinician" }));
-    expect(radios[0]).toBeChecked();
-    await user.click(radios[1]);
-    await user.click(screen.getByRole("button", { name: "Save and try again" }));
-    await waitFor(() => expect(mockBackend.listRuns(UID, sid)).toHaveLength(2));
-    expect(mockBackend.getSpeakers(UID, sid).clinician_speaker).toBe("spk_1");
-    await waitFor(() => expect(screen.queryByRole("list", { name: "Speakers" })).not.toBeInTheDocument());
-    expect(hits.filter((h) => /speakers\/confirm|\/retry|\/runs$/.test(h))).toEqual([
-      `POST /v1/sessions/${sid}/speakers/confirm`,
-      `POST /v1/sessions/${sid}/retry`,
-    ]);
-  });
-
-  it("is not offered after a permanent failure: only retryable failures re-run (H-5)", async () => {
-    const sid = reportReady("fail-code");
-    open(sid);
-    await screen.findByRole("link", { name: "Start a new session" });
-    expect(screen.queryByRole("button", { name: "Change who the clinician is" })).not.toBeInTheDocument();
-  });
-
-  it("says the clinician was saved when the re-run itself fails (no half-applied silence)", async () => {
-    const user = userEvent.setup();
-    const sid = reportReady("fail-transient");
-    server.use(
-      http.post("*/v1/sessions/:id/retry", () =>
-        HttpResponse.json(
-          { schema_version: "0.0.1", error: { code: "invalid_state", message: "Not now.", request_id: "req_7", details: [] } },
-          { status: 409 },
-        ),
-      ),
-    );
-    open(sid);
-    await user.click(await screen.findByRole("button", { name: "Change who the clinician is" }));
-    const list = await cards();
-    await user.click(within(list[1]).getByRole("radio", { name: "This is the clinician" }));
-    await user.click(screen.getByRole("button", { name: "Save and try again" }));
-    expect(await screen.findByText(/clinician was saved, but the re-run didn't start/i)).toBeInTheDocument();
-    expect(mockBackend.getSpeakers(UID, sid).clinician_speaker).toBe("spk_1");
-    expect(screen.getByRole("button", { name: "Save and try again" })).toBeEnabled();
-  });
-
-  it("can be reopened by keyboard after a failed run", async () => {
-    const user = userEvent.setup();
-    const sid = reportReady("fail-transient");
-    open(sid);
-    const link = await screen.findByRole("button", { name: "Change who the clinician is" });
-    act(() => link.focus());
-    await user.keyboard("{Enter}");
-    expect(await screen.findByRole("button", { name: "Save and try again" })).toBeEnabled();
-  });
-
-  it("is not offered while the first gate is showing or while running", async () => {
-    const sid = create();
-    toAwaiting(sid);
-    open(sid);
-    await cards();
-    expect(screen.queryByRole("button", { name: "Change who the clinician is" })).not.toBeInTheDocument();
   });
 });

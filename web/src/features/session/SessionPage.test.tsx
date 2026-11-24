@@ -944,3 +944,19 @@ describe("session page: processing screen (05-processing-screen R4, R5, R7, R8)"
     expect(files["./CancelLink.tsx"]).toContain("Spinner");
   });
 });
+
+
+describe("session page: input locks", () => {
+  it.each(["running", "failed", "report_ready"] as const)("locks an unsubmitted rating and hides the unconfirmed speaker gate in %s", async (state) => {
+    vi.stubEnv("VITE_RATING_ENABLED", "true");
+    const sid = create();
+    toAwaiting(sid);
+    open(sid);
+    await screen.findByRole("list", { name: "Speakers" });
+    act(() => mockEmitter.emit(sid, { ...failedDoc(sid, "x"), state, speaker_confirmed: false, rating_submitted: false }));
+    await waitFor(() => expect(document.querySelector('[data-slot="speaker-gate"]')).toBeNull());
+    expect(await screen.findByLabelText("Change goal")).toBeDisabled();
+    expect(screen.queryByRole("button", { name: "Submit rating" })).not.toBeInTheDocument();
+    vi.unstubAllEnvs();
+  });
+});
