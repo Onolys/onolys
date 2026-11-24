@@ -240,18 +240,20 @@ class _Pass:
         )
         res = await self.client.complete_json(req, self.metrics)
         by_id = {v.id: v for v in batch}
+        returned = [vo.volley_id for vo in res.parsed.volleys]
+        if sorted(returned) != sorted(by_id):  # missing, duplicate or unknown volley ids
+            missing = sorted(set(by_id) - set(returned))
+            extra = sorted({i for i in returned if i not in by_id})
+            dupes = sorted({i for i in returned if returned.count(i) > 1})
+            raise LLMBadOutput(
+                f"incomplete volley coverage: missing={missing} unknown={extra} duplicate={dupes}"
+            )
         by_volley: dict[str, list[Instance]] = {}
         warnings: list[ResultWarning] = []
         total = dropped = 0
         for vo in res.parsed.volleys:
             total += len(vo.utterances)
-            volley = by_id.get(vo.volley_id)
-            if volley is None:  # unknown volley id: nothing to anchor to
-                dropped += len(vo.utterances)
-                warnings += [
-                    ResultWarning(code="quote_not_found", detail=f"{vo.volley_id}: unknown volley")
-                ] * len(vo.utterances)
-                continue
+            volley = by_id[vo.volley_id]
             insts, warns = _locate_volley(volley, vo.utterances)
             by_volley.setdefault(volley.id, []).extend(insts)
             warnings += warns

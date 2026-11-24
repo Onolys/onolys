@@ -184,3 +184,49 @@ def test_compare_template_hash_tracks_templates(monkeypatch):
     monkeypatch.setattr(c, "SCORED_ONLY", "changed {o}")
     assert template_strings() != []
     assert evaluation_prompt_hashes()["engine:compare_templates"] != before
+
+
+def _with_run_warnings(kw, warns):
+    result = kw["result"]
+    run = result.results[0].model_copy(update={"warnings": warns})
+    return result.model_copy(update={"results": [run, *result.results[1:]]})
+
+
+def test_run_warnings_reach_report_deduped():
+    from onolys_miti.result import ResultWarning
+
+    kw = inputs()
+    g = next(iter(kw["result"].results[0].globals))
+    warns = [ResultWarning(code="insufficient_evidence", item_id=g),
+             ResultWarning(code="insufficient_evidence", item_id=g),
+             ResultWarning(code="quote_not_found", detail="v1: utterance dropped")]
+    d = doc(result=_with_run_warnings(kw, warns))
+    assert d["warnings"].count({"code": "insufficient_evidence", "item_id": g}) == 1
+    assert {"code": "quote_not_found", "item_id": None} in d["warnings"]
+
+
+def test_tone_violating_global_reason_withheld_in_onolys_block():
+    kw = inputs()
+    run = kw["result"].results[0]
+    g = next(iter(run.globals))
+    bad = run.globals[g].model_copy(update={"reason": "That was a mistake."})
+    run2 = run.model_copy(update={"globals": {**run.globals, g: bad}})
+    result = kw["result"].model_copy(update={"results": [run2, *kw["result"].results[1:]]})
+    d = doc(result=result)
+    entry = next(x for x in d["globals"] if x["item_id"] == g)
+    assert entry["onolys"]["reason"] is None
+    assert "That was a mistake." not in str(d["globals"])
+
+
+def test_tone_violating_instance_rationale_blanked():
+    kw = inputs()
+    run = kw["result"].results[0]
+    k = next(b for b in doc(result=kw["result"])["behaviours"] if b["instances"])["item_id"]
+    insts = [i.model_copy(update={"rationale": "That was a mistake."})
+             if i.counted and i.code == k else i for i in run.instances]
+    run2 = run.model_copy(update={"instances": insts})
+    result = kw["result"].model_copy(update={"results": [run2, *kw["result"].results[1:]]})
+    d = doc(result=result)
+    b = next(x for x in d["behaviours"] if x["item_id"] == k)
+    assert all(i["rationale"] == "" for i in b["instances"])
+    assert {"code": "reason_withheld_tone", "item_id": k} in d["warnings"]
