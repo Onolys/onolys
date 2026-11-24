@@ -11,6 +11,7 @@ import logging
 
 import pytest
 import test_run
+from onolys_engine_core.json_logging import render
 from onolys_engine_core.transcript import Transcript, Turn
 from test_run import BigEval, Env, swap_eval
 
@@ -57,8 +58,8 @@ def session_blob_keys(env: Env, sid: str) -> list[str]:
 def deleted_lines(caplog) -> list[dict]:
     out = []
     for r in caplog.records:
-        if r.name == EVENTS_LOG and '"event": "session_deleted"' in r.getMessage():
-            out.append(json.loads(r.getMessage()))
+        if r.name == EVENTS_LOG and '"event": "session_deleted"' in render(r):
+            out.append(json.loads(render(r)))
     return out
 
 

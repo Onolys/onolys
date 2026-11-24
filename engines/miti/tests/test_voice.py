@@ -10,6 +10,7 @@ from types import SimpleNamespace as NS
 import pytest
 import yaml
 from onolys_engine_core.errors import ConfigError, InputError
+from onolys_engine_core.json_logging import JsonFormatter
 from onolys_engine_core.safe_log import log
 
 from onolys_miti.voice import (
@@ -337,6 +338,7 @@ async def test_gemini_close_yields_closed_and_open_failure():
 async def test_system_prompt_never_logged():
     buf = io.StringIO()
     h = logging.StreamHandler(buf)
+    h.setFormatter(JsonFormatter())
     log.addHandler(h)
     old = log.level
     log.setLevel(logging.DEBUG)

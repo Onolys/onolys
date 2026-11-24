@@ -2,45 +2,20 @@
 
 import logging
 import re
-import sys
 
 log = logging.getLogger("miti")
 
 
-class _StderrHandler(logging.StreamHandler):
-    """Writes to whatever sys.stderr is at emit time (survives stream swaps)."""
-
-    _miti = True
-
-    def __init__(self) -> None:
-        super().__init__(sys.stderr)
-
-    @property
-    def stream(self):
-        return sys.stderr
-
-    @stream.setter
-    def stream(self, _value) -> None:
-        pass
-
-
-class _FieldsFormatter(logging.Formatter):
-    """Interim text formatter: appends `extra["fields"]` as k=v (replaced by the JSON formatter)."""
-
-    def format(self, record: logging.LogRecord) -> str:
-        line = super().format(record)
-        fields = getattr(record, "fields", None)
-        if fields:
-            line += " " + " ".join(f"{k}={v!r}" for k, v in sorted(fields.items()))
-        return line.replace("\r", " ").replace("\n", " ") if fields else line
-
-
 def setup_logging(level: str = "INFO") -> None:
-    """Attach one stderr handler to the miti logger; safe to call repeatedly."""
+    """Standalone use (no `configure_logging`): one JSON stderr handler on the miti logger."""
+    from onolys_engine_core.json_logging import has_json_handler, make_handler  # noqa: PLC0415
+
     log.setLevel(level)
-    if not any(getattr(h, "_miti", False) for h in log.handlers):
-        h = _StderrHandler()
-        h.setFormatter(_FieldsFormatter("%(asctime)s %(levelname)s %(name)s %(message)s"))
+    if not any(getattr(h, "_miti", False) for h in log.handlers) and not has_json_handler(
+        logging.getLogger()
+    ):
+        h = make_handler()
+        h._miti = True
         log.addHandler(h)
 
 
@@ -48,6 +23,8 @@ def setup_logging(level: str = "INFO") -> None:
 # Audio URIs, transcript text and ratings are deliberately never loggable.
 ALLOWED_FIELDS: set[str] = {
     "request_id",
+    "session_id",
+    "run_id",
     "status",
     "outcome",
     "total_ms",

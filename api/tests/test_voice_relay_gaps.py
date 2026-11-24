@@ -5,6 +5,7 @@ import asyncio
 import logging
 
 import pytest
+from onolys_engine_core.json_logging import render
 from onolys_miti.voice import AudioOut, Interrupted, TurnComplete
 from onolys_miti.voice.fixture import FixtureVoice
 from test_voice_relay import TONE, Env, SeqVoice, connect, expect_close, ready
@@ -65,8 +66,9 @@ async def test_unexpected_serve_error_sends_internal_error_and_frees_the_slot(
         assert await c.recv_json() == {"type": "error", "code": "internal_error"}
         await expect_close(c, 1011)
     assert env.app.state.voice_connections == {}
-    assert "kaboom-secret" not in caplog.text  # only the exception class is logged
-    assert "ValueError" in caplog.text
+    out = "\n".join(render(r) for r in caplog.records)
+    assert "kaboom-secret" not in out  # only the exception class is logged
+    assert "ValueError" in out
 
 
 async def test_interview_vanishing_between_ownership_check_and_serve(tmp_path, monkeypatch):

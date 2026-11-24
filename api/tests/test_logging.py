@@ -8,6 +8,7 @@ import logging
 import pytest
 import test_run
 import test_worker
+from onolys_engine_core.json_logging import render
 from onolys_engine_core.safe_log import ALLOWED_FIELDS
 from test_run import CARD
 from test_worker import SID, payload, runner_with
@@ -31,16 +32,16 @@ def lines(caplog) -> list[dict]:
     for r in caplog.records:
         if r.name.startswith("onolys_api"):
             try:
-                out.append(json.loads(r.getMessage()))
+                out.append(json.loads(render(r)))
             except ValueError:
-                out.append({"_unstructured": r.getMessage()})
+                out.append({"_unstructured": render(r)})
     return out
 
 
 def server_text(caplog) -> str:
     """Server-side lines only: httpx/asyncio lines are the test client's own."""
     return "\n".join(
-        r.getMessage() for r in caplog.records if r.name.split(".")[0] not in CLIENT_LOGGERS
+        render(r) for r in caplog.records if r.name.split(".")[0] not in CLIENT_LOGGERS
     )
 
 

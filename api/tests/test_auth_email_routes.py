@@ -5,6 +5,7 @@ import logging
 
 import httpx
 import pytest
+from onolys_engine_core.json_logging import render
 from test_auth import KID, PROJECT, PUB, bearer, mint
 
 from onolys_api.adapters.base import AdapterError, AuthAccount
@@ -117,7 +118,7 @@ async def test_reset_send_failure_after_202_is_only_logged(blobs, caplog):
         async with env.client() as c:
             r = await c.post(RESET, json={"email": EMAIL})
     assert (r.status_code, r.text) == (202, "{}")
-    lines = [json.loads(x.getMessage()) for x in caplog.records if x.name == "onolys_api.events"]
+    lines = [json.loads(render(x)) for x in caplog.records if x.name == "onolys_api.events"]
     ev = [d for d in lines if d["message"] == "auth_email"]
     assert ev[0]["outcome"] == "send_failed" and ev[0]["provider_status"] == 500
 
@@ -166,15 +167,15 @@ async def test_logs_never_contain_email_link_or_code(blobs, caplog):  # AC6
             await c.post(RESET, json={"email": EMAIL})
             await c.post(RESET, json={"email": "nobody@example.org"})
     ours = "\n".join(
-        r.getMessage() for r in caplog.records if r.name.split(".")[0] not in {"httpx", "httpcore"}
+        render(r) for r in caplog.records if r.name.split(".")[0] not in {"httpx", "httpcore"}
     )
     assert "auth_email" in ours
     for secret in (EMAIL, "nobody@example.org", "oobCode", "fake-verify", "fake-reset",
                    "/auth/action", BASE):  # fmt: skip
         assert secret not in ours
     reset_lines = [
-        json.loads(x.getMessage()) for x in caplog.records
-        if x.name == "onolys_api.events" and '"email_kind": "reset"' in x.getMessage()
+        json.loads(render(x)) for x in caplog.records
+        if x.name == "onolys_api.events" and '"email_kind": "reset"' in render(x)
     ]  # fmt: skip
     assert reset_lines and all("uid_hash" not in d for d in reset_lines)
 
@@ -259,6 +260,6 @@ async def test_api_starts_without_app_base_url_verify_503_reset_logged(blobs, ca
             r = await c.post(RESET, json={"email": EMAIL})
             assert (r.status_code, r.text) == (202, "{}")
     assert sender.messages == []
-    outs = [json.loads(x.getMessage()).get("outcome") for x in caplog.records
-            if x.name == "onolys_api.events" and '"email_kind": "reset"' in x.getMessage()]  # fmt: skip
+    outs = [json.loads(render(x)).get("outcome") for x in caplog.records
+            if x.name == "onolys_api.events" and '"email_kind": "reset"' in render(x)]  # fmt: skip
     assert "unconfigured" in outs

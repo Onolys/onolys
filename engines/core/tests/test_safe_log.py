@@ -1,8 +1,8 @@
-import json
 import logging
 
 import pytest
 
+from onolys_engine_core.json_logging import render
 from onolys_engine_core.safe_log import ALLOWED_FIELDS, MAX_VALUE_CHARS, log_event, register_fields
 
 pytestmark = pytest.mark.unit
@@ -12,13 +12,11 @@ URI = "gs://secret-bucket/patient-0042.flac"
 
 
 def _log(caplog, **fields):
-    """Rendered view of the emitted record: message plus its extra fields."""
+    """Formatted JSON lines of the emitted records."""
     with caplog.at_level(logging.INFO, logger="miti"):
         caplog.clear()
         log_event("ev", **fields)
-    return caplog.text + "".join(
-        f" {k}={json.dumps(v)}" for r in caplog.records for k, v in r.fields.items()
-    )
+    return "\n".join(render(r) for r in caplog.records)
 
 
 @pytest.mark.parametrize(
@@ -49,13 +47,13 @@ def test_new_generic_fields_allowed(caplog):
         step="submit",
     )
     for s in (
-        "audio_ms=1200",
-        'stt_provider="fixture"',
-        'stt_model="m"',
-        'language="en"',
-        "speakers=2",
-        'job_id="j1"',
-        'step="submit"',
+        '"audio_ms": 1200',
+        '"stt_provider": "fixture"',
+        '"stt_model": "m"',
+        '"language": "en"',
+        '"speakers": 2',
+        '"job_id": "j1"',
+        '"step": "submit"',
     ):
         assert s in out
 
@@ -63,7 +61,7 @@ def test_new_generic_fields_allowed(caplog):
 def test_register_fields_adds_engine_field(caplog):
     register_fields(frozenset({"zz_engine_field"}))
     try:
-        assert "zz_engine_field=3" in _log(caplog, zz_engine_field=3)
+        assert '"zz_engine_field": 3' in _log(caplog, zz_engine_field=3)
     finally:
         ALLOWED_FIELDS.discard("zz_engine_field")
 

@@ -1,6 +1,7 @@
 import logging
 
 import pytest
+from onolys_engine_core.json_logging import render
 
 from onolys_miti.stt import AudioRef, SttParams, Word
 from onolys_miti.stt.base import transcribe
@@ -27,7 +28,7 @@ async def test_full_fixture_stt_call_logs_no_text_or_uri(caplog):
     merged: dict = {}
     for f in all_fields:
         merged.update(f)
-    blob = caplog.text + repr([getattr(r, "fields", {}) for r in caplog.records])
+    blob = caplog.text + "\n".join(render(r) for r in caplog.records)
     assert "stt_provider" in merged and any(f.get("stt_model") == "fx" for f in all_fields)
     assert merged["audio_ms"] == 900 and merged["speakers"] == 2
     assert "job_id" in merged

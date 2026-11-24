@@ -9,11 +9,10 @@ Values are ids, codes and numbers only.
 
 import hashlib
 import hmac
-import json
 import logging
-import sys
 import threading
 
+from onolys_engine_core.json_logging import configure_logging
 from onolys_engine_core.safe_log import clean_value, register_fields, safe_fields
 
 from onolys_api.config import Settings
@@ -27,27 +26,8 @@ API_FIELDS = frozenset({
 register_fields(API_FIELDS)
 
 log = logging.getLogger("onolys_api.events")
-_LEVELS = {logging.DEBUG: "DEBUG", logging.INFO: "INFO", logging.WARNING: "WARNING",
-           logging.ERROR: "ERROR", logging.CRITICAL: "CRITICAL"}  # fmt: skip
 _state = {"key": b"", "code_version": "dev"}
 _lock = threading.Lock()
-
-
-class _StderrHandler(logging.StreamHandler):
-    """Writes to whatever sys.stderr is at emit time (survives stream swaps)."""
-
-    _onolys = True
-
-    def __init__(self) -> None:
-        super().__init__(sys.stderr)
-
-    @property
-    def stream(self):
-        return sys.stderr
-
-    @stream.setter
-    def stream(self, _value) -> None:
-        pass
 
 
 class _NoTraceback(logging.Filter):
@@ -81,12 +61,7 @@ def configure(settings: Settings) -> None:
     with _lock:
         _state["key"] = settings.uid_hmac_key.encode()
         _state["code_version"] = settings.git_sha
-        if log.level == logging.NOTSET:
-            log.setLevel(logging.INFO)
-        if not any(getattr(h, "_onolys", False) for h in log.handlers):
-            h = _StderrHandler()
-            h.setFormatter(logging.Formatter("%(message)s"))
-            log.addHandler(h)
+    configure_logging(settings)
 
 
 def uid_hash(uid: str) -> str:
@@ -102,8 +77,7 @@ def emit(event: str, level: int = logging.INFO, **fields) -> None:
     """Log one line. None values are omitted; `code_version` is always added."""
     kept = {k: _clean(k, v) for k, v in safe_fields(fields).items() if v is not None}
     kept.setdefault("code_version", _state["code_version"])
-    line = {"severity": _LEVELS.get(level, "INFO"), "message": event, "event": event, **kept}
-    log.log(level, "%s", json.dumps(line, sort_keys=False))
+    log.log(level, "%s", event, extra={"fields": kept})
 
 
 def failed(

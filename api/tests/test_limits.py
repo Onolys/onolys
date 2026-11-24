@@ -4,6 +4,7 @@ import json
 import logging
 
 import pytest
+from onolys_engine_core.json_logging import render
 
 from onolys_api.config import Settings
 from onolys_api.repo.limits import KIND_FIELD, LimitDefaults, effective_cap
@@ -51,7 +52,7 @@ def test_malformed_leaf_falls_back_without_logging_value(bad, caplog):
     assert any(r.levelno == logging.WARNING for r in caplog.records)
     for r in caplog.records:
         # code_version (from GIT_SHA, e.g. "abc123" in CI) may legitimately contain "12".
-        payload = json.loads(r.getMessage())
+        payload = json.loads(render(r))
         payload.pop("code_version", None)
         dumped = json.dumps(payload)
         assert "secret-value" not in dumped and "12" not in dumped

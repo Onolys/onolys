@@ -3,6 +3,7 @@
 from datetime import UTC, datetime, timedelta
 
 import pytest
+from onolys_engine_core.json_logging import render
 from onolys_miti.stt import Word
 from onolys_miti.stt.fixture import FixtureStt, uri_hash
 
@@ -378,7 +379,7 @@ def _events(caplog, event):
     for r in caplog.records:
         if r.name.startswith("onolys_api"):
             try:
-                d = json.loads(r.getMessage())
+                d = json.loads(render(r))
             except ValueError:
                 continue
             if d.get("event") == event:

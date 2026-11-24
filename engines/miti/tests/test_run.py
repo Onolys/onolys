@@ -13,6 +13,7 @@ import time
 import jsonschema
 import pytest
 from onolys_engine_core.context import RunContext
+from onolys_engine_core.json_logging import render
 from onolys_engine_core.llm import LLMBadOutput, LLMResult, LLMUnavailable, MetricsCollector, Usage
 from onolys_engine_core.transcript import Transcript
 
@@ -155,6 +156,10 @@ async def test_stages_are_emitted_in_order_with_assemble_last():
     assert cb.events.index(("tips", "done")) < cb.events.index(("assemble", "started"))
 
 
+def rendered(caplog):
+    return "\n".join(render(r) for r in caplog.records)
+
+
 async def test_raising_callback_is_ignored(caplog):
     caplog.set_level(logging.INFO)
 
@@ -162,7 +167,7 @@ async def test_raising_callback_is_ignored(caplog):
         raise ValueError("cb exploded")
 
     assert isinstance(await go(cb=boom), MitiOutput)
-    assert "cb exploded" not in caplog.text
+    assert "cb exploded" not in rendered(caplog)
 
 
 async def test_no_callback_ok():
@@ -372,7 +377,7 @@ async def test_logs_hold_no_transcript_text(caplog):
         await go(FakeClient(code=bad))
     assert caplog.records
     for needle in ("walk more", "What makes walking", "kids", "blocking"):
-        assert needle not in caplog.text
+        assert needle not in rendered(caplog)
 
 
 def test_prompt_hashes_change_with_engine_template(monkeypatch):
