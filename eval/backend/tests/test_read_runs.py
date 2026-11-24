@@ -470,3 +470,13 @@ def test_legacy_preset_run_derives_preset_labels_everywhere(services):
     new = detail(c, response.json()["run_id"])
     assert new["legacy_selection"] is False and new["input"] == body["input"]
     assert new["combo_keys"] == [LOW]
+
+
+def test_partial_human_scores_leave_missing_metrics_null():
+    from onolys_eval.metrics import PartialScores
+
+    from onolys_eval_backend.read_runs import _values
+
+    values = _values(PartialScores(counts={"question": 3, "cr": 1, "sr": 1}, quality_label="low"))
+    assert values["question"] == 3 and values["gi"] is None and values["cct"] is None
+    assert values["pct_cr"] == .5 and values["reflection_question_ratio"] == 2 / 3

@@ -1,0 +1,36 @@
+# Verified 2026-11-24 against https://github.com/Advanced-Reality-Lab/MI-TAGS (README, sample CSVs).
+# Only transcripts + labels derived from the two public sample CSVs are stored (private cache/bucket).
+dataset_id: mi-tags-sample
+title: MI-TAGS public sample (2 sessions) — MITI 4.2
+license_note: Public GitHub sample (repo declares no license; full set is gated by an access form). Internal evaluation use only; owner to confirm terms before any redistribution.
+source_page: https://github.com/Advanced-Reality-Lab/MI-TAGS
+miti_version: "4.2"
+label_scheme: "MITI 4.2 (Structure Statement not counted; Seek, Emphasize Autonomy, Persuade with Permission not labeled)"
+# README/paper: transcripts of MI demonstration videos from public sources; how they were
+# transcribed is not stated on the README or the paper abstract, so transcript_origin is omitted.
+source_media: [video, transcript]
+labels_summary: "MITI 4.2 therapist utterance codes (7 counts) + 4 global ratings by one annotator; sample of the 242-transcript MI-TAGS set"
+source_format: mitags_csv
+source_files:
+  - https://raw.githubusercontent.com/Advanced-Reality-Lab/MI-TAGS/main/sample_global_mitis.csv
+  - https://raw.githubusercontent.com/Advanced-Reality-Lab/MI-TAGS/main/sample_utterances.csv
+overlaps_with:
+  - dataset_id: casaa-miti421-video2013
+    note: "The full MI-TAGS set reportedly includes 8 CASAA 2013 transcripts; neither of the 2 public sample sessions matches a CASAA series title."
+sessions:
+  - session_id: type-1-diabetes-counseling
+    title: "Type 1 Diabetes Counseling Video"
+    clinician_labels: [T]
+    code_header: null
+    change_goal: "Diabetes self-management: carbohydrate counting and insulin"
+    change_goal_source: curated
+    coded_span: null
+    notes: "Title is the CSV Video Title (join key). Goal curated from the transcript; owner review pending. Annotator A3."
+  - session_id: ineffective-physician
+    title: "The Ineffective Physician_ Non-Motivational Approach"
+    clinician_labels: [T]
+    code_header: null
+    change_goal: "Quit smoking (parent of a child with ear infections)"
+    change_goal_source: curated
+    coded_span: null
+    notes: "Title is the CSV Video Title (join key). Deliberately non-MI demonstration. Goal curated from the transcript; owner review pending. Annotator A2."

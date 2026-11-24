@@ -1,0 +1,529 @@
+dataset_id: midas-es
+title: 'MIDAS: Spanish-language MI conversations from YouTube (ITEM2 questions and reflections)'
+license_note: No licence file in repo; internal evaluation only; licence request sent to authors
+source_page: https://github.com/MichiganNLP/MIDAS
+miti_version: null
+label_scheme: 'ITEM2 (Spanish MITI adaptation): questions and reflections'
+source_media:
+- video
+- transcript
+transcript_origin: human
+language: es
+labels_summary: Counselor questions as 1 MITI count (question); reflections annotated but not split into simple/complex, so sr and cr not labeled; no other counts, no globals; Spanish transcripts
+source_format: midas_json
+source_files:
+- https://raw.githubusercontent.com/MichiganNLP/MIDAS/main/Spanish_MI.json
+sessions:
+- session_id: 6uqc49isopg-c
+  title: MIDAS Spanish MI conversation 6uqC49iSopg_c
+  clinician_labels:
+  - counselor
+  code_header: null
+  change_goal: Behavior change discussed in the session (the source does not record it)
+  change_goal_source: curated
+  coded_span: null
+  notes: source key 6uqC49iSopg_c.html; video id 6uqC49iSopg (https://www.youtube.com/watch?v=6uqC49iSopg, may no longer be public); 5 turns; 5 questions labeled, 0 reflections not mapped
+- session_id: vc7-wrv-ame
+  title: MIDAS Spanish MI conversation vC7_Wrv-AME
+  clinician_labels:
+  - counselor
+  code_header: null
+  change_goal: Behavior change discussed in the session (the source does not record it)
+  change_goal_source: curated
+  coded_span: null
+  notes: source key vC7_Wrv-AME.html; video id vC7_Wrv-AME (https://www.youtube.com/watch?v=vC7_Wrv-AME, may no longer be public); 25 turns; 7 questions labeled, 2 reflections not mapped
+- session_id: tozb57jmcwq
+  title: MIDAS Spanish MI conversation TOZb57jMcWQ
+  clinician_labels:
+  - counselor
+  code_header: null
+  change_goal: Behavior change discussed in the session (the source does not record it)
+  change_goal_source: curated
+  coded_span: null
+  notes: source key TOZb57jMcWQ.html; video id TOZb57jMcWQ (https://www.youtube.com/watch?v=TOZb57jMcWQ, may no longer be public); 100 turns; 34 questions labeled, 17 reflections not mapped
+- session_id: bapql8uydig
+  title: MIDAS Spanish MI conversation bAPqL8uYdIg
+  clinician_labels:
+  - counselor
+  code_header: null
+  change_goal: Behavior change discussed in the session (the source does not record it)
+  change_goal_source: curated
+  coded_span: null
+  notes: source key bAPqL8uYdIg.html; video id bAPqL8uYdIg (https://www.youtube.com/watch?v=bAPqL8uYdIg, may no longer be public); 31 turns; 9 questions labeled, 6 reflections not mapped
+- session_id: gikxbwksmxy-a
+  title: MIDAS Spanish MI conversation GikxBWksMxY_a
+  clinician_labels:
+  - counselor
+  code_header: null
+  change_goal: Behavior change discussed in the session (the source does not record it)
+  change_goal_source: curated
+  coded_span: null
+  notes: source key GikxBWksMxY_a.html; video id GikxBWksMxY (https://www.youtube.com/watch?v=GikxBWksMxY, may no longer be public); 24 turns; 4 questions labeled, 1 reflections not mapped
+- session_id: uvzstudxjcq-b
+  title: MIDAS Spanish MI conversation uvzsTUDxJCQ_b
+  clinician_labels:
+  - counselor
+  code_header: null
+  change_goal: Behavior change discussed in the session (the source does not record it)
+  change_goal_source: curated
+  coded_span: null
+  notes: source key uvzsTUDxJCQ_b.html; video id uvzsTUDxJCQ (https://www.youtube.com/watch?v=uvzsTUDxJCQ, may no longer be public); 30 turns; 3 questions labeled, 3 reflections not mapped
+- session_id: fefzoyflloy-bad
+  title: MIDAS Spanish MI conversation FEFZOyFLlOY_bad
+  clinician_labels:
+  - counselor
+  code_header: null
+  change_goal: Behavior change discussed in the session (the source does not record it)
+  change_goal_source: curated
+  coded_span: null
+  notes: source key FEFZOyFLlOY_bad.html; video id FEFZOyFLlOY (https://www.youtube.com/watch?v=FEFZOyFLlOY, may no longer be public); 19 turns; 4 questions labeled, 0 reflections not mapped
+- session_id: usmwisshhkk
+  title: MIDAS Spanish MI conversation USMwISShhKk
+  clinician_labels:
+  - counselor
+  code_header: null
+  change_goal: Behavior change discussed in the session (the source does not record it)
+  change_goal_source: curated
+  coded_span: null
+  notes: source key USMwISShhKk.html; video id USMwISShhKk (https://www.youtube.com/watch?v=USMwISShhKk, may no longer be public); 39 turns; 18 questions labeled, 5 reflections not mapped
+- session_id: vobvnmyeb
+  title: MIDAS Spanish MI conversation voBvNMYEB
+  clinician_labels:
+  - counselor
+  code_header: null
+  change_goal: Behavior change discussed in the session (the source does not record it)
+  change_goal_source: curated
+  coded_span: null
+  notes: source key voBvNMYEB.html; video id voBvNMYEB (https://www.youtube.com/watch?v=voBvNMYEB, may no longer be public); 35 turns; 14 questions labeled, 8 reflections not mapped
+- session_id: uofboszq-ua
+  title: MIDAS Spanish MI conversation uOfbOsZq_UA
+  clinician_labels:
+  - counselor
+  code_header: null
+  change_goal: Behavior change discussed in the session (the source does not record it)
+  change_goal_source: curated
+  coded_span: null
+  notes: source key uOfbOsZq_UA.html; video id uOfbOsZq_UA (https://www.youtube.com/watch?v=uOfbOsZq_UA, may no longer be public); 48 turns; 17 questions labeled, 6 reflections not mapped
+- session_id: zu58dyw2g5c
+  title: MIDAS Spanish MI conversation Zu58dyw2g5c
+  clinician_labels:
+  - counselor
+  code_header: null
+  change_goal: Behavior change discussed in the session (the source does not record it)
+  change_goal_source: curated
+  coded_span: null
+  notes: source key Zu58dyw2g5c.html; video id Zu58dyw2g5c (https://www.youtube.com/watch?v=Zu58dyw2g5c, may no longer be public); 30 turns; 11 questions labeled, 2 reflections not mapped
+- session_id: ci2rtkdlh2a
+  title: MIDAS Spanish MI conversation Ci2rtkDLH2A
+  clinician_labels:
+  - counselor
+  code_header: null
+  change_goal: Behavior change discussed in the session (the source does not record it)
+  change_goal_source: curated
+  coded_span: null
+  notes: source key Ci2rtkDLH2A.html; video id Ci2rtkDLH2A (https://www.youtube.com/watch?v=Ci2rtkDLH2A, may no longer be public); 43 turns; 14 questions labeled, 3 reflections not mapped
+- session_id: 6uqc49isopg-b
+  title: MIDAS Spanish MI conversation 6uqC49iSopg_b
+  clinician_labels:
+  - counselor
+  code_header: null
+  change_goal: Behavior change discussed in the session (the source does not record it)
+  change_goal_source: curated
+  coded_span: null
+  notes: source key 6uqC49iSopg_b.html; video id 6uqC49iSopg (https://www.youtube.com/watch?v=6uqC49iSopg, may no longer be public); 5 turns; 4 questions labeled, 0 reflections not mapped
+- session_id: u-gpwzlpqxs-a
+  title: MIDAS Spanish MI conversation u_gpwZLpQXs_a
+  clinician_labels:
+  - counselor
+  code_header: null
+  change_goal: Behavior change discussed in the session (the source does not record it)
+  change_goal_source: curated
+  coded_span: null
+  notes: source key u_gpwZLpQXs_a.html; video id u_gpwZLpQXs (https://www.youtube.com/watch?v=u_gpwZLpQXs, may no longer be public); 43 turns; 14 questions labeled, 3 reflections not mapped
+- session_id: zrroi-ihfco
+  title: MIDAS Spanish MI conversation zrROi_IHFco
+  clinician_labels:
+  - counselor
+  code_header: null
+  change_goal: Behavior change discussed in the session (the source does not record it)
+  change_goal_source: curated
+  coded_span: null
+  notes: source key zrROi_IHFco.html; video id zrROi_IHFco (https://www.youtube.com/watch?v=zrROi_IHFco, may no longer be public); 48 turns; 18 questions labeled, 3 reflections not mapped
+- session_id: 9rpkcjtzlxo-a
+  title: MIDAS Spanish MI conversation 9rPKcjTZLxo_a
+  clinician_labels:
+  - counselor
+  code_header: null
+  change_goal: Behavior change discussed in the session (the source does not record it)
+  change_goal_source: curated
+  coded_span: null
+  notes: source key 9rPKcjTZLxo_a.html; video id 9rPKcjTZLxo (https://www.youtube.com/watch?v=9rPKcjTZLxo, may no longer be public); 47 turns; 14 questions labeled, 1 reflections not mapped
+- session_id: 4tywtpbhq84
+  title: MIDAS Spanish MI conversation 4TYwTPBhq84
+  clinician_labels:
+  - counselor
+  code_header: null
+  change_goal: Behavior change discussed in the session (the source does not record it)
+  change_goal_source: curated
+  coded_span: null
+  notes: source key 4TYwTPBhq84.html; video id 4TYwTPBhq84 (https://www.youtube.com/watch?v=4TYwTPBhq84, may no longer be public); 30 turns; 9 questions labeled, 1 reflections not mapped
+- session_id: 8mro0wjzypo
+  title: MIDAS Spanish MI conversation 8MRO0WJzYpo
+  clinician_labels:
+  - counselor
+  code_header: null
+  change_goal: Behavior change discussed in the session (the source does not record it)
+  change_goal_source: curated
+  coded_span: null
+  notes: source key 8MRO0WJzYpo.html; video id 8MRO0WJzYpo (https://www.youtube.com/watch?v=8MRO0WJzYpo, may no longer be public); 18 turns; 8 questions labeled, 2 reflections not mapped
+- session_id: tu8fehgodd8
+  title: MIDAS Spanish MI conversation tu8FeHGODd8
+  clinician_labels:
+  - counselor
+  code_header: null
+  change_goal: Behavior change discussed in the session (the source does not record it)
+  change_goal_source: curated
+  coded_span: null
+  notes: source key tu8FeHGODd8.html; video id tu8FeHGODd8 (https://www.youtube.com/watch?v=tu8FeHGODd8, may no longer be public); 93 turns; 22 questions labeled, 17 reflections not mapped
+- session_id: bktmda-kjqc-double
+  title: MIDAS Spanish MI conversation bkTMda-KjQc_double
+  clinician_labels:
+  - counselor
+  code_header: null
+  change_goal: Behavior change discussed in the session (the source does not record it)
+  change_goal_source: curated
+  coded_span: null
+  notes: source key bkTMda-KjQc_double.html; video id bkTMda-KjQc (https://www.youtube.com/watch?v=bkTMda-KjQc, may no longer be public); 28 turns; 7 questions labeled, 4 reflections not mapped
+- session_id: zpmectbblyw
+  title: MIDAS Spanish MI conversation zPmectBBlYw
+  clinician_labels:
+  - counselor
+  code_header: null
+  change_goal: Behavior change discussed in the session (the source does not record it)
+  change_goal_source: curated
+  coded_span: null
+  notes: source key zPmectBBlYw.html; video id zPmectBBlYw (https://www.youtube.com/watch?v=zPmectBBlYw, may no longer be public); 82 turns; 27 questions labeled, 19 reflections not mapped
+- session_id: 0iqv3xil6yi
+  title: MIDAS Spanish MI conversation 0IQv3xil6YI
+  clinician_labels:
+  - counselor
+  code_header: null
+  change_goal: Behavior change discussed in the session (the source does not record it)
+  change_goal_source: curated
+  coded_span: null
+  notes: source key 0IQv3xil6YI.html; video id 0IQv3xil6YI (https://www.youtube.com/watch?v=0IQv3xil6YI, may no longer be public); 32 turns; 5 questions labeled, 9 reflections not mapped
+- session_id: hqxav3dbx7e
+  title: MIDAS Spanish MI conversation HQXav3dbx7E
+  clinician_labels:
+  - counselor
+  code_header: null
+  change_goal: Behavior change discussed in the session (the source does not record it)
+  change_goal_source: curated
+  coded_span: null
+  notes: source key HQXav3dbx7E.html; video id HQXav3dbx7E (https://www.youtube.com/watch?v=HQXav3dbx7E, may no longer be public); 3 turns; 1 questions labeled, 4 reflections not mapped
+- session_id: wltzhgs30su
+  title: MIDAS Spanish MI conversation wltzHgs30sU
+  clinician_labels:
+  - counselor
+  code_header: null
+  change_goal: Behavior change discussed in the session (the source does not record it)
+  change_goal_source: curated
+  coded_span: null
+  notes: source key wltzHgs30sU.html; video id wltzHgs30sU (https://www.youtube.com/watch?v=wltzHgs30sU, may no longer be public); 12 turns; 6 questions labeled, 1 reflections not mapped
+- session_id: 9gjiym03znm
+  title: MIDAS Spanish MI conversation 9gJiYm03znM
+  clinician_labels:
+  - counselor
+  code_header: null
+  change_goal: Behavior change discussed in the session (the source does not record it)
+  change_goal_source: curated
+  coded_span: null
+  notes: source key 9gJiYm03znM.html; video id 9gJiYm03znM (https://www.youtube.com/watch?v=9gJiYm03znM, may no longer be public); 29 turns; 7 questions labeled, 0 reflections not mapped
+- session_id: kspjoixxbhm
+  title: MIDAS Spanish MI conversation kspjoixXbHM
+  clinician_labels:
+  - counselor
+  code_header: null
+  change_goal: Behavior change discussed in the session (the source does not record it)
+  change_goal_source: curated
+  coded_span: null
+  notes: source key kspjoixXbHM.html; video id kspjoixXbHM (https://www.youtube.com/watch?v=kspjoixXbHM, may no longer be public); 22 turns; 4 questions labeled, 0 reflections not mapped
+- session_id: rlkcyuclysm-bad
+  title: MIDAS Spanish MI conversation rlKCyuCLysM_bad
+  clinician_labels:
+  - counselor
+  code_header: null
+  change_goal: Behavior change discussed in the session (the source does not record it)
+  change_goal_source: curated
+  coded_span: null
+  notes: source key rlKCyuCLysM_bad.html; video id rlKCyuCLysM (https://www.youtube.com/watch?v=rlKCyuCLysM, may no longer be public); 8 turns; 3 questions labeled, 0 reflections not mapped
+- session_id: eafrycp5xui
+  title: MIDAS Spanish MI conversation eaFRycp5xuI
+  clinician_labels:
+  - counselor
+  code_header: null
+  change_goal: Behavior change discussed in the session (the source does not record it)
+  change_goal_source: curated
+  coded_span: null
+  notes: source key eaFRycp5xuI.html; video id eaFRycp5xuI (https://www.youtube.com/watch?v=eaFRycp5xuI, may no longer be public); 24 turns; 6 questions labeled, 3 reflections not mapped
+- session_id: 5u-oe4a8h40-bad
+  title: MIDAS Spanish MI conversation 5U-oe4A8H40_bad
+  clinician_labels:
+  - counselor
+  code_header: null
+  change_goal: Behavior change discussed in the session (the source does not record it)
+  change_goal_source: curated
+  coded_span: null
+  notes: source key 5U-oe4A8H40_bad.html; video id 5U-oe4A8H40 (https://www.youtube.com/watch?v=5U-oe4A8H40, may no longer be public); 11 turns; 4 questions labeled, 0 reflections not mapped
+- session_id: qllbrgdvgwo
+  title: MIDAS Spanish MI conversation QLlbrgDvgWo
+  clinician_labels:
+  - counselor
+  code_header: null
+  change_goal: Behavior change discussed in the session (the source does not record it)
+  change_goal_source: curated
+  coded_span: null
+  notes: source key QLlbrgDvgWo.html; video id QLlbrgDvgWo (https://www.youtube.com/watch?v=QLlbrgDvgWo, may no longer be public); 26 turns; 11 questions labeled, 2 reflections not mapped
+- session_id: rpzxh-h2mge
+  title: MIDAS Spanish MI conversation rpZxH_h2MGE
+  clinician_labels:
+  - counselor
+  code_header: null
+  change_goal: Behavior change discussed in the session (the source does not record it)
+  change_goal_source: curated
+  coded_span: null
+  notes: source key rpZxH_h2MGE.html; video id rpZxH_h2MGE (https://www.youtube.com/watch?v=rpZxH_h2MGE, may no longer be public); 28 turns; 8 questions labeled, 0 reflections not mapped
+- session_id: ccnd8znbkte-bad
+  title: MIDAS Spanish MI conversation CCND8ZnBKTE_bad
+  clinician_labels:
+  - counselor
+  code_header: null
+  change_goal: Behavior change discussed in the session (the source does not record it)
+  change_goal_source: curated
+  coded_span: null
+  notes: source key CCND8ZnBKTE_bad.html; video id CCND8ZnBKTE (https://www.youtube.com/watch?v=CCND8ZnBKTE, may no longer be public); 19 turns; 1 questions labeled, 0 reflections not mapped
+- session_id: fsrsk31odcq
+  title: MIDAS Spanish MI conversation FsRsk31ODCQ
+  clinician_labels:
+  - counselor
+  code_header: null
+  change_goal: Behavior change discussed in the session (the source does not record it)
+  change_goal_source: curated
+  coded_span: null
+  notes: source key FsRsk31ODCQ.html; video id FsRsk31ODCQ (https://www.youtube.com/watch?v=FsRsk31ODCQ, may no longer be public); 44 turns; 7 questions labeled, 6 reflections not mapped
+- session_id: evsvabzajta
+  title: MIDAS Spanish MI conversation EvsVabzAjtA
+  clinician_labels:
+  - counselor
+  code_header: null
+  change_goal: Behavior change discussed in the session (the source does not record it)
+  change_goal_source: curated
+  coded_span: null
+  notes: source key EvsVabzAjtA.html; video id EvsVabzAjtA (https://www.youtube.com/watch?v=EvsVabzAjtA, may no longer be public); 22 turns; 3 questions labeled, 15 reflections not mapped
+- session_id: tv66twhxw-0
+  title: MIDAS Spanish MI conversation tV66TWhxW_0
+  clinician_labels:
+  - counselor
+  code_header: null
+  change_goal: Behavior change discussed in the session (the source does not record it)
+  change_goal_source: curated
+  coded_span: null
+  notes: source key tV66TWhxW_0.html; video id tV66TWhxW_0 (https://www.youtube.com/watch?v=tV66TWhxW_0, may no longer be public); 32 turns; 7 questions labeled, 3 reflections not mapped
+- session_id: o92kacntgk0
+  title: MIDAS Spanish MI conversation o92KaCnTgk0
+  clinician_labels:
+  - counselor
+  code_header: null
+  change_goal: Behavior change discussed in the session (the source does not record it)
+  change_goal_source: curated
+  coded_span: null
+  notes: source key o92KaCnTgk0.html; video id o92KaCnTgk0 (https://www.youtube.com/watch?v=o92KaCnTgk0, may no longer be public); 30 turns; 10 questions labeled, 9 reflections not mapped
+- session_id: zh4ruoblkhs
+  title: MIDAS Spanish MI conversation ZH4RuoBlkhs
+  clinician_labels:
+  - counselor
+  code_header: null
+  change_goal: Behavior change discussed in the session (the source does not record it)
+  change_goal_source: curated
+  coded_span: null
+  notes: source key ZH4RuoBlkhs.html; video id ZH4RuoBlkhs (https://www.youtube.com/watch?v=ZH4RuoBlkhs, may no longer be public); 45 turns; 18 questions labeled, 7 reflections not mapped
+- session_id: 9rpkcjtzlxo-b
+  title: MIDAS Spanish MI conversation 9rPKcjTZLxo_b
+  clinician_labels:
+  - counselor
+  code_header: null
+  change_goal: Behavior change discussed in the session (the source does not record it)
+  change_goal_source: curated
+  coded_span: null
+  notes: source key 9rPKcjTZLxo_b.html; video id 9rPKcjTZLxo (https://www.youtube.com/watch?v=9rPKcjTZLxo, may no longer be public); 33 turns; 1 questions labeled, 3 reflections not mapped
+- session_id: qjtnumukn7m
+  title: MIDAS Spanish MI conversation QJtNuMUkN7M
+  clinician_labels:
+  - counselor
+  code_header: null
+  change_goal: Behavior change discussed in the session (the source does not record it)
+  change_goal_source: curated
+  coded_span: null
+  notes: source key QJtNuMUkN7M.html; video id QJtNuMUkN7M (https://www.youtube.com/watch?v=QJtNuMUkN7M, may no longer be public); 18 turns; 3 questions labeled, 3 reflections not mapped
+- session_id: wmpygvegnbc
+  title: MIDAS Spanish MI conversation WmPYGVEGNBc
+  clinician_labels:
+  - counselor
+  code_header: null
+  change_goal: Behavior change discussed in the session (the source does not record it)
+  change_goal_source: curated
+  coded_span: null
+  notes: source key WmPYGVEGNBc.html; video id WmPYGVEGNBc (https://www.youtube.com/watch?v=WmPYGVEGNBc, may no longer be public); 36 turns; 17 questions labeled, 11 reflections not mapped
+- session_id: zeyc1l4e8f0-c
+  title: MIDAS Spanish MI conversation ZEYC1l4e8F0_c
+  clinician_labels:
+  - counselor
+  code_header: null
+  change_goal: Behavior change discussed in the session (the source does not record it)
+  change_goal_source: curated
+  coded_span: null
+  notes: source key ZEYC1l4e8F0_c.html; video id ZEYC1l4e8F0 (https://www.youtube.com/watch?v=ZEYC1l4e8F0, may no longer be public); 5 turns; 3 questions labeled, 1 reflections not mapped
+- session_id: 5u-oe4a8h40-good
+  title: MIDAS Spanish MI conversation 5U-oe4A8H40_good
+  clinician_labels:
+  - counselor
+  code_header: null
+  change_goal: Behavior change discussed in the session (the source does not record it)
+  change_goal_source: curated
+  coded_span: null
+  notes: source key 5U-oe4A8H40_good.html; video id 5U-oe4A8H40 (https://www.youtube.com/watch?v=5U-oe4A8H40, may no longer be public); 25 turns; 6 questions labeled, 3 reflections not mapped
+- session_id: u-gpwzlpqxs-b
+  title: MIDAS Spanish MI conversation u_gpwZLpQXs_b
+  clinician_labels:
+  - counselor
+  code_header: null
+  change_goal: Behavior change discussed in the session (the source does not record it)
+  change_goal_source: curated
+  coded_span: null
+  notes: source key u_gpwZLpQXs_b.html; video id u_gpwZLpQXs (https://www.youtube.com/watch?v=u_gpwZLpQXs, may no longer be public); 48 turns; 18 questions labeled, 11 reflections not mapped
+- session_id: izo-0rv-h4k
+  title: MIDAS Spanish MI conversation Izo-0rv_h4k
+  clinician_labels:
+  - counselor
+  code_header: null
+  change_goal: Behavior change discussed in the session (the source does not record it)
+  change_goal_source: curated
+  coded_span: null
+  notes: source key Izo-0rv_h4k.html; video id Izo-0rv_h4k (https://www.youtube.com/watch?v=Izo-0rv_h4k, may no longer be public); 22 turns; 7 questions labeled, 3 reflections not mapped
+- session_id: uvzstudxjcq-a
+  title: MIDAS Spanish MI conversation uvzsTUDxJCQ_a
+  clinician_labels:
+  - counselor
+  code_header: null
+  change_goal: Behavior change discussed in the session (the source does not record it)
+  change_goal_source: curated
+  coded_span: null
+  notes: source key uvzsTUDxJCQ_a.html; video id uvzsTUDxJCQ (https://www.youtube.com/watch?v=uvzsTUDxJCQ, may no longer be public); 47 turns; 6 questions labeled, 2 reflections not mapped
+- session_id: obycwyaib9m
+  title: MIDAS Spanish MI conversation ObycwYaib9M
+  clinician_labels:
+  - counselor
+  code_header: null
+  change_goal: Behavior change discussed in the session (the source does not record it)
+  change_goal_source: curated
+  coded_span: null
+  notes: source key ObycwYaib9M.html; video id ObycwYaib9M (https://www.youtube.com/watch?v=ObycwYaib9M, may no longer be public); 42 turns; 9 questions labeled, 5 reflections not mapped
+- session_id: gikxbwksmxy-b
+  title: MIDAS Spanish MI conversation GikxBWksMxY_b
+  clinician_labels:
+  - counselor
+  code_header: null
+  change_goal: Behavior change discussed in the session (the source does not record it)
+  change_goal_source: curated
+  coded_span: null
+  notes: source key GikxBWksMxY_b.html; video id GikxBWksMxY (https://www.youtube.com/watch?v=GikxBWksMxY, may no longer be public); 40 turns; 6 questions labeled, 7 reflections not mapped
+- session_id: inwsxza-ouy
+  title: MIDAS Spanish MI conversation iNWSXZa_oUY
+  clinician_labels:
+  - counselor
+  code_header: null
+  change_goal: Behavior change discussed in the session (the source does not record it)
+  change_goal_source: curated
+  coded_span: null
+  notes: source key iNWSXZa_oUY.html; video id iNWSXZa_oUY (https://www.youtube.com/watch?v=iNWSXZa_oUY, may no longer be public); 35 turns; 9 questions labeled, 10 reflections not mapped
+- session_id: itru31kexoe-bad
+  title: MIDAS Spanish MI conversation itrU31KEXOE_bad
+  clinician_labels:
+  - counselor
+  code_header: null
+  change_goal: Behavior change discussed in the session (the source does not record it)
+  change_goal_source: curated
+  coded_span: null
+  notes: source key itrU31KEXOE_bad.html; video id itrU31KEXOE (https://www.youtube.com/watch?v=itrU31KEXOE, may no longer be public); 15 turns; 5 questions labeled, 0 reflections not mapped
+- session_id: itru31kexoe-good
+  title: MIDAS Spanish MI conversation itrU31KEXOE_good
+  clinician_labels:
+  - counselor
+  code_header: null
+  change_goal: Behavior change discussed in the session (the source does not record it)
+  change_goal_source: curated
+  coded_span: null
+  notes: source key itrU31KEXOE_good.html; video id itrU31KEXOE (https://www.youtube.com/watch?v=itrU31KEXOE, may no longer be public); 17 turns; 2 questions labeled, 1 reflections not mapped
+- session_id: i3h3v8mca2a
+  title: MIDAS Spanish MI conversation i3H3v8MCa2A
+  clinician_labels:
+  - counselor
+  code_header: null
+  change_goal: Behavior change discussed in the session (the source does not record it)
+  change_goal_source: curated
+  coded_span: null
+  notes: source key i3H3v8MCa2A.html; video id i3H3v8MCa2A (https://www.youtube.com/watch?v=i3H3v8MCa2A, may no longer be public); 30 turns; 15 questions labeled, 5 reflections not mapped
+- session_id: povnkptpfdi
+  title: MIDAS Spanish MI conversation POVNKPTpfdI
+  clinician_labels:
+  - counselor
+  code_header: null
+  change_goal: Behavior change discussed in the session (the source does not record it)
+  change_goal_source: curated
+  coded_span: null
+  notes: source key POVNKPTpfdI.html; video id POVNKPTpfdI (https://www.youtube.com/watch?v=POVNKPTpfdI, may no longer be public); 39 turns; 16 questions labeled, 8 reflections not mapped
+- session_id: mwu7hnfjz0q
+  title: MIDAS Spanish MI conversation mWU7hnFjZ0Q
+  clinician_labels:
+  - counselor
+  code_header: null
+  change_goal: Behavior change discussed in the session (the source does not record it)
+  change_goal_source: curated
+  coded_span: null
+  notes: source key mWU7hnFjZ0Q.html; video id mWU7hnFjZ0Q (https://www.youtube.com/watch?v=mWU7hnFjZ0Q, may no longer be public); 95 turns; 37 questions labeled, 16 reflections not mapped
+- session_id: xqf1f83gqxo
+  title: MIDAS Spanish MI conversation XQF1F83GqXo
+  clinician_labels:
+  - counselor
+  code_header: null
+  change_goal: Behavior change discussed in the session (the source does not record it)
+  change_goal_source: curated
+  coded_span: null
+  notes: source key XQF1F83GqXo.html; video id XQF1F83GqXo (https://www.youtube.com/watch?v=XQF1F83GqXo, may no longer be public); 19 turns; 7 questions labeled, 4 reflections not mapped
+- session_id: hqgc3qdf4xc
+  title: MIDAS Spanish MI conversation HQGc3Qdf4Xc
+  clinician_labels:
+  - counselor
+  code_header: null
+  change_goal: Behavior change discussed in the session (the source does not record it)
+  change_goal_source: curated
+  coded_span: null
+  notes: source key HQGc3Qdf4Xc.html; video id HQGc3Qdf4Xc (https://www.youtube.com/watch?v=HQGc3Qdf4Xc, may no longer be public); 125 turns; 19 questions labeled, 26 reflections not mapped
+- session_id: zeyc1l4e8f0-b
+  title: MIDAS Spanish MI conversation ZEYC1l4e8F0_b
+  clinician_labels:
+  - counselor
+  code_header: null
+  change_goal: Behavior change discussed in the session (the source does not record it)
+  change_goal_source: curated
+  coded_span: null
+  notes: source key ZEYC1l4e8F0_b.html; video id ZEYC1l4e8F0 (https://www.youtube.com/watch?v=ZEYC1l4e8F0, may no longer be public); 7 turns; 2 questions labeled, 1 reflections not mapped
+- session_id: c57dhktywf4
+  title: MIDAS Spanish MI conversation c57DhktYwF4
+  clinician_labels:
+  - counselor
+  code_header: null
+  change_goal: Behavior change discussed in the session (the source does not record it)
+  change_goal_source: curated
+  coded_span: null
+  notes: source key c57DhktYwF4.html; video id c57DhktYwF4 (https://www.youtube.com/watch?v=c57DhktYwF4, may no longer be public); 36 turns; 7 questions labeled, 4 reflections not mapped

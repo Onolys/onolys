@@ -24,7 +24,8 @@ def dataset():
 def test_fetch_layout_hashes_and_second_run_skips(tmp_path, monkeypatch, dataset):
     calls = []
 
-    def download(url, **kwargs):
+    def download(request, **kwargs):
+        url = request.full_url
         calls.append(url)
         return io.BytesIO(url.encode())
 
@@ -126,8 +127,8 @@ def test_preexisting_files_are_skipped_and_recorded(tmp_path, monkeypatch, datas
     target.write_bytes(b"already here")
     calls = []
 
-    def download(url, **kwargs):
-        calls.append(url)
+    def download(request, **kwargs):
+        calls.append(request.full_url)
         return io.BytesIO(b"new")
 
     monkeypatch.setattr("onolys_eval.fetch.urlopen", download)
@@ -151,8 +152,8 @@ def test_truncated_http_body_is_not_published(tmp_path, monkeypatch, dataset):
 
 
 def test_completed_provenance_survives_later_download_failure(tmp_path, monkeypatch, dataset):
-    def download(url, **kwargs):
-        if "uncoded" in url:
+    def download(request, **kwargs):
+        if "uncoded" in request.full_url:
             raise URLError("offline")
         return io.BytesIO(b"complete")
 

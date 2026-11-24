@@ -1,0 +1,6 @@
+# Parenthetical notes mention GI/Q; assigned codes are the uppercase codes outside parentheses.
+utterance_codes:
+- turn_id: t7
+  codes: [persuade, question]
+- turn_id: t13
+  codes: [gi, persuade]

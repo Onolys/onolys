@@ -8,6 +8,8 @@ Select engines, then pick **models**, **tiers** and **efforts** (options come fr
 
 Human is locked on for datasets: the server adds it automatically (the UI shows it checked and disabled), and it ignores the model/tier/effort and repeat axes. Planned units equal `sessions x (1 if Human + non-Human engines x combos x repeats)`. A run is capped at **499 units**; above that the request fails with 422 `Run has N units; the maximum is 499. ...`. A Human unit for a session without gold is kept but marked skipped (`no_gold`).
 
+**`gold.v1` supports partial human labels.** Every label is optional; a missing or `null` value means "not labeled", never zero. `counts` may hold any subset of the ten count ids (each nonnegative integer or `null`); `globals` may be `null` or hold any subset of the four globals (integer 1 to 5 or `null`); `summaries` is optional and, when present, must equal the pack formulas over the labeled inputs (a summary is `null` when an input is missing or a denominator is zero). Optional metadata: `quality_label` (`"high"`, `"low"` or `null`, a session-level quality tag), `label_source` (provenance note, e.g. "human MITI 4.2.1") and `label_scheme` (free text, e.g. "MISC 2.5 mapped to MITI"). `source.coded_url`, `source.uncoded_url` and `source.sha256` are optional; `source.retrieved_at` stays required. A gold with no labels at all is valid. Existing full CASAA gold files validate unchanged. Comparison compares only fields present on both the gold and the engine side: other fields show `—` (null), are excluded from MAE, bias and within-1, and each aggregate reports its own `n`. `quality_label` is passed through to `compare.v1` (and to each session in the compare view, which shows a Quality label column when any session has one) so engine scores can be related to high/low quality.
+
 Each combination re-points every LLM route of the base routes at the chosen model, tier and effort. Effort sets `reasoning_effort` and caps output tokens: low 16000, medium 32000, high 48000, max 64000, each bounded by the model's own maximum. Combination routes use a 300 s request timeout. The old preset path is deprecated: new runs ignore presets, and `presets` in the API is only accepted for stored legacy runs.
 
 Start opens persisted progress. Work runs through Cloud Tasks and continues after the browser closes. Reopen the run from History. A unit that fails with a transient error (provider timeout, rate limit, 5xx) is retried in the same task: up to 3 attempts, with jittered waits of about 5 s then 20 s, within an 840 s per-unit budget; no retry starts with less than 120 s of budget left, and non-transient errors fail immediately. Cancel stops pending work; an in-flight provider request may finish. History preserves inputs, timestamps, engine versions and Git SHA, resolved models, usage and estimated cost. If queued AI work reaches a different runtime SHA, engine version or resolved model map, it fails with `execution_config_changed` before provider calls. Rerun creates a fresh execution snapshot using the selected current configuration. **Rerun with different engines/selection** creates a new run from the original saved input snapshot. If the queued AI execution configuration changes before execution (code SHA, engine version or resolved models), the unit fails with `execution_config_changed` before calling the provider. Rerun preserves the input and records the new execution configuration.
@@ -27,7 +29,7 @@ The API base is `https://onolys-eval-backend-staging-1054076260967.us-central1.r
 | GET | `/v1/me` | Confirm access |
 | GET | `/v1/options?mode=dataset` | Engines, models/tiers/efforts, defaults and production labels |
 | GET | `/v1/options?mode=upload&upload_id=ID` | Upload-specific Human eligibility |
-| GET | `/v1/datasets` | Available manifests |
+| GET | `/v1/datasets` | Available manifests with original-source metadata (`source_media`, `transcript_origin`, `labels_summary`, `miti_version`, `overlaps_with`) |
 | GET | `/v1/datasets/{id}` | Sessions, gold availability and coded spans |
 | POST | `/v1/uploads` | Multipart `file`, optional `gold`, `change_goal`, `language`, JSON `coded_span` |
 | GET | `/v1/uploads/{id}` | Transcription/speaker readiness |
@@ -54,3 +56,21 @@ For an upload, use `"input":{"upload_id":"ID"}`. Engine, model, tier and effort 
 Only staging is supported. `eval/web` is the SPA; `eval/backend` authenticates users, schedules work and reads results. The backend calls registered engines in process rather than the main application API. Firestore database `staging` stores `eval_uploads`, `eval_runs`, and run `units`; browser clients have no direct database access. The private `onolys-eval-data-staging` bucket stores `datasets/<dataset>/manifest.json`, session `transcript.json`/`gold.json`, `uploads/<id>/` input and transcript artifacts, and large `runs/<run>/<unit>.json` outputs. Dataset source files are excluded from the deployment image.
 
 These are transcript-based MITI 4.2.1 comparisons, not diagnosis or judgments of clinical correctness. Automatic speaker labels and times may be wrong. Utterance splitting and CASAA row coding rules can change counts. One consensus reference does not establish inter-rater reliability, validation or official MITI status. Review evidence with human judgment; this is not an official MITI product.
+
+## Dataset manifest: original source fields
+
+A dataset `manifest.yaml` records what the dataset ORIGINALLY provides (we always store `transcript.v1`). The Dataset picker shows it as `Original: Video + audio + transcript · Transcript: human · Labels: ... · MITI 4.2.1 · Scheme: ...`, or `Original: Transcript only (no audio)`.
+
+| Field | Type / allowed values | Notes |
+|---|---|---|
+| `source_media` | required list, unique, any of `audio`, `video`, `transcript` | What the original source offers |
+| `transcript_origin` | optional: `human`, `auto_captions`, `translated`, `stt_ours` | Where the transcript came from |
+| `labels_summary` | optional non-empty string | Human labels available, e.g. `MITI 4.2.1 behavior counts + 4 global ratings` |
+| `miti_version` | required key: `4.2.1`, `4.2`, `4.0` or `null` | `null` = labels are not MITI-coded; the picker then shows `Not MITI-coded` instead of `MITI x` |
+| `label_scheme` | optional non-empty string | Shown as `Scheme: ...`, e.g. `MITI 4.2`, `MISC 2.5 mapped to MITI`, `AnnoMI codes mapped to MITI`, `none` |
+| `source_format` | `pdf` (default) or `mitags_csv` | `pdf`: per-session `coded_url`/`uncoded_url`. `mitags_csv`: dataset-level `source_files` (CSV URLs) and no per-session URLs |
+| `sessions_from_source` | `false` (default) or `true` | `true` (non-pdf formats only): the YAML lists no `sessions`; they are derived from the fetched source file at `convert`/`upload`/`run` time and only the bucket `manifest.json` carries the full list. Keeps thousand-session datasets under the 200,000-byte repo guard (`welivita-mi`) |
+| `overlaps_with` | optional list of `{dataset_id, note}` | Datasets sharing interviews |
+| `sessions[].source_media` | optional per-session override, same values | |
+
+Per-dataset sources, mappings and gaps: [eval-datasets.md](eval-datasets.md).

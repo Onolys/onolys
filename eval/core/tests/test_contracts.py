@@ -17,6 +17,7 @@ def manifest_data():
     return {
         "dataset_id": "synthetic", "title": "Synthetic", "license_note": "Test only",
         "source_page": "https://example.org", "miti_version": "4.2.1",
+        "source_media": ["video", "transcript"],
         "sessions": [{"session_id": "one", "title": "One",
                       "coded_url": "https://example.org/coded.pdf",
                       "uncoded_url": "https://example.org/uncoded.pdf",
@@ -74,11 +75,10 @@ def test_gold_rejects_bad_scores_and_unknown_keys(target, key, value):
     assert list(Draft202012Validator(schema).iter_errors(data))
 
 
-def test_gold_requires_complete_scores_and_computed_summaries():
+def test_gold_counts_are_partial_but_summaries_stay_computed():
     data = gold_data()
-    del data["counts"]["gi"]
-    with pytest.raises(ValidationError):
-        Gold.model_validate(data)
+    del data["counts"]["gi"]  # no longer required: unlabeled, not zero
+    Gold.model_validate(data)
     data = gold_data()
     data["summaries"]["pct_cr"] = .9
     with pytest.raises(ValidationError, match="summaries"):
@@ -98,6 +98,13 @@ def test_gold_accepts_optional_utterance_codes_and_zero_denominators():
 @pytest.mark.parametrize("change", [
     lambda d: d.update(dataset_id="../escape"),
     lambda d: d.update(unknown="x"),
+    lambda d: d.pop("source_media"),
+    lambda d: d.update(source_media=[]),
+    lambda d: d.update(source_media=["pdf"]),
+    lambda d: d.update(source_media=["audio", "audio"]),
+    lambda d: d.update(transcript_origin="guess"),
+    lambda d: d.update(overlaps_with=[{"dataset_id": "x"}]),
+    lambda d: d["sessions"][0].update(source_media=["gif"]),
     lambda d: d["sessions"][0].update(unknown="x"),
     lambda d: d["sessions"][0].update(session_id="bad/id"),
     lambda d: d["sessions"][0].update(change_goal=""),
@@ -176,3 +183,120 @@ def test_gold_accepts_zero_based_half_open_turn_range():
     data = gold_data()
     data["coded_span"] = {"start_turn": 0, "end_turn": 2}
     assert Gold.model_validate(data).coded_span.model_dump() == data["coded_span"]
+
+
+def partial_gold(**fields):
+    base = gold_data()
+    data = {k: base[k] for k in ("schema", "dataset_id", "session_id", "source", "coded_span", "parse")}
+    data.update(fields)
+    return data
+
+
+def test_partial_gold_counts_only_validates_and_schema_accepts():
+    data = partial_gold(counts={"question": 4, "sr": 1, "cr": None},
+                        summaries={"technical": None, "relational": None, "pct_cr": None,
+                                   "reflection_question_ratio": None,
+                                   "total_mia": None, "total_mina": None},
+                        label_source="human AnnoMI codes mapped", label_scheme="AnnoMI")
+    gold = Gold.model_validate(data)
+    assert gold.globals is None and gold.counts["question"] == 4
+    schema = Gold.model_json_schema(by_alias=True)
+    assert not list(Draft202012Validator(schema).iter_errors(data))
+
+
+def test_partial_gold_quality_only_and_empty_validate():
+    assert Gold.model_validate(partial_gold(quality_label="high")).quality_label == "high"
+    empty = Gold.model_validate(partial_gold())
+    assert empty.counts == {} and empty.globals is None and empty.summaries is None
+    assert empty.quality_label is None
+    schema = Gold.model_json_schema(by_alias=True)
+    for data in (partial_gold(quality_label="low"), partial_gold()):
+        assert not list(Draft202012Validator(schema).iter_errors(data))
+    with pytest.raises(ValidationError):
+        Gold.model_validate(partial_gold(quality_label="medium"))
+
+
+def test_partial_globals_individually_nullable_and_range_checked():
+    gold = Gold.model_validate(partial_gold(globals={"cct": 4, "sst": None}))
+    assert gold.globals == {"cct": 4, "sst": None}
+    with pytest.raises(ValidationError):
+        Gold.model_validate(partial_gold(globals={"cct": 6}))
+
+
+def test_partial_summaries_validated_only_from_present_inputs():
+    ok = partial_gold(counts={"cr": 3, "sr": 1}, summaries={"pct_cr": .75, "technical": None})
+    assert Gold.model_validate(ok).summaries.pct_cr == .75
+    bad = partial_gold(counts={"cr": 3, "sr": 1}, summaries={"pct_cr": .5})
+    with pytest.raises(ValidationError, match="summaries"):
+        Gold.model_validate(bad)
+    invented = partial_gold(counts={"cr": 3}, summaries={"technical": 3.0})
+    with pytest.raises(ValidationError, match="summaries"):
+        Gold.model_validate(invented)
+
+
+def test_full_gold_summaries_still_enforced_and_unchanged_dump():
+    data = gold_data()
+    gold = Gold.model_validate(data)
+    assert gold.model_dump(mode="json", by_alias=True)["summaries"] == data["summaries"]
+    data["summaries"]["total_mia"] = 99
+    with pytest.raises(ValidationError, match="summaries"):
+        Gold.model_validate(data)
+
+
+def test_manifest_source_media_and_optional_fields():
+    data = manifest_data()
+    data.update(source_media=["video", "audio", "transcript"], transcript_origin="auto_captions",
+                labels_summary="MITI counts", overlaps_with=[{"dataset_id": "other", "note": "Shared"}])
+    data["sessions"][0]["source_media"] = ["transcript"]
+    m = DatasetManifest.model_validate(data)
+    assert m.source_media == ["video", "audio", "transcript"]
+    assert m.transcript_origin == "auto_captions" and m.overlaps_with[0].dataset_id == "other"
+    assert m.sessions[0].source_media == ["transcript"]
+    base = DatasetManifest.model_validate(manifest_data())
+    assert base.transcript_origin is None and base.labels_summary is None and base.overlaps_with == []
+
+
+def test_committed_casaa_manifest_source_media():
+    m = load_manifest(ROOT / "datasets/casaa-miti421-video2013/manifest.yaml")
+    assert m.source_media == ["video", "transcript"] and m.transcript_origin == "human"
+    assert "MITI 4.2.1" in m.labels_summary
+
+
+@pytest.mark.parametrize("version", ["4.2.1", "4.2", "4.0", None])
+def test_manifest_accepts_miti_versions_and_label_scheme(version):
+    data = manifest_data()
+    data.update(miti_version=version, label_scheme="MISC 2.5 mapped to MITI")
+    m = DatasetManifest.model_validate(data)
+    assert m.miti_version == version and m.label_scheme == "MISC 2.5 mapped to MITI"
+    assert DatasetManifest.model_validate(manifest_data()).label_scheme is None
+
+
+@pytest.mark.parametrize("bad", ["3.1", "4", "", 4.2])
+def test_manifest_rejects_unknown_miti_version(bad):
+    data = manifest_data()
+    data["miti_version"] = bad
+    with pytest.raises(ValidationError):
+        DatasetManifest.model_validate(data)
+
+
+def test_manifest_requires_explicit_miti_version_key():
+    data = manifest_data()
+    del data["miti_version"]
+    with pytest.raises(ValidationError):
+        DatasetManifest.model_validate(data)
+
+
+def test_committed_casaa_practice_manifest_and_overrides():
+    from onolys_eval.convert import Overrides
+    import yaml
+    base = ROOT / "datasets/casaa-miti-practice"
+    m = load_manifest(base / "manifest.yaml")
+    assert len(m.sessions) == 12 and m.miti_version == "4.0" and "MITI 4" in m.label_scheme
+    assert m.source_media == ["audio", "transcript"] and m.transcript_origin == "human"
+    emmy = next(s for s in m.sessions if s.session_id == "emmys-first-encounter")
+    assert emmy.source_media == ["video", "transcript"]
+    assert all(s.audio_url is None and s.clinician_labels == ["P"] for s in m.sessions)
+    ids = {s.session_id for s in m.sessions}
+    for path in (base / "overrides").glob("*.yaml"):
+        assert path.stem in ids
+        Overrides.model_validate(yaml.safe_load(path.read_text()))

@@ -124,3 +124,12 @@ it.each(['done', 'partial', 'failed', 'cancelled'] as const)('does not poll term
 it('aborts in-flight progress requests on unmount and never schedules another poll', async()=>{
  vi.useFakeTimers(); let resolve!: (value:RunDetail)=>void; const api={...createEvalApi('',vi.fn()),run:vi.fn().mockImplementation(()=>new Promise<RunDetail>(r=>{resolve=r}))}; const view=render(<RunView api={api} runId="r1" onRerun={vi.fn()}/>); const signal=api.run.mock.calls[0][1] as AbortSignal; view.unmount(); expect(signal.aborted).toBe(true); await act(async()=>{resolve(detail('running')); await vi.advanceTimersByTimeAsync(9000)}); expect(api.run).toHaveBeenCalledTimes(1);
 });
+
+it('renders — for unlabeled human values and shows quality label column only when present', () => {
+ const partial = comparison(); partial.sessions[0].human = { ...partial.sessions[0].human!, giving_information: null, empathy: null };
+ const view = render(<CompareView compare={partial} />);
+ expect(screen.queryByText('Quality label')).toBeNull();
+ const human = screen.getAllByRole('row')[1].querySelectorAll('td'); expect(human[ids.indexOf('giving_information')].textContent).toBe('—, n=0'); expect(human[ids.indexOf('empathy')].textContent).toBe('—, n=0');
+ partial.sessions[0].quality_label = 'high'; view.rerender(<CompareView compare={partial} />);
+ expect(screen.getByRole('columnheader', { name: 'Quality label' })).toBeTruthy(); expect(screen.getAllByText('high').length).toBeGreaterThan(0);
+});

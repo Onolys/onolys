@@ -1,0 +1,32 @@
+# SAME = last code listed for the preceding provider utterance; t99 follows a code cell ending in a dangling ';' so it is ambiguous. t53 prints EMP (Emphasize), t63 prints AFF.
+utterance_codes:
+- turn_id: t11
+  codes: [sr, question]
+- turn_id: t13
+  codes: [emphasize_autonomy]
+- turn_id: t19
+  codes: [question]
+- turn_id: t23
+  codes: [cr]
+- turn_id: t37
+  codes: [gi, affirm]
+- turn_id: t43
+  codes: [gi]
+- turn_id: t45
+  codes: [gi]
+- turn_id: t53
+  codes: [emphasize_autonomy]
+- turn_id: t63
+  codes: [affirm]
+- turn_id: t73
+  codes: [cr]
+- turn_id: t87
+  codes: [cr]
+- turn_id: t91
+  codes: [cr]
+- turn_id: t93
+  codes: [cr]
+- turn_id: t99
+  codes: [seek_collab]
+- turn_id: t103
+  codes: [question]
