@@ -74,11 +74,10 @@ def test_gold_rejects_bad_scores_and_unknown_keys(target, key, value):
     assert list(Draft202012Validator(schema).iter_errors(data))
 
 
-def test_gold_requires_complete_scores_and_computed_summaries():
+def test_gold_counts_are_partial_but_summaries_stay_computed():
     data = gold_data()
-    del data["counts"]["gi"]
-    with pytest.raises(ValidationError):
-        Gold.model_validate(data)
+    del data["counts"]["gi"]  # no longer required: unlabeled, not zero
+    Gold.model_validate(data)
     data = gold_data()
     data["summaries"]["pct_cr"] = .9
     with pytest.raises(ValidationError, match="summaries"):
@@ -176,3 +175,61 @@ def test_gold_accepts_zero_based_half_open_turn_range():
     data = gold_data()
     data["coded_span"] = {"start_turn": 0, "end_turn": 2}
     assert Gold.model_validate(data).coded_span.model_dump() == data["coded_span"]
+
+
+def partial_gold(**fields):
+    base = gold_data()
+    data = {k: base[k] for k in ("schema", "dataset_id", "session_id", "source", "coded_span", "parse")}
+    data.update(fields)
+    return data
+
+
+def test_partial_gold_counts_only_validates_and_schema_accepts():
+    data = partial_gold(counts={"question": 4, "sr": 1, "cr": None},
+                        summaries={"technical": None, "relational": None, "pct_cr": None,
+                                   "reflection_question_ratio": None,
+                                   "total_mia": None, "total_mina": None},
+                        label_source="human AnnoMI codes mapped", label_scheme="AnnoMI")
+    gold = Gold.model_validate(data)
+    assert gold.globals is None and gold.counts["question"] == 4
+    schema = Gold.model_json_schema(by_alias=True)
+    assert not list(Draft202012Validator(schema).iter_errors(data))
+
+
+def test_partial_gold_quality_only_and_empty_validate():
+    assert Gold.model_validate(partial_gold(quality_label="high")).quality_label == "high"
+    empty = Gold.model_validate(partial_gold())
+    assert empty.counts == {} and empty.globals is None and empty.summaries is None
+    assert empty.quality_label is None
+    schema = Gold.model_json_schema(by_alias=True)
+    for data in (partial_gold(quality_label="low"), partial_gold()):
+        assert not list(Draft202012Validator(schema).iter_errors(data))
+    with pytest.raises(ValidationError):
+        Gold.model_validate(partial_gold(quality_label="medium"))
+
+
+def test_partial_globals_individually_nullable_and_range_checked():
+    gold = Gold.model_validate(partial_gold(globals={"cct": 4, "sst": None}))
+    assert gold.globals == {"cct": 4, "sst": None}
+    with pytest.raises(ValidationError):
+        Gold.model_validate(partial_gold(globals={"cct": 6}))
+
+
+def test_partial_summaries_validated_only_from_present_inputs():
+    ok = partial_gold(counts={"cr": 3, "sr": 1}, summaries={"pct_cr": .75, "technical": None})
+    assert Gold.model_validate(ok).summaries.pct_cr == .75
+    bad = partial_gold(counts={"cr": 3, "sr": 1}, summaries={"pct_cr": .5})
+    with pytest.raises(ValidationError, match="summaries"):
+        Gold.model_validate(bad)
+    invented = partial_gold(counts={"cr": 3}, summaries={"technical": 3.0})
+    with pytest.raises(ValidationError, match="summaries"):
+        Gold.model_validate(invented)
+
+
+def test_full_gold_summaries_still_enforced_and_unchanged_dump():
+    data = gold_data()
+    gold = Gold.model_validate(data)
+    assert gold.model_dump(mode="json", by_alias=True)["summaries"] == data["summaries"]
+    data["summaries"]["total_mia"] = 99
+    with pytest.raises(ValidationError, match="summaries"):
+        Gold.model_validate(data)

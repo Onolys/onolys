@@ -60,7 +60,7 @@ export interface CompareAggregate {
 }
 export interface Compare {
  has_human: boolean; metrics: { id: string; group: 'counts' | 'globals' | 'summaries'; label: string }[];
- sessions: { session_id: string; human: Record<string, number | null> | null; cells: CompareCell[] }[];
+ sessions: { session_id: string; human: Record<string, number | null> | null; quality_label?: 'high' | 'low' | null; cells: CompareCell[] }[];
  aggregates: CompareAggregate[]; notes: string[];
 }
 export interface RunDetail extends RunSummary { units: RunUnit[]; compare: Compare }

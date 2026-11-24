@@ -8,7 +8,7 @@ from fastapi import APIRouter, HTTPException, Request
 from onolys_engine_core.errors import InputError
 from onolys_eval._formulas import compute_summaries
 from onolys_eval.gold import COUNT_IDS, GLOBAL_IDS
-from onolys_eval.metrics import Scores, aggregate, compare
+from onolys_eval.metrics import PartialScores, Scores, aggregate, compare
 from pydantic import BaseModel, ConfigDict, Field, StrictInt
 
 from onolys_eval_backend.matrix import RunTooLarge, SelectionError, combo_key
@@ -104,15 +104,11 @@ def run_summary(rid, run):
 
 
 def _values(scores):
-    return {
-        **scores.counts,
-        **scores.globals,
-        **{
-            key: value
-            for key, value in compute_summaries(scores.counts, scores.globals).items()
-            if key in SUMMARY_IDS
-        },
-    }
+    """Per-metric values; keys a partial human label omits are None (not labeled)."""
+    counts = {key: (scores.counts or {}).get(key) for key in COUNT_IDS}
+    globals_ = {key: (scores.globals or {}).get(key) for key in GLOBAL_IDS}
+    summaries = compute_summaries(counts, globals_)
+    return {**counts, **globals_, **{key: summaries[key] for key in SUMMARY_IDS}}
 
 
 def _range(values):
@@ -161,7 +157,7 @@ def build_compare(run, units):
         humans = [u for u in selected.values() if u["engine"] == "human"]
         human = next(
             (
-                Scores.model_validate(u["scores"])
+                PartialScores.model_validate(u["scores"])
                 for u in humans
                 if u["status"] == "done" and u.get("scores") is not None
             ),
@@ -217,7 +213,14 @@ def build_compare(run, units):
                     notes.extend(comparison["notes"])
                 cell["error"] = _flat_error(session_errors)
             cells.append(cell)
-        sessions.append({"session_id": sid, "human": reference, "cells": cells})
+        sessions.append(
+            {
+                "session_id": sid,
+                "human": reference,
+                "quality_label": human.quality_label if human is not None else None,
+                "cells": cells,
+            }
+        )
     for source in run.get("input_ref", {}).get("sessions", []):
         caveat = source.get("provenance", {}).get("notes")
         if caveat:

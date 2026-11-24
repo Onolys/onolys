@@ -130,3 +130,38 @@ def test_scores_require_all_authorable_keys(group, key):
     del data[group][key]
     with pytest.raises(ValidationError):
         Scores(**data)
+
+
+def test_compare_skips_fields_missing_on_either_side_and_passes_quality_label():
+    from onolys_eval.metrics import PartialScores
+    gold = PartialScores(counts={"question": 2, "cr": None}, globals=None, quality_label="high")
+    result = compare(gold, scores(counts={"question": 5, "cr": 1}))
+    assert result["quality_label"] == "high"
+    assert result["counts"]["question"] == {"gold": 2, "ours": 5, "diff": 3, "abs_diff": 3}
+    assert result["counts"]["cr"] == {"gold": None, "ours": 1, "diff": None, "abs_diff": None}
+    assert result["counts"]["gi"]["diff"] is None
+    assert all(row["diff"] is None for row in result["globals"].values())
+    assert all(row["gold"] is None and row["diff"] is None for row in result["summaries"].values())
+    assert json.loads(json.dumps(result, allow_nan=False)) == result
+
+
+def test_partial_gold_summaries_use_only_present_inputs():
+    from onolys_eval.metrics import PartialScores
+    gold = PartialScores(counts={"cr": 3, "sr": 1}, globals={"cct": 4, "sst": 2})
+    result = compare(gold, scores(counts={"cr": 1, "sr": 1}))
+    assert result["summaries"]["pct_cr"]["gold"] == .75
+    assert result["summaries"]["technical"]["gold"] == 3
+    assert result["summaries"]["relational"]["gold"] is None
+
+
+def test_aggregate_mae_ignores_missing_and_reports_n_per_field():
+    from onolys_eval.metrics import PartialScores
+    full = compare(scores(counts={"question": 1}), scores(counts={"question": 4}))
+    partial = compare(PartialScores(counts={"question": 3}), scores(counts={"question": 4}))
+    unlabeled = compare(PartialScores(), scores(counts={"question": 9}))
+    agg = aggregate([full, partial, unlabeled])
+    assert agg["n"] == 3
+    assert agg["counts"]["question"] == {"mae": 2.0, "mean_bias": 2.0, "n": 2}
+    assert agg["counts"]["gi"]["n"] == 1
+    assert agg["globals"]["cct"]["n"] == 1
+    assert agg["globals"]["cct"]["within_1"]["total"] == 1
