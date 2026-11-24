@@ -15,7 +15,7 @@
    retries and duplicate tasks never add a second line. No tombstone is kept.
 
 An in-flight validate or run task that writes blobs after the delete is covered by
-`jobs.alive.ensure_alive` (it removes what it wrote and answers `gone`).
+`jobs.alive.ensure_active` (it removes what it wrote and answers `gone`).
 """
 
 import logging

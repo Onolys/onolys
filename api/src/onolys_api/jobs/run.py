@@ -33,13 +33,14 @@ from onolys_api import logs
 from onolys_api.adapters.base import Evaluation
 from onolys_api.adapters.error_map import kind_for_code, to_public
 from onolys_api.adapters.validated import evaluate_validated
-from onolys_api.jobs.alive import ensure_alive
+from onolys_api.jobs.alive import ensure_active
 from onolys_api.jobs.charging import release_failed_run, release_once
 from onolys_api.jobs.machine import RUN_START_PROGRESS, STAGE_WEIGHTS, advance
 from onolys_api.jobs.queue import MAX_ATTEMPTS
 from onolys_api.jobs.transcribe import TRANSCRIPT_ID
 from onolys_api.jobs.transcribe import _run as run_coro
 from onolys_api.jobs.worker import (
+    Cancelled,
     Handler,
     PermanentError,
     TaskContext,
@@ -74,6 +75,8 @@ def make_run_handler(
         date = run_doc.cap_date
         try:
             _execute(ctx, blobs, get_evaluation(), run_doc)
+        except Cancelled:
+            raise  # the cancel already released the slot (released=true) and marked the run
         except (TaskError, TimeoutError) as e:
             retryable = isinstance(e, TimeoutError) or e.retryable
             if not retryable or ctx.attempt >= MAX_ATTEMPTS:
@@ -100,6 +103,8 @@ def _execute(ctx, blobs, evaluation, run_doc) -> None:
     session = repo.get_session(uid, sid)
     if session.state == "deleting":
         raise NotFoundError()
+    if session.state == "cancelled":
+        raise Cancelled()
 
     try:  # a retry or redelivery after the report was stored only finishes the bookkeeping
         existing = repo.get_report(uid, sid, run_id, resolve=False)
@@ -126,8 +131,9 @@ def _evaluate(ctx, blobs, evaluation, run_doc, session) -> ReportDoc:
     params = {
         "change_goal": session.change_goal or "",
         "seed": sid,
-        "coded_span": (run_doc.coded_span.model_dump(exclude_none=True)
-                       if run_doc.coded_span else None),
+        "coded_span": (
+            run_doc.coded_span.model_dump(exclude_none=True) if run_doc.coded_span else None
+        ),
         "language": transcript.language or session.language,
         "n_runs": run_doc.n_runs,
         "preset": run_doc.preset,
@@ -141,6 +147,7 @@ def _evaluate(ctx, blobs, evaluation, run_doc, session) -> ReportDoc:
         if stage not in STAGE_WEIGHTS:
             return
         try:
+            ensure_active(repo, blobs, uid, sid)  # stage boundary: stop when cancelled/deleted
             if status == "started":
                 repo.update_session(uid, sid, {"step": stage}, status={"step": stage})
             elif stage not in done:
@@ -150,7 +157,7 @@ def _evaluate(ctx, blobs, evaluation, run_doc, session) -> ReportDoc:
                 repo.update_session(
                     uid, sid, {}, status={"progress": max(shown, min(MAX_PROGRESS, total))}
                 )
-        except NotFoundError:
+        except (NotFoundError, Cancelled):
             raise
         except Exception as e:  # progress is best effort: never fail the run for it
             logs.emit(
@@ -179,7 +186,8 @@ def _evaluate(ctx, blobs, evaluation, run_doc, session) -> ReportDoc:
         if out.artifacts.get(name) is not None:
             blobs.put_bytes(artifact_key(uid, sid, run_id, name), _dumps(out.artifacts[name]),
                             "application/json")  # fmt: skip
-    ensure_alive(repo, blobs, uid, sid)  # a DELETE during the run must not leave artifacts
+    ensure_active(repo, blobs, uid, sid)  # a DELETE during the run must not leave artifacts
+    # (and a cancel must not get a report: ensure_active raises Cancelled)
     versions = [r.version for r in repo.list_reports(uid, sid)]
     doc = ReportDoc(
         version=max(versions, default=0) + 1,

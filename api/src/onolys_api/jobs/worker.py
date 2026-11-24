@@ -34,6 +34,11 @@ LEASE_GRACE_S = 60  # lease = deadline + 60 s
 RETRYABLE_CODES = ("upstream_unavailable", "deadline_exceeded", "rate_limited")
 
 
+class Cancelled(Exception):
+    """The session was cancelled (04-cancel R5): stop quietly, answer 200 `cancelled`, write no
+    failure. Not a TaskError: it is neither retried nor recorded."""
+
+
 class TaskError(Exception):
     retryable = False
 
@@ -106,7 +111,7 @@ class HandlerSpec:
 @dataclass(frozen=True)
 class TaskResult:
     status_code: int
-    outcome: str  # done | duplicate | busy | retry | failed | gone | skipped
+    outcome: str  # done | duplicate | busy | retry | failed | gone | cancelled | skipped
 
 
 class TaskRunner:
@@ -181,13 +186,28 @@ class TaskRunner:
             return TaskResult(200, "done")
         except NotFoundError:
             return TaskResult(200, "gone")  # session deleted: nothing left to do
+        except Cancelled:
+            return self._cancelled(spec, payload)
         except TaskError as e:
             return self._on_error(spec, payload, e, last)
         except Exception as e:
+            if self._is_cancelled(payload):  # backstop (D4): e.g. `advance` -> invalid_state
+                return self._cancelled(spec, payload)
             stage = "stt" if spec.step == "transcribe" else "run"
             code, retryable = to_public(e, attempt, stage)
             err = RetryableError(code) if retryable else PermanentError(code)
             return self._on_error(spec, payload, err, last, e)
+
+    def _is_cancelled(self, p: TaskPayload) -> bool:
+        try:
+            return self.repo.get_session(p.uid, p.sid).state == "cancelled"
+        except Exception:  # noqa: BLE001 - the backstop must never mask the real error
+            return False
+
+    def _cancelled(self, spec: HandlerSpec, p: TaskPayload) -> TaskResult:
+        logs.emit("task_cancelled", session_id=p.sid, run_id=p.run_id, step=spec.step or "run",
+                  request_id=p.request_id)  # fmt: skip
+        return TaskResult(200, "cancelled")
 
     # ---- records ----
 
@@ -238,6 +258,8 @@ class TaskRunner:
             request_id=p.request_id,
         )  # fmt: skip
         if not bookkeeping:  # the session is gone (an upload failure): nothing to mark
+            return
+        if self._is_cancelled(p):  # never write `failed` over `cancelled` (R5)
             return
         self._safe(self._record, spec, p, status="failed", ended=self.clock(), error=code)
         label = spec.step or "run"

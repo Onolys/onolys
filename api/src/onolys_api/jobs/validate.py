@@ -36,10 +36,16 @@ from onolys_api.audio import (
     staging_key,
 )
 from onolys_api.config import Settings
-from onolys_api.jobs.alive import ensure_alive as _ensure_alive
+from onolys_api.jobs.alive import ensure_active as _ensure_active
 from onolys_api.jobs.machine import advance
 from onolys_api.jobs.queue import TaskPayload
-from onolys_api.jobs.worker import Handler, PermanentError, TaskContext, UploadFailedError
+from onolys_api.jobs.worker import (
+    Cancelled,
+    Handler,
+    PermanentError,
+    TaskContext,
+    UploadFailedError,
+)
 from onolys_api.repo.base import NotFoundError
 from onolys_api.repo.models import ClientInfo, InterviewDoc, RecordingDoc
 from onolys_api.storage.base import MAX_UPLOAD_BYTES, BlobNotFoundError, BlobStore
@@ -128,8 +134,8 @@ def make_validate_handler(
         blobs.delete_prefix(f"uploads/{uid}/{sid}/")
         blobs.delete_prefix(f"{uid}/{sid}/audio/")
 
-    def ensure_alive(ctx: TaskContext) -> None:
-        _ensure_alive(ctx.repo, blobs, ctx.uid, ctx.sid)
+    def ensure_active(ctx: TaskContext) -> None:
+        _ensure_active(ctx.repo, blobs, ctx.uid, ctx.sid)
 
     def fail(ctx: TaskContext, code: str) -> PermanentError:
         """A file-check failure: discard the upload (audio, session doc, subcollections)."""
@@ -189,6 +195,8 @@ def make_validate_handler(
     def validate(ctx: TaskContext) -> None:
         uid, sid = ctx.uid, ctx.sid
         session = ctx.repo.get_session(uid, sid)
+        if session.state == "cancelled":  # delivered after a cancel: nothing to do, keep the data
+            raise Cancelled()
         source = find_source(ctx, session.upload.upload_id if session.upload else None)
         if source is None:
             raise fail(ctx, "audio_unreadable")
@@ -247,7 +255,7 @@ def make_validate_handler(
 
             orig = original_key(uid, sid, fmt)
             digest, nbytes = _sha256(local), local.stat().st_size
-            ensure_alive(ctx)
+            ensure_active(ctx)
             try:
                 blobs.upload_from(canonical_key(uid, sid), flac, "audio/flac")
                 if moved:
@@ -256,10 +264,10 @@ def make_validate_handler(
                 else:
                     blobs.move(src_key, orig)  # also deletes the staged object
             except BlobNotFoundError:
-                ensure_alive(ctx)  # the DELETE swept the staged object under us
+                ensure_active(ctx)  # the DELETE swept the staged object under us
                 raise
             blobs.delete_prefix(f"uploads/{uid}/{sid}/")  # late PUTs and stale-URL strays
-            ensure_alive(ctx)  # a DELETE during the writes above must not leave audio behind
+            ensure_active(ctx)  # a DELETE during the writes above must not leave audio behind
 
         if session.interview_id:
             # a mismatch is OUR error (03-failure-policy R9): no upload discard, data kept, no retry

@@ -31,11 +31,13 @@ from onolys_api import logs
 from onolys_api.adapters.base import AdapterError, Stt
 from onolys_api.audio import canonical_audio_ref
 from onolys_api.config import Settings
+from onolys_api.jobs.alive import ensure_active
 from onolys_api.jobs.first_run import maybe_start_first_run
 from onolys_api.jobs.machine import advance
 from onolys_api.jobs.queue import MAX_ATTEMPTS, TaskPayload, TaskQueue
 from onolys_api.jobs.worker import (
     RETRYABLE_CODES,
+    Cancelled,
     Handler,
     PermanentError,
     RetryableError,
@@ -149,6 +151,8 @@ def make_transcribe_handler(
     def transcribe(ctx: TaskContext) -> None:
         uid, sid = ctx.uid, ctx.sid
         session = ctx.repo.get_session(uid, sid)
+        if session.state == "cancelled":
+            raise Cancelled()
         if session.state != "transcribing":
             return
         rec = session.steps.get(STEP)
@@ -167,6 +171,7 @@ def make_transcribe_handler(
                 handle = _run(stt.start(audio, params))
             except AdapterError as e:
                 raise _provider_error(e, ctx) from None
+            ensure_active(ctx.repo, blobs, uid, sid)  # cancelled meanwhile: ignore the operation
             started = ctx.clock()
             ms = recs[0].duration_ms
             limit = stt_cap_s(None if ms is None else ms / 1000, settings)
@@ -214,6 +219,8 @@ def make_poll_handler(
     def poll(ctx: TaskContext) -> None:
         uid, sid = ctx.uid, ctx.sid
         session = ctx.repo.get_session(uid, sid)
+        if session.state == "cancelled":
+            raise Cancelled()
         rec = session.steps.get(STEP)
         if rec is None or rec.status in ("done", "failed"):
             return
@@ -256,6 +263,7 @@ def make_poll_handler(
         code = check_transcript(transcript)
         if code is not None:
             raise PermanentError(code)
+        ensure_active(ctx.repo, blobs, uid, sid)  # cancelled meanwhile: discard the result
         ctx.repo.put_transcript(uid, sid, TRANSCRIPT_ID, transcript)
         advance(ctx.repo, uid, sid, to="awaiting_input", step=None,
                 flags={"transcript_ready": True})  # fmt: skip
