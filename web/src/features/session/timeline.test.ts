@@ -120,7 +120,7 @@ const ROWS: Row[] = [
 ];
 
 const ON_KEYS = ["upload", "transcribe", "speaker", "rating", "run", "report"];
-const ON_LABELS = ["Upload", "Transcribe", "Confirm speaker", "Your rating", "Rate session", "Report"];
+const ON_LABELS = ["Upload", "Transcribe", "Confirm speaker", "Your rating", "Onolys scoring", "Report"];
 const OFF_KEYS = ON_KEYS.filter((k) => k !== "rating");
 const OFF_LABELS = ON_LABELS.filter((l) => l !== "Your rating");
 const dropRating = (statuses: string) => statuses.slice(0, 3) + statuses.slice(4);
@@ -142,7 +142,7 @@ describe("deriveTimeline: table (rating flag on)", () => {
   });
 
   it("keeps the label list in step order", () => {
-    expect(STEP_LABELS).toEqual(["Upload", "Transcribe", "Confirm speaker", "Your rating", "Rate session", "Report"]);
+    expect(STEP_LABELS).toEqual(["Upload", "Transcribe", "Confirm speaker", "Your rating", "Onolys scoring", "Report"]);
   });
 });
 

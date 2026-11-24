@@ -5,6 +5,7 @@ import { useAuth } from "../auth/AuthProvider";
 import { useSignOut } from "../auth/useSignOut";
 import { AccountMenu } from "./AccountMenu";
 import { Footer } from "./Footer";
+import { RouteTitle } from "./routeTitle";
 
 /** Plain text nav link (not a button): muted, subtle hover, current page = primary colour + underline. AppHeader's nav supplies the even gap. */
 function NavItem({ to, children }: { to: string; children: ReactNode }) {
@@ -53,6 +54,7 @@ export function Layout() {
 
   return (
     <div className="flex min-h-screen flex-col">
+      <RouteTitle />
       <SkipLink />
       <AppHeader
         // verified: page nav sits at the true centre of the bar (brand left, account menu right); signed-out nav stays right via the brand's mr-auto

@@ -179,3 +179,13 @@ describe("sessions page: empty state, rating flag on", () => {
     expect(await main().findByText(/agrees with your own rating/i)).toBeInTheDocument();
   });
 });
+
+describe("sessions page: unknown status (C17)", () => {
+  it("renders a neutral chip instead of crashing the dashboard", async () => {
+    server.use(http.get("*/v1/sessions", () => HttpResponse.json({ items: [item("s0", "brand_new_state"), item("s1", "report_ready", { latest_report_version: 1 })] })));
+    render({ user: USER });
+    const li = await waitFor(() => rowOf("Session s0"));
+    expect(within(li).getByText("Status unavailable")).toBeInTheDocument();
+    expect(within(rowOf("Session s1")).getByText("Report ready")).toBeInTheDocument();
+  });
+});

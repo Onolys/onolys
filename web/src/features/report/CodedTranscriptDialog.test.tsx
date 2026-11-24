@@ -233,3 +233,19 @@ describe("CodedTranscriptDialog", () => {
     }
   });
 });
+
+describe("CodedTranscriptDialog on narrow screens (C18)", () => {
+  it("stacks each row below 640px so the Why text is never cut off, and labels every cell", () => {
+    view();
+    fireEvent.click(screen.getByRole("button", { name: "Open coded transcript" }));
+    const d = dlg();
+    const table = d.querySelector("table")!;
+    expect(table.className).toMatch(/max-\[640px\]:block/);
+    const row = d.querySelector("#utt-25")!;
+    expect(row.className).toMatch(/max-\[640px\]:block/);
+    const cells = [...row.querySelectorAll("td")];
+    expect(cells.map((c) => c.getAttribute("data-label"))).toEqual(["Utt #", "Speaker", "Utterance", "Code(s)", "Why"]);
+    for (const c of cells) expect(c.className).toMatch(/max-\[640px\]:block/);
+    expect(cells[4]!.className).toMatch(/max-\[640px\]:before:/);
+  });
+});

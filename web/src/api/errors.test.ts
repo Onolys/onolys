@@ -263,3 +263,11 @@ describe("cancelErrorMessage", () => {
     expect(cancelErrorMessage(new TypeError("network"))).toBe("We couldn't cancel this session. Try again.");
   });
 });
+
+describe("session_too_long copy (C20)", () => {
+  it("speaks to web users, not API users", () => {
+    const msg = messageForCode("session_too_long");
+    expect(msg).not.toMatch(/coded_span|API/);
+    expect(msg).toMatch(/shorter/i);
+  });
+});

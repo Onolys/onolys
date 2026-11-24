@@ -12,7 +12,7 @@ const MESSAGES = {
   transcript_invalid: "We couldn't read this transcript. Check its format and upload it again.",
   transcript_too_large: "This transcript is over 1 MB. Upload a smaller file.",
   empty_transcript: "The transcript needs at least 50 words. Upload a longer transcript.",
-  session_too_long: "This session is too long to code. Use a narrower coded_span in the API.",
+  session_too_long: "This session is too long to code. Upload a shorter recording or transcript.",
   invalid_coded_span: "The coded range is invalid. Check the range and try again.",
   unsupported_audio:
     "We can't use this file type. Upload an mp3, wav, m4a, webm or ogg recording.",

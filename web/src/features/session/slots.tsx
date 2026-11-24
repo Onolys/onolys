@@ -38,14 +38,25 @@ export function RatingCardSlot({ sessionId, doc, readOnly = false }: SlotProps &
 
 export function SpeakerGateSlot({ sessionId, doc }: SlotProps) {
   const [open, setOpen] = useState(false);
+  const [dismissed, setDismissed] = useState(false);
   // Only a retryable failure re-runs (via /retry); a ready report is final (FX45) and a permanent failure needs a new session.
-  const rerunnable = doc.state === "failed" && failureView(doc).action === "retry";
+  const failed = doc.state === "failed";
+  const rerunnable = failed && failureView(doc).action === "retry";
+  // A failed session whose speaker was never confirmed opens the rerun gate (confirm, then /retry): "first" would only confirm and leave it failed.
+  const showRerun = rerunnable && (open || (!doc.speaker_confirmed && !dismissed));
   return (
     <div data-slot="speaker-gate" data-session={sessionId}>
-      {!doc.speaker_confirmed ? (
+      {!doc.speaker_confirmed && !failed ? (
         <SpeakerGate sessionId={sessionId} mode="first" />
-      ) : rerunnable && open ? (
-        <SpeakerGate sessionId={sessionId} mode="rerun" onDone={() => setOpen(false)} />
+      ) : showRerun ? (
+        <SpeakerGate
+          sessionId={sessionId}
+          mode="rerun"
+          onDone={() => {
+            setOpen(false);
+            setDismissed(true);
+          }}
+        />
       ) : rerunnable ? (
         <div>
           <Button type="button" variant="link" className={LINK_BTN} onClick={() => setOpen(true)}>

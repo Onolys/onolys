@@ -13,6 +13,7 @@ import type { CodedRow, TurnsState } from "./codedRows";
 import { Button, Card, Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@onolys/ui";
 import { StatusChip, type ChipTone } from "../../components/StatusChip";
 import { H1, LINK_BTN, NOTE } from "../../components/classes";
+import { formatDate } from "../../lib/format";
 import { CODE_META } from "./codeMeta";
 import { CodeChip } from "./CodeChip";
 import { CodedTranscriptProvider } from "./CodedTranscriptDialog";
@@ -61,7 +62,18 @@ const LABEL = "block text-[0.6875rem] font-semibold uppercase tracking-widest te
 const WARNING_TEXT: Record<string, string> = {
   fewer_tips: "We could only find a few tips this time.",
   tips_failed: "We couldn't write tips this time.",
+  // Per-run engine codes (they can repeat per item; the notes below show each message once).
+  quote_not_found: "Some quotes could not be matched to the transcript, so they were left out.",
+  overlap: "Some coded lines overlapped, so only one code was kept for them.",
+  insufficient_evidence: "For some items there was not enough evidence in the transcript to be sure.",
+  capped: "Some scores were limited because the evidence was thin.",
+  reason_withheld_tone: "Some written reasons were left out because their wording was not suitable to show.",
 };
+const GENERIC_WARNING = "Some parts of this report had a processing note.";
+/** Plain-language notes for the report's warnings: known codes by their text, unknown ones as one generic line, each message once. */
+const warningNotes = (warnings: Report["warnings"]): string[] => [
+  ...new Set((warnings ?? []).map((w) => WARNING_TEXT[w.code] ?? GENERIC_WARNING)),
+];
 const GROUPS: {
   title: string;
   ids: string[];
@@ -90,17 +102,6 @@ const GROUPS: {
   },
 ];
 
-const fmtDate = (iso: string) => {
-  const d = new Date(iso);
-  return Number.isNaN(d.getTime())
-    ? iso
-    : d.toLocaleDateString("en-GB", {
-        day: "numeric",
-        month: "short",
-        year: "numeric",
-        timeZone: "UTC",
-      });
-};
 const mmss = (ms: number) =>
   `${Math.floor(ms / 60000)}:${String(Math.floor(ms / 1000) % 60).padStart(2, "0")}`;
 
@@ -133,6 +134,13 @@ function Section({
     </section>
   );
 }
+
+/** An absent value: a dash a screen reader hears as "no data". */
+const NO_DATA = (
+  <span role="img" aria-label="no data">
+    –
+  </span>
+);
 
 const valueText = (id: string, v: number | null | undefined) => {
   if (v === null || v === undefined) return "–";
@@ -249,7 +257,7 @@ function Glance({ r, turns }: { r: Report; turns: readonly Turn[] | null }) {
 
 function Feedback({ r, turns }: { r: Report; turns: readonly Turn[] | null }) {
   const tips = [...(r.tips ?? [])].sort((a, b) => a.rank - b.rank);
-  const notices = (r.warnings ?? []).filter((w) => WARNING_TEXT[w.code]);
+  const notices = warningNotes(r.warnings);
   if (tips.length === 0 && notices.length === 0) return null;
   const index = new Map((turns ?? []).map((t, i) => [t.id, i + 1]));
   return (
@@ -297,9 +305,9 @@ function Feedback({ r, turns }: { r: Report; turns: readonly Turn[] | null }) {
           })}
         </ol>
       ) : null}
-      {notices.map((w, i) => (
-        <p key={i} className={NOTE} role="note">
-          {WARNING_TEXT[w.code]}
+      {notices.map((text) => (
+        <p key={text} className={NOTE} role="note">
+          {text}
         </p>
       ))}
     </Section>
@@ -308,15 +316,17 @@ function Feedback({ r, turns }: { r: Report; turns: readonly Turn[] | null }) {
 
 function Counts({ r }: { r: Report }) {
   // Keep the unrounded means: a total is round(sum of means), not the sum of the rounded rows.
-  const means = new Map(
-    (r.behaviours ?? []).map((b) => [
-      b.item_id,
-      b.onolys_count?.mean ?? b.onolys_count?.values?.[0] ?? 0,
-    ]),
-  );
+  // A behaviour with no onolys_count has no data: it is left out (shown as a dash), never counted as 0.
+  const means = new Map<string, number>();
+  for (const b of r.behaviours ?? []) {
+    const v = b.onolys_count?.mean ?? b.onolys_count?.values?.[0];
+    if (typeof v === "number") means.set(b.item_id, v);
+  }
   const counts = new Map([...means].map(([id, v]) => [id, Math.round(v)]));
   const sum = (ids: string[]) =>
-    Math.round(ids.reduce((a, id) => a + (means.get(id) ?? 0), 0));
+    ids.some((id) => means.has(id))
+      ? String(Math.round(ids.reduce((a, id) => a + (means.get(id) ?? 0), 0)))
+      : NO_DATA;
   return (
     <Section id="counts" title="Behaviour counts">
       <div className={TBL}>
@@ -342,7 +352,7 @@ function Counts({ r }: { r: Report }) {
                       <CodeChip id={id} />
                     </TableCell>
                     <TableCell className={CELL}>{CODE_META[id]?.label ?? id}</TableCell>
-                    <TableCell className={`${CELL} text-right`}>{counts.get(id) ?? 0}</TableCell>
+                    <TableCell className={`${CELL} text-right`}>{counts.get(id) ?? NO_DATA}</TableCell>
                   </TableRow>
                 ))}
                 {g.total ? (
@@ -473,7 +483,7 @@ export function ReportView({
               <b className="font-medium text-foreground">Coded span</b> {spanText(r, list ? list.length : null)}
             </li>
             <li>
-              <b className="font-medium text-foreground">Date</b> {fmtDate(r.created_at)}
+              <b className="font-medium text-foreground">Date</b> {formatDate(r.created_at)}
             </li>
           </ul>
         </header>

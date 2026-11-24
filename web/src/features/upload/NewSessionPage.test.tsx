@@ -338,7 +338,7 @@ describe("Transcript upload", () => {
   });
   it.each([
     ['transcript_invalid', /couldn't read this transcript/i], ['transcript_too_large', /over 1 MB/i],
-    ['empty_transcript', /at least 50 words/i], ['session_too_long', /narrower coded_span/i],
+    ['empty_transcript', /at least 50 words/i], ['session_too_long', /upload a shorter/i],
   ])("shows the shared error card for %s", async (code, message) => {
     server.use(http.put("*/v1/sessions/:id/transcript", () => HttpResponse.json({ status: 422, details: [{ code, message: 'private text' }], request_id: 'transcript_ref' }, { status: 422 })));
     await open();
