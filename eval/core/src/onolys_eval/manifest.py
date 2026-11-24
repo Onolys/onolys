@@ -40,8 +40,9 @@ class DatasetOverlap(Contract):
 class SessionManifest(Contract):
     session_id: Identifier
     title: Nonempty
-    uncoded_url: HttpURL
-    coded_url: HttpURL
+    # Required for PDF datasets; CSV datasets list their files at dataset level.
+    uncoded_url: HttpURL | None = None
+    coded_url: HttpURL | None = None
     audio_url: HttpURL | None = None
     # Per-session override of the dataset-level original source media.
     source_media: list[SourceMedia] | None = Field(default=None, min_length=1)
@@ -63,6 +64,9 @@ class SessionManifest(Contract):
         return self
 
 
+SourceFormat = Literal["pdf", "mitags_csv"]
+
+
 class DatasetManifest(Contract):
     dataset_id: Identifier
     title: Nonempty
@@ -77,11 +81,19 @@ class DatasetManifest(Contract):
     transcript_origin: TranscriptOrigin | None = None
     labels_summary: Nonempty | None = None
     overlaps_with: list[DatasetOverlap] = Field(default_factory=list)
+    # "pdf": per-session coded/uncoded PDFs. "mitags_csv": dataset-level CSV files.
+    source_format: SourceFormat = "pdf"
+    source_files: list[HttpURL] = Field(default_factory=list)
     sessions: list[SessionManifest] = Field(min_length=1)
 
     @model_validator(mode="after")
     def unique_sessions(self):
         _unique_media(self.source_media)
+        if self.source_format == "pdf":
+            if any(s.coded_url is None or s.uncoded_url is None for s in self.sessions):
+                raise ValueError("pdf datasets need coded_url and uncoded_url for every session")
+        elif not self.source_files:
+            raise ValueError("csv datasets need source_files")
         ids = [session.session_id for session in self.sessions]
         if len(ids) != len(set(ids)):
             raise ValueError("session_id must be unique within a dataset")

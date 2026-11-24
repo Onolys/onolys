@@ -312,3 +312,21 @@ def test_catalog_lists_wider_label_schemes(services):
     assert rows["miti-four"]["miti_version"] == "4.0"
     assert rows["not-miti"]["miti_version"] is None
     assert rows["not-miti"]["label_scheme"] == "MISC 2.5 mapped to MITI"
+
+
+def test_catalog_lists_committed_public_datasets(services):
+    from pathlib import Path
+
+    from onolys_eval.manifest import load_manifest
+    root = Path(__file__).resolve().parents[2] / "datasets"
+    for ident in ("casaa-miti-practice", "mi-tags-sample"):
+        manifest = load_manifest(root / ident / "manifest.yaml")
+        services.bucket.write_json(f"datasets/{ident}/manifest.json", manifest.model_dump(mode="json"))
+    c = client(services)
+    rows = {r["dataset_id"]: r for r in c.get("/v1/datasets", headers=AUTH).json()["datasets"]}
+    assert rows["casaa-miti-practice"]["session_count"] == 12
+    assert rows["casaa-miti-practice"]["miti_version"] == "4.0"
+    assert rows["mi-tags-sample"]["session_count"] == 2 and rows["mi-tags-sample"]["miti_version"] == "4.2"
+    assert "Structure Statement" in rows["mi-tags-sample"]["label_scheme"]
+    detail = c.get("/v1/datasets/mi-tags-sample", headers=AUTH)
+    assert detail.status_code == 200 and detail.json()["sessions"][0]["session_id"] == "type-1-diabetes-counseling"

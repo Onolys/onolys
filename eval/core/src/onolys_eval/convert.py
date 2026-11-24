@@ -324,6 +324,12 @@ def convert_dataset(dataset: str, cache: Path | None = None, session_id: str | N
                     *, dump=False, allow_warnings=False) -> int:
     manifest_path = manifest_path_for(dataset)
     manifest = load_manifest(manifest_path)
+    if manifest.source_format == "mitags_csv":
+        from .mitags import convert_mitags_dataset
+
+        status, report = convert_mitags_dataset(manifest, cache, session_id)
+        print("\n".join(report))
+        return status
     cache = require_external_path(cache if cache is not None else default_cache())
     root = cache / manifest.dataset_id
     raw = root / "raw"

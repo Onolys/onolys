@@ -100,6 +100,10 @@ def fetch_dataset(manifest: DatasetManifest, cache: str | Path | None = None) ->
                 target = raw / session.session_id / filename
                 require_external_path(target)
                 assets.append((target, url))
+    for url in manifest.source_files:
+        target = raw / url.rstrip("/").rsplit("/", 1)[-1]
+        require_external_path(target)
+        assets.append((target, url))
     require_external_path(metadata_path)
     raw.mkdir(parents=True, exist_ok=True)
     metadata = (

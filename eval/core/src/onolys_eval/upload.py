@@ -31,7 +31,8 @@ def upload_dataset(
             raise ValueError(f"Unresolved conversion warnings: {session.session_id}; run convert first")
         for filename, content_type in (
             ("transcript.json", "application/json"), ("gold.json", "application/json"),
-            ("raw/coded.pdf", "application/pdf"), ("raw/uncoded.pdf", "application/pdf"),
+            *([("raw/coded.pdf", "application/pdf"), ("raw/uncoded.pdf", "application/pdf")]
+              if manifest.source_format == "pdf" else []),
             *([("raw/audio.mp3", "audio/mpeg")] if session.audio_url else []),
         ):
             path = (
