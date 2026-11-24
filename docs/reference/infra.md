@@ -34,7 +34,7 @@ staging: same shape, site onolys-app-staging, Firestore DB `staging`, *-staging 
 
 Shared (project level): Artifact Registry repo `onolys` (`us-central1-docker.pkg.dev/onolys/onolys`, no cleanup policy, so any earlier sha stays deployable), budget `onolys monthly`, Monitoring channel `Onolys owner email`, Workload Identity pool `github` with provider `github` (condition `assertion.repository=='Onolys/onolys'`), Speech-to-Text service agent `service-1054076260967@gcp-sa-speech.iam.gserviceaccount.com` (`objectViewer` on both buckets), Identity Platform config (email+password, min length 8, open sign-up, no MFA). Email verify/reset links need `notification.sendEmail.callbackUri` = `https://app.onolys.com/auth/action` (set only by `python3 infra/scripts/identity-config.py`, a manual Terraform apply); `python3 infra/scripts/identity-config.py --check` is a read-only drift check (exit 1 and the remedy if it differs). Not in CI: the deployer SAs hold no Identity Platform read role (would need e.g. `roles/firebaseauth.viewer`).
 
-Admin (SP07) resources (`onolys-admin`, `onolys-admin-staging` sites, `admin.onolys.com`, `onolys-admin-backend-{env}`, `admin-allowed-emails-{env}`) exist only per env while `admin_enabled` (a map, default `{ staging = true, prod = false }`) is true for that env. Owner decision 2026-11-21: staging is the ONLY admin environment and serves `admin.onolys.com` (it auto-deploys from `main`; admin uses only synthetic MITI fixtures, no user data). Staging owns the `onolys-admin-staging` site, its web app, `onolys-admin-backend-staging` (CORS allows `https://admin.onolys.com` and `https://onolys-admin-staging.web.app`), `admin-allowed-emails-staging`, the `admin.onolys.com` Hosting custom domain and the `admin.onolys.com` / `onolys-admin-staging.web.app` authorised domains. The prod admin (`onolys-admin` site and web app, `onolys-admin-backend-prod`, its SA, invoker, secret and IAM, prod admin deployer IAM) was destroyed. `onolys-admin-backend-staging` is public at Cloud Run (`allUsers` invoker) on purpose; access is enforced in the app (Firebase ID token + allowlist), timeout 130 s, runs as `admin-backend-staging`.
+Admin (SP07) resources (`onolys-admin`, `onolys-admin-staging` sites, `admin.onolys.com`, `onolys-admin-backend-{env}`, `admin-allowed-emails-{env}`) exist only per env while `admin_enabled` (a map, default `{ staging = true, prod = false }`) is true for that env. Owner decision 2026-11-21: staging is the ONLY admin environment and serves `admin.onolys.com` (its former source and auto-deploy workflow are retired; existing cloud resources remain). Staging owns the `onolys-admin-staging` site, its web app, `onolys-admin-backend-staging` (CORS allows `https://admin.onolys.com` and `https://onolys-admin-staging.web.app`), `admin-allowed-emails-staging`, the `admin.onolys.com` Hosting custom domain and the `admin.onolys.com` / `onolys-admin-staging.web.app` authorised domains. The prod admin (`onolys-admin` site and web app, `onolys-admin-backend-prod`, its SA, invoker, secret and IAM, prod admin deployer IAM) was destroyed. `onolys-admin-backend-staging` is public at Cloud Run (`allUsers` invoker) on purpose; access is enforced in the app (Firebase ID token + allowlist), timeout 130 s, runs as `admin-backend-staging`.
 
 Sizing (checked on the live services):
 
@@ -155,16 +155,16 @@ Environments: create `production` with Tejit as required reviewer (all prod jobs
 
 | Variable | Used by | Value (Terraform output) |
 |---|---|---|
-| `WIF_PROVIDER` | deploy-staging, deploy-prod, deploy-admin, `_deploy-cloudrun` | `wif_provider` |
+| `WIF_PROVIDER` | deploy-staging, deploy-prod, deploy-eval, `_deploy-cloudrun` | `wif_provider` |
 | `DEPLOYER_STAGING_SA` | same (and the read-only `resolve` step of deploy-prod) | `deployer_staging_email` |
-| `DEPLOYER_PROD_SA` | deploy-prod, deploy-admin, `_deploy-cloudrun` | `deployer_prod_email` |
+| `DEPLOYER_PROD_SA` | deploy-prod, `_deploy-cloudrun` | `deployer_prod_email` |
 | `NIGHTLY_WIF_PROVIDER` | Nightly `api-real-mode`, trusted `main` only | `nightly_wif_provider` |
 | `NIGHTLY_GEMINI_SA` | Nightly `api-real-mode`, staging secret reader | `nightly_gemini_email` |
 | `GCP_PROJECT`, `GCP_REGION` | optional; default `onolys`, `us-central1` | leave unset |
 | `STAGING_VITE_FIREBASE_API_KEY`, `_AUTH_DOMAIN`, `_APP_ID`, `_STORAGE_BUCKET`, `_MESSAGING_SENDER_ID` | deploy-staging (web build) | `web_env_staging` keys `VITE_FIREBASE_*` (same names without the `STAGING_` prefix) |
 | `PROD_VITE_FIREBASE_API_KEY`, `_AUTH_DOMAIN`, `_APP_ID`, `_STORAGE_BUCKET`, `_MESSAGING_SENDER_ID` | deploy-prod (web build) | `web_env_prod` keys |
 | `STAGING_VITE_CONTACT_EMAIL`, `PROD_VITE_CONTACT_EMAIL` | optional, web build | owner's contact address |
-| `ADMIN_STAGING_VITE_FIREBASE_{API_KEY,AUTH_DOMAIN,APP_ID}` | deploy-admin | `web_env_admin_staging` (no prod admin vars) |
+| `ADMIN_STAGING_VITE_FIREBASE_{API_KEY,AUTH_DOMAIN,APP_ID}` | deploy-eval | `web_env_admin_staging` (no prod admin vars) |
 
 `VITE_FIREBASE_PROJECT_ID` is taken from `GCP_PROJECT`/`onolys` in the workflow; `VITE_FIRESTORE_DATABASE` is hard-coded per workflow (see Terraform outputs).
 
@@ -183,7 +183,7 @@ Activate in this order:
 
 Offline guards: `uv run --package onolys-admin-auth pytest infra/scripts/test_nightly_gemini_secret.py -q`, `python3 scripts/ci/check_no_llm_keys_in_pr_workflows.py`, `actionlint .github/workflows/nightly.yml`, and Terraform `fmt -check` / `validate`. These validate configuration, not live IAM propagation; the trusted-main Nightly run completes activation.
 
-Workflows: `deploy-staging.yml` runs after the `CI` workflow succeeds on `main` (also manual). `deploy-prod.yml` is manual (`workflow_dispatch`, input `sha` or `version`) or on a `v*` tag. `deploy-admin.yml` deploys the staging admin only (backend + `onolys-admin-staging` site): automatically on push to `main` touching `admin/`, `frontend/`, root `pyproject.toml`/`uv.lock`, `.dockerignore`, or `deploy-admin.yml`/`_deploy-cloudrun.yml`; also manual. There is no prod admin. `nightly.yml` runs 06:17 UTC daily.
+Workflows: `deploy-staging.yml` runs after the `CI` workflow succeeds on `main` (also manual). `deploy-prod.yml` is manual (`workflow_dispatch`, input `sha` or `version`) or on a `v*` tag. The former admin deployment workflow is retired; existing admin resources and auth domains remain. `deploy-eval.yml` deploys the staging evaluation backend and site. There is no prod admin. `nightly.yml` runs 06:17 UTC daily.
 
 ## Operating Terraform
 
@@ -274,11 +274,11 @@ Then dispatch `deploy-staging` / `deploy-prod` (or just confirm the new worker r
 
 ## Admin access
 
-Who may use the admin app is a comma-separated list of emails in Secret Manager `admin-allowed-emails-{env}` (case-insensitive, spaces around commas ignored). The admin backend reads it as env `ADMIN_ALLOWED_EMAILS` (secret ref, `latest`). Anyone signed in but not on the list gets 403; no token gets 401.
+The retained admin resources and evaluation sign-in use a comma-separated list of emails in Secret Manager `admin-allowed-emails-{env}` (case-insensitive, spaces around commas ignored). Services read it as env `ADMIN_ALLOWED_EMAILS` (secret ref, `latest`). Anyone signed in but not on the list gets 403; no token gets 401.
 
 Today (staging, same list intended for prod): `tejitpabari99@gmail.com`, `gitika.bose@gmail.com`, `falakpabari386@gmail.com`.
 
-Edit in the console: Secret Manager, open `admin-allowed-emails-{env}`, **+ New version**, paste the FULL list (it replaces the old one), Add. A running revision keeps the old value, so make Cloud Run pick it up: Cloud Run, `onolys-admin-backend-{env}`, **Edit & deploy new revision**, **Deploy** (or re-run `deploy-admin.yml`).
+Edit in the console: Secret Manager, open `admin-allowed-emails-{env}`, **+ New version**, paste the FULL list (it replaces the old one), Add. A running revision keeps the old value, so make Cloud Run pick it up: Cloud Run, `onolys-admin-backend-{env}`, **Edit & deploy new revision**, **Deploy**; the former admin deployment workflow is retired.
 
 Edit with the script (value never printed; staging shown, `--admin` is staging only, prod admin is removed):
 

@@ -15,12 +15,18 @@ web
 frontend
 infra
 **/eval
-# uv resolves every workspace member; include only the eval manifest, never its data/source.
+# uv resolves every workspace member; include only the eval manifests, never its data/source.
 !eval/
 eval/**
 !eval/core/
 eval/core/**
 !eval/core/pyproject.toml
+!eval/auth/
+eval/auth/**
+!eval/auth/pyproject.toml
+!eval/backend/
+eval/backend/**
+!eval/backend/pyproject.toml
 **/datasets
 firestore-rules-test
 .github

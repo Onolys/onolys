@@ -21,8 +21,8 @@ for required in ['branches: [main]', 'workflow_dispatch:', 'environment: staging
                  'content-security-policy:', 'cancel-in-progress: false',
                  'hosting:eval-staging']:
     assert required in s, f'missing workflow contract: {required}'
-for path in ['eval/**', 'admin/auth/**', 'engines/**', 'config/**', 'api/pyproject.toml',
-             'admin/backend/pyproject.toml', 'pyproject.toml', 'uv.lock', '.firebaserc',
+for path in ['eval/**', 'engines/**', 'config/**', 'api/pyproject.toml',
+             'pyproject.toml', 'uv.lock', '.firebaserc',
              'scripts/ci/*eval*', '.github/workflows/deploy-eval.yml']:
     assert f'"{path}"' in s, f'missing deploy input {path}'
 for forbidden in ['DEPLOYER_PROD_SA', 'credentials_json', 'service_account_key',
@@ -31,14 +31,18 @@ for forbidden in ['DEPLOYER_PROD_SA', 'credentials_json', 'service_account_key',
 print('ok staging-only WIF workflow, digest image, image provenance, image-only deploy and smoke')
 docker = Path('eval/backend/Dockerfile').read_text()
 for member in ['engines/core', 'engines/miti', 'engines/oneshot', 'api',
-               'admin/auth', 'admin/backend', 'eval/core', 'eval/backend']:
+               'eval/auth', 'eval/core', 'eval/backend']:
     assert f'COPY {member}/pyproject.toml {member}/pyproject.toml' in docker, member
+    assert Path(member, 'pyproject.toml').is_file(), member
 for required in ['--frozen', '--no-editable', 'ARG GIT_SHA', 'GIT_SHA=${GIT_SHA}',
                  'COPY config /app/config', 'USER onolys']:
     assert required in docker, required
 ignore = Path('eval/backend/Dockerfile.dockerignore').read_text()
 assert ignore.splitlines()[0] == '**', 'image context must be opt-in'
 assert '!config/models.yaml' in ignore.splitlines(), 'models.yaml must ship (LLM_PROVIDER/LLM_MODEL)'
+for path in ['eval/auth/', 'eval/auth/pyproject.toml', 'eval/auth/src/', 'eval/auth/src/**']:
+    assert f'!{path}' in ignore.splitlines(), f'auth missing from image context: {path}'
+assert 'admin/' not in docker and 'admin/' not in ignore, 'retired image inputs remain'
 for denied in ['**/node_modules', '**/.git', '**/.worktrees', '**/datasets', '**/uploads',
                '**/runs', '**/.env', '**/.env.*', '**/tests', '**/__pycache__']:
     assert denied in ignore, denied

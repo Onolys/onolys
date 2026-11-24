@@ -5,7 +5,6 @@ requires-python = "==3.12.*"
 [manifest]
 members = [
     "onolys-admin-auth",
-    "onolys-admin-backend",
     "onolys-api",
     "onolys-engine-core",
     "onolys-eval",
@@ -1161,7 +1160,7 @@ wheels = [
 [[package]]
 name = "onolys-admin-auth"
 version = "0.1.0"
-source = { editable = "admin/auth" }
+source = { editable = "eval/auth" }
 dependencies = [
     { name = "google-auth" },
     { name = "requests" },
@@ -1191,41 +1190,6 @@ dev = [
     { name = "pytest-cov", specifier = ">=5" },
     { name = "ruff", specifier = ">=0.6" },
     { name = "starlette", specifier = ">=0.40" },
-]
-
-[[package]]
-name = "onolys-admin-backend"
-version = "0.1.0"
-source = { editable = "admin/backend" }
-dependencies = [
-    { name = "fastapi" },
-    { name = "onolys-admin-auth" },
-    { name = "uvicorn" },
-]
-
-[package.dev-dependencies]
-dev = [
-    { name = "cryptography" },
-    { name = "httpx" },
-    { name = "pytest" },
-    { name = "pytest-cov" },
-    { name = "ruff" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "fastapi", specifier = ">=0.115" },
-    { name = "onolys-admin-auth", editable = "admin/auth" },
-    { name = "uvicorn", specifier = ">=0.30" },
-]
-
-[package.metadata.requires-dev]
-dev = [
-    { name = "cryptography", specifier = ">=42" },
-    { name = "httpx", specifier = ">=0.27" },
-    { name = "pytest", specifier = ">=8" },
-    { name = "pytest-cov", specifier = ">=5" },
-    { name = "ruff", specifier = ">=0.6" },
 ]
 
 [[package]]
@@ -1397,7 +1361,7 @@ requires-dist = [
     { name = "google-cloud-firestore", specifier = ">=2.19" },
     { name = "google-cloud-storage", specifier = ">=2.18" },
     { name = "google-cloud-tasks", specifier = ">=2.16" },
-    { name = "onolys-admin-auth", editable = "admin/auth" },
+    { name = "onolys-admin-auth", editable = "eval/auth" },
     { name = "onolys-engine-core", editable = "engines/core" },
     { name = "onolys-eval", editable = "eval/core" },
     { name = "onolys-miti", extras = ["stt-google"], editable = "engines/miti" },

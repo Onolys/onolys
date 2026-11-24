@@ -131,7 +131,8 @@ def test_dockerfile_is_slim_miti_only():
     assert "protocols" not in copies and not any(c.startswith("docs/contracts") for c in copies)
     assert not re.search(r"PROTOCOLS_DIR|CONTRACTS_DIR", code)
     assert "COPY engines/miti engines/miti" in code
-    for member in ("engines/miti", "admin/auth", "admin/backend"):  # every workspace member manifest
+    for member in ("engines/core", "engines/miti", "engines/oneshot", "api",
+                   "eval/auth", "eval/core", "eval/backend"):  # every workspace member manifest
         assert f"COPY {member}/pyproject.toml {member}/pyproject.toml" in code
 
 

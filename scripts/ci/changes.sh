@@ -16,8 +16,7 @@ PACKAGES=(
   "oneshot:engines/oneshot:python"
   "miti:engines/miti:python"
   "api:api:python"
-  "admin-auth:admin/auth:python"
-  "admin-backend:admin/backend:python"
+  "admin-auth:eval/auth:python"
   "eval:eval/core:python"
   "eval-backend:eval/backend:python"
   "eval-web:eval/web:node"
@@ -46,11 +45,8 @@ EVAL_BACKEND_EXTRA_RE='^(config/|protocols/|\.dockerignore$)'
 # These are source/data dependencies, not npm runtime edges in DEPS.
 EVAL_WEB_EXTRA_RE='^(frontend/src/auth/|frontend/src/transport/authFetch\.ts$|eval/backend/|api/openapi\.json$|docs/contracts/public/|engines/miti/src/onolys_miti/data/report\.schema\.json$)'
 
-# The infra job's tests import admin/auth (onolys_admin_auth), so admin/auth changes also run infra.
-INFRA_EXTRA_RE='^(admin/auth/|pyproject\.toml$|uv\.lock$)'
-
-# The admin backend serves only /v1/me via admin/auth, so it re-runs when admin/auth or .dockerignore changes.
-ADMIN_BACKEND_EXTRA_RE='^(admin/auth/|\.dockerignore)'
+# The infra job's tests import eval/auth (onolys_admin_auth), so eval/auth changes also run infra.
+INFRA_EXTRA_RE='^(eval/auth/|pyproject\.toml$|uv\.lock$)'
 
 # Direct workspace dependencies (name: deps), mirrored from each pyproject [project].dependencies.
 # A change in a package also runs every package that (transitively) depends on it.
@@ -61,7 +57,6 @@ DEPS=(
   "api:core miti"
   "eval:core miti"
   "eval-backend:admin-auth core miti oneshot eval"
-  "admin-backend:admin-auth"
 )
 
 mapfile -t FILES
@@ -77,7 +72,6 @@ for entry in "${PACKAGES[@]}"; do
           ( "$name" == eval-backend && "$f" =~ $EVAL_BACKEND_EXTRA_RE ) ||
           ( "$name" == eval-web && "$f" =~ $EVAL_WEB_EXTRA_RE ) ||
           ( "$name" == api && "$f" =~ $API_EXTRA_RE ) ||
-          ( "$name" == admin-backend && "$f" =~ $ADMIN_BACKEND_EXTRA_RE ) ||
           ( "$name" == infra && "$f" =~ $INFRA_EXTRA_RE ) ||
           ( "$name" == web && "$f" =~ $WEB_EXTRA_RE ) ]]; then
       HIT[$name]=1

@@ -33,20 +33,14 @@ uv run --package onolys-api pytest api -m "not live"
 
 More: [running-tests.md](running-tests.md), [reference/testing.md](../reference/testing.md).
 
-## Admin shell
+## Retained admin frontend
 
-```bash
-scripts/dev.sh --check   # preflight only: uv, node/npm, node_modules, free ports
-scripts/dev.sh           # admin backend (8000, ADMIN_AUTH=off) and Vite (5173)
-```
-
-Ports are fixed by the script. Ctrl-C stops both. Details: [scripts/README.md](../../scripts/README.md). To run the admin frontend alone: `(cd frontend && VITE_MOCK=true npm run dev)`.
+The former admin backend and root admin launcher are retired. To run the retained sign-in shell with mocks: `(cd frontend && VITE_MOCK=true npm run dev)`. Product development uses the [main app setup](#main-app-web--api) below; the API alone also has [`api/scripts/dev.sh`](../../api/scripts/dev.sh).
 
 ## Owner live checks
 
 These need a key, spend money and are not run by agents.
 
-- [ ] **a. `scripts/dev.sh` live smoke.** Run `scripts/dev.sh`: both services come up. Ctrl-C, then confirm no orphans (for example `ss -ltnp | grep -E ':(8000|5173)\b'` is empty).
 - [ ] **b. MITI engine live check.** `set -a; . ~/.config/onolys/keys.env; set +a`, then `uv run --package onolys-miti python -m onolys_miti.check --preset <p>`. It runs the three synthetic fixtures against the limits in `fixtures/thresholds.yaml` and checks that tips quote the transcript ([engines/miti/README.md](../../engines/miti/README.md#tests)). Note the cost.
 - [ ] **c. Voice check.** `uv run --package onolys-miti pytest engines/miti -m live -s` also opens a real Gemini voice session (`tests/test_voice_live.py`).
 - [ ] **d. Refresh recordings (only if prompts changed).** Re-record golden fixtures with `MITI_LLM_RECORD=1` on a live run, then run `pytest engines/miti` offline and commit only synthetic recordings.

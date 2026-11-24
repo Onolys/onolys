@@ -4,7 +4,7 @@ High-level design: how the system fits together.
 
 **Audience:** everyone.
 
-Onolys has a web app, a public API with a background worker, one MITI engine on a shared engine core, and a small admin shell.
+Onolys has a web app, a public API with a background worker, one MITI engine on a shared engine core, and an internal evaluation site.
 
 ```
 web app --/v1--> api (+ worker) --registry--> MitiEngine (onolys_miti)
@@ -12,7 +12,7 @@ web app --/v1--> api (+ worker) --registry--> MitiEngine (onolys_miti)
                     |                           |-- speech-to-text
                     |                           `-- voice (Gemini Live)
                     `-- Firestore, Cloud Storage, Cloud Tasks
-admin site --/v1/me--> admin backend (login check only)
+eval site --/v1--> eval backend --onolys_admin_auth--> Identity Platform + allowlist
 ```
 
 ## Shared engine core: `onolys_engine_core`
@@ -55,9 +55,9 @@ runs MITI, API and eval checks through workspace dependency flags.
 
 A React + TypeScript app. It talks to the api on the same origin (`/v1`), listens to session status in Firestore, and renders the report. Hosting and CSP: [ADR 0021](decisions/0021-web-app-hosting-and-sharing.md). It validates nothing about MITI itself; the api and engine own the report shape.
 
-## Admin shell: `admin/` and `frontend/`
+## Evaluation auth and retained admin frontend
 
-An internal site behind a login. The backend (`admin/backend`) serves only `GET /v1/me`; `admin/auth` verifies the token and the email allowlist. The frontend is sign-in plus an empty page. See [ADR 0023](decisions/0023-admin-deployment-and-auth.md) and [backend-api.md](reference/backend-api.md).
+The evaluation backend uses `eval/auth` (`onolys_admin_auth`) to verify Identity Platform tokens and the email allowlist. See [shared auth](reference/backend-api.md). The former admin backend source and deployment workflow have been retired. `frontend/` remains the legacy sign-in shell; its existing cloud resources and `admin.onolys.com` auth domain are retained. [ADR 0023](decisions/0023-admin-deployment-and-auth.md) records the original deployment design.
 
 ## Infrastructure
 

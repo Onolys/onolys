@@ -1,18 +1,10 @@
-# Admin backend API
+# Internal evaluation auth
 
-What the admin backend accepts, returns, and reads from the environment. Code: `admin/backend/src/onolys_admin_backend/app.py`, `admin/auth/src/onolys_admin_auth/`.
+**Audience:** users and contributors.
 
-**Audience:** users.
+The former admin backend source and its deployment workflow are retired. Existing cloud services, Hosting sites and the `admin.onolys.com` Identity Platform auth domain are retained; this repository change does not alter them. The retained [frontend](../../frontend/README.md) is the legacy sign-in shell. [ADR 0023](../decisions/0023-admin-deployment-and-auth.md) describes the original deployment.
 
-The internal admin site (`admin.onolys.com`, also `onolys-admin-staging.web.app`) is a single environment, staging (owner decision 2026-11-21; no prod admin). It runs one Cloud Run service, `onolys-admin-backend-staging`, and is a sign-in shell: it has no engine and no user data. Why it is built this way: [ADR 0023](../decisions/0023-admin-deployment-and-auth.md). The public product API is documented in [public-api.md](public-api.md).
-
-## Routes
-
-| Method and path | Purpose |
-|---|---|
-| `GET /v1/me` | Returns `{"status": "ok"}` for a signed-in, allowed user. The shell calls it after sign-in. |
-
-There is no other route, no OpenAPI page and no docs page.
+The shared package now lives in [`eval/auth`](../../eval/auth/pyproject.toml), with its existing Python import `onolys_admin_auth` and project name `onolys-admin-auth`. The [eval backend](../../eval/backend/pyproject.toml) still uses it for staging sign-in. Its CORS settings and Identity Platform domains remain unchanged. The product API is documented in [public-api.md](public-api.md).
 
 ## Auth
 
@@ -29,19 +21,8 @@ Signing keys are cached for one hour. Refreshes (including unknown key IDs and f
 
 These replies use a small body `{"error": {"code", "message"}}`.
 
-## CORS
+## Configuration
 
-Handled before auth, so preflights need no token and 401/403 replies also carry CORS headers (`app.py`). Only the exact origins in `ADMIN_CORS_ORIGINS` are allowed (a wildcard or `null` stops startup). Methods: `GET`, `OPTIONS`. Allowed headers: `authorization`, `content-type`. Credentials are off. The browser calls the Cloud Run URL directly, so the site's CSP `connect-src` lists that origin (`frontend/firebase.json`, filled in by `scripts/ci/set_admin_origin.sh`).
+The package reads `ENV`, `ADMIN_AUTH`, `ADMIN_AUTH_PROJECT` (falling back to `GCP_PROJECT`) and `ADMIN_ALLOWED_EMAILS`. Auth defaults to on outside local/test; disabling it outside local/test stops startup. With auth on, a project and a nonempty email allowlist are required. Cloud Run receives the allowlist through Secret Manager when an instance starts.
 
-## Environment variables
-
-| Variable | Default | Meaning |
-|---|---|---|
-| `ENV` | none (image sets `prod`) | `local` or `test` allows auth off. Any other value or unset counts as non-local. |
-| `ADMIN_AUTH` | `on` (`off` when `ENV` is `local`/`test`) | `on` or `off`. `off` with a non-local `ENV` stops startup. |
-| `ADMIN_AUTH_PROJECT` | `GCP_PROJECT` | Project whose ID tokens are accepted. Required with auth on. |
-| `ADMIN_ALLOWED_EMAILS` | none | Comma list. Empty stops startup with auth on. Cloud Run reads it from Secret Manager `admin-allowed-emails-{env}` (version `latest`, read when an instance starts, so a change needs a new revision). |
-| `ADMIN_CORS_ORIGINS` | empty (no origin allowed) | Comma list of exact origins. |
-| `PORT` | `8080` | Listen port (image). |
-
-The service is public at Cloud Run (`allUsers` invoker); access is enforced only by the app. Terraform: `infra/modules/environment/services.tf`. Deploy: `.github/workflows/deploy-admin.yml`. The Firebase Hosting rewrite limit (60 s) does not matter here: the site has no `/v1` rewrite. The frontend is built with `VITE_AUTH_REQUIRED=true`, `VITE_ADMIN_API_URL` (the Cloud Run origin) and the `VITE_FIREBASE_*` values ([frontend README](../../frontend/README.md)).
+CORS belongs to the calling service. Eval deployment and Hosting origin substitution use `.github/workflows/deploy-eval.yml` and `scripts/ci/set_eval_origin.sh`.

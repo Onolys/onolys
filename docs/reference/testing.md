@@ -4,7 +4,7 @@ How to write and run tests in every package. One convention for all.
 
 **Audience:** contributors.
 
-Package paths below use `engines/miti/`; the other Python packages (`api`, `admin/auth`, `admin/backend`) follow the same layout.
+Package paths below use `engines/miti/`; the other Python packages (`api`, `eval/auth`, `eval/backend`) follow the same layout.
 
 ## Markers (Python, pytest)
 

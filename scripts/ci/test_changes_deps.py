@@ -102,6 +102,17 @@ def test_deps_map_matches_pyproject_dependencies() -> None:
     assert actual == expected
 
 
+def test_retired_admin_source_keeps_eval_auth_registered() -> None:
+    assert not (ROOT / "admin").exists()
+    assert "admin-auth:eval/auth:python" in _array("PACKAGES")
+    assert not any(e.startswith("admin-backend:") for e in _array("PACKAGES"))
+    workflow = (ROOT / ".github/workflows/ci.yml").read_text()
+    assert "ruff check eval/auth" in workflow
+    assert "pytest eval/auth" in workflow
+    assert "admin-backend" not in workflow
+    assert not (ROOT / ".github/workflows/deploy-admin.yml").exists()
+
+
 if __name__ == "__main__":
     test_core_package_is_registered()
     test_oneshot_package_is_registered()
@@ -109,4 +120,5 @@ if __name__ == "__main__":
     test_eval_package_is_registered()
     test_eval_site_packages_and_offline_jobs()
     test_deps_map_matches_pyproject_dependencies()
+    test_retired_admin_source_keeps_eval_auth_registered()
     print("ok   changes.sh DEPS map matches pyproject dependencies")

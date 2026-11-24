@@ -17,6 +17,7 @@ The whole suite runs offline with no API key (`-m "not live"` is the default `ad
 | `engines/miti/tests/` | The engine: MITI data, code and globals passes, tips, report, scoring, LLM routes and clients, STT, voice, logging. |
 | `api/tests/` | The api: routes, auth, jobs, error map, public contract. Emulator tests need the Firestore emulator ([reference/testing.md](../reference/testing.md#firestore-emulator)). |
 | `web/src/**/*.test.ts(x)` | The web app (vitest). |
-| `admin/*/tests/` | The admin auth package and the admin backend. |
+| `eval/auth/tests/` | The shared Identity Platform and allowlist auth package. |
+| `eval/backend/tests/` | The internal evaluation backend. |
 
 `engines/miti/tests/test_naming_guard.py` keeps old names out of the engine. Live checks (manual, never in CI): [local-setup.md](local-setup.md#owner-live-checks). Property tests and mutation runs: [fuzz-and-mutation.md](fuzz-and-mutation.md).

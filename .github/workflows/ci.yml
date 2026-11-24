@@ -26,7 +26,6 @@ jobs:
       eval-web: ${{ steps.flags.outputs.eval-web }}
       api: ${{ steps.flags.outputs.api }}
       admin-auth: ${{ steps.flags.outputs.admin-auth }}
-      admin-backend: ${{ steps.flags.outputs.admin-backend }}
       frontend: ${{ steps.flags.outputs.frontend }}
       web: ${{ steps.flags.outputs.web }}
       infra: ${{ steps.flags.outputs.infra }}
@@ -81,8 +80,6 @@ jobs:
         run: bash scripts/ci/test_check_config.sh
       - name: Test deploy-prod workflow guard
         run: bash scripts/ci/test_deploy_prod.sh
-      - name: Test deploy-admin workflow guard
-        run: bash scripts/ci/test_deploy_admin.sh
       - name: Test eval deployment workflow and image guard
         run: bash scripts/ci/test_deploy_eval.sh
       - name: Test Hosting targets resolve per app (.firebaserc)
@@ -479,26 +476,8 @@ jobs:
           enable-cache: true
           cache-dependency-glob: uv.lock
       - run: uv sync --frozen --package onolys-admin-auth
-      - run: uv run --no-sync --package onolys-admin-auth ruff check admin/auth
-      - run: uv run --no-sync --package onolys-admin-auth pytest admin/auth
-
-  admin-backend:
-    needs: changes
-    if: needs.changes.outputs.admin-backend == 'true'
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v5
-        with:
-          enable-cache: true
-          cache-dependency-glob: uv.lock
-      - run: uv sync --frozen --package onolys-admin-backend
-      - run: uv run --no-sync --package onolys-admin-backend ruff check admin/backend
-      - run: uv run --no-sync --package onolys-admin-backend pytest admin/backend
-      - name: Image builds, rejects anonymous calls, refuses an empty allowlist, ships no eval data
-        if: github.event_name != 'pull_request'
-        run: bash scripts/ci/test_admin_image.sh onolys-admin-backend:ci
+      - run: uv run --no-sync --package onolys-admin-auth ruff check eval/auth
+      - run: uv run --no-sync --package onolys-admin-auth pytest eval/auth
 
   frontend:
     needs: changes
@@ -629,7 +608,7 @@ jobs:
 
   required:
     if: always()
-    needs: [changes, guards, engine-core, oneshot, miti, eval-core, eval-backend, eval-web, api-unit, api-emulator, api-coverage, api-flaky, api-rules, api-image, admin-auth, admin-backend, frontend, web, web-e2e, infra]
+    needs: [changes, guards, engine-core, oneshot, miti, eval-core, eval-backend, eval-web, api-unit, api-emulator, api-coverage, api-flaky, api-rules, api-image, admin-auth, frontend, web, web-e2e, infra]
     runs-on: ubuntu-latest
     timeout-minutes: 1
     permissions:

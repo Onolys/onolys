@@ -39,8 +39,8 @@ on:
       - uv.lock
       - .dockerignore
       - eval/core/pyproject.toml
-      - admin/auth/pyproject.toml
-      - admin/backend/pyproject.toml
+      - eval/auth/pyproject.toml
+      - eval/backend/pyproject.toml
       - scripts/ci/pr_preview.sh
       - .github/workflows/pr-preview.yml
 
