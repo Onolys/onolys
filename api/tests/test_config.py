@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import pytest
 from onolys_engine_core.errors import ConfigError
 
@@ -279,3 +281,37 @@ def test_staging_startup_without_resend_key():
     blobs = FakeBlobStore()
     app = create_app(s, repo=FakeRepo(blobs), blobs=blobs)
     assert app.state.settings.resend_api_key == ""
+
+
+def _api_real_settings():
+    cfg = Path(__file__).resolve().parents[2] / "config"
+    return Settings(
+        env="test", service_mode="api", adapters="real", auth_mode="fake", git_sha="x",
+        routes_file=str(cfg / "staging" / "routes.yaml"),
+    )
+
+
+def test_api_mode_real_adapters_bad_llm_override_fails_startup(monkeypatch, blobs):
+    from onolys_api.app import create_app
+    from onolys_api.repo.fake import FakeRepo
+
+    monkeypatch.setenv("MODELS_FILE", str(Path(__file__).resolve().parents[2] / "config" / "models.yaml"))
+    monkeypatch.setenv("LLM_PROVIDER", "anthropic")
+    monkeypatch.setenv("LLM_MODEL", "nope")
+    with pytest.raises(ConfigError):
+        create_app(_api_real_settings(), repo=FakeRepo(blobs), blobs=blobs)
+
+
+def test_api_mode_real_adapters_valid_or_unset_llm_override_starts_without_keys(monkeypatch, blobs):
+    from onolys_api.app import create_app
+    from onolys_api.repo.fake import FakeRepo
+
+    monkeypatch.setenv("MODELS_FILE", str(Path(__file__).resolve().parents[2] / "config" / "models.yaml"))
+    for k in ("ANTHROPIC_API_KEY", "GEMINI_API_KEY"):
+        monkeypatch.delenv(k, raising=False)
+    monkeypatch.delenv("LLM_PROVIDER", raising=False)
+    monkeypatch.delenv("LLM_MODEL", raising=False)
+    create_app(_api_real_settings(), repo=FakeRepo(blobs), blobs=blobs)
+    monkeypatch.setenv("LLM_PROVIDER", "anthropic")
+    monkeypatch.setenv("LLM_MODEL", "claude-sonnet-5-5")
+    create_app(_api_real_settings(), repo=FakeRepo(blobs), blobs=blobs)

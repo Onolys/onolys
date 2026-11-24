@@ -373,6 +373,8 @@ def create_app(
     app.state.presets = PresetResolver(settings)
     if settings.adapters == "real" and settings.service_mode in ("worker", "combined"):
         app.state.presets.check_keys()  # the worker runs the LLM: its keys must be there
+    elif settings.adapters == "real" and settings.service_mode == "api":
+        app.state.presets.public_names()  # load routes now: bad LLM_* fails startup, no keys needed
     app.state.auth = Authenticator(settings, app.state.repo, token_verifier)
     queue = build_queue(settings)
     if queue is not None:
