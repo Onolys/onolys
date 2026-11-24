@@ -15,7 +15,7 @@ permissions:
 jobs:
   changes:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 10
     outputs:
       core: ${{ steps.flags.outputs.core }}
       oneshot: ${{ steps.flags.outputs.oneshot }}
@@ -85,7 +85,7 @@ jobs:
     needs: changes
     if: needs.changes.outputs.core == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 10
     env:
       # Unit tests use bundled model metadata and fixture clients, never provider calls.
       LITELLM_LOCAL_MODEL_COST_MAP: "True"
@@ -104,7 +104,7 @@ jobs:
     needs: changes
     if: needs.changes.outputs.oneshot == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 10
     env:
       # Bundled model pricing and replayed synthetic replies; no provider credentials.
       LITELLM_LOCAL_MODEL_COST_MAP: "True"
@@ -125,7 +125,7 @@ jobs:
     needs: changes
     if: needs.changes.outputs.miti == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
@@ -147,7 +147,7 @@ jobs:
     needs: changes
     if: needs.changes.outputs.eval == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 10
     env:
       # Use LiteLLM's bundled pricing data; unit tests need no provider/network access.
       LITELLM_LOCAL_MODEL_COST_MAP: "True"
@@ -167,7 +167,7 @@ jobs:
     needs: changes
     if: needs.changes.outputs.eval-backend == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 10
     env:
       # Offline fixtures and bundled pricing metadata; provider credentials are unnecessary.
       LITELLM_LOCAL_MODEL_COST_MAP: "True"
@@ -188,7 +188,7 @@ jobs:
     needs: changes
     if: needs.changes.outputs.eval-web == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 10
     defaults:
       run:
         working-directory: eval/web
@@ -334,7 +334,7 @@ jobs:
     needs: changes
     if: needs.changes.outputs.api == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 10
     env:
       FIREBASE_TOOLS_VERSION: 15.37.0
     steps:
@@ -399,7 +399,7 @@ jobs:
     needs: changes
     if: needs.changes.outputs.api == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 10
     env:
       FIREBASE_TOOLS_VERSION: 15.37.0
     steps:
@@ -433,7 +433,7 @@ jobs:
     needs: changes
     if: needs.changes.outputs.api == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - name: Image builds and answers /v1/healthz (SERVICE_MODE=combined)
@@ -464,7 +464,7 @@ jobs:
     needs: changes
     if: needs.changes.outputs.admin-auth == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
@@ -479,7 +479,7 @@ jobs:
     needs: changes
     if: needs.changes.outputs.admin-backend == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
@@ -496,7 +496,7 @@ jobs:
     needs: changes
     if: needs.changes.outputs.frontend == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 10
     defaults:
       run:
         working-directory: frontend
@@ -515,7 +515,7 @@ jobs:
     needs: changes
     if: needs.changes.outputs.web == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 10
     defaults:
       run:
         working-directory: web
@@ -558,7 +558,7 @@ jobs:
     needs: changes
     if: needs.changes.outputs.web == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 12
+    timeout-minutes: 10
     defaults:
       run:
         working-directory: web
@@ -599,7 +599,7 @@ jobs:
     needs: changes
     if: needs.changes.outputs.infra == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 10
     defaults:
       run:
         working-directory: infra
