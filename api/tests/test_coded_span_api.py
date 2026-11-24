@@ -57,12 +57,9 @@ async def test_manual_first_run_defaults_to_session_span(client, app, span):
 
 
 @pytest.mark.parametrize("prior_span", [SPANS[1], None], ids=["override", "whole-session"])
-@pytest.mark.parametrize(
-    "body",
-    [{}, {"coded_span": {"start_turn": 1, "end_turn": 2}}, {"coded_span": None}],
-    ids=["inherit", "new-override", "explicit-null"],
-)
-async def test_failed_run_retry_preserves_span_unless_overridden(client, app, prior_span, body):
+async def test_failed_run_retry_preserves_span(client, app, prior_span):
+    """03-failure-policy R4: `POST /retry` re-runs the SAME submission (the failed run's span, even
+    a null one); `POST /runs` on a failed session is 409 and no longer takes a span override."""
     sid = await create(client, coded_span=SPANS[0])
     assert (await upload(client, sid, json.dumps(timed_document()))).status_code == 202
     app.state.queue = None  # A dispatch failure creates and refunds a failed run snapshot.
@@ -76,11 +73,12 @@ async def test_failed_run_retry_preserves_span_unless_overridden(client, app, pr
     snapshot = prior.model_dump()
 
     app.state.queue = Queue()
-    retry = await client.post(f"/v1/sessions/{sid}/runs", headers=AUTH, json=body)
+    refused = await client.post(f"/v1/sessions/{sid}/runs", headers=AUTH, json={})
+    assert refused.status_code == 409, refused.text  # the retry route is the only way back
+    retry = await client.post(f"/v1/sessions/{sid}/retry", headers=AUTH)
     assert retry.status_code == 202, retry.text
     run = repo.get_run("upload-user", sid, retry.json()["run_id"])
-    expected = body.get("coded_span", prior_span)
-    assert (run.coded_span.model_dump(exclude_none=True) if run.coded_span else None) == expected
+    assert (run.coded_span.model_dump(exclude_none=True) if run.coded_span else None) == prior_span
     assert repo.get_run("upload-user", sid, prior.run_id).model_dump() == snapshot
     assert repo.get_session("upload-user", sid).coded_span.model_dump(exclude_none=True) == SPANS[0]
 

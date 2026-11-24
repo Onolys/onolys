@@ -764,6 +764,14 @@ class FirestoreRepo:
         except GoogleNotFound:  # the run's session was deleted under it
             raise NotFoundError() from None
 
+    def _unreleased_run(self, uid: str, sid: str, txn):
+        """First unreleased run, read inside `txn`; uid-scoped via the owned session ref."""
+        for rs in self._session_ref(uid, sid).collection("runs").stream(transaction=txn):
+            rd = rs.to_dict() or {}
+            if not rd.get("released"):
+                return rs.reference, rd
+        return None, None
+
     def cancel_session(
         self, uid: str, sid: str, date: str, defaults: LimitDefaults
     ) -> CancelOutcome:
@@ -792,11 +800,7 @@ class FirestoreRepo:
             user = user_ref.get(transaction=txn).to_dict() or {}
             run_ref, run = None, None
             if state == "running":
-                for rs in sref.collection("runs").stream(transaction=txn):
-                    rd = rs.to_dict() or {}
-                    if not rd.get("released"):
-                        run_ref, run = rs.reference, rd
-                        break
+                run_ref, run = self._unreleased_run(uid, sid, txn)
             run_day = (run.get("cap_date") or date) if run else None
             run_day_ref = self._top("usage", f"{uid}_{run_day}") if run_day else None
             run_day_doc = {}
