@@ -19,13 +19,7 @@ from onolys_engine_core.context import RunContext
 from onolys_engine_core.engine import RunUsage
 from onolys_engine_core.errors import ConfigError, InputError
 from onolys_engine_core.llm.config import LLMConfig
-from onolys_engine_core.llm.errors import (
-    LLMBadOutput,
-    LLMError,
-    LLMRateLimited,
-    LLMTimeout,
-    LLMUnavailable,
-)
+from onolys_engine_core.llm.errors import LLMError, LLMRateLimited, LLMTimeout, is_transient
 from onolys_engine_core.llm.litellm_client import LiteLLMClient
 from onolys_engine_core.llm.models import load_models, models_path
 from onolys_engine_core.llm.routes import combo_routes, resolve_preset
@@ -466,8 +460,6 @@ UNIT_BUDGET_S = 840
 MAX_ATTEMPTS = 3
 RETRY_DELAYS_S = (5, 20)
 MIN_RETRY_BUDGET_S = 120
-_PERMANENT_STATUS = {400, 401, 403, 404, 422}
-_PERMANENT_ERROR_TYPES = {"auth", "authentication", "bad_request", "not_found", "invalid_request"}
 
 
 def _llm_cause(exc):
@@ -481,26 +473,10 @@ def _llm_cause(exc):
     return None
 
 
-def _llm_transient(err):
-    """SHIM: replace with SP03's `onolys_engine_core.llm.errors.is_transient` once it lands.
-
-    Reads SP02's `http_status`/`error_type` via getattr so it works before and after SP02.
-    """
-    if isinstance(err, LLMBadOutput) or not isinstance(err, LLMUnavailable | LLMTimeout):
-        return False
-    if getattr(err, "no_retry", False):
-        return False
-    status = getattr(err, "http_status", None) or getattr(err, "status_code", None)
-    if status in _PERMANENT_STATUS or getattr(err, "error_type", None) in _PERMANENT_ERROR_TYPES:
-        return False
-    return True
-
-
 def is_retryable(exc):
     if any(isinstance(e, _PERMANENT) for e in _chain(exc)):
         return False
-    cause = _llm_cause(exc)
-    return cause is not None and _llm_transient(cause)
+    return is_transient(exc)
 
 
 def _chain(exc):

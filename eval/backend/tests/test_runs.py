@@ -891,7 +891,9 @@ def test_retry_503_then_success(services):
 def test_three_429_fail_with_all_attempt_usage(services):
     from onolys_engine_core.llm.errors import LLMRateLimited
 
-    engine, sleeps = _scripted(services, [LLMRateLimited("429")])
+    # Real shape: the client marks no_retry=True once its own backoff has used the deadline.
+    err = _Err.make(LLMRateLimited, no_retry=True, http_status=429, retry_after=None)
+    engine, sleeps = _scripted(services, [err])
     c, rid, uid = _one_unit(services)
     assert dispatch(c, rid, uid).status_code == 200
     unit = services.repository.get_unit(rid, uid)
@@ -921,6 +923,11 @@ def test_all_runs_failed_wrapping_transient_is_retried(services):
     assert unit["status"] == "done" and unit["attempts"] == 2
 
 
+def _with_cause(err, cause):
+    err.__cause__ = cause
+    return err
+
+
 def _permanent_cases():
     from onolys_engine_core.errors import ConfigError, InputError
     from onolys_engine_core.llm.errors import LLMBadOutput, LLMUnavailable
@@ -940,6 +947,13 @@ def _permanent_cases():
         "auth_401": _Err.make(LLMUnavailable, http_status=401),
         "bad_request_400": _Err.make(LLMUnavailable, http_status=400),
         "not_found_404": _Err.make(LLMUnavailable, http_status=404),
+        "context_window_400_cause": _with_cause(
+            _Err.make(LLMUnavailable, http_status=400, error_type="ContextWindowExceededError"),
+            _Err.make(Exception, status_code=400),
+        ),
+        "unprocessable_422_cause": _with_cause(
+            _Err.make(LLMUnavailable, http_status=422), _Err.make(Exception, status_code=422)
+        ),
         "auth_error_type": _Err.make(LLMUnavailable, error_type="auth"),
         "all_runs_failed_auth": wrapped(_Err.make(LLMUnavailable, http_status=401)),
         "input_error": InputError("bad"),
