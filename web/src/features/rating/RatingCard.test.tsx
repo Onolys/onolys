@@ -56,7 +56,10 @@ describe("rating card: layout", () => {
     expect(screen.getAllByLabelText(/ count$/)).toHaveLength(10);
     expect(screen.getByLabelText("Additional notes / evaluation reasoning")).toBeInTheDocument();
     expect(screen.getByText(/not parsed/i)).toBeInTheDocument();
-    expect(document.querySelector('input[type="file"]')).toBeNull();
+    // The upload slot (resume-without-job, e49995e) may show a file input on a "created" session; the card itself has none.
+    const form = document.querySelector('form[aria-labelledby="rating-heading"]');
+    expect(form).not.toBeNull();
+    expect(form?.querySelector('input[type="file"]')).toBeNull();
   });
 });
 
