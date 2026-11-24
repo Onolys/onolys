@@ -93,7 +93,7 @@ async def test_fixture_keys_match_existing_golden_filenames(monkeypatch):
     """
     expected = {
         "3c57a37926ed1da6e177264069b0836bf0cc242b91f38476e49a3192e0816b3a",
-        "bb5d3c608f6d8f2128e67a764de355821d93bbce302076d99d0152a18cd7b15c",
+        "bb4f265ebc3b2af2851f88a74d4537170289fd4578de52d5752b2f01c8f79f48",
     }
     seen = set()
     original = FixtureClient.complete_json
@@ -148,11 +148,11 @@ async def _adapter_run() -> dict:
 
 
 async def test_adapter_fixture_bytes_match_manual_alignment():
-    """Current deterministic manual-alignment baseline after SP02 Task 5.
+    """Current deterministic manual-alignment baseline after SP02 Task 6.
 
     Historical SP01 assertion and adapter_pre_input_locks.json are preserved at
-    commit ce65eef. Task 5 preserves thin-evidence global scores and adds the
-    low-score evidence instruction to the globals prompt.
+    commit ce65eef. Task 6 bounds client/previous-clinician context in user
+    messages, adds the context-only quote guard and updates code prompt guidance.
     For this synthetic fixture only pack/prompt hashes change; counts, globals
     and volley groupings remain unchanged.
 
@@ -164,3 +164,9 @@ async def test_adapter_fixture_bytes_match_manual_alignment():
     """
     expected = (Path(__file__).parent / "fixtures" / "adapter_manual_alignment.json").read_bytes()
     assert adapter_bytes(await _adapter_run()) == expected
+
+
+async def test_complete_report_fixture_matches_current_adapter_report():
+    """Keep complete report bytes current; only created_at is generated per run."""
+    payload = await _adapter_run()
+    assert adapter_bytes(payload['report']) == adapter_bytes(GOLDEN_REPORT)

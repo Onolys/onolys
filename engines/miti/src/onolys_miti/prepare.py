@@ -1,6 +1,7 @@
 """Pure steps before any model call (PRD R2 steps 1-3): role marking, span selection,
 input checks and volley building. Protocol-agnostic: "subject" / "other" roles only."""
 
+import re
 import unicodedata
 from dataclasses import dataclass, field
 from typing import Any
@@ -27,7 +28,7 @@ class RoleTurn:
 class Volley:
     id: str  # v1..vN
     turns: list[Turn]  # subject turns, possibly separated by facilitative client input
-    prev_other: Turn | None  # most recent other-speaker turn before the volley (context only)
+    context_before: dict[str, Any] = field(default_factory=dict)  # bounded text only, no ids
 
 
 @dataclass(frozen=True)
@@ -144,32 +145,60 @@ def _asks_question(text: str) -> bool:
     return size <= (6 if spaceless else 3)
 
 
-def build_volleys(turns: list[RoleTurn], volley_cfg: dict[str, Any]) -> list[Volley]:
-    """Keep facilitative client input within a clinician volley (manual pp.13, 15–16).
+def _last_words(text: str, limit: int) -> str:
+    words = list(re.finditer(r"\S+", text))
+    return text[words[-limit].start():] if len(words) > limit else text
 
-    Size thresholds are engineering approximations; answers to a direct question
-    always break. Client turns stay in Prepared.turns, never in codable volley turns.
+
+def _client_context(texts: list[str]) -> list[str]:
+    """Keep recent whole turns; truncate only an oversized newest turn."""
+    kept = texts[-4:]
+    while kept:
+        size, spaceless = _size(" ".join(kept))
+        limit = 300 if spaceless else 150
+        if size <= limit:
+            return kept
+        if len(kept) > 1:
+            kept = kept[1:]
+            continue
+        text = kept[0]
+        if spaceless:
+            chars = [i for i, char in enumerate(text) if not char.isspace()]
+            return [text[chars[-limit]:]]
+        return [_last_words(text, limit)]
+    return []
+
+
+def build_volleys(turns: list[RoleTurn], volley_cfg: dict[str, Any]) -> list[Volley]:
+    """Keep facilitative input inside volleys (manual pp.13, 15–16).
+
+    Context snapshots precede each volley's first clinician turn. Retain client
+    history, including earlier facilitative input, across volleys and batches.
     """
     min_words = int(volley_cfg.get("min_other_words", 3))
     min_chars = int(volley_cfg.get("min_other_chars", 6))
     volleys: list[Volley] = []
     current: list[Turn] = []
-    prev_other: Turn | None = None
-    current_prev: Turn | None = None
+    clients: list[str] = []
+    context: dict[str, Any] = {}
 
     def flush() -> None:
         nonlocal current
         if current:
-            volleys.append(Volley(f"v{len(volleys) + 1}", current, current_prev))
+            volleys.append(Volley(f"v{len(volleys) + 1}", current, context))
             current = []
 
     for rt in turns:
         if rt.role == SUBJECT:
             if not current:
-                current_prev = prev_other
+                previous = " ".join(t.text for t in volleys[-1].turns) if volleys else None
+                context = {
+                    "client_turns": _client_context(clients),
+                    "previous_clinician_volley": _last_words(previous, 100) if previous else None,
+                }
             current.append(rt.turn)
         else:
-            prev_other = rt.turn
+            clients = [*clients[-3:], rt.turn.text]
             size, spaceless = _size(rt.turn.text)
             if size >= (min_chars if spaceless else min_words) or (
                 current and _asks_question(current[-1].text)

@@ -14,7 +14,7 @@ from onolys_miti.prepare import OTHER, SUBJECT, CheckInput, RoleTurn
 
 pytestmark = pytest.mark.unit
 
-KNOWN_PACK_HASH = "2913ee4eaed0bc33"
+KNOWN_PACK_HASH = "c13785af2f3da30d"
 
 GLOBALS = ["cct", "sst", "partnership", "empathy"]
 CODES = ["gi", "persuade", "persuade_permission", "question", "sr", "cr", "affirm",

@@ -1,13 +1,13 @@
 {
   "schema_version": "0.0.1",
-  "request_id": "req-fixture-no_rating",
+  "request_id": "req-golden",
   "created_at": "2026-11-20T00:00:00Z",
   "header": {
     "change_goal": "walk more during the working week",
     "protocol": {
       "id": "miti",
       "version": "4.2.1",
-      "pack_hash": "2913ee4eaed0bc33",
+      "pack_hash": "c13785af2f3da30d",
       "label": "MITI 4.2.1"
     },
     "language": "en",
@@ -15,24 +15,20 @@
     "subject_speaker": "A",
     "n_runs": 1,
     "models": {
-      "miti_code": "anthropic/claude-sonnet-5-5",
-      "miti_globals": "anthropic/claude-sonnet-5-5",
-      "tips": "anthropic/claude-sonnet-5-5"
+      "miti_code": "gemini/gemini-4-neon",
+      "miti_globals": "gemini/gemini-4-neon"
     },
-    "stt": {
-      "provider": "stub",
-      "model": "synthetic-fixture",
-      "location": null,
-      "language_requested": "en",
-      "language_detected": "en",
-      "adapter_version": "fixture-0.0.1"
-    },
-    "preset": "fixture",
-    "code_version": "fixture",
+    "stt": null,
+    "preset": null,
+    "code_version": "fixture-build",
     "params": {
+      "change_goal": "walk more during the working week",
+      "seed": null,
+      "language": null,
       "n_runs": 1,
-      "preset": "fixture",
-      "code_version": "fixture"
+      "preset": null,
+      "code_version": "fixture-build",
+      "coded_span": null
     },
     "has_clinician_rating": false,
     "rating_coverage": {
@@ -1399,25 +1395,18 @@
   "run_info": {
     "evaluation": {
       "engine": "miti",
-      "code_version": "fixture",
-      "preset": "fixture",
+      "code_version": "fixture-build",
+      "preset": null,
       "routes": {},
-      "stt": {
-        "provider": "stub",
-        "model": "synthetic-fixture",
-        "location": null,
-        "language_requested": "en",
-        "language_detected": "en",
-        "adapter_version": "fixture-0.0.1"
-      },
+      "stt": null,
       "pack": {
         "id": "miti",
         "version": "4.2.1",
-        "hash": "d98e79648859d15e"
+        "hash": "c13785af2f3da30d"
       },
       "prompt_hashes": {
-        "tips_system.md": "c101994ac3e665b1",
-        "engine:tips_output_format": "775e35f7eb1e7050",
+        "tips_system.md": "0706f2a8a5107784",
+        "engine:tips_output_format": "690899f495699d35",
         "engine:compare_templates": "899078a5c763eb74"
       },
       "n_runs": 1,
@@ -1428,7 +1417,8 @@
         "cache_read_tokens": 0,
         "cache_write_tokens": 0,
         "cost_usd": null
-      }
+      },
+      "span": null
     },
     "miti": {
       "engine": "miti",
@@ -1436,35 +1426,35 @@
       "preset": null,
       "routes": {
         "miti_code": {
-          "litellm_id": "anthropic/claude-sonnet-5-5",
-          "provider": "anthropic",
+          "litellm_id": "gemini/gemini-4-neon",
+          "provider": "gemini",
           "structured_output_mode": "json_object",
           "temperature_effective": null,
-          "params_hash": "6656172429332cca"
+          "params_hash": "e17ed971b54d79ec"
         },
         "miti_globals": {
-          "litellm_id": "anthropic/claude-sonnet-5-5",
-          "provider": "anthropic",
+          "litellm_id": "gemini/gemini-4-neon",
+          "provider": "gemini",
           "structured_output_mode": "json_object",
           "temperature_effective": null,
-          "params_hash": "6656172429332cca"
+          "params_hash": "e17ed971b54d79ec"
         }
       },
       "stt": null,
       "pack": {
         "id": "miti",
         "version": "4.2.1",
-        "hash": "d98e79648859d15e"
+        "hash": "c13785af2f3da30d"
       },
       "prompt_hashes": {
-        "code_system.md": "fe6abdc6e916c3a8",
-        "code_fewshot.json": "66067cb3cdb0d3b4",
-        "globals_system.md": "defd14fd71dada50",
+        "code_system.md": "2c3966ecace027bd",
+        "code_fewshot.json": "4d607d4722331e4a",
+        "globals_system.md": "b7b9b0fa188a1322",
         "globals_fewshot.json": "d1c0578f710ce40c",
         "engine:code_output_format": "bd70e3a0f9faa4c8",
-        "engine:code_templates": "8a4ebcfbfb90cba0",
+        "engine:code_templates": "09472c7621fb9dce",
         "engine:globals_output_format": "2ef1aa6d4656444c",
-        "engine:globals_templates": "a3929d2477e13168"
+        "engine:globals_templates": "dab332342db6dcef"
       },
       "n_runs": 1,
       "usage": {
@@ -1474,6 +1464,11 @@
         "cache_read_tokens": 0,
         "cache_write_tokens": 0,
         "cost_usd": null
+      },
+      "span": {
+        "mode": "whole",
+        "duration_s": 1205,
+        "seed": "req-golden"
       }
     }
   }

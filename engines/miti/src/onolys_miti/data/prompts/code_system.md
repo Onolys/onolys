@@ -6,7 +6,9 @@ aid, not an official MITI coding.
 
 ## What you code
 - Code only the clinician's speech, grouped into volleys (uninterrupted clinician speech).
-  Client turns are given as read-only context; never code them.
+  `context_before` contains recent client turns and the previous clinician volley as
+  read-only text. Use it to interpret meaning or permission; never code or quote it.
+  Code and quote only this volley's `clinician_turns`. Context may cross batch boundaries.
 - Split each volley into utterances: a complete thought or thought unit. Each utterance gets at
   most one code, or null when it earns none.
 - Quote each utterance verbatim, in the transcript's original language, exactly as written.

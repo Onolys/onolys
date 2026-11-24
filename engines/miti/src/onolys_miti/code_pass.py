@@ -4,8 +4,9 @@ Volleys are sent in batches of `volleys_per_call` on the `miti_code` route. The 
 alone (core `warm_then_fanout`) so later batches can read the prompt cache. A truncated or
 invalid response (`LLMBadOutput`) halves the batch and retries each half once. Each quote is
 located inside its volley's turn text; unlocatable or overlapping utterances are dropped with a
-warning. More than 20% dropped retries the batch once, then the run fails: no silent partial
-counts. Rules and scoring run afterwards (`onolys_miti.score`).
+warning. Context-only quotes are dropped without affecting the retry rate.
+Dropping more than 20% of the remaining utterances retries the batch once, then the run fails:
+no silent partial counts. Rules and scoring run afterwards (`onolys_miti.score`).
 
 Token limits, timeouts, sampling and model choice belong to the route (core); the request only
 carries the engine default (or the MITI `params` override), which core clamps to the route.
@@ -155,7 +156,7 @@ def _render_batch(batch: list[Volley]) -> str:
             "volleys": [
                 {
                     "volley_id": v.id,
-                    "previous_other_turn": v.prev_other.text if v.prev_other else None,
+                    "context_before": v.context_before,
                     "clinician_turns": [{"turn_id": t.id, "text": t.text} for t in v.turns],
                 }
                 for v in batch
@@ -193,7 +194,15 @@ def _locate_volley(
             seen_earlier = any(
                 locate(t.text, u.quote, None, _CFG) is not None for t in volley.turns
             )
-            code = "overlap" if seen_earlier else "quote_not_found"
+            context = volley.context_before
+            context_texts = [*context.get("client_turns", [])]
+            if previous := context.get("previous_clinician_volley"):
+                context_texts.append(previous)
+            in_context = any(locate(text, u.quote, None, _CFG) is not None
+                             for text in context_texts)
+            code = (
+                "overlap" if seen_earlier else "context_quote" if in_context else "quote_not_found"
+            )
             warns.append(ResultWarning(code=code, detail=f"{volley.id}: utterance dropped"))
             continue
         j, start, end = found
@@ -262,7 +271,9 @@ class _Pass:
             insts, warns = _locate_volley(volley, vo.utterances)
             by_volley.setdefault(volley.id, []).extend(insts)
             warnings += warns
-            dropped += len(warns)
+            context_drops = sum(w.code == "context_quote" for w in warns)
+            total -= context_drops
+            dropped += len(warns) - context_drops
         return _Attempt(by_volley, warnings, total, dropped)
 
     async def _checked(self, batch: list[Volley], tag: str) -> _Attempt:

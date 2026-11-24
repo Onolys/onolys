@@ -100,7 +100,7 @@ def test_coverage_counts_union_including_uncoded_spans():
 
     audit = load("audit_report", ROOT / "audit_report.py")
     turn = Turn(id="t1", speaker="A", text="one two three four")
-    prepared = Prepared([], [Volley("v1", [turn], None)])
+    prepared = Prepared([], [Volley("v1", [turn])])
     # Overlap must not double-count 'two'; the last word is uncovered.
     spans = [
         SimpleNamespace(turn_id="t1", start=0, end=7),

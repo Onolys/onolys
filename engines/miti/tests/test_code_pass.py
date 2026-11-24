@@ -36,7 +36,7 @@ def volleys(n):
     for i in range(n):
         t = Turn(id=f"t{i}", speaker="A", text=TEXTS["t0"], start_ms=i * 1000, end_ms=i * 1000 + 500)
         prev = Turn(id=f"p{i}", speaker="B", text="client said something")
-        out.append(Volley(f"v{i + 1}", [t], prev))
+        out.append(Volley(f"v{i + 1}", [t], {"client_turns": [prev.text]}))
     return out
 
 
@@ -179,7 +179,7 @@ async def test_single_volley_bad_output_retried_once_then_fails(tmp_path, pack_d
 
 async def test_drop_at_20_percent_is_kept_with_warning(tmp_path, pack_data):
     text = "One aaa. Two bbb. Three ccc. Four ddd. Five eee."
-    v = Volley("v1", [Turn(id="t1", speaker="A", text=text)], None)
+    v = Volley("v1", [Turn(id="t1", speaker="A", text=text)], {})
     quotes = ["One aaa.", "Two bbb.", "Three ccc.", "Four ddd.", "not in the transcript"]
     client = FakeClient(lambda req, n: good(req, lambda vid: [utt(q) for q in quotes]))
     out = await run(client, make_pack(tmp_path, pack_data), [v])
@@ -210,7 +210,7 @@ async def test_drop_over_20_percent_twice_fails(tmp_path, pack_data):
 
 async def test_locate_offsets_and_overlap(tmp_path, pack_data):
     v = Volley("v1", [Turn(id="t9", speaker="A", text="Alpha beta gamma. Delta epsilon zeta.",
-                           start_ms=10, end_ms=20)], None)
+                           start_ms=10, end_ms=20)], {})
     client = FakeClient(lambda req, n: good(req, lambda vid: [
         utt("Alpha beta gamma.", "a"),
         utt("alpha  BETA gamma.", "b"),  # same span again -> overlap
@@ -237,7 +237,7 @@ async def test_locate_offsets_and_overlap(tmp_path, pack_data):
 
 async def test_quote_never_crosses_turn_boundary(tmp_path, pack_data):
     v = Volley("v1", [Turn(id="t1", speaker="A", text="Alpha beta gamma."),
-                      Turn(id="t2", speaker="A", text="Delta epsilon zeta.")], None)
+                      Turn(id="t2", speaker="A", text="Delta epsilon zeta.")], {})
     client = FakeClient(lambda req, n: good(req, lambda vid: [
         utt("Alpha beta gamma. Delta epsilon zeta.")]))
     with pytest.raises(CodePassFailed):  # 100% dropped, twice
@@ -246,7 +246,7 @@ async def test_quote_never_crosses_turn_boundary(tmp_path, pack_data):
 
 async def test_second_turn_located_in_its_own_turn(tmp_path, pack_data):
     v = Volley("v1", [Turn(id="t1", speaker="A", text="Alpha beta gamma."),
-                      Turn(id="t2", speaker="A", text="Delta epsilon zeta.")], None)
+                      Turn(id="t2", speaker="A", text="Delta epsilon zeta.")], {})
     client = FakeClient(lambda req, n: good(req, lambda vid: [
         utt("Alpha beta gamma."), utt("Delta epsilon zeta.", "b")]))
     out = await run(client, make_pack(tmp_path, pack_data), [v])
@@ -324,3 +324,117 @@ async def test_output_format_says_all_ids_returned_and_empty_allowed(tmp_path, p
     text = " ".join(_OUTPUT_FORMAT.split())
     assert "every volley id appears exactly once" in text
     assert "empty" in text and "allowed" in text
+
+
+class StubClient(FakeClient):
+    """Offline responses inspect only the rendered request, never a provider."""
+
+
+def context_volleys(spec):
+    from onolys_miti.prepare import build_volleys
+
+    return build_volleys([
+        RoleTurn(Turn(id=f"private-id-{i}", speaker=speaker, text=text),
+                 "subject" if speaker == "A" else "other")
+        for i, (speaker, text) in enumerate(spec)
+    ], {})
+
+
+@pytest.mark.parametrize("client_texts,expected", [
+    ([f"client reply number {i}" for i in range(6)],
+     [f"client reply number {i}" for i in range(2, 6)]),
+    (["old " * 70, "middle " * 80, "recent " * 71], ["recent " * 71]),
+    (["old reply here", " ".join(f"word{i}" for i in range(160))],
+     [" ".join(f"word{i}" for i in range(10, 160))]),
+    (["旧" * 160, "新" * 150], ["新" * 150]),
+    (["旧回复", "新" * 310], ["新" * 300]),
+])
+async def test_context_client_bounds_and_text_only(tmp_path, pack_data, client_texts, expected):
+    vs = context_volleys([*(('B', text) for text in client_texts), ('A', TEXTS['t0'])])
+    client = StubClient(lambda req, n: good(req))
+    await run(client, make_pack(tmp_path, pack_data), vs)
+    rendered = _req_volleys(client.requests[0])[0]
+    context = rendered["context_before"]
+    assert context == {"client_turns": expected, "previous_clinician_volley": None}
+    assert "previous_other_turn" not in rendered
+    assert "private-id" not in str(context)
+    assert all(text not in prefix for text in expected for prefix in client.requests[0].cache_prefixes)
+
+
+async def test_context_previous_volley_crosses_batch_and_batches_stay_disjoint(tmp_path, pack_data):
+    previous = " ".join(f"word{i}" for i in range(125))
+    vs = context_volleys([('A', previous), ('B', 'yeah'), ('A', 'Last statement?'),
+                          ('B', 'sure'), ('A', TEXTS['t0'])])
+    client = StubClient(lambda req, n: good(req, lambda vid: [utt(
+        _req_volleys(req)[0]['clinician_turns'][0]['text'])]))
+    await run(client, make_pack(tmp_path, pack_data, {"volleys_per_call": 1}), vs)
+    assert len(client.requests) == 2
+    context = _req_volleys(client.requests[1])[0]['context_before']
+    expected = " ".join((previous + " Last statement?").split()[-100:])
+    assert context == {"client_turns": ['yeah', 'sure'],
+                       "previous_clinician_volley": expected}
+    assert 'private-id' not in str(context)
+    assert client.requests[0].cache_prefixes == client.requests[1].cache_prefixes
+    ids = [{t['turn_id'] for v in _req_volleys(r) for t in v['clinician_turns']}
+           for r in client.requests]
+    assert ids[0].isdisjoint(ids[1])
+
+
+@pytest.mark.parametrize('context_source', ['client', 'clinician'])
+async def test_context_only_quote_dropped_without_retry(tmp_path, pack_data, context_source):
+    text = 'Permission was already granted.'
+    spec = [('B', text), ('A', TEXTS['t0'])] if context_source == 'client' else [
+        ('A', text + '?'), ('B', 'yes'), ('A', TEXTS['t0'])]
+    vs = context_volleys(spec)
+    client = StubClient(lambda req, n: good(req, lambda vid: [utt(text)]
+                        if vid == vs[-1].id else []))
+    out = await run(client, make_pack(tmp_path, pack_data), vs)
+    assert len(client.requests) == 1
+    assert out.instances == []
+    assert [w.code for w in out.warnings] == ['context_quote']
+
+
+async def test_current_quote_wins_over_context_and_overlap_is_still_a_failure(tmp_path, pack_data):
+    vs = context_volleys([('B', TEXTS['t0']), ('A', TEXTS['t0'])])
+    client = StubClient(lambda req, n: good(req))
+    out = await run(client, make_pack(tmp_path, pack_data), vs)
+    assert len(client.requests) == 1 and len(out.instances) == 1 and out.warnings == []
+    client = StubClient(lambda req, n: good(req, lambda vid: [utt('First thing here.')] * 2))
+    with pytest.raises(CodePassFailed):
+        await run(client, make_pack(tmp_path, pack_data), vs)
+    assert len(client.requests) == 2
+
+
+async def test_context_quotes_do_not_dilute_actual_quote_misses(tmp_path, pack_data):
+    vs = context_volleys([('B', 'A context sentence.'), ('A', TEXTS['t0'])])
+
+    def handler(req, n):
+        if n == 1:
+            return good(req, lambda vid: [utt('A context sentence.')] * 8 + [
+                utt('First thing here.'), utt('An invented sentence.')])
+        return good(req)
+
+    client = StubClient(handler)
+    out = await run(client, make_pack(tmp_path, pack_data), vs)
+    assert len(client.requests) == 2
+    assert len(out.instances) == 1 and out.warnings == []
+
+
+async def test_other_volley_quote_without_own_context_is_real_miss(tmp_path, pack_data):
+    vs = volleys(2)
+    vs[0].turns[0].text = 'Different current evidence.'
+    client = StubClient(lambda req, n: good(req))
+    with pytest.raises(CodePassFailed):
+        await run(client, make_pack(tmp_path, pack_data), vs)
+    assert len(client.requests) == 2
+
+
+def test_real_fewshots_use_context_before():
+    import json
+
+    from onolys_miti import miti
+
+    path = miti.DATA_DIR / 'prompts/code_fewshot.json'
+    examples = json.loads(path.read_text())
+    assert all('context_before' in ex['input'] for ex in examples)
+    assert 'previous_other_turn' not in path.read_text()

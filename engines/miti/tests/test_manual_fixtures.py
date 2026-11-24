@@ -48,7 +48,7 @@ def test_batch_edge_has_permission_across_25_26_and_facilitative_ack():
     assert prepared.volleys[0].turns[0].id == "b01a"
     assert [t.id for t in prepared.volleys[0].turns] == ["b01a", "b01b"]
     assert prepared.volleys[24].turns[0].text == "May I offer a suggestion about fitting a short walk into your lunch break?"
-    assert prepared.volleys[25].prev_other.text == "yeah"
+    assert prepared.volleys[25].context_before["client_turns"][-1] == "yeah"
     assert prepared.volleys[25].turns[0].id == "b26"
 
 

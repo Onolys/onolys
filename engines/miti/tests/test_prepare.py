@@ -140,7 +140,7 @@ def test_facilitative_client_turn_is_preserved_but_not_codable(tmp_path, pack_da
     p = prepare(Transcript(turns=[rt.turn for rt in turns]), params())
     assert [[t.id for t in v.turns] for v in p.volleys] == [["t0", "t2"], ["t4"]]
     assert p.turns[1].turn.text == "mm-hm" and p.turns[1].role == "other"
-    assert p.volleys[1].prev_other.text == "long reply here"
+    assert p.volleys[1].context_before["client_turns"] == ["mm-hm", "long reply here"]
 
 
 @pytest.mark.parametrize("client,breaks", [
@@ -207,7 +207,7 @@ def test_min_other_words_knob():
     ]
     vs = build_volleys(_seq(spec), {"breaks_on": "other_speaker", "min_other_words": 3})
     assert [[t.id for t in v.turns] for v in vs] == [["t0", "t2"], ["t4"]]
-    assert vs[1].prev_other.text == "a longer reply here"
+    assert vs[1].context_before["client_turns"] == ["mm-hm", "a longer reply here"]
 
 
 def test_consecutive_subject_turns_one_volley():
