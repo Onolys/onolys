@@ -31,6 +31,8 @@ def dialogue(dialog=CC):
         sentence(dialog, 4, "listener", "Synthetic seven.", "Complex Reflection"),
         sentence(dialog, 4, "listener", "Synthetic eight.", "Complex Reflection"),
         sentence(dialog, 4, "listener", "Synthetic nine.", "Give Information"),
+        sentence(dialog, 4, "listener", "Synthetic ten.", "Warn"),
+        sentence(dialog, 4, "listener", "Synthetic eleven.", "Direct"),
     ]
 
 
@@ -65,13 +67,13 @@ def test_non_contiguous_turn_and_unknown_author_are_errors():
 def test_gold_maps_labels_and_skips_unmapped_and_unresolved():
     transcript, gold, warnings, stats = welivita.build_session(
         "synthetic", "counsel-chat-7", welivita.turns_from_rows(dialogue()), **COMMON)
-    assert warnings == [] and stats == {"mapped": 7, "unmapped": 1, "unresolved": 1}
-    assert gold.counts == {"gi": 1, "persuade": 1, "persuade_permission": 1, "question": 2, "sr": 0,
+    assert warnings == [] and stats == {"mapped": 9, "unmapped": 1, "unresolved": 1}
+    assert gold.counts == {"gi": 1, "persuade": 3, "persuade_permission": 1, "question": 2, "sr": 0,
                            "cr": 2, "affirm": 0, "seek_collab": None, "emphasize_autonomy": 0,
                            "confront": 0}
     codes = {u.turn_id: u.codes for u in gold.utterance_codes}
     assert codes["t2"] == ["question", "question", "persuade", "persuade_permission"]
-    assert codes["t1"] == [] and codes["t4"] == ["cr", "cr", "gi"]
+    assert codes["t1"] == [] and codes["t4"] == ["cr", "cr", "gi", "persuade", "persuade"]
     assert gold.globals is None and gold.summaries is None and gold.quality_label is None
     assert all(set(t) == {"id", "speaker", "role", "text"} for t in transcript["turns"])
 
@@ -97,7 +99,7 @@ def test_read_dialogues_groups_in_file_order(tmp_path):
     path.write_text("﻿" + _csv_text(dialogue(CC) + dialogue(RED)), encoding="utf-8")
     dialogues = welivita.read_dialogues(path)
     assert list(dialogues) == ["counsel-chat-7", "red-123-somesub"]
-    assert len(dialogues["counsel-chat-7"][1]) == 11
+    assert len(dialogues["counsel-chat-7"][1]) == 13
 
 
 def test_convert_dataset_writes_sessions(tmp_path):

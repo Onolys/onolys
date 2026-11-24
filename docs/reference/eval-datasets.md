@@ -80,12 +80,12 @@ Terms: unless noted, reuse terms are not separately confirmed and every dataset 
 | AF (affirm) | `affirm` |
 | GI (give information) | `gi` |
 | ADP (advise with permission), RCP (raise concern with permission) | `persuade_permission` |
-| ADW (advise without permission), RCW (raise concern without permission) | `persuade` |
+| ADW (advise without permission), RCW (raise concern without permission), WA (warn), DI (direct) | `persuade` |
 | EC (emphasize control) | `emphasize_autonomy` |
 | CO (confront) | `confront` |
-| FI, FA, ST, SU, RF, WA, DI | not counted |
+| FI, FA, ST, SU, RF | not counted |
 
-- Not counted: FI (filler), FA (facilitate), ST (structure), SU (support), RF (reframe), WA (warn), DI (direct). MISC has no Seek Collaboration, so `seek_collab` is `null`. WA and DI sit under the repo's "Imperative without permission" group; whether MITI Persuade should include them is not settled here, so `persuade` is a lower bound. `cr` is a lower bound when RF occurs. Client codes (N, R+, C+, ...) are ignored; a client code on a counsellor turn, a counsellor code on a client turn, or an unknown code is a parse warning (none occur). The MISC code definitions come from the paper's prompt appendix (the repo has no code book).
+- Not counted: FI (filler), FA (facilitate), ST (structure), SU (support), RF (reframe). WA (warn) and DI (direct) count as `persuade` (owner decision; they sit under the repo's "Imperative without permission" group). MISC has no Seek Collaboration, so `seek_collab` is `null`. `cr` is a lower bound when RF occurs. Client codes (N, R+, C+, ...) are ignored; a client code on a counsellor turn, a counsellor code on a client turn, or an unknown code is a parse warning (none occur). The MISC code definitions come from the paper's prompt appendix (the repo has no code book).
 - Labels: partial counts only (9 of 10 ids are integers, 0 when absent). No globals, no summaries. HLQC sessions also carry `quality_label` (high/low from the conversation id); smoking sessions have none. `label_scheme`: "MISC 2.5 (human) mapped to MITI counts"; `miti_version: null`.
 - Overlaps: the 10 HLQC sessions are the same conversations as `hlqc` ids `high-001` etc., but AutoMISC re-parsed the transcripts into utterances, so turn text and turn count differ. No AnnoMI overlap: the manual files contain no AnnoMI sessions (AutoMISC's AnnoMI codes are automated and excluded).
 - Change goal: smoking sessions "Quit smoking" (curated); HLQC sessions generic.
@@ -109,12 +109,12 @@ Terms: unless noted, reuse terms are not separately confirmed and every dataset 
 | Affirm | `affirm` | 945 |
 | Give Information | `gi` | 4,856 |
 | Advise with Permission | `persuade_permission` | 484 |
-| Advise without Permission | `persuade` | 2,285 |
+| Advise without Permission, Warn, Direct | `persuade` | 2,285 + 113 + 898 |
 | Emphasize Autonomy | `emphasize_autonomy` | 253 |
 | Confront | `confront` | 318 |
-| Support, Direct, Warn, Self-Disclose, Other | not counted | 1,233 + 898 + 113 + 1,390 + 805 |
+| Support, Self-Disclose, Other | not counted | 1,233 + 1,390 + 805 |
 
-- Gaps: `seek_collab` is `null` (no such label). `persuade` is a lower bound because Direct and Warn are not folded in (same call as `automisc-human`; owner to confirm whether MITI Persuade should include them). Total: 12,372 mapped sentences, 4,439 labeled but not mapped, 450 unresolved. 82 dialogues have only unmapped or unresolved labels, so all their mapped counts are 0. No globals, no summaries, no quality label. `miti_version: null`; `label_scheme`: "Welivita & Pu MI labels mapped to MITI counts (partial)". The per-session manifest `notes` give the mapped / unmapped / unresolved sentence counts. Change goals are a generic "Not stated" (curated).
+- Gaps: `seek_collab` is `null` (no such label). Warn and Direct count as `persuade` (owner decision, same as WA/DI in `automisc-human`). Total with this mapping: 13,383 mapped sentences, 3,428 labeled but not mapped, 450 unresolved . Some dialogues have only unmapped or unresolved labels, so all their mapped counts are 0. No globals, no summaries, no quality label. `miti_version: null`; `label_scheme`: "Welivita & Pu MI labels mapped to MITI counts (partial)". The per-session manifest `notes` give the mapped / unmapped / unresolved sentence counts. Change goals are a generic "Not stated" (curated).
 - Overlaps: none recorded.
 - Terms: CC BY-NC-SA 3.0 (non-commercial, share-alike, attribution). Cite the paper and read its ethics section (Reddit users are anonymous; do not try to identify them). Internal non-commercial evaluation only.
 - Catalog and picker with 2,000 sessions: the dataset manifest is about 0.75 MB of YAML and `GET /v1/datasets` reads and validates every manifest on each call (a failure in one gives 503 for all); `GET /v1/datasets/welivita-mi` returns 2,000 session rows and lists all 4,001 objects under the prefix. The new-run picker renders one checkbox per session with all preselected, so a whole-dataset run is 2,000 sessions: select only the sessions you want. Not exercised by us.

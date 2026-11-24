@@ -53,11 +53,12 @@ def test_gold_maps_misc_codes_to_miti_counts():
         coded_url="https://example.org/a.zip")
     assert warnings == []
     assert all(set(t) == {"id", "speaker", "role", "text"} for t in transcript["turns"])
-    assert gold.counts == {"gi": 1, "persuade": 2, "persuade_permission": 1, "question": 2, "sr": 1,
+    assert gold.counts == {"gi": 1, "persuade": 4, "persuade_permission": 1, "question": 2, "sr": 1,
                            "cr": 1, "affirm": 1, "seek_collab": None, "emphasize_autonomy": 1,
                            "confront": 1}
     codes = {u.turn_id: u.codes for u in gold.utterance_codes}
     assert codes["t1"] == ["question"] and codes["t2"] == [] and codes["t10"] == ["persuade"]
+    assert codes["t18"] == ["persuade"] and codes["t19"] == ["persuade"]  # WA, DI
     assert gold.quality_label is None and gold.label_scheme == automisc.LABEL_SCHEME
 
 

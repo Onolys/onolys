@@ -18,11 +18,11 @@ Counselor code mapping (MISC 2.5 tier-2 -> gold counts)::
 
     OQ, CQ -> question     SR -> sr           CR -> cr        AF -> affirm
     GI -> gi               ADP, RCP -> persuade_permission
-    ADW, RCW -> persuade   EC -> emphasize_autonomy           CO -> confront
+    ADW, RCW, WA, DI -> persuade   EC -> emphasize_autonomy           CO -> confront
 
-Not counted: FI (filler), FA (facilitate), ST (structure), SU (support), RF (reframe), WA
-(warn), DI (direct). MISC has no Seek Collaboration, so ``seek_collab`` is ``null``;
-``persuade`` and ``cr`` are therefore lower bounds when WA/DI or RF occur. Client codes
+Not counted: FI (filler), FA (facilitate), ST (structure), SU (support), RF (reframe).
+WA (warn) and DI (direct) count as persuade (owner decision). MISC has no Seek
+Collaboration, so ``seek_collab`` is ``null``; ``cr`` is a lower bound when RF occurs. Client codes
 (N, R+, C+, ...) are ignored; a client code on a counsellor row, or the reverse, and any
 unknown code are parse warnings. No globals, no summaries.
 """
@@ -54,8 +54,8 @@ LABELED = tuple(k for k in COUNT_IDS if k != "seek_collab")
 COUNSELLOR_CODES = {
     "OQ": "question", "CQ": "question", "SR": "sr", "CR": "cr", "AF": "affirm", "GI": "gi",
     "ADP": "persuade_permission", "RCP": "persuade_permission", "ADW": "persuade",
-    "RCW": "persuade", "EC": "emphasize_autonomy", "CO": "confront"}
-UNMAPPED_COUNSELLOR_CODES = {"FI", "FA", "ST", "SU", "RF", "WA", "DI"}
+    "RCW": "persuade", "WA": "persuade", "DI": "persuade", "EC": "emphasize_autonomy", "CO": "confront"}
+UNMAPPED_COUNSELLOR_CODES = {"FI", "FA", "ST", "SU", "RF"}
 CLIENT_CODES = {"N", "N+", "N-", "R+", "R-", "AB+", "AB-", "AC+", "AC-", "O+", "O-", "D+", "D-",
                 "C+", "C-", "TS+", "TS-"}
 _ROLES = {"counsellor": "clinician", "client": "client"}

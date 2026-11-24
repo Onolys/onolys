@@ -19,12 +19,11 @@ Label mapping::
     Open Question, Closed Question -> question   Simple Reflection -> sr
     Complex Reflection -> cr    Affirm -> affirm    Give Information -> gi
     Advise with Permission -> persuade_permission
-    Advise without Permission -> persuade
+    Advise without Permission, Warn, Direct -> persuade
     Emphasize Autonomy -> emphasize_autonomy       Confront -> confront
 
-Not counted: Support, Direct, Warn, Self-Disclose, Other (no MITI 4.2.1 count). No Seek
-Collaboration label exists, so ``seek_collab`` is ``null``; ``persuade`` is a lower bound
-because Direct and Warn are not folded into it. No globals, no summaries.
+Not counted: Support, Self-Disclose, Other (no MITI 4.2.1 count). Warn and Direct count as
+persuade (owner decision). No Seek Collaboration label exists, so ``seek_collab`` is ``null``. No globals, no summaries.
 """
 import csv
 import io
@@ -54,8 +53,9 @@ LABEL_MAP = {
     "Open Question": "question", "Closed Question": "question", "Simple Reflection": "sr",
     "Complex Reflection": "cr", "Affirm": "affirm", "Give Information": "gi",
     "Advise with Permission": "persuade_permission", "Advise without Permission": "persuade",
+    "Warn": "persuade", "Direct": "persuade",
     "Emphasize Autonomy": "emphasize_autonomy", "Confront": "confront"}
-UNMAPPED_LABELS = {"Support", "Direct", "Warn", "Self-Disclose", "Other"}
+UNMAPPED_LABELS = {"Support", "Self-Disclose", "Other"}
 UNRESOLVED = "-"
 _ROLES = {"speaker": "client", "listener": "clinician"}
 _SIDES = {"speaker": "seeker", "listener": "helper"}
