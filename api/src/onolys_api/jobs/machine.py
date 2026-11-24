@@ -18,22 +18,27 @@ STATES: tuple[str, ...] = get_args(SessionState)
 
 _NOT_DELETING = (
     "created", "uploading", "validating", "transcribing", "awaiting_input",
-    "running", "report_ready", "failed", "upload_incomplete",
+    "running", "report_ready", "failed", "upload_incomplete", "cancelled",
 )  # fmt: skip
 
 TRANSITIONS: dict[str, frozenset[str]] = {
-    "created": frozenset({"awaiting_input", "uploading", "upload_incomplete", "deleting"}),
+    "created": frozenset(
+        {"awaiting_input", "uploading", "upload_incomplete", "deleting", "cancelled"}
+    ),
     # uploading -> uploading: a fresh signed URL for the same session
-    "uploading": frozenset({"uploading", "upload_incomplete", "validating", "deleting"}),
+    "uploading": frozenset(
+        {"uploading", "upload_incomplete", "validating", "deleting", "cancelled"}
+    ),
     # never uploaded (lazy stale check): a fresh URL resumes it; a late PUT still completes
-    "upload_incomplete": frozenset({"uploading", "validating", "deleting"}),
-    "validating": frozenset({"transcribing", "failed", "deleting"}),
-    "transcribing": frozenset({"awaiting_input", "failed", "deleting"}),
-    "awaiting_input": frozenset({"running", "deleting"}),
-    "running": frozenset({"report_ready", "failed", "deleting"}),
+    "upload_incomplete": frozenset({"uploading", "validating", "deleting", "cancelled"}),
+    "validating": frozenset({"transcribing", "failed", "deleting", "cancelled"}),
+    "transcribing": frozenset({"awaiting_input", "failed", "deleting", "cancelled"}),
+    "awaiting_input": frozenset({"running", "deleting", "cancelled"}),
+    "running": frozenset({"report_ready", "failed", "deleting", "cancelled"}),
     "report_ready": frozenset({"running", "deleting"}),  # re-run
     # one retry path (R4): re-enter the step that failed (`POST /sessions/{id}/retry`)
     "failed": frozenset({"running", "validating", "transcribing", "deleting"}),
+    "cancelled": frozenset({"deleting"}),  # terminal (04-cancel R1): only Delete leaves it
     "deleting": frozenset(),
 }
 assert set(TRANSITIONS) == set(STATES) and all("deleting" in TRANSITIONS[s] for s in _NOT_DELETING)

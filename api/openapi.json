@@ -350,7 +350,8 @@
               "report_ready",
               "failed",
               "deleting",
-              "upload_incomplete"
+              "upload_incomplete",
+              "cancelled"
             ],
             "title": "Status",
             "type": "string"
@@ -1233,7 +1234,8 @@
               "report_ready",
               "failed",
               "deleting",
-              "upload_incomplete"
+              "upload_incomplete",
+              "cancelled"
             ],
             "title": "Status",
             "type": "string"
@@ -1559,7 +1561,8 @@
               "report_ready",
               "failed",
               "deleting",
-              "upload_incomplete"
+              "upload_incomplete",
+              "cancelled"
             ],
             "title": "Status",
             "type": "string"
@@ -1710,7 +1713,8 @@
               "report_ready",
               "failed",
               "deleting",
-              "upload_incomplete"
+              "upload_incomplete",
+              "cancelled"
             ],
             "title": "Status",
             "type": "string"
@@ -1752,7 +1756,8 @@
               "report_ready",
               "failed",
               "deleting",
-              "upload_incomplete"
+              "upload_incomplete",
+              "cancelled"
             ],
             "title": "Status",
             "type": "string"

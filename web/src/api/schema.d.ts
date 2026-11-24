@@ -599,7 +599,7 @@ export interface components {
              * Status
              * @enum {string}
              */
-            status: "created" | "uploading" | "validating" | "transcribing" | "awaiting_input" | "running" | "report_ready" | "failed" | "deleting" | "upload_incomplete";
+            status: "created" | "uploading" | "validating" | "transcribing" | "awaiting_input" | "running" | "report_ready" | "failed" | "deleting" | "upload_incomplete" | "cancelled";
         };
         /** CreateInterviewRequest */
         CreateInterviewRequest: {
@@ -939,7 +939,7 @@ export interface components {
              * Status
              * @enum {string}
              */
-            status: "created" | "uploading" | "validating" | "transcribing" | "awaiting_input" | "running" | "report_ready" | "failed" | "deleting" | "upload_incomplete";
+            status: "created" | "uploading" | "validating" | "transcribing" | "awaiting_input" | "running" | "report_ready" | "failed" | "deleting" | "upload_incomplete" | "cancelled";
         };
         /** RunStarted */
         RunStarted: {
@@ -1048,7 +1048,7 @@ export interface components {
              * Status
              * @enum {string}
              */
-            status: "created" | "uploading" | "validating" | "transcribing" | "awaiting_input" | "running" | "report_ready" | "failed" | "deleting" | "upload_incomplete";
+            status: "created" | "uploading" | "validating" | "transcribing" | "awaiting_input" | "running" | "report_ready" | "failed" | "deleting" | "upload_incomplete" | "cancelled";
             /** Step */
             step?: string | null;
             /** Title */
@@ -1095,7 +1095,7 @@ export interface components {
              * Status
              * @enum {string}
              */
-            status: "created" | "uploading" | "validating" | "transcribing" | "awaiting_input" | "running" | "report_ready" | "failed" | "deleting" | "upload_incomplete";
+            status: "created" | "uploading" | "validating" | "transcribing" | "awaiting_input" | "running" | "report_ready" | "failed" | "deleting" | "upload_incomplete" | "cancelled";
             /** Title */
             title?: string | null;
         };
@@ -1107,7 +1107,7 @@ export interface components {
              * Status
              * @enum {string}
              */
-            status: "created" | "uploading" | "validating" | "transcribing" | "awaiting_input" | "running" | "report_ready" | "failed" | "deleting" | "upload_incomplete";
+            status: "created" | "uploading" | "validating" | "transcribing" | "awaiting_input" | "running" | "report_ready" | "failed" | "deleting" | "upload_incomplete" | "cancelled";
         };
         /** SpeakerInfo */
         SpeakerInfo: {

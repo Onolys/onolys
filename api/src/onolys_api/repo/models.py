@@ -22,6 +22,7 @@ SessionState = Literal[
     "failed",
     "deleting",
     "upload_incomplete",
+    "cancelled",
 ]
 # Only the status doc has this state (R11): the session doc of a discarded upload is gone.
 StatusState = Literal[SessionState, "upload_failed"]
@@ -166,6 +167,14 @@ class SessionError(BaseModel):
         return self
 
 
+class SessionCancel(BaseModel):
+    """The result of a user cancel (04-cancel R7): did it use a unit, how many, and when."""
+
+    counted: bool
+    units: int
+    at: datetime
+
+
 class SessionDoc(Doc):
     uid: str
     title: str | None = None
@@ -190,6 +199,7 @@ class SessionDoc(Doc):
     steps: dict[str, StepRecord] = Field(default_factory=dict)
     warnings: list[str] = Field(default_factory=list)
     error: SessionError | None = None
+    cancel: SessionCancel | None = None
     created_at: datetime = Field(default_factory=utcnow)
     updated_at: datetime = Field(default_factory=utcnow)
     stage_started_at: datetime | None = None  # entered this state; other writes never bump it
