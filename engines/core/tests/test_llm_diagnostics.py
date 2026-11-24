@@ -105,7 +105,7 @@ async def test_provider_warning_drops_echoed_message_transcript(caplog, monkeypa
 
     route = Route(litellm_id="anthropic/claude-sonnet-5-5", api_key_env="ANTHROPIC_API_KEY", max_retries=0)
     for exc in (error, other):
-        async def fail(**kwargs):
+        async def fail(*, exc=exc, **kwargs):
             raise exc
 
         caplog.clear()
