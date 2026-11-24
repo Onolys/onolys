@@ -17,7 +17,7 @@ from pydantic import BaseModel, Field
 from onolys_api.auth.deps import AuthUser, current_user
 from onolys_api.errors import ApiError, ErrorDetail, ErrorResponse
 from onolys_api.jobs.first_run import maybe_start_first_run
-from onolys_api.jobs.machine import has_final_report, rating_final
+from onolys_api.jobs.machine import has_final_report, invalid_state, rating_final
 from onolys_api.rating import SCHEMA_VERSION, Issue, has_content, validate_rating
 from onolys_api.repo.base import NotFoundError
 from onolys_api.repo.models import RatingDoc, RatingDraftDoc
@@ -94,15 +94,17 @@ def _open_session(request: Request, user: AuthUser, id: str):
         "and sets `rating_submitted`/`has_rating`; `no_rating=true`, or a card with no scores, "
         'counts or notes, is a "no rating" revision (`has_rating=false`). Over 1,000 chars per '
         "reason/note/example or 3,000 for `notes` is 422 `rating_invalid`. Allowed in every state "
-        "but `deleting`; a final card is refused with 409 `rating_final` once a rating was "
-        "submitted (or a report exists): the rating is final, only drafts stay open. A final card "
-        "may start the first run (R4)."
+        "but `deleting` (404) and `cancelled` (409 `invalid_state`); a final card is refused "
+        "with 409 `rating_final` once a rating was submitted (or a report exists): the "
+        "rating is final, only drafts stay open. A final card may start the first run (R4)."
     ),
 )
 def put_rating(id: ResourceId, body: RatingRequest, request: Request, user: User) -> RatingSaved:
     repo = request.app.state.repo
     uid = user.uid
     session = _open_session(request, user, id)
+    if session.state == "cancelled":
+        raise invalid_state()  # terminal (04-cancel R6); GET /rating still reads
     now = datetime.now(UTC)
     if not body.final:
         if issues := validate_rating(body.card, final=False):

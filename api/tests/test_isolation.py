@@ -31,6 +31,7 @@ ID_ROUTES: dict[tuple[str, str], dict | None] = {
     ("get", "/v1/sessions/{id}/audio"): None,
     ("post", "/v1/sessions/{id}/audio"): {"content_type": "audio/wav", "size_bytes": 100},
     ("post", "/v1/sessions/{id}/audio/complete"): None,
+    ("post", "/v1/sessions/{id}/cancel"): None,
     ("get", "/v1/sessions/{id}/rating"): None,
     ("put", "/v1/sessions/{id}/rating"): {"final": True, "card": CARD},
     ("post", "/v1/sessions/{id}/retry"): None,

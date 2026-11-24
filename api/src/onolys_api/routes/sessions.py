@@ -16,6 +16,7 @@ from onolys_api.audio import CANONICAL_TYPES, original_key, staging_key
 from onolys_api.auth.deps import AuthUser, current_user
 from onolys_api.client_info import client_info
 from onolys_api.errors import ApiError, ErrorResponse
+from onolys_api.jobs import caps
 from onolys_api.jobs.delete import delete_session_data
 from onolys_api.jobs.machine import (
     STATE_PROGRESS,
@@ -29,10 +30,12 @@ from onolys_api.jobs.stale import settle_if_stale
 from onolys_api.languages import is_supported_language
 from onolys_api.presets import UnknownPreset
 from onolys_api.repo.base import NotFoundError
+from onolys_api.repo.limits import LimitDefaults
 from onolys_api.repo.models import (
     ClientInfo,
     IdempotencyDoc,
     RatingDraftDoc,
+    SessionCancel,
     SessionDoc,
     SessionError,
     SessionState,
@@ -97,6 +100,9 @@ class SessionListItem(BaseModel):
     latest_report_version: int | None = None
     error_code: str | None = None
     interview_id: str | None = Field(None, description="Set for sessions made from an AI interview")
+    counted: bool | None = Field(
+        None, description="Did the session end (cancelled or failed) having used a unit; null n/a"
+    )
 
 
 class SessionList(BaseModel):
@@ -132,6 +138,12 @@ class SessionDetail(BaseModel):
         default=None,
         description="Set when an AI interview created this session: its first run is free.",
     )
+    cancel: SessionCancel | None = Field(
+        None, description="Set once cancelled: whether it used a unit, how many, and when"
+    )
+    counted: bool | None = Field(
+        None, description="Did the session end (cancelled or failed) having used a unit; null n/a"
+    )
     free_run: bool = Field(
         default=False,
         description=(
@@ -142,6 +154,12 @@ class SessionDetail(BaseModel):
     created_at: datetime
     updated_at: datetime
     links: dict[str, str]
+
+
+def _counted(s: SessionDoc) -> bool | None:
+    if s.cancel is not None:
+        return s.cancel.counted
+    return s.error.counted if s.error else None
 
 
 def _body_hash(body: CreateSessionRequest) -> str:
@@ -322,6 +340,7 @@ def list_sessions(
             latest_report_version=s.latest_report_version,
             error_code=s.error.code if s.error else None,
             interview_id=s.interview_id,
+            counted=_counted(s),
         )
         for s in sessions
         if s.state != "deleting"  # one that began deleting since the page was read
@@ -372,6 +391,8 @@ def get_session(id: ResourceId, request: Request, user: User) -> SessionDetail:
         preset=s.preset,
         interview_id=s.interview_id,
         free_run=bool(s.interview_id),
+        cancel=s.cancel,
+        counted=st.counted if st.counted is not None else _counted(s),
         created_at=s.created_at,
         updated_at=s.updated_at,
         links=links,
@@ -451,6 +472,36 @@ def _upload_still_there(blobs, uid: str, sid: str, s: SessionDoc) -> bool:
     if any(blobs.exists(original_key(uid, sid, fmt)) for fmt in CANONICAL_TYPES):
         return True
     return s.upload is not None and blobs.exists(staging_key(uid, sid, s.upload.upload_id))
+
+
+class CancelResult(BaseModel):
+    counted: bool = Field(description="Did the cancel use a unit of the daily limit")
+
+
+@router.post(
+    "/{id}/cancel",
+    operation_id="cancelSession",
+    response_model=CancelResult,
+    summary="Cancel a session that is still being processed",
+    description=(
+        "Moves a session in any in-progress state (`created` ... `running`) to the terminal "
+        "`cancelled` state in one transaction; workers stop at their next check and nothing is "
+        "deleted. `counted` says whether a unit was used: transcription had started and no run "
+        "was reserved (interview sessions never count). Repeating it answers 200 with the same "
+        "`counted` and charges nothing more. Never 429, even over the cap. `report_ready` and "
+        "`failed` are 409 `invalid_state`; `deleting`, unknown or another user's is 404."
+    ),
+)
+def cancel_session(id: ResourceId, request: Request, user: User) -> CancelResult:
+    repo, uid = request.app.state.repo, user.uid
+    s = repo.get_session(uid, id)  # 404 for another user's or an unknown session
+    if s.state == "deleting":
+        raise NotFoundError()
+    defaults = LimitDefaults.from_settings(request.app.state.settings)
+    outcome = repo.cancel_session(uid, id, caps.utc_date(), defaults)  # NotFoundError -> 404
+    if outcome[0] == "invalid":
+        raise invalid_state()
+    return CancelResult(counted=outcome[1])
 
 
 @router.delete(

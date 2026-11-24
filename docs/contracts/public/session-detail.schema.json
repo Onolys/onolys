@@ -28,6 +28,31 @@
       "title": "Flags",
       "type": "object"
     },
+    "SessionCancel": {
+      "description": "The result of a user cancel (04-cancel R7): did it use a unit, how many, and when.",
+      "properties": {
+        "at": {
+          "format": "date-time",
+          "title": "At",
+          "type": "string"
+        },
+        "counted": {
+          "title": "Counted",
+          "type": "boolean"
+        },
+        "units": {
+          "title": "Units",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "counted",
+        "units",
+        "at"
+      ],
+      "title": "SessionCancel",
+      "type": "object"
+    },
     "SessionErrorInfo": {
       "properties": {
         "code": {
@@ -45,6 +70,31 @@
   "$id": "session-detail.schema.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "properties": {
+    "cancel": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/SessionCancel"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Set once cancelled: whether it used a unit, how many, and when"
+    },
+    "counted": {
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Did the session end (cancelled or failed) having used a unit; null n/a",
+      "title": "Counted"
+    },
     "created_at": {
       "format": "date-time",
       "title": "Created At",

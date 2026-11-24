@@ -148,6 +148,20 @@
         "title": "AudioUploadResponse",
         "type": "object"
       },
+      "CancelResult": {
+        "properties": {
+          "counted": {
+            "description": "Did the cancel use a unit of the daily limit",
+            "title": "Counted",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "counted"
+        ],
+        "title": "CancelResult",
+        "type": "object"
+      },
       "ClientInfo": {
         "description": "What produced a session or interview (02-logging R13). Client-reported, so every field is\noptional and sanitized, never rejected: non-strings become absent, control characters are\nstripped, and values are cut to a cap. Unknown keys are ignored.",
         "properties": {
@@ -1467,8 +1481,56 @@
         "title": "ScenarioPublic",
         "type": "object"
       },
+      "SessionCancel": {
+        "description": "The result of a user cancel (04-cancel R7): did it use a unit, how many, and when.",
+        "properties": {
+          "at": {
+            "format": "date-time",
+            "title": "At",
+            "type": "string"
+          },
+          "counted": {
+            "title": "Counted",
+            "type": "boolean"
+          },
+          "units": {
+            "title": "Units",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "counted",
+          "units",
+          "at"
+        ],
+        "title": "SessionCancel",
+        "type": "object"
+      },
       "SessionDetail": {
         "properties": {
+          "cancel": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SessionCancel"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Set once cancelled: whether it used a unit, how many, and when"
+          },
+          "counted": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Did the session end (cancelled or failed) having used a unit; null n/a",
+            "title": "Counted"
+          },
           "created_at": {
             "format": "date-time",
             "title": "Created At",
@@ -1659,6 +1721,18 @@
       },
       "SessionListItem": {
         "properties": {
+          "counted": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Did the session end (cancelled or failed) having used a unit; null n/a",
+            "title": "Counted"
+          },
           "created_at": {
             "format": "date-time",
             "title": "Created At",
@@ -3628,6 +3702,98 @@
         ]
       }
     },
+    "/v1/sessions/{id}/cancel": {
+      "post": {
+        "description": "Moves a session in any in-progress state (`created` ... `running`) to the terminal `cancelled` state in one transaction; workers stop at their next check and nothing is deleted. `counted` says whether a unit was used: transcription had started and no run was reserved (interview sessions never count). Repeating it answers 200 with the same `counted` and charges nothing more. Never 429, even over the cap. `report_ready` and `failed` are 409 `invalid_state`; `deleting`, unknown or another user's is 404.",
+        "operationId": "cancelSession",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "pattern": "^[0-9a-f]{32}$",
+              "title": "Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CancelResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "`unauthenticated`: missing, invalid or revoked credentials"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "`not_found`: no such resource for this user (never 403, so ids cannot be probed)"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "`invalid_parameters` (incl. a malformed id, cursor or body), `unsupported_audio`, `audio_too_large`, `rating_invalid`, `invalid_coded_span` or `session_too_long`"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "`daily_cap_reached` (daily run cap), `concurrent_runs` (a run is already in progress) or `rate_limited`"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "`internal_error`"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "summary": "Cancel a session that is still being processed",
+        "tags": [
+          "sessions"
+        ]
+      }
+    },
     "/v1/sessions/{id}/rating": {
       "get": {
         "operationId": "getRating",
@@ -3719,7 +3885,7 @@
         ]
       },
       "put": {
-        "description": "`final=false`: overwrites the draft; the shape and size limits are checked (an unset `change_goal` is fine) and nothing else changes. `final=true`: validates the card (`change_goal` required), writes a new revision and sets `rating_submitted`/`has_rating`; `no_rating=true`, or a card with no scores, counts or notes, is a \"no rating\" revision (`has_rating=false`). Over 1,000 chars per reason/note/example or 3,000 for `notes` is 422 `rating_invalid`. Allowed in every state but `deleting`; a final card is refused with 409 `rating_final` once a rating was submitted (or a report exists): the rating is final, only drafts stay open. A final card may start the first run (R4).",
+        "description": "`final=false`: overwrites the draft; the shape and size limits are checked (an unset `change_goal` is fine) and nothing else changes. `final=true`: validates the card (`change_goal` required), writes a new revision and sets `rating_submitted`/`has_rating`; `no_rating=true`, or a card with no scores, counts or notes, is a \"no rating\" revision (`has_rating=false`). Over 1,000 chars per reason/note/example or 3,000 for `notes` is 422 `rating_invalid`. Allowed in every state but `deleting` (404) and `cancelled` (409 `invalid_state`); a final card is refused with 409 `rating_final` once a rating was submitted (or a report exists): the rating is final, only drafts stay open. A final card may start the first run (R4).",
         "operationId": "putRating",
         "parameters": [
           {
