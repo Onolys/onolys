@@ -437,6 +437,11 @@
         "title": "DraftRating",
         "type": "object"
       },
+      "Empty": {
+        "properties": {},
+        "title": "Empty",
+        "type": "object"
+      },
       "EndInterviewRequest": {
         "properties": {
           "discard": {
@@ -497,7 +502,8 @@
               "concurrent_runs",
               "email_unverified",
               "conflict",
-              "interview_too_long"
+              "interview_too_long",
+              "email_unavailable"
             ],
             "title": "Code",
             "type": "string"
@@ -1021,6 +1027,21 @@
           "report"
         ],
         "title": "ReportView",
+        "type": "object"
+      },
+      "ResetRequest": {
+        "properties": {
+          "email": {
+            "maxLength": 254,
+            "minLength": 3,
+            "title": "Email",
+            "type": "string"
+          }
+        },
+        "required": [
+          "email"
+        ],
+        "title": "ResetRequest",
         "type": "object"
       },
       "RunList": {
@@ -1902,6 +1923,25 @@
         ],
         "title": "Usage",
         "type": "object"
+      },
+      "VerificationRequest": {
+        "properties": {
+          "next": {
+            "anyOf": [
+              {
+                "maxLength": 512,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Optional in-app path to continue to after verifying.",
+            "title": "Next"
+          }
+        },
+        "title": "VerificationRequest",
+        "type": "object"
       }
     },
     "securitySchemes": {
@@ -2118,6 +2158,138 @@
         "summary": "Create a key (revokes the current one); the secret is shown once",
         "tags": [
           "api-key"
+        ]
+      }
+    },
+    "/v1/auth/email/password-reset": {
+      "post": {
+        "description": "Always `202 {}`: known, unknown, disabled, rate-limited and failed sends are indistinguishable, so account existence cannot be probed.",
+        "operationId": "sendPasswordResetEmail",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResetRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Empty"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "`unauthenticated`: missing, invalid or revoked credentials"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "`daily_cap_reached` (daily run cap), `concurrent_runs` (a run is already in progress) or `rate_limited`"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "`internal_error`"
+          }
+        },
+        "summary": "Email a password-reset link if the account exists (no auth)",
+        "tags": [
+          "auth-email"
+        ]
+      }
+    },
+    "/v1/auth/email/verification": {
+      "post": {
+        "description": "Sends to the account's own address, never one from the request. An already verified account gets `202` and no email. `429 rate_limited` after 1 per minute / 5 per hour; `503 email_unavailable` when the email could not be sent.",
+        "operationId": "sendVerificationEmail",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VerificationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Empty"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "`unauthenticated`: missing, invalid or revoked credentials"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "`daily_cap_reached` (daily run cap), `concurrent_runs` (a run is already in progress) or `rate_limited`"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "`internal_error`"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "summary": "Email the signed-in user a verification link (unverified tokens allowed)",
+        "tags": [
+          "auth-email"
         ]
       }
     },

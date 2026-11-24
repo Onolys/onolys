@@ -23,6 +23,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/auth/email/password-reset": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Email a password-reset link if the account exists (no auth)
+         * @description Always `202 {}`: known, unknown, disabled, rate-limited and failed sends are indistinguishable, so account existence cannot be probed.
+         */
+        post: operations["sendPasswordResetEmail"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/auth/email/verification": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Email the signed-in user a verification link (unverified tokens allowed)
+         * @description Sends to the account's own address, never one from the request. An already verified account gets `202` and no email. `429 rate_limited` after 1 per minute / 5 per hour; `503 email_unavailable` when the email could not be sent.
+         */
+        post: operations["sendVerificationEmail"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/healthz": {
         parameters: {
             query?: never;
@@ -550,6 +590,8 @@ export interface components {
              */
             updated_at: string;
         };
+        /** Empty */
+        Empty: Record<string, never>;
         /** EndInterviewRequest */
         EndInterviewRequest: {
             /**
@@ -565,7 +607,7 @@ export interface components {
              * Code
              * @enum {string}
              */
-            code: "invalid_json" | "unsupported_media_type" | "schema_violation" | "empty_transcript" | "invalid_coded_span" | "session_too_long" | "transcript_invalid" | "transcript_too_large" | "empty_assessment" | "duplicate_ids" | "invalid_parameters" | "output_invalid" | "body_too_large" | "too_many_turns" | "too_many_sections" | "rate_limited" | "not_found" | "method_not_allowed" | "cors_rejected" | "request_rejected" | "upstream_unavailable" | "deadline_exceeded" | "internal_error" | "missing_parameter" | "unknown_pack" | "input_rejected" | "run_failed" | "unauthenticated" | "forbidden" | "invalid_state" | "rating_final" | "unsupported_audio" | "audio_too_long" | "audio_too_large" | "audio_unreadable" | "no_speech" | "speakers_not_separated" | "transcription_failed" | "rating_invalid" | "daily_cap_reached" | "interview_cap_reached" | "concurrent_runs" | "email_unverified" | "conflict" | "interview_too_long";
+            code: "invalid_json" | "unsupported_media_type" | "schema_violation" | "empty_transcript" | "invalid_coded_span" | "session_too_long" | "transcript_invalid" | "transcript_too_large" | "empty_assessment" | "duplicate_ids" | "invalid_parameters" | "output_invalid" | "body_too_large" | "too_many_turns" | "too_many_sections" | "rate_limited" | "not_found" | "method_not_allowed" | "cors_rejected" | "request_rejected" | "upstream_unavailable" | "deadline_exceeded" | "internal_error" | "missing_parameter" | "unknown_pack" | "input_rejected" | "run_failed" | "unauthenticated" | "forbidden" | "invalid_state" | "rating_final" | "unsupported_audio" | "audio_too_long" | "audio_too_large" | "audio_unreadable" | "no_speech" | "speakers_not_separated" | "transcription_failed" | "rating_invalid" | "daily_cap_reached" | "interview_cap_reached" | "concurrent_runs" | "email_unverified" | "conflict" | "interview_too_long" | "email_unavailable";
             /**
              * Field
              * @description `/`-joined path of the offending field in the rating card or transcript (e.g. `globals/cct/reason`); `$` is the whole input. Set on `rating_invalid` or transcript upload errors. A path only, never user text.
@@ -783,6 +825,11 @@ export interface components {
             run_id: string;
             /** Version */
             version: number;
+        };
+        /** ResetRequest */
+        ResetRequest: {
+            /** Email */
+            email: string;
         };
         /** RunList */
         RunList: {
@@ -1075,6 +1122,14 @@ export interface components {
             eval: components["schemas"]["KindUsage"];
             interview: components["schemas"]["KindUsage"];
         };
+        /** VerificationRequest */
+        VerificationRequest: {
+            /**
+             * Next
+             * @description Optional in-app path to continue to after verifying.
+             */
+            next?: string | null;
+        };
     };
     responses: never;
     parameters: never;
@@ -1223,6 +1278,108 @@ export interface operations {
             };
             /** @description `forbidden` (API keys cannot manage API keys) or `email_unverified` (valid sign-in, email address not verified yet) */
             403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description `daily_cap_reached` (daily run cap), `concurrent_runs` (a run is already in progress) or `rate_limited` */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description `internal_error` */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    sendPasswordResetEmail: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ResetRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Empty"];
+                };
+            };
+            /** @description `unauthenticated`: missing, invalid or revoked credentials */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description `daily_cap_reached` (daily run cap), `concurrent_runs` (a run is already in progress) or `rate_limited` */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description `internal_error` */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    sendVerificationEmail: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VerificationRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Empty"];
+                };
+            };
+            /** @description `unauthenticated`: missing, invalid or revoked credentials */
+            401: {
                 headers: {
                     [name: string]: unknown;
                 };
