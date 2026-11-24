@@ -8,6 +8,7 @@ import asyncio
 import hashlib
 import json
 import os
+import random
 import re
 from datetime import UTC, datetime
 from time import monotonic
@@ -16,8 +17,15 @@ from uuid import uuid4
 from fastapi import APIRouter, HTTPException, Request
 from onolys_engine_core.context import RunContext
 from onolys_engine_core.engine import RunUsage
-from onolys_engine_core.errors import InputError
+from onolys_engine_core.errors import ConfigError, InputError
 from onolys_engine_core.llm.config import LLMConfig
+from onolys_engine_core.llm.errors import (
+    LLMBadOutput,
+    LLMError,
+    LLMRateLimited,
+    LLMTimeout,
+    LLMUnavailable,
+)
 from onolys_engine_core.llm.litellm_client import LiteLLMClient
 from onolys_engine_core.llm.models import load_models, models_path
 from onolys_engine_core.llm.routes import combo_routes, resolve_preset
@@ -433,8 +441,8 @@ def cancel_run(request: Request, run_id: str):
     return {"run_id": run_id, "status": repository.get_run(run_id)["status"]}
 
 
-def _metric_usage(metrics):
-    records = metrics.records
+def _metric_usage(metrics, start=0):
+    records = metrics.records[start:]
     return RunUsage(
         input_tokens=sum(r["input_tokens"] for r in records),
         output_tokens=sum(r["output_tokens"] for r in records),
@@ -443,6 +451,75 @@ def _metric_usage(metrics):
         if all(r["cost_usd"] is not None for r in records)
         else None,
     )
+
+
+def _add_usage(a, b):
+    if a is None:
+        return b
+    cost = a.cost_usd + b.cost_usd if a.cost_usd is not None and b.cost_usd is not None else None
+    return RunUsage(
+        input_tokens=a.input_tokens + b.input_tokens,
+        output_tokens=a.output_tokens + b.output_tokens,
+        calls=a.calls + b.calls,
+        cost_usd=cost,
+    )
+
+
+UNIT_BUDGET_S = 840
+MAX_ATTEMPTS = 3
+RETRY_DELAYS_S = (5, 20)
+MIN_RETRY_BUDGET_S = 120
+_PERMANENT_STATUS = {400, 401, 403, 404, 422}
+_PERMANENT_ERROR_TYPES = {"auth", "authentication", "bad_request", "not_found", "invalid_request"}
+
+
+def _llm_cause(exc):
+    """First LLMError on the `__cause__`/`__context__` chain (miti wraps it in AllRunsFailed)."""
+    seen = set()
+    while exc is not None and id(exc) not in seen:
+        if isinstance(exc, LLMError):
+            return exc
+        seen.add(id(exc))
+        exc = exc.__cause__ or exc.__context__
+    return None
+
+
+def _llm_transient(err):
+    """SHIM: replace with SP03's `onolys_engine_core.llm.errors.is_transient` once it lands.
+
+    Reads SP02's `http_status`/`error_type` via getattr so it works before and after SP02.
+    """
+    if isinstance(err, LLMBadOutput) or not isinstance(err, LLMUnavailable | LLMTimeout):
+        return False
+    if getattr(err, "no_retry", False):
+        return False
+    status = getattr(err, "http_status", None) or getattr(err, "status_code", None)
+    if status in _PERMANENT_STATUS or getattr(err, "error_type", None) in _PERMANENT_ERROR_TYPES:
+        return False
+    return True
+
+
+def is_retryable(exc):
+    if any(isinstance(e, _PERMANENT) for e in _chain(exc)):
+        return False
+    cause = _llm_cause(exc)
+    return cause is not None and _llm_transient(cause)
+
+
+def _chain(exc):
+    seen = set()
+    while exc is not None and id(exc) not in seen:
+        yield exc
+        seen.add(id(exc))
+        exc = exc.__cause__ or exc.__context__
+
+
+def _llm_code(err):
+    if isinstance(err, LLMRateLimited):
+        return "llm_rate_limited"
+    if isinstance(err, LLMTimeout):
+        return "llm_timeout"
+    return "llm_unavailable"
 
 
 def _estimate_cost(services, run, unit, usage, metrics):
@@ -494,6 +571,9 @@ class _ExecutionConfigChanged(Exception):
     """Queued AI work no longer matches its saved execution provenance."""
 
 
+_PERMANENT = (OutputInvalid, InputError, ConfigError, _ExecutionConfigChanged)
+
+
 async def execute_unit(services, rid, uid):
     repository = services.repository
     # Read immutable execution inputs before claiming: transient read failures must
@@ -518,6 +598,8 @@ async def execute_unit(services, rid, uid):
         return
     metrics = MetricsCollector()
     usage = None
+    attempts = 0
+    carried = None
     try:
         source = next(
             s for s in run["input_ref"]["sessions"] if s["session_id"] == unit["session_id"]
@@ -554,11 +636,6 @@ async def execute_unit(services, rid, uid):
                 or config_changed
             ):
                 raise _ExecutionConfigChanged
-            factory = getattr(services, "llm_factory", None)
-            llm = factory(routes, metrics) if factory else LiteLLMClient(LLMConfig(routes=routes))
-            ctx = RunContext(
-                llm=llm, metrics=metrics, request_id=f"{rid}-{uid}", deadline=monotonic() + 840
-            )
             params = {
                 "preset": unit["preset"],
                 "coded_span": unit["coded_span"],
@@ -572,8 +649,39 @@ async def execute_unit(services, rid, uid):
             def progress(stage, status):
                 repository.update_unit(rid, uid, {"stage": str(stage)})
 
-            async with asyncio.timeout(840):
-                result = await run_validated(engine, ctx, transcript, params, progress_cb=progress)
+            factory = getattr(services, "llm_factory", None)
+            sleep = getattr(services, "sleep", None) or asyncio.sleep
+            budget_end = monotonic() + UNIT_BUDGET_S
+            while True:
+                attempts += 1
+                first_record = len(metrics.records)
+                llm = (
+                    factory(routes, metrics) if factory else LiteLLMClient(LLMConfig(routes=routes))
+                )
+                ctx = RunContext(
+                    llm=llm, metrics=metrics, request_id=f"{rid}-{uid}", deadline=budget_end
+                )
+                try:
+                    async with asyncio.timeout(max(budget_end - monotonic(), 0)):
+                        result = await run_validated(
+                            engine, ctx, transcript, params, progress_cb=progress
+                        )
+                    break
+                except Exception as exc:
+                    remaining = budget_end - monotonic()
+                    if (
+                        attempts >= MAX_ATTEMPTS
+                        or remaining < MIN_RETRY_BUDGET_S
+                        or not is_retryable(exc)
+                    ):
+                        raise
+                    # Failed attempt's spend is carried into the single finish_unit.
+                    carried = _add_usage(
+                        carried,
+                        (exc.usage if isinstance(exc, OutputInvalid) else None)
+                        or _metric_usage(metrics, first_record),
+                    )
+                    await sleep(RETRY_DELAYS_S[attempts - 1] * random.uniform(0.5, 1.0))
             output = result.output
             scores = (
                 oneshot_scores(output)
@@ -581,12 +689,17 @@ async def execute_unit(services, rid, uid):
                 else miti_lean_scores(output)
             )
             run_info = result.run_info.model_dump(mode="json")
-            usage = result.run_info.usage or _metric_usage(metrics)
+            usage = (
+                _add_usage(carried, result.run_info.usage)
+                if result.run_info.usage
+                else _metric_usage(metrics)
+            )
             run_info["usage"] = usage.model_dump(mode="json")
             cost, unpriced = _cost(services, run, unit, usage, metrics)
         saved = {
             **store_output(services.bucket, rid, uid, output),
             "status": "done",
+            "attempts": attempts,
             "scores": scores.model_dump(mode="json"),
             "run_info": run_info,
             "cost_usd_est": cost,
@@ -594,19 +707,23 @@ async def execute_unit(services, rid, uid):
         }
     except Exception as exc:
         usage = (
-            (exc.usage if isinstance(exc, OutputInvalid) else None)
-            or usage
-            or _metric_usage(metrics)
+            _add_usage(carried, exc.usage)
+            if isinstance(exc, OutputInvalid) and exc.usage
+            else usage or _metric_usage(metrics)
         )
         cost, unpriced = _cost(services, run, unit, usage, metrics)
         error_code = "engine_failed"
+        retryable = is_retryable(exc)
         if isinstance(exc, OutputInvalid):
             error_code = "output_invalid"
+        elif retryable:
+            error_code = _llm_code(_llm_cause(exc))
         elif isinstance(exc, _ExecutionConfigChanged):
             error_code = "execution_config_changed"
         saved = {
             "status": "failed",
-            "error": {"code": error_code},
+            "attempts": attempts,
+            "error": {"code": error_code, "retryable": retryable},
             "run_info": {"usage": usage.model_dump(mode="json")},
             "cost_usd_est": cost,
             "unpriced": unpriced,

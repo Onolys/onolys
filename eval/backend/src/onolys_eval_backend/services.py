@@ -1,5 +1,6 @@
 """Lazy production composition; constructing an app never loads cloud credentials."""
 
+import asyncio
 import os
 from functools import cached_property
 from pathlib import Path
@@ -23,6 +24,10 @@ class EvalServices:
             self.queue = queue
         if stt_factory is not None:
             self.stt_factory = stt_factory
+
+    async def sleep(self, seconds: float) -> None:
+        """Injectable backoff sleep for unit retries (tests replace it)."""
+        await asyncio.sleep(seconds)
 
     @cached_property
     def prices(self) -> PriceBook:

@@ -280,7 +280,7 @@ def test_execution_config_drift_fails_before_provider_work(services, monkeypatch
     unit = services.repository.get_unit(rid, uid)
     run = services.repository.get_run(rid)
     assert unit["status"] == "failed"
-    assert unit["error"] == {"code": "execution_config_changed"}
+    assert unit["error"] == {"code": "execution_config_changed", "retryable": False}
     assert run["status"] == "failed" and run["completed_units"] == 1
     assert run["usage"]["calls"] == 0 and run["cost_usd_est"] == 0
     assert engine.calls == []
@@ -819,3 +819,179 @@ def test_legacy_preset_unit_still_executes_via_preset_branch(services):
     assert seen[0]["oneshot"].litellm_id == "synthetic/model"
     ((_, params),) = engine.calls
     assert params["preset"] == "configured-prod"
+
+
+# ---- Task 5: unit retry on transient errors (R7, D5, D6, AC5) ----
+
+
+class _Err:
+    @staticmethod
+    def make(cls, **attrs):
+        e = cls("provider said no")
+        for k, v in attrs.items():
+            setattr(e, k, v)
+        return e
+
+
+def _scripted(services, script, usage_per_attempt=True):
+    """Engine whose n-th call raises script[n] (an exception) or succeeds when it is None."""
+    from onolys_engine_core.llm.types import LLMRequest, Usage
+
+    engine = services.fake_engine = FakeEngine()
+    ok = engine.run
+    engine.n = 0
+
+    async def run(ctx, value, params, progress_cb=None):
+        step = script[min(engine.n, len(script) - 1)]
+        engine.n += 1
+        if usage_per_attempt:
+            ctx.metrics.record(
+                LLMRequest(tier="oneshot", system="", user="", call_tag="t", response_schema={}),
+                "unknown/model",
+                Usage(input_tokens=7, output_tokens=1),
+                1,
+                1,
+                False,
+            )
+        if step is not None:
+            raise step
+        return await ok(ctx, value, params, progress_cb)
+
+    engine.run = run
+    sleeps = []
+
+    async def fake_sleep(s):
+        sleeps.append(s)
+
+    services.sleep = fake_sleep
+    return engine, sleeps
+
+
+def _one_unit(services, **kw):
+    c = client(services=services)
+    rid = start_ai(services, c, engines=["oneshot:miti"], **kw).json()["run_id"]
+    uid = next(iter(services.repository.list_units(rid)))
+    return c, rid, uid
+
+
+def test_retry_503_then_success(services):
+    from onolys_engine_core.llm.errors import LLMUnavailable
+
+    engine, sleeps = _scripted(services, [_Err.make(LLMUnavailable, http_status=503), None])
+    c, rid, uid = _one_unit(services)
+    assert dispatch(c, rid, uid).status_code == 200
+    unit = services.repository.get_unit(rid, uid)
+    assert unit["status"] == "done" and unit["attempts"] == 2
+    assert len(sleeps) == 1 and 2.5 <= sleeps[0] <= 5
+    assert services.repository.get_run(rid)["status"] == "done"
+    # failed attempt's metrics usage (7 in) is summed with the success usage (10 in)
+    assert unit["run_info"]["usage"]["input_tokens"] == 17
+
+
+def test_three_429_fail_with_all_attempt_usage(services):
+    from onolys_engine_core.llm.errors import LLMRateLimited
+
+    engine, sleeps = _scripted(services, [LLMRateLimited("429")])
+    c, rid, uid = _one_unit(services)
+    assert dispatch(c, rid, uid).status_code == 200
+    unit = services.repository.get_unit(rid, uid)
+    assert unit["status"] == "failed" and unit["attempts"] == 3 and engine.n == 3
+    assert unit["error"] == {"code": "llm_rate_limited", "retryable": True}
+    assert unit["run_info"]["usage"]["input_tokens"] == 21
+    assert services.repository.get_run(rid)["usage"]["input_tokens"] == 21
+    assert len(sleeps) == 2
+    assert 2.5 <= sleeps[0] <= 5 and 10 <= sleeps[1] <= 20
+
+
+def test_all_runs_failed_wrapping_transient_is_retried(services):
+    from onolys_engine_core.llm.errors import LLMTimeout
+    from onolys_miti.run import AllRunsFailed
+
+    try:
+        try:
+            raise LLMTimeout("t")
+        except LLMTimeout as inner:
+            raise AllRunsFailed("all 1 run(s) failed") from inner
+    except AllRunsFailed as wrapped:
+        err = wrapped
+    engine, _ = _scripted(services, [err, None])
+    c, rid, uid = _one_unit(services)
+    dispatch(c, rid, uid)
+    unit = services.repository.get_unit(rid, uid)
+    assert unit["status"] == "done" and unit["attempts"] == 2
+
+
+def _permanent_cases():
+    from onolys_engine_core.errors import ConfigError, InputError
+    from onolys_engine_core.llm.errors import LLMBadOutput, LLMUnavailable
+    from onolys_miti.run import AllRunsFailed
+
+    def wrapped(inner):
+        try:
+            try:
+                raise inner
+            except Exception as e:
+                raise AllRunsFailed("all failed") from e
+        except AllRunsFailed as w:
+            return w
+
+    return {
+        "bad_output": LLMBadOutput("truncated"),
+        "auth_401": _Err.make(LLMUnavailable, http_status=401),
+        "bad_request_400": _Err.make(LLMUnavailable, http_status=400),
+        "not_found_404": _Err.make(LLMUnavailable, http_status=404),
+        "auth_error_type": _Err.make(LLMUnavailable, error_type="auth"),
+        "all_runs_failed_auth": wrapped(_Err.make(LLMUnavailable, http_status=401)),
+        "input_error": InputError("bad"),
+        "config_error": ConfigError("bad"),
+    }
+
+
+@pytest.mark.parametrize("name", list(_permanent_cases()))
+def test_permanent_errors_make_one_attempt(services, name):
+    err = _permanent_cases()[name]
+    engine, sleeps = _scripted(services, [err])
+    c, rid, uid = _one_unit(services)
+    dispatch(c, rid, uid)
+    unit = services.repository.get_unit(rid, uid)
+    assert unit["status"] == "failed" and unit["attempts"] == 1 and engine.n == 1
+    assert unit["error"]["retryable"] is False and sleeps == []
+
+
+def test_drift_guard_is_not_retried(services, monkeypatch):
+    engine, sleeps = _scripted(services, [None])
+    c, rid, uid = _one_unit(services)
+    monkeypatch.setattr("onolys_eval_backend.runs._git_sha", lambda: "changed")
+    dispatch(c, rid, uid)
+    unit = services.repository.get_unit(rid, uid)
+    assert unit["error"] == {"code": "execution_config_changed", "retryable": False}
+    assert engine.n == 0 and sleeps == []
+
+
+def test_no_retry_when_budget_under_120s(services, monkeypatch):
+    from onolys_engine_core.llm.errors import LLMUnavailable
+
+    engine, sleeps = _scripted(services, [_Err.make(LLMUnavailable, http_status=503), None])
+    # clock: 800 s elapse during the first attempt, leaving 40 s of the 840 s budget
+    ticks = iter([0, 0, 800, 800, 800, 800, 800])
+    monkeypatch.setattr("onolys_eval_backend.runs.monotonic", lambda: next(ticks, 800))
+    c, rid, uid = _one_unit(services)
+    dispatch(c, rid, uid)
+    unit = services.repository.get_unit(rid, uid)
+    assert unit["status"] == "failed" and unit["attempts"] == 1 and sleeps == []
+    assert unit["error"] == {"code": "llm_unavailable", "retryable": True}
+
+
+def test_sibling_units_unaffected(services):
+    from onolys_engine_core.llm.errors import LLMUnavailable
+
+    engine, _ = _scripted(
+        services, [_Err.make(LLMUnavailable, http_status=503), None, None], usage_per_attempt=False
+    )
+    c, rid, _ = _one_unit(services, selection=SEL2)
+    units = list(services.repository.list_units(rid))
+    for u in units:
+        dispatch(c, rid, u)
+    got = [services.repository.get_unit(rid, u) for u in units]
+    assert sorted(u["attempts"] for u in got if u["engine"] != "human") == [1, 2]
+    assert all(u["status"] == "done" for u in got)
