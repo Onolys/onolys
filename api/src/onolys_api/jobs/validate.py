@@ -46,7 +46,7 @@ from onolys_api.jobs.worker import (
     TaskContext,
     UploadFailedError,
 )
-from onolys_api.repo.base import NotFoundError
+from onolys_api.repo.base import ConflictError, NotFoundError
 from onolys_api.repo.models import ClientInfo, InterviewDoc, RecordingDoc
 from onolys_api.storage.base import MAX_UPLOAD_BYTES, BlobNotFoundError, BlobStore
 
@@ -139,8 +139,13 @@ def make_validate_handler(
 
     def fail(ctx: TaskContext, code: str) -> PermanentError:
         """A file-check failure: discard the upload (audio, session doc, subcollections)."""
-        purge(ctx.uid, ctx.sid)
-        ctx.repo.discard_failed_upload(ctx.uid, ctx.sid, code)
+        try:
+            if ctx.repo.get_session(ctx.uid, ctx.sid).state == "cancelled":
+                raise Cancelled()  # a cancel landed mid-check: keep the audio (04-cancel R5)
+            purge(ctx.uid, ctx.sid)
+            ctx.repo.discard_failed_upload(ctx.uid, ctx.sid, code)
+        except ConflictError:  # cancelled between the check and the discard
+            raise Cancelled() from None
         return UploadFailedError(code)
 
     def find_source(ctx: TaskContext, upload_id: str | None) -> tuple[str, bool] | None:

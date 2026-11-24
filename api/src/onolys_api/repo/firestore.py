@@ -398,11 +398,20 @@ class FirestoreRepo:
         return ssnap is not None or stsnap is not None
 
     def discard_failed_upload(self, uid: str, sid: str, code: str) -> None:
-        sref, snap = self._owned_session(uid, sid)
-        if (snap.to_dict() or {}).get("state") == "deleting":
-            raise NotFoundError()
-        stub = upload_failed_stub(uid, code, utcnow())
-        self._top("session_status", sid).set(stub.to_store())  # overwrite: no leftover fields
+        sref, _ = self._owned_session(uid, sid)
+        stref = self._top("session_status", sid)
+
+        @firestore.transactional
+        def txn_fn(txn) -> None:
+            sess = sref.get(transaction=txn).to_dict() or {}
+            if sess.get("uid") != uid or sess.get("state") == "deleting":
+                raise NotFoundError()
+            if sess.get("state") == "cancelled":
+                raise ConflictError()  # cancel deletes nothing (04-cancel R5)
+            stub = upload_failed_stub(uid, code, utcnow())
+            txn.set(stref, stub.to_store())  # overwrite: no leftover fields
+
+        self._contended(txn_fn, uid)
         self._client.recursive_delete(sref)  # doc + recordings, runs, ...
 
     # ---- recordings ----

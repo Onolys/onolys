@@ -297,6 +297,8 @@ class FakeRepo:
             doc = self._owned(f"sessions/{sid}", uid)
             if doc.get("state") == "deleting":
                 raise NotFoundError()
+            if doc.get("state") == "cancelled":
+                raise ConflictError()  # cancel deletes nothing (04-cancel R5)
             self._put(f"session_status/{sid}", upload_failed_stub(uid, code, utcnow()).to_store())
             self._record_status(uid, sid)
             for p in [p for p in self._docs if p.startswith(f"sessions/{sid}/")]:

@@ -183,6 +183,26 @@ async def test_cancel_mid_validate_stops_and_keeps_blobs(settings, blobs):
     assert f"{sid}-transcribe" not in app.state.queue.seen  # nothing handed on
 
 
+async def test_cancel_mid_validate_then_failing_file_check_keeps_everything(settings, blobs):
+    """Cancel lands while ffprobe runs, then the probe fails: no purge, no stub over cancelled."""
+    repo = FakeRepo(blobs)
+    holder = {}
+
+    class CancellingBadProbe(StubTools):
+        def probe(self, path, fmt=None):
+            cancel(repo, "alice", holder["sid"])
+            return super().probe(path, fmt)
+
+    tools = CancellingBadProbe(probe_error=True)
+    app, sid = await _staged(settings, repo, blobs, tools)
+    holder["sid"] = sid
+    app.state.queue.drain()
+    s = repo.get_session("alice", sid)  # the session doc survives
+    assert s.state == "cancelled" and s.error is None
+    assert repo.get_status("alice", sid).state == "cancelled"  # no upload_failed stub
+    assert blobs.list_keys(f"uploads/alice/{sid}/")  # audio kept
+
+
 async def test_cancel_after_blob_writes_in_validate_keeps_them(settings, blobs, monkeypatch):
     """Cancel lands right after the original is moved: ensure_active stops, nothing purged."""
     repo = FakeRepo(blobs)

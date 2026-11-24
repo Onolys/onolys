@@ -1018,6 +1018,22 @@ def test_discard_failed_upload_leaves_only_a_data_free_stub(repo):
         repo.discard_failed_upload(uid, sid, "audio_too_long")
 
 
+def test_discard_failed_upload_refuses_a_cancelled_session(repo):
+    """04-cancel R5: cancel deletes nothing; a late file-check discard must not wipe it."""
+    from onolys_api.jobs import caps
+    from onolys_api.repo.base import ConflictError
+    from onolys_api.repo.limits import LimitDefaults
+
+    uid, sid = seed(repo)
+    repo.add_recording(uid, sid, "original", RecordingDoc(gcs_uri="gs://b/x"))
+    repo.cancel_session(uid, sid, caps.utc_date(), LimitDefaults(eval_day=10, interview_day=5))
+    with pytest.raises(ConflictError):
+        repo.discard_failed_upload(uid, sid, "audio_unreadable")
+    assert repo.get_session(uid, sid).state == "cancelled"
+    assert repo.get_status(uid, sid).state == "cancelled"  # no upload_failed stub
+    assert len(repo.list_recordings(uid, sid)) == 1
+
+
 def test_discard_failed_upload_refuses_a_foreign_session(repo):
     uid, sid = seed(repo)
     with pytest.raises(NotFoundError):
