@@ -205,8 +205,7 @@ class TaskRunner:
             return False
 
     def _cancelled(self, spec: HandlerSpec, p: TaskPayload) -> TaskResult:
-        logs.emit("task_cancelled", session_id=p.sid, run_id=p.run_id, step=spec.step or "run",
-                  request_id=p.request_id)  # fmt: skip
+        logs.emit("task_cancelled", step=spec.step or "run")  # ids come from the log context
         return TaskResult(200, "cancelled")
 
     # ---- records ----

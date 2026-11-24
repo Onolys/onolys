@@ -22,6 +22,7 @@ from google.cloud import firestore
 from google.cloud.firestore_v1 import FieldFilter, Increment
 from onolys_engine_core.transcript import Transcript
 
+from onolys_api import logs
 from onolys_api.config import Settings
 from onolys_api.repo import large
 from onolys_api.repo.base import (
@@ -760,9 +761,11 @@ class FirestoreRepo:
         stref = self._top("session_status", sid)
         usage_ref = self._top("usage", f"{uid}_{date}")
         user_ref = self._top("users", uid)
+        done: dict[str, Any] = {}  # filled by the committing pass; logged after the commit
 
         @firestore.transactional
         def txn_fn(txn) -> CancelOutcome:
+            done.clear()
             snap = sref.get(transaction=txn)
             sess = snap.to_dict() or {}
             if not snap.exists or sess.get("uid") != uid:
@@ -820,12 +823,19 @@ class FirestoreRepo:
                 {"state": "cancelled", "counted": charge.counted, "uid": uid, "updated_at": now},
                 merge=True,
             )
+            done.update(
+                from_state=state, counted=charge.counted,
+                run_id=run_ref.id if run_ref is not None else None,
+            )  # fmt: skip
             return ("cancelled", charge.counted)
 
         try:
-            return self._contended(txn_fn, uid)
+            outcome = self._contended(txn_fn, uid)
         except GoogleNotFound:
             raise NotFoundError() from None
+        if done:  # a real transition, not an idempotent repeat
+            logs.emit("session_cancelled", **done)
+        return outcome
 
     def get_usage_doc(self, uid: str, date: str) -> UsageDoc:
         day = self._top("usage", f"{uid}_{date}").get()

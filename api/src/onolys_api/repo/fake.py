@@ -7,6 +7,7 @@ from typing import Any, Literal
 
 from onolys_engine_core.transcript import Transcript
 
+from onolys_api import logs
 from onolys_api.repo import large
 from onolys_api.repo.base import (
     CancelOutcome,
@@ -638,6 +639,7 @@ class FakeRepo:
                 {**status, "state": "cancelled", "counted": charge.counted, "updated_at": now},
             )
             self._record_status(uid, sid)
+            logs.emit("session_cancelled", from_state=state, counted=charge.counted, run_id=run_id)
             return ("cancelled", charge.counted)
 
     def get_usage_doc(self, uid: str, date: str) -> UsageDoc:

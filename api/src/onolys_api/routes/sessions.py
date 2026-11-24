@@ -498,7 +498,14 @@ def cancel_session(id: ResourceId, request: Request, user: User) -> CancelResult
     if s.state == "deleting":
         raise NotFoundError()
     defaults = LimitDefaults.from_settings(request.app.state.settings)
-    outcome = repo.cancel_session(uid, id, caps.utc_date(), defaults)  # NotFoundError -> 404
+    logs.emit("session_cancel_requested", from_state=s.state)
+    try:
+        outcome = repo.cancel_session(uid, id, caps.utc_date(), defaults)
+    except NotFoundError:
+        raise  # -> 404
+    except Exception as e:
+        logs.emit("session_cancel_failed", logging.ERROR, exc_class=type(e).__name__)
+        raise
     if outcome[0] == "invalid":
         raise invalid_state()
     return CancelResult(counted=outcome[1])
