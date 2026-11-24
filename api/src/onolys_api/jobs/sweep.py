@@ -12,7 +12,7 @@ b. resumes deletion of sessions stuck in `deleting` longer than `DELETING_GRACE_
    upload's tombstone (`discard_code`) is left to its own task;
 c. repairs leaked `active_runs` (`Repo.reconcile_active_runs`) for users that still hold slots.
 
-At most `batch` items per step per call, oldest first; nothing here is not repeatable: a second
+At most `batch` items per step per call, oldest first (a failed deletion goes to the back); a second
 call right after finds nothing to do. One item failing never stops the pass.
 """
 
@@ -59,6 +59,15 @@ def _settle_stale(repo: Repo, settings: Settings, now: datetime, batch: int) -> 
     return settled
 
 
+def _back_of_queue(repo: Repo, s, now: datetime) -> None:
+    """A session whose deletion keeps failing would stay first in the oldest-first batch and starve
+    every later one: restart its grace period so the next sweeps reach the others first."""
+    try:
+        repo.update_session(s.uid, s.id, {"stage_started_at": now})
+    except Exception:  # noqa: BLE001 - best effort; the session may be gone already
+        pass
+
+
 def _resume_deletes(
     repo: Repo, blobs: BlobStore, now: datetime, batch: int
 ) -> int:
@@ -70,9 +79,10 @@ def _resume_deletes(
         try:
             delete_session_data(repo, blobs, s.uid, s.id)
             deleted += 1
-        except Exception as e:  # noqa: BLE001 - retried by the next sweep
+        except Exception as e:  # noqa: BLE001 - retried by a later sweep
             logs.emit("sweep_item_failed", logging.WARNING, session_id=s.id, step="delete",
                       exc_class=type(e).__name__)  # fmt: skip
+            _back_of_queue(repo, s, now)
     return deleted
 
 

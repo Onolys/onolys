@@ -532,8 +532,8 @@ async def test_confirm_unknown_speaker_422_and_wrong_state_409(env):
         assert r.status_code == 409 and r.json()["details"][0]["code"] == "invalid_state"
 
 
-async def test_confirm_in_report_ready_changes_next_run_only_report_unchanged(env):
-    """AC18."""
+async def test_confirm_in_report_ready_is_refused_and_changes_nothing(env):
+    """AC18, revised (LM-3): no rerun is possible in `report_ready`, so relabelling is refused."""
     c, h, repo, uid, queue = env
     sid = new_session(repo, uid, state="report_ready", ready=True, clinician_speaker="S1",
                       speaker_confirmed=True, rating_submitted=True, first_run_id="run0",
@@ -542,13 +542,11 @@ async def test_confirm_in_report_ready_changes_next_run_only_report_unchanged(en
     before = repo.get_report(uid, sid, "rep1")
     r = await c.post(f"/v1/sessions/{sid}/speakers/confirm", json={"clinician_speaker": "S2"},
                      headers=h)  # fmt: skip
-    assert r.status_code == 202
+    assert r.status_code == 409 and r.json()["details"][0]["code"] == "invalid_state"
     s = repo.get_session(uid, sid)
-    assert (s.clinician_speaker, s.state, s.first_run_id) == ("S2", "report_ready", "run0")
+    assert (s.clinician_speaker, s.state, s.first_run_id) == ("S1", "report_ready", "run0")
     assert repo.get_report(uid, sid, "rep1") == before
-    assert repo.list_reports(uid, sid) == [before]
     assert repo.list_runs(uid, sid) == [] and queue.calls == []
-    assert repo.get_status(uid, sid).state == "report_ready"
 
 
 async def test_confirm_in_failed_allowed(env):

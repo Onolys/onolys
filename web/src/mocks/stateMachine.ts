@@ -709,7 +709,7 @@ export class MockBackend {
 
   confirmSpeaker(uid: string, sid: string, speaker: string): S["CreateSessionResponse"] {
     const s = this.own(uid, sid);
-    if (!s.flags.transcript_ready || s.state === "running" || s.state === "deleting" || s.state === "cancelled")
+    if (!s.flags.transcript_ready || !["awaiting_input", "failed"].includes(s.state))
       bad(409, "invalid_state", "Speakers cannot be confirmed now.");
     if (!this.turns(s).some((t) => t.speaker === speaker)) invalidParam("clinician_speaker is not a speaker");
     s.clinician_speaker = speaker;

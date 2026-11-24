@@ -33,6 +33,13 @@ router = APIRouter(
 User = Annotated[AuthUser, Depends(current_user)]
 
 
+def _session_language(session_language: str, transcript_language: str | None) -> str:
+    """A language the user chose stays; only `auto` takes the transcript's, else `en` (LM-4)."""
+    if session_language not in ("", "auto"):
+        return session_language
+    return transcript_language or "en"
+
+
 def _public_error(error: TranscriptInputError) -> ApiError:
     return ApiError(
         413 if error.code == "transcript_too_large" else 422,
@@ -75,6 +82,10 @@ async def upload_transcript(
     if session.state == "deleting":
         raise NotFoundError()
     if session.state != "created":
+        raise invalid_state()
+    if session.interview_id:
+        # an interview session's transcript is its recording's: a typed one would be a free,
+        # uncounted evaluation of arbitrary text (LM-5)
         raise invalid_state()
     media = request.headers.get("content-type", "").split(";", 1)[0].strip().lower()
     if media not in ("application/json", "text/plain"):
@@ -140,7 +151,7 @@ async def upload_transcript(
                 flags={"transcript_ready": True, "speaker_confirmed": clinician is not None},
                 extra_fields={
                     "clinician_speaker": clinician, "stt": None,
-                    "language": transcript.language or "en",
+                    "language": _session_language(session.language, transcript.language),
                 },
             ),
             children=((f"transcripts/{TRANSCRIPT_ID}", tdoc.to_store(), False),),

@@ -83,13 +83,16 @@ def timing_fields(
     to: str,
     now: datetime,
 ) -> dict[str, Any]:
-    """`stage_started_at`, plus `started_at` (first `uploading`; a re-run from `report_ready`
-    restarts it and `waited_ms`) and `waited_ms` (grows when `awaiting_input` is left)."""
+    """`stage_started_at`, plus `started_at` (first `uploading`, or a transcript upload leaving
+    `created`; a re-run from `report_ready` restarts it and `waited_ms`) and `waited_ms` (grows
+    when `awaiting_input` is left)."""
     out: dict[str, Any] = {"stage_started_at": now}
     waited = status.get("waited_ms") or 0
     if prev_state == "awaiting_input":
         waited += _ms_between(prev_entered, now)
-    if to == "uploading" and not status.get("started_at"):
+    # first processing: audio enters `uploading`; a transcript goes `created` -> `awaiting_input`
+    first = to == "uploading" or (prev_state == "created" and to == "awaiting_input")
+    if first and not status.get("started_at"):
         out["started_at"] = now
     if to == "running" and prev_state == "report_ready":
         out["started_at"], waited = now, 0

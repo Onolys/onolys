@@ -26,7 +26,7 @@ from onolys_api.jobs.machine import (
     invalid_state,
 )
 from onolys_api.jobs.queue import TaskPayload
-from onolys_api.jobs.stale import settle_if_stale
+from onolys_api.jobs.stale import UPLOAD_STATES, settle_if_stale
 from onolys_api.languages import is_supported_language
 from onolys_api.presets import UnknownPreset
 from onolys_api.repo.base import NotFoundError
@@ -182,7 +182,8 @@ def _counted(s: SessionDoc) -> bool | None:
 
 
 def _body_hash(body: CreateSessionRequest) -> str:
-    return hashlib.sha256(body.model_dump_json().encode()).hexdigest()
+    # `client` (web build, recorder, engine) changes with a redeploy: a replay is the same request
+    return hashlib.sha256(body.model_dump_json(exclude={"client"}).encode()).hexdigest()
 
 
 def _replay_target_alive(repo, uid: str, doc: IdempotencyDoc) -> bool:
@@ -217,8 +218,10 @@ def _create_for_interview(
     session: SessionDoc,
     status: SessionStatusDoc,
     now: datetime,
-) -> None:
-    """Write the session, its link and the prefilled rating draft in one repo transaction."""
+) -> SessionRef | None:
+    """Write the session, its link and the prefilled rating draft in one repo transaction.
+    Returns the caller's own session when the interview is already linked to one that is still
+    in the upload phase (a retry after a lost response, LM-15); None when this call linked it."""
     assert body.interview_id is not None
     repo = request.app.state.repo
     scenario = _interview_scenario(request, uid, body.interview_id)
@@ -232,7 +235,22 @@ def _create_for_interview(
     if outcome == "refunded":
         raise ApiError.of(409, "invalid_state", "A refunded (very short) interview cannot be used.")
     if outcome == "already_linked":
+        existing = _linked_session(repo, uid, body.interview_id)
+        if existing is not None:
+            return existing
         raise ApiError.of(409, "conflict", "The interview already has a session.")
+    return None
+
+
+def _linked_session(repo, uid: str, iid: str) -> SessionRef | None:
+    try:
+        sid = repo.get_interview(uid, iid).session_id
+        s = repo.get_session(uid, sid) if sid else None
+    except NotFoundError:
+        return None
+    if s is None or s.state not in UPLOAD_STATES:
+        return None
+    return SessionRef(id=s.id, status=s.state)
 
 
 @router.post(
@@ -246,8 +264,10 @@ def _create_for_interview(
         "`Idempotency-Key` replays the original response for 24 h; the same key with a different "
         "body is 409 `conflict`. With `interview_id` the interview must be the caller's (404 "
         "otherwise), `ended` (else 409 `invalid_state`) and not linked to a session yet (else 409 "
-        "`conflict`); the link and the session are written atomically, `language` comes from the "
-        "scenario and `ratings/draft` is prefilled with its `change_goal`."
+        "`conflict`, except that a repeat while its session is still `created|uploading` returns "
+        "that session, so a lost response can be retried); the link and the session are written "
+        "atomically, `language` comes from the scenario and `ratings/draft` is prefilled with its "
+        "`change_goal`."
     ),
 )
 def create_session(
@@ -306,8 +326,8 @@ def create_session(
     status = SessionStatusDoc(uid=uid, updated_at=now)
     if body.interview_id is None:
         repo.create_session(uid, sid, session, status)
-    else:
-        _create_for_interview(request, body, uid, sid, session, status, now)
+    elif (existing := _create_for_interview(request, body, uid, sid, session, status, now)):
+        return CreateSessionResponse(session=existing)  # a retry: nothing new was written
     result = CreateSessionResponse(session=SessionRef(id=sid, status="created"))
 
     if idempotency_key:
@@ -474,7 +494,9 @@ def retry_session(id: ResourceId, request: Request, user: User) -> RetryStarted:
         raise invalid_state()
     if not repo.retry_step(uid, id, step, to, cap, STATE_PROGRESS[to]):
         raise invalid_state()  # lost a race: another retry won, or the session moved on
-    retries = s.retry_count + 1
+    # the stored count (this retry's own increment), not the pre-read: a stale read would repeat
+    # an earlier task name and Cloud Tasks would drop the retry
+    retries = max(s.retry_count + 1, repo.get_session(uid, id).retry_count)
     try:
         queue = getattr(request.app.state, "queue", None)
         if queue is None:

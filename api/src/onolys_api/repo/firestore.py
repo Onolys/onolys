@@ -803,7 +803,9 @@ class FirestoreRepo:
 
     def list_reports(self, uid: str, sid: str) -> list[ReportDoc]:
         coll = self._session_ref(uid, sid).collection("reports")
-        return sorted((_load(ReportDoc, s) for s in coll.stream()), key=lambda r: r.version)
+        # the listing needs no body: project the small fields (the report can be large)
+        small = coll.select(["version", "run_id", "created_at", "report_schema_version"])
+        return sorted((_load(ReportDoc, s) for s in small.stream()), key=lambda r: r.version)
 
     # ---- api keys ----
 

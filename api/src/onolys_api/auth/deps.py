@@ -1,5 +1,6 @@
 """`current_user` dependency: Bearer ID token or X-API-Key -> (uid, auth_kind)."""
 
+import logging
 import re
 import threading
 from dataclasses import dataclass
@@ -10,6 +11,7 @@ from fastapi import Depends, Request
 from fastapi.security import APIKeyHeader, HTTPAuthorizationCredentials, HTTPBearer
 from onolys_engine_core.errors import ConfigError
 
+from onolys_api import logs
 from onolys_api.auth.idtoken import EmailNotVerified, IdTokenVerifier, InvalidToken, TokenVerifier
 from onolys_api.auth.keys import parse_key, secret_matches
 from onolys_api.config import LOCAL_ENVS, Settings
@@ -98,7 +100,10 @@ class Authenticator:
             raise _unauthenticated()
         now = datetime.now(UTC)
         if doc.last_used_at is None or now - doc.last_used_at >= LAST_USED_EVERY:
-            self._repo.mark_api_key_used(doc.uid, key_id, now)
+            try:
+                self._repo.mark_api_key_used(doc.uid, key_id, now)
+            except Exception as e:  # noqa: BLE001 - best effort: a metadata write never fails auth
+                logs.emit("api_key_last_used_failed", logging.WARNING, exc_class=type(e).__name__)
         return AuthUser(doc.uid, "api_key")
 
     def authenticate(

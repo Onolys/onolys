@@ -186,7 +186,7 @@ export interface paths {
         put?: never;
         /**
          * Create a session
-         * @description Writes the session and its PHI-free `session_status` document before returning. `Idempotency-Key` replays the original response for 24 h; the same key with a different body is 409 `conflict`. With `interview_id` the interview must be the caller's (404 otherwise), `ended` (else 409 `invalid_state`) and not linked to a session yet (else 409 `conflict`); the link and the session are written atomically, `language` comes from the scenario and `ratings/draft` is prefilled with its `change_goal`.
+         * @description Writes the session and its PHI-free `session_status` document before returning. `Idempotency-Key` replays the original response for 24 h; the same key with a different body is 409 `conflict`. With `interview_id` the interview must be the caller's (404 otherwise), `ended` (else 409 `invalid_state`) and not linked to a session yet (else 409 `conflict`, except that a repeat while its session is still `created|uploading` returns that session, so a lost response can be retried); the link and the session are written atomically, `language` comes from the scenario and `ratings/draft` is prefilled with its `change_goal`.
          */
         post: operations["createSession"];
         delete?: never;
@@ -410,7 +410,7 @@ export interface paths {
         put?: never;
         /**
          * Pick the clinician speaker (every other speaker is the client)
-         * @description Allowed once the transcript is ready and not while a run is in progress. In `report_ready|failed` it applies to the next run only. May start the first run (R4).
+         * @description Allowed in `awaiting_input` and `failed` once the transcript is ready; any other state (a run in progress, `report_ready`) is 409 `invalid_state`. In `failed` it applies to the next run only. May start the first run (R4).
          */
         post: operations["confirmSpeakers"];
         delete?: never;
