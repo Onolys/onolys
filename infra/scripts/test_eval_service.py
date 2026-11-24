@@ -44,3 +44,14 @@ def test_eval_config_and_access():
     assert 'deployer_staging_eval_developer' in text('deployer.tf')
     assert 'deployer_staging_eval_runtime_user' in text('deployer.tf')
     assert 'custom_domain         = "eval.onolys.com"' in text('domains.tf')
+
+
+def test_eval_local_dev_origins_match_vite_default():
+    # eval/web uses Vite's unmodified default port (5173).
+    source = text('eval-services.tf')
+    match = re.search(r'ADMIN_CORS_ORIGINS\s*=\s*"([^"]+)"', source)
+    origins = set(match.group(1).split(','))
+    assert origins == {
+        'https://onolys-eval-staging.web.app', 'https://eval.onolys.com',
+        'http://localhost:5173', 'http://127.0.0.1:5173',
+    }

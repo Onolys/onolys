@@ -67,6 +67,7 @@ def test_non_allowlisted_is_403():
     )
     assert response.status_code == 403
     assert response.json()["error"]["message"] == "Not allowed."
+    assert response.json()["error"]["code"] == "not_allowlisted"
 
 
 def test_allowed_me_and_health():
@@ -109,7 +110,9 @@ def test_internal_requires_token_even_with_cloudtasks_headers(route):
     ],
 )
 def test_internal_checks_all_identity_claims(claims):
-    assert client(task_claims=claims).post("/internal/tasks/unit", headers=AUTH).status_code == 403
+    response = client(task_claims=claims).post("/internal/tasks/unit", headers=AUTH)
+    assert response.status_code == 403
+    assert response.json()["error"]["code"] == "forbidden"
 
 
 def test_internal_invalid_token():
@@ -205,48 +208,84 @@ def test_no_api_imports_in_backend():
             ), source
 
 
-def test_task_verifier_uses_google_oauth_verification_with_exact_audience(monkeypatch):
-    from onolys_eval_backend.auth import TaskOidcVerifier, id_token
+@pytest.fixture(scope="module")
+def task_keys():
+    import time
 
-    seen = {}
+    from cryptography.hazmat.primitives import serialization
+    from cryptography.hazmat.primitives.asymmetric import rsa
+    from google.auth import crypt, jwt
 
-    def verify(token, request, audience):
-        seen.update(token=token, request=request, audience=audience)
-        return TASK_CLAIMS
+    key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    signer = crypt.RSASigner.from_string(
+        key.private_bytes(
+            serialization.Encoding.PEM,
+            serialization.PrivateFormat.PKCS8,
+            serialization.NoEncryption(),
+        ),
+        "current",
+    )
+    cert = (
+        key.public_key()
+        .public_bytes(serialization.Encoding.PEM, serialization.PublicFormat.SubjectPublicKeyInfo)
+        .decode()
+    )
 
-    monkeypatch.setattr(id_token, "verify_oauth2_token", verify)
-    verifier = TaskOidcVerifier(ENV["SERVICE_URL"])
-    assert verifier.verify("signed-token") == TASK_CLAIMS
-    assert seen == {
-        "token": "signed-token",
-        "request": verifier.request,
-        "audience": ENV["SERVICE_URL"],
-    }
+    def mint(kid="current", **overrides):
+        now = int(time.time())
+        return jwt.encode(
+            signer, {**TASK_CLAIMS, "iat": now, "exp": now + 600, **overrides}, key_id=kid
+        ).decode()
+
+    return mint, cert
 
 
-def test_task_verifier_rejects_google_verification_failure(monkeypatch):
-    from onolys_eval_backend.auth import TaskOidcVerifier, id_token
+def test_task_verifier_caches_refreshes_and_retains_google_validation(task_keys):
+    import json
+    from types import SimpleNamespace
 
-    def reject(*args, **kwargs):
-        raise ValueError("invalid signature / expired token")
+    from onolys_eval_backend.auth import TaskOidcVerifier
 
-    monkeypatch.setattr(id_token, "verify_oauth2_token", reject)
-    with pytest.raises(InvalidToken):
-        TaskOidcVerifier(ENV["SERVICE_URL"]).verify("bad")
+    mint, cert = task_keys
+    calls = []
+    now = [0.0]
+    certs = {"current": cert}
+
+    def request(url, **kwargs):
+        calls.append((url, kwargs))
+        return SimpleNamespace(status=200, data=json.dumps(certs).encode())
+
+    verifier = TaskOidcVerifier(ENV["SERVICE_URL"], request=request, clock=lambda: now[0])
+    for _ in range(3):
+        assert verifier.verify(mint())["email"] == ENV["TASKS_SA"]
+    assert len(calls) == 1
+    assert calls[0][1] == {"method": "GET", "timeout": 5}
+    certs["next"] = cert
+    now[0] = 31
+    assert verifier.verify(mint("next"))["email_verified"] is True
+    assert len(calls) == 2
+    for overrides in ({"aud": "another-service"}, {"iss": "another-issuer"}, {"iat": 1, "exp": 2}):
+        with pytest.raises(InvalidToken):
+            verifier.verify(mint(**overrides))
 
 
-def test_task_verifier_upstream_failure_is_not_an_auth_bypass(monkeypatch):
+def test_task_verifier_upstream_failure_is_not_an_auth_bypass(task_keys):
     from google.auth.exceptions import TransportError
     from onolys_admin_auth import UpstreamUnavailable
 
-    from onolys_eval_backend.auth import TaskOidcVerifier, id_token
+    from onolys_eval_backend.auth import TaskOidcVerifier
+
+    calls = []
 
     def unavailable(*args, **kwargs):
+        calls.append(1)
         raise TransportError("certificate service unavailable")
 
-    monkeypatch.setattr(id_token, "verify_oauth2_token", unavailable)
-    with pytest.raises(UpstreamUnavailable):
-        TaskOidcVerifier(ENV["SERVICE_URL"]).verify("token")
+    verifier = TaskOidcVerifier(ENV["SERVICE_URL"], request=unavailable, clock=lambda: 0)
+    for _ in range(3):
+        with pytest.raises(UpstreamUnavailable):
+            verifier.verify(task_keys[0]())
+    assert len(calls) == 1
 
     class Unavailable:
         def verify(self, token):
@@ -254,6 +293,39 @@ def test_task_verifier_upstream_failure_is_not_an_auth_bypass(monkeypatch):
 
     with TestClient(create_app(ENV, task_verifier=Unavailable())) as c:
         assert c.post("/internal/tasks/unit", headers=AUTH).status_code == 503
+
+
+def test_task_verification_runs_outside_event_loop():
+    import asyncio
+    import threading
+
+    from onolys_eval_backend.auth import EvalAuthMiddleware
+
+    async def exercise():
+        loop_thread = threading.get_ident()
+        reached = []
+
+        class Verifier:
+            def verify(self, token):
+                assert threading.get_ident() != loop_thread
+                return TASK_CLAIMS
+
+        async def app(scope, receive, send):
+            reached.append(True)
+
+        middleware = EvalAuthMiddleware(app, EvalConfig.from_env(ENV), task_verifier=Verifier())
+        await middleware(
+            {
+                "type": "http",
+                "path": "/internal/tasks/unit",
+                "headers": [(b"authorization", b"Bearer valid")],
+            },
+            None,
+            None,
+        )
+        assert reached == [True]
+
+    asyncio.run(exercise())
 
 
 def test_explicit_task_audience_configuration():

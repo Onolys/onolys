@@ -93,15 +93,15 @@ def test_bad_signature(make_client, keys):
 
 
 def test_unverified_email(make_client, keys):
-    err(get(make_client(), keys.mint(email_verified=False)), 403, "forbidden")
+    err(get(make_client(), keys.mint(email_verified=False)), 403, "email_unverified")
 
 
 def test_missing_email_claim(make_client, keys):
-    err(get(make_client(), keys.mint(email=None)), 403, "forbidden")
+    err(get(make_client(), keys.mint(email=None)), 403, "email_unverified")
 
 
 def test_not_listed(make_client, keys):
-    err(get(make_client(), keys.mint(email="eve@example.com")), 403, "forbidden")
+    err(get(make_client(), keys.mint(email="eve@example.com")), 403, "not_allowlisted")
 
 
 def test_mixed_case_allowed(make_client, keys):
@@ -212,3 +212,124 @@ def test_on_parses_allowlist_lowercased():
 def test_invalid_mode():
     with pytest.raises(ConfigError):
         AdminAuthConfig.from_env({"ADMIN_AUTH": "maybe"})
+
+
+def test_unknown_key_refresh_is_bounded_and_rotation_recovers(keys):
+    from google.auth import jwt
+
+    from onolys_admin_auth import InvalidToken, UpstreamUnavailable
+
+    now = [0.0]
+    calls = []
+    certs = {}
+
+    def fetch():
+        calls.append(now[0])
+        return dict(certs)
+
+    verifier = IdTokenVerifier(PROJECT, fetch_certs=fetch, clock=lambda: now[0])
+    # An empty upstream response is unavailable, never a usable cache entry.
+    with pytest.raises(UpstreamUnavailable):
+        verifier.verify(keys.mint())
+    with pytest.raises(UpstreamUnavailable):
+        verifier.verify(keys.mint())
+    assert len(calls) == 1
+    certs.update(keys.certs)
+    now[0] = 31
+    assert verifier.verify(keys.mint())["email"] == "alice@example.com"
+    # Publish the local signing key under its next ordinary rotation ID.
+    claims = verifier.verify(keys.mint())
+    rotated = jwt.encode(keys.signer, claims, key_id="next").decode()
+    certs["next"] = certs[KID]
+    for _ in range(3):
+        with pytest.raises(InvalidToken):
+            verifier.verify(rotated)
+    assert len(calls) == 2
+    now[0] = 62
+    assert verifier.verify(rotated)["email_verified"] is True
+    assert len(calls) == 3
+
+
+def test_refresh_failure_is_cooled_down_and_does_not_serve_expired_keys(keys):
+    from onolys_admin_auth import UpstreamUnavailable
+
+    now = [0.0]
+    calls = []
+
+    def fetch():
+        calls.append(now[0])
+        if len(calls) > 1:
+            raise RuntimeError("temporarily unavailable")
+        return keys.certs
+
+    verifier = IdTokenVerifier(PROJECT, fetch_certs=fetch, ttl_s=60, clock=lambda: now[0])
+    verifier.verify(keys.mint())
+    now[0] = 61
+    for _ in range(3):
+        with pytest.raises(UpstreamUnavailable):
+            verifier.verify(keys.mint())
+    assert len(calls) == 2
+
+
+def test_admin_verification_runs_outside_event_loop():
+    import asyncio
+    import threading
+
+    async def exercise():
+        loop_thread = threading.get_ident()
+
+        class Verifier:
+            def verify(self, token):
+                assert threading.get_ident() != loop_thread
+                return {"email": "alice@example.com", "email_verified": True}
+
+        async def app(scope, receive, send):
+            pass
+
+        middleware = AdminAuthMiddleware(
+            app, AdminAuthConfig(True, PROJECT, frozenset({"alice@example.com"})), Verifier()
+        )
+        await middleware(
+            {"type": "http", "method": "GET", "headers": [(b"authorization", b"Bearer valid")]},
+            None,
+            None,
+        )
+
+    asyncio.run(exercise())
+
+
+def test_concurrent_cold_cache_fetches_once(keys):
+    import threading
+    from concurrent.futures import ThreadPoolExecutor
+
+    entered = threading.Event()
+    release = threading.Event()
+    calls = []
+
+    def fetch():
+        calls.append(1)
+        entered.set()
+        assert release.wait(timeout=1)
+        return keys.certs
+
+    verifier = IdTokenVerifier(PROJECT, fetch_certs=fetch)
+    token = keys.mint()
+    with ThreadPoolExecutor(max_workers=3) as pool:
+        first = pool.submit(verifier.verify, token)
+        try:
+            assert entered.wait(timeout=1)
+            others = [pool.submit(verifier.verify, token) for _ in range(2)]
+        finally:
+            release.set()
+        assert first.result(timeout=1)["email_verified"] is True
+        assert all(f.result(timeout=1)["email_verified"] is True for f in others)
+    assert len(calls) == 1
+
+
+def test_cache_wait_is_bounded():
+    from onolys_admin_auth import UpstreamUnavailable
+    from onolys_admin_auth.verifier import CertificateCache
+
+    cache = CertificateCache(lambda: {"current": "cert"}, lock_timeout_s=0)
+    with cache._lock, pytest.raises(UpstreamUnavailable):
+        cache.get("current")

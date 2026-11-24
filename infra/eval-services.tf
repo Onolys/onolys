@@ -14,7 +14,7 @@ locals {
     FIRESTORE_DATABASE  = "staging"
     ADMIN_AUTH          = "on"
     ADMIN_AUTH_PROJECT  = var.project
-    ADMIN_CORS_ORIGINS  = "https://onolys-eval-staging.web.app,https://eval.onolys.com"
+    ADMIN_CORS_ORIGINS  = "https://onolys-eval-staging.web.app,https://eval.onolys.com,http://localhost:5173,http://127.0.0.1:5173"
     EVAL_BUCKET         = google_storage_bucket.eval_staging.name
     TASKS_QUEUE         = google_cloud_tasks_queue.eval_staging[0].id
     TASKS_SA            = google_service_account.eval_tasks_staging[0].email
