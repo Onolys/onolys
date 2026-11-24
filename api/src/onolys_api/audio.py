@@ -82,6 +82,7 @@ class ProbeResult:
     duration_s: float | None  # None when the container carries no duration
     audio_streams: int = 1
     video_streams: int = 0  # attached cover art does not count
+    codec_name: str | None = None  # first audio stream's codec (ffprobe `codec_name`)
 
 
 class AudioTools(Protocol):
@@ -136,16 +137,20 @@ class FfmpegTools:
         except (subprocess.SubprocessError, OSError, ValueError):
             raise ToolError("ffprobe failed") from None
         audio = video = 0
+        codec = None
         for s in info.get("streams", []):
             kind = s.get("codec_type")
             if kind == "audio":
                 audio += 1
+                if codec is None and isinstance(s.get("codec_name"), str):
+                    codec = s["codec_name"]
             elif kind == "video" and not s.get("disposition", {}).get("attached_pic"):
                 video += 1
         return ProbeResult(
             duration_s=_duration(info.get("format", {}).get("duration"), info.get("streams", [])),
             audio_streams=audio,
             video_streams=video,
+            codec_name=codec,
         )
 
     def to_flac(

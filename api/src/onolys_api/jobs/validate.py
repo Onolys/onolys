@@ -10,10 +10,12 @@ Logs carry codes only, never file names or content.
 """
 
 import hashlib
+import logging
 import tempfile
 from collections.abc import Callable
 from pathlib import Path
 
+from onolys_api import logs
 from onolys_api.audio import (
     CANONICAL_TYPES,
     DEFAULT_MAX_DURATION_S,
@@ -21,6 +23,7 @@ from onolys_api.audio import (
     SHORT_RECORDING_S,
     UNKNOWN_DURATION_MARGIN_S,
     AudioTools,
+    ProbeResult,
     ToolError,
     canonical_key,
     original_key,
@@ -33,11 +36,65 @@ from onolys_api.jobs.machine import advance
 from onolys_api.jobs.queue import TaskPayload
 from onolys_api.jobs.worker import Handler, PermanentError, TaskContext
 from onolys_api.repo.base import NotFoundError
-from onolys_api.repo.models import RecordingDoc
+from onolys_api.repo.models import ClientInfo, InterviewDoc, RecordingDoc
 from onolys_api.storage.base import MAX_UPLOAD_BYTES, BlobNotFoundError, BlobStore
 
 SHORT_WARNING = "short_recording"
 SHORT_INTERVIEW_WARNING = "short_interview"  # replaces `short_recording` for AI interviews
+
+AUDIO_CHECK_EVENT = "interview_audio_check"
+AUDIO_CHECK_RESULTS = ("ok", "mismatch", "skipped_no_relay_duration", "skipped_no_interview")
+
+
+def _r1(value: float | None) -> float | None:
+    return None if value is None else round(value, 1)
+
+
+def log_interview_audio_check(
+    *,
+    session_id: str,
+    interview_id: str,
+    uploaded_s: float,
+    relay_s: float | None,
+    threshold_s: float,
+    result: str,
+    audio_format: str | None,
+    probe: ProbeResult | None,
+    session_client: ClientInfo | None,
+    interview: InterviewDoc | None,
+) -> None:
+    """Emit the ONE `interview_audio_check` line of an interview-linked validation (02-logging
+    R12/R13). The caller decides `result` (one of `AUDIO_CHECK_RESULTS`) and `threshold_s`; this
+    only reports, so the mismatch rule can change without touching the line. INFO for `ok`,
+    WARNING otherwise. Sources that are not there are omitted (absent), never an error.
+    Numbers are rounded to 0.1 s. Carries ids, numbers and build/format names only."""
+    iv_client = interview.client if interview else None
+    relay = interview.relay if interview else None
+
+    def client(name: str) -> str | None:  # the interview's own value wins over the session's
+        return getattr(iv_client, name, None) or getattr(session_client, name, None)
+
+    up, rel = _r1(uploaded_s), _r1(relay_s)
+    logs.emit(
+        AUDIO_CHECK_EVENT,
+        logging.INFO if result == "ok" else logging.WARNING,
+        session_id=session_id,
+        interview_id=interview_id,
+        uploaded_s=up,
+        relay_s=rel,
+        diff_s=None if relay_s is None else _r1(abs(uploaded_s - relay_s)),
+        threshold_s=_r1(threshold_s),
+        result=result,
+        relay_version=relay.relay_version if relay else None,
+        relay_revision=relay.relay_revision if relay else None,
+        web_version=client("web_version"),
+        user_agent=client("user_agent"),
+        recorder_mime=client("recorder_mime"),
+        audio_engine=client("audio_engine"),
+        audio_format=audio_format,
+        audio_codec=probe.codec_name if probe else None,
+        audio_streams=probe.audio_streams if probe else None,
+    )
 
 
 def _sha256(path: Path) -> str:
@@ -93,12 +150,28 @@ def make_validate_handler(
         if seconds < MIN_DURATION_S:
             raise fail(ctx, "audio_unreadable")
 
-    def _matches_relay(ctx: TaskContext, session, seconds: float) -> bool:
+    def _matches_relay(
+        ctx: TaskContext, session, seconds: float, fmt: str, probe: ProbeResult
+    ) -> bool:
+        """True when the upload matches the relay duration; logs the one audio-check line."""
+        threshold = float(cfg.ai_tolerance_seconds)
         try:
-            recorded = ctx.repo.get_interview(ctx.uid, session.interview_id).duration_s
+            iv = ctx.repo.get_interview(ctx.uid, session.interview_id)
         except NotFoundError:
-            return False
-        return recorded is not None and abs(seconds - recorded) <= cfg.ai_tolerance_seconds
+            iv = None
+        recorded = iv.duration_s if iv else None
+        if iv is None:
+            result = "skipped_no_interview"
+        elif recorded is None:
+            result = "skipped_no_relay_duration"
+        else:
+            result = "ok" if abs(seconds - recorded) <= threshold else "mismatch"
+        log_interview_audio_check(
+            session_id=ctx.sid, interview_id=session.interview_id, uploaded_s=seconds,
+            relay_s=recorded, threshold_s=threshold, result=result, audio_format=fmt,
+            probe=probe, session_client=session.client, interview=iv,
+        )  # fmt: skip
+        return result == "ok"
 
     def validate(ctx: TaskContext) -> None:
         uid, sid = ctx.uid, ctx.sid
@@ -179,7 +252,7 @@ def make_validate_handler(
             # A10: the free first run is only for the interview's own recording: the uploaded
             # audio must last as long as the relay recorded (within the tolerance)
             ctx.repo.update_session(
-                uid, sid, {"free_run_void": not _matches_relay(ctx, session, seconds)}
+                uid, sid, {"free_run_void": not _matches_relay(ctx, session, seconds, fmt, probe)}
             )
         ctx.repo.add_recording(
             uid,
