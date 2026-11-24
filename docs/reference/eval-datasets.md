@@ -157,13 +157,26 @@ Terms: unless noted, reuse terms are not separately confirmed and every dataset 
 - Change goal: the train file has `topic_new` (`change_goal_source: header`); the test file has none, so test sessions use a generic curated goal.
 - Terms: no licence file in the repo; internal evaluation only; licence request sent to authors.
 
+## midas-es
+
+- Source: MIDAS, <https://github.com/MichiganNLP/MIDAS>, file `Spanish_MI.json` (raw.githubusercontent.com `main`, 1.7 MB). Paper: Gunal et al., NAACL 2025 (arXiv 2502.08458). The repo has no licence file.
+- Size: the file has 74 Spanish-language MI conversations from YouTube (educational demonstrations and student role-plays; outer key = YouTube video id plus a variant suffix such as `_a`, `_bad`, `.html`; some videos are no longer public). 57 are converted (1,944 turns), 17 are skipped (below). Session id = lowercased key without `.html`, non-alphanumerics as `-` (`6uqC49iSopg_c.html` is `6uqc49isopg-c`). Several keys share one video (`_a/_b/_c`, `_good/_bad`); they are separate sessions of the manifest.
+- Language: Spanish. `language: es`, `transcript.language: "es"`. The file also has `translated_turn` (Google Translate to English); it is never used as the transcript or stored. The engine's non-English caveat applies as for `phac-fr`: it reads `transcript.language`, runs, and adds the info warning `language_not_validated`, so quality is not validated for Spanish.
+- Original media: YouTube video plus transcript. Transcript origin `human`: the paper (section 3.1) says Amazon Transcribe produced and diarized the text, participants were labeled counselor or client manually, and two native Spanish speakers reviewed the transcripts (machine first, human reviewed).
+- Roles: `counselor` is clinician, `patient` is client (speakers kept as in the file). Roles are never guessed. Skipped (17 conversations, 15 + 2): 15 contain a turn with speaker `unclear` (`3NWntoABoos`, `3Ni_ZRj_n3s`, `5XU96pcVb2c`, `6UTzDXcJxZY`, `6uqC49iSopg_a`, `Fi1emvarXBs`, `O7fv-JJlZYY`, `VsHYx66XegE_todo_remove`, `ZEYC1l4e8F0_a`, `bAArgCxzPM4`, `bXhBQrdNZ08`, `e91VPxNMzxM_double`, `h-nEe_-KCxU_bad`, `uD_qhnJ1WnQ`, `ylNa_aOJ1NI`) and 2 carry a counselor annotation on a patient turn (`Tz9cUkQzLv8`, `Y5ejnuy4dp0_double`), which means their role labels are wrong.
+- Labels: three Spanish-speaking MI counselors annotated only counselor turns for questions and reflections with ITEM2 (Integridad del Tratamiento de la Entrevista Motivacional, the Spanish MITI), as character spans (paper section 3.2; it reports 884 questions and 415 reflections, the file holds the same for 74 conversations). `label_scheme`: "ITEM2 (Spanish MITI adaptation): questions and reflections"; `miti_version: null`.
+- Mapping (`onolys_eval/midas.py`): tag `question` to `question`, one count per span (559 across the 57 sessions; counts are per question, unlike `annomi`, which counts per utterance). Tag `reflection` (286 spans in the 57 sessions) is not mapped: the file has no simple/complex split, so `sr` and `cr` are `null` and reflections are not compared. The one `empty` tag is ignored. Every other count is `null`; no globals, no summaries, no quality label.
+- Source quirks: 2 question spans have character positions outside their turn text (a zero-length span and one ending past the text); they are counted anyway, since positions are not used. Consecutive turns by the same speaker occur (28 in the file), kept as given. Some turn texts contain stray tabs or spaces before punctuation; whitespace is normalised, nothing else is changed.
+- Change goal: not in the source, so a generic curated goal is used for every session.
+- Overlaps: none recorded.
+- Terms: no licence file in the repo; internal evaluation only; licence request sent to authors.
+
 ## Gated / not added
 
 | Dataset | Why not added | How to get it |
 |---|---|---|
 | MI-TAGS full set (242 transcripts) | Access-gated | Request form: <https://docs.google.com/forms/d/e/1FAIpQLSfWAFOmRcPRd0751bRdQT83Qx-vC2HCnkrwl3T4Lh7HoByr6Q/viewform> |
 | BiMISC | Not public | Email the first author, x.sun2@uva.nl |
-| MIDAS (Spanish) | Spanish; not added | arXiv 2502.08458 |
 | MI-LLM (Chinese) | Data not released | None |
 | CASAA MITI 3.1 archive | Skipped: old MITI version | <https://casaa.unm.edu/tools/miti.html> |
 | AFDEM | Terms prohibit download | None |

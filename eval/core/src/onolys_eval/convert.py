@@ -328,6 +328,7 @@ _CSV_CONVERTERS = {
     "welivita_csv": ("welivita", "convert_welivita_dataset"),
     "phac_html": ("phac", "convert_phac_dataset"),
     "annosum_csv": ("annosum", "convert_annosum_dataset"),
+    "midas_json": ("midas", "convert_midas_dataset"),
 }
 
 
