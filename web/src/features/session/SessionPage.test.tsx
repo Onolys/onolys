@@ -31,7 +31,7 @@ const progress = () => screen.getByRole("list", { name: "Progress" });
 const stepItem = (label: string) =>
   within(progress())
     .getAllByRole("listitem")
-    .find((li) => li.textContent?.startsWith(label))!;
+    .find((li) => li.textContent?.replace(/^✓/, "").startsWith(label))!;
 
 let getCalls: string[] = [];
 beforeEach(() => {
@@ -833,5 +833,146 @@ describe("session page: cancel (04-cancel R9)", () => {
     act(() => mockEmitter.emit(sid, { ...failedDoc(sid, "x"), state: "report_ready", latest_report_version: 1 }));
     await waitFor(() => expect(screen.queryByRole("button", { name: "Cancel session" })).not.toBeInTheDocument());
     expect(screen.getByRole("link", { name: "View report" })).toBeInTheDocument();
+  });
+});
+
+describe("session page: processing screen (05-processing-screen R4, R5, R7, R8)", () => {
+  const emit = (sid: string, patch: Partial<SessionStatusDoc>) =>
+    act(() => mockEmitter.emit(sid, { ...failedDoc(sid, "x"), error_code: null, ...patch } as SessionStatusDoc));
+  const bar = () => screen.queryByRole("progressbar", { name: "Overall progress" });
+  const slot = () => document.querySelector('[data-slot="cancel"]');
+  const CANCELLABLE = ["created", "uploading", "upload_incomplete", "validating", "transcribing", "awaiting_input", "running"] as const;
+
+  it("shows the hint per phase, outside the live region", async () => {
+    const sid = create();
+    open(sid);
+    const status = await ready();
+    const cases: [SessionStatusDoc["state"], RegExp][] = [
+      ["created", /Keep this tab open until upload finishes/],
+      ["uploading", /Keep this tab open until upload finishes/],
+      ["validating", /You can close this tab/],
+      ["transcribing", /You can close this tab/],
+      ["running", /You can close this tab/],
+      ["awaiting_input", /We'll wait here for your choice/],
+    ];
+    for (const [state, re] of cases) {
+      emit(sid, { state });
+      expect(await screen.findByText(re)).toBeInTheDocument();
+      expect(status).not.toHaveTextContent(re);
+      expect(screen.getAllByText(re)).toHaveLength(1);
+    }
+    for (const state of ["report_ready", "failed"] as const) {
+      emit(sid, { state });
+      await waitFor(() => expect(screen.queryByText(/close this tab|Keep this tab open|wait here/)).not.toBeInTheDocument());
+    }
+  });
+
+  it("shows bar, N% and Elapsed from created through transcribing; none at report_ready, failed, cancelled", async () => {
+    const sid = create();
+    open(sid);
+    await ready();
+    const startedAt = new Date(Date.now() - 65_000).toISOString();
+    for (const state of ["created", "uploading", "transcribing"] as const) {
+      emit(sid, { state, progress: 10, started_at: startedAt, stage_started_at: startedAt, progress_next: 40 });
+      await waitFor(() => expect(state && bar()).toBeInTheDocument());
+      expect(screen.getByText(/^\d+%$/)).toBeInTheDocument();
+      expect(screen.getByText(/Elapsed \d+:\d\d/)).toBeInTheDocument();
+    }
+    for (const state of ["report_ready", "failed", "cancelled"] as const) {
+      emit(sid, { state, progress: 100 });
+      await waitFor(() => expect(bar()).not.toBeInTheDocument());
+      expect(screen.queryByText(/^\d+%$/)).not.toBeInTheDocument();
+      expect(screen.queryByText(/Elapsed/)).not.toBeInTheDocument();
+    }
+  });
+
+  it("bar has an accessible name, value and valuetext, outside the live region", async () => {
+    const sid = create();
+    open(sid);
+    const status = await ready();
+    emit(sid, { state: "awaiting_input", progress: 40 });
+    await waitFor(() => expect(bar()).toBeInTheDocument());
+    expect(bar()).toHaveAttribute("value", "40");
+    expect(bar()).toHaveAttribute("max", "100");
+    expect(bar()).toHaveAttribute("aria-valuetext", "40 percent");
+    expect(status.contains(bar())).toBe(false);
+    expect(status.closest("[aria-live]")?.contains(bar())).toBeFalsy();
+  });
+
+  it("marks the current step with In progress, a spinner and the accent; done has a check; pending is muted", async () => {
+    const sid = create();
+    open(sid);
+    await ready();
+    emit(sid, { state: "transcribing", progress: 20, transcript_ready: false, speaker_confirmed: false, rating_submitted: false });
+    await waitFor(() => expect(stepItem("Transcribe")).toHaveAttribute("data-status", "current"));
+    const cur = stepItem("Transcribe");
+    expect(within(cur).getByText("In progress")).toBeVisible();
+    expect(cur).toHaveClass("text-primary", "border-primary");
+    expect(cur.querySelector('[data-slot="spinner"]')).not.toBeNull();
+    const done = stepItem("Upload");
+    expect(done).toHaveClass("text-score-good");
+    expect(done.querySelector('[data-slot="step-check"]')).not.toBeNull();
+    expect(stepItem("Report")).toHaveClass("text-muted-foreground");
+    emit(sid, { state: "failed", error_code: "transcription_failed", transcript_ready: false });
+    await waitFor(() => expect(stepItem("Transcribe")).toHaveAttribute("data-status", "failed"));
+    expect(stepItem("Transcribe")).toHaveClass("text-destructive");
+  });
+
+  it("spinner honours reduced motion: spin is motion-safe only", async () => {
+    const sid = create();
+    open(sid);
+    await ready();
+    emit(sid, { state: "transcribing" });
+    await waitFor(() => expect(stepItem("Transcribe").querySelector('[data-slot="spinner"]')).not.toBeNull());
+    const tokens = stepItem("Transcribe").querySelector('[data-slot="spinner"]')!.className.split(/\s+/);
+    expect(tokens).not.toContain("animate-spin");
+    expect(tokens).toContain("motion-safe:animate-spin");
+  });
+
+  it("keeps the live-region text unchanged across ticks and progress changes", async () => {
+    const sid = create();
+    open(sid);
+    const status = await ready();
+    const startedAt = new Date(Date.now() - 65_000).toISOString();
+    emit(sid, { state: "transcribing", progress: 20, progress_next: 40, started_at: startedAt, stage_started_at: startedAt });
+    await waitFor(() => expect(status).toHaveTextContent("Transcribing the recording."));
+    const elapsed = () => screen.getByText(/Elapsed \d+:\d\d/).textContent;
+    const before = elapsed();
+    let mutations = 0;
+    const obs = new MutationObserver((m) => (mutations += m.length));
+    obs.observe(status, { subtree: true, childList: true, characterData: true, attributes: true });
+    await waitFor(() => expect(elapsed()).not.toBe(before), { timeout: 3000 });
+    emit(sid, { state: "transcribing", progress: 30, progress_next: 40, started_at: startedAt, stage_started_at: startedAt });
+    await waitFor(() => expect(Number(bar()!.getAttribute("value"))).toBeGreaterThanOrEqual(30));
+    obs.disconnect();
+    expect(mutations).toBe(0);
+    expect(status).toHaveTextContent("Transcribing the recording.");
+  });
+
+  it("renders the cancel slot (right-aligned, under the hint) for every cancellable state and no other", async () => {
+    const sid = create();
+    open(sid);
+    await ready();
+    for (const state of CANCELLABLE) {
+      emit(sid, { state });
+      await waitFor(() => expect(slot()).not.toBeNull());
+      expect(slot()).toHaveClass("justify-end");
+      expect(within(slot() as HTMLElement).getByRole("button", { name: "Cancel session" })).toBeInTheDocument();
+      const hint = document.querySelector('[data-slot="hint"]');
+      expect(hint!.compareDocumentPosition(slot()!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    }
+    for (const state of ["report_ready", "failed"] as const) {
+      emit(sid, { state });
+      await waitFor(() => expect(slot()).toBeNull());
+    }
+  });
+
+  it("has no inline spinner SVG or hand-rolled spin class in the session screen", () => {
+    const files = import.meta.glob(["./*.tsx", "!./*.test.tsx"], { query: "?raw", import: "default", eager: true }) as Record<string, string>;
+    for (const [name, src] of Object.entries(files)) {
+      expect(src, name).not.toMatch(/(?<!motion-safe:)\banimate-spin\b/);
+      expect(src, name).not.toMatch(/<svg[^>]*(spin|spinner)/i);
+    }
+    expect(files["./CancelLink.tsx"]).toContain("Spinner");
   });
 });

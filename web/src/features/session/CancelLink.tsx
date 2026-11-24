@@ -1,3 +1,4 @@
+import { Spinner } from "@onolys/ui";
 import { useRef, useState } from "react";
 import { LINK } from "../../components/classes";
 import { ConfirmDialog } from "./ConfirmDialog";
@@ -52,11 +53,7 @@ export function CancelLink({
       >
         {pending ? (
           <>
-            <span
-              data-slot="spinner"
-              aria-hidden="true"
-              className="mr-2 inline-block size-3 animate-spin rounded-full border-2 border-current border-t-transparent align-[-1px]"
-            />
+            <Spinner className="mr-2 size-3 align-[-1px]" />
             Cancelling…
           </>
         ) : (

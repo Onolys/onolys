@@ -3,7 +3,7 @@
  * gate slots, error cards and delete. The upload, rating card and speaker gate mount in
  * `slots.tsx`.
  */
-import { Button } from "@onolys/ui";
+import { Button, Progress, Spinner } from "@onolys/ui";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
@@ -24,30 +24,22 @@ import { RetryButton } from "./RetryButton";
 import { UploadFailedView } from "./UploadFailedView";
 import { RatingCardSlot, SpeakerGateSlot, UploadSlot } from "./slots";
 import { deriveTimeline } from "./timeline";
-import { useSessionStatus } from "./useSessionStatus";
+import { useProgress, useSessionStatus } from "./useSessionStatus";
 
 const NOT_FOUND_MESSAGE = "This upload didn't go through, or the session no longer exists. Start a new upload.";
 
 const STEP_CLASS = {
-  done: "border-score-good",
-  current: "border-primary font-semibold",
-  failed: "border-destructive font-semibold",
-  pending: "border-border",
+  done: "border-score-good text-score-good",
+  current: "border-primary text-primary font-semibold",
+  failed: "border-destructive text-destructive font-semibold",
+  pending: "border-border text-muted-foreground",
 } as const;
+
+const STEP_STATUS_TEXT = { done: "Done", current: "In progress", failed: "Failed", pending: "Not started" } as const;
 
 export function SessionPage() {
   const { id = "" } = useParams();
   return <SessionView key={id} id={id} />;
-}
-
-function useNow(active: boolean): number {
-  const [now, setNow] = useState(() => Date.now());
-  useEffect(() => {
-    if (!active) return;
-    const t = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(t);
-  }, [active]);
-  return now;
 }
 
 function SessionView({ id }: { id: string }) {
@@ -60,8 +52,9 @@ function SessionView({ id }: { id: string }) {
   const deleteButton = useRef<HTMLButtonElement>(null);
 
   const doc: SessionStatusDoc | null = view.phase === "live" || view.phase === "fallback" ? view.doc : null;
-  const runStartedAt = view.phase === "live" ? view.runStartedAt : null;
-  const now = useNow(runStartedAt !== null);
+  // This tab's upload byte fraction (UploadSlot), so the bar moves during the upload (05-processing-screen D4).
+  const [uploadFraction, setUploadFraction] = useState<number | null>(null);
+  const progress = useProgress(doc, uploadFraction);
 
   const needsUsage =
     doc !== null && doc.error_code === "daily_cap_reached";
@@ -197,31 +190,62 @@ function SessionView({ id }: { id: string }) {
             </Notice>
           ) : null}
 
+          {progress && !progress.hidden && doc.state !== "report_ready" ? (
+            <div className="grid gap-2">
+              <div className="flex items-center gap-3">
+                <Progress
+                  aria-label="Overall progress"
+                  aria-valuetext={`${progress.pct} percent`}
+                  value={progress.pct}
+                  className="flex-1"
+                />
+                <span className="text-sm tabular-nums">{progress.pct}%</span>
+              </div>
+              <p className={NOTE}>Elapsed {formatElapsed(progress.elapsedMs)}</p>
+            </div>
+          ) : null}
+
+          {timeline.hint ? (
+            <p data-slot="hint" className={NOTE}>
+              {timeline.hint}
+            </p>
+          ) : null}
+
+          {isCancellable(doc.state) ? (
+            <div data-slot="cancel" className="flex justify-end">
+              <CancelLink
+                state={doc.state}
+                freeRun={Boolean(detail.data?.free_run)}
+                pending={cancel.isPending}
+                onOpen={() => {
+                  setCancelOpened(true);
+                  cancel.reset();
+                }}
+                onConfirm={() => cancel.mutate()}
+              />
+            </div>
+          ) : null}
+
           <ol className="m-0 grid list-none gap-2 p-0" aria-label="Progress">
             {timeline.steps.map((s) => (
-              <li key={s.key} data-status={s.status} className={`border-l-4 px-3 py-2 ${STEP_CLASS[s.status]}`}>
-                <span>{s.label}</span>{" "}
-                <span className="font-normal text-muted-foreground">
-                  ({s.status === "done" ? "done" : s.status === "current" ? "in progress" : s.status === "failed" ? "failed" : "not started"})
-                </span>
-                {s.subLabel ? <span className="font-normal text-muted-foreground"> {s.subLabel}</span> : null}
+              <li
+                key={s.key}
+                data-status={s.status}
+                className={`flex flex-wrap items-center gap-x-2 border-l-4 px-3 py-2 ${STEP_CLASS[s.status]}`}
+              >
+                {s.status === "done" ? (
+                  <span data-slot="step-check" aria-hidden="true">
+                    ✓
+                  </span>
+                ) : s.status === "current" ? (
+                  <Spinner />
+                ) : null}
+                <span>{s.label}</span>
+                <span className="font-normal">{STEP_STATUS_TEXT[s.status]}</span>
+                {s.subLabel ? <span className="font-normal text-muted-foreground">{s.subLabel}</span> : null}
               </li>
             ))}
           </ol>
-
-          {timeline.showRunCopy ? (
-            <>
-              <p className={NOTE}>
-                {timeline.hint}
-              </p>
-              {runStartedAt !== null ? <p className={NOTE}>Elapsed {formatElapsed(now - runStartedAt)}</p> : null}
-              {doc.progress > 0 ? (
-                <p className={NOTE}>
-                  <progress max={100} value={doc.progress} aria-label="Progress" /> {doc.progress}%
-                </p>
-              ) : null}
-            </>
-          ) : null}
 
           {timeline.capReached ? (
             <div>
@@ -262,7 +286,7 @@ function SessionView({ id }: { id: string }) {
           {retryError ? <ErrorCard code={retryError.code} reference={retryError.requestId} /> : null}
           {runError ? <ErrorCard code={runError.code} reference={runError.requestId} resetsAt={resetsAt} /> : null}
 
-          {doc.state === "created" || doc.state === "uploading" || doc.state === "upload_incomplete" ? <UploadSlot sessionId={id} doc={doc} /> : null}
+          {doc.state === "created" || doc.state === "uploading" || doc.state === "upload_incomplete" ? <UploadSlot sessionId={id} doc={doc} onFraction={setUploadFraction} /> : null}
           {doc.state !== "deleting" ? <RatingCardSlot sessionId={id} doc={doc} readOnly={doc.rating_submitted || doc.state === "report_ready"} /> : null}
           {doc.transcript_ready && doc.state !== "deleting" && (!doc.speaker_confirmed || doc.state === "failed") ? (
             <SpeakerGateSlot sessionId={id} doc={doc} />
@@ -270,21 +294,6 @@ function SessionView({ id }: { id: string }) {
 
           {cancel.error ? (
             <ErrorCard message={cancelErrorMessage(cancel.error)} code={undefined} reference={id} />
-          ) : null}
-
-          {isCancellable(doc.state) ? (
-            <div className={ACTIONS}>
-              <CancelLink
-                state={doc.state}
-                freeRun={Boolean(detail.data?.free_run)}
-                pending={cancel.isPending}
-                onOpen={() => {
-                  setCancelOpened(true);
-                  cancel.reset();
-                }}
-                onConfirm={() => cancel.mutate()}
-              />
-            </div>
           ) : null}
 
           <div className={ACTIONS}>
