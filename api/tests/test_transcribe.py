@@ -460,7 +460,7 @@ def test_next_poll_enqueue_failure_answers_5xx_then_fails_on_the_last_attempt(bl
     assert env.session.state == "transcribing"
     last = env.runner.handle(p, 1)  # no attempt left: terminal, not silent
     assert (last.status_code, last.outcome) == (200, "failed")
-    assert env.session.error.code == "transcription_failed"
+    assert env.session.error.code == "upstream_unavailable"  # 03 PRD D6: transient STT stays retryable
 
 
 def test_next_poll_enqueue_recovers_on_the_retry(blobs):
@@ -483,7 +483,7 @@ def test_first_poll_enqueue_failure_in_transcribe_is_not_silent(blobs):
     env.queue.fail = True
     assert env.start(0).status_code == 503
     assert env.start(1).outcome == "failed"
-    assert env.session.error.code == "transcription_failed"
+    assert env.session.error.code == "upstream_unavailable"  # 03 PRD D6
     assert env.stt.submits == 1  # the retry resumed, never re-submitted
 
 
