@@ -366,7 +366,7 @@ async def test_retry_within_the_task_refunds_once_never_twice(env):
 
     class SpendThenBreak(FakeEvaluation):
         async def run(self, *a, **kw):
-            env.repo.update_session(env.uid, sid, {"clinician_speaker": None})
+            env.repo.update_run(env.uid, sid, env.repo.get_session(env.uid, sid).first_run_id, {"clinician_speaker": ""})
             raise AdapterError("upstream_unavailable")
 
     swap_eval(env, SpendThenBreak())
@@ -548,7 +548,7 @@ async def test_bad_file_failure_is_not_refunded_after_the_llm_call(env):
 async def test_failure_before_the_llm_is_refunded(env):
     sid = await env.start()
     # break an input the handler needs before it calls the evaluation
-    env.repo.update_session(env.uid, sid, {"clinician_speaker": None})
+    env.repo.update_run(env.uid, sid, env.repo.get_session(env.uid, sid).first_run_id, {"clinician_speaker": ""})
     env.drain()
     assert env.repo.get_session(env.uid, sid).state == "failed"
     assert env.counters() == (0, 0)  # refunded: runs back to 0, slot freed
@@ -644,7 +644,7 @@ async def test_transient_run_failure_refunds_and_is_not_counted(env):
 
 async def test_permanent_internal_run_failure_refunds_and_is_not_counted(env):
     sid = await env.start()
-    env.repo.update_session(env.uid, sid, {"clinician_speaker": None})  # internal_error, no LLM
+    env.repo.update_run(env.uid, sid, env.repo.get_session(env.uid, sid).first_run_id, {"clinician_speaker": ""})  # internal_error, no LLM
     env.drain()
     s = env.repo.get_session(env.uid, sid)
     assert s.error.kind == "permanent_internal" and s.error.counted is False
@@ -737,3 +737,100 @@ async def test_failed_run_persists_completed_call_metrics(env):
     run = env.repo.list_runs(env.uid, sid)[0]
     assert run.status == "failed"
     assert run.run_info["metrics"]["records"][0]["input_tokens"] == 11
+
+
+def raw_doc(env, path, mutate):
+    """Corrupt storage without loading a model, including actual missing fields."""
+    if isinstance(env.repo, FakeRepo):
+        updated = mutate(env.repo._get(path))
+        if updated is None:
+            env.repo._docs.pop(path, None)
+        else:
+            env.repo._put(path, updated)
+    else:
+        parts = path.split("/")
+        ref = env.repo._top(*parts[:2])
+        for collection, ident in zip(parts[2::2], parts[3::2], strict=True):
+            ref = ref.collection(collection).document(ident)
+        updated = mutate(ref.get().to_dict())
+        if updated is None:
+            ref.delete()
+        else:
+            ref.set(updated)
+
+
+@pytest.mark.parametrize("fault", [
+    "changed_body", "missing_doc", "missing_body", "missing_blob",
+    *[f"empty_{f}" for f in ("clinician_speaker", "language", "transcript_sha256")],
+    *[f"missing_{f}" for f in ("change_goal", "clinician_speaker", "language", "transcript_sha256")],
+    *[f"invalid_{f}" for f in ("change_goal", "clinician_speaker", "language", "transcript_sha256")],
+])
+async def test_worker_rejects_corrupt_pinned_inputs(env, fault, caplog):
+    sid = await env.start()
+    run = env.repo.list_runs(env.uid, sid)[0]
+    path = f"sessions/{sid}/transcripts/current"
+    if fault in ("changed_body", "missing_doc", "missing_body", "missing_blob"):
+        def corrupt(doc):
+            if fault == "missing_doc":
+                return None
+            if fault == "changed_body":
+                doc["transcript"]["language"] = "zz"
+            else:
+                doc["transcript"] = None
+                if fault == "missing_blob":
+                    doc["pointer"] = {"key": "missing/transcript.json", "uri": "gs://fake-bucket/missing/transcript.json", "size_bytes": 100}
+            return doc
+    else:
+        action, field = fault.split("_", 1)
+        path = f"sessions/{sid}/runs/{run.run_id}"
+        def corrupt(doc):
+            if action == "missing":
+                doc.pop(field)
+            else:
+                doc[field] = "" if action == "empty" else None
+            return doc
+    raw_doc(env, path, corrupt)
+    env.drain()
+    session = env.repo.get_session(env.uid, sid)
+    assert session.state == "failed" and session.error.code == "internal_error"
+    assert session.error.counted is False and env.counters() == (0, 0)
+    assert env.evaluation.calls == 0 and env.repo.list_reports(env.uid, sid) == []
+    records = [r.fields for r in caplog.records if getattr(r, "fields", {}).get("reason") == "run_input_mismatch"]
+    assert records and all(r["session_id"] == sid and r["run_id"] == run.run_id for r in records)
+    stored = []
+    raw_doc(env, f"sessions/{sid}/runs/{run.run_id}", lambda d: stored.append(d) or d)
+    assert stored[0]["status"] == "failed" and stored[0]["released"] is True
+    assert stored[0]["llm_started"] is False
+
+
+async def test_worker_uses_snapshot_across_session_edits_and_redelivery(env):
+    seen = []
+    class EditThenRetry(FakeEvaluation):
+        async def run(self, ctx, transcript, speaker_map, params, progress_cb=None):
+            seen.append((speaker_map, params.copy()))
+            if len(seen) == 1:
+                env.repo.update_session(env.uid, sid, {
+                    "change_goal": "private changed goal", "clinician_speaker": "S2",
+                    "language": "zz", "stt": None,
+                })
+                raise AdapterError("upstream_unavailable")
+            return await super().run(ctx, transcript, speaker_map, params, progress_cb)
+    swap_eval(env, EditThenRetry())
+    sid = await env.start()
+    before = env.repo.list_runs(env.uid, sid)[0]
+    env.repo.update_session(env.uid, sid, {
+        "change_goal": "private edit before delivery", "clinician_speaker": "S2",
+        "language": "zz", "stt": None,
+    })
+    env.drain()
+    after = env.repo.get_run(env.uid, sid, before.run_id)
+    assert after.attempts == 2 and after.status == "done"
+    assert len(seen) == 2 and seen[0] == seen[1]
+    assert seen[1][0] == {"subject": before.clinician_speaker}
+    assert seen[1][1]["change_goal"] == before.change_goal
+    assert seen[1][1]["language"] == before.language
+    assert seen[1][1]["stt_run"] == before.stt.run.model_dump()
+    assert len(env.repo.list_reports(env.uid, sid)) == 1
+    from onolys_api.jobs.queue import TaskPayload
+    result = env.app.state.runner.handle(TaskPayload(kind="run", uid=env.uid, sid=sid, run_id=before.run_id))
+    assert result.outcome == "duplicate" and len(seen) == 2

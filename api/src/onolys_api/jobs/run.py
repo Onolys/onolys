@@ -24,17 +24,18 @@ import json
 import logging
 import time
 from collections.abc import Callable
-from typing import Any
+from typing import Any, NoReturn
 
 from onolys_engine_core.context import RunContext
 from onolys_engine_core.validated_run import OutputInvalid
+from pydantic import ValidationError
 
 from onolys_api import logs
 from onolys_api.adapters.base import Evaluation
 from onolys_api.adapters.error_map import kind_for_code, to_public
 from onolys_api.adapters.validated import evaluate_validated
 from onolys_api.jobs.alive import ensure_active
-from onolys_api.jobs.charging import release_failed_run, release_once
+from onolys_api.jobs.charging import invalid_run_snapshot, release_failed_run, release_once
 from onolys_api.jobs.machine import (
     RUN_START_PROGRESS,
     STAGE_WEIGHTS,
@@ -54,8 +55,8 @@ from onolys_api.jobs.worker import (
     TaskError,
 )
 from onolys_api.repo.base import NotFoundError
-from onolys_api.repo.models import ReportDoc, utcnow
-from onolys_api.storage.base import BlobStore
+from onolys_api.repo.models import ReportDoc, transcript_sha256, utcnow
+from onolys_api.storage.base import BlobNotFoundError, BlobStore
 
 ARTIFACTS = ("code", "tips")
 MAX_PROGRESS = 99  # same as `progress.MAX_PROGRESS`
@@ -78,7 +79,18 @@ def make_run_handler(
         uid, sid, run_id = ctx.uid, ctx.sid, ctx.payload.run_id
         assert run_id
         repo = ctx.repo
-        run_doc = repo.get_run(uid, sid, run_id)
+        try:
+            run_doc = repo.get_run(uid, sid, run_id)
+        except ValidationError as exc:
+            if not invalid_run_snapshot(exc):
+                raise
+            # Preserve cancellation/deletion even when the stored snapshot cannot load.
+            session = repo.get_session(uid, sid)
+            if session.state == "deleting":
+                raise NotFoundError() from None
+            if session.state == "cancelled":
+                raise Cancelled() from None
+            _input_mismatch(sid, run_id)
         date = run_doc.cap_date
         try:
             _execute(ctx, blobs, get_evaluation(), run_doc)
@@ -144,24 +156,37 @@ def _execute(ctx, blobs, evaluation, run_doc) -> None:
         )  # fmt: skip
 
 
+def _input_mismatch(sid: str, run_id: str) -> NoReturn:
+    logs.emit("run_input_invalid", logging.ERROR, reason="run_input_mismatch",
+              session_id=sid, run_id=run_id)
+    raise PermanentError("internal_error") from None
+
+
 def _evaluate(ctx, blobs, evaluation, run_doc, session) -> None:
     uid, sid, run_id, repo = ctx.uid, ctx.sid, run_doc.run_id, ctx.repo
-    if session.clinician_speaker is None:
-        raise PermanentError("internal_error")
-    transcript = repo.get_transcript(uid, sid, TRANSCRIPT_ID).transcript
-    if transcript is None:
-        raise PermanentError("internal_error")
+    if any(not getattr(run_doc, field, None) for field in (
+        "clinician_speaker", "language", "transcript_sha256"
+    )) or not isinstance(getattr(run_doc, "change_goal", None), str):
+        _input_mismatch(sid, run_id)
+    try:
+        transcript = repo.get_transcript(uid, sid, TRANSCRIPT_ID).transcript
+    except (NotFoundError, BlobNotFoundError):
+        # A concurrent delete still wins over input-integrity failure.
+        ensure_active(repo, blobs, uid, sid)
+        _input_mismatch(sid, run_id)
+    if transcript is None or transcript_sha256(transcript) != run_doc.transcript_sha256:
+        _input_mismatch(sid, run_id)
     params = {
-        "change_goal": session.change_goal or "",
+        "change_goal": run_doc.change_goal,
         "seed": sid,
         "coded_span": (
             run_doc.coded_span.model_dump(exclude_none=True) if run_doc.coded_span else None
         ),
-        "language": transcript.language or session.language,
+        "language": run_doc.language,
         "n_runs": run_doc.n_runs,
         "preset": run_doc.preset,
         "code_version": run_doc.code_version,
-        "stt_run": session.stt.run.model_dump() if session.stt and session.stt.run else None,
+        "stt_run": run_doc.stt.run.model_dump() if run_doc.stt and run_doc.stt.run else None,
         "stub_title": session.title or "",  # real adapters ignore it
     }
     done: set[str] = set()
@@ -213,7 +238,7 @@ def _evaluate(ctx, blobs, evaluation, run_doc, session) -> None:
     try:
         out = run_coro(
             evaluate_validated(
-                evaluation, rctx, transcript, {"subject": session.clinician_speaker},
+                evaluation, rctx, transcript, {"subject": run_doc.clinician_speaker},
                 params, progress_cb,
             )
         )  # fmt: skip

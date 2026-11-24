@@ -5,10 +5,21 @@ counted (they are created `counted=False`, so a release never gives anything bac
 `should_refund` and `release_once` are the public helpers SP04 reuses; both are run-end only.
 """
 
+from pydantic import ValidationError
+
 from onolys_api.repo.base import NotFoundError
 from onolys_api.repo.limits import decide_cancel
 
 __all__ = ["decide_cancel", "release_failed_run", "release_once", "should_refund"]
+
+
+def invalid_run_snapshot(exc: ValidationError) -> bool:
+    """Only malformed pinned inputs, never unrelated document validation failures."""
+    fields = {"change_goal", "clinician_speaker", "language", "transcript_sha256", "stt"}
+    errors = exc.errors(include_input=False)
+    return exc.title == "RunDoc" and bool(errors) and all(
+        error["loc"] and error["loc"][0] in fields for error in errors
+    )
 
 
 def should_refund(kind: str, llm_started: bool) -> bool:
@@ -39,6 +50,12 @@ def release_failed_run(repo, uid: str, sid: str, run_id: str, kind: str, date: s
     """Release a run that ended in a failure of `kind`, refunding per `should_refund`."""
     try:
         llm_started = repo.get_run(uid, sid, run_id).llm_started
+    except ValidationError as exc:
+        if kind != "permanent_internal" or not invalid_run_snapshot(exc):
+            raise
+        # The raw storage transaction needs no RunDoc. A system failure always refunds.
+        repo.release_run_slot(uid, sid, run_id, True, date)
+        return False
     except NotFoundError:
         return None  # nothing to refund on a vanished run
     return release_once(repo, uid, sid, run_id, should_refund(kind, llm_started), date)
