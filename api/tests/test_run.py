@@ -834,3 +834,39 @@ async def test_worker_uses_snapshot_across_session_edits_and_redelivery(env):
     from onolys_api.jobs.queue import TaskPayload
     result = env.app.state.runner.handle(TaskPayload(kind="run", uid=env.uid, sid=sid, run_id=before.run_id))
     assert result.outcome == "duplicate" and len(seen) == 2
+
+
+async def test_run_views_keep_populated_input_snapshot_private(env):
+    from onolys_api.routes.runs import RunView, _view
+
+    # Use the real start transaction, then inspect the persisted populated inputs
+    # so an empty placeholder cannot make the privacy assertions pass vacuously.
+    sid = await env.new_session()
+    rating = await env.c.put(
+        f"/v1/sessions/{sid}/rating", json={"final": True, "card": CARD}, headers=env.h,
+    )
+    assert rating.status_code == 202
+    confirmed = await env.c.post(
+        f"/v1/sessions/{sid}/speakers/confirm", json={"clinician_speaker": "S1"}, headers=env.h,
+    )
+    assert confirmed.status_code == 202
+    (run,) = env.repo.list_runs(env.uid, sid)
+    private = {"change_goal", "clinician_speaker", "language", "transcript_sha256"}
+    assert private <= run.model_dump().keys()
+    assert run.clinician_speaker == "S1"
+    assert run.language and len(run.transcript_sha256) == 64
+    assert run.change_goal == CARD["change_goal"]
+    assert all(run.model_dump()[key] for key in private)
+    assert private.isdisjoint(RunView.model_fields)
+    projected = _view(run).model_dump(mode="json")
+    assert private.isdisjoint(projected)
+
+    for path, listed in (
+        (f"/v1/sessions/{sid}/runs", True),
+        (f"/v1/runs/{run.run_id}", False),
+    ):
+        response = await env.c.get(path, headers=env.h)
+        assert response.status_code == 200
+        items = response.json()["items"] if listed else [response.json()]
+        assert items == [projected]
+        assert all(private.isdisjoint(item) for item in items)
