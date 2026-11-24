@@ -45,9 +45,7 @@ test.describe("CSP smoke: zero violations under the prod CSP", () => {
     expect(await csp.all()).toEqual([]);
   });
 
-  test("account menu, settings secret dialog, native select, session DeleteDialog", async ({ page, context, browserName }) => {
-    // Firefox/WebKit authorize clipboard writes through the Copy click itself.
-    if (browserName === "chromium") await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+  test("account menu, current settings, native select, session DeleteDialog", async ({ page }) => {
     const csp = await watchCsp(page);
     await signUpVerified(page, "csp@example.com");
 
@@ -57,20 +55,9 @@ test.describe("CSP smoke: zero violations under the prod CSP", () => {
     await expect(page.getByRole("menu")).toHaveCount(0); // let the exit animation finish before reopening
     await expect(page.getByRole("button", { name: "Account menu" })).toBeFocused(); // Escape returns focus
     await accountMenu(page, "Settings");
-    await page.getByRole("button", { name: "Create API key" }).click();
-    await expect(page.getByRole("dialog")).toBeVisible();
-    await page.getByRole("button", { name: "Copy" }).click();
-    await expect(page.getByText(/copied/i)).toBeVisible();
-    await page.keyboard.press("Escape");
-    await page.mouse.click(5, 5); // outside click
-    await expect(page.getByRole("dialog")).toBeVisible(); // neither dismisses the one-time secret
-    await page.getByRole("checkbox", { name: /stored it/i }).click();
-    await page.getByRole("button", { name: "Done" }).click();
-    await expect(page.getByRole("dialog")).toHaveCount(0);
-    await page.getByRole("button", { name: "Regenerate" }).click();
-    await expect(page.getByRole("alertdialog")).toBeVisible();
-    await page.keyboard.press("Escape");
-    await expect(page.getByRole("alertdialog")).toHaveCount(0);
+    await expect(page.getByRole("region", { name: "Usage" })).toBeVisible();
+    await expect(page.getByRole("region", { name: "Account", exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: /Create API key|Regenerate|Sign out/ })).toHaveCount(0);
 
     await spa(page, "/sessions/new"); // native <select>: choose / change
     const lang = page.getByRole("combobox").first();

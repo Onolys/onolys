@@ -96,11 +96,6 @@ const SIGNED_IN = {
     await expect(p.getByRole("alertdialog")).toBeVisible();
   },
   settings: async (p) => { await verified(p, "f@example.com"); await accountMenu(p, "Settings"); await expect(p.getByRole("heading", { name: "Settings" })).toBeVisible(); },
-  "settings-secret-dialog": async (p) => {
-    await SIGNED_IN.settings(p);
-    await p.getByRole("button", { name: "Create API key" }).click();
-    await expect(p.getByRole("dialog")).toBeVisible();
-  },
   "account-menu-open": async (p) => { await verified(p, "g@example.com"); await p.getByRole("button", { name: "Account menu" }).click(); await expect(p.getByRole("menuitem", { name: "Settings" })).toBeVisible(); },
 };
 
