@@ -263,7 +263,7 @@ The failed session card shows the **session id** as its Reference. All app logs 
 1. **Open the session trail** (Logs Explorer, project `onolys`; both envs share it): `jsonPayload.session_id="<session id>"`, or the link template in [logging.md](logging.md#reference). Add `resource.labels.service_name=("onolys-api-prod" OR "onolys-worker-prod")` to pick the env. Sort ascending to read in order; for one run add `jsonPayload.run_id="<rid>"`.
 2. **Find the failure:** add `jsonPayload.status="failed"`. Read `error_code`, `exc_class`, `step`, `code_version` (deployed sha). For a provider error read the `llm_provider_error` line just before it (`http_status`, `error_type`, `provider_error`).
 3. **Errors with no session** (Settings cards, API-only calls) show a `request_id` instead: `jsonPayload.request_id="<id>"`.
-4. **Match the `error_code`** below, fix or advise, then have the user run again.
+4. **Match the `error_code`** below, fix or advise, then tell the user what the code says: Try again (transient), start a new session (`permanent_internal`) or upload a different file (`user_file`).
 
 Verified 2026-11-20 against the task-10 test lines (staging, `error_code t10_test`, written for the alert check) through the REST API `POST https://logging.googleapis.com/v2/entries:list` with body `{"resourceNames":["projects/onolys"],"filter":"jsonPayload.request_id=\"t10b-1795181702\"","orderBy":"timestamp desc"}`: it returned the one `onolys-worker-staging` line (`status failed`, `session_id synthetic`, `step test`); the filter `jsonPayload.session_id="synthetic"` returned that line plus the `onolys-api-staging` one (`request_id t10-1795181472`); the alert filter (`resource.type="cloud_run_revision"`, service name in the two staging services, `jsonPayload.status="failed"`) matched both.
 
@@ -281,8 +281,8 @@ The code in the failed log line is the public code `to_public` (`api/src/onolys_
 
 | `error_code` | Meaning | Usual fix |
 |---|---|---|
-| `upstream_unavailable` | LLM or STT provider failed or timed out (retryable; one retry is automatic) | Check Google (Gemini) / Anthropic status; check the worker has its secret ref and a valid key (`GEMINI_API_KEY`); user runs again shortly |
-| `transcription_failed` | STT failed twice, or a non-transient STT error | Ask for a different file; look at `exc_class` (`SttProviderError`); check `config/{env}/stt_providers.yaml` and the STT service agent's bucket access |
+| `upstream_unavailable` | LLM or STT provider failed or timed out (retryable; one retry is automatic) | Check Google (Gemini) / Anthropic status; check the worker has its secret ref and a valid key (`GEMINI_API_KEY`); user presses Try again shortly (at most 3 times) |
+| `transcription_failed` | A non-transient STT error (a transient one stays `upstream_unavailable`) | Ask for a different file; look at `exc_class` (`SttProviderError`); check `config/{env}/stt_providers.yaml` and the STT service agent's bucket access |
 | `no_speech` | No usable speech found | Nothing to fix; user uploads another recording |
 | `speakers_not_separated` | Diarization could not separate speakers | Nothing to fix; another recording |
 | `deadline_exceeded` | Run exceeded its time limit (retryable) | Run again; if repeated check the provider's latency and worker timeout (900 s) |

@@ -130,9 +130,24 @@ for (const scheme of ["light", "dark"]) {
     // 05-processing-screen: one shot per phase (upload / background / waiting). Mock steps advance every 1.5s.
     test("processing screen: upload, background, waiting phases", async ({ page }) => {
       const csp = await watchCsp(page);
-      let release;
-      const held = new Promise((r) => (release = r));
-      await page.route("**/uploads/**", async (route) => { await held; await route.continue(); }); // hold the PUT: upload phase stays visible
+      // Hold the upload PUT so the upload phase stays visible. The mock answers it from the MSW service worker, which
+      // `page.route` never sees (Playwright does not route service-worker-handled requests), so hold the XHR itself:
+      // `send()` of the PUT to /uploads/ is deferred until `window.__releaseUpload()`.
+      await page.addInitScript(() => {
+        const queue = [];
+        let released = false;
+        const open = XMLHttpRequest.prototype.open;
+        const send = XMLHttpRequest.prototype.send;
+        XMLHttpRequest.prototype.open = function (method, url, ...rest) {
+          this.__hold = String(method).toUpperCase() === "PUT" && String(url).includes("/uploads/");
+          return open.call(this, method, url, ...rest);
+        };
+        XMLHttpRequest.prototype.send = function (body) {
+          if (this.__hold && !released) { queue.push(() => send.call(this, body)); return; }
+          return send.call(this, body);
+        };
+        window.__releaseUpload = () => { released = true; queue.splice(0).forEach((f) => f()); };
+      });
       await verified(page, `p-${scheme}@example.com`);
       await openUpload(page);
       await page.getByLabel("Change goal").fill("Walk more");
@@ -155,7 +170,7 @@ for (const scheme of ["light", "dark"]) {
       };
 
       await phase("upload", "Keep this tab open until upload finishes");
-      release();
+      await page.evaluate(() => window.__releaseUpload());
       await phase("background", "You can close this tab — we'll keep working");
       await gate(page);
       await phase("waiting", "We'll wait here for your choice");

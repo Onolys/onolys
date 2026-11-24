@@ -90,10 +90,12 @@ For a provider failure the trail has a WARNING `llm_provider_error` line (`provi
 |---|---|---|
 | `upstream_unavailable` | 429 | Provider rate limit; `provider_error` names the quota |
 | `upstream_unavailable` | 5xx | Provider outage or overload |
-| `upstream_unavailable` | 401/403 | Bad or missing key (worker secret); the user retry will not help |
-| `upstream_unavailable` | 400/404 | Bad request or model id (routes file, `LLM_MODEL`) |
+| `internal_error` | 401/403 | Bad or missing key (worker secret); permanent, a user retry will not help |
+| `internal_error` | 400/404 | Bad request or model id (routes file, `LLM_MODEL`); permanent |
 | `upstream_unavailable` | none | Timeout or network error; see `error_type` |
-| `internal_error` | n/a | Read `exc_class`, then the trail |
+| `internal_error` | other or none | Read `exc_class`, then the trail |
+
+Which statuses are transient (`upstream_unavailable`) and which are permanent (`internal_error`) is the [engine error table](public-api.md#engine-errors).
 
 `provider_error` is the sanitized first line of the provider's text, up to 300 chars; `error_type` is the exception class name.
 
