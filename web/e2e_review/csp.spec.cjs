@@ -90,6 +90,9 @@ test.describe("CSP smoke: zero violations under the prod CSP", () => {
 
     await spa(page, "/new");
     await newSession(page);
+    await expect(page.getByRole("button", { name: "Delete session" })).toHaveCount(0);
+    await page.getByRole("button", { name: "This is the clinician" }).first().click();
+    await expect(page).toHaveURL(/\/sessions\/[^/]+\/reports\/1$/, { timeout: 60_000 });
     await page.getByRole("button", { name: "Delete session" }).click();
     await expect(page.getByRole("alertdialog")).toBeVisible();
     await page.keyboard.press("Escape");

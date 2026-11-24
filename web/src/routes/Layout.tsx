@@ -46,8 +46,8 @@ export function Layout() {
   } else if (phase === "verified") {
     navigation = (
       <>
-        <NavItem to="/sessions">Sessions</NavItem>
         <NavItem to="/new">New Session</NavItem>
+        <NavItem to="/sessions">Sessions</NavItem>
       </>
     );
   }
@@ -72,7 +72,7 @@ export function Layout() {
         id="main"
         ref={mainRef}
         // focus-to-h1 on route change: no ring for programmatic focus, keep it for keyboard focus-visible
-        className="mx-auto w-full max-w-5xl flex-1 px-4 py-6 [&_h1:focus:not(:focus-visible)]:outline-none"
+        className={`mx-auto w-full flex-1 px-4 py-6 [&_h1:focus:not(:focus-visible)]:outline-none ${pathname === "/sample" || /^\/sessions\/[^/]+\/reports\/[^/]+$/.test(pathname) ? "max-w-none lg:w-4/5" : "max-w-5xl"}`}
       >
         <Outlet />
       </main>

@@ -22,7 +22,7 @@ describe("UploadSlot resume (C4)", () => {
     expect(screen.queryByText(/start a new session/i)).toBeNull();
   });
 
-  it("a running job shows progress, not Resume", () => {
+  it("a running job shows bytes without a second progress bar or Resume", () => {
     vi.spyOn(uploader, "subscribeRegistry").mockImplementation(() => () => undefined);
     const running = { phase: "uploading", loaded: 1, total: 4, attempt: 0 };
     const job = {
@@ -34,7 +34,8 @@ describe("UploadSlot resume (C4)", () => {
     vi.spyOn(uploader, "getJob").mockReturnValue(job as unknown as uploader.UploadJob);
     render(<UploadSlot sessionId="s1" doc={docIn("uploading")} />);
     expect(screen.queryByRole("button", { name: "Resume upload" })).toBeNull();
-    expect(screen.getByLabelText("Upload progress")).toBeInTheDocument();
+    expect(screen.getByText(/MB \(25%\)/)).toBeInTheDocument();
+    expect(screen.queryByRole("progressbar")).not.toBeInTheDocument();
   });
 
   it("C12: a failed job shows the carried error message", () => {

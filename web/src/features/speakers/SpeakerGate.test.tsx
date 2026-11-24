@@ -159,7 +159,7 @@ describe("change who the clinician is", () => {
   it("is not offered once the report is ready: the rating is final (FX45)", async () => {
     const sid = reportReady();
     open(sid);
-    expect(await screen.findByRole("link", { name: "View report" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { level: 1, name: "Report" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Change who the clinician is" })).not.toBeInTheDocument();
     expect(mockBackend.listRuns(UID, sid)).toHaveLength(1);
   });

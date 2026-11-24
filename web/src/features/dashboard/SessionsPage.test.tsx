@@ -49,7 +49,7 @@ describe("sessions page: list", () => {
     for (const [i, [, label]] of cases.entries()) {
       const li = await waitFor(() => rowOf(`Session s${i}`));
       expect(within(li).getByText(label)).toBeInTheDocument();
-      expect(within(li).getByRole("link", { name: `Session s${i}` })).toHaveAttribute("href", `/sessions/s${i}`);
+      expect(within(li).getByRole("link", { name: `Session s${i}` })).toHaveAttribute("href", i === 7 ? `/sessions/s${i}/reports/2` : `/sessions/s${i}`);
     }
   });
 
@@ -70,6 +70,7 @@ describe("sessions page: list", () => {
     expect(await main().findByRole("link", { name: "Session run1" })).toHaveAttribute("href", "/sessions/run1");
     expect(main().getByRole("link", { name: "Session bad1" })).toHaveAttribute("href", "/sessions/bad1");
     expect(within(rowOf("Session run1")).queryByRole("link", { name: /Report v/ })).toBeNull();
+    expect(main().getByRole("link", { name: "Session ok1" })).toHaveAttribute("href", "/sessions/ok1/reports/3");
     const rep = within(rowOf("Session ok1")).getByRole("link", { name: "Report v3" });
     expect(rep).toHaveAttribute("href", "/sessions/ok1/reports/3");
     await user.click(rep);

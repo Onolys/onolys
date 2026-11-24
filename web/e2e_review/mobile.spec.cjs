@@ -44,8 +44,7 @@ test.describe("mobile (iPhone 13 viewport)", () => {
     expect(await hasHScroll(page), "session/speaker gate").toBe(false);
     await page.getByRole("button", { name: "This is the clinician" }).first().click();
     await expect(page.getByRole("status")).toContainText("Coding the session", { timeout: 30_000 });
-    await expect(page.getByRole("link", { name: "View report" })).toBeVisible({ timeout: 30_000 });
-    await page.getByRole("link", { name: "View report" }).click();
+    await expect(page).toHaveURL(/\/sessions\/[^/]+\/reports\/1$/, { timeout: 30_000 });
     await expect(page.getByRole("heading", { name: "At a glance" })).toBeVisible();
     await expect(page.getByText(/Difference|Where Onolys disagrees/)).toHaveCount(0);
     await expect(page.getByRole("columnheader", { name: "You", exact: true })).toHaveCount(0);

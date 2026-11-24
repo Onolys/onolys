@@ -1,4 +1,4 @@
-import { act, cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -60,8 +60,61 @@ const failedDoc = (sid: string, code: string): SessionStatusDoc => ({
   has_rating: true,
 });
 
+describe("session page: navigation and heading", () => {
+  it("uses the session name in the heading", async () => {
+    const sid = create("Walking practice");
+    open(sid);
+    expect(await screen.findByRole("heading", { level: 1, name: "Session - Walking practice" })).toBeInTheDocument();
+  });
+
+  it("falls back to the first 20 characters of the saved change goal", async () => {
+    const sid = create();
+    mockBackend.putRating(UID, sid, { final: true, no_rating: true, card: { change_goal: "Walk outside every afternoon" } });
+    open(sid);
+    expect(await screen.findByRole("heading", { level: 1, name: "Session - Walk outside every a…" })).toBeInTheDocument();
+  });
+
+  it("opens an existing completed session directly as its report", async () => {
+    const sid = create();
+    toAwaiting(sid);
+    mockBackend.confirmSpeaker(UID, sid, "spk_0");
+    mockBackend.putRating(UID, sid, { final: true, no_rating: true, card: { change_goal: "g" } });
+    mockBackend.settle(sid);
+    const { router } = open(sid);
+    await waitFor(() => expect(here(router)).toBe(`/sessions/${sid}/reports/1`));
+    expect(router.state.historyAction).toBe("REPLACE");
+  });
+
+  it("uses the completed detail response when the status listener has not answered", async () => {
+    const sid = create();
+    toAwaiting(sid);
+    mockBackend.confirmSpeaker(UID, sid, "spk_0");
+    mockBackend.putRating(UID, sid, { final: true, no_rating: true, card: { change_goal: "g" } });
+    mockBackend.settle(sid);
+    setStatusListener({ subscribe: () => () => {} });
+    const { router } = open(sid);
+    await waitFor(() => expect(here(router)).toBe(`/sessions/${sid}/reports/1`));
+  });
+
+  it("keeps whole Unicode characters in the change-goal heading", async () => {
+    const sid = create();
+    mockBackend.putRating(UID, sid, { final: true, no_rating: true, card: { change_goal: `${"🙂".repeat(19)}🧠hello` } });
+    open(sid);
+    expect(await screen.findByRole("heading", { level: 1, name: `Session - ${"🙂".repeat(19)}🧠…` })).toBeInTheDocument();
+  });
+
+  it("keeps cancel below the steps and does not offer deletion before a report", async () => {
+    const sid = create();
+    open(sid);
+    await ready();
+    const cancel = screen.getByRole("button", { name: "Cancel session" });
+    expect(progress().compareDocumentPosition(cancel) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Delete session" })).not.toBeInTheDocument();
+  });
+});
+
 describe("session page: status listener", () => {
-  it("attaches to the status doc and follows it with no GET /sessions/{id}", async () => {
+  it("attaches to the status doc and follows it while loading session metadata", async () => {
     const sid = create();
     open(sid);
     expect(await screen.findByRole("heading", { level: 1, name: "Session" })).toBeInTheDocument();
@@ -74,7 +127,7 @@ describe("session page: status listener", () => {
     await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Transcribing the recording."));
     expect(stepItem("Transcribe")).toHaveTextContent(/in progress/i);
     expect(screen.getByRole("status")).toHaveAttribute("aria-live", "polite");
-    expect(getCalls).toEqual([]);
+    expect(getCalls).toContain(`/v1/sessions/${sid}`);
   });
 
   it("names what is missing in awaiting_input: both, then each one", async () => {
@@ -105,8 +158,7 @@ describe("session page: status listener", () => {
     tick(sid);
     await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Writing tips"));
     act(() => mockBackend.settle(sid));
-    const link = await screen.findByRole("link", { name: /view report/i });
-    expect(link).toHaveAttribute("href", `/sessions/${sid}/reports/1`);
+    await screen.findByRole("heading", { level: 1, name: "Report" });
     // flag off: no card, no fallback (submitted); no submit buttons, no Run again
     expect(screen.queryByRole("textbox", { name: "Change goal" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /submit rating|no rating/i })).not.toBeInTheDocument();
@@ -125,7 +177,7 @@ describe("session page: status listener", () => {
       tick(sid);
       await new Promise((r) => setTimeout(r, 60));
     }
-    expect(getCalls).toEqual([]);
+    expect(getCalls).toEqual([`/v1/sessions/${sid}`]);
   });
 
   it("on a listener error polls the detail and resubscribes; no stopped notice until retries run out", async () => {
@@ -312,7 +364,7 @@ describe("session page: upload incomplete (D4)", () => {
     await ready();
     act(() => mockEmitter.emit(sid, incompleteDoc()));
     expect(await screen.findByText(/upload didn't finish/i)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Delete session" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Delete session" })).not.toBeInTheDocument();
     const resume = screen.getByRole("button", { name: "Resume upload" });
     expect(resume).toBeDisabled();
     await userEvent.upload(
@@ -570,93 +622,6 @@ describe("session page: start held by an active run (review R2)", () => {
   });
 });
 
-describe("session page: delete", () => {
-  it("asks first, says what is removed, and cancel keeps the session", async () => {
-    const user = userEvent.setup();
-    const sid = create();
-    open(sid);
-    await ready();
-    await user.click(screen.getByRole("button", { name: "Delete session" }));
-    const dialog = await screen.findByRole("alertdialog", { name: /delete this session/i });
-    expect(dialog).toHaveTextContent(/audio, transcript, rating and all report versions/i);
-    expect(dialog).toHaveTextContent(/permanently/i);
-    await user.click(within(dialog).getByRole("button", { name: "Cancel" }));
-    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
-    expect(() => mockBackend.getSession(UID, sid)).not.toThrow();
-  });
-
-  it("confirm deletes and goes to the dashboard without a not-found flash", async () => {
-    const user = userEvent.setup();
-    const sid = create();
-    const { router } = open(sid);
-    await ready();
-    await user.click(screen.getByRole("button", { name: "Delete session" }));
-    await user.click(within(await screen.findByRole("alertdialog")).getByRole("button", { name: "Delete permanently" }));
-    await screen.findByRole("heading", { level: 1, name: "Sessions" });
-    expect(here(router)).toBe("/sessions");
-    expect(() => mockBackend.getSession(UID, sid)).toThrow();
-    expect(getCalls).toEqual([]);
-  });
-
-  it("keeps the dialog open with an error when delete fails", async () => {
-    const user = userEvent.setup();
-    const sid = create();
-    open(sid);
-    await ready();
-    server.use(
-      http.delete("*/v1/sessions/:id", () =>
-        HttpResponse.json(
-          { schema_version: "0.0.1", status: 500, message: "x", details: [{ code: "internal_error", message: "x" }], request_id: "req_del" },
-          { status: 500 },
-        ),
-      ),
-    );
-    await user.click(screen.getByRole("button", { name: "Delete session" }));
-    const dialog = await screen.findByRole("alertdialog");
-    await user.click(within(dialog).getByRole("button", { name: "Delete permanently" }));
-    await waitFor(() => expect(within(dialog).getByRole("alert")).toHaveTextContent("Reference: req_del"));
-    expect(screen.getByRole("alertdialog")).toBeInTheDocument();
-  });
-
-  it("Escape is ignored while a delete is in flight, so a failure is still shown (W32)", async () => {
-    const user = userEvent.setup();
-    const sid = create();
-    open(sid);
-    await ready();
-    let release: () => void = () => {};
-    const gate = new Promise<void>((r) => (release = r));
-    server.use(
-      http.delete("*/v1/sessions/:id", async () => {
-        await gate;
-        return HttpResponse.json(
-          { schema_version: "0.0.1", status: 500, message: "x", details: [{ code: "internal_error", message: "x" }], request_id: "req_esc" },
-          { status: 500 },
-        );
-      }),
-    );
-    await user.click(screen.getByRole("button", { name: "Delete session" }));
-    const dialog = await screen.findByRole("alertdialog");
-    await user.click(within(dialog).getByRole("button", { name: "Delete permanently" }));
-    await waitFor(() => expect(within(dialog).getByRole("button", { name: "Delete permanently" })).toBeDisabled());
-    fireEvent.keyDown(dialog, { key: "Escape" }); // focus can still be inside the dialog (e.g. on Cancel)
-    expect(screen.getByRole("alertdialog")).toBeInTheDocument();
-    release();
-    await waitFor(() => expect(within(dialog).getByRole("alert")).toHaveTextContent("Reference: req_esc"));
-  });
-
-  it("Escape closes the dialog", async () => {
-    const user = userEvent.setup();
-    const sid = create();
-    open(sid);
-    await ready();
-    await user.click(screen.getByRole("button", { name: "Delete session" }));
-    await screen.findByRole("alertdialog");
-    await user.keyboard("{Escape}");
-    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
-  });
-});
-
-
 describe("transcript speaker gate", () => {
   it.each([false, true])("shows detected labels only when roles are missing (confirmed=%s)", async (confirmed) => {
     const sid = create();
@@ -783,14 +748,14 @@ describe("session page: cancel (04-cancel R9)", () => {
     expect(await screen.findByText("Session cancelled. This counted toward your limit.")).toBeInTheDocument();
   });
 
-  it("the cancelled view has Delete only: no rating, speaker gate, retry or cancel link", async () => {
+  it("the cancelled view has no deletion, rating, speaker gate, retry or cancel link", async () => {
     const sid = create();
     toAwaiting(sid);
     open(sid);
     await ready();
     await userEvent.click(confirmBtn(await confirm()));
     await screen.findByRole("heading", { name: "Cancelled" });
-    expect(screen.getByRole("button", { name: "Delete session" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Delete session" })).not.toBeInTheDocument();
     for (const name of [/cancel session/i, /start/i, /retry/i, /submit/i, /confirm/i]) {
       expect(screen.queryByRole("button", { name })).not.toBeInTheDocument();
     }
@@ -830,13 +795,13 @@ describe("session page: cancel (04-cancel R9)", () => {
         HttpResponse.json({ schema_version: "0.0.1", status: 409, message: "x", details: [{ code: "invalid_state", message: "x" }], request_id: "r" }, { status: 409 }),
       ),
     );
-    open(sid);
+    const { router } = open(sid);
     await ready();
     await userEvent.click(confirmBtn(await confirm()));
     expect(await screen.findByRole("alert")).toHaveTextContent("This session already finished or failed.");
     act(() => mockEmitter.emit(sid, { ...failedDoc(sid, "x"), state: "report_ready", latest_report_version: 1 }));
     await waitFor(() => expect(screen.queryByRole("button", { name: "Cancel session" })).not.toBeInTheDocument());
-    expect(screen.getByRole("link", { name: "View report" })).toBeInTheDocument();
+    await waitFor(() => expect(here(router)).toBe(`/sessions/${sid}/reports/1`));
   });
 });
 
@@ -953,7 +918,7 @@ describe("session page: processing screen (05-processing-screen R4, R5, R7, R8)"
     expect(status).toHaveTextContent("Transcribing the recording.");
   });
 
-  it("renders the cancel slot (right-aligned, under the hint) for every cancellable state and no other", async () => {
+  it("renders the cancel slot (right-aligned, below the steps) for every cancellable state and no other", async () => {
     const sid = create();
     open(sid);
     await ready();
@@ -962,8 +927,7 @@ describe("session page: processing screen (05-processing-screen R4, R5, R7, R8)"
       await waitFor(() => expect(slot()).not.toBeNull());
       expect(slot()).toHaveClass("justify-end");
       expect(within(slot() as HTMLElement).getByRole("button", { name: "Cancel session" })).toBeInTheDocument();
-      const hint = document.querySelector('[data-slot="hint"]');
-      expect(hint!.compareDocumentPosition(slot()!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+      expect(progress().compareDocumentPosition(slot()!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     }
     for (const state of ["report_ready", "failed"] as const) {
       emit(sid, { state });
