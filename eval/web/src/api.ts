@@ -46,7 +46,7 @@ export interface RunSummary extends Omit<RunInput, 'selection'> {
  resolved_combos?: Record<string, unknown>; base_preset?: string;
 }
 export interface RunUnit {
- unit_id: string; session_id: string; engine: string; preset?: string | null; repeat?: number | null;
+ unit_id: string; session_id: string; engine: string; combo?: Combo | null; combo_key?: string | null; preset?: string | null; repeat?: number | null;
  status: Exclude<RunStatus, 'partial'>; stage?: string; error?: { code: string; message?: string } | string; output?: unknown;
 }
 export interface ErrorMetric { mae: number | null; mean_bias: number | null; n: number }
