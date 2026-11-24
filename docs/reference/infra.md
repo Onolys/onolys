@@ -73,6 +73,7 @@ Set by Terraform (`infra/modules/environment/services.tf`). Values below are the
 | `CORS_ORIGINS` | yes | no | staging `https://onolys-app-staging.web.app,http://localhost:5173`; prod `https://app.onolys.com` |
 | `UID_HMAC_KEY` | yes | yes | secret ref `uid-hmac-key-{env}` (keys the `uid_hash` log field) |
 | `GEMINI_API_KEY` (evaluation LLM) and `ANTHROPIC_API_KEY` (only for the `claude` preset) | no | yes | secret refs `gemini-api-key-{env}` and `anthropic-api-key-{env}` (one ref per `llm_secrets` / `stt_secrets` entry, always the env's own secret; staging and prod use separate provider keys) |
+| `LLM_PROVIDER`, `LLM_MODEL` | yes | yes | staging only, set by `deploy-staging.yml` from GitHub repo variables `LLM_PROVIDER` / `LLM_MODEL`; not set by Terraform. Empty = no override. See "LLM provider and model" |
 | `GIT_SHA` | yes | yes | set by CI at deploy. `unset` until the first CI deploy (the services still run the placeholder image `us-docker.pkg.dev/cloudrun/container/hello`) |
 
 There are no STT env vars. No model id appears in infra.
@@ -213,6 +214,19 @@ ADMIN_ALLOWED_EMAILS="a@x.com,b@y.com" python3 infra/scripts/seed-secrets.py --e
 ```
 
 Then deploy a new revision as above. First-time order for an env: `terraform apply -target='module.<env>.google_secret_manager_secret.admin_allowed_emails'`, run the seed command, then the full `terraform apply` (a revision that references a secret with no version fails).
+
+## LLM provider and model
+
+Which provider/model the text routes (evaluation LLM calls) use, and where to change it.
+
+- **Default:** `config/{env}/routes.yaml` (baked into the image). Staging routes point at Claude (`anthropic/claude-sonnet-5-5`); prod is unchanged.
+- **Override (staging):** set GitHub repo variables (Settings > Secrets and variables > Actions > Variables) `LLM_PROVIDER` (`anthropic` or `gemini`) and `LLM_MODEL` (a tier id listed in `config/models.yaml`, e.g. `claude-sonnet-5-5`, `gemini-4-neon`), then re-run `deploy-staging` (or push to `main`). `deploy-staging.yml` passes both to the api and worker services (the voice relay never loads routes, so it does not get them). Set both or neither: one without the other, or an unknown value, fails startup with a config error. Empty variables mean no override.
+- **Precedence (low to high):** `routes.yaml` < `MITI_MODEL_*` < `LLM_PROVIDER`/`LLM_MODEL` < preset overlay. Only concrete text routes are rewritten; aliases follow their target.
+- **models.yaml:** the override reads `config/models.yaml`, found at `<ROUTES_FILE dir>/../models.yaml` (`/app/config/models.yaml` in the images; `MODELS_FILE` overrides the path). It is shipped in the api/worker image (`COPY config /app/config`) and the eval backend image (whitelisted in `eval/backend/Dockerfile.dockerignore`). `scripts/ci/check_config.sh` fails the build if it is missing in the repo or image.
+- **Secret names:** `anthropic-api-key-staging` mounted as `ANTHROPIC_API_KEY` and `gemini-api-key-staging` as `GEMINI_API_KEY` on the worker (Terraform `llm_secrets`; prod uses `-prod`). Nothing to add in Terraform to switch between the two. The worker fails at startup if the key for the selected provider is missing.
+- **Rollback (back to Gemini):** set `LLM_PROVIDER=gemini` and `LLM_MODEL=gemini-4-neon`, then re-run `deploy-staging`. To drop the override entirely, clear both variables and re-run the deploy; routes.yaml applies again.
+- **Terraform drift:** `LLM_PROVIDER`/`LLM_MODEL` are set only by CI, not by Terraform. A `terraform apply` on the staging services rewrites the env and removes them (the routes.yaml default applies until the next deploy). After any apply, re-run `deploy-staging` to restore the override. Same drift pattern as `GIT_SHA` above.
+- **Eval service:** unchanged; it reads routes from its image config and has no `LLM_*` env (`deploy-eval`/Terraform not touched). It still ships `models.yaml` so an override can be added later.
 
 ## Adding an LLM or STT provider
 

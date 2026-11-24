@@ -38,6 +38,7 @@ for required in ['--frozen', '--no-editable', 'ARG GIT_SHA', 'GIT_SHA=${GIT_SHA}
     assert required in docker, required
 ignore = Path('eval/backend/Dockerfile.dockerignore').read_text()
 assert ignore.splitlines()[0] == '**', 'image context must be opt-in'
+assert '!config/models.yaml' in ignore.splitlines(), 'models.yaml must ship (LLM_PROVIDER/LLM_MODEL)'
 for denied in ['**/node_modules', '**/.git', '**/.worktrees', '**/datasets', '**/uploads',
                '**/runs', '**/.env', '**/.env.*', '**/tests', '**/__pycache__']:
     assert denied in ignore, denied
