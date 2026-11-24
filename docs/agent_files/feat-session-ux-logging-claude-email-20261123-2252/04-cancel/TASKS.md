@@ -8,15 +8,15 @@ Source of truth: docs/agent_files/feat-session-ux-logging-claude-email-20261123-
 
 | # | Task | Depends on | Status |
 |---|---|---|---|
-| 1 | Cancelled state and data fields | - | in-progress |
-| 2 | decide_cancel charge rule | 1 | todo |
-| 3 | Atomic cancel transaction in repos | 1, 2 | todo |
-| 4 | Cancel route and 409 on other routes | 3 | todo |
-| 5 | Workers stop on cancel | 1 | todo |
-| 6 | Cancel logging | 4, 5 | todo |
-| 7 | Web: ConfirmDialog, chip, errors, mock | 1 | todo |
-| 8 | Web: CancelLink, CancelledView, SessionPage | 4, 7 | todo |
-| 9 | Contract regen, public docs, race tests | 4, 5, 8 | todo |
+| 1 | Cancelled state and data fields | - | done |
+| 2 | decide_cancel charge rule | 1 | done |
+| 3 | Atomic cancel transaction in repos | 1, 2 | done |
+| 4 | Cancel route and 409 on other routes | 3 | done |
+| 5 | Workers stop on cancel | 1 | done |
+| 6 | Cancel logging | 4, 5 | done |
+| 7 | Web: ConfirmDialog, chip, errors, mock | 1 | done |
+| 8 | Web: CancelLink, CancelledView, SessionPage | 4, 7 | done |
+| 9 | Contract regen, public docs, race tests | 4, 5, 8 | done |
 
 ## Task 1 — Cancelled state and data fields
 What it is / what it means: The terminal `cancelled` state and the fields that remember its result, so every later piece shares one model. Traces to R1, R7, D1, D8.
