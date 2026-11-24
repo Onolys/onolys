@@ -319,7 +319,7 @@ def test_catalog_lists_committed_public_datasets(services):
 
     from onolys_eval.manifest import load_manifest
     root = Path(__file__).resolve().parents[2] / "datasets"
-    for ident in ("casaa-miti-practice", "mi-tags-sample"):
+    for ident in ("casaa-miti-practice", "mi-tags-sample", "annomi"):
         manifest = load_manifest(root / ident / "manifest.yaml")
         services.bucket.write_json(f"datasets/{ident}/manifest.json", manifest.model_dump(mode="json"))
     c = client(services)
@@ -330,3 +330,6 @@ def test_catalog_lists_committed_public_datasets(services):
     assert "Structure Statement" in rows["mi-tags-sample"]["label_scheme"]
     detail = c.get("/v1/datasets/mi-tags-sample", headers=AUTH)
     assert detail.status_code == 200 and detail.json()["sessions"][0]["session_id"] == "type-1-diabetes-counseling"
+    assert rows["annomi"]["session_count"] == 133 and rows["annomi"]["miti_version"] is None
+    assert rows["annomi"]["source_media"] == ["video", "transcript"]
+    assert rows["annomi"]["label_scheme"] == "AnnoMI codes mapped to MITI counts (partial)"

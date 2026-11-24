@@ -12,6 +12,7 @@ import subprocess
 import tempfile
 from datetime import UTC, datetime
 from pathlib import Path
+from urllib.parse import unquote
 from urllib.request import urlopen
 
 from .manifest import DatasetManifest
@@ -101,7 +102,7 @@ def fetch_dataset(manifest: DatasetManifest, cache: str | Path | None = None) ->
                 require_external_path(target)
                 assets.append((target, url))
     for url in manifest.source_files:
-        target = raw / url.rstrip("/").rsplit("/", 1)[-1]
+        target = raw / unquote(url.rstrip("/").rsplit("/", 1)[-1])
         require_external_path(target)
         assets.append((target, url))
     require_external_path(metadata_path)

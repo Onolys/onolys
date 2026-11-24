@@ -39,6 +39,20 @@ Terms: unless noted, reuse terms are not separately confirmed and every dataset 
 - Overlaps: the full MI-TAGS set reportedly includes 140 HLQC and 8 CASAA 2013 transcripts. Neither public sample session matches a CASAA series title; the manifest records the possible overlap with `casaa-miti421-video2013` as a note.
 - Terms: the GitHub repository declares no license; the full set requires an access request. Internal evaluation use only; confirm before any redistribution.
 
+## annomi
+
+- Source: AnnoMI, <https://github.com/uccollab/AnnoMI>, file `AnnoMI-full.csv` (raw.githubusercontent.com `main`). Papers: Wu et al., ICASSP 2022; Future Internet 15(3):110, 2023 (<https://www.mdpi.com/1999-5903/15/3/110>; the publisher page returned HTTP 403 to our fetcher, so statements below come from the repo README and CSV).
+- Size: 133 transcripts (110 high, 23 low quality), 13,551 rows = 9,699 utterances; one session per `transcript_id` (`transcript-<id>`).
+- Original media: public YouTube (and some Vimeo) MI demonstration videos plus transcript. The per-session YouTube/Vimeo URL is in the manifest `notes`. The README calls the transcripts "faithfully transcribed"; the paper was not reachable, so `transcript_origin: human` rests on that wording.
+- Columns used: `transcript_id`, `mi_quality`, `video_title`, `video_url`, `topic`, `utterance_id` (order), `interlocutor` (therapist/client), `utterance_text`, `annotator_id`, `therapist_input_exists/subtype`, `reflection_exists/subtype`, `question_exists/subtype`. The change goal is the `topic` field (`change_goal_source: header`).
+- Annotators: 126 transcripts have one annotator. 7 (ids 7, 27, 55, 56, 66, 109, 130) were annotated by all ten; `AnnoMI-simple.csv` collapses them by majority vote. We apply the same idea to every code: a code counts only when a strict majority of that utterance's annotators gave it (ties are not counted).
+- Mapping (`onolys_eval/annomi.py`): `question_exists` (open or closed) to `question`; reflection subtype simple to `sr`, complex to `cr`; therapist input subtype `information` to `gi`. An utterance can carry several codes. Counts are per utterance, so a long utterance with two reflections counts once.
+- Not mapped (null): `persuade`, `persuade_permission` (input subtypes advice, options and negotiation are not cleanly Persuade versus Persuade with permission), `affirm`, `seek_collab`, `emphasize_autonomy`, `confront`. Client talk types (change, neutral, sustain) are ignored. No globals, no summaries.
+- Quality: `quality_label` high/low from `mi_quality`. `label_scheme`: "AnnoMI codes mapped to MITI counts (partial)"; `miti_version: null`.
+- Known gaps: one transcript (`transcript-121`, 598 utterances, 7,347 words) exceeds the engine's 6,000-word coded cap, so its manifest `coded_span` is the turn range 0 to 470 and counts cover only that span. Timestamps are not stored in `transcript.v1`. Because the labels are partial, comparisons only cover the four mapped counts.
+- Overlaps: none recorded. The AutoMISC repo ships automated MISC codes for AnnoMI; those are excluded (see automisc-human).
+- Terms: the repo declares no license and the README has no reuse statement. Internal evaluation use only; confirm before any redistribution.
+
 ## Gated / not added
 
 | Dataset | Why not added | How to get it |

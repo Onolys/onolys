@@ -64,7 +64,8 @@ class SessionManifest(Contract):
         return self
 
 
-SourceFormat = Literal["pdf", "mitags_csv"]
+SourceFormat = Literal[
+    "pdf", "mitags_csv", "annomi_csv"]
 
 
 class DatasetManifest(Contract):
@@ -81,7 +82,8 @@ class DatasetManifest(Contract):
     transcript_origin: TranscriptOrigin | None = None
     labels_summary: Nonempty | None = None
     overlaps_with: list[DatasetOverlap] = Field(default_factory=list)
-    # "pdf": per-session coded/uncoded PDFs. "mitags_csv": dataset-level CSV files.
+    # "pdf": per-session coded/uncoded PDFs. Other formats: dataset-level source_files
+    # (CSV/zip) read by that format's converter module.
     source_format: SourceFormat = "pdf"
     source_files: list[HttpURL] = Field(default_factory=list)
     sessions: list[SessionManifest] = Field(min_length=1)

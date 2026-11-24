@@ -1,0 +1,1214 @@
+dataset_id: annomi
+title: 'AnnoMI: expert-annotated MI demonstrations (133 transcripts, high/low quality)'
+license_note: Public GitHub release (uccollab/AnnoMI); the repo declares no license and the README gives no reuse statement. Transcripts of public YouTube/Vimeo demo videos. Internal evaluation use only; owner to confirm terms before any redistribution.
+source_page: https://github.com/uccollab/AnnoMI
+miti_version: null
+label_scheme: AnnoMI codes mapped to MITI counts (partial)
+source_media:
+- video
+- transcript
+transcript_origin: human
+labels_summary: Therapist question/reflection/information codes mapped to 4 MITI counts (question, sr, cr, gi); persuade, affirm, seek, emphasize autonomy and confront not labeled; high/low session quality label
+source_format: annomi_csv
+source_files:
+- https://raw.githubusercontent.com/uccollab/AnnoMI/main/AnnoMI-full.csv
+sessions:
+- session_id: transcript-0
+  title: 'NEW VIDEO: Brief intervention: "Barbara"'
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: reducing alcohol consumption
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; video https://www.youtube.com/watch?v=PaSKcfTmFEk; 54 utterances; annotator 3
+- session_id: transcript-1
+  title: 'NEW VIDEO: Brief intervention: "Dave"'
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: reducing alcohol consumption
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; video https://www.youtube.com/watch?v=g2v2sfwfQ84; 37 utterances; annotator 4
+- session_id: transcript-2
+  title: 'Motivational Interviewing: Evoking Commitment to Change'
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: weight loss; diet
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; video https://www.youtube.com/watch?v=dm-rJJPCuTE; 36 utterances; annotator 6
+- session_id: transcript-3
+  title: How to Do Motivational Interviewing (MI) Role Play -1
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: problem recognition
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; video https://www.youtube.com/watch?v=wcu8oqHIsbc; 16 utterances; annotator 3
+- session_id: transcript-4
+  title: Motivational Interviewing in Dental Practice Emily's Oral Piercing
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: better oral health
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; video https://www.youtube.com/watch?v=HMS6acj3Fjw; 59 utterances; annotator 9
+- session_id: transcript-5
+  title: Motivational Techniques - Margaret interview Billy - 3
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: reducing recidivism
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; video https://www.youtube.com/watch?v=3_KZkxveh70; 203 utterances; annotator 1
+- session_id: transcript-6
+  title: Agenda setting conversation with "Sal" 2
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: asthma management
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; video https://www.youtube.com/watch?v=klnHJ4coG8o; 53 utterances; annotator 7
+- session_id: transcript-7
+  title: Doctor Uses Motivational Interviewing to Discuss Alcohol Use
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: reducing alcohol consumption
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; video https://www.youtube.com/watch?v=_HpKn29oCD0; 66 utterances; majority vote over annotators 0,1,2,3,4,5,6,7,8,9
+- session_id: transcript-8
+  title: Dr. Marilyn Herie -- MI Skills -- Tobacco Cessation -- Angry Client
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: smoking cessation
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; video https://www.youtube.com/watch?v=hB-zchaxlNc; 30 utterances; annotator 9
+- session_id: transcript-9
+  title: 'SBIRT: HTN Case - Average Medical Resident example - PART I'
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: reducing alcohol consumption
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality low; video https://youtu.be/NAHJRdKY4dI; 27 utterances; annotator 2
+- session_id: transcript-10
+  title: ComMIt Diabetes Dialogue without MI
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: diabetes management
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality low; video https://www.youtube.com/watch?v=N8rYXn0bOow&feature=youtu.be; 12 utterances; annotator 6
+- session_id: transcript-11
+  title: Motivational Interviewing in Juvenile Justice Settings - 1
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: reducing recidivism
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; video https://www.youtube.com/watch?v=M-i6-BNkCTo; 15 utterances; annotator 1
+- session_id: transcript-12
+  title: 'Part One: Motivational Interviewing in an Integrated Care Setting (Nurse Practitioner Scenario)'
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: smoking cessation
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; video https://vimeo.com/109552200; 52 utterances; annotator 7
+- session_id: transcript-13
+  title: Using Motivational Interviewing to address vaccine hesitancy (microskills annotated)
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: taking medicine / following medical procedure
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; video https://www.youtube.com/watch?v=8cf8MVgAA7A; 14 utterances; annotator 7
+- session_id: transcript-14
+  title: 'Motivational Interviewing (MI): Building Confidence Video'
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: weight loss
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; video https://www.youtube.com/watch?v=Cfl4d-qQ-co; 49 utterances; annotator 4
+- session_id: transcript-15
+  title: 'The Ineffective Pharmacist: Non-Motivational Approach'
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: smoking cessation
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality low; video https://www.youtube.com/watch?v=dmmvAR6K1TQ; 21 utterances; annotator 6
+- session_id: transcript-16
+  title: Motivational Techniques - Daryl interviews Ricky - 3
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: reducing alcohol consumption
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; video https://www.youtube.com/watch?v=IqtaW2ufbcw; 24 utterances; annotator 0
+- session_id: transcript-17
+  title: 'SBIRT: Sprained Ankle Case - Average Medical Resident example - PART I'
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: reducing alcohol consumption
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality low; video https://youtu.be/xB67CD9zxG4; 30 utterances; annotator 4
+- session_id: transcript-18
+  title: Motivational Techniques - Ken interviews Catherine - 1
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: reducing gambling
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; video https://www.youtube.com/watch?v=PM1q6uB0ysQ; 115 utterances; annotator 2
+- session_id: transcript-19
+  title: How to Do Motivational Interviewing (MI) Role Play - 3
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: reducing recidivism
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; video https://www.youtube.com/watch?v=wcu8oqHIsbc; 17 utterances; annotator 1
+- session_id: transcript-20
+  title: 'The Effective Physician: Motivational Interviewing Demonstration'
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: smoking cessation
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; video https://www.youtube.com/watch?v=URiKA7CKtfc; 47 utterances; annotator 0
+- session_id: transcript-21
+  title: 'The Effective School Counselor With a Lower-Risk Teen: Motivational Interviewing Demonstration'
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: reducing alcohol consumption
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; video https://www.youtube.com/watch?v=v21ZLg8n8do; 248 utterances; annotator 4
+- session_id: transcript-22
+  title: Values Clarification Handout with Aviyana and Sheri Galvanized
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: supporting client to live in more alignment with her values
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; video https://www.youtube.com/watch?v=8m5-MXX372w&list=PL08E228806AE7CB30&index=8&t=0s; 133 utterances; annotator 9
+- session_id: transcript-23
+  title: 'Case study clinical example: First session with a client with symptoms of social anxiety (CBT model)'
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: anxiety management
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; video https://youtu.be/XH2tF8oB3cw; 79 utterances; annotator 9
+- session_id: transcript-24
+  title: 'The Effective Pharmacist: Motivational Interviewing Demonstration'
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: smoking cessation
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; video https://www.youtube.com/watch?v=5UU63mfNnD4; 22 utterances; annotator 9
+- session_id: transcript-25
+  title: MI-Good Example
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: weight loss
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; video https://www.youtube.com/watch?v=SbuuFaH4FuE; 34 utterances; annotator 1
+- session_id: transcript-26
+  title: Motivational Interviewing in Juvenile Justice Settings - 2
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: compliance with rules
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; video https://www.youtube.com/watch?v=M-i6-BNkCTo; 13 utterances; annotator 5
+- session_id: transcript-27
+  title: 'How NOT to do Motivational Interviewing: A conversation with "Sal" about managing his asthma'
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: asthma management
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality low; video https://www.youtube.com/watch?v=kN7T-cmb_l0; 23 utterances; majority vote over annotators 0,1,2,3,4,5,6,7,8,9
+- session_id: transcript-28
+  title: Monkey on My Back - Part 1
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: smoking cessation
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; video https://www.youtube.com/watch?v=DXI2N8kEPAs; 123 utterances; annotator 6
+- session_id: transcript-29
+  title: 'Part 2: A Non-Diet Approach with Motivational Interviewing Role Play, Sharing a Non-Diet Message'
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: weight loss
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; video https://www.youtube.com/watch?v=fWFPBSTd830; 38 utterances; annotator 1
+- session_id: transcript-30
+  title: MI role play 2
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: charging battery
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; video https://www.youtube.com/watch?v=LTHpKc9olmA; 29 utterances; annotator 6
+- session_id: transcript-31
+  title: ComMIt High Cholesterol Dialogue with MI
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: taking medicine / following medical procedure
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; video https://www.youtube.com/watch?v=R4gPcGDkTw0&feature=youtu.be; 55 utterances; annotator 0
+- session_id: transcript-32
+  title: A Motivational Interviewing Approach to Student Conduct - 1
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: compliance with rules
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality low; video https://youtu.be/NSyKhmEG3f4; 12 utterances; annotator 2
+- session_id: transcript-33
+  title: Motivational Interviewing in Dental Practice Addressing tobacco use with David
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: smoking cessation
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; video https://www.youtube.com/watch?v=rFLrDvUexC8; 78 utterances; annotator 0
+- session_id: transcript-34
+  title: 'Motivational Interviewing: Discussing Alcohol Use With a Pregnant Woman'
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: reducing alcohol consumption
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; video https://www.youtube.com/watch?v=V2yXX7M8egw; 117 utterances; annotator 9
+- session_id: transcript-35
+  title: 'Part 1: A Non-Diet Approach with Motivational Interviewing Role Play, Engaging'
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: more exercise / increasing activity; weight loss
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; video https://www.youtube.com/watch?v=g7TG9J0E0eU; 35 utterances; annotator 6
+- session_id: transcript-36
+  title: 'Psychiatric Interviews for Teaching: Somatisation'
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: changing approach to disease
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; video https://www.youtube.com/watch?v=4-bH55MCa1U; 315 utterances; annotator 3
+- session_id: transcript-37
+  title: Motivational Techniques - Daryl interviews Ricky - 2
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: reducing violence
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; video https://www.youtube.com/watch?v=IqtaW2ufbcw; 41 utterances; annotator 1
+- session_id: transcript-38
+  title: 'Part Two: Motivational Interviewing in an Integrated Care Setting (Counselor Scenario)'
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: reducing alcohol consumption
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; video https://vimeo.com/109546082; 95 utterances; annotator 7
+- session_id: transcript-39
+  title: Monkey on My Back - Part 2
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: smoking cessation
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; video https://www.youtube.com/watch?v=KNxWYEkzQg8; 73 utterances; annotator 1
+- session_id: transcript-40
+  title: How to Do Motivational Interviewing (MI) Role Play - 5
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: reducing drug use
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; video https://www.youtube.com/watch?v=wcu8oqHIsbc; 20 utterances; annotator 8
+- session_id: transcript-41
+  title: Sheri Values Self-Respect Motivational Interview with Deborah
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: unidentifiable
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; video https://www.youtube.com/watch?v=CSHbCBfkLcE; 85 utterances; annotator 6
+- session_id: transcript-42
+  title: Motivational Interviewing for Adolescent Health Behavior - 1
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: weight loss
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; video https://www.youtube.com/watch?v=wdqtsPnK2bs; 15 utterances; annotator 2
+- session_id: transcript-43
+  title: Rowing with Confidence
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: increasing self-confidence
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; video https://www.youtube.com/watch?v=2vtYJAyNnvA; 50 utterances; annotator 3
+- session_id: transcript-44
+  title: 'The Ineffective School Counselor With a High Risk Teen: Non-Motivational Approach'
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: reducing alcohol consumption
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality low; video https://www.youtube.com/watch?v=Ocp_1PtZupg; 173 utterances; annotator 3
+- session_id: transcript-45
+  title: MI role play
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: compliance with rules
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; video https://www.youtube.com/watch?v=mxyhAK5ae0o; 52 utterances; annotator 8
+- session_id: transcript-46
+  title: 'Adolescent brief intervention: "Jacob"'
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: reducing alcohol consumption
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; video https://www.youtube.com/watch?v=GvaOXREccHI&feature=emb_title; 60 utterances; annotator 8
+- session_id: transcript-47
+  title: Non-communicative client– MI Training
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: opening up
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; video https://www.youtube.com/watch?v=G6AYuQuEXME; 15 utterances; annotator 0
+- session_id: transcript-48
+  title: Motivational Interviewing for Adolescent Health Behavior - 2
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: diabetes management
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; video https://www.youtube.com/watch?v=wdqtsPnK2bs; 28 utterances; annotator 0
+- session_id: transcript-49
+  title: Motivational Techniques - Ken interviews Catherine - 2
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: reducing gambling
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; video https://www.youtube.com/watch?v=PM1q6uB0ysQ; 182 utterances; annotator 8
+- session_id: transcript-50
+  title: How to Do Motivational Interviewing (MI) Role Play - 2
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: reducing coffee consumption
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; video https://www.youtube.com/watch?v=wcu8oqHIsbc; 51 utterances; annotator 0
+- session_id: transcript-51
+  title: Elicit Provide Elicit- or Ask Tell Ask-Using Motivational Interviewing to address vaccine hesitancy
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: taking medicine / following medical procedure
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; video https://www.youtube.com/watch?v=Ans4LjGHBos; 16 utterances; annotator 9
+- session_id: transcript-52
+  title: 'Motivational Interviewing: Adolescent Follow Up on Positive Alcohol Screen'
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: reducing alcohol consumption
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; video https://www.youtube.com/watch?v=JZrYk86EDlQ; 29 utterances; annotator 4
+- session_id: transcript-53
+  title: 'The Ineffective School Counselor With a Lower-Risk Teen: Non-Motivational Approach'
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: reducing alcohol consumption
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality low; video https://www.youtube.com/watch?v=Q9astgtdDW4; 108 utterances; annotator 3
+- session_id: transcript-54
+  title: 'MI: Not So Good - Not so Bad - Part 1'
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: more exercise / increasing activity
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; video https://www.youtube.com/watch?v=FBFtGKRjQGE; 41 utterances; annotator 5
+- session_id: transcript-55
+  title: 'NEW VIDEO: Brief intervention: "Miguel"'
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: reducing drug use
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; video https://www.youtube.com/watch?v=7nevSz5-dhc; 65 utterances; majority vote over annotators 0,1,2,3,4,5,6,7,8,9
+- session_id: transcript-56
+  title: MI Scenario 3 web training
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: more exercise / increasing activity
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; video https://www.youtube.com/watch?v=XyqPdDB4dZk; 175 utterances; majority vote over annotators 0,1,2,3,4,5,6,7,8,9
+- session_id: transcript-57
+  title: ComMIt High Cholesterol Dialogue without MI
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: taking medicine / following medical procedure
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality low; video https://www.youtube.com/watch?v=2mgYwv-_go8&feature=youtu.be; 19 utterances; annotator 3
+- session_id: transcript-58
+  title: 'MI: Not So Good - Not so Bad - Part 2'
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: more exercise / increasing activity
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; video https://www.youtube.com/watch?v=KqgZpg6ooyA; 101 utterances; annotator 1
+- session_id: transcript-59
+  title: 'SBIRT in Pediatrics: Teen Alcohol Use Case - Bad Doctor example'
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: not getting into a car with someone who is under the influence of drugs or alcohol
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality low; video https://www.youtube.com/watch?v=hwlgrc8S8I8; 6 utterances; annotator 6
+- session_id: transcript-60
+  title: Monkey on My Back - Part 4
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: smoking cessation
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; video https://www.youtube.com/watch?v=3hW-7X96zQI; 95 utterances; annotator 5
+- session_id: transcript-61
+  title: MI Scenario 2 web training
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: increasing activity; taking medicine / following medical procedure
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; video https://www.youtube.com/watch?v=yfUZMICDz5A; 126 utterances; annotator 4
+- session_id: transcript-62
+  title: EPE Role Play
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: completion of community service
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; video https://www.youtube.com/watch?v=31r4rCwoa_o; 46 utterances; annotator 8
+- session_id: transcript-63
+  title: 'Brief intervention: "Tom"'
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: reducing drug use
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; video https://www.youtube.com/watch?v=1kalMZCelNw; 60 utterances; annotator 4
+- session_id: transcript-64
+  title: Ricky and Ian
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: reducing drug use
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; video https://www.youtube.com/watch?v=uH38Bxe3Lzw; 262 utterances; annotator 8
+- session_id: transcript-65
+  title: Motivational Interviewing for Health Issues Video
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: smoking cessation
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; video https://www.youtube.com/watch?v=wCbYXsQd9u8; 35 utterances; annotator 9
+- session_id: transcript-66
+  title: ComMIt Diabetes Dialogue with MI
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: diabetes management
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; video https://www.youtube.com/watch?v=k_oGpP-7x6Q&feature=youtu.be; 31 utterances; majority vote over annotators 0,1,2,3,4,5,6,7,8,9
+- session_id: transcript-67
+  title: 'NEW VIDEO: Adolescent brief intervention: "Natasha"'
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: smoking cessation
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; video https://www.youtube.com/watch?v=zPomDCFiwjs; 47 utterances; annotator 3
+- session_id: transcript-68
+  title: 'The Effective School Counselor With a High Risk Teen: Motivational Interviewing Demonstration'
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: reducing alcohol consumption
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; video https://www.youtube.com/watch?v=_TwVa4utpII; 204 utterances; annotator 1
+- session_id: transcript-69
+  title: Provider Counseling-1
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: providing information on medicines
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality low; video https://www.youtube.com/watch?v=FImVOb5dRpU; 7 utterances; annotator 3
+- session_id: transcript-70
+  title: Provider Counseling-2
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: providing information on medicines
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; video https://www.youtube.com/watch?v=FImVOb5dRpU; 12 utterances; annotator 4
+- session_id: transcript-71
+  title: Motivational Techniques - Margaret interview Billy - 2
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: reducing recidivism
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; video https://www.youtube.com/watch?v=3_KZkxveh70; 169 utterances; annotator 8
+- session_id: transcript-72
+  title: 'The Ineffective Athletic Director With a Lower-Risk Teen: Non-Motivational Approach'
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: reducing alcohol consumption; compliance with rules
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality low; video https://www.youtube.com/watch?v=X9NBaihCzhk; 31 utterances; annotator 2
+- session_id: transcript-73
+  title: Motivational Interviewing for Adolescent Substance Use - 2
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: reducing drug use
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; video https://www.youtube.com/watch?v=K-zJme3RTzM; 26 utterances; annotator 0
+- session_id: transcript-74
+  title: How NOT to do Motivational Interviewing in Dental Practice Emily's Oral Piercing
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: better oral health
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality low; video https://www.youtube.com/watch?v=AJPvYSEn1VE; 38 utterances; annotator 8
+- session_id: transcript-76
+  title: Aviyana Interviews Deborah Regarding Her Values Clarification Handout
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: unidentifiable
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; video https://www.youtube.com/watch?v=TVlWvUt4EcM&list=PL08E228806AE7CB30&index=6&t=0s; 68 utterances; annotator 8
+- session_id: transcript-77
+  title: MI Scenario 1 web training
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: more exercise / increasing activity
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; video https://www.youtube.com/watch?v=giXGZvZIl2k; 43 utterances; annotator 8
+- session_id: transcript-78
+  title: ComMIt Asthma Dialogue with MI
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: asthma management
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; video https://www.youtube.com/watch?v=lvxa64imMiY&feature=youtu.be; 75 utterances; annotator 0
+- session_id: transcript-79
+  title: Motivational Interviewing for Concurrent Disorders Video
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: recognising success
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; video https://www.youtube.com/watch?v=oZEdbK0VFXU; 11 utterances; annotator 3
+- session_id: transcript-80
+  title: Dr. Peter Selby - MI Skills - Tobacco Cessation - 1st Follow-up Visit - www.teachproject.ca
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: smoking cessation
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; video https://www.youtube.com/watch?v=_X2xXvC7QPs; 64 utterances; annotator 3
+- session_id: transcript-81
+  title: Using Open Ended Questions in Home Visiting/OARS/Motivational Interviewing
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: taking medicine / following medical procedure
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; video https://www.youtube.com/watch?v=x0Vcfmg05kc; 21 utterances; annotator 4
+- session_id: transcript-82
+  title: 'Motivational Interviewing: Linking Behaviors'
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: reducing alcohol consumption
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; video https://www.youtube.com/watch?v=5ePJw0NjEec; 37 utterances; annotator 5
+- session_id: transcript-83
+  title: Motivational Techniques - Daryl interviews Ricky - 1
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: taking medicine / following medical procedure
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; video https://www.youtube.com/watch?v=IqtaW2ufbcw; 128 utterances; annotator 2
+- session_id: transcript-84
+  title: Motivational Techniques - Margaret interview Billy - 1
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: reducing recidivism
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; video https://www.youtube.com/watch?v=3_KZkxveh70; 235 utterances; annotator 0
+- session_id: transcript-85
+  title: 'Motivational Interviewing Change Talk: My Meds Make Me Mad'
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: taking medicine / following medical procedure
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; video https://www.youtube.com/watch?v=U32rGyGrd90; 131 utterances; annotator 7
+- session_id: transcript-86
+  title: MI Reflections
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: reducing drug use
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; video https://www.youtube.com/watch?v=PoLlQO_mchA; 41 utterances; annotator 8
+- session_id: transcript-87
+  title: Motivational Interviewing (MI) for Addictions Video
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: reducing alcohol consumption
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; video https://www.youtube.com/watch?v=EvLquWI8aqc; 26 utterances; annotator 2
+- session_id: transcript-88
+  title: MI-Change Plan
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: compliance with rules
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; video https://www.youtube.com/watch?v=DYQ6KVWv5xU; 69 utterances; annotator 9
+- session_id: transcript-89
+  title: Motivational Interviewing Developing Discrepancy
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: reducing drug use
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; video https://www.youtube.com/watch?v=KNnwfMfkZek; 45 utterances; annotator 6
+- session_id: transcript-90
+  title: 'The Ineffective Youth Minister With a High-Risk Teen: Non-Motivational Approach'
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: reducing alcohol consumption
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality low; video https://www.youtube.com/watch?v=25jUW52zAvU; 26 utterances; annotator 8
+- session_id: transcript-91
+  title: Dr. Peter Selby - MI Skills - Tobacco Cessation - Ambivalent Client www.teachproject.ca
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: smoking cessation
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; video https://www.youtube.com/watch?v=MixAphYLZy0; 79 utterances; annotator 5
+- session_id: transcript-92
+  title: ComMIt Asthma Dialogue without MI
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: asthma management
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality low; video https://www.youtube.com/watch?v=jtS1UVhYwkM; 13 utterances; annotator 5
+- session_id: transcript-93
+  title: 'Part 3: A Non-Diet Approach with Motivational Interviewing Role Play, Focusing & Evoking'
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: more exercise / increasing activity
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; video https://www.youtube.com/watch?v=T4f-RPF7fcY; 25 utterances; annotator 9
+- session_id: transcript-94
+  title: 'Motivational Interviewing: Hit The Road, Jack (Coded)'
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: Being assertive with flatmate about moving out
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; video https://www.youtube.com/watch?v=dcmplmT5iOs; 62 utterances; annotator 7
+- session_id: transcript-95
+  title: MI 5 30 18
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: reducing self-harm
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; video https://www.youtube.com/watch?v=BhpTJMKVsmg; 36 utterances; annotator 6
+- session_id: transcript-96
+  title: 'Motivational Interviewing: Talking With a Pregnant Woman About Her Alcohol Use'
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: reducing alcohol consumption
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; video https://www.youtube.com/watch?v=ZYhtMBUT20A; 92 utterances; annotator 5
+- session_id: transcript-97
+  title: 'Motivational interviewing in brief consultations: role-play focussing on engaging'
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: weight loss
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; video https://www.youtube.com/watch?v=bTRRNWrwRCo; 108 utterances; annotator 7
+- session_id: transcript-98
+  title: My Lawyer Sent Me
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: avoiding DOI
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; video https://www.youtube.com/watch?v=Vc_Hv1xiV4Y; 394 utterances; annotator 7
+- session_id: transcript-99
+  title: 'Brief intervention: "Steve"'
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: reducing alcohol consumption
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; video https://www.youtube.com/watch?v=b-ilxvHZJDc; 33 utterances; annotator 5
+- session_id: transcript-100
+  title: I Can't Get a Break
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: reducing recidivism
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; video https://www.youtube.com/watch?v=6lq3znGhveo; 283 utterances; annotator 5
+- session_id: transcript-101
+  title: 'Brief intervention: "Jill"'
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: reducing alcohol consumption
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; video https://www.youtube.com/watch?v=MaxHuf17A44; 64 utterances; annotator 5
+- session_id: transcript-102
+  title: MI-Bad example
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: more exercise / increasing activity
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality low; video https://www.youtube.com/watch?v=tRn3p0F5leU; 19 utterances; annotator 2
+- session_id: transcript-103
+  title: How to Do Motivational Interviewing (MI) Role Play - 4
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: engaging in community activities
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; video https://www.youtube.com/watch?v=wcu8oqHIsbc; 17 utterances; annotator 7
+- session_id: transcript-104
+  title: 'NEW VIDEO: Adolescent brief intervention: "Erin"'
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: reducing alcohol consumption; safe sex
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; video https://www.youtube.com/watch?v=F5fMkat8aJE; 55 utterances; annotator 2
+- session_id: transcript-105
+  title: 'Motivational Interviewing: Change Talk'
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: weight loss
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; video https://www.youtube.com/watch?v=-ZmhD2kjNuY; 50 utterances; annotator 2
+- session_id: transcript-106
+  title: 'The Ineffective Physician: Non-Motivational Approach'
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: smoking cessation
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality low; video https://www.youtube.com/watch?v=80XyNE89eCs; 23 utterances; annotator 1
+- session_id: transcript-107
+  title: Marsha Linehan DBT with Suicidal Clients Video
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: reducing self-harm
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; video https://www.youtube.com/watch?v=x0Iky4NWN2U; 18 utterances; annotator 1
+- session_id: transcript-108
+  title: 'Part Three: Motivational Interviewing in an Integrated Care Setting (Social Worker Scenario)'
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: taking steps towards getting help with day-care
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; video https://vimeo.com/109594861; 57 utterances; annotator 2
+- session_id: transcript-109
+  title: 'The Effective Dentist: Motivational Interviewing Demonstration'
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: smoking cessation
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; video https://www.youtube.com/watch?v=f8QSA_5PEFM&t=350s; 46 utterances; majority vote over annotators 0,1,2,3,4,5,6,7,8,9
+- session_id: transcript-110
+  title: She Wants What's Best for Her Son - Motivational Interviewing
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: unidentifiable
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; video https://www.youtube.com/watch?v=-abtdvTm-jE; 101 utterances; annotator 5
+- session_id: transcript-111
+  title: Anatomy of a Brief Intervention
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: reducing drug use; following medical procedure
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; video https://www.youtube.com/watch?v=soBpcZUdSf4; 59 utterances; annotator 2
+- session_id: transcript-112
+  title: 'The Effective Athletic Director With a Lower-Risk Teen: Motivational Interviewing Demonstration'
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: reducing alcohol consumption
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; video https://www.youtube.com/watch?v=GCoCq2o6Ye8; 65 utterances; annotator 0
+- session_id: transcript-113
+  title: Dr. Marilyn Herie - MI Skills - Tobacco Cessation - Pre-contemplative Stage www.teachproject.ca
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: smoking cessation
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; video https://www.youtube.com/watch?v=_YOULz-MPaU; 50 utterances; annotator 5
+- session_id: transcript-114
+  title: A Motivational Interviewing Approach to Student Conduct - 2
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: reducing alcohol consumption
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; video https://youtu.be/NSyKhmEG3f4; 24 utterances; annotator 1
+- session_id: transcript-115
+  title: How NOT to do Motivational Interviewing in Dental Practice Addressing tobacco use with David
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: smoking cessation
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality low; video https://www.youtube.com/watch?v=SytVckoox4U; 47 utterances; annotator 1
+- session_id: transcript-116
+  title: Frenemies!
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: overcoming issues at school
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; video https://www.youtube.com/watch?v=HbEDPU1ICcY; 167 utterances; annotator 6
+- session_id: transcript-117
+  title: 'Psychotherapy Examples: Part 4 Motivational Interviewing'
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: reducing alcohol consumption
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; video https://www.youtube.com/watch?v=tvoNEuwcbwk; 93 utterances; annotator 3
+- session_id: transcript-118
+  title: Mismanaging the angry patient
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: diagnosis
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality low; video https://www.youtube.com/watch?v=mbheToXlm2Y; 21 utterances; annotator 6
+- session_id: transcript-119
+  title: Motivational Interviewing and Employment - with OARS labeled
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: managing life
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; video https://www.youtube.com/watch?v=A-3wZrLkZpE; 86 utterances; annotator 9
+- session_id: transcript-120
+  title: MOTIVATIONAL INTERVIEWING
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: more exercise / increasing activity; weight loss
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; video https://www.youtube.com/watch?v=Egh2mHhrUTM; 31 utterances; annotator 7
+- session_id: transcript-121
+  title: MI in health care
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: diabetes management
+  change_goal_source: header
+  coded_span:
+    start_turn: 0
+    end_turn: 470
+  notes: mi_quality high; video https://www.youtube.com/watch?v=dDygm-rh6hk; 598 utterances; annotator 4; coded_span limits the coded text to the 6000-word engine cap
+- session_id: transcript-122
+  title: Motivational Interviewing for Adolescent Substance Use - 1
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: unidentifiable
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; video https://www.youtube.com/watch?v=K-zJme3RTzM; 26 utterances; annotator 7
+- session_id: transcript-123
+  title: 'The Ineffective Dentist: Non-Motivational Approach'
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: smoking cessation
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality low; video https://www.youtube.com/watch?v=3xrEaFPbYC8; 27 utterances; annotator 7
+- session_id: transcript-124
+  title: 'Part 4: A Non-Diet Approach with Motivational Interviewing Role Play, Planning'
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: more exercise / increasing activity
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; video https://www.youtube.com/watch?v=BO12gyu0UcA; 55 utterances; annotator 4
+- session_id: transcript-125
+  title: Using Reflection in Home Visiting/OARS/Motivational Interviewing
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: unidentifiable
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; video https://www.youtube.com/watch?v=5OR4TRQ5xnI; 7 utterances; annotator 5
+- session_id: transcript-126
+  title: Patient Counseling
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: taking medicine / following medical procedure
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality low; video https://www.youtube.com/watch?v=TBqfu-uaRpU; 64 utterances; annotator 4
+- session_id: transcript-127
+  title: Motivational Interviewing A conversation with "Sal" about managing his asthma
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: asthma management
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; video https://www.youtube.com/watch?v=-RXy8Li3ZaE; 60 utterances; annotator 8
+- session_id: transcript-128
+  title: The TEACH Project - The Effective Health Practitioner
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: smoking cessation; reducing alcohol consumption
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; video https://www.youtube.com/watch?v=dvEAMoDTg9w; 34 utterances; annotator 3
+- session_id: transcript-129
+  title: Doctor Uses Motivational Interviewing to Discuss Contraception
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: birth control
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; video https://www.youtube.com/watch?v=fX2Frhh-dvk; 36 utterances; annotator 7
+- session_id: transcript-130
+  title: The TEACH Project - The Ineffective Health Practitioner
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: smoking cessation; reducing alcohol consumption
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality low; video https://www.youtube.com/watch?v=KVbSYBCzh4o; 22 utterances; majority vote over annotators 0,1,2,3,4,5,6,7,8,9
+- session_id: transcript-131
+  title: Stop smoking - initial consultation
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: smoking cessation
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality low; video https://www.youtube.com/watch?v=pL3zIl2hS-o; 91 utterances; annotator 9
+- session_id: transcript-132
+  title: Motivational Interviewing & lifestyle
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: diet; reducing alcohol consumption; diabetes management
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; video https://www.youtube.com/watch?v=KzlkRjDwPxE; 40 utterances; annotator 4
+- session_id: transcript-133
+  title: 'Motivational interviewing: Ken interviews Daryl'
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: reducing recidivism
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; video https://www.youtube.com/watch?v=MOVj0FoOxpk&t=279s; 381 utterances; annotator 6

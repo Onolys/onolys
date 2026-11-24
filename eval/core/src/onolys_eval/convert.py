@@ -320,14 +320,22 @@ def manifest_path_for(dataset: str) -> Path:
     return Path(__file__).resolve().parents[3] / "datasets" / dataset / "manifest.yaml"
 
 
+_CSV_CONVERTERS = {
+    "mitags_csv": ("mitags", "convert_mitags_dataset"),
+    "annomi_csv": ("annomi", "convert_annomi_dataset"),
+}
+
+
 def convert_dataset(dataset: str, cache: Path | None = None, session_id: str | None = None,
                     *, dump=False, allow_warnings=False) -> int:
     manifest_path = manifest_path_for(dataset)
     manifest = load_manifest(manifest_path)
-    if manifest.source_format == "mitags_csv":
-        from .mitags import convert_mitags_dataset
+    if manifest.source_format != "pdf":
+        import importlib
 
-        status, report = convert_mitags_dataset(manifest, cache, session_id)
+        module, function = _CSV_CONVERTERS[manifest.source_format]
+        status, report = getattr(importlib.import_module(f".{module}", __package__), function)(
+            manifest, cache, session_id)
         print("\n".join(report))
         return status
     cache = require_external_path(cache if cache is not None else default_cache())
