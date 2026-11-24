@@ -4,7 +4,8 @@ import re
 from typing import Literal
 
 from fastapi import APIRouter, HTTPException, Request
-from onolys_engine_core.presets import PresetInfo, list_presets
+from onolys_engine_core.llm.models import find_model
+from onolys_engine_core.llm.routes import resolve_preset
 from onolys_eval.manifest import DatasetManifest, SessionManifest
 from pydantic import BaseModel
 
@@ -21,9 +22,30 @@ class EngineOption(BaseModel):
     version: str | None = None
 
 
+class TierOption(BaseModel):
+    id: str
+    efforts: list[str]
+    default_effort: str
+
+
+class ModelOption(BaseModel):
+    id: str
+    label: str
+    context_tokens: int
+    max_output_tokens: int
+    tiers: list[TierOption]
+
+
+class ComboSelection(BaseModel):
+    models: list[str]
+    tiers: list[str]
+    efforts: list[str]
+
+
 class SelectionDefaults(BaseModel):
     engines: list[str]
-    presets: list[str]
+    selection: ComboSelection
+    label: str
 
 
 class ModeDefaults(BaseModel):
@@ -33,7 +55,7 @@ class ModeDefaults(BaseModel):
 
 class OptionsResponse(BaseModel):
     engines: list[EngineOption]
-    presets: list[PresetInfo]
+    models: list[ModelOption]
     defaults: ModeDefaults
 
 
@@ -96,18 +118,30 @@ def options(
                     id=option_id, label=label + (" (prod)" if prod else ""), engine=info.name,
                     config=variant, prod=prod, version=info.version,
                 ))
-        presets = [p for p in list_presets(services.routes, config.default_preset)
-                   if not p.name.startswith("test-")]
-        # A misconfigured production default must never advertise an unselectable ID.
+        models = [ModelOption(
+            id=m.id, label=m.label, context_tokens=m.context_tokens,
+            max_output_tokens=m.max_output_tokens,
+            tiers=[TierOption(id=t.id, efforts=list(t.efforts), default_effort=t.default_effort)
+                   for t in m.tiers.values()],
+        ) for m in services.models.values()]
+        # Default combo = resolved `mid` route; never advertise an unmapped or test selection.
         if (config.prod_engine not in {e.id for e in engines}
-                or config.default_preset not in {p.name for p in presets}):
+                or config.default_preset.startswith("test-")):
             raise ValueError("Unavailable production selection")
+        mid = resolve_preset(config.default_preset, services.routes)[0]["mid"]
+        provider, _, tier = mid.litellm_id.partition("/")
+        model = find_model(services.models, provider, tier)
+        effort = mid.extra_params.get("reasoning_effort")
+        if model is None or effort not in model.tiers[tier].efforts:
+            raise ValueError("Unavailable production selection")
+        selection = ComboSelection(models=[model.id], tiers=[tier], efforts=[effort])
+        label = f"{model.label} / {tier} / {effort} (prod)"
     except Exception:
         raise HTTPException(503, "Engine options unavailable.") from None
-    return OptionsResponse(engines=engines, presets=presets, defaults=ModeDefaults(
+    return OptionsResponse(engines=engines, models=models, defaults=ModeDefaults(
         dataset=SelectionDefaults(engines=["human", config.prod_engine],
-                                  presets=[config.default_preset]),
-        upload=SelectionDefaults(engines=[config.prod_engine], presets=[config.default_preset]),
+                                  selection=selection, label=label),
+        upload=SelectionDefaults(engines=[config.prod_engine], selection=selection, label=label),
     ))
 
 

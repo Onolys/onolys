@@ -8,21 +8,28 @@ import asyncio
 import hashlib
 import json
 import os
+import random
 import re
 from datetime import UTC, datetime
-from itertools import product
 from time import monotonic
 from uuid import uuid4
 
 from fastapi import APIRouter, HTTPException, Request
 from onolys_engine_core.context import RunContext
 from onolys_engine_core.engine import RunUsage
-from onolys_engine_core.errors import InputError
+from onolys_engine_core.errors import ConfigError, InputError
 from onolys_engine_core.llm.config import LLMConfig
+from onolys_engine_core.llm.errors import (
+    LLMBadOutput,
+    LLMError,
+    LLMRateLimited,
+    LLMTimeout,
+    LLMUnavailable,
+)
 from onolys_engine_core.llm.litellm_client import LiteLLMClient
-from onolys_engine_core.llm.routes import resolve_preset
+from onolys_engine_core.llm.models import load_models, models_path
+from onolys_engine_core.llm.routes import combo_routes, resolve_preset
 from onolys_engine_core.llm.types import MetricsCollector
-from onolys_engine_core.presets import list_presets
 from onolys_engine_core.transcript_input import (
     inferred_clinician_speaker,
     validate_transcript_input,
@@ -35,6 +42,13 @@ from pydantic import BaseModel, ConfigDict, Field, StrictInt, model_validator
 
 from onolys_eval_backend.catalog import _IDENTIFIER, read_dataset
 from onolys_eval_backend.costs import PriceBook
+from onolys_eval_backend.matrix import (
+    RunTooLarge,
+    SelectionError,
+    combo_key,
+    plan_units,
+    validate_selection,
+)
 from onolys_eval_backend.storage import store_output
 from onolys_eval_backend.uploads import validate_gold, validate_span
 
@@ -72,24 +86,32 @@ class InputRef(BaseModel):
         return self
 
 
+class Selection(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    models: list[str] = Field(default_factory=list)
+    tiers: list[str] = Field(default_factory=list)
+    efforts: list[str] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def unique(self):
+        if any(len(set(v)) != len(v) for v in (self.models, self.tiers, self.efforts)):
+            raise ValueError("Invalid run selection")
+        return self
+
+
 class RunRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     input: InputRef
     engines: list[str] = Field(min_length=1)
-    presets: list[str] = Field(default_factory=list)
+    selection: Selection = Field(default_factory=Selection)
     repeats: StrictInt = 1
     change_goal: str | None = Field(default=None, min_length=1, max_length=4000)
     language: str | None = Field(default=None, min_length=1, max_length=64)
     coded_span: dict | None = None
 
     @model_validator(mode="after")
-    def selection(self):
-        if (
-            self.repeats not in (1, 3)
-            or len(set(self.engines)) != len(self.engines)
-            or len(set(self.presets)) != len(self.presets)
-            or (any(e != "human" for e in self.engines) and not self.presets)
-        ):
+    def check_selection(self):
+        if self.repeats not in (1, 3) or len(set(self.engines)) != len(self.engines):
             raise ValueError("Invalid run selection")
         if self.input.dataset_id and self.coded_span is not None:
             raise ValueError("Dataset spans come from the manifest")
@@ -238,33 +260,30 @@ def create_run(services, config, body, created_by, *, registry=None, input_ref=N
     }
     if any(e != "human" and e not in choices for e in body.engines):
         raise ValueError("Unknown engine")
-    presets = {
-        p.name: p.models
-        for p in list_presets(services.routes, config.default_preset)
-        if not p.name.startswith("test-")
-    }
-    if any(p not in presets for p in body.presets):
-        raise ValueError("Unknown preset")
-    count = (len(body.input.session_ids) if body.input.dataset_id else 1) * (
-        int("human" in body.engines)
-        + sum(e != "human" for e in body.engines) * len(body.presets) * body.repeats
+    models = getattr(services, "models", None) or load_models(
+        models_path(os.environ, config.routes_file)
     )
-    if count > 499:
-        raise ValueError("Run exceeds atomic Firestore batch capacity")
+    engines = list(body.engines)
+    if body.input.dataset_id and "human" not in engines:
+        engines.append("human")
+    combos, _dropped = validate_selection(
+        {m.id: {t.id: list(t.efforts) for t in m.tiers.values()} for m in models.values()},
+        body.selection.model_dump(),
+        any(e != "human" for e in engines),
+    )
+    session_ids = body.input.session_ids if body.input.dataset_id else [body.input.upload_id]
+    # Pure and IO-free: oversized runs are rejected before anything is read or written.
+    plan = plan_units([{"session_id": sid} for sid in session_ids], engines, combos, body.repeats)
+    base = config.default_preset
+    resolved_combos = {
+        combo_key(c): _combo_snapshot(_routes_for(services.routes, base, models, c), c)
+        for c in combos
+    }
     sources = (
         _validate_sources(services, input_ref["sessions"], body)
         if input_ref is not None
         else _inputs(services, body)
     )
-    if (
-        len(sources)
-        * (
-            int("human" in body.engines)
-            + sum(e != "human" for e in body.engines) * len(body.presets) * body.repeats
-        )
-        > 499
-    ):
-        raise ValueError("Run exceeds atomic Firestore batch capacity")
     rid = uuid4().hex
     saved_sources, units = [], {}
     for source in sources:
@@ -281,28 +300,31 @@ def create_run(services, config, body, created_by, *, registry=None, input_ref=N
         if gold:
             services.bucket.write_json(saved["gold_path"], gold)
         saved_sources.append(saved)
-        for engine in body.engines:
-            axes = [(None, 0)] if engine == "human" else product(body.presets, range(body.repeats))
-            for preset, repeat in axes:
-                uid = f"u{len(units):04d}"
-                span = gold["coded_span"] if engine == "human" else source["coded_span"]
-                units[uid] = {
-                    "session_id": sid,
-                    "engine": engine,
-                    "preset": preset,
-                    "repeat": repeat,
-                    "status": "queued",
-                    "stage": "queued",
-                    "coded_span": span,
-                    "warnings": ["human_span_differs"]
-                    if engine == "human" and span != source["coded_span"]
-                    else [],
-                }
+        for planned in (p for p in plan if p["session_id"] == sid):
+            engine = planned["engine"]
+            uid = f"u{len(units):04d}"
+            span = gold["coded_span"] if engine == "human" else source["coded_span"]
+            units[uid] = {
+                "session_id": sid,
+                "engine": engine,
+                "preset": None,
+                "combo": planned["combo"],
+                "combo_key": planned["combo_key"],
+                "repeat": planned["repeat"],
+                "status": "queued",
+                "stage": "queued",
+                "coded_span": span,
+                "warnings": ["human_span_differs"]
+                if engine == "human" and span != source["coded_span"]
+                else [],
+            }
     run = {
         "input": body.input.model_dump(exclude_none=True),
         "input_ref": {"sessions": saved_sources},
-        "engines": body.engines,
-        "presets": body.presets,
+        "engines": engines,
+        "selection": body.selection.model_dump(),
+        "combos": combos,
+        "base_preset": base,
         "repeats": body.repeats,
         "change_goal": body.change_goal,
         "language": body.language,
@@ -320,8 +342,8 @@ def create_run(services, config, body, created_by, *, registry=None, input_ref=N
         "cost_usd_est": 0.0,
         "unpriced_units": 0,
         "engine_git_sha": _git_sha(),
-        "engine_versions": {e: choices[e].version for e in body.engines if e != "human"},
-        "resolved_presets": {p: presets[p] for p in body.presets},
+        "engine_versions": {e: choices[e].version for e in engines if e != "human"},
+        "resolved_combos": resolved_combos,
     }
     services.repository.create_run(rid, run, units)
     for uid in units:
@@ -351,9 +373,15 @@ def post_run(request: Request, body: RunRequest):
             request.state.admin_claims["email"].strip().lower(),
             registry=getattr(services, "registry", None) or request.app.state.catalog.registry,
         )
-        return {"run_id": rid, "status": status}
+        return {
+            "run_id": rid,
+            "status": status,
+            "engines": services.repository.get_run(rid)["engines"],
+        }
     except HTTPException:
         raise
+    except (SelectionError, RunTooLarge) as error:
+        raise HTTPException(422, str(error)) from None
     except (ValueError, FileNotFoundError, InputError):
         raise HTTPException(422, "Invalid run selection or input.") from None
     except Exception:
@@ -410,8 +438,8 @@ def cancel_run(request: Request, run_id: str):
     return {"run_id": run_id, "status": repository.get_run(run_id)["status"]}
 
 
-def _metric_usage(metrics):
-    records = metrics.records
+def _metric_usage(metrics, start=0):
+    records = metrics.records[start:]
     return RunUsage(
         input_tokens=sum(r["input_tokens"] for r in records),
         output_tokens=sum(r["output_tokens"] for r in records),
@@ -420,6 +448,75 @@ def _metric_usage(metrics):
         if all(r["cost_usd"] is not None for r in records)
         else None,
     )
+
+
+def _add_usage(a, b):
+    if a is None:
+        return b
+    cost = a.cost_usd + b.cost_usd if a.cost_usd is not None and b.cost_usd is not None else None
+    return RunUsage(
+        input_tokens=a.input_tokens + b.input_tokens,
+        output_tokens=a.output_tokens + b.output_tokens,
+        calls=a.calls + b.calls,
+        cost_usd=cost,
+    )
+
+
+UNIT_BUDGET_S = 840
+MAX_ATTEMPTS = 3
+RETRY_DELAYS_S = (5, 20)
+MIN_RETRY_BUDGET_S = 120
+_PERMANENT_STATUS = {400, 401, 403, 404, 422}
+_PERMANENT_ERROR_TYPES = {"auth", "authentication", "bad_request", "not_found", "invalid_request"}
+
+
+def _llm_cause(exc):
+    """First LLMError on the `__cause__`/`__context__` chain (miti wraps it in AllRunsFailed)."""
+    seen = set()
+    while exc is not None and id(exc) not in seen:
+        if isinstance(exc, LLMError):
+            return exc
+        seen.add(id(exc))
+        exc = exc.__cause__ or exc.__context__
+    return None
+
+
+def _llm_transient(err):
+    """SHIM: replace with SP03's `onolys_engine_core.llm.errors.is_transient` once it lands.
+
+    Reads SP02's `http_status`/`error_type` via getattr so it works before and after SP02.
+    """
+    if isinstance(err, LLMBadOutput) or not isinstance(err, LLMUnavailable | LLMTimeout):
+        return False
+    if getattr(err, "no_retry", False):
+        return False
+    status = getattr(err, "http_status", None) or getattr(err, "status_code", None)
+    if status in _PERMANENT_STATUS or getattr(err, "error_type", None) in _PERMANENT_ERROR_TYPES:
+        return False
+    return True
+
+
+def is_retryable(exc):
+    if any(isinstance(e, _PERMANENT) for e in _chain(exc)):
+        return False
+    cause = _llm_cause(exc)
+    return cause is not None and _llm_transient(cause)
+
+
+def _chain(exc):
+    seen = set()
+    while exc is not None and id(exc) not in seen:
+        yield exc
+        seen.add(id(exc))
+        exc = exc.__cause__ or exc.__context__
+
+
+def _llm_code(err):
+    if isinstance(err, LLMRateLimited):
+        return "llm_rate_limited"
+    if isinstance(err, LLMTimeout):
+        return "llm_timeout"
+    return "llm_unavailable"
 
 
 def _estimate_cost(services, run, unit, usage, metrics):
@@ -431,7 +528,11 @@ def _estimate_cost(services, run, unit, usage, metrics):
         estimates = [prices.estimate(record, record["model"]) for record in metrics.records]
         unknown = any(e.cost_usd is None for e in estimates)
         return sum(e.cost_usd or 0 for e in estimates), unknown
-    models = set(run["resolved_presets"].get(unit["preset"], {}).values())
+    if unit.get("combo_key"):
+        snap = run["resolved_combos"].get(unit["combo_key"])
+        models = {snap["litellm_id"]} if snap else set()
+    else:
+        models = set(run["resolved_presets"].get(unit["preset"], {}).values())
     estimate = prices.estimate(usage, next(iter(models)) if len(models) == 1 else "")
     return estimate.cost_usd, estimate.cost_usd is None
 
@@ -444,8 +545,30 @@ def _cost(services, run, unit, usage, metrics):
         return usage.cost_usd, usage.cost_usd is None
 
 
+def _routes_for(registry, base_preset, models, combo):
+    """Route set for one combo: the base preset's routes re-pointed at the combo (PRD R6)."""
+    model = next(m for m in models.values() if m.id == combo["model"])
+    base = resolve_preset(base_preset, registry)[0]
+    return combo_routes(base, model, combo["tier"], combo["effort"])
+
+
+def _combo_snapshot(routes, combo):
+    route = next(iter(routes.values()))
+    return {
+        "litellm_id": route.litellm_id,
+        "effort": combo["effort"],
+        "max_output_tokens": route.max_output_tokens,
+        "context_tokens": route.context_tokens,
+        "supports_temperature": route.supports_temperature,
+        "caching_mode": route.caching_mode,
+    }
+
+
 class _ExecutionConfigChanged(Exception):
     """Queued AI work no longer matches its saved execution provenance."""
+
+
+_PERMANENT = (OutputInvalid, InputError, ConfigError, _ExecutionConfigChanged)
 
 
 async def execute_unit(services, rid, uid):
@@ -472,6 +595,8 @@ async def execute_unit(services, rid, uid):
         return
     metrics = MetricsCollector()
     usage = None
+    attempts = 0
+    carried = None
     try:
         source = next(
             s for s in run["input_ref"]["sessions"] if s["session_id"] == unit["session_id"]
@@ -486,20 +611,28 @@ async def execute_unit(services, rid, uid):
             transcript = validate_transcript_input(
                 services.bucket.read_json(source["transcript_path"])
             )
-            routes, _ = resolve_preset(unit["preset"], services.routes)
             engine = services.engine(unit["engine"])
+            if unit.get("combo"):
+                # Combo unit: rebuild routes from the live models.yaml and compare to the
+                # snapshot taken at creation (drift guard).
+                routes = _routes_for(
+                    services.routes, run["base_preset"], services.models, unit["combo"]
+                )
+                config_changed = run["resolved_combos"].get(unit["combo_key"]) != _combo_snapshot(
+                    routes, unit["combo"]
+                )
+            else:
+                # Legacy preset unit, kept until stored legacy runs drain.
+                routes, _ = resolve_preset(unit["preset"], services.routes)
+                config_changed = run["resolved_presets"].get(unit["preset"]) != {
+                    name: route.litellm_id for name, route in routes.items()
+                }
             if (
                 run["engine_git_sha"] != _git_sha()
                 or run["engine_versions"].get(unit["engine"]) != engine.version
-                or run["resolved_presets"].get(unit["preset"])
-                != {name: route.litellm_id for name, route in routes.items()}
+                or config_changed
             ):
                 raise _ExecutionConfigChanged
-            factory = getattr(services, "llm_factory", None)
-            llm = factory(routes, metrics) if factory else LiteLLMClient(LLMConfig(routes=routes))
-            ctx = RunContext(
-                llm=llm, metrics=metrics, request_id=f"{rid}-{uid}", deadline=monotonic() + 840
-            )
             params = {
                 "preset": unit["preset"],
                 "coded_span": unit["coded_span"],
@@ -513,8 +646,39 @@ async def execute_unit(services, rid, uid):
             def progress(stage, status):
                 repository.update_unit(rid, uid, {"stage": str(stage)})
 
-            async with asyncio.timeout(840):
-                result = await run_validated(engine, ctx, transcript, params, progress_cb=progress)
+            factory = getattr(services, "llm_factory", None)
+            sleep = getattr(services, "sleep", None) or asyncio.sleep
+            budget_end = monotonic() + UNIT_BUDGET_S
+            while True:
+                attempts += 1
+                first_record = len(metrics.records)
+                llm = (
+                    factory(routes, metrics) if factory else LiteLLMClient(LLMConfig(routes=routes))
+                )
+                ctx = RunContext(
+                    llm=llm, metrics=metrics, request_id=f"{rid}-{uid}", deadline=budget_end
+                )
+                try:
+                    async with asyncio.timeout(max(budget_end - monotonic(), 0)):
+                        result = await run_validated(
+                            engine, ctx, transcript, params, progress_cb=progress
+                        )
+                    break
+                except Exception as exc:
+                    remaining = budget_end - monotonic()
+                    if (
+                        attempts >= MAX_ATTEMPTS
+                        or remaining < MIN_RETRY_BUDGET_S
+                        or not is_retryable(exc)
+                    ):
+                        raise
+                    # Failed attempt's spend is carried into the single finish_unit.
+                    carried = _add_usage(
+                        carried,
+                        (exc.usage if isinstance(exc, OutputInvalid) else None)
+                        or _metric_usage(metrics, first_record),
+                    )
+                    await sleep(RETRY_DELAYS_S[attempts - 1] * random.uniform(0.5, 1.0))
             output = result.output
             scores = (
                 oneshot_scores(output)
@@ -522,12 +686,17 @@ async def execute_unit(services, rid, uid):
                 else miti_lean_scores(output)
             )
             run_info = result.run_info.model_dump(mode="json")
-            usage = result.run_info.usage or _metric_usage(metrics)
+            usage = (
+                _add_usage(carried, result.run_info.usage)
+                if result.run_info.usage
+                else _metric_usage(metrics)
+            )
             run_info["usage"] = usage.model_dump(mode="json")
             cost, unpriced = _cost(services, run, unit, usage, metrics)
         saved = {
             **store_output(services.bucket, rid, uid, output),
             "status": "done",
+            "attempts": attempts,
             "scores": scores.model_dump(mode="json"),
             "run_info": run_info,
             "cost_usd_est": cost,
@@ -535,19 +704,23 @@ async def execute_unit(services, rid, uid):
         }
     except Exception as exc:
         usage = (
-            (exc.usage if isinstance(exc, OutputInvalid) else None)
-            or usage
-            or _metric_usage(metrics)
+            _add_usage(carried, exc.usage)
+            if isinstance(exc, OutputInvalid) and exc.usage
+            else usage or _metric_usage(metrics)
         )
         cost, unpriced = _cost(services, run, unit, usage, metrics)
         error_code = "engine_failed"
+        retryable = is_retryable(exc)
         if isinstance(exc, OutputInvalid):
             error_code = "output_invalid"
+        elif retryable:
+            error_code = _llm_code(_llm_cause(exc))
         elif isinstance(exc, _ExecutionConfigChanged):
             error_code = "execution_config_changed"
         saved = {
             "status": "failed",
-            "error": {"code": error_code},
+            "attempts": attempts,
+            "error": {"code": error_code, "retryable": retryable},
             "run_info": {"usage": usage.model_dump(mode="json")},
             "cost_usd_est": cost,
             "unpriced": unpriced,

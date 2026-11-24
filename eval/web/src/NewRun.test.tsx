@@ -1,30 +1,33 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import fixture from '../../fixtures/selection_cases.json';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { NewRun, plannedUnits } from './NewRun';
-import { createEvalApi, type EvalApi, type Options, type Upload } from './api';
+import { NewRun } from './NewRun';
+import { createEvalApi, type EvalApi, type Options, type RunSummary, type Upload } from './api';
 
 afterEach(() => { cleanup(); vi.useRealTimers(); });
+const sonnetLow = { models: ['claude'], tiers: ['claude-sonnet-5-5'], efforts: ['low'] };
 const options: Options = {
-  engines: [{ id: 'human', engine: 'human', label: 'Human score', prod: false }, { id: 'miti', engine: 'miti', label: 'MITI lean', prod: true }, { id: 'oneshot:miti', engine: 'oneshot', config: 'miti', label: 'One-shot · MITI', prod: false }],
-  presets: [{ name: 'configured', prod: true, models: {} }, { name: 'other', prod: false, models: {} }],
-  defaults: { dataset: { engines: ['human', 'miti'], presets: ['configured'] }, upload: { engines: ['miti'], presets: ['configured'] } },
+  engines: [{ id: 'human', engine: 'human', label: 'Human score', prod: false }, { id: 'miti', engine: 'miti', label: 'MITI lean (prod)', prod: true }, { id: 'oneshot:miti', engine: 'oneshot', config: 'miti', label: 'One-shot · MITI', prod: false }],
+  models: Object.entries(fixture.models).map(([id, tiers]) => ({ id, label: id === 'claude' ? 'Claude' : 'Gemini', context_tokens: 1000, max_output_tokens: 100, tiers: Object.entries(tiers).map(([tier, efforts]) => ({ id: tier, efforts, default_effort: 'low' })) })),
+  defaults: { dataset: { engines: ['human', 'miti'], selection: sonnetLow, label: 'Claude / claude-sonnet-5-5 / low (prod)' }, upload: { engines: ['miti'], selection: sonnetLow, label: 'Claude / claude-sonnet-5-5 / low (prod)' } },
 };
-function makeApi() {
+function makeApi(sessionCount = 2) {
   return {
     ...createEvalApi('', vi.fn()),
     me: vi.fn().mockResolvedValue({}),
     options: vi.fn(async (_mode: string, uploadId?: string) => ({ ...options, engines: uploadId === 'gold' || _mode === 'dataset' ? options.engines : options.engines.filter(e => e.id !== 'human') })),
     datasets: vi.fn().mockResolvedValue({ datasets: [{ dataset_id: 'sample', title: 'Sample dataset' }] }),
-    dataset: vi.fn().mockResolvedValue({ dataset_id: 'sample', title: 'Sample dataset', sessions: [{ session_id: 's1', title: 'First session' }, { session_id: 's2', title: 'Second session' }] }),
+    dataset: vi.fn().mockResolvedValue({ dataset_id: 'sample', title: 'Sample dataset', sessions: sessionCount === 2 ? [{ session_id: 's1', title: 'First session' }, { session_id: 's2', title: 'Second session' }] : Array.from({ length: sessionCount }, (_, i) => ({ session_id: i === 0 ? 's1' : `x${i}`, title: i === 0 ? 'First session' : `Session ${i}` })) }),
     upload: vi.fn().mockResolvedValue({ upload_id: 'plain', status: 'ready', has_gold: false, speakers: [] }),
     getUpload: vi.fn().mockResolvedValue({ upload_id: 'plain', status: 'ready', has_gold: false, speakers: [] }),
     speakers: vi.fn().mockResolvedValue({ upload_id: 'plain', status: 'ready', has_gold: false, speakers: [] }),
     start: vi.fn().mockResolvedValue({ run_id: 'run-1', status: 'queued' }),
+    rerun: vi.fn().mockResolvedValue({ run_id: 'run-2', status: 'queued' }),
   } satisfies EvalApi;
 }
-async function mount() {
-  const api = makeApi(); const onRunCreated = vi.fn();
+async function mount(sessionCount = 2) {
+  const api = makeApi(sessionCount); const onRunCreated = vi.fn();
   render(<NewRun api={api} onRunCreated={onRunCreated} />);
   await screen.findByLabelText('First session');
   return { api, onRunCreated };
@@ -44,26 +47,78 @@ const checked = (name: string) => (screen.getByLabelText(name) as HTMLInputEleme
 const start = () => screen.getByRole('button', { name: 'Start run' }) as HTMLButtonElement;
 
 describe('new run', () => {
-  it('loads configured dataset defaults, all sessions, prod labels and starts with wire IDs', async () => {
+  it('loads configured dataset defaults, all sessions, prod labels and starts with a selection', async () => {
     const { api, onRunCreated } = await mount();
     expect(checked('First session')).toBe(true); expect(checked('Second session')).toBe(true);
-    expect(checked('Human score')).toBe(true); expect(checked('MITI lean (prod)')).toBe(true);
-    expect(checked('configured (prod)')).toBe(true);
-    expect(screen.getByText('4 planned units')).toBeTruthy();
+    expect(checked('Human score')).toBe(true); expect((screen.getByLabelText('Human score') as HTMLInputElement).disabled).toBe(true);
+    expect(checked('MITI lean (prod)')).toBe(true);
+    expect(checked('Claude')).toBe(true); expect(checked('claude-sonnet-5-5')).toBe(true); expect(checked('low')).toBe(true);
+    expect(screen.getByText('4 units = 2 sessions x (1 human + 1 engines x 1 combos x 1 repeats)')).toBeTruthy();
     fireEvent.click(start());
-    await waitFor(() => expect(api.start).toHaveBeenCalledWith({ input: { dataset_id: 'sample', session_ids: ['s1', 's2'] }, engines: ['human', 'miti'], presets: ['configured'], repeats: 1 }));
+    await waitFor(() => expect(api.start).toHaveBeenCalledWith({ input: { dataset_id: 'sample', session_ids: ['s1', 's2'] }, engines: ['human', 'miti'], selection: sonnetLow, repeats: 1 }));
     expect(onRunCreated).toHaveBeenCalledWith('run-1');
   });
-  it('counts Human once per session and excludes its preset/repeat axes', async () => {
+  it('deselecting a model drops its tiers and the efforts only they offered', async () => {
     await mount();
-    fireEvent.click(screen.getByLabelText('One-shot · MITI')); fireEvent.click(screen.getByLabelText('other'));
+    expect(screen.queryByLabelText('gemini-4-neon')).toBeNull();
+    fireEvent.click(screen.getByLabelText('Gemini')); fireEvent.click(screen.getByLabelText('gemini-4-neon'));
+    expect(checked('gemini-4-neon')).toBe(true);
+    fireEvent.click(screen.getByLabelText('Gemini'));
+    expect(screen.queryByLabelText('gemini-4-neon')).toBeNull();
+    fireEvent.click(screen.getByLabelText('Gemini'));
+    expect(checked('gemini-4-neon')).toBe(false);
+  });
+  it('effort list is the union of the selected tiers efforts', async () => {
+    await mount();
+    expect(screen.getAllByRole('checkbox').map(c => c.parentElement?.textContent)).toContain('max');
+    fireEvent.click(screen.getByLabelText('Claude')); // no tiers left
+    expect(screen.queryByLabelText('max')).toBeNull();
+    fireEvent.click(screen.getByLabelText('Gemini')); fireEvent.click(screen.getByLabelText('gemini-4-neon'));
+    expect(screen.queryByLabelText('max')).toBeNull(); expect(screen.getByLabelText('high')).toBeTruthy();
+    fireEvent.click(screen.getByLabelText('Claude')); fireEvent.click(screen.getByLabelText('claude-haiku-5-5'));
+    expect(screen.getByLabelText('max')).toBeTruthy();
+    fireEvent.click(screen.getByLabelText('max'));
+    fireEvent.click(screen.getByLabelText('claude-haiku-5-5')); // drops max again, effort pruned
+    expect(screen.queryByLabelText('max')).toBeNull();
+  });
+  it('shows the shared-fixture count, combo list and skipped combos', async () => {
+    await mount();
+    fireEvent.click(screen.getByLabelText('Gemini')); fireEvent.click(screen.getByLabelText('gemini-4-neon'));
+    fireEvent.click(screen.getByLabelText('low')); fireEvent.click(screen.getByLabelText('max'));
+    expect(screen.getByText('4 units = 2 sessions x (1 human + 1 engines x 1 combos x 1 repeats)')).toBeTruthy();
+    expect(screen.getByText('claude/claude-sonnet-5-5/max')).toBeTruthy();
+    expect(screen.getByText('skipped: gemini-4-neon has no max')).toBeTruthy();
+    fireEvent.click(screen.getByLabelText('One-shot · MITI'));
     fireEvent.change(screen.getByLabelText('Runs per cell'), { target: { value: '3' } });
-    expect(screen.getByText('26 planned units')).toBeTruthy();
-    expect(plannedUnits(8, ['human', 'miti'], ['a', 'b'], 3)).toBe(56);
-    fireEvent.click(screen.getByLabelText('MITI lean (prod)')); fireEvent.click(screen.getByLabelText('One-shot · MITI'));
-    fireEvent.click(screen.getByLabelText('configured (prod)')); fireEvent.click(screen.getByLabelText('other'));
-    expect(screen.getByText('2 planned units')).toBeTruthy(); expect(start().disabled).toBe(false);
-    fireEvent.click(screen.getByLabelText('Human score')); expect(start().disabled).toBe(true);
+    expect(screen.getByText('14 units = 2 sessions x (1 human + 2 engines x 1 combos x 3 repeats)')).toBeTruthy();
+  });
+  it('disables Start with the server message above 499 units', async () => {
+    await mount(250);
+    expect(screen.getByText('Run has 500 units; the maximum is 499. Remove sessions, combos or repeats.')).toBeTruthy();
+    expect(start().disabled).toBe(true);
+    fireEvent.click(screen.getByLabelText('First session'));
+    expect(screen.queryByText(/the maximum is 499/)).toBeNull();
+    expect(start().disabled).toBe(false);
+  });
+  it('legacy rerun opens the picker empty with a notice and keeps the saved engines', async () => {
+    const api = makeApi(); const onRunCreated = vi.fn();
+    const legacy = { run_id: 'old', status: 'done', created_at: '', input: { dataset_id: 'sample', session_ids: ['s1'] }, engines: ['miti'], repeats: 1, selection: null, combos: null, presets: ['default'], legacy_selection: true, combo_keys: ['preset:default'], combo_labels: { 'preset:default': 'preset: default (legacy)' } } as unknown as RunSummary;
+    render(<NewRun api={api} initialRun={legacy} onRunCreated={onRunCreated} />);
+    expect(await screen.findByText(/older run chose models by preset/)).toBeTruthy();
+    expect(checked('MITI lean (prod)')).toBe(true); expect(checked('Human score')).toBe(true);
+    expect(checked('Claude')).toBe(false); expect(checked('Gemini')).toBe(false);
+    expect(start().disabled).toBe(true);
+    fireEvent.click(screen.getByLabelText('Claude')); fireEvent.click(screen.getByLabelText('claude-haiku-5-5')); fireEvent.click(screen.getByLabelText('high'));
+    expect(start().disabled).toBe(false);
+    fireEvent.click(start());
+    await waitFor(() => expect(api.rerun).toHaveBeenCalledWith('old', { engines: ['human', 'miti'], selection: { models: ['claude'], tiers: ['claude-haiku-5-5'], efforts: ['high'] }, repeats: 1 }));
+  });
+  it('requires a combo when an AI engine is selected and allows Human only', async () => {
+    await mount();
+    fireEvent.click(screen.getByLabelText('low'));
+    expect(start().disabled).toBe(true);
+    fireEvent.click(screen.getByLabelText('MITI lean (prod)'));
+    expect(start().disabled).toBe(false);
   });
   it('upload defaults omit Human and require a saved ready upload; changing input invalidates it', async () => {
     const { api } = await uploadMode();
@@ -87,7 +142,7 @@ describe('new run', () => {
     expect(api.options).toHaveBeenLastCalledWith('upload', 'gold');
     expect(checked('Human score')).toBe(false);
     fireEvent.click(screen.getByLabelText('Human score'));
-    expect(screen.getByText('2 planned units')).toBeTruthy();
+    expect(screen.getByText('2 units = 1 sessions x (1 human + 1 engines x 1 combos x 1 repeats)')).toBeTruthy();
   });
   it('uses actual detected labels and samples for clinician selection before Start', async () => {
     const { api } = await uploadMode(); chooseFile();

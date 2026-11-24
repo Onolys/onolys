@@ -1,10 +1,13 @@
 export type Mode = 'dataset' | 'upload';
 export type CodedSpan = { start_turn: number; end_turn: number } | { start_ms: number; end_ms: number };
 export interface EngineOption { id: string; label: string; engine: string; config?: string; prod: boolean; version?: string }
+export interface Selection { models: string[]; tiers: string[]; efforts: string[] }
+export interface Combo { model: string; tier: string; effort: string }
+export interface ModelOption { id: string; label: string; context_tokens: number; max_output_tokens: number; tiers: { id: string; efforts: string[]; default_effort: string }[] }
 export interface Options {
   engines: EngineOption[];
-  presets: { name: string; prod: boolean; models: Record<string, string> }[];
-  defaults: Record<Mode, { engines: string[]; presets: string[] }>;
+  models: ModelOption[];
+  defaults: Record<Mode, { engines: string[]; selection: Selection; label: string }>;
 }
 export interface DatasetMetadata { dataset_id: string; title: string }
 export interface Dataset extends DatasetMetadata { sessions: { session_id: string; title: string; has_gold?: boolean; coded_span?: CodedSpan }[] }
@@ -19,14 +22,15 @@ export interface UploadInput { file: File; gold?: File; change_goal: string; lan
 export interface RunInput {
   input: { dataset_id: string; session_ids: string[] } | { upload_id: string };
   engines: string[];
-  presets: string[];
+  selection: Selection;
   repeats: 1 | 3;
   change_goal?: string;
   language?: string;
   coded_span?: CodedSpan;
 }
 export type RunStatus = 'queued' | 'running' | 'done' | 'partial' | 'failed' | 'cancelled';
-export interface RunSummary extends RunInput {
+export interface RunSummary extends Omit<RunInput, 'selection'> {
+ selection: Selection | null; combos: Combo[] | null; legacy_selection: boolean; combo_keys: string[]; combo_labels: Record<string, string>; presets?: string[];
  run_id: string; status: RunStatus; created_at: string;
  total_units: number; completed_units: number; done_units: number; failed_units: number; cancelled_units: number;
  usage: { input_tokens: number; output_tokens: number; cost_usd?: number | null; calls?: number };
@@ -42,17 +46,24 @@ export interface Aggregate {
  n: number; counts: Record<string, ErrorMetric>; summaries: Record<string, ErrorMetric>;
  globals: Record<string, ErrorMetric & { within_1: { n: number; total: number; fraction: number | null } }>;
 }
-export interface Compare {
- has_human: boolean; metrics: { id: string; group: 'counts' | 'globals' | 'summaries'; label: string }[];
- sessions: { session_id: string; human: Record<string, number | null> | null; cells: {
- engine: string; preset: string; n: number; failed: number; unit_ids: string[];
+export interface CompareCell {
+ engine: string; combo_key: string; label: string; n: number; failed: number; error_code: string | null; unit_ids: string[];
  values: Record<string, { mean: number | null; min: number | null; max: number | null; n: number }>;
  diff?: Record<string, number | null>;
- }[] }[];
- aggregates: { engine: string; preset: string; metrics: Aggregate }[]; notes: string[];
+ error: Record<string, ErrorMetric> | null;
+}
+export interface CompareAggregate {
+ engine: string; combo_key: string; label: string; n: number; failed: number;
+ within_1: Record<string, { n: number; total: number; fraction: number | null }>;
+ usage: { input_tokens: number; output_tokens: number; calls: number }; cost_usd_est: number | null; metrics: Aggregate;
+}
+export interface Compare {
+ has_human: boolean; metrics: { id: string; group: 'counts' | 'globals' | 'summaries'; label: string }[];
+ sessions: { session_id: string; human: Record<string, number | null> | null; cells: CompareCell[] }[];
+ aggregates: CompareAggregate[]; notes: string[];
 }
 export interface RunDetail extends RunSummary { units: RunUnit[]; compare: Compare }
-export type RunSelection = Pick<RunInput, 'engines' | 'presets' | 'repeats'>;
+export type RunSelection = Pick<RunInput, 'engines' | 'selection' | 'repeats'>;
 export interface EvalApi {
   me(): Promise<unknown>;
   runs(signal?: AbortSignal): Promise<{ runs: RunSummary[] }>;

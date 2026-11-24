@@ -1,0 +1,43 @@
+{
+  "note": "Shared table cases for validate_selection/plan_units. Server: eval/backend/tests/test_matrix.py. Web (Task 7) mirrors the same cases. models maps model id -> tier id -> efforts. Exactly one of expect.error / expect.combos is present; sessions is a count.",
+  "models": {
+    "claude": {
+      "claude-sonnet-5-5": ["low", "medium", "high", "max"],
+      "claude-haiku-5-5": ["low", "medium", "high", "max"]
+    },
+    "gemini": {
+      "gemini-4-carbon": ["low", "medium", "high"],
+      "gemini-4-neon": ["low", "medium", "high"]
+    }
+  },
+  "cases": [
+    {"name": "valid", "selection": {"models": ["claude"], "tiers": ["claude-sonnet-5-5"], "efforts": ["low", "high"]}, "engines": ["miti"], "sessions": 1, "repeats": 1,
+     "expect": {"combos": ["claude/claude-sonnet-5-5/low", "claude/claude-sonnet-5-5/high"], "dropped": [], "units": 2}},
+    {"name": "unknown model", "selection": {"models": ["nope"], "tiers": [], "efforts": ["low"]}, "engines": ["miti"], "sessions": 1, "repeats": 1,
+     "expect": {"error": "Unknown model 'nope'."}},
+    {"name": "unknown tier", "selection": {"models": ["claude"], "tiers": ["nope"], "efforts": ["low"]}, "engines": ["miti"], "sessions": 1, "repeats": 1,
+     "expect": {"error": "Unknown tier 'nope'."}},
+    {"name": "unknown effort", "selection": {"models": ["claude"], "tiers": ["claude-sonnet-5-5"], "efforts": ["xhigh"]}, "engines": ["miti"], "sessions": 1, "repeats": 1,
+     "expect": {"error": "Unknown effort 'xhigh'."}},
+    {"name": "model without tier", "selection": {"models": ["claude", "gemini"], "tiers": ["claude-sonnet-5-5"], "efforts": ["low"]}, "engines": ["miti"], "sessions": 1, "repeats": 1,
+     "expect": {"error": "Model 'gemini' has no selected tier."}},
+    {"name": "tier without model", "selection": {"models": ["claude"], "tiers": ["claude-sonnet-5-5", "gemini-4-neon"], "efforts": ["low"]}, "engines": ["miti"], "sessions": 1, "repeats": 1,
+     "expect": {"error": "Tier 'gemini-4-neon' belongs to model 'gemini', which is not selected."}},
+    {"name": "effort unsupported by every tier", "selection": {"models": ["gemini"], "tiers": ["gemini-4-neon"], "efforts": ["max"]}, "engines": ["miti"], "sessions": 1, "repeats": 1,
+     "expect": {"error": "Effort 'max' is not supported by any selected tier."}},
+    {"name": "partially supported effort is dropped", "selection": {"models": ["claude", "gemini"], "tiers": ["claude-sonnet-5-5", "gemini-4-neon"], "efforts": ["max"]}, "engines": ["miti"], "sessions": 1, "repeats": 1,
+     "expect": {"combos": ["claude/claude-sonnet-5-5/max"], "dropped": ["gemini/gemini-4-neon/max"], "units": 1}},
+    {"name": "empty product with AI engine", "selection": {"models": [], "tiers": [], "efforts": []}, "engines": ["miti"], "sessions": 1, "repeats": 1,
+     "expect": {"error": "Selection has no valid model, tier and effort combination."}},
+    {"name": "human only needs no combos", "selection": {"models": [], "tiers": [], "efforts": []}, "engines": ["human"], "sessions": 2, "repeats": 1,
+     "expect": {"combos": [], "dropped": [], "units": 2}},
+    {"name": "499 units ok", "selection": {"models": ["claude"], "tiers": ["claude-sonnet-5-5"], "efforts": ["low"]}, "engines": ["human", "miti"], "sessions": 249, "repeats": 1,
+     "expect": {"combos": ["claude/claude-sonnet-5-5/low"], "dropped": [], "units": 498}},
+    {"name": "499 exactly", "selection": {"models": ["claude"], "tiers": ["claude-sonnet-5-5"], "efforts": ["low"]}, "engines": ["miti"], "sessions": 499, "repeats": 1,
+     "expect": {"combos": ["claude/claude-sonnet-5-5/low"], "dropped": [], "units": 499}},
+    {"name": "500 rejected", "selection": {"models": ["claude"], "tiers": ["claude-sonnet-5-5"], "efforts": ["low"]}, "engines": ["miti"], "sessions": 500, "repeats": 1,
+     "expect": {"error": "Run has 500 units; the maximum is 499. Remove sessions, combos or repeats."}},
+    {"name": "repeats multiply", "selection": {"models": ["claude"], "tiers": ["claude-sonnet-5-5"], "efforts": ["low", "high"]}, "engines": ["human", "miti", "oneshot:miti"], "sessions": 2, "repeats": 3,
+     "expect": {"combos": ["claude/claude-sonnet-5-5/low", "claude/claude-sonnet-5-5/high"], "dropped": [], "units": 26}}
+  ]
+}

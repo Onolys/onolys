@@ -17,7 +17,7 @@ import yaml
 
 from onolys_engine_core.config import locate_config_file
 from onolys_engine_core.errors import ConfigError, InputError
-from onolys_engine_core.llm.models import load_models
+from onolys_engine_core.llm.models import Model, find_model, load_models
 
 ROUTES_ENV = "ROUTES_FILE"
 DEFAULT_PRESET_ENV = "DEFAULT_PRESET"
@@ -106,13 +106,12 @@ def _llm_override(env: dict[str, str], models_path: Path | None) -> dict[str, st
     owners = [m for m in entries.values() if m.provider == provider]
     if not owners:
         raise ConfigError(f"{PROVIDER_ENV}={provider!r} unknown; expected one of {providers}")
-    for m in owners:
-        if model in m.tiers:
-            return {
-                "litellm_id": f"{provider}/{model}",
-                "api_key_env": m.api_key_env,
-                "caching_mode": m.caching_mode,
-            }
+    if m := find_model(entries, provider, model):
+        return {
+            "litellm_id": f"{provider}/{model}",
+            "api_key_env": m.api_key_env,
+            "caching_mode": m.caching_mode,
+        }
     known = sorted(t for m in owners for t in m.tiers)
     raise ConfigError(f"{MODEL_ENV}={model!r} unknown for provider {provider!r}; expected {known}")
 
@@ -246,17 +245,48 @@ def check_api_keys(routes: dict[str, Route], env: dict[str, str] | None = None) 
         raise ConfigError("LLM API key environment variable not set: " + "; ".join(parts))
 
 
+EFFORT_OUTPUT_CAP = {"low": 16000, "medium": 32000, "high": 48000, "max": 64000}
+COMBO_TIMEOUT_S = 300
+
+
+def combo_routes(base: dict[str, Route], model: Model, tier: str, effort: str) -> dict[str, Route]:
+    """Pure: every route of `base` re-pointed at one (model, tier, effort) combo (PRD R6, D2, D9).
+
+    `model` is the models.yaml block owning `tier`. Structured-output mode, concurrency and
+    retries are inherited; output cap is min(model max, EFFORT_OUTPUT_CAP[effort]).
+    """
+    cap = min(model.max_output_tokens, EFFORT_OUTPUT_CAP[effort])
+    out = {}
+    for name, r in base.items():
+        extra = {k: v for k, v in r.extra_params.items() if k != "reasoning_effort"}
+        extra["reasoning_effort"] = effort
+        out[name] = replace(
+            r,
+            litellm_id=f"{model.provider}/{tier}",
+            api_key_env=model.api_key_env,
+            caching_mode=model.caching_mode,
+            supports_temperature=model.supports_temperature,
+            context_tokens=model.context_tokens,
+            max_output_tokens=cap,
+            timeout_s=COMBO_TIMEOUT_S,
+            extra_params=extra,
+        )
+    return out
+
+
 def allowed_presets(registry: RouteRegistry | None = None) -> list[str]:
     reg = registry or load_registry()
     return sorted(reg.presets) or [DEFAULT_PRESET_NAME]
 
 
 __all__ = [
+    "EFFORT_OUTPUT_CAP",
     "Preset",
     "Route",
     "RouteRegistry",
     "allowed_presets",
     "check_api_keys",
+    "combo_routes",
     "default_preset_name",
     "load_registry",
     "resolve_preset",
