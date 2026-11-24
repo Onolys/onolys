@@ -117,7 +117,7 @@ def test_expansion_human_once_and_immutable_provenance(services):
     assert all(t["kind"] == "unit" and t["payload"]["run_id"] == rid for t in services.queue.tasks)
     assert run["created_by"] == "alice@example.com"
     assert run["engine_versions"]["oneshot:miti"] and run["engine_git_sha"]
-    assert run["presets"] == [] and run["resolved_presets"] == {}
+    assert "presets" not in run and "resolved_presets" not in run
     assert set(run["resolved_combos"]) == {
         "claude/claude-sonnet-5-5/low",
         "claude/claude-sonnet-5-5/high",

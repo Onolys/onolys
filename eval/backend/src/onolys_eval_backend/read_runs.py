@@ -11,7 +11,7 @@ from onolys_eval.gold import COUNT_IDS, GLOBAL_IDS
 from onolys_eval.metrics import Scores, aggregate, compare
 from pydantic import BaseModel, ConfigDict, Field, StrictInt
 
-from onolys_eval_backend.matrix import RunTooLarge, SelectionError
+from onolys_eval_backend.matrix import RunTooLarge, SelectionError, combo_key
 from onolys_eval_backend.runs import RunRequest, Selection, create_run
 from onolys_eval_backend.storage import load_output
 
@@ -24,6 +24,8 @@ SUMMARY_FIELDS = (
     "input",
     "engines",
     "presets",
+    "selection",
+    "combos",
     "repeats",
     "change_goal",
     "language",
@@ -61,9 +63,42 @@ def _run(repository, rid):
     return run
 
 
+def is_legacy(run):
+    """Stored pre-matrix runs carry preset names and no combo selection."""
+    return bool(run.get("presets"))
+
+
+def _unit_key(unit):
+    if unit.get("combo_key"):
+        return unit["combo_key"]
+    return f"preset:{unit['preset']}" if unit.get("preset") else None
+
+
+def _label(key):
+    if key.startswith("preset:"):
+        return f"preset: {key[len('preset:'):]} (legacy)"
+    return key
+
+
+def _run_keys(run):
+    if is_legacy(run):
+        return [f"preset:{name}" for name in run["presets"]]
+    return [combo_key(c) for c in run.get("combos") or []]
+
+
 def run_summary(rid, run):
     """Allowlist the public saved fields so storage paths never become API fields."""
-    return {"run_id": rid, **{key: run.get(key) for key in SUMMARY_FIELDS}}
+    legacy = is_legacy(run)
+    keys = _run_keys(run)
+    out = {"run_id": rid, **{key: run.get(key) for key in SUMMARY_FIELDS}}
+    if legacy:
+        out["selection"] = out["combos"] = None
+    return {
+        **out,
+        "legacy_selection": legacy,
+        "combo_keys": keys,
+        "combo_labels": {key: _label(key) for key in keys},
+    }
 
 
 def _values(scores):
@@ -87,15 +122,36 @@ def _range(values):
     }
 
 
+def _flat_error(comparisons):
+    """MAE/bias per metric over the given core comparisons (None without any)."""
+    if not comparisons:
+        return None
+    agg = aggregate(comparisons)
+    return {
+        key: {"mae": row["mae"], "mean_bias": row["mean_bias"], "n": row["n"]}
+        for key, row in {**agg["counts"], **agg["globals"], **agg["summaries"]}.items()
+    }
+
+
+def _usage(units):
+    total = {"input_tokens": 0, "output_tokens": 0, "calls": 0}
+    for unit in units:
+        usage = (unit.get("run_info") or {}).get("usage") or {}
+        for key in total:
+            total[key] += usage.get(key) or 0
+    return total
+
+
 def build_compare(run, units):
     """Keep repeats as individual core comparisons; only presentation cells use means."""
     has_human = "human" in run["engines"]
     notes, sessions = [], []
+    keys = _run_keys(run)
     comparisons = {
-        (engine, preset): []
+        (engine, key): []
         for engine in run["engines"]
         if engine != "human"
-        for preset in run["presets"]
+        for key in keys
     }
     session_ids = run["input"].get("session_ids") or [run["input"].get("upload_id")]
     for sid in session_ids:
@@ -113,60 +169,80 @@ def build_compare(run, units):
         for unit in selected.values():
             notes.extend(unit.get("warnings", []))
         cells = []
-        for (engine, preset), errors in comparisons.items():
+        for (engine, key), errors in comparisons.items():
             cell_units = {
                 uid: unit
                 for uid, unit in selected.items()
-                if unit["engine"] == engine and unit["preset"] == preset
+                if unit["engine"] == engine and _unit_key(unit) == key
             }
             successful = [
                 Scores.model_validate(u["scores"])
                 for u in cell_units.values()
                 if u["status"] == "done" and u.get("scores") is not None
             ]
+            failed = [u for u in cell_units.values() if u["status"] == "failed"]
             values = [_values(score) for score in successful]
             ranges = {
-                key: _range([row[key] for row in values if row[key] is not None])
-                for key in METRIC_IDS
+                key_: _range([row[key_] for row in values if row[key_] is not None])
+                for key_ in METRIC_IDS
             }
             cell = {
                 "engine": engine,
-                "preset": preset,
+                "combo_key": key,
+                "label": _label(key),
                 "n": len(successful),
-                "failed": sum(u["status"] == "failed" for u in cell_units.values()),
+                "failed": len(failed),
+                "error_code": next(
+                    ((u.get("error") or {}).get("code") for u in failed if u.get("error")), None
+                ),
                 "unit_ids": list(cell_units),
                 "values": ranges,
+                "error": None,
             }
             if has_human:
                 cell["diff"] = {
-                    key: (ranges[key]["mean"] - reference[key])
+                    key_: (ranges[key_]["mean"] - reference[key_])
                     if reference is not None
-                    and reference[key] is not None
-                    and ranges[key]["mean"] is not None
+                    and reference[key_] is not None
+                    and ranges[key_]["mean"] is not None
                     else None
-                    for key in METRIC_IDS
+                    for key_ in METRIC_IDS
                 }
             if human is not None:
-                for score in successful:
-                    comparison = compare(human, score)
-                    errors.append(comparison)
+                session_errors = [compare(human, score) for score in successful]
+                errors.extend(session_errors)
+                for comparison in session_errors:
                     notes.extend(comparison["notes"])
+                cell["error"] = _flat_error(session_errors)
             cells.append(cell)
         sessions.append({"session_id": sid, "human": reference, "cells": cells})
     for source in run.get("input_ref", {}).get("sessions", []):
         caveat = source.get("provenance", {}).get("notes")
         if caveat:
             notes.append(f"{source['session_id']}: {caveat}")
+    rows = []
+    if has_human:
+        for (engine, key), errors in comparisons.items():
+            owned = [u for u in units.values() if u["engine"] == engine and _unit_key(u) == key]
+            metrics = aggregate(errors)
+            rows.append(
+                {
+                    "engine": engine,
+                    "combo_key": key,
+                    "label": _label(key),
+                    "n": metrics["n"],
+                    "failed": sum(u["status"] == "failed" for u in owned),
+                    "within_1": {k: v["within_1"] for k, v in metrics["globals"].items()},
+                    "usage": _usage(owned),
+                    "cost_usd_est": sum(u.get("cost_usd_est") or 0 for u in owned),
+                    "metrics": metrics,
+                }
+            )
     return {
         "has_human": has_human,
         "metrics": METRICS,
         "sessions": sessions,
-        "aggregates": [
-            {"engine": engine, "preset": preset, "metrics": aggregate(errors)}
-            for (engine, preset), errors in comparisons.items()
-        ]
-        if has_human
-        else [],
+        "aggregates": rows,
         "notes": list(dict.fromkeys(notes)),
     }
 
@@ -186,6 +262,7 @@ def _public_unit(run_id, unit_id, unit):
             for key, value in unit.items()
             if key != "output_ref" and not (key == "output" and value is None and spilled)
         },
+        "combo_key": _unit_key(unit),
     }
 
 

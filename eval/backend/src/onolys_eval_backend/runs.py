@@ -324,9 +324,6 @@ def create_run(services, config, body, created_by, *, registry=None, input_ref=N
         "engines": engines,
         "selection": body.selection.model_dump(),
         "combos": combos,
-        # Legacy-shaped fields keep read_runs working until Task 6 reads combos.
-        "presets": [],
-        "resolved_presets": {},
         "base_preset": base,
         "repeats": body.repeats,
         "change_goal": body.change_goal,
