@@ -315,3 +315,16 @@ def test_api_mode_real_adapters_valid_or_unset_llm_override_starts_without_keys(
     monkeypatch.setenv("LLM_PROVIDER", "anthropic")
     monkeypatch.setenv("LLM_MODEL", "claude-sonnet-5-5")
     create_app(_api_real_settings(), repo=FakeRepo(blobs), blobs=blobs)
+
+
+def test_mismatch_settings_defaults_env_and_validation():
+    s = Settings.from_env({"APP_BASE_URL": "https://app.onolys.com", "ENV": "local"})
+    assert (s.ai_mismatch_min_seconds, s.ai_mismatch_pct, s.ai_tolerance_seconds) == (60, 15, 30)
+    t = Settings.from_env(
+        {"APP_BASE_URL": "https://app.onolys.com", "ENV": "local",
+         "AI_MISMATCH_MIN_SECONDS": "45", "AI_MISMATCH_PCT": "20"}
+    )  # fmt: skip
+    assert (t.ai_mismatch_min_seconds, t.ai_mismatch_pct) == (45, 20)
+    for bad in ("AI_MISMATCH_MIN_SECONDS", "AI_MISMATCH_PCT"):
+        with pytest.raises(ConfigError):
+            Settings.from_env({"APP_BASE_URL": "https://app.onolys.com", "ENV": "local", bad: "-1"})

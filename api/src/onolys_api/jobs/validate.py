@@ -118,7 +118,7 @@ def make_validate_handler(
 ) -> Handler:
     """`max_audio_s(provider, model)` gives the longest accepted audio for the session's STT.
     `settings` carries the AI interview bounds (`AI_MAX_SECONDS` + `AI_TOLERANCE_SECONDS`
-    longest, `AI_MIN_SECONDS` shortest before a warning) used when the session has `interview_id`.
+    longest, `AI_MIN_SECONDS` shortest before a warning, `AI_MISMATCH_*` relay-match tolerance) used when the session has `interview_id`.
     """
     cfg = settings or Settings()
 
@@ -159,16 +159,20 @@ def make_validate_handler(
         if seconds < MIN_DURATION_S:
             raise fail(ctx, "audio_unreadable")
 
-    def _matches_relay(
+    def _audio_matches_relay(
         ctx: TaskContext, session, seconds: float, fmt: str, probe: ProbeResult
     ) -> bool:
-        """True when the upload matches the relay duration; logs the one audio-check line."""
-        threshold = float(cfg.ai_tolerance_seconds)
+        """03-failure-policy R9: False only when the relay duration is known and the upload is
+        further from it than `max(AI_MISMATCH_MIN_SECONDS, AI_MISMATCH_PCT % of relay)`. Logs the
+        one `interview_audio_check` line; unknown relay duration or interview proceeds."""
         try:
             iv = ctx.repo.get_interview(ctx.uid, session.interview_id)
         except NotFoundError:
             iv = None
         recorded = iv.duration_s if iv else None
+        threshold = float(cfg.ai_mismatch_min_seconds)
+        if recorded is not None:
+            threshold = max(threshold, cfg.ai_mismatch_pct / 100 * recorded)
         if iv is None:
             result = "skipped_no_interview"
         elif recorded is None:
@@ -180,7 +184,7 @@ def make_validate_handler(
             relay_s=recorded, threshold_s=threshold, result=result, audio_format=fmt,
             probe=probe, session_client=session.client, interview=iv,
         )  # fmt: skip
-        return result == "ok"
+        return result != "mismatch"
 
     def validate(ctx: TaskContext) -> None:
         uid, sid = ctx.uid, ctx.sid
@@ -258,8 +262,9 @@ def make_validate_handler(
             ensure_alive(ctx)  # a DELETE during the writes above must not leave audio behind
 
         if session.interview_id:
-            # interview sessions are never counted (03-failure-policy R5): the check only logs
-            _matches_relay(ctx, session, seconds, fmt, probe)
+            # a mismatch is OUR error (03-failure-policy R9): no upload discard, data kept, no retry
+            if not _audio_matches_relay(ctx, session, seconds, fmt, probe):
+                raise PermanentError("internal_error")
         ctx.repo.add_recording(
             uid,
             sid,

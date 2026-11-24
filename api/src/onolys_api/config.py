@@ -103,7 +103,9 @@ class Settings:
     ai_max_seconds: int = 600  # hard cap on one interview
     ai_warn_seconds: int = 480  # client warns the user at this elapsed time
     ai_min_seconds: int = 300  # shortest recording worth sending to the audit
-    ai_tolerance_seconds: int = 30
+    ai_tolerance_seconds: int = 30  # only the interview ceiling: AI_MAX_SECONDS + this
+    ai_mismatch_min_seconds: int = 60  # relay/upload mismatch: tolerated up to max(this, pct of relay)
+    ai_mismatch_pct: int = 15
     ai_abandon_count_seconds: int = 30  # ended/abandoned under this: the usage unit is refunded
     ai_refunds_per_day: int = 3  # at most this many such refunds per user per UTC day (A9)
     ai_reconnect_seconds: int = 60  # relay waits this long for a dropped client
@@ -170,6 +172,10 @@ class Settings:
             ai_warn_seconds=_int(e, "AI_WARN_SECONDS", cls.ai_warn_seconds),
             ai_min_seconds=_int(e, "AI_MIN_SECONDS", cls.ai_min_seconds),
             ai_tolerance_seconds=_int(e, "AI_TOLERANCE_SECONDS", cls.ai_tolerance_seconds),
+            ai_mismatch_min_seconds=_int(
+                e, "AI_MISMATCH_MIN_SECONDS", cls.ai_mismatch_min_seconds
+            ),
+            ai_mismatch_pct=_int(e, "AI_MISMATCH_PCT", cls.ai_mismatch_pct),
             ai_abandon_count_seconds=_int(
                 e, "AI_ABANDON_COUNT_SECONDS", cls.ai_abandon_count_seconds
             ),
@@ -221,6 +227,8 @@ class Settings:
             ("AI_WARN_SECONDS", self.ai_warn_seconds),
             ("AI_MIN_SECONDS", self.ai_min_seconds),
             ("AI_TOLERANCE_SECONDS", self.ai_tolerance_seconds),
+            ("AI_MISMATCH_MIN_SECONDS", self.ai_mismatch_min_seconds),
+            ("AI_MISMATCH_PCT", self.ai_mismatch_pct),
             ("AI_ABANDON_COUNT_SECONDS", self.ai_abandon_count_seconds),
             ("AI_REFUNDS_PER_DAY", self.ai_refunds_per_day),
             ("AI_RECONNECT_SECONDS", self.ai_reconnect_seconds),

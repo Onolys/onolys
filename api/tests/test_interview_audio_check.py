@@ -1,6 +1,7 @@
 """02-logging Task 7 (R12, R13, AC7): one `interview_audio_check` line per interview-linked
 validation, match or not."""
 
+import dataclasses
 import inspect
 import json
 import logging
@@ -73,7 +74,7 @@ async def test_match_one_info_line_with_all_fields(settings, repo, blobs, cap):
         310.1,
         300.0,
         10.0,
-        30.0,
+        60.0,
     )
     assert (d["web_version"], d["relay_version"], d["relay_revision"]) == ("abc123", "rsha", "rrev")
     assert (d["recorder_mime"], d["audio_engine"], d["user_agent"]) == (
@@ -88,8 +89,27 @@ async def test_mismatch_one_line(settings, repo, blobs, cap):
     iid = interview(repo, duration_s=120.0)
     await upload(settings, repo, blobs, 600.0, iid)
     [d] = lines(cap)
-    assert d["result"] == "mismatch" and d["diff_s"] == 480.0 and d["threshold_s"] == 30.0
+    assert d["result"] == "mismatch" and d["diff_s"] == 480.0 and d["threshold_s"] == 60.0
     assert BASE <= d.keys()
+
+
+@pytest.mark.parametrize(
+    ("relay_s", "upload_s", "result", "threshold"),
+    [
+        (600.0, 689.0, "ok", 90.0),
+        (600.0, 691.0, "mismatch", 90.0),
+        (180.0, 240.0, "ok", 60.0),
+        (180.0, 241.0, "mismatch", 60.0),
+    ],
+)
+async def test_threshold_is_max_of_min_and_pct_one_line_each(
+    settings, repo, blobs, cap, relay_s, upload_s, result, threshold
+):
+    settings = dataclasses.replace(settings, ai_max_seconds=700)
+    iid = interview(repo, duration_s=relay_s)
+    await upload(settings, repo, blobs, upload_s, iid)
+    [d] = lines(cap)
+    assert (d["result"], d["threshold_s"]) == (result, threshold)
 
 
 async def test_skipped_no_relay_duration(settings, repo, blobs, cap):

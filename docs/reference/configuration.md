@@ -28,7 +28,8 @@ Provider keys are the standard variables LiteLLM reads, for example `GEMINI_API_
 | `UID_HMAC_KEY` | empty | Keys the `uid_hash` log field. Required in staging and prod (Secret Manager `uid-hmac-key-{env}`). |
 | `VOICE_URL` | `ws://localhost:8081` locally, else empty | Voice relay base URL. |
 | `AI_MAX_SECONDS`, `AI_WARN_SECONDS`, `AI_MIN_SECONDS` | `600`, `480`, `300` | AI interview hard cap, user warning time, shortest recording sent on. |
-| `AI_TOLERANCE_SECONDS`, `AI_ABANDON_COUNT_SECONDS`, `AI_REFUNDS_PER_DAY` | `30`, `30`, `3` | Interview timing tolerance, the abandon threshold for a refund, and refunds per day. |
+| `AI_MISMATCH_MIN_SECONDS`, `AI_MISMATCH_PCT` | `60`, `15` | Relay vs upload duration: tolerated up to the larger of the seconds and the percent of the relay duration; beyond it the session fails as our error (`internal_error`, never counted, data kept). |
+| `AI_TOLERANCE_SECONDS`, `AI_ABANDON_COUNT_SECONDS`, `AI_REFUNDS_PER_DAY` | `30`, `30`, `3` | Interview ceiling tolerance, the abandon threshold for a refund, and refunds per day. |
 | `AI_RECONNECT_SECONDS`, `AI_MIC_GATE` | `60`, `false` | Relay wait for a dropped client; mic gate. |
 | `AI_MAX_FRAME_BYTES`, `AI_MAX_AUDIO_BYTES_PER_S`, `AI_MAX_CONNECTS` | `65536`, `128000`, `30` | Relay abuse caps. |
 

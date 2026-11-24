@@ -247,6 +247,12 @@ class TaskRunner:
                 counted = self.repo.get_run(p.uid, p.sid, p.run_id).unit_kept
             except NotFoundError:
                 pass
+        elif spec.scope != "run":  # interview sessions are never counted (R5, R9)
+            try:
+                if self.repo.get_session(p.uid, p.sid).interview_id:
+                    counted = False
+            except NotFoundError:
+                pass
         self._safe(
             advance, self.repo, p.uid, p.sid, to="failed", step=label,
             error=SessionError(code=code, step=label, kind=kind_for_code(code), counted=counted),

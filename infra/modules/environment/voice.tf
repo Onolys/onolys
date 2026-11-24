@@ -19,6 +19,8 @@ locals {
     { name = "AI_WARN_SECONDS", value = tostring(var.ai_warn_seconds) },
     { name = "AI_MIN_SECONDS", value = tostring(var.ai_min_seconds) },
     { name = "AI_TOLERANCE_SECONDS", value = tostring(var.ai_tolerance_seconds) },
+    { name = "AI_MISMATCH_MIN_SECONDS", value = tostring(var.ai_mismatch_min_seconds) },
+    { name = "AI_MISMATCH_PCT", value = tostring(var.ai_mismatch_pct) },
     { name = "AI_ABANDON_COUNT_SECONDS", value = tostring(var.ai_abandon_count_seconds) },
     { name = "AI_RECONNECT_SECONDS", value = tostring(var.ai_reconnect_seconds) },
     { name = "AI_MIC_GATE", value = tostring(var.ai_mic_gate) },

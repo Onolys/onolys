@@ -111,9 +111,10 @@ def test_voice_env_and_defaults():
     names = set(re.findall(r'\{ name = "(\w+)"', VOICE))
     assert {"VOICE_PROVIDERS_FILE", "GOOGLE_CLOUD_PROJECT", "FIRESTORE_DATABASE", "AUTH_PROJECT", "CORS_ORIGINS", "ENV",
             "AI_CAP_DAY", "AI_MAX_SECONDS", "AI_WARN_SECONDS", "AI_MIN_SECONDS",
-            "AI_TOLERANCE_SECONDS", "AI_ABANDON_COUNT_SECONDS", "AI_RECONNECT_SECONDS", "AI_MIC_GATE"} <= names
+            "AI_TOLERANCE_SECONDS", "AI_MISMATCH_MIN_SECONDS", "AI_MISMATCH_PCT", "AI_ABANDON_COUNT_SECONDS", "AI_RECONNECT_SECONDS", "AI_MIC_GATE"} <= names
     variables = (MOD / "variables.tf").read_text()
     for var, default in {"ai_max_seconds": 600, "ai_warn_seconds": 480, "ai_min_seconds": 300, "ai_tolerance_seconds": 30,
+                         "ai_mismatch_min_seconds": 60, "ai_mismatch_pct": 15,
                          "ai_abandon_count_seconds": 30, "ai_reconnect_seconds": 60, "voice_max_instances": 3}.items():
         assert re.search(r'variable "%s" \{.*?default\s*=\s*%d\n' % (var, default), variables, re.S), var
     assert re.search(r'variable "ai_mic_gate" \{.*?default\s*=\s*false', variables, re.S)

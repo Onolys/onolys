@@ -139,6 +139,17 @@ variable "ai_tolerance_seconds" {
   default = 30
 }
 
+variable "ai_mismatch_min_seconds" {
+  description = "Relay/upload duration mismatch tolerated up to max(this, ai_mismatch_pct % of the relay duration); beyond it the session stops as our error."
+  type        = number
+  default     = 60
+}
+
+variable "ai_mismatch_pct" {
+  type    = number
+  default = 15
+}
+
 variable "ai_abandon_count_seconds" {
   type    = number
   default = 30
