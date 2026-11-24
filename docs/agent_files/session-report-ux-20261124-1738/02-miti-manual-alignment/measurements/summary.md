@@ -1,6 +1,6 @@
 ---
 status: done
-summary: Deterministic rule alignment and request-size evidence; offline suite has two pending fixture-baseline failures.
+summary: Deterministic rule alignment and request-size evidence; final offline verification passes 587 tests after review fixes.
 date: 2026-11-24
 ---
 # Offline alignment measurements
@@ -64,7 +64,7 @@ Coverage counts a whitespace word once when any located utterance span overlaps 
 
 ## Reproducibility and limits
 
-At implementation commit `6af8a73`, a fresh `audit_report.py` output byte-matched committed `step5.json`; `regen_goldens.py` printed `No changes.` Both tools run offline and require no API key. The snapshots carry source, pack and expected-data fingerprints. Golden regeneration maintains the existing good-practice synthetic response set; it does not generate responses for all five fixtures.
+At implementation commit `6af8a73`, a fresh `audit_report.py` output byte-matched committed `step5.json`; `regen_goldens.py` printed `No changes.` After review fix `739dfc7`, the audit was refreshed: only `source_sha256.code_pass.py` changed, from `61e9627767d7335fb8d732d6fd09b42d0740d952a46c6a896ac1b2981806e515` to `a4738f940c206401a41cd5815d6b987be224b562026f710bb5381bae89ed0a8c`. All fixture measurements, request sizes and residuals remain unchanged; `step4.json` remains historical. Both tools run offline and require no API key. The snapshots carry source, pack and expected-data fingerprints. Golden regeneration maintains the existing good-practice synthetic response set; it does not generate responses for all five fixtures.
 
 Request words count whitespace-separated words in cache prefixes, system and user strings for every initial code batch and the globals request; repeated prefixes count for each call. Schemas, tips and retries are excluded. This is a request-size proxy only: no tokenizer, cache savings, latency, p95, cost, live outputs or clinical accuracy were measured. Hand-set synthetic targets are not independent human coding. Short-turn semantics, reflection acknowledgements, permission outside the bounded context, transcript-only cues and unvalidated model judgments remain limitations; see the [manual audit](../audit.md).
 
@@ -74,9 +74,8 @@ Verification command:
 LITELLM_LOCAL_MODEL_COST_MAP=True .venv/bin/python -m pytest engines/miti/tests -m "not live" -q
 ```
 
-Result: **581 passed, 2 failed, 3 deselected in 7.93s**. The three live cases were excluded. Two existing builder-fixture comparisons in `test_build_report.py` remain pending repair after the Task 6 golden refresh:
+Result after review fix `739dfc7`: **587 passed, 3 deselected in 7.22s**. The three live tests were excluded. Ruff passed for `engines/miti`; golden regeneration printed `No changes.` No network, live checks or credentials were used.
 
-- `test_matches_golden_except_volatile_and_run_info` (line 38): header provenance differs. The builder helper supplies `preset=fixture`, `code_version=fixture`, and Anthropic fixture routes; the refreshed golden uses null preset, `fixture-build`, Gemini fixture routes, null tips route, and additional parameter fields including the change goal. Both `header.coded_span` values are null.
-- `test_run_info_renames` (line 48): the assertion removes `span` only from actual keys, but the refreshed golden now includes that key. Actual spans are null; the golden MITI span records whole-session provenance (`duration_s=1205`, `seed=req-golden`).
+The initial Task 8 verification had 581 passed, 2 failed and 3 deselected: the two builder-fixture assertions assumed matching provenance and an absent evaluation span. The review fix explicitly asserts each intentionally different provenance field and both span contracts while preserving complete report and adapter parity. Its new context-guard regressions first produced 3 failures / 1 pass; the builder baseline produced 2 failures / 19 passes. The fixed focused set passed 73 tests before the final 587-test verification. See the [review-fix evidence](../code-2026-11-24-2202-review-fixes.md) and [final review](../review-2026-11-24-2203.md).
 
-These failures expose stale fixture assumptions, not an established production scoring defect. Repair should deliberately align the builder input/baseline contract and compare span provenance explicitly; Task 8 does not edit tests, fixtures or production code. The suite is therefore **not fully green**. Repository link validation reported `0 broken relative link(s)`; an additional direct check covered all relative links in these three changed documents because the repository checker skips historical agent artifacts. `git diff --check` passed. No network, live checks or credentials were used.
+The Task 8 repository link check reported `0 broken relative link(s)`, with historical artifact links checked directly, and `git diff --check` passed. Final documentation changes were also checked for relative-link validity and whitespace errors.

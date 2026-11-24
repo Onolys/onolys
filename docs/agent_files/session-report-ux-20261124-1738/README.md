@@ -1,6 +1,6 @@
 ---
 status: in-progress
-summary: UX done; SP01 implementation and review PASS; SP02 offline baseline tooling active
+summary: SP01 and SP02 implementation and reviews PASS; queued product/eval follow-ups remain.
 date: 2026-11-24
 ---
 # session-report-ux
@@ -9,6 +9,9 @@ date: 2026-11-24
 - [Full branch review — PASS](review-2026-11-24-1739.md)
 - [SP01 implementation](01-run-input-locks/code-2026-11-24-2130.md)
 - [SP01 review — PASS](01-run-input-locks/review-2026-11-24-2130.md)
+- [SP02 implementation](02-miti-manual-alignment/code-2026-11-24-2203.md)
+- [SP02 review — PASS](02-miti-manual-alignment/review-2026-11-24-2203.md)
+- [Eval Compare/Summary proposal — design only](eval-compare-summary-proposal.md)
 - [Completed session inputs and MITI runs brainstorm](brainstorm.md)
 - [Eval: run input pinning](eval-run-inputs.md)
 - [Eval: MITI coding vs manual 4.2.1](eval-miti-coding.md)
@@ -17,7 +20,7 @@ date: 2026-11-24
 | # | Sub-project | Scope | Depends | Status |
 |---|---|---|---|---|
 | 01 | [Run input locks](01-run-input-locks/PRD.md) · [tasks](01-run-input-locks/TASKS.md) | Speaker + goal write-once; inputs copied onto RunDoc in start txn; worker reads RunDoc; transcript sha256 | — | done — review PASS |
-| 02 | [MITI manual alignment](02-miti-manual-alignment/PRD.md) · [tasks](02-miti-manual-alignment/TASKS.md) | Volley break per manual, one persuasion slot/volley, remove globals reset, bounded client context, coverage metric, new fixtures, measurement | — (commits after 01) | in-progress — Task 1 active |
+| 02 | [MITI manual alignment](02-miti-manual-alignment/PRD.md) · [tasks](02-miti-manual-alignment/TASKS.md) | Volley break per manual, one persuasion slot/volley, remove globals reset, bounded client context, coverage metric, new fixtures, measurement | — (commits after 01) | done — review PASS |
 
 Dependency: `01 ──(commit order only)──▶ 02` ; one PR.
 
@@ -33,3 +36,5 @@ Dependency: `01 ──(commit order only)──▶ 02` ; one PR.
 ### Cross-cutting open questions
 - 01 [RESOLVED]: failure is terminal; unconfirmed speaker + failure stays failed.
 - 02: no open items (threshold tuning and coverage retry are [DEFERRED]).
+
+Next: queued product/eval follow-ups recorded in the local handoff; Compare/Summary remains design-only (`eccd65b`). Full whole-branch review and shipping checks remain after those changes. SP02 final verification: 587 offline MITI tests passed, 3 live tests excluded; Ruff passed; golden regeneration unchanged.

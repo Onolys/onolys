@@ -1,5 +1,5 @@
 ---
-status: draft
+status: done
 summary: 8 tasks - offline audit tooling + golden regen + baseline, volley break, new fixtures, one persuasion slot, globals reset removal, bounded context + guard, coverage metric, audit/summary docs.
 date: 2026-11-24
 ---
@@ -8,14 +8,16 @@ Source of truth: docs/agent_files/session-report-ux-20261124-1738/02-miti-manual
 
 | # | Task | Depends on | Status |
 |---|---|---|---|
-| 1 | Offline audit script, golden regen script, baseline | - | todo |
-| 2 | R1 volley breaks (step 1) | 1 | todo |
-| 3 | New fixtures: batch_edge, sparse_evidence, 6,000-word generator test | 2 | todo |
-| 4 | R2 one persuasion slot (step 2) | 2 | todo |
-| 5 | R3 globals: remove reset (step 3) | 4 | todo |
-| 6 | R4 bounded context + `context_quote` guard (step 4) | 5 | todo |
-| 7 | R5 coverage metric, info only (step 5) | 6 | todo |
-| 8 | Audit and summary documents | 3, 7 | todo |
+| 1 | Offline audit script, golden regen script, baseline | - | done |
+| 2 | R1 volley breaks (step 1) | 1 | done |
+| 3 | New fixtures: batch_edge, sparse_evidence, 6,000-word generator test | 2 | done |
+| 4 | R2 one persuasion slot (step 2) | 2 | done |
+| 5 | R3 globals: remove reset (step 3) | 4 | done |
+| 6 | R4 bounded context + `context_quote` guard (step 4) | 5 | done |
+| 7 | R5 coverage metric, info only (step 5) | 6 | done |
+| 8 | Audit and summary documents | 3, 7 | done |
+
+Completion: Tasks 1–8 are committed through `b0d22a8`; review fixes are committed as `739dfc7`. Task 7: `6af8a73` (102 focused tests). Task 8: `b0d22a8` (manual audit, measurements summary and engine README). Final verification: 587 passed, 3 live tests excluded; Ruff passed; golden regeneration reported No changes. See [implementation result](code-2026-11-24-2203.md) and [review — PASS](review-2026-11-24-2203.md).
 
 ## Task 1 — Offline audit script, golden regen script, baseline
 What it is / what it means: The measuring stick and the safety net come before any rule change. Traces to R6, R8, D9, D10, acceptance criteria 6, 7, 9.
