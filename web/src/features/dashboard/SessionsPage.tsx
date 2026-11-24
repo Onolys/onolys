@@ -2,6 +2,7 @@
 import { Badge, Button, Card, CardContent, Skeleton } from "@onolys/ui";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { Link } from "react-router";
+import { pageLoadError } from "../../pageLoadError";
 import { unwrap } from "../../api/client";
 import { describeError } from "../../api/errors";
 import { useApiClient } from "../../auth/useApiClient";
@@ -21,6 +22,7 @@ export function SessionsPage() {
   const client = useApiClient();
   const sessions = useInfiniteQuery({
     queryKey: ["sessions"],
+    throwOnError: pageLoadError,
     staleTime: 0,
     gcTime: 0,
     retry: false,

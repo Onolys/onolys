@@ -108,14 +108,14 @@ describe("sessions page: list", () => {
     server.events.removeAllListeners();
   });
 
-  it("shows an error with Try again when the list fails", async () => {
+  it("keeps a request error local with a working Try again", async () => {
     let fail = true;
     server.use(
       http.get("*/v1/sessions", () =>
         fail
           ? HttpResponse.json(
-              { schema_version: "0.0.1", status: 500, message: "x", details: [{ code: "internal_error", message: "x" }], request_id: "r" },
-              { status: 500 },
+              { schema_version: "0.0.1", status: 400, message: "x", details: [{ code: "invalid_parameters", message: "x" }], request_id: "r" },
+              { status: 400 },
             )
           : HttpResponse.json({ items: [item("z", "running")] }),
       ),

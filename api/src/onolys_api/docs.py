@@ -1,5 +1,5 @@
-"""Public docs (R11): `/v1/docs` (Redoc, bundle vendored in `static/`, no external host), the
-OpenAPI description with the curl quickstart, and the explicit error responses per operation."""
+"""Internal API docs (local/test only): `/v1/docs` (vendored Redoc, no external host),
+the OpenAPI description with curl quickstart, and explicit error responses per operation."""
 
 from pathlib import Path
 from typing import Any
@@ -15,7 +15,7 @@ QUICKSTART = r"""
 
 Create a session, upload audio, submit the rating card, confirm the speaker, wait for the
 report. Every call needs credentials: an `X-API-Key: onolys_<id>_<secret>` header (create a key
-in the web app or with `POST /v1/api-key`) or an `Authorization: Bearer <ID token>` header.
+with `POST /v1/api-key`) or an `Authorization: Bearer <ID token>` header.
 
 ```bash
 set -euo pipefail
@@ -75,7 +75,8 @@ session `status` moves `created` → `uploading` (→ `upload_incomplete`, resum
 """
 
 DESCRIPTION = (
-    "Public API of Onolys (`/v1`, JSON, scoped to the calling user). The contract is this "
+    "Internal integration reference for Onolys (`/v1`, JSON, scoped to the calling user). "
+    "Documentation endpoints are available only in local/test environments. The contract is this "
     "document; the machine-readable schemas live in `docs/contracts/public/`.\n" + QUICKSTART
 )
 

@@ -1,6 +1,7 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { App } from "./App";
+import { ErrorBoundary } from "./ErrorBoundary";
 import { createFirestoreStatusListener } from "./api/firestoreListener";
 import { setStatusListener } from "./api/statusListener";
 import { createAuthService } from "./auth/createAuthService";
@@ -29,7 +30,7 @@ void enableMocking()
   .then((authService) => {
     createRoot(document.getElementById("root")!).render(
       <StrictMode>
-        <App authService={authService} />
+        <ErrorBoundary><App authService={authService} /></ErrorBoundary>
       </StrictMode>,
     );
   })

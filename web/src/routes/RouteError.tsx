@@ -1,15 +1,9 @@
-import { Link } from "react-router";
+import { isRouteErrorResponse, useRouteError } from "react-router";
+import { ErrorRecovery } from "../components/ErrorRecovery";
 
-/** Root error element: a render crash keeps the layout and a way back. */
-export function RouteError() {
-  return (
-    <>
-      <h1 className="text-2xl font-semibold">Something went wrong</h1>
-      <p className="mt-4">
-        <Link to="/" className="text-primary underline underline-offset-4">
-          Back to the start
-        </Link>
-      </p>
-    </>
-  );
+/** Page crashes keep the shell; a shell crash gets a standalone main landmark. */
+export function RouteError({ standalone = false }: { standalone?: boolean }) {
+  const error = useRouteError();
+  const recovery = <ErrorRecovery error={error} status={isRouteErrorResponse(error) ? error.status : undefined} />;
+  return standalone ? <main className="mx-auto max-w-2xl p-6">{recovery}</main> : recovery;
 }

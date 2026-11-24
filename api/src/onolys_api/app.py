@@ -372,7 +372,7 @@ def create_app(
         title="Onolys API",
         version="0.1.0",
         description=DESCRIPTION,
-        openapi_url="/v1/openapi.json",
+        openapi_url="/v1/openapi.json" if settings.env in LOCAL_ENVS else None,
         docs_url=None,
         redoc_url=None,
     )
@@ -533,7 +533,8 @@ def create_app(
     router.include_router(scenario_routes.router)
     router.include_router(interview_routes.router, dependencies=by_id)
     app.include_router(router)
-    app.include_router(make_docs_router())
+    if settings.env in LOCAL_ENVS:
+        app.include_router(make_docs_router())
 
     def openapi_with_errors() -> dict:
         if app.openapi_schema is None:

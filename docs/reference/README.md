@@ -4,7 +4,7 @@ What exactly is supported? Precise, lookup-oriented facts.
 
 **Audience:** users.
 
-- [public-api.md](public-api.md): the public `/v1` API (OpenAPI, `/v1/docs`, auth, idempotency, errors).
+- [public-api.md](public-api.md): internal `/v1` API reference (OpenAPI, local/test `/v1/docs`, auth, idempotency, errors).
 - [backend-api.md](backend-api.md): the admin shell backend (`GET /v1/me`, auth, CORS, environment).
 - [configuration.md](configuration.md): environment variables for the api and the MITI engine.
 - [warnings.md](warnings.md): when the engine emits each warning code.

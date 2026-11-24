@@ -6,7 +6,7 @@ describe("renderBootError", () => {
     const root = document.createElement("div");
     const reload = vi.fn();
     renderBootError(root, reload);
-    expect(root.textContent).toContain("Can't start the app. Reload the page.");
+    expect(root.textContent).toContain("Something went wrong");
     root.querySelector("button")!.click();
     expect(reload).toHaveBeenCalledOnce();
   });

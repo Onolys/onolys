@@ -6,6 +6,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
+import { pageLoadError } from "../../pageLoadError";
 import { unwrap } from "../../api/client";
 import { describeError, isNotFoundError } from "../../api/errors";
 import type { Report } from "../../api/report";
@@ -63,6 +64,7 @@ function LoadedReport({ id, version }: { id: string; version: number }) {
 
   const view = useQuery({
     queryKey: ["report", id, version],
+    throwOnError: pageLoadError,
     staleTime: 0,
     gcTime: 0,
     retry: false,

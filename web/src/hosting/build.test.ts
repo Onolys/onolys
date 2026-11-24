@@ -23,6 +23,15 @@ describe("production build", () => {
     expect(html).not.toMatch(/<script(?![^>]*\ssrc=)[^>]*>/i);
   });
 
+  it("ships independent startup recovery and native links before the module bundle", () => {
+    const html = readFileSync(join(out, "index.html"), "utf8");
+    expect(html).toContain('src="/boot-recovery.js"');
+    expect(html).toContain('id="startup-recovery"');
+    expect(html).toContain('href=""');
+    expect(html).toContain('href="/"');
+    expect(readFileSync(join(out, "boot-recovery.js"), "utf8")).toContain('window.addEventListener("error", recover, true)');
+  });
+
   it("styles are emitted as .css files, none injected from JS as a <style> element", () => {
     const files = all(out);
     expect(files.some((f) => f.endsWith(".css"))).toBe(true);

@@ -6,6 +6,7 @@ import { Badge, Button, Label, Select, Skeleton } from "@onolys/ui";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { Link, useNavigate } from "react-router";
+import { pageLoadError } from "../../pageLoadError";
 import { unwrap } from "../../api/client";
 import { describeError } from "../../api/errors";
 import { useApiClient } from "../../auth/useApiClient";
@@ -26,6 +27,7 @@ export function NewInterviewPage() {
   const queryClient = useQueryClient();
   const scenarios = useQuery({
     queryKey: ["scenarios"],
+    throwOnError: pageLoadError,
     queryFn: async () => unwrap(await client.GET("/scenarios")),
   });
   const usage = useUsage();
