@@ -165,6 +165,7 @@ export function deriveTimeline(doc: TimelineInput, opts: TimelineOptions = {}): 
       lines = ["Your report is ready."];
       break;
     case "failed":
+    case "upload_failed": // SessionPage shows its own view; this keeps the switch exhaustive
       lines = ["This session couldn't be completed."];
       break;
     case "deleting":
