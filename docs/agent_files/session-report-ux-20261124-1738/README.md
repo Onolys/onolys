@@ -14,8 +14,8 @@ date: 2026-11-24
 ## Design: run input locks + MITI manual alignment
 | # | Sub-project | Scope | Depends | Status |
 |---|---|---|---|---|
-| 01 | [Run input locks](01-run-input-locks/PRD.md) | Speaker + goal write-once; inputs copied onto RunDoc in start txn; worker reads RunDoc; transcript sha256 | — | draft |
-| 02 | [MITI manual alignment](02-miti-manual-alignment/PRD.md) | Volley break per manual, one persuasion slot/volley, remove globals reset, bounded client context, coverage metric, new fixtures, measurement | — (commits after 01) | draft |
+| 01 | [Run input locks](01-run-input-locks/PRD.md) · [tasks](01-run-input-locks/TASKS.md) | Speaker + goal write-once; inputs copied onto RunDoc in start txn; worker reads RunDoc; transcript sha256 | — | tasks ready |
+| 02 | [MITI manual alignment](02-miti-manual-alignment/PRD.md) · [tasks](02-miti-manual-alignment/TASKS.md) | Volley break per manual, one persuasion slot/volley, remove globals reset, bounded client context, coverage metric, new fixtures, measurement | — (commits after 01) | tasks ready |
 
 Dependency: `01 ──(commit order only)──▶ 02` ; one PR.
 
