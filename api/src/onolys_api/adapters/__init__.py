@@ -8,6 +8,7 @@ from onolys_miti.stt.fixture import FixtureStt
 
 from onolys_api.adapters.base import (
     AdapterError,
+    AuthLinks,
     EmailSender,
     Evaluation,
     EvaluationOutput,
@@ -18,6 +19,7 @@ from onolys_api.adapters.base import (
     Voice,
 )
 from onolys_api.adapters.fake import (
+    FakeAuthLinks,
     FakeEmailSender,
     FakeEvaluation,
     FakeStt,
@@ -26,6 +28,7 @@ from onolys_api.adapters.fake import (
 from onolys_api.config import Settings
 
 __all__ = [
+    "AuthLinks", "FakeAuthLinks", "build_auth_links",
     "EmailSender", "FakeEmailSender", "build_email_sender",
     "AdapterError", "Adapters", "Evaluation", "EvaluationOutput", "FakeEvaluation", "FakeStt",
     "FakeVoice", "FixtureStt", "ProgressCb", "Stage", "StageStatus", "Stt", "Voice",
@@ -77,3 +80,11 @@ def build_email_sender(settings: Settings) -> EmailSender:
     if not settings.resend_api_key:
         return UnconfiguredEmailSender()
     return ResendEmailSender(settings.resend_api_key, settings.email_from)
+
+
+def build_auth_links(settings: Settings) -> AuthLinks:
+    if settings.adapters == "stub":
+        return FakeAuthLinks()
+    from onolys_api.adapters.real import FirebaseAuthLinks
+
+    return FirebaseAuthLinks(settings.auth_project or settings.gcp_project, settings.app_base_url)
