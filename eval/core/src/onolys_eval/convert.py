@@ -325,6 +325,7 @@ _CSV_CONVERTERS = {
     "annomi_csv": ("annomi", "convert_annomi_dataset"),
     "hlqc_zip": ("hlqc", "convert_hlqc_dataset"),
     "automisc_zip": ("automisc", "convert_automisc_dataset"),
+    "welivita_csv": ("welivita", "convert_welivita_dataset"),
 }
 
 

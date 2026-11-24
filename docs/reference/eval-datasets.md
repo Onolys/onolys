@@ -91,6 +91,34 @@ Terms: unless noted, reuse terms are not separately confirmed and every dataset 
 - Change goal: smoking sessions "Quit smoking" (curated); HLQC sessions generic.
 - Terms: no license on the repo; the paper says the code and annotated data are released without stating a data license. Internal evaluation use only; confirm before any redistribution.
 
+## welivita-mi
+
+- Source: Welivita & Pu, "Curating a Large-Scale Motivational Interviewing Dataset using Peer Support Forums", COLING 2022 (<https://aclanthology.org/2022.coling-1.293/>). Repo <https://github.com/anuradha1992/Motivational-Interviewing-Dataset>, file `MI Dataset.csv` (raw.githubusercontent.com `main`, 4.7 MB, one row per sentence, 20,462 rows).
+- Size: 2,000 dialogues (session = one dialogue, `counsel-chat-<n>` or `red-<n>-<subreddit>`): 1,000 CounselChat threads (a poster's question answered by a professional counsellor) and 1,000 Reddit RED peer-support threads. Not Reddit only. 2 to 6 turns each, at most 1,009 words, so none needs a `coded_span`. All 2,000 have at least one labeled helper sentence, so none were skipped.
+- Documents are short forum threads, not counseling sessions: the seeker (`speaker`, role client) posts once or twice and the helper (`listener`, role clinician) answers in prose, with no turn-taking rhythm. Counts are far lower than in a session and the structure differs from what the MITI pack expects; treat results as a different task.
+- Original media: text only (`source_media: [transcript]`, `transcript_origin: human`).
+- Labels are human: trained counsellors recruited through UpWork labelled every helper sentence (two workers per batch, judges resolved conflicts, final observed agreement 93.2%, Fleiss kappa 0.55; paper section 3.3). The CSV has no model-predicted labels. We use `final agreed label`. 450 helper sentences stayed unresolved (`-`) and are not counted. Seeker rows are `N/A` and unlabeled.
+- Turns: one transcript turn per dialogue turn (its sentences joined with a space; whitespace normalised). Gold `utterance_codes` list one mapped code per labeled sentence of that turn, so a code can repeat. Counts are per sentence.
+- Mapping (`onolys_eval/welivita.py`), 15-label set from the paper's Table 1:
+
+| Welivita & Pu label | Gold count | Helper sentences |
+|---|---|---|
+| Open Question, Closed Question | `question` | 476 + 905 |
+| Simple Reflection | `sr` | 556 |
+| Complex Reflection | `cr` | 1,294 |
+| Affirm | `affirm` | 945 |
+| Give Information | `gi` | 4,856 |
+| Advise with Permission | `persuade_permission` | 484 |
+| Advise without Permission | `persuade` | 2,285 |
+| Emphasize Autonomy | `emphasize_autonomy` | 253 |
+| Confront | `confront` | 318 |
+| Support, Direct, Warn, Self-Disclose, Other | not counted | 1,233 + 898 + 113 + 1,390 + 805 |
+
+- Gaps: `seek_collab` is `null` (no such label). `persuade` is a lower bound because Direct and Warn are not folded in (same call as `automisc-human`; owner to confirm whether MITI Persuade should include them). Total: 12,372 mapped sentences, 4,439 labeled but not mapped, 450 unresolved. 82 dialogues have only unmapped or unresolved labels, so all their mapped counts are 0. No globals, no summaries, no quality label. `miti_version: null`; `label_scheme`: "Welivita & Pu MI labels mapped to MITI counts (partial)". The per-session manifest `notes` give the mapped / unmapped / unresolved sentence counts. Change goals are a generic "Not stated" (curated).
+- Overlaps: none recorded.
+- Terms: CC BY-NC-SA 3.0 (non-commercial, share-alike, attribution). Cite the paper and read its ethics section (Reddit users are anonymous; do not try to identify them). Internal non-commercial evaluation only.
+- Catalog and picker with 2,000 sessions: the dataset manifest is about 0.75 MB of YAML and `GET /v1/datasets` reads and validates every manifest on each call (a failure in one gives 503 for all); `GET /v1/datasets/welivita-mi` returns 2,000 session rows and lists all 4,001 objects under the prefix. The new-run picker renders one checkbox per session with all preselected, so a whole-dataset run is 2,000 sessions: select only the sessions you want. Not exercised by us.
+
 ## Gated / not added
 
 | Dataset | Why not added | How to get it |

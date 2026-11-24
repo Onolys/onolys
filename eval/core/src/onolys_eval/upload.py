@@ -1,5 +1,6 @@
 """Publish converted reference datasets to the private staging bucket via ADC."""
 import json
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from .fetch import default_cache, require_external_path
@@ -48,8 +49,14 @@ def upload_dataset(
 
         client = storage.Client(project="onolys")
     bucket = client.bucket(BUCKET)
-    for name, path, content_type in assets:
+
+    def put(asset):
+        name, path, content_type = asset
         bucket.blob(name).upload_from_filename(str(path), content_type=content_type)
+
+    # Thousand-session datasets: upload objects concurrently; the listing manifest stays last.
+    with ThreadPoolExecutor(max_workers=16) as pool:
+        list(pool.map(put, assets))
     bucket.blob(prefix + "manifest.json").upload_from_string(
         json.dumps(manifest.model_dump(mode="json"), indent=2) + "\n",
         content_type="application/json",
