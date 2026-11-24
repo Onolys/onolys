@@ -1376,6 +1376,24 @@ class FirestoreRepo:
         _owned(ref, uid)
         ref.set(fields, merge=True)
 
+    def update_interview_if_conn(
+        self, uid: str, iid: str, conn_id: str, fields: dict[str, Any]
+    ) -> bool:
+        ref = self._top("interviews", iid)
+        _owned(ref, uid)
+
+        @firestore.transactional
+        def txn_fn(txn) -> bool:
+            data = ref.get(transaction=txn).to_dict() or {}
+            if data.get("uid") != uid:
+                raise NotFoundError()
+            if data.get("conn_id") != conn_id:
+                return False
+            txn.set(ref, fields, merge=True)
+            return True
+
+        return self._contended(txn_fn, uid)
+
     def get_idempotency(self, uid: str, key: str) -> IdempotencyDoc | None:
         ref = self._top("idempotency", _idem_id(uid, key))
         snap = _owned(ref, uid, missing_ok=True)

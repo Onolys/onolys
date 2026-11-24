@@ -258,13 +258,20 @@ class TaskRunner:
     def _fail(
         self, spec: HandlerSpec, p: TaskPayload, code: str, exc_class: str, bookkeeping: bool = True
     ) -> None:
+        if not bookkeeping:  # the session is gone (an upload failure): nothing to mark
+            # a routine user-file rejection (R11), not a system failure: its own WARNING line, so
+            # the prod `status=failed` alert only fires for failures we must act on (A16)
+            logs.emit(
+                "upload_rejected", logging.WARNING, status="rejected", session_id=p.sid,
+                step=spec.step or "run", error_code=code, exc_class=exc_class,
+                request_id=p.request_id,
+            )  # fmt: skip
+            return
         logs.failed(
             "run_failed" if spec.scope == "run" else "step_failed", session_id=p.sid,
             run_id=p.run_id, step=spec.step or "run", error_code=code, exc_class=exc_class,
             request_id=p.request_id,
         )  # fmt: skip
-        if not bookkeeping:  # the session is gone (an upload failure): nothing to mark
-            return
         if self._is_cancelled(p):  # never write `failed` over `cancelled` (R5)
             return
         self._safe(self._record, spec, p, status="failed", ended=self.clock(), error=code)

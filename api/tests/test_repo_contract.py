@@ -818,6 +818,21 @@ def test_interview_create_get_owner_only(repo):
         repo.create_interview(bob, i2, _iv(alice))
 
 
+def test_interview_update_if_conn_writes_only_for_the_lease_holder(repo):
+    alice, bob = (f"{n}-{uuid.uuid4().hex[:8]}" for n in ("alice", "bob"))
+    i1 = uuid.uuid4().hex
+    repo.create_interview(alice, i1, _iv(alice, state="live", conn_id="c1", duration_s=5.0))
+    assert repo.update_interview_if_conn(alice, i1, "c2", {"duration_s": 99.0}) is False
+    assert repo.get_interview(alice, i1).duration_s == 5.0  # a stale connection wrote nothing
+    assert repo.update_interview_if_conn(alice, i1, "c1", {"duration_s": 9.0}) is True
+    got = repo.get_interview(alice, i1)
+    assert (got.duration_s, got.conn_id, got.state) == (9.0, "c1", "live")  # merge, not replace
+    with pytest.raises(NotFoundError):
+        repo.update_interview_if_conn(bob, i1, "c1", {"duration_s": 1.0})  # foreign id
+    with pytest.raises(NotFoundError):
+        repo.update_interview_if_conn(alice, "nope", "c1", {"duration_s": 1.0})
+
+
 def test_interview_list_open_is_uid_scoped_and_state_filtered(repo):
     alice, bob, nobody = (f"{n}-{uuid.uuid4().hex[:8]}" for n in ("alice", "bob", "nobody"))
     i1, i2, a1, a2, a3, b1 = (uuid.uuid4().hex for _ in range(6))

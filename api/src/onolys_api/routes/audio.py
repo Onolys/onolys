@@ -15,7 +15,7 @@ from onolys_api.audio import (
 )
 from onolys_api.auth.deps import AuthUser, current_user
 from onolys_api.errors import ApiError, ErrorResponse
-from onolys_api.jobs.machine import advance, invalid_state
+from onolys_api.jobs.machine import invalid_state, transition_plan
 from onolys_api.jobs.queue import TaskPayload
 from onolys_api.repo.base import NotFoundError
 from onolys_api.routes.ids import ResourceId
@@ -76,24 +76,28 @@ def request_upload(
         raise ApiError.of(422, "audio_too_large", "The audio file is larger than 300 MB.")
     repo, blobs = request.app.state.repo, request.app.state.blobs
     _owned_open(request, user, id)
-    advance(repo, user.uid, id, to="uploading")  # 409 invalid_state unless created|uploading
-    # a fresh URL replaces every earlier one: also sweeps strays a stale signed URL wrote
-    blobs.delete_prefix(f"uploads/{user.uid}/{id}/")
     upload_id = uuid4().hex
     canonical = CANONICAL_TYPES[fmt]
+    # ONE transaction (A14): the move to `uploading` and the new `upload` commit together, so a
+    # concurrent `complete` either validated the old upload first (this is then a 409) or sees the
+    # new one and refuses. 409 invalid_state unless created|uploading|upload_incomplete.
+    repo.transition_session(
+        user.uid, id,
+        transition_plan(
+            to="uploading",
+            extra_fields={
+                "upload": {
+                    "upload_id": upload_id,
+                    "format": fmt,
+                    "content_type": canonical,
+                    "size_bytes": body.size_bytes,
+                }
+            },
+        ),
+    )  # fmt: skip
+    # a fresh URL replaces every earlier one: also sweeps strays a stale signed URL wrote
+    blobs.delete_prefix(f"uploads/{user.uid}/{id}/")
     signed = blobs.signed_upload(staging_key(user.uid, id, upload_id), canonical, MAX_UPLOAD_BYTES)
-    repo.update_session(
-        user.uid,
-        id,
-        {
-            "upload": {
-                "upload_id": upload_id,
-                "format": fmt,
-                "content_type": canonical,
-                "size_bytes": body.size_bytes,
-            }
-        },
-    )
     return AudioUploadResponse(
         upload_url=signed.url, upload_id=upload_id, required_headers=signed.headers
     )
@@ -127,7 +131,16 @@ def complete_upload(id: ResourceId, request: Request, user: User) -> dict[str, S
     if queue is None:
         raise ApiError.of(503, "upstream_unavailable", "Service temporarily unavailable.")
     if session.state in ("uploading", "upload_incomplete"):
-        advance(repo, user.uid, id, to="validating", step="validate")
+        checked = session.upload.upload_id
+
+        def still_that_upload(current) -> None:
+            if current.upload is None or current.upload.upload_id != checked:
+                raise invalid_state()  # a new upload replaced the one we checked (A14)
+
+        repo.transition_session(
+            user.uid, id,
+            transition_plan(to="validating", step="validate", guard=still_that_upload),
+        )
     try:
         queue.enqueue(
             TaskPayload(

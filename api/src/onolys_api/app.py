@@ -39,6 +39,7 @@ from onolys_api.factory import build_blobs, build_email_rate_store, build_repo
 from onolys_api.jobs.delete import make_delete_handler
 from onolys_api.jobs.interview_sweep import make_interview_sweep_handler
 from onolys_api.jobs.queue import build_queue
+from onolys_api.jobs.reset_email import make_reset_email_handler
 from onolys_api.jobs.run import make_run_handler
 from onolys_api.jobs.transcribe import make_poll_handler, make_transcribe_handler
 from onolys_api.jobs.validate import make_validate_handler
@@ -443,6 +444,10 @@ def create_app(
             HandlerSpec(
                 make_interview_sweep_handler(settings, lambda: app.state.clock()), claim=False
             ),
+        )
+        app.state.runner.register(
+            "reset-email",  # the durable password-reset send (M-5); no session, so no claim
+            HandlerSpec(make_reset_email_handler(lambda: app.state.auth_email()), claim=False),
         )
         if settings.env not in LOCAL_ENVS:
             if settings.worker_url and settings.tasks_sa:

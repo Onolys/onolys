@@ -43,6 +43,7 @@ MAX_REOPENS = 3  # consecutive upstream reopens without any content event (audio
 REOPEN_BACKOFF_S = 0.25  # real-time wait before the 2nd, 3rd... consecutive fruitless reopen
 POLL_INTERVAL_S = 10.0  # live-state poll + checkpoint cadence: bounds free time after an End
 MAX_TEXT_FRAME_BYTES = 4096  # control frames are tiny `{type: ...}` objects
+MAX_AUTH_FRAME_BYTES = 16 * 1024  # the first frame, read before auth: a Firebase ID token + JSON
 CLOSE_POLICY, CLOSE_TOO_BIG = 1008, 1009
 CLOSE_UNAUTH, CLOSE_FORBIDDEN, CLOSE_NOT_FOUND, CLOSE_NOT_LIVE = 4401, 4403, 4404, 4409
 
@@ -110,7 +111,10 @@ class Relay:
 
     async def authenticate(self) -> str | None:
         try:
-            raw = await asyncio.wait_for(self.ws.receive_text(), AUTH_TIMEOUT_S)
+            frame = await asyncio.wait_for(self.ws.receive(), AUTH_TIMEOUT_S)
+            raw = frame.get("text")  # binary, a disconnect or anything else is not an auth frame
+            if raw is None or len(raw) > MAX_AUTH_FRAME_BYTES:  # unauthenticated: cap before parse
+                return None
             msg = json.loads(raw)
         except (TimeoutError, WebSocketDisconnect, RuntimeError, ValueError, KeyError):
             return None
@@ -311,25 +315,24 @@ class Relay:
 
     # ---- state ----
 
-    async def _checkpoint(self, timer: ConnectedTimer, *, disconnected: bool) -> None:
+    async def _checkpoint(self, timer: ConnectedTimer, *, disconnected: bool) -> bool:
+        """Persist progress. One lease-guarded write (A19): only the connection that holds the
+        interview's `conn_id` may write, so a stale or superseded connection (here or on another
+        instance) can never overwrite the new owner's duration, handle or `disconnected_at`.
+        False when the lease is gone (or the interview is) and nothing was written."""
         fields: dict[str, Any] = {
             "duration_s": min(timer.elapsed(), float(self.settings.ai_max_seconds)),
             "resumption_handle": self.handle,
             "seen_at": self.clock.wall(),
+            # a final checkpoint marks the drop; a live one clears any earlier mark
+            "disconnected_at": self.clock.wall() if disconnected else None,
         }
-        if disconnected:
-            # final checkpoint: only the lease holder may mark the drop (a superseded connection
-            # must not stamp `disconnected_at` onto the interview the new connection owns)
-            try:
-                current = await _io(self.repo.get_interview, self.uid, self.iid)
-            except NotFoundError:
-                return
-            if current.conn_id != self.conn_id:
-                return
-            fields["disconnected_at"] = self.clock.wall()
-        else:
-            fields["disconnected_at"] = None  # lease verified by the caller: connected now
-        await _io(self.repo.update_interview, self.uid, self.iid, fields)
+        try:
+            return await _io(
+                self.repo.update_interview_if_conn, self.uid, self.iid, self.conn_id, fields
+            )
+        except NotFoundError:
+            return False
 
     async def _finish(self, duration_s: float) -> None:
         await _io(
@@ -420,7 +423,8 @@ class Relay:
                         await self._set_speaking(False)
                     elif isinstance(ev, ResumptionHandle):
                         self.handle = ev.h
-                        await self._checkpoint(timer, disconnected=False)
+                        if not await self._checkpoint(timer, disconnected=False):
+                            raise _Fatal("not_live")  # another connection owns it now
                     elif isinstance(ev, GoAway):
                         reopen = True
                         break
@@ -458,7 +462,8 @@ class Relay:
                 raise _Fatal("not_live") from None
             if doc.state != "live" or doc.conn_id != self.conn_id:
                 raise _Fatal("not_live")
-            await self._checkpoint(timer, disconnected=False)
+            if not await self._checkpoint(timer, disconnected=False):
+                raise _Fatal("not_live")
 
     async def _run_timer(self, timer: ConnectedTimer) -> str:
         s = self.settings

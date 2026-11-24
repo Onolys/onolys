@@ -11,6 +11,7 @@ from onolys_engine_core.transcript_input import (
     validate_transcript_input,
 )
 from onolys_engine_core.transcript_txt import parse_transcript_txt
+from starlette.concurrency import run_in_threadpool
 
 from onolys_api.auth.deps import AuthUser, current_user
 from onolys_api.coded_span import validate_coded_input
@@ -55,6 +56,45 @@ def _public_error(error: TranscriptInputError) -> ApiError:
     )
 
 
+def _persist(request: Request, uid: str, id: str, session, transcript, clinician) -> str:
+    """The synchronous storage/Firestore sequence; runs in a worker thread."""
+    repo = request.app.state.repo
+    # ONE transaction (N1): the `created` check, the transcript doc and the move to
+    # `awaiting_input` commit together, so two concurrent PUTs cannot both write.
+    blobs = request.app.state.blobs
+    pointer = large.pack(
+        blobs, f"{uid}/{id}/transcripts/{uuid4().hex}.json",
+        transcript.model_dump(mode="json"),
+    )  # a unique key: the losing PUT must not overwrite the winner's blob
+    tdoc = TranscriptDoc(transcript=None if pointer else transcript, pointer=pointer)
+    try:
+        repo.transition_session(
+            uid, id,
+            transition_plan(
+                to="awaiting_input", step=None, only_from=("created",),
+                flags={"transcript_ready": True, "speaker_confirmed": clinician is not None},
+                extra_fields={
+                    "clinician_speaker": clinician, "stt": None,
+                    "language": _session_language(session.language, transcript.language),
+                },
+            ),
+            children=((f"transcripts/{TRANSCRIPT_ID}", tdoc.to_store(), False),),
+        )  # fmt: skip
+    except Exception:
+        if pointer is not None:
+            blobs.delete(pointer.key)
+        raise
+    maybe_start_first_run(
+        repo,
+        getattr(request.app.state, "queue", None),
+        uid,
+        id,
+        request.app.state.settings,
+        getattr(request.state, "request_id", None),
+    )
+    return repo.get_session(uid, id).state
+
+
 @router.put(
     "/transcript",
     operation_id="uploadTranscript",
@@ -78,7 +118,8 @@ async def upload_transcript(
     user: User,
 ) -> CreateSessionResponse:
     repo = request.app.state.repo
-    session = repo.get_session(user.uid, id)
+    # the repo and blob store are synchronous clients: every call runs off the event loop (LM-10)
+    session = await run_in_threadpool(repo.get_session, user.uid, id)
     if session.state == "deleting":
         raise NotFoundError()
     if session.state != "created":
@@ -134,40 +175,7 @@ async def upload_transcript(
         raise _public_error(error) from None
 
     validate_coded_input(transcript, session.coded_span)
-
-    # ONE transaction (N1): the `created` check, the transcript doc and the move to
-    # `awaiting_input` commit together, so two concurrent PUTs cannot both write.
-    blobs = request.app.state.blobs
-    pointer = large.pack(
-        blobs, f"{user.uid}/{id}/transcripts/{uuid4().hex}.json",
-        transcript.model_dump(mode="json"),
-    )  # a unique key: the losing PUT must not overwrite the winner's blob
-    tdoc = TranscriptDoc(transcript=None if pointer else transcript, pointer=pointer)
-    try:
-        repo.transition_session(
-            user.uid, id,
-            transition_plan(
-                to="awaiting_input", step=None, only_from=("created",),
-                flags={"transcript_ready": True, "speaker_confirmed": clinician is not None},
-                extra_fields={
-                    "clinician_speaker": clinician, "stt": None,
-                    "language": _session_language(session.language, transcript.language),
-                },
-            ),
-            children=((f"transcripts/{TRANSCRIPT_ID}", tdoc.to_store(), False),),
-        )  # fmt: skip
-    except Exception:
-        if pointer is not None:
-            blobs.delete(pointer.key)
-        raise
-    maybe_start_first_run(
-        repo,
-        getattr(request.app.state, "queue", None),
-        user.uid,
-        id,
-        request.app.state.settings,
-        getattr(request.state, "request_id", None),
+    status = await run_in_threadpool(
+        _persist, request, user.uid, id, session, transcript, clinician
     )
-    return CreateSessionResponse(
-        session=SessionRef(id=id, status=repo.get_session(user.uid, id).state)
-    )
+    return CreateSessionResponse(session=SessionRef(id=id, status=status))

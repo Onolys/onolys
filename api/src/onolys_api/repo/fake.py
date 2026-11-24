@@ -1009,6 +1009,16 @@ class FakeRepo:
             d = self._owned(f"interviews/{iid}", uid)
             self._put(f"interviews/{iid}", {**d, **fields})
 
+    def update_interview_if_conn(
+        self, uid: str, iid: str, conn_id: str, fields: dict[str, Any]
+    ) -> bool:
+        with self._claim_lock:
+            d = self._owned(f"interviews/{iid}", uid)
+            if d.get("conn_id") != conn_id:
+                return False
+            self._put(f"interviews/{iid}", {**d, **fields})
+            return True
+
     def get_idempotency(self, uid: str, key: str) -> IdempotencyDoc | None:
         path = f"idempotency/{_idem_id(uid, key)}"
         d = self._owned(path, uid, missing_ok=True)
