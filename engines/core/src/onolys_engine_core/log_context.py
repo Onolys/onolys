@@ -13,7 +13,16 @@ from typing import Any
 
 _VARS: dict[str, ContextVar[str | None]] = {
     name: ContextVar(f"log_{name}", default=None)
-    for name in ("session_id", "run_id", "step", "request_id", "client_version")
+    for name in (
+        "session_id",
+        "run_id",
+        "step",
+        "request_id",
+        "client_version",
+        "unit_id",
+        "combo_key",
+        "attempt",
+    )
 }
 
 LogToken = dict[str, Token]

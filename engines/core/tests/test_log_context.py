@@ -72,3 +72,11 @@ def test_client_version_is_a_request_scoped_key():
     with lc.log_context(client_version="abc123"):
         assert lc.snapshot() == {"client_version": "abc123"}
     assert lc.snapshot() == {}
+
+
+def test_eval_unit_keys_are_bindable():
+    with lc.log_context(run_id="r", unit_id="u0001", combo_key="m/t/low", attempt="2"):
+        assert lc.snapshot() == {
+            "run_id": "r", "unit_id": "u0001", "combo_key": "m/t/low", "attempt": "2"
+        }
+    assert lc.snapshot() == {}

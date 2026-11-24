@@ -1003,6 +1003,25 @@ def test_cancel_requested_during_attempt_stops_retrying(services):
     assert unit["run_info"]["usage"]["input_tokens"] == 7
 
 
+def test_unit_attempt_log_lines_carry_run_unit_combo_attempt(services, capsys):
+    import json
+
+    from onolys_engine_core.llm.errors import LLMUnavailable
+
+    _scripted(services, [_Err.make(LLMUnavailable, http_status=503), None])
+    c, rid, uid = _one_unit(services)  # create_app installs the JSON handler
+    capsys.readouterr()
+    dispatch(c, rid, uid)
+    lines = [json.loads(x) for x in capsys.readouterr().err.splitlines() if x.startswith("{")]
+    attempts = [x for x in lines if x["message"] == "unit attempt"]
+    combo = services.repository.get_unit(rid, uid)["combo_key"]
+    assert [(x["run_id"], x["unit_id"], x["combo_key"], x["attempt"]) for x in attempts] == [
+        (rid, uid, combo, "1"),
+        (rid, uid, combo, "2"),
+    ]
+    assert attempts[0]["logger"].startswith("onolys_eval_backend")
+
+
 def test_drift_guard_is_not_retried(services, monkeypatch):
     engine, sleeps = _scripted(services, [None])
     c, rid, uid = _one_unit(services)

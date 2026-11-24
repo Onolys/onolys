@@ -7,6 +7,7 @@ writes happen after claiming, outside Firestore's retryable callback.
 import asyncio
 import hashlib
 import json
+import logging
 import os
 import random
 import re
@@ -23,6 +24,7 @@ from onolys_engine_core.llm.errors import LLMError, LLMRateLimited, LLMTimeout, 
 from onolys_engine_core.llm.litellm_client import LiteLLMClient
 from onolys_engine_core.llm.routes import combo_routes, resolve_preset
 from onolys_engine_core.llm.types import MetricsCollector
+from onolys_engine_core.log_context import log_context
 from onolys_engine_core.transcript_input import (
     inferred_clinician_speaker,
     validate_transcript_input,
@@ -46,6 +48,7 @@ from onolys_eval_backend.storage import store_output
 from onolys_eval_backend.uploads import validate_gold, validate_span
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 TERMINAL = {"done", "failed", "cancelled"}
 ZERO_USAGE = {"input_tokens": 0, "output_tokens": 0, "calls": 0, "cost_usd": 0.0}
 
@@ -632,10 +635,17 @@ async def execute_unit(services, rid, uid):
                     llm=llm, metrics=metrics, request_id=f"{rid}-{uid}", deadline=budget_end
                 )
                 try:
-                    async with asyncio.timeout(max(budget_end - monotonic(), 0)):
-                        result = await run_validated(
-                            engine, ctx, transcript, params, progress_cb=progress
-                        )
+                    with log_context(
+                        run_id=rid,
+                        unit_id=uid,
+                        combo_key=unit.get("combo_key"),
+                        attempt=str(attempts),
+                    ):
+                        logger.info("unit attempt")
+                        async with asyncio.timeout(max(budget_end - monotonic(), 0)):
+                            result = await run_validated(
+                                engine, ctx, transcript, params, progress_cb=progress
+                            )
                     break
                 except Exception as exc:
                     remaining = budget_end - monotonic()

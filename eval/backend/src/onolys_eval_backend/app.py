@@ -2,15 +2,18 @@
 
 import os
 from collections.abc import Mapping
+from types import SimpleNamespace
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from onolys_admin_auth import ConfigError
+from onolys_engine_core.json_logging import configure_logging
 
 from onolys_eval_backend.auth import EvalAuthMiddleware, TokenVerifier
 from onolys_eval_backend.catalog import router as catalog_router
 from onolys_eval_backend.config import EvalConfig
 from onolys_eval_backend.read_runs import router as read_runs_router
+from onolys_eval_backend.runs import _git_sha
 from onolys_eval_backend.runs import router as runs_router
 from onolys_eval_backend.services import EvalServices
 from onolys_eval_backend.uploads import install_error_handler
@@ -33,6 +36,8 @@ def create_app(
 ) -> FastAPI:
     env = os.environ if env is None else env
     config = EvalConfig.from_env(env)
+    # One JSON handler on root; configure_logging never imports litellm.
+    configure_logging(SimpleNamespace(git_sha=_git_sha()))
     origins = parse_cors_origins(env.get("ADMIN_CORS_ORIGINS", ""))
     app = FastAPI(title="Onolys eval backend", docs_url=None, redoc_url=None, openapi_url=None)
     # Routers access these through request.app.state; construction performs no cloud I/O.
