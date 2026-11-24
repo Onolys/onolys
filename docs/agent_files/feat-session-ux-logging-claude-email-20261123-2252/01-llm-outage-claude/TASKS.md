@@ -8,13 +8,13 @@ Source of truth: docs/agent_files/feat-session-ux-logging-claude-email-20261123-
 
 | # | Task | Depends on | Status |
 |---|---|---|---|
-| 1 | models.yaml + validated loader | - | todo |
-| 2 | Minimal error capture + probe script | - | todo |
-| 3 | Run probe on current LiteLLM, record real error | 2 | todo |
-| 4 | LiteLLM upgrade (and any other root-cause fix) | 3 | todo |
-| 5 | Claude staging routes + route/model consistency test | 1, 4 | todo |
-| 6 | LLM_PROVIDER / LLM_MODEL override | 1, 5 | todo |
-| 7 | Deploy wiring + infra docs | 6 | todo |
+| 1 | models.yaml + validated loader | - | done |
+| 2 | Minimal error capture + probe script | - | done |
+| 3 | Run probe on current LiteLLM, record real error | 2 | done |
+| 4 | LiteLLM upgrade (and any other root-cause fix) | 3 | done |
+| 5 | Claude staging routes + route/model consistency test | 1, 4 | done |
+| 6 | LLM_PROVIDER / LLM_MODEL override | 1, 5 | done |
+| 7 | Deploy wiring + infra docs | 6 | done |
 | 8 | Staging end-to-end smoke | 5, 6, 7 | todo |
 
 ## Task 1 — models.yaml + validated loader

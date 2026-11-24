@@ -8,16 +8,16 @@ Source of truth: `docs/agent_files/feat-session-ux-logging-claude-email-20261123
 
 | # | Task | Depends on | Status |
 |---|---|---|---|
-| 1 | Settings and log fields | - | todo |
-| 2 | Email port and adapters | 1 | todo |
-| 3 | Unverified-allowed auth dependency | - | todo |
-| 4 | AuthLinks port and link builder | 1 | todo |
-| 5 | Email templates and service | 2, 4 | todo |
-| 6 | Firestore rate limiter | 1 | todo |
-| 7 | Auth email endpoints | 2, 3, 4, 5, 6 | todo |
-| 8 | Contract and docs regeneration | 7 | todo |
-| 9 | Web switch to new endpoints | 8 | todo |
-| 10 | Infra and deploy env wiring | 1 | todo |
+| 1 | Settings and log fields | - | done |
+| 2 | Email port and adapters | 1 | done |
+| 3 | Unverified-allowed auth dependency | - | done |
+| 4 | AuthLinks port and link builder | 1 | done |
+| 5 | Email templates and service | 2, 4 | done |
+| 6 | Firestore rate limiter | 1 | done |
+| 7 | Auth email endpoints | 2, 3, 4, 5, 6 | done |
+| 8 | Contract and docs regeneration | 7 | done |
+| 9 | Web switch to new endpoints | 8 | done |
+| 10 | Infra and deploy env wiring | 1 | done |
 
 ## Task 1 — Settings and log fields
 What it is / what it means: Config the feature needs, plus the log field names the later tasks emit (R7, R10).

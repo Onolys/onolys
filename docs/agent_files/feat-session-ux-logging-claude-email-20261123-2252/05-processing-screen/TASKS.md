@@ -8,8 +8,8 @@ Source of truth: docs/agent_files/feat-session-ux-logging-claude-email-20261123-
 
 | # | Task | Depends on | Status |
 |---|---|---|---|
-| 1 | onolys-ui: Spinner and Progress components | - | todo |
-| 2 | onolys-ui: release prep (version, changelog) | 1 | todo |
+| 1 | onolys-ui: Spinner and Progress components | - | done |
+| 2 | onolys-ui: release prep (version, changelog) | 1 | done |
 | 3 | API: progress fields on status doc and detail | - | todo |
 | 4 | Contract regen, mocks, status-doc note | 3 | todo |
 | 5 | Web: timeline steps and hint | 4 | todo |

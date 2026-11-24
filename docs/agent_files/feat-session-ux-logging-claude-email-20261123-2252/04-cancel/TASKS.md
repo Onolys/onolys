@@ -8,7 +8,7 @@ Source of truth: docs/agent_files/feat-session-ux-logging-claude-email-20261123-
 
 | # | Task | Depends on | Status |
 |---|---|---|---|
-| 1 | Cancelled state and data fields | - | todo |
+| 1 | Cancelled state and data fields | - | in-progress |
 | 2 | decide_cancel charge rule | 1 | todo |
 | 3 | Atomic cancel transaction in repos | 1, 2 | todo |
 | 4 | Cancel route and 409 on other routes | 3 | todo |

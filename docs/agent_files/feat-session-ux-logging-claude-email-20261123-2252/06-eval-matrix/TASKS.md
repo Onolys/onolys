@@ -8,15 +8,15 @@ Source of truth: docs/agent_files/feat-session-ux-logging-claude-email-20261123-
 
 | # | Task | Depends on | Status |
 |---|---|---|---|
-| 1 | /v1/options from models.yaml | SP01 T1 | todo |
-| 2 | combo_routes + effort output caps | SP01 T1, T5 | todo |
-| 3 | Selection request, validation, plan_units, human lock | 1 | todo |
-| 4 | Run execution on combo routes + drift guard | 2, 3 | todo |
-| 5 | Unit retry on transient errors | 4 | todo |
-| 6 | Compare per combo, per-session error, legacy read path | 4 | todo |
-| 7 | NewRun pickers, count preview, human lock UI | 1, 3, 6 | todo |
-| 8 | Compare table transpose + Summary view | 6 | todo |
-| 9 | Preset retirement + eval-site docs | 4, 7, 8 | todo |
+| 1 | /v1/options from models.yaml | SP01 T1 | done |
+| 2 | combo_routes + effort output caps | SP01 T1, T5 | done |
+| 3 | Selection request, validation, plan_units, human lock | 1 | done |
+| 4 | Run execution on combo routes + drift guard | 2, 3 | done |
+| 5 | Unit retry on transient errors | 4 | done |
+| 6 | Compare per combo, per-session error, legacy read path | 4 | done |
+| 7 | NewRun pickers, count preview, human lock UI | 1, 3, 6 | done |
+| 8 | Compare table transpose + Summary view | 6 | done |
+| 9 | Preset retirement + eval-site docs | 4, 7, 8 | done |
 | 10 | Owner live smoke (provider x effort) | 4, 7 | todo |
 
 ## Task 1 — /v1/options from models.yaml

@@ -8,16 +8,16 @@ Source of truth: docs/agent_files/feat-session-ux-logging-claude-email-20261123-
 
 | # | Task | Depends on | Status |
 |---|---|---|---|
-| 1 | Classifier, KIND_BY_CODE, is_transient | - | todo |
-| 2 | Persist kind, counted, retry_count; retire BAD_FILE_CODES | 1 | todo |
-| 3 | Charging module, interview never counted, retire free_run_void | 2 | todo |
-| 4 | Retry endpoint and TRANSITIONS | 2, 3 | todo |
-| 5 | GET /v1/upload-limits and one accepted-types source | - | todo |
-| 6 | Validation failure = upload failure; keep data after validation | 2 | todo |
-| 7 | Interview audio mismatch = our error | 3, 6 | todo |
-| 8 | Web failure cards, copy, countdown retry | 2, 4 | todo |
-| 9 | Web pre-checks from served limits; UploadFailedView | 5, 6, 8 | todo |
-| 10 | Contracts regen, mocks, docs | 4, 5, 6, 7, 8, 9 | todo |
+| 1 | Classifier, KIND_BY_CODE, is_transient | - | done |
+| 2 | Persist kind, counted, retry_count; retire BAD_FILE_CODES | 1 | done |
+| 3 | Charging module, interview never counted, retire free_run_void | 2 | done |
+| 4 | Retry endpoint and TRANSITIONS | 2, 3 | done |
+| 5 | GET /v1/upload-limits and one accepted-types source | - | done |
+| 6 | Validation failure = upload failure; keep data after validation | 2 | done |
+| 7 | Interview audio mismatch = our error | 3, 6 | done |
+| 8 | Web failure cards, copy, countdown retry | 2, 4 | done |
+| 9 | Web pre-checks from served limits; UploadFailedView | 5, 6, 8 | done |
+| 10 | Contracts regen, mocks, docs | 4, 5, 6, 7, 8, 9 | done |
 
 ## Task 1 — Classifier, KIND_BY_CODE, is_transient
 What it is / what it means: One place decides whether a failure is a blip, our fault, or the file's fault. Traces to D1, D2, D6, D8, R1, R2.

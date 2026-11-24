@@ -8,15 +8,15 @@ Source of truth: docs/agent_files/feat-session-ux-logging-claude-email-20261123-
 
 | # | Task | Depends on | Status |
 |---|---|---|---|
-| 1 | Log context module | - | todo |
-| 2 | safe_log: allowlist, caps, sanitizer, JSON fields | - | todo |
-| 3 | JsonFormatter, ContextFilter, configure_logging | 1, 2 | todo |
-| 4 | Bind context in API, worker, voice | 3 | todo |
-| 5 | Provider error fields + LLMError attributes | 2, 3 | todo |
-| 6 | Client and relay version capture | 4 | todo |
-| 7 | interview_audio_check log line | 3, 6 | todo |
-| 8 | Docs: logging.md, runbook, PHI doc | 5, 7 | todo |
-| 9 | End-to-end log tests (worker, API, PHI, leak) | 4, 5 | todo |
+| 1 | Log context module | - | done |
+| 2 | safe_log: allowlist, caps, sanitizer, JSON fields | - | done |
+| 3 | JsonFormatter, ContextFilter, configure_logging | 1, 2 | done |
+| 4 | Bind context in API, worker, voice | 3 | done |
+| 5 | Provider error fields + LLMError attributes | 2, 3 | done |
+| 6 | Client and relay version capture | 4 | done |
+| 7 | interview_audio_check log line | 3, 6 | done |
+| 8 | Docs: logging.md, runbook, PHI doc | 5, 7 | done |
+| 9 | End-to-end log tests (worker, API, PHI, leak) | 4, 5 | done |
 
 ## Task 1 — Log context module
 What it is / what it means: One place that holds the ids every log line should carry (session, run, step, request). Traces to D1, R1.
