@@ -139,13 +139,30 @@ Terms: unless noted, reuse terms are not separately confirmed and every dataset 
 - Language: the manifest has a new optional dataset-level `language` (BCP-47, default `en`, so existing manifests are unchanged); `phac-fr` sets `fr` and the converter writes `transcript.language: "fr"`. The new-run picker shows `Language: fr` for non-English datasets only; `GET /v1/datasets` returns the field.
 - Engine French support: no change made. The MITI engine reads `transcript.language` (`engines/miti/src/onolys_miti/run.py`), passes it to the code, globals and tips prompts ("Transcript language: fr"; quotes stay in the transcript language, rationales in English) and adds the info warning `language_not_validated` for any non-English language. French input therefore runs but its quality is not validated; the eval backend uses the session language, then the request language, then `transcript.language`.
 
+## annosum-mi
+
+- Source: AnnoSUM-MI, <https://github.com/vsrana-ai/AnnoSUM-MI>, folder `Dataset` (raw.githubusercontent.com `main`). Paper: Kumar, Ntoutsi, Rajawat, IJCNN 2025 (arXiv 2511.22818). Four files are fetched: `train_dataset_MI_sessions.csv`, `test_dataset_MI_sessions.csv`, `train_data_MI_annotated.csv`, `test_data_MI_annotated.csv` (semicolon-separated, UTF-8 with BOM).
+- Human labels only: the LLM summaries (`chatgpt_summaries.csv`, `Gemini_summaries.csv`, `DeepSeek_summaries.csv`) and the ratings of those summaries are never fetched or read. Prompts, results and the notebook are ignored.
+- Size: 131 sessions (97 train, 34 test; 108 high, 23 low quality), one per AnnoMI transcript (`transcript-<id>`).
+- Original media: public MI demonstration videos (the AnnoMI set) plus transcript; `transcript_origin: human` (AnnoMI transcripts, described by its README as "faithfully transcribed").
+- Overlaps: `annomi`. Session ids equal AnnoMI `transcript_id` for 131 of AnnoMI's 133 transcripts (AnnoMI 47 and 129 are not in AnnoSUM-MI). Utterance ids and speakers match AnnoMI; 235 of 9,648 utterances have small text edits (leading dashes dropped, minor punctuation or case changes, one blank utterance in transcript 3). So the same video is available in both datasets; treat results as repeated measurements of the same sessions, not independent ones.
+- Text repair: 228 utterances carry encoding damage (UTF-8 punctuation read as Mac Roman, for example a dash shown as `‚Äî`); `annosum.repair_text` reverses it when the text round-trips, otherwise leaves it. One blank client utterance (transcript 3, utterance 0) is skipped.
+- Turns: one transcript turn per source utterance (`therapist` is role clinician, `client` is client). `transcript-121` exceeds the engine's 6,000-word coded cap, so its `coded_span` limits the counts to the leading turns (same rule as `annomi`).
+- Labels in gold (`label_scheme`: "AnnoSUM-MI: AnnoMI question label and expert empathy rating (partial)"; `miti_version: null`):
+  - `question`: therapist utterances whose `main_therapist_behaviour` is `question` (1,376 across all sessions). Caveat: that column is one main label per utterance, so a question inside an utterance labeled reflection or therapist_input is not counted. In AnnoMI's own single-annotator rows about 15% of utterances flagged `question_exists` have another main label, so this count is a lower bound of what the engine will code.
+  - `globals.empathy`: the expert Empathy rating, integer 1 to 5 (5 = 43 sessions, 4 = 57, 3 = 15, 2 = 12, 1 = 4). The paper defines it as a five-point Likert scale of how present the attribute is ("Extremely Low" to "Extremely High") with a definition close to MITI Empathy; it is not anchored to the MITI 4.2.1 empathy descriptors, so compare it as an approximate human reference.
+  - `quality_label`: `mi_quality` high or low (the file value, checked equal in both CSVs).
+  - Not labeled (null): `sr`, `cr`, `gi`, `persuade`, `persuade_permission`, `affirm`, `seek_collab`, `emphasize_autonomy`, `confront` (no subtype columns; `reflection` and `therapist_input` cannot be split into SR/CR or GI/Persuade). `cct`, `sst`, `partnership` are null. No summaries.
+- Ratings present in the source but not mapped (so they are in the CSV but never compared): Evocation, Collaboration, Autonomy, Direction, Non-Judgmental Attitude (all five-point; the paper calls the first five "essentially components of the MITI framework", i.e. older MITI-style dimensions, and adds Non-Judgmental Attitude itself) and, in the train file only (undocumented in the paper), Competence, Ethical Behavior, Reflectiveness. None is defined as a MITI 4.2.1 global in the paper, so Partnership, Cultivating Change Talk and Softening Sustain Talk are not synthesized from them. Blank cells exist (Autonomy of one session, Ethical Behavior of another); they are unmapped anyway. Client talk types (change, neutral, sustain) are ignored.
+- Change goal: the train file has `topic_new` (`change_goal_source: header`); the test file has none, so test sessions use a generic curated goal.
+- Terms: no licence file in the repo; internal evaluation only; licence request sent to authors.
+
 ## Gated / not added
 
 | Dataset | Why not added | How to get it |
 |---|---|---|
 | MI-TAGS full set (242 transcripts) | Access-gated | Request form: <https://docs.google.com/forms/d/e/1FAIpQLSfWAFOmRcPRd0751bRdQT83Qx-vC2HCnkrwl3T4Lh7HoByr6Q/viewform> |
 | BiMISC | Not public | Email the first author, x.sun2@uva.nl |
-| AnnoSUM-MI | Not public | arXiv 2511.22818; ask the authors |
 | MIDAS (Spanish) | Spanish; not added | arXiv 2502.08458 |
 | MI-LLM (Chinese) | Data not released | None |
 | CASAA MITI 3.1 archive | Skipped: old MITI version | <https://casaa.unm.edu/tools/miti.html> |

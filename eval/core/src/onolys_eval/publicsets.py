@@ -35,10 +35,11 @@ def span_bounds(session, turn_count: int) -> tuple[int, int]:
 
 
 def make_gold(dataset_id, session_id, *, source, counts, utterance_codes, warnings,
-              label_source, label_scheme, coded_span=None, quality_label=None) -> Gold:
+              label_source, label_scheme, coded_span=None, quality_label=None,
+              globals_=None) -> Gold:
     data = {
         "schema": "gold.v1", "dataset_id": dataset_id, "session_id": session_id,
-        "source": source, "coded_span": coded_span, "counts": counts, "globals": None,
+        "source": source, "coded_span": coded_span, "counts": counts, "globals": globals_,
         "utterance_codes": utterance_codes, "parse": {"method": "auto", "warnings": warnings},
         "label_source": label_source, "label_scheme": label_scheme}
     if quality_label is not None:

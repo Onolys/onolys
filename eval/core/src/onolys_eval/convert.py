@@ -327,6 +327,7 @@ _CSV_CONVERTERS = {
     "automisc_zip": ("automisc", "convert_automisc_dataset"),
     "welivita_csv": ("welivita", "convert_welivita_dataset"),
     "phac_html": ("phac", "convert_phac_dataset"),
+    "annosum_csv": ("annosum", "convert_annosum_dataset"),
 }
 
 
