@@ -72,7 +72,7 @@ describe("session page: status listener", () => {
     await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Checking your audio."));
     tick(sid);
     await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Transcribing the recording."));
-    expect(stepItem("Check audio")).toHaveTextContent(/done/i);
+    expect(stepItem("Transcribe")).toHaveTextContent(/in progress/i);
     expect(screen.getByRole("status")).toHaveAttribute("aria-live", "polite");
     expect(getCalls).toEqual([]);
   });
@@ -84,11 +84,11 @@ describe("session page: status listener", () => {
     const status = await ready();
     await waitFor(() => {
       expect(status).toHaveTextContent("Confirm who the clinician is");
-      expect(status).toHaveTextContent("Waiting for session setup");
+      expect(status).toHaveTextContent("Waiting for your change goal");
     });
     act(() => void mockBackend.confirmSpeaker(UID, sid, "spk_0"));
     await waitFor(() => expect(status).not.toHaveTextContent("Confirm who the clinician is"));
-    expect(status).toHaveTextContent("Waiting for session setup");
+    expect(status).toHaveTextContent("Waiting for your change goal");
   });
 
   it("shows run sub-labels, the stay-or-leave copy and elapsed time, then links the report", async () => {
@@ -97,10 +97,10 @@ describe("session page: status listener", () => {
     mockBackend.confirmSpeaker(UID, sid, "spk_0");
     open(sid);
     await ready();
-    expect(screen.queryByText(/Usually under 5 minutes/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/close this tab/)).not.toBeInTheDocument();
     act(() => void mockBackend.putRating(UID, sid, { final: true, no_rating: true, card: { change_goal: "g" } }));
     await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Coding the session"));
-    expect(screen.getByText(/Usually under 5 minutes/)).toBeInTheDocument();
+    expect(screen.getByText(/You can close this tab/)).toBeInTheDocument();
     expect(screen.getByText(/Elapsed \d+:\d\d/)).toBeInTheDocument();
     tick(sid);
     await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Writing tips"));

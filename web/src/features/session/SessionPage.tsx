@@ -212,7 +212,7 @@ function SessionView({ id }: { id: string }) {
           {timeline.showRunCopy ? (
             <>
               <p className={NOTE}>
-                Usually under 5 minutes — you can close this tab and come back; your report will be here.
+                {timeline.hint}
               </p>
               {runStartedAt !== null ? <p className={NOTE}>Elapsed {formatElapsed(now - runStartedAt)}</p> : null}
               {doc.progress > 0 ? (
