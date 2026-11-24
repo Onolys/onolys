@@ -651,10 +651,11 @@ class FirestoreRepo:
 
     def put_transcript(self, uid: str, sid: str, tid: str, transcript: Transcript) -> None:
         ref = self._session_ref(uid, sid).collection("transcripts").document(tid)
+        session_language = self.get_session(uid, sid).language
         pointer = large.pack(
             self._blobs, large.transcript_key(uid, sid), transcript.model_dump(mode="json")
         )
-        doc = TranscriptDoc(transcript=None if pointer else transcript, pointer=pointer)
+        doc = TranscriptDoc.build(transcript, pointer, session_language)
         try:
             self._create_child(uid, sid, ref, doc.to_store(), exclusive=False)
         except NotFoundError:

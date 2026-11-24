@@ -468,10 +468,11 @@ class FakeRepo:
 
     def put_transcript(self, uid: str, sid: str, tid: str, transcript: Transcript) -> None:
         self._own_open(uid, sid)
+        session_language = self.get_session(uid, sid).language
         pointer = large.pack(
             self._blobs, large.transcript_key(uid, sid), transcript.model_dump(mode="json")
         )
-        doc = TranscriptDoc(transcript=None if pointer else transcript, pointer=pointer)
+        doc = TranscriptDoc.build(transcript, pointer, session_language)
         self._guarded(uid, sid, pointer)
         self._put(f"sessions/{sid}/transcripts/{tid}", doc.to_store())
 

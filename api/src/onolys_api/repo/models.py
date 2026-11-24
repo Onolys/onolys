@@ -3,6 +3,8 @@
 `id` is the document id: filled on read, never written. Datetimes are tz-aware UTC.
 """
 
+import hashlib
+import json
 from datetime import UTC, datetime, timedelta
 from typing import Any, Literal
 
@@ -262,10 +264,35 @@ class RecordingDoc(Doc):
     sha256: str | None = None
 
 
+def transcript_sha256(transcript: Transcript) -> str:
+    """Hash transcript content independently of its inline/blob storage representation."""
+    canonical = json.dumps(
+        transcript.model_dump(mode="json"),
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+    )
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
 class TranscriptDoc(Doc):
+    sha256: str
+    language: str
     transcript: Transcript | None = None  # None when stored out of line (pointer set)
     pointer: BlobPointer | None = None
     created_at: datetime = Field(default_factory=utcnow)
+
+    @classmethod
+    def build(
+        cls, transcript: Transcript, pointer: BlobPointer | None, session_language: str
+    ) -> "TranscriptDoc":
+        """Resolve stored run inputs once, while the complete transcript is in memory."""
+        return cls(
+            transcript=None if pointer else transcript,
+            pointer=pointer,
+            sha256=transcript_sha256(transcript),
+            language=transcript.language or session_language,
+        )
 
 
 class RatingDoc(Doc):

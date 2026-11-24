@@ -1,5 +1,7 @@
 """Repo contract suite: identical tests against FakeRepo and the Firestore emulator."""
 
+import hashlib
+import json
 import os
 import uuid
 from datetime import UTC, datetime, timedelta
@@ -25,6 +27,8 @@ from onolys_api.repo.models import (
     SessionError,
     SessionStatusDoc,
     StepRecord,
+    TranscriptDoc,
+    transcript_sha256,
 )
 from onolys_api.storage.fake import FakeBlobStore
 
@@ -247,6 +251,41 @@ def test_transcript_over_500kb_goes_to_blob_with_pointer_roundtrip(repo, blobs):
     assert raw.pointer.size_bytes > MAX_INLINE_BYTES
     assert blobs.exists(raw.pointer.key)
     assert repo.get_transcript(uid, sid, "tr1").transcript == big
+
+
+@pytest.mark.parametrize("large_body", [False, True])
+@pytest.mark.parametrize(
+    "transcript_language,session_language,effective",
+    [("fr", "auto", "fr"), (None, "auto", "auto"), (None, "de", "de"), ("", "de", "de")],
+)
+def test_transcript_stored_inputs(repo, large_body, transcript_language, session_language, effective):
+    uid, sid = seed(repo)
+    repo.update_session(uid, sid, {"language": session_language})
+    original = transcript(n=60, text="é" * 10_000) if large_body else transcript(text="échange")
+    original.language = transcript_language
+    repo.put_transcript(uid, sid, "tr1", original)
+    raw = repo.get_transcript(uid, sid, "tr1", resolve=False)
+    assert (raw.pointer is not None) == large_body
+    canonical = json.dumps(
+        original.model_dump(mode="json"), sort_keys=True, separators=(",", ":"), ensure_ascii=False
+    ).encode("utf-8")
+    assert raw.sha256 == hashlib.sha256(canonical).hexdigest()
+    assert raw.language == effective
+    resolved = repo.get_transcript(uid, sid, "tr1")
+    assert transcript_sha256(resolved.transcript) == raw.sha256
+    repo.put_transcript(uid, sid, "tr2", original.model_copy(deep=True))
+    assert repo.get_transcript(uid, sid, "tr2", resolve=False).sha256 == raw.sha256
+
+
+def test_transcript_factory_hashes_content_and_resolves_language():
+    original = transcript(text="échange")
+    a = TranscriptDoc.build(original, None, "auto")
+    b = TranscriptDoc.build(original.model_copy(deep=True), None, "de")
+    assert a.sha256 == b.sha256 == transcript_sha256(original)
+    assert a.language == b.language == "en"
+    changed = original.model_copy(deep=True)
+    changed.turns[0].text = "changed"
+    assert transcript_sha256(changed) != a.sha256
 
 
 def test_ratings_revisions_draft_and_latest(repo):

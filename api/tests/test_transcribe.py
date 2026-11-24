@@ -15,7 +15,13 @@ from onolys_api.jobs.transcribe import make_poll_handler, make_transcribe_handle
 from onolys_api.jobs.worker import HandlerSpec, TaskRunner
 from onolys_api.repo.base import NotFoundError
 from onolys_api.repo.fake import FakeRepo
-from onolys_api.repo.models import RecordingDoc, SessionDoc, SessionStatusDoc, SttInfo
+from onolys_api.repo.models import (
+    RecordingDoc,
+    SessionDoc,
+    SessionStatusDoc,
+    SttInfo,
+    transcript_sha256,
+)
 
 pytestmark = pytest.mark.unit
 UID, SID = "u1", "s1"
@@ -178,6 +184,9 @@ def test_polls_until_ready_then_awaiting_input(make_env, blobs):
     assert env.stt.submits == 1
     stored = env.repo.get_transcript(UID, SID, tr.TRANSCRIPT_ID).transcript
     assert "stt_run" not in stored.model_dump()
+    doc = env.repo.get_transcript(UID, SID, tr.TRANSCRIPT_ID, resolve=False)
+    assert doc.sha256 == transcript_sha256(stored)
+    assert doc.language == (stored.language or s.language)
     assert s.stt.run.provider == "fixture"
     assert s.stt.run.adapter_version == "fixture-1"
 
@@ -200,6 +209,9 @@ def test_large_transcript_is_stored_as_a_pointer(make_env):
     raw = env.repo.get_transcript(UID, SID, tr.TRANSCRIPT_ID, resolve=False)
     assert raw.transcript is None and raw.pointer is not None
     assert raw.pointer.size_bytes > 500 * 1024
+    resolved = env.repo.get_transcript(UID, SID, tr.TRANSCRIPT_ID)
+    assert raw.sha256 == transcript_sha256(resolved.transcript)
+    assert raw.language == (resolved.transcript.language or env.session.language)
     assert env.session.state == "awaiting_input"
 
 

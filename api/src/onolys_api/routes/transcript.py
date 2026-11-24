@@ -66,7 +66,8 @@ def _persist(request: Request, uid: str, id: str, session, transcript, clinician
         blobs, f"{uid}/{id}/transcripts/{uuid4().hex}.json",
         transcript.model_dump(mode="json"),
     )  # a unique key: the losing PUT must not overwrite the winner's blob
-    tdoc = TranscriptDoc(transcript=None if pointer else transcript, pointer=pointer)
+    session_language = _session_language(session.language, transcript.language)
+    tdoc = TranscriptDoc.build(transcript, pointer, session_language)
     try:
         repo.transition_session(
             uid, id,
@@ -75,7 +76,7 @@ def _persist(request: Request, uid: str, id: str, session, transcript, clinician
                 flags={"transcript_ready": True, "speaker_confirmed": clinician is not None},
                 extra_fields={
                     "clinician_speaker": clinician, "stt": None,
-                    "language": _session_language(session.language, transcript.language),
+                    "language": session_language,
                 },
             ),
             children=((f"transcripts/{TRANSCRIPT_ID}", tdoc.to_store(), False),),
