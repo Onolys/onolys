@@ -44,7 +44,20 @@ def repo(blobs):
         UID, SID, SessionDoc(uid=UID, state="validating", created_at=now, updated_at=now),
         SessionStatusDoc(uid=UID, state="validating", updated_at=now),
     )  # fmt: skip
-    r.create_run(UID, SID, RUN, RunDoc(uid=UID, session_id=SID, run_id=RUN))
+    r.create_run(
+        UID,
+        SID,
+        RUN,
+        RunDoc(
+            change_goal="",
+            clinician_speaker="S1",
+            language="en",
+            transcript_sha256="test-hash",
+            uid=UID,
+            session_id=SID,
+            run_id=RUN,
+        ),
+    )
     return r
 
 

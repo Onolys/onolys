@@ -103,7 +103,19 @@ def test_delete_mark_after_cancel_is_allowed(repo):
 
 def run_doc(repo, run_id="r1"):
     repo.create_run(
-        UID, SID, run_id, RunDoc(uid=UID, run_id=run_id, session_id=SID, cap_date="2026-11-20")
+        UID,
+        SID,
+        run_id,
+        RunDoc(
+            change_goal="",
+            clinician_speaker="S1",
+            language="en",
+            transcript_sha256="test-hash",
+            uid=UID,
+            run_id=run_id,
+            session_id=SID,
+            cap_date="2026-11-20",
+        ),
     )
 
 

@@ -76,7 +76,18 @@ def test_bad_legacy_ignored():
 def test_models():
     assert KIND_FIELD == {"eval": "runs", "interview": "interviews"}
     assert UsageDoc().interviews == 0
-    assert RunDoc(uid="u", session_id="s", run_id="r").counted is True
+    assert (
+        RunDoc(
+            change_goal="",
+            clinician_speaker="S1",
+            language="en",
+            transcript_sha256="test-hash",
+            uid="u",
+            session_id="s",
+            run_id="r",
+        ).counted
+        is True
+    )
 
 
 # ---- FX42/M9/M10: unit-cost cap decisions and the per-user override branches ------------------

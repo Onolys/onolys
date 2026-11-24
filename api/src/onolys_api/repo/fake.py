@@ -816,7 +816,20 @@ class FakeRepo:
             if sess.get("first_run_id"):
                 return "already"
             if sess.get("state") != "awaiting_input" or not all(
-                sess.get(f) for f in ("transcript_ready", "speaker_confirmed", "rating_submitted")
+                sess.get(f)
+                for f in (
+                    "transcript_ready",
+                    "speaker_confirmed",
+                    "rating_submitted",
+                    "clinician_speaker",
+                )
+            ):
+                return "not_ready"
+            if not isinstance(sess.get("clinician_speaker"), str):
+                return "not_ready"
+            transcript = self._get(f"sessions/{sid}/transcripts/current") or {}
+            if not all(
+                isinstance(transcript.get(k), str) and transcript[k] for k in ("sha256", "language")
             ):
                 return "not_ready"
             status = self._get(f"session_status/{sid}") or {}
@@ -842,6 +855,9 @@ class FakeRepo:
                 uid=uid, session_id=sid, run_id=run_id, n_runs=sess.get("n_runs", 1),
                 preset=sess.get("preset"), rating_id=rating_id,
                 stt=sess.get("stt"), code_version=code_version, cap_date=date,
+                change_goal=sess.get("change_goal") or "",
+                clinician_speaker=sess["clinician_speaker"],
+                language=transcript["language"], transcript_sha256=transcript["sha256"],
                 counted=not exempt, units=units, coded_span=sess.get("coded_span"),
             )  # fmt: skip
             self._create(f"sessions/{sid}/runs/{run_id}", run.to_store())
@@ -880,6 +896,13 @@ class FakeRepo:
                 return "not_ready"
             if retry_max is not None and not retry_allowed(sess, retry_max, "run"):
                 return "not_ready"
+            if not isinstance(sess.get("clinician_speaker"), str):
+                return "not_ready"
+            transcript = self._get(f"sessions/{sid}/transcripts/current") or {}
+            if not all(
+                isinstance(transcript.get(k), str) and transcript[k] for k in ("sha256", "language")
+            ):
+                return "not_ready"
             status = self._get(f"session_status/{sid}") or {}
             user = self._get(f"users/{uid}") or {}
             usage = self._get(f"usage/{uid}_{date}") or {"uid": uid, "date": date, "runs": 0}
@@ -889,6 +912,11 @@ class FakeRepo:
                 if sess.get("first_run_id")
                 else None
             )
+            if (
+                sess.get("first_run_id")
+                and (first or {}).get("transcript_sha256") != transcript["sha256"]
+            ):
+                return "not_ready"
             # Try again after a failed free run stays free (review R1): the free rating is owed
             exempt = (
                 bool(sess.get("interview_id"))
@@ -907,6 +935,9 @@ class FakeRepo:
                 n_runs=n_runs or sess.get("n_runs", 1),
                 preset=preset or sess.get("preset"), rating_id=rating_id,
                 stt=sess.get("stt"), code_version=code_version, cap_date=date,
+                change_goal=sess.get("change_goal") or "",
+                clinician_speaker=sess["clinician_speaker"],
+                language=transcript["language"], transcript_sha256=transcript["sha256"],
                 counted=not exempt, units=units, coded_span=coded_span,
             )  # fmt: skip
             now = utcnow()

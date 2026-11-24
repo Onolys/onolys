@@ -258,7 +258,9 @@ def test_transcript_over_500kb_goes_to_blob_with_pointer_roundtrip(repo, blobs):
     "transcript_language,session_language,effective",
     [("fr", "auto", "fr"), (None, "auto", "auto"), (None, "de", "de"), ("", "de", "de")],
 )
-def test_transcript_stored_inputs(repo, large_body, transcript_language, session_language, effective):
+def test_transcript_stored_inputs(
+    repo, large_body, transcript_language, session_language, effective
+):
     uid, sid = seed(repo)
     repo.update_session(uid, sid, {"language": session_language})
     original = transcript(n=60, text="é" * 10_000) if large_body else transcript(text="échange")
@@ -320,11 +322,34 @@ def test_runs_create_update_list_and_lookup_by_id(repo):
         uid,
         sid,
         run_id,
-        RunDoc(uid=uid, session_id=sid, run_id=run_id, n_runs=1, preset="p", started=now),
+        RunDoc(
+            change_goal="",
+            clinician_speaker="S1",
+            language="en",
+            transcript_sha256="test-hash",
+            uid=uid,
+            session_id=sid,
+            run_id=run_id,
+            n_runs=1,
+            preset="p",
+            started=now,
+        ),
     )
     with pytest.raises(ConflictError):
         repo.create_run(
-            uid, sid, run_id, RunDoc(uid=uid, session_id=sid, run_id=run_id, started=now)
+            uid,
+            sid,
+            run_id,
+            RunDoc(
+                change_goal="",
+                clinician_speaker="S1",
+                language="en",
+                transcript_sha256="test-hash",
+                uid=uid,
+                session_id=sid,
+                run_id=run_id,
+                started=now,
+            ),
         )
     repo.update_run(uid, sid, run_id, {"status": "done", "stage": "assemble"})
     r = repo.get_run(uid, sid, run_id)
@@ -370,7 +395,21 @@ def test_delete_session_removes_doc_status_and_every_subcollection(repo):
     repo.put_transcript(uid, sid, "tr1", transcript())
     repo.put_rating_revision(uid, sid, "rt1", RatingDoc(card={}, created_at=now))
     repo.put_rating_draft(uid, sid, RatingDraftDoc(card={}, updated_at=now))
-    repo.create_run(uid, sid, "run1", RunDoc(uid=uid, session_id=sid, run_id="run1", started=now))
+    repo.create_run(
+        uid,
+        sid,
+        "run1",
+        RunDoc(
+            change_goal="",
+            clinician_speaker="S1",
+            language="en",
+            transcript_sha256="test-hash",
+            uid=uid,
+            session_id=sid,
+            run_id="run1",
+            started=now,
+        ),
+    )
     repo.put_report(uid, sid, "rp1", ReportDoc(version=1, run_id="run1", report={}, created_at=now))
     assert repo.delete_session(uid, sid) is True
     with pytest.raises(NotFoundError):
@@ -392,7 +431,7 @@ def _child_writes(repo, uid, sid):
         "transcript": lambda: repo.put_transcript(uid, sid, "tr1", transcript()),
         "rating": lambda: repo.put_rating_revision(uid, sid, "rt1", RatingDoc(card={}, created_at=now)),
         "draft": lambda: repo.put_rating_draft(uid, sid, RatingDraftDoc(card={}, updated_at=now)),
-        "run": lambda: repo.create_run(uid, sid, "run1", RunDoc(uid=uid, session_id=sid, run_id="run1")),
+        "run": lambda: repo.create_run(uid, sid, "run1", RunDoc(change_goal="", clinician_speaker="S1", language="en", transcript_sha256="test-hash", uid=uid, session_id=sid, run_id="run1")),
         "report": lambda: repo.put_report(uid, sid, "rp1", ReportDoc(version=1, run_id="run1", report={}, created_at=now)),
     }  # fmt: skip
 
@@ -452,7 +491,20 @@ def test_delete_racing_a_big_write_leaves_no_doc_and_no_blob(repo, tmp_path, kin
 
 def test_update_run_on_deleted_session_is_not_found_and_creates_nothing(repo):
     uid, sid = seed(repo)
-    repo.create_run(uid, sid, "run1", RunDoc(uid=uid, session_id=sid, run_id="run1"))
+    repo.create_run(
+        uid,
+        sid,
+        "run1",
+        RunDoc(
+            change_goal="",
+            clinician_speaker="S1",
+            language="en",
+            transcript_sha256="test-hash",
+            uid=uid,
+            session_id=sid,
+            run_id="run1",
+        ),
+    )
     repo.delete_session(uid, sid)
     with pytest.raises(NotFoundError):
         repo.update_run(uid, sid, "run1", {"released": True})
@@ -519,7 +571,21 @@ def test_two_user_cross_uid_reads_and_writes_are_not_found(repo):
     repo.put_transcript(a, sid, "tr1", transcript())
     repo.put_rating_revision(a, sid, "rt1", RatingDoc(card={}, created_at=now))
     repo.put_rating_draft(a, sid, RatingDraftDoc(card={}, updated_at=now))
-    repo.create_run(a, sid, "run1", RunDoc(uid=a, session_id=sid, run_id="run1", started=now))
+    repo.create_run(
+        a,
+        sid,
+        "run1",
+        RunDoc(
+            change_goal="",
+            clinician_speaker="S1",
+            language="en",
+            transcript_sha256="test-hash",
+            uid=a,
+            session_id=sid,
+            run_id="run1",
+            started=now,
+        ),
+    )
     repo.put_report(a, sid, "rp1", ReportDoc(version=1, run_id="run1", report={}, created_at=now))
 
     calls = {
@@ -649,7 +715,20 @@ def test_claim_run_lifecycle(repo):
     uid, sid = seed(repo)
     run_id = f"run-{uuid.uuid4().hex[:8]}"
     now = datetime.now(UTC)
-    repo.create_run(uid, sid, run_id, RunDoc(uid=uid, session_id=sid, run_id=run_id))
+    repo.create_run(
+        uid,
+        sid,
+        run_id,
+        RunDoc(
+            change_goal="",
+            clinician_speaker="S1",
+            language="en",
+            transcript_sha256="test-hash",
+            uid=uid,
+            session_id=sid,
+            run_id=run_id,
+        ),
+    )
     assert repo.claim_run(uid, sid, run_id, now, LEASE).outcome == "claimed"
     r = repo.get_run(uid, sid, run_id)
     assert r.status == "running" and r.attempts == 1 and r.started is not None
@@ -688,7 +767,20 @@ def test_claim_survives_exhausted_txn_retries(repo, monkeypatch, kind):
     uid, sid = seed(repo)
     now = datetime.now(UTC)
     run_id = f"run-{uuid.uuid4().hex[:8]}"
-    repo.create_run(uid, sid, run_id, RunDoc(uid=uid, session_id=sid, run_id=run_id))
+    repo.create_run(
+        uid,
+        sid,
+        run_id,
+        RunDoc(
+            change_goal="",
+            clinician_speaker="S1",
+            language="en",
+            transcript_sha256="test-hash",
+            uid=uid,
+            session_id=sid,
+            run_id=run_id,
+        ),
+    )
     real, calls = repo._client.transaction, []
 
     def flaky(*a, **kw):
@@ -1043,9 +1135,15 @@ def test_confirm_speaker_write_once_and_idempotent(repo):
 @pytest.mark.parametrize("confirmed", [False, True])
 def test_confirm_speaker_terminal_states_precede_idempotency(repo, state, confirmed):
     uid, sid = seed(repo)
-    repo.update_session(uid, sid, {
-        "state": state, "speaker_confirmed": confirmed, "clinician_speaker": "A",
-    })
+    repo.update_session(
+        uid,
+        sid,
+        {
+            "state": state,
+            "speaker_confirmed": confirmed,
+            "clinician_speaker": "A",
+        },
+    )
     before = repo.get_session(uid, sid)
     for speaker in ("A", "B"):
         assert repo.confirm_speaker(uid, sid, speaker, ("awaiting_input",)) == "conflict"
@@ -1074,7 +1172,21 @@ def test_discard_failed_upload_leaves_only_a_data_free_stub(repo):
     uid, sid = seed(repo)
     now = datetime.now(UTC)
     repo.add_recording(uid, sid, "original", RecordingDoc(gcs_uri="gs://b/x"))
-    repo.create_run(uid, sid, "run1", RunDoc(uid=uid, session_id=sid, run_id="run1", started=now))
+    repo.create_run(
+        uid,
+        sid,
+        "run1",
+        RunDoc(
+            change_goal="",
+            clinician_speaker="S1",
+            language="en",
+            transcript_sha256="test-hash",
+            uid=uid,
+            session_id=sid,
+            run_id="run1",
+            started=now,
+        ),
+    )
     repo.discard_failed_upload(uid, sid, "audio_too_long")
     with pytest.raises(NotFoundError):
         repo.get_session(uid, sid)

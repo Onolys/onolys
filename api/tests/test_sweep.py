@@ -49,7 +49,7 @@ def seed(repo, settings, n=1, state="running", run_status="running", at=T0, slot
             assert ok == "ok"
         repo.create_run(
             UID, sid, f"run{n}",
-            RunDoc(uid=UID, session_id=sid, run_id=f"run{n}", status=run_status, cap_date=DATE),
+            RunDoc(change_goal="", clinician_speaker="S1", language="en", transcript_sha256="test-hash", uid=UID, session_id=sid, run_id=f"run{n}", status=run_status, cap_date=DATE),
         )  # fmt: skip
     return sid
 

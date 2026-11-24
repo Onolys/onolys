@@ -323,6 +323,10 @@ class OutputValidation(BaseModel):
 
 
 class RunDoc(Doc):
+    change_goal: str
+    clinician_speaker: str
+    language: str
+    transcript_sha256: str
     coded_span: CodedSpan | None = None
     uid: str
     session_id: str

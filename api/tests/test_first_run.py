@@ -142,7 +142,7 @@ def test_starts_run_when_all_three_inputs_present(repo):
     uid, queue, s = "u1" + uuid.uuid4().hex[:6], RecordingQueue(), mk_settings()
     sid = new_session(repo, uid, state="awaiting_input", ready=True, clinician_speaker="S1")
     rid = rate(repo, uid, sid)
-    set_flags(repo, uid, sid, speaker_confirmed=True, rating_submitted=True)
+    set_flags(repo, uid, sid, speaker_confirmed=True, clinician_speaker="S1", rating_submitted=True)
     maybe_start_first_run(repo, queue, uid, sid, s)
     sess = repo.get_session(uid, sid)
     assert sess.state == "running" and sess.first_run_id
@@ -175,7 +175,7 @@ def test_nothing_starts_while_an_input_is_missing(repo, missing):
 def test_no_rating_revision_still_starts_with_null_rating_id(repo):
     uid, queue = "u3" + uuid.uuid4().hex[:6], RecordingQueue()
     sid = new_session(repo, uid, state="awaiting_input", ready=True)
-    set_flags(repo, uid, sid, speaker_confirmed=True, rating_submitted=True)
+    set_flags(repo, uid, sid, speaker_confirmed=True, clinician_speaker="S1", rating_submitted=True)
     maybe_start_first_run(repo, queue, uid, sid, mk_settings())
     (run,) = repo.list_runs(uid, sid)
     assert run.rating_id is None
@@ -184,7 +184,7 @@ def test_no_rating_revision_still_starts_with_null_rating_id(repo):
 def test_second_call_is_a_noop(repo):
     uid, queue = "u4" + uuid.uuid4().hex[:6], RecordingQueue()
     sid = new_session(repo, uid, state="awaiting_input", ready=True)
-    set_flags(repo, uid, sid, speaker_confirmed=True, rating_submitted=True)
+    set_flags(repo, uid, sid, speaker_confirmed=True, clinician_speaker="S1", rating_submitted=True)
     for _ in range(3):
         maybe_start_first_run(repo, queue, uid, sid, mk_settings())
     assert len(repo.list_runs(uid, sid)) == 1 and len(queue.runs) == 1
@@ -198,7 +198,7 @@ def test_second_call_is_a_noop(repo):
 def test_cap_hit_leaves_awaiting_input_with_error_code_and_leaks_nothing(repo, kw, code):
     uid, queue = "u5" + uuid.uuid4().hex[:6], RecordingQueue()
     sid = new_session(repo, uid, state="awaiting_input", ready=True)
-    set_flags(repo, uid, sid, speaker_confirmed=True, rating_submitted=True)
+    set_flags(repo, uid, sid, speaker_confirmed=True, clinician_speaker="S1", rating_submitted=True)
     maybe_start_first_run(repo, queue, uid, sid, mk_settings(**kw))
     sess = repo.get_session(uid, sid)
     assert sess.state == "awaiting_input" and sess.first_run_id is None
@@ -215,7 +215,7 @@ def test_cap_hit_leaves_awaiting_input_with_error_code_and_leaks_nothing(repo, k
 
 def _ready(repo, uid, **fields):
     sid = new_session(repo, uid, state="awaiting_input", ready=True, **fields)
-    set_flags(repo, uid, sid, speaker_confirmed=True, rating_submitted=True)
+    set_flags(repo, uid, sid, speaker_confirmed=True, clinician_speaker="S1", rating_submitted=True)
     return sid
 
 
@@ -350,7 +350,9 @@ def test_cap_race_two_sessions_same_user_exactly_one_starts_no_leak(repo):
     sids = []
     for _ in range(2):
         sid = new_session(repo, uid, state="awaiting_input", ready=True)
-        set_flags(repo, uid, sid, speaker_confirmed=True, rating_submitted=True)
+        set_flags(
+            repo, uid, sid, speaker_confirmed=True, clinician_speaker="S1", rating_submitted=True
+        )
         sids.append(sid)
     barrier = threading.Barrier(2)
 
@@ -368,7 +370,7 @@ def test_cap_race_two_sessions_same_user_exactly_one_starts_no_leak(repo):
 def test_enqueue_failure_after_commit_fails_the_run_and_refunds(repo):
     uid = "u7" + uuid.uuid4().hex[:6]
     sid = new_session(repo, uid, state="awaiting_input", ready=True)
-    set_flags(repo, uid, sid, speaker_confirmed=True, rating_submitted=True)
+    set_flags(repo, uid, sid, speaker_confirmed=True, clinician_speaker="S1", rating_submitted=True)
     maybe_start_first_run(repo, RecordingQueue(fail=True), uid, sid, mk_settings())
     sess = repo.get_session(uid, sid)
     assert sess.state == "failed" and sess.error is not None
@@ -381,7 +383,7 @@ def test_enqueue_failure_after_commit_fails_the_run_and_refunds(repo):
 def test_no_queue_does_not_start(repo):
     uid = "u8" + uuid.uuid4().hex[:6]
     sid = new_session(repo, uid, state="awaiting_input", ready=True)
-    set_flags(repo, uid, sid, speaker_confirmed=True, rating_submitted=True)
+    set_flags(repo, uid, sid, speaker_confirmed=True, clinician_speaker="S1", rating_submitted=True)
     maybe_start_first_run(repo, None, uid, sid, mk_settings())
     assert repo.get_session(uid, sid).state == "awaiting_input" and repo.list_runs(uid, sid) == []
 

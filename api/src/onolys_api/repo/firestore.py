@@ -1112,7 +1112,23 @@ class FirestoreRepo:
             if sess.get("first_run_id"):
                 return "already"
             if sess.get("state") != "awaiting_input" or not all(
-                sess.get(f) for f in ("transcript_ready", "speaker_confirmed", "rating_submitted")
+                sess.get(f)
+                for f in (
+                    "transcript_ready",
+                    "speaker_confirmed",
+                    "rating_submitted",
+                    "clinician_speaker",
+                )
+            ):
+                return "not_ready"
+            if not isinstance(sess.get("clinician_speaker"), str):
+                return "not_ready"
+            transcript = (
+                sref.collection("transcripts").document("current").get(transaction=txn).to_dict()
+                or {}
+            )
+            if not all(
+                isinstance(transcript.get(k), str) and transcript[k] for k in ("sha256", "language")
             ):
                 return "not_ready"
             status = stref.get(transaction=txn).to_dict() or {}
@@ -1133,6 +1149,9 @@ class FirestoreRepo:
                 uid=uid, session_id=sid, run_id=run_id, n_runs=sess.get("n_runs", 1),
                 preset=sess.get("preset"), rating_id=latest[0].id if latest else None,
                 stt=sess.get("stt"), code_version=code_version, cap_date=date,
+                change_goal=sess.get("change_goal") or "",
+                clinician_speaker=sess["clinician_speaker"],
+                language=transcript["language"], transcript_sha256=transcript["sha256"],
                 counted=not exempt, units=units, coded_span=sess.get("coded_span"),
             )  # fmt: skip
             txn.create(run_ref, run.to_store())
@@ -1188,6 +1207,16 @@ class FirestoreRepo:
                 return "not_ready"
             if retry_max is not None and not retry_allowed(sess, retry_max, "run"):
                 return "not_ready"
+            if not isinstance(sess.get("clinician_speaker"), str):
+                return "not_ready"
+            transcript = (
+                sref.collection("transcripts").document("current").get(transaction=txn).to_dict()
+                or {}
+            )
+            if not all(
+                isinstance(transcript.get(k), str) and transcript[k] for k in ("sha256", "language")
+            ):
+                return "not_ready"
             status = stref.get(transaction=txn).to_dict() or {}
             user = user_ref.get(transaction=txn).to_dict() or {}
             usage = usage_ref.get(transaction=txn).to_dict() or {}
@@ -1204,6 +1233,11 @@ class FirestoreRepo:
                 if sess.get("first_run_id")
                 else {}
             )
+            if (
+                sess.get("first_run_id")
+                and (first or {}).get("transcript_sha256") != transcript["sha256"]
+            ):
+                return "not_ready"
             # Try again after a failed free run stays free (review R1): the free rating is owed
             exempt = (
                 bool(sess.get("interview_id"))
@@ -1218,6 +1252,9 @@ class FirestoreRepo:
                 uid=uid, session_id=sid, run_id=run_id, n_runs=n_runs or sess.get("n_runs", 1),
                 preset=preset or sess.get("preset"), rating_id=latest[0].id if latest else None,
                 stt=sess.get("stt"), code_version=code_version, cap_date=date,
+                change_goal=sess.get("change_goal") or "",
+                clinician_speaker=sess["clinician_speaker"],
+                language=transcript["language"], transcript_sha256=transcript["sha256"],
                 counted=not exempt, units=units, coded_span=coded_span,
             )  # fmt: skip
             progress = (

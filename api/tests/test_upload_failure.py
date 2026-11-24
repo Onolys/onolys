@@ -81,7 +81,20 @@ async def test_discard_removes_recordings_and_runs_too(repo):
 
     repo.create_session("alice", "s1", SessionDoc(uid="alice"), SessionStatusDoc(uid="alice"))
     repo.add_recording("alice", "s1", "original", RecordingDoc(gcs_uri="gs://b/x"))
-    repo.create_run("alice", "s1", "r1", RunDoc(uid="alice", session_id="s1", run_id="r1"))
+    repo.create_run(
+        "alice",
+        "s1",
+        "r1",
+        RunDoc(
+            change_goal="",
+            clinician_speaker="S1",
+            language="en",
+            transcript_sha256="test-hash",
+            uid="alice",
+            session_id="s1",
+            run_id="r1",
+        ),
+    )
     repo.discard_failed_upload("alice", "s1", "audio_unreadable")
     assert repo.paths("s1") == ["session_status/s1"]
     with pytest.raises(NotFoundError):
