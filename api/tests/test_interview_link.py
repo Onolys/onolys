@@ -122,12 +122,35 @@ async def test_foreign_or_unknown_interview_is_404_and_untouched(api, repo):
     assert repo.get_interview("bob", iid).session_id is None
 
 
-async def test_already_linked_is_409_conflict(api, repo):
+async def test_link_retry_returns_same_session_without_creating_a_duplicate(api, repo):
     iid = interview(repo)
     first = await link(api, iid)
     assert first.status_code == 202
     second = await link(api, iid)
-    assert second.status_code == 409 and second.json()["details"][0]["code"] == "conflict"
+    assert second.status_code == 202 and second.json() == first.json()
+    assert repo.get_interview("alice", iid).session_id == first.json()["session"]["id"]
+    assert len(repo.list_sessions("alice").items) == 1
+
+
+async def test_link_retry_after_upload_stage_is_409_conflict(api, repo):
+    iid = interview(repo)
+    sid = (await link(api, iid)).json()["session"]["id"]
+    repo.update_session("alice", sid, {"state": "validating"}, status={"state": "validating"})
+    response = await link(api, iid)
+    assert response.status_code == 409 and response.json()["details"][0]["code"] == "conflict"
+    assert repo.get_interview("alice", iid).session_id == sid
+    assert len(repo.list_sessions("alice").items) == 1
+
+
+async def test_same_idempotency_key_for_different_interview_is_409_conflict(api, repo):
+    first_iid = interview(repo, iid="first")
+    second_iid = interview(repo, iid="second")
+    headers = {**A, "Idempotency-Key": "same-key"}
+    first = await link(api, first_iid, headers=headers)
+    response = await link(api, second_iid, headers=headers)
+    assert first.status_code == 202
+    assert response.status_code == 409 and response.json()["details"][0]["code"] == "conflict"
+    assert repo.get_interview("alice", second_iid).session_id is None
     assert len(repo.list_sessions("alice").items) == 1
 
 
