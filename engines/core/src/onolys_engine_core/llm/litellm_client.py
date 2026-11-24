@@ -17,9 +17,10 @@ from pydantic import ValidationError
 
 from onolys_engine_core.errors import ConfigError
 from onolys_engine_core.retry import retry
+from onolys_engine_core.safe_log import log_event, sanitize_provider_text
 
 from .config import LLMConfig
-from .errors import LLMBadOutput, LLMRateLimited, LLMTimeout, LLMUnavailable
+from .errors import LLMBadOutput, LLMError, LLMRateLimited, LLMTimeout, LLMUnavailable
 from .routes import Route, resolve_preset
 from .schema import to_provider_schema
 from .types import LLMRequest, LLMResult, MetricsCollector, Usage
@@ -116,13 +117,29 @@ def _safe_provider_message(exc: BaseException, req: LLMRequest, route: Route) ->
     return message[:300]
 
 
-def _log_provider_error(exc: BaseException, req: LLMRequest, route: Route) -> None:
+def _record_provider_error(
+    exc: BaseException, req: LLMRequest, route: Route, raised: LLMError
+) -> LLMError:
+    """Log one `llm_provider_error` WARNING and expose the same fields on the raised error.
+
+    `provider_error` gets the request-aware redaction first, then the generic sanitizer.
+    """
     provider, _, model = route.litellm_id.partition("/")
-    logging.getLogger("miti").warning(
-        "llm.provider_error provider=%s model=%s status_code=%s exc_class=%s message=%s",
-        provider, model, _status(exc), type(exc).__name__,
-        json.dumps(_safe_provider_message(exc, req, route)),
+    fields = {
+        "provider": provider or None,
+        "model": model or None,
+        "http_status": _status(exc),
+        "error_type": type(exc).__name__,
+        "provider_error": sanitize_provider_text(_safe_provider_message(exc, req, route)),
+    }
+    for name, value in fields.items():
+        setattr(raised, name, value)
+    # None (e.g. http_status on a timeout) is omitted: clean_value would render it as "None".
+    log_event(
+        "llm_provider_error", logging.WARNING,
+        **{k: v for k, v in fields.items() if v is not None},
     )
+    return raised
 
 
 def _is_rate_limit(exc: BaseException) -> bool:
@@ -359,18 +376,22 @@ class LiteLLMClient:
                 async with asyncio.timeout(timeout_s):
                     resp = await self._call()(**self._kwargs(req, timeout_s))
             except TimeoutError as exc:
-                _log_provider_error(exc, req, route)
-                raise LLMTimeout("LLM call timed out") from exc
+                raise _record_provider_error(
+                    exc, req, route, LLMTimeout("LLM call timed out")
+                ) from exc
             except asyncio.CancelledError:
                 raise
             except Exception as exc:
-                _log_provider_error(exc, req, route)
                 if _is_rate_limit(exc):
-                    raise LLMRateLimited(
-                        f"LLM provider rate limited ({_status(exc) or type(exc).__name__})",
-                        retry_after=_retry_after(exc),
+                    raise _record_provider_error(
+                        exc, req, route,
+                        LLMRateLimited(
+                            f"LLM provider rate limited ({_status(exc) or type(exc).__name__})",
+                            retry_after=_retry_after(exc),
+                        ),
                     ) from exc
                 err = LLMUnavailable(f"LLM provider error: {type(exc).__name__}")
+                _record_provider_error(exc, req, route, err)
                 err.no_retry = type(exc).__name__ in _NO_RETRY  # type: ignore[attr-defined]
                 raise err from exc
         # Received responses are billable even when parsing or validation fails below.

@@ -5,7 +5,16 @@ from pathlib import Path
 
 import pytest
 
-from onolys_engine_core.llm import LiteLLMClient, LLMConfig, LLMRequest, LLMUnavailable
+from onolys_engine_core.json_logging import render
+from onolys_engine_core.llm import (
+    LiteLLMClient,
+    LLMConfig,
+    LLMError,
+    LLMRateLimited,
+    LLMRequest,
+    LLMTimeout,
+    LLMUnavailable,
+)
 from onolys_engine_core.llm.routes import Route
 
 pytestmark = pytest.mark.unit
@@ -26,14 +35,17 @@ async def test_provider_warning_redacts_credentials_prompts_and_caps_message(cap
     with caplog.at_level(logging.WARNING, logger="miti"), pytest.raises(LLMUnavailable):
         await client.complete_json(request)
     record, = [r for r in caplog.records if r.name == "miti"]
-    text = record.getMessage()
+    text = render(record)
+    line = json.loads(text)
     assert record.levelno == logging.WARNING
-    assert "provider=anthropic" in text and "model=claude-sonnet-5-5" in text
-    assert "status_code=503" in text and "exc_class=RuntimeError" in text
+    assert record.getMessage() == "llm_provider_error"
+    assert line["provider"] == "anthropic" and line["model"] == "claude-sonnet-5-5"
+    assert line["http_status"] == 503 and line["error_type"] == "RuntimeError"
     assert secret not in text and "another-token" not in text
     assert request.user not in text and request.system not in text
-    assert "provider unavailable" in text
-    assert len(json.loads(text.split("message=", 1)[1])) <= 300
+    assert "provider unavailable" in line["provider_error"]
+    assert len(line["provider_error"]) <= 300
+    assert "llm.provider_error" not in text
 
 
 def load_probe():
@@ -112,8 +124,114 @@ async def test_provider_warning_drops_echoed_message_transcript(caplog, monkeypa
         client = LiteLLMClient(LLMConfig(llm_mode="live", routes={"mid": route}), acompletion=fail)
         with caplog.at_level(logging.WARNING, logger="miti"), pytest.raises(LLMUnavailable):
             await client.complete_json(request)
-        text = "\n".join(r.getMessage() for r in caplog.records)
+        records = [r for r in caplog.records if r.name == "miti"]
+        assert len(records) == 1
+        text = render(records[0])
         for leak in ("sertraline", "Therapist", "tell me more", secret, repr(transcript), "Received Messages", "Invalid Message passed in"):
             assert leak not in text
         assert "invalid_request" in text or "bad shape" in text
-        assert len(json.loads(text.split("message=", 1)[1])) <= 300
+        assert len(json.loads(text)["provider_error"]) <= 300
+
+
+def _client(exc, route=None):
+    async def fail(**kwargs):
+        raise exc
+
+    route = route or Route(litellm_id="anthropic/claude-sonnet-5-5", api_key_env="ANTHROPIC_API_KEY", max_retries=0)
+    return LiteLLMClient(LLMConfig(llm_mode="live", routes={"mid": route}), acompletion=fail)
+
+
+def _req(**kw):
+    return LLMRequest(tier="mid", system="sys", user="usr", response_schema={}, **kw)
+
+
+async def test_503_exposes_five_fields_redacts_quoted_spans_and_caps(caplog):
+    quoted = "a long quoted span that is surely over twenty chars"
+    exc = RuntimeError(f"upstream failed \"{quoted}\" " + "y" * 500)
+    exc.status_code = 503
+    with caplog.at_level(logging.WARNING, logger="miti"), pytest.raises(LLMUnavailable) as ei:
+        await _client(exc).complete_json(_req())
+    record, = [r for r in caplog.records if r.name == "miti"]
+    line = json.loads(render(record))
+    assert line["provider"] == "anthropic" and line["model"] == "claude-sonnet-5-5"
+    assert line["http_status"] == 503 and line["error_type"] == "RuntimeError"
+    assert quoted not in line["provider_error"] and len(line["provider_error"]) <= 300
+    e = ei.value
+    assert (e.provider, e.model, e.http_status, e.error_type) == (
+        "anthropic", "claude-sonnet-5-5", 503, "RuntimeError",
+    )
+    assert e.provider_error == line["provider_error"]
+
+
+async def test_400_text_is_logged_sanitized(caplog):
+    exc = RuntimeError("invalid_request: max_tokens too large")
+    exc.status_code = 400
+    with caplog.at_level(logging.WARNING, logger="miti"), pytest.raises(LLMUnavailable) as ei:
+        await _client(exc).complete_json(_req())
+    record, = [r for r in caplog.records if r.name == "miti"]
+    assert json.loads(render(record))["provider_error"] == "invalid_request: max_tokens too large"
+    assert ei.value.http_status == 400
+
+
+async def test_rate_limit_fields(caplog):
+    exc = RuntimeError("slow down")
+    exc.status_code = 429
+    route = Route(litellm_id="anthropic/claude-sonnet-5-5", api_key_env="ANTHROPIC_API_KEY", max_retries=0, timeout_s=1)
+    with caplog.at_level(logging.WARNING, logger="miti"), pytest.raises(LLMRateLimited) as ei:
+        await _client(exc, route).complete_json(_req())
+    records = [r for r in caplog.records if r.name == "miti"]
+    assert len(records) >= 1
+    line = json.loads(render(records[0]))
+    assert line["http_status"] == 429 and line["provider"] == "anthropic"
+    assert line["provider_error"] == "slow down"
+    e = ei.value
+    assert (e.provider, e.model, e.http_status, e.error_type, e.provider_error) == (
+        "anthropic", "claude-sonnet-5-5", 429, "RuntimeError", "slow down",
+    )
+
+
+async def test_timeout_fields_http_status_none(caplog):
+    exc = TimeoutError("took too long")
+    with caplog.at_level(logging.WARNING, logger="miti"), pytest.raises(LLMTimeout) as ei:
+        await _client(exc).complete_json(_req())
+    record, = [r for r in caplog.records if r.name == "miti"]
+    line = json.loads(render(record))
+    assert line["error_type"] == "TimeoutError" and line["provider"] == "anthropic"
+    assert line.get("http_status") is None
+    e = ei.value
+    assert e.http_status is None and e.error_type == "TimeoutError"
+    assert e.provider == "anthropic" and e.model == "claude-sonnet-5-5"
+
+
+def test_llm_error_defaults_to_none():
+    e = LLMError("x")
+    for name in ("provider", "model", "http_status", "error_type", "provider_error"):
+        assert getattr(e, name) is None
+
+
+async def test_prompt_repr_and_json_escaped_forms_redacted(caplog):
+    system = 'sys "quoted" line\nTherapist said hi'
+    user = "usr\twith 'tab' and \\ slash"
+    req = LLMRequest(tier="mid", system=system, user=user, cache_prefix="PREFIX-SECRET-TEXT", response_schema={})
+    exc = RuntimeError(f"bad {system!r} {json.dumps(user)} {json.dumps(system)[1:-1]} {repr(user)[1:-1]} PREFIX-SECRET-TEXT")
+    exc.status_code = 500
+    with caplog.at_level(logging.WARNING, logger="miti"), pytest.raises(LLMUnavailable):
+        await _client(exc).complete_json(req)
+    record, = [r for r in caplog.records if r.name == "miti"]
+    text = json.loads(render(record))["provider_error"]
+    for leak in ("Therapist", "with 'tab'", "PREFIX-SECRET-TEXT", "\\t", "quoted"):
+        assert leak not in text
+    assert text.startswith("bad")
+
+
+async def test_token_env_value_and_bearer_redacted(caplog, monkeypatch):
+    monkeypatch.setenv("MY_SERVICE_TOKEN", "tok-abcdef-123456")
+    monkeypatch.setenv("CUSTOM_KEY_ENV", "route-secret-value-9")
+    route = Route(litellm_id="anthropic/claude-sonnet-5-5", api_key_env="CUSTOM_KEY_ENV", max_retries=0)
+    exc = RuntimeError("fail tok-abcdef-123456 route-secret-value-9 Bearer zzz999 api_key=qqq111")
+    exc.status_code = 401
+    with caplog.at_level(logging.WARNING, logger="miti"), pytest.raises(LLMUnavailable):
+        await _client(exc, route).complete_json(_req())
+    text = render([r for r in caplog.records if r.name == "miti"][0])
+    for leak in ("tok-abcdef-123456", "route-secret-value-9", "zzz999", "qqq111"):
+        assert leak not in text

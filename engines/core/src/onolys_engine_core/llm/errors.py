@@ -2,7 +2,13 @@
 
 
 class LLMError(Exception):
-    pass
+    """Provider fields are set by the client on provider failures (sanitized, see safe_log)."""
+
+    provider: str | None = None
+    model: str | None = None
+    http_status: int | None = None
+    error_type: str | None = None
+    provider_error: str | None = None
 
 
 class LLMTimeout(LLMError):
