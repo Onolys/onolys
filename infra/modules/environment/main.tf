@@ -143,7 +143,9 @@ resource "google_service_account_iam_member" "api_self_token_creator" {
 }
 
 # api generates verify/reset links with the Admin SDK (SP07). Start broad, narrow after smoke (PRD 07 Open Questions).
+# Gated with the Resend wiring so an environment without email gets no extra IAM.
 resource "google_project_iam_member" "api_firebaseauth_admin" {
+  count   = var.resend_secret_wired ? 1 : 0
   project = var.project
   role    = "roles/firebaseauth.admin"
   member  = "serviceAccount:${google_service_account.api.email}"

@@ -155,7 +155,7 @@ variable "ai_mic_gate" {
 }
 
 variable "app_base_url" {
-  description = "Public web app origin the api puts in auth-email links (api APP_BASE_URL; required by Settings in staging/prod for api, worker and voice)."
+  description = "Public web app origin the api puts in auth-email links (api only; unset means the auth-email endpoints answer 503 email_unavailable)."
   type        = string
 }
 

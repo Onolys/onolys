@@ -11,7 +11,6 @@ locals {
     { name = "REGION", value = var.region },
     { name = "FIRESTORE_DATABASE", value = var.database_id },
     { name = "AUTH_PROJECT", value = var.project },
-    { name = "APP_BASE_URL", value = var.app_base_url },
     { name = "CORS_ORIGINS", value = join(",", var.cors_origins) },
     { name = "VOICE_PROVIDERS_FILE", value = "config/${var.env}/voice_providers.yaml" },
     { name = "ADAPTERS", value = "real" },

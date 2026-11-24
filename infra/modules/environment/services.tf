@@ -22,8 +22,6 @@ locals {
     { name = "TASKS_QUEUE", value = google_cloud_tasks_queue.steps.name },
     { name = "TASKS_SA", value = google_service_account.tasks_invoker.email },
     { name = "WORKER_URL", value = local.worker_url },
-    # Settings.from_env validates this at startup in every SERVICE_MODE (api, worker, voice).
-    { name = "APP_BASE_URL", value = var.app_base_url },
   ]
 }
 
@@ -81,6 +79,11 @@ resource "google_cloud_run_v2_service" "api" {
       env {
         name  = "CORS_ORIGINS"
         value = join(",", var.cors_origins)
+      }
+      env {
+        # Only the api builds auth-email links; unset elsewhere is fine (Settings treats it as optional).
+        name  = "APP_BASE_URL"
+        value = var.app_base_url
       }
       env {
         name  = "EMAIL_FROM"
