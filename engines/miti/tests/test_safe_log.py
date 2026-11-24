@@ -23,8 +23,13 @@ async def test_full_fixture_stt_call_logs_no_text_or_uri(caplog):
         await transcribe(
             stt, audio, SttParams(provider="fixture", model="fx", language="en"), interval_s=0
         )
-    assert "stt_provider" in caplog.text and 'stt_model="fx"' in caplog.text
-    assert "audio_ms=900" in caplog.text and "speakers=2" in caplog.text
-    assert "job_id=" in caplog.text
+    all_fields = [getattr(r, "fields", {}) for r in caplog.records]
+    merged: dict = {}
+    for f in all_fields:
+        merged.update(f)
+    blob = caplog.text + repr([getattr(r, "fields", {}) for r in caplog.records])
+    assert "stt_provider" in merged and any(f.get("stt_model") == "fx" for f in all_fields)
+    assert merged["audio_ms"] == 900 and merged["speakers"] == 2
+    assert "job_id" in merged
     for banned in (SENTINEL, "other", URI, "secret-bucket", "patient-0042"):
-        assert banned not in caplog.text
+        assert banned not in blob

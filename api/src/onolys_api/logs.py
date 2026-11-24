@@ -14,7 +14,7 @@ import logging
 import sys
 import threading
 
-from onolys_engine_core.safe_log import MAX_VALUE_CHARS, register_fields, safe_fields
+from onolys_engine_core.safe_log import clean_value, register_fields, safe_fields
 
 from onolys_api.config import Settings
 
@@ -94,17 +94,13 @@ def uid_hash(uid: str) -> str:
     return hmac.new(_state["key"], uid.encode(), hashlib.sha256).hexdigest()[:16]
 
 
-def _clean(value):
-    if value is None:
-        return None
-    if isinstance(value, bool | int | float):
-        return value
-    return str(value)[:MAX_VALUE_CHARS]
+def _clean(name, value):
+    return None if value is None else clean_value(name, value)
 
 
 def emit(event: str, level: int = logging.INFO, **fields) -> None:
     """Log one line. None values are omitted; `code_version` is always added."""
-    kept = {k: _clean(v) for k, v in safe_fields(fields).items() if v is not None}
+    kept = {k: _clean(k, v) for k, v in safe_fields(fields).items() if v is not None}
     kept.setdefault("code_version", _state["code_version"])
     line = {"severity": _LEVELS.get(level, "INFO"), "message": event, "event": event, **kept}
     log.log(level, "%s", json.dumps(line, sort_keys=False))
