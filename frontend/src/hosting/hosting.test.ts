@@ -86,3 +86,10 @@ describe("frontend/firebase.json", () => {
     for (const e of entries) expect(e.ignore).toEqual(expect.arrayContaining(["firebase.json", "**/.*", "**/node_modules/**"]));
   });
 });
+
+it('permits the configured default admin authDomain in every hosting frame policy', () => {
+  for (const entry of entries) {
+    const csp = entry.headers?.flatMap(h => h.headers).find(h => h.key === 'Content-Security-Policy')?.value ?? '';
+    expect(csp.split(';').find(d => d.trim().startsWith('frame-src '))).toContain('https://admin.onolys.com');
+  }
+});

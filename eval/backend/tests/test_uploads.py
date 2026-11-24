@@ -536,6 +536,7 @@ def test_direct_audio_upload_signed_url_then_complete_enqueues_transcription(ser
     uid = body["upload_id"]
     assert body["status"] == "awaiting_upload" and body["upload"]["method"] == "PUT"
     assert body["upload"]["url"].endswith(f"uploads/{uid}/input.wav")
+    assert body["upload"]["headers"]["x-goog-if-generation-match"] == "0"
     assert services.queue.tasks == []
     path = f"uploads/{uid}/input.wav"
     # Not uploaded yet.

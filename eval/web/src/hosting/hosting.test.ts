@@ -31,3 +31,7 @@ describe("eval/web/firebase.json", () => {
     }
   });
 });
+
+it("connect-src permits the signed GCS upload host", () => {
+  for (const entry of entries) expect(csp(entry)["connect-src"]).toContain("https://storage.googleapis.com");
+});

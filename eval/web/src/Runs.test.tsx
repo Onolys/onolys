@@ -116,7 +116,7 @@ it('keeps polling after cancellation while in-flight work runs, then shows final
   expect(api.run).toHaveBeenCalledTimes(3);
 });
 it('history shows provenance and rerun preserves saved input with correct endpoint',async()=>{
- const api={...createEvalApi('',vi.fn()),runs:vi.fn().mockResolvedValue({runs:[summary()]}),options:vi.fn().mockResolvedValue({engines:[{id:'human',label:'Human',prod:false},{id:'miti',label:'MITI',prod:true}],models:[{id:'claude',label:'Claude',context_tokens:1,max_output_tokens:1,tiers:[{id:'claude-sonnet-5-5',efforts:['low'],default_effort:'low'}]}],defaults:{dataset:{engines:[],selection:{models:[],tiers:[],efforts:[]},label:''}}}),rerun:vi.fn().mockResolvedValue({run_id:'r2',status:'queued'}),dataset:vi.fn(),datasets:vi.fn()}; const onRerun=vi.fn(),onCreated=vi.fn(); const view=render(<History api={api} onOpen={vi.fn()} onRerun={onRerun}/>); expect(await screen.findByText('saved')).toBeTruthy(); expect(screen.getByText(/abc123/)).toBeTruthy(); expect(screen.getByText(/saved-model/)).toBeTruthy(); expect(screen.getByText(/STT excluded/)).toBeTruthy(); expect(screen.getByText(/1 unpriced unit/)).toBeTruthy(); fireEvent.click(screen.getByRole('button',{name:'Rerun with different engines/presets'})); expect(onRerun).toHaveBeenCalledWith(summary()); view.unmount(); render(<NewRun api={api} initialRun={summary()} onRunCreated={onCreated}/>); await act(async()=>{}); expect((screen.getByLabelText('Runs per cell') as HTMLSelectElement).value).toBe('3'); expect(screen.getByText(/older run chose models by preset/)).toBeTruthy(); expect((screen.getByLabelText('Human') as HTMLInputElement).disabled).toBe(true); fireEvent.click(screen.getByLabelText('Claude')); fireEvent.click(screen.getByLabelText('claude-sonnet-5-5')); fireEvent.click(screen.getByLabelText('low')); fireEvent.click(screen.getByRole('button',{name:'Start run'})); await act(async()=>{}); expect(api.rerun).toHaveBeenCalledWith('r1',{engines:['human','miti'],selection:{models:['claude'],tiers:['claude-sonnet-5-5'],efforts:['low']},repeats:3}); expect(api.dataset).not.toHaveBeenCalled(); expect(api.datasets).not.toHaveBeenCalled(); expect(onCreated).toHaveBeenCalledWith('r2');
+ const api={...createEvalApi('',vi.fn()),runs:vi.fn().mockResolvedValue({runs:[summary()]}),options:vi.fn().mockResolvedValue({engines:[{id:'human',label:'Human',prod:false},{id:'miti',label:'MITI',prod:true}],models:[{id:'claude',label:'Claude',context_tokens:1,max_output_tokens:1,tiers:[{id:'claude-sonnet-5-5',efforts:['low'],default_effort:'low'}]}],defaults:{dataset:{engines:[],selection:{models:[],tiers:[],efforts:[]},label:''}}}),rerun:vi.fn().mockResolvedValue({run_id:'r2',status:'queued'}),dataset:vi.fn(),datasets:vi.fn()}; const onRerun=vi.fn(),onCreated=vi.fn(); const view=render(<History api={api} onOpen={vi.fn()} onRerun={onRerun}/>); expect(await screen.findByText('saved')).toBeTruthy(); expect(screen.getByText(/abc123/)).toBeTruthy(); expect(screen.getByText(/saved-model/)).toBeTruthy(); expect(screen.getByText(/STT excluded/)).toBeTruthy(); expect(screen.getByText(/1 unpriced unit/)).toBeTruthy(); fireEvent.click(screen.getByRole('button',{name:'Rerun with different engines/presets'})); expect(onRerun).toHaveBeenCalledWith(summary()); view.unmount(); render(<NewRun api={api} initialRun={summary()} onRunCreated={onCreated}/>); await act(async()=>{}); expect((screen.getByLabelText('Runs per cell') as HTMLSelectElement).value).toBe('3'); expect(screen.getByText(/older run chose models by preset/)).toBeTruthy(); expect((screen.getByLabelText('Human') as HTMLInputElement).disabled).toBe(false); fireEvent.click(screen.getByLabelText('Claude')); fireEvent.click(screen.getByLabelText('claude-sonnet-5-5')); fireEvent.click(screen.getByLabelText('low')); fireEvent.click(screen.getByRole('button',{name:'Start run'})); await act(async()=>{}); expect(api.rerun).toHaveBeenCalledWith('r1',{engines:['human','miti'],selection:{models:['claude'],tiers:['claude-sonnet-5-5'],efforts:['low']},repeats:3}); expect(api.dataset).not.toHaveBeenCalled(); expect(api.datasets).not.toHaveBeenCalled(); expect(onCreated).toHaveBeenCalledWith('r2');
 });
 it.each(['done', 'partial', 'failed', 'cancelled'] as const)('does not poll terminal %s runs', async status => {
  vi.useFakeTimers(); const api={...createEvalApi('',vi.fn()),run:vi.fn().mockResolvedValue(detail(status))}; render(<RunView api={api} runId="r1" onRerun={vi.fn()}/>); await act(async()=>{}); await act(async()=>{await vi.advanceTimersByTimeAsync(9000)}); expect(api.run).toHaveBeenCalledTimes(1); expect(screen.queryByRole('button',{name:'Cancel run'})).toBeNull();
@@ -153,16 +153,31 @@ it('shows Cancelling… and hides Cancel when the run summary says cancel_reques
   expect((screen.getByRole('button', { name: 'Cancelling…' }) as HTMLButtonElement).disabled).toBe(true);
   expect(screen.getByText(/^cancelling · /)).toBeTruthy();
 });
-it('history says it is limited to the latest 100 runs only when 100 are returned', async () => {
-  const many = Array.from({ length: 100 }, (_, i) => ({ ...summary(), run_id: `r${i}` }));
-  const api = { ...createEvalApi('', vi.fn()), runs: vi.fn().mockResolvedValue({ runs: many }) };
-  const view = render(<History api={api} onOpen={vi.fn()} onRerun={vi.fn()} />);
-  expect(await screen.findByText(/Showing the latest 100 runs/)).toBeTruthy();
-  view.unmount();
-  const few = { ...createEvalApi('', vi.fn()), runs: vi.fn().mockResolvedValue({ runs: many.slice(0, 3) }) };
-  render(<History api={few} onOpen={vi.fn()} onRerun={vi.fn()} />);
-  await screen.findAllByText('saved');
-  expect(screen.queryByText(/Showing the latest/)).toBeNull();
+it('history loads more using the server cursor, retains rows on failure and retries that page', async () => {
+  const runs = vi.fn().mockResolvedValueOnce({ runs: [summary()], next_cursor: 'page2' }).mockRejectedValueOnce(new Error('offline')).mockResolvedValueOnce({ runs: [{ ...summary(), run_id: 'r2' }], next_cursor: null });
+  render(<History api={{ ...createEvalApi('', vi.fn()), runs }} onOpen={vi.fn()} onRerun={vi.fn()} />);
+  await screen.findByRole('button', { name: 'Open run r1' });
+  fireEvent.click(screen.getByRole('button', { name: 'Load more' })); await screen.findByText('offline');
+  expect(screen.getByRole('button', { name: 'Open run r1' })).toBeTruthy();
+  fireEvent.click(screen.getByRole('button', { name: 'Retry history' })); await screen.findByRole('button', { name: 'Open run r2' });
+  expect(runs.mock.calls[1][1]).toBe('page2'); expect(runs.mock.calls[2][1]).toBe('page2');
+  expect(screen.getByRole('button', { name: 'Open run r1' })).toBeTruthy(); expect(screen.queryByRole('button', { name: 'Load more' })).toBeNull();
+});
+it('stops polling a structured HTTP 404 until an explicit retry', async () => {
+  vi.useFakeTimers(); const fetcher = vi.fn<typeof fetch>().mockResolvedValue(new Response('{"detail":"Run not found"}', { status: 404 }));
+  render(<RunView api={createEvalApi('', fetcher)} runId="missing" onRerun={vi.fn()} />); await act(async () => {});
+  await act(async () => { await vi.advanceTimersByTimeAsync(90000); }); expect(fetcher).toHaveBeenCalledTimes(1);
+  expect(screen.getByRole('alert').textContent).not.toContain('Still trying');
+  fireEvent.click(screen.getByRole('button', { name: 'Retry run status' })); await act(async () => {}); expect(fetcher).toHaveBeenCalledTimes(2);
+});
+it('aborts stale history requests on API change and ignores late results', async () => {
+  let resolve!: (value: { runs: RunSummary[]; next_cursor: null }) => void;
+  const old = { ...createEvalApi('', vi.fn()), runs: vi.fn().mockImplementation(() => new Promise(r => { resolve = r; })) };
+  const view = render(<History api={old} onOpen={vi.fn()} onRerun={vi.fn()} />);
+  const fresh = { ...createEvalApi('', vi.fn()), runs: vi.fn().mockResolvedValue({ runs: [{ ...summary(), run_id: 'fresh' }], next_cursor: null }) };
+  view.rerender(<History api={fresh} onOpen={vi.fn()} onRerun={vi.fn()} />); await screen.findByRole('button', { name: 'Open run fresh' });
+  expect(old.runs.mock.calls[0][0].aborted).toBe(true);
+  await act(async () => { resolve({ runs: [summary()], next_cursor: null }); }); expect(screen.queryByRole('button', { name: 'Open run r1' })).toBeNull();
 });
 it('history formats the run date for the locale instead of showing raw ISO', async () => {
   const api = { ...createEvalApi('', vi.fn()), runs: vi.fn().mockResolvedValue({ runs: [summary()] }) };

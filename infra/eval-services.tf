@@ -81,6 +81,14 @@ resource "google_service_account_iam_member" "eval_tasks_user" {
   member             = "serviceAccount:${google_service_account.eval_staging[0].email}"
 }
 
+# IAM signBlob for V4 upload URLs; grant on this runtime identity only.
+resource "google_service_account_iam_member" "eval_upload_signer" {
+  count              = var.eval_enabled ? 1 : 0
+  service_account_id = google_service_account.eval_staging[0].name
+  role               = "roles/iam.serviceAccountTokenCreator"
+  member             = "serviceAccount:${google_service_account.eval_staging[0].email}"
+}
+
 resource "google_project_iam_member" "eval_datastore" {
   count   = var.eval_enabled ? 1 : 0
   project = var.project

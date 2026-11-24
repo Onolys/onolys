@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { ApiError } from './api';
 import type { Compare, CompareAggregate, ErrorMetric, EvalApi, RunDetail, RunSummary, RunUnit } from './api';
 
 const errorMessage = (error: unknown) => error instanceof Error ? error.message : 'Could not load run. Please try again.';
@@ -6,7 +7,6 @@ const terminal = (status: string) => !['queued', 'running'].includes(status);
 const number = (value: number | null | undefined, metric = '') => value == null ? '—' : metric === 'pct_cr' ? `${Number((value * 100).toFixed(2))}%` : String(Number(value.toFixed(3)));
 const statusLabel = (run: RunSummary, cancelRequested = false) => cancelRequested && !terminal(run.status) ? 'cancelling' : run.status;
 const dateText = (iso: string) => { const date = new Date(iso); return Number.isNaN(date.getTime()) ? iso : date.toLocaleString(); };
-const HISTORY_LIMIT = 100; // the server returns at most this many runs, newest first
 const POLL_MS = 3000, MAX_POLL_MS = 30000;
 const inputName = (run: RunSummary) => 'dataset_id' in run.input ? run.input.dataset_id : run.input.upload_id;
 
@@ -95,6 +95,7 @@ export function RunView({ api, runId, onRerun }: { api: EvalApi; runId: string; 
   const [error, setError] = useState('');
   const [attempt, setAttempt] = useState(0);
   const [cancelling, setCancelling] = useState(false);
+  const [missing, setMissing] = useState(false);
   const stop = useRef<() => void>(() => {});
   useEffect(() => {
     const controller = new AbortController();
@@ -106,12 +107,13 @@ export function RunView({ api, runId, onRerun }: { api: EvalApi; runId: string; 
       try {
         const value = await api.run(runId, controller.signal);
         if (controller.signal.aborted) return;
-        failures = 0; setError('');
+        failures = 0; setError(''); setMissing(false);
         setRun(value);
         if (!terminal(value.status)) timer = setTimeout(() => void poll(), POLL_MS);
       } catch (e) {
         if (controller.signal.aborted) return;
         failures += 1; setError(errorMessage(e));
+        if (e instanceof ApiError && e.status === 404) { setMissing(true); return; }
         timer = setTimeout(() => void poll(), Math.min(POLL_MS * 2 ** (failures - 1), MAX_POLL_MS));
       }
     };
@@ -127,8 +129,8 @@ export function RunView({ api, runId, onRerun }: { api: EvalApi; runId: string; 
     } catch (e) { setError(errorMessage(e)); setCancelling(false); }
   };
   const cancelRequested = cancelling || run?.cancel_requested === true;
-  return <section><h1>Run {runId}</h1>{error && <div role="alert">{error}{run && !terminal(run.status) && ' Still trying to refresh.'}<button onClick={() => { setError(''); setAttempt(n => n + 1); }}>Retry run status</button></div>}
-    {!run ? <p role="status">Loading run…</p> : <>
+  return <section><h1>Run {runId}</h1>{error && <div role="alert">{error}{!missing && run && !terminal(run.status) && ' Still trying to refresh.'}<button onClick={() => { setError(''); setMissing(false); setAttempt(n => n + 1); }}>Retry run status</button></div>}
+    {!run ? (!error && <p role="status">Loading run…</p>) : <>
       <p role="status">{statusLabel(run, cancelRequested)} · {run.completed_units}/{run.total_units} units complete · {run.failed_units} failed · {run.cancelled_units} cancelled</p>
       {!terminal(run.status) && <button disabled={cancelRequested} onClick={() => void cancel()}>{cancelRequested ? 'Cancelling…' : 'Cancel run'}</button>}
       <button onClick={() => onRerun(run)}>Rerun with different engines/presets</button>
@@ -142,10 +144,21 @@ export function History({ api, onOpen, onRerun }: { api: EvalApi; onOpen: (id: s
   const [runs, setRuns] = useState<RunSummary[]>();
   const [error, setError] = useState('');
   const [attempt, setAttempt] = useState(0);
+  const [cursor, setCursor] = useState<string>();
+  const [nextCursor, setNextCursor] = useState<string | null>();
+  const [loading, setLoading] = useState(true);
+  const [source, setSource] = useState(api);
+  if (source !== api) {
+    setSource(api); setRuns(undefined); setCursor(undefined); setNextCursor(undefined); setLoading(true); setError('');
+  }
   useEffect(() => {
     const controller = new AbortController();
-    api.runs(controller.signal).then(value => { if (!controller.signal.aborted) setRuns(value.runs); }).catch(e => { if (!controller.signal.aborted) setError(errorMessage(e)); });
+    api.runs(controller.signal, cursor).then(value => {
+      if (controller.signal.aborted) return;
+      setRuns(previous => cursor ? [...(previous ?? []), ...value.runs.filter(run => !previous?.some(old => old.run_id === run.run_id))] : value.runs);
+      setNextCursor(value.next_cursor ?? null); setLoading(false);
+    }).catch(e => { if (!controller.signal.aborted) { setError(errorMessage(e)); setLoading(false); } });
     return () => controller.abort();
-  }, [api, attempt]);
-  return <section><h1>History</h1>{runs && runs.length >= HISTORY_LIMIT && <p role="note">Showing the latest {HISTORY_LIMIT} runs. Older runs are not listed.</p>}{error && <div role="alert">{error}<button onClick={() => { setError(''); setAttempt(n => n + 1); }}>Retry history</button></div>}{!runs ? <p role="status">Loading history…</p> : runs.length === 0 ? <p>No saved runs yet.</p> : <div className="table-scroll"><table><thead><tr>{['Date', 'Input', 'Engines / presets', 'Status', 'Tokens / estimated cost', 'Details'].map(label => <th scope="col" key={label}>{label}</th>)}</tr></thead><tbody>{runs.map(run => <tr key={run.run_id}><td><time dateTime={run.created_at}>{dateText(run.created_at)}</time></td><td>{inputName(run)}</td><td>{run.engines.join(', ')} / {(run.combo_keys ?? run.presets ?? []).join(', ')} · {run.repeats} runs per cell</td><td>{statusLabel(run, run.cancel_requested === true)}</td><td><Usage run={run} /></td><td><button onClick={() => onOpen(run.run_id)}>Open run {run.run_id}</button><button onClick={() => onRerun(run)}>Rerun with different engines/presets</button><Provenance run={run} /></td></tr>)}</tbody></table></div>}</section>;
+  }, [api, attempt, cursor]);
+  return <section><h1>History</h1>{error && <div role="alert">{error}<button disabled={loading} onClick={() => { setError(''); setLoading(true); setAttempt(n => n + 1); }}>Retry history</button></div>}{!runs ? <p role="status">Loading history…</p> : runs.length === 0 ? <p>No saved runs yet.</p> : <div className="table-scroll"><table><thead><tr>{['Date', 'Input', 'Engines / presets', 'Status', 'Tokens / estimated cost', 'Details'].map(label => <th scope="col" key={label}>{label}</th>)}</tr></thead><tbody>{runs.map(run => <tr key={run.run_id}><td><time dateTime={run.created_at}>{dateText(run.created_at)}</time></td><td>{inputName(run)}</td><td>{run.engines.join(', ')} / {(run.combo_keys ?? run.presets ?? []).join(', ')} · {run.repeats} runs per cell</td><td>{statusLabel(run, run.cancel_requested === true)}</td><td><Usage run={run} /></td><td><button onClick={() => onOpen(run.run_id)}>Open run {run.run_id}</button><button onClick={() => onRerun(run)}>Rerun with different engines/presets</button><Provenance run={run} /></td></tr>)}</tbody></table></div>}{nextCursor && !error && <button disabled={loading} onClick={() => { setLoading(true); setCursor(nextCursor); }}>Load more</button>}{loading && runs && <p role="status">Loading history…</p>}</section>;
 }

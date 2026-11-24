@@ -64,7 +64,10 @@ class GCSBucket(_JSONBucket):
 
         credentials, _ = google.auth.default()
         credentials.refresh(Request())
-        headers = {'x-goog-content-length-range': f'1,{max_bytes}'}
+        headers = {
+            'x-goog-content-length-range': f'1,{max_bytes}',
+            'x-goog-if-generation-match': '0',
+        }
         url = self.bucket.blob(path).generate_signed_url(
             version='v4',
             method='PUT',
@@ -107,7 +110,10 @@ class InMemoryBucket(_JSONBucket):
             return sorted(path for path in self._objects if path.startswith(prefix))
 
     def signed_upload_url(self, path, content_type, *, expires_s, max_bytes):
-        headers = {'x-goog-content-length-range': f'1,{max_bytes}'}
+        headers = {
+            'x-goog-content-length-range': f'1,{max_bytes}',
+            'x-goog-if-generation-match': '0',
+        }
         return {
             'url': f'memory://{path}',
             'method': 'PUT',

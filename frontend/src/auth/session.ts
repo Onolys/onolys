@@ -5,6 +5,7 @@ export type AuthStatus = "loading" | "signed-out" | "signed-in" | "forbidden";
 export interface AuthSnapshot {
   status: AuthStatus;
   user: AuthUser | null;
+  denialCode?: string;
 }
 
 export interface AuthSession {
@@ -26,7 +27,7 @@ export function createAuthSession(provider: AuthProvider): AuthSession {
   };
   provider.onAuthChange(user => {
     if (!user) set({ status: "signed-out", user: null });
-    else set({ status: snap.status === "forbidden" ? "forbidden" : "signed-in", user });
+    else set({ status: snap.status === "forbidden" ? "forbidden" : "signed-in", user, denialCode: snap.denialCode });
   });
   return {
     getSnapshot: () => snap,
@@ -48,7 +49,7 @@ export function createAuthSession(provider: AuthProvider): AuthSession {
           set({ status: "signed-out", user: null });
           void provider.signOut().catch(() => undefined);
         },
-        onForbidden: () => set({ status: "forbidden", user: snap.user }),
+        onForbidden: denialCode => set({ status: "forbidden", user: snap.user, denialCode }),
       }),
   };
 }

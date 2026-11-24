@@ -97,3 +97,16 @@ describe("AuthGate", () => {
     expect(all).not.toMatch(/from "firebase\/(?!app"|auth")/);
   });
 });
+
+it.each([
+  ['email_unverified', 'Verify your email, then sign out and sign in again.'],
+  ['not_allowlisted', 'This account is not on the app access list. Contact an administrator.'],
+  ['other', 'This account is not allowed to use this app, or its email is not verified.'],
+])('maps exact public denial code %s and preserves the response body', async (code, message) => {
+  const provider = createFakeProvider({ email: 'a@b.co' }); const session = createAuthSession(provider);
+  render(<AuthGate session={session}>{app}</AuthGate>); await screen.findByText('the app');
+  const body = { error: { code, message: 'server detail' } };
+  const response = await session.createFetch(vi.fn().mockResolvedValue(new Response(JSON.stringify(body), { status: 403 })))('https://api');
+  expect(await response.json()).toEqual(body);
+  expect(await screen.findByText(message)).toBeTruthy(); expect(screen.queryByText('the app')).toBeNull();
+});
