@@ -21,8 +21,8 @@ An in-flight validate or run task that writes blobs after the delete is covered 
 import logging
 
 from onolys_api import logs
+from onolys_api.jobs.charging import release_once
 from onolys_api.jobs.machine import advance
-from onolys_api.jobs.run import release_once
 from onolys_api.jobs.worker import Handler, RetryableError, TaskContext, TaskError
 from onolys_api.repo.base import NotFoundError, Repo
 from onolys_api.storage.base import BlobStore

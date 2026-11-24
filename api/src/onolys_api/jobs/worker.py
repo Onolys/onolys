@@ -233,9 +233,15 @@ class TaskRunner:
         )  # fmt: skip
         self._safe(self._record, spec, p, status="failed", ended=self.clock(), error=code)
         label = spec.step or "run"
+        counted = None
+        if spec.scope == "run" and p.run_id:  # the refund already ran in `run.py`
+            try:
+                counted = self.repo.get_run(p.uid, p.sid, p.run_id).unit_kept
+            except NotFoundError:
+                pass
         self._safe(
             advance, self.repo, p.uid, p.sid, to="failed", step=label,
-            error=SessionError(code=code, step=label, kind=kind_for_code(code)),
+            error=SessionError(code=code, step=label, kind=kind_for_code(code), counted=counted),
         )  # fmt: skip
 
     @staticmethod

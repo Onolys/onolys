@@ -249,11 +249,8 @@ def make_validate_handler(
             ensure_alive(ctx)  # a DELETE during the writes above must not leave audio behind
 
         if session.interview_id:
-            # A10: the free first run is only for the interview's own recording: the uploaded
-            # audio must last as long as the relay recorded (within the tolerance)
-            ctx.repo.update_session(
-                uid, sid, {"free_run_void": not _matches_relay(ctx, session, seconds, fmt, probe)}
-            )
+            # interview sessions are never counted (03-failure-policy R5): the check only logs
+            _matches_relay(ctx, session, seconds, fmt, probe)
         ctx.repo.add_recording(
             uid,
             sid,

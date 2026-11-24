@@ -244,20 +244,13 @@ async def test_failed_validation_leaves_interview_linked_uploaded(settings, repo
 
 
 @pytest.mark.parametrize(
-    ("relay_s", "upload_s", "void"),
-    [
-        (300.0, 310.0, False),  # same recording: within the tolerance
-        (300.0, 330.0, False),  # exactly AI_TOLERANCE_SECONDS (30) apart
-        (300.0, 331.0, True),  # a different file
-        (120.0, 600.0, True),  # an arbitrary upload on a linked session
-        (None, 310.0, True),  # the relay never recorded a duration
-    ],
+    ("relay_s", "upload_s"),
+    [(300.0, 310.0), (300.0, 331.0), (120.0, 600.0), (None, 310.0)],
 )
-async def test_free_first_run_needs_audio_matching_the_relay_duration(
-    settings, repo, blobs, relay_s, upload_s, void
+async def test_linked_upload_proceeds_whatever_the_relay_duration(
+    settings, repo, blobs, relay_s, upload_s
 ):
     iid = interview(repo, duration_s=relay_s)
     sid = await upload(settings, repo, blobs, upload_s, iid)
     s = repo.get_session("alice", sid)
     assert s.state == "transcribing"
-    assert s.free_run_void is void

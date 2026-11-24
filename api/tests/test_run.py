@@ -550,3 +550,76 @@ async def test_no_report_text_in_session_status(env):
         "id", "uid", "state", "step", "progress", "error_code", "error_kind", "retries_left",
         "counted", "latest_report_version", "updated_at", "transcript_ready", "speaker_confirmed", "rating_submitted", "has_rating",
     }  # fmt: skip
+
+
+# ---- 03-failure-policy Task 3: `counted` on the failed session, interview never counted ----------
+
+
+class AlwaysDown(FakeEvaluation):
+    async def run(self, *a, **kw):
+        raise AdapterError("upstream_unavailable")
+
+
+async def test_transient_run_failure_refunds_and_is_not_counted(env):
+    swap_eval(env, AlwaysDown())
+    sid = await env.finished()
+    s = env.repo.get_session(env.uid, sid)
+    assert s.state == "failed" and s.error.kind == "transient" and s.error.counted is False
+    assert env.repo.get_status(env.uid, sid).counted is False
+    assert env.counters() == (0, 0)
+
+
+async def test_permanent_internal_run_failure_refunds_and_is_not_counted(env):
+    sid = await env.start()
+    env.repo.update_session(env.uid, sid, {"clinician_speaker": None})  # internal_error, no LLM
+    env.drain()
+    s = env.repo.get_session(env.uid, sid)
+    assert s.error.kind == "permanent_internal" and s.error.counted is False
+    assert env.counters() == (0, 0)
+
+
+async def test_user_file_failure_after_llm_keeps_the_unit_and_is_counted(env):
+    class BadFile(FakeEvaluation):
+        async def run(self, *a, **kw):
+            raise AdapterError("no_speech")
+
+    swap_eval(env, BadFile())
+    sid = await env.finished()
+    s = env.repo.get_session(env.uid, sid)
+    assert s.error.kind == "user_file" and s.error.counted is True
+    assert env.repo.get_status(env.uid, sid).counted is True
+    assert env.counters() == (0, 1)
+
+
+async def _interview_session(env):
+    sid = await env.new_session()
+    env.repo.update_session(env.uid, sid, {"interview_id": "iv1"})
+    await env.c.post(
+        f"/v1/sessions/{sid}/speakers/confirm", json={"clinician_speaker": "S1"}, headers=env.h
+    )
+    await env.c.put(
+        f"/v1/sessions/{sid}/rating", json={"final": True, "card": CARD}, headers=env.h
+    )
+    return sid
+
+
+async def test_interview_first_run_success_is_never_counted(env):
+    sid = await _interview_session(env)
+    (run,) = env.repo.list_runs(env.uid, sid)
+    assert run.counted is False and env.counters() == (1, 0)
+    env.drain()
+    assert env.repo.get_session(env.uid, sid).state == "report_ready"
+    assert env.counters() == (0, 0)
+
+
+async def test_interview_first_run_failure_is_never_counted(env):
+    class BadFile(FakeEvaluation):
+        async def run(self, *a, **kw):
+            raise AdapterError("no_speech")  # user_file after the LLM: would be counted otherwise
+
+    swap_eval(env, BadFile())
+    sid = await _interview_session(env)
+    env.drain()
+    s = env.repo.get_session(env.uid, sid)
+    assert s.state == "failed" and s.error.counted is False
+    assert env.counters() == (0, 0)

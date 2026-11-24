@@ -296,24 +296,6 @@ def test_auto_first_run_costs_the_session_n_runs(repo):  # noqa: F811
     assert user_counters(repo, uid, caps.utc_date()) == (1, 2)
 
 
-# ---- FX44 (A10): an interview session whose audio is not the relay's recording pays -----------
-
-
-def test_linked_session_with_unmatched_audio_is_charged(repo):  # noqa: F811
-    uid = f"u{uuid.uuid4().hex[:10]}"
-    sid = _linked_ready(repo, uid, interview_id="iv1", free_run_void=True)
-    maybe_start_first_run(repo, RecordingQueue(), uid, sid, mk_settings())
-    (run,) = repo.list_runs(uid, sid)
-    assert run.counted is True
-    assert user_counters(repo, uid, caps.utc_date()) == (1, 1)
-    # and it is held by the cap like any upload
-    sid2 = _linked_ready(repo, uid, interview_id="iv2", free_run_void=True)
-    maybe_start_first_run(repo, RecordingQueue(), uid, sid2, mk_settings(eval_cap_day=1))
-    assert repo.get_session(uid, sid2).first_run_id is None
-    r = _post_run(make_client(repo, mk_settings(eval_cap_day=1), RecordingQueue()), uid, sid2)
-    assert r.status_code == 429
-
-
 # ---- review R1: Try again after a failed FREE interview run stays free -------------------------
 
 
@@ -347,28 +329,14 @@ def test_try_again_after_failed_free_interview_run_is_free_even_at_eval_cap(repo
     assert repo.get_usage_doc(uid, date).runs == 0
 
 
-def test_try_again_after_failed_charged_run_is_still_charged(repo):  # noqa: F811
-    uid = f"u{uuid.uuid4().hex[:10]}"
-    date = caps.utc_date()
-    sid = _linked_ready(repo, uid, interview_id="iv1", free_run_void=True)
-    maybe_start_first_run(repo, RecordingQueue(), uid, sid, mk_settings())
-    (first,) = repo.list_runs(uid, sid)
-    assert first.counted is True
-    _fail_system(repo, uid, sid, first.run_id)
-    assert repo.get_usage_doc(uid, date).runs == 0  # refunded
-    r = _post_run(make_client(repo, mk_settings(eval_cap_day=0), RecordingQueue()), uid, sid)
-    assert r.status_code == 429  # a charged run is charged again
-
-
 def test_session_detail_exposes_free_run(repo):  # noqa: F811
     uid = f"u{uuid.uuid4().hex[:10]}"
     free = _linked_ready(repo, uid, interview_id="iv1")
-    void = _linked_ready(repo, uid, interview_id="iv2", free_run_void=True)
     plain = _linked_ready(repo, uid)
     h = {"Authorization": f"Bearer test:{uid}"}
     with TestClient(make_client(repo)) as c:
-        got = [c.get(f"/v1/sessions/{s}", headers=h).json()["free_run"] for s in (free, void, plain)]
-    assert got == [True, False, False]
+        got = [c.get(f"/v1/sessions/{s}", headers=h).json()["free_run"] for s in (free, plain)]
+    assert got == [True, False]
 
 
 # ---- review R2: an auto-start held by an active run says so, not "daily cap" -------------------

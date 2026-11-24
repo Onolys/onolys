@@ -715,7 +715,9 @@ class FirestoreRepo:
             user = user_ref.get(transaction=txn).to_dict() or {}
             day_ref = self._top("usage", f"{uid}_{day_key}") if day_key else None
             day = (day_ref.get(transaction=txn).to_dict() or {}) if day_ref else {}
-            txn.update(run_ref, {"released": True})
+            counted = run.get("counted", True)
+            refunded = bool(day_key) and refund and counted
+            txn.update(run_ref, {"released": True, "unit_kept": counted and not refunded})
             if day_key:
                 if user.get("active_runs", 0) > 0:
                     txn.set(user_ref, {"active_runs": user["active_runs"] - 1}, merge=True)
@@ -764,7 +766,7 @@ class FirestoreRepo:
             usage = usage_ref.get(transaction=txn).to_dict() or {}
             latest = [s for s in newest.get(transaction=txn) if s.id != DRAFT_ID]
             now = utcnow()
-            exempt = bool(sess.get("interview_id")) and not sess.get("free_run_void")
+            exempt = bool(sess.get("interview_id"))  # never counted (03-failure-policy R5)
             units = sess.get("n_runs", 1)
             decided = decide_start(user, usage, defaults, max_active, exempt, units)
             if decided != "ok":
@@ -841,7 +843,6 @@ class FirestoreRepo:
             # Try again after a failed free run stays free (review R1): the free rating is owed
             exempt = (
                 bool(sess.get("interview_id"))
-                and not sess.get("free_run_void")
                 and (not sess.get("first_run_id")
                      or (sess.get("state") == "failed" and first.get("counted") is False))
             )  # fmt: skip

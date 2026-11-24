@@ -171,9 +171,6 @@ class SessionDoc(Doc):
     retry_count: int = 0  # user-visible retries used; capped at MAX_SESSION_RETRIES (D4)
     client: ClientInfo = Field(default_factory=ClientInfo)  # web build / browser that created it
     interview_id: str | None = None  # set by the AI interview (SP10): its first run is free (SP11)
-    # set by `validate`: the upload is not the audio the interview's relay recorded, so the free
-    # first run is void (A10); an unset flag on an interview session means the free run stands
-    free_run_void: bool = False
     upload: UploadInfo | None = None
     steps: dict[str, StepRecord] = Field(default_factory=dict)
     warnings: list[str] = Field(default_factory=list)
@@ -280,6 +277,7 @@ class RunDoc(Doc):
     units: int = 1  # usage units charged when `counted` (= n_runs); a refund gives all back
     released: bool = False  # the cap slot was handed back: guards double release
     llm_started: bool = False  # the evaluation was called on some attempt: a unit is spent
+    unit_kept: bool | None = None  # set on release: a unit of the limit stays spent (None: open)
 
 
 class ReportDoc(Doc):

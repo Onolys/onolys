@@ -360,7 +360,7 @@ def get_session(id: ResourceId, request: Request, user: User) -> SessionDetail:
         n_runs=s.n_runs,
         preset=s.preset,
         interview_id=s.interview_id,
-        free_run=bool(s.interview_id) and not s.free_run_void,
+        free_run=bool(s.interview_id),
         created_at=s.created_at,
         updated_at=s.updated_at,
         links=links,

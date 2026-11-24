@@ -22,6 +22,7 @@ from onolys_api.auth.deps import AuthUser, current_user
 from onolys_api.coded_span import validate_coded_input
 from onolys_api.errors import ApiError, ErrorResponse
 from onolys_api.jobs import caps
+from onolys_api.jobs.charging import release_once
 from onolys_api.jobs.machine import (
     RUN_START_PROGRESS,
     advance,
@@ -30,7 +31,6 @@ from onolys_api.jobs.machine import (
     rating_final,
 )
 from onolys_api.jobs.queue import TaskPayload
-from onolys_api.jobs.run import release_once
 from onolys_api.presets import UnknownPreset
 from onolys_api.repo.base import NotFoundError
 from onolys_api.repo.limits import LimitDefaults

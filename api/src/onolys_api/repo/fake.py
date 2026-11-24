@@ -559,12 +559,12 @@ class FakeRepo:
                 raise NotFoundError()
             if d.get("released"):
                 return False
-            self._put(path, {**d, "released": True})
             date = d.get("cap_date") or date
+            counted = d.get("counted", True)
+            refunded = bool(date) and refund and counted
+            self._put(path, {**d, "released": True, "unit_kept": counted and not refunded})
             if date:
-                self.release_usage(
-                    uid, "eval", date, refund and d.get("counted", True), d.get("units", 1)
-                )
+                self.release_usage(uid, "eval", date, refunded, d.get("units", 1))
             return True
 
     def get_usage_doc(self, uid: str, date: str) -> UsageDoc:
@@ -588,7 +588,7 @@ class FakeRepo:
             user = self._get(f"users/{uid}") or {}
             usage = self._get(f"usage/{uid}_{date}") or {"uid": uid, "date": date, "runs": 0}
             now = utcnow()
-            exempt = bool(sess.get("interview_id")) and not sess.get("free_run_void")
+            exempt = bool(sess.get("interview_id"))  # never counted (03-failure-policy R5)
             units = sess.get("n_runs", 1)
             decided = decide_start(user, usage, defaults, max_active, exempt, units)
             if decided != "ok":
@@ -652,7 +652,6 @@ class FakeRepo:
             # Try again after a failed free run stays free (review R1): the free rating is owed
             exempt = (
                 bool(sess.get("interview_id"))
-                and not sess.get("free_run_void")
                 and (not sess.get("first_run_id")
                      or (sess.get("state") == "failed" and first is not None
                          and first.get("counted") is False))
