@@ -14,6 +14,7 @@ import { useApiClient } from "../../auth/useApiClient";
 import { ACTIONS, H1, LINK, LINK_BTN, NOTE, PAGE } from "../../components/classes";
 import { Field } from "../../components/Field";
 import { Notice } from "../../components/Notice";
+import { formatDate } from "../../lib/format";
 import { ErrorCard } from "../session/ErrorCard";
 import { ReportView as ReportDocument, type TurnsState } from "./ReportView";
 
@@ -108,7 +109,7 @@ function LoadedReport({ id, version }: { id: string; version: number }) {
 
   const newer = Number.isFinite(major(view.data.report_schema_version)) && major(view.data.report_schema_version) !== SUPPORTED_MAJOR;
   const h = report.header;
-  const date = (iso: string) => new Date(iso).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
+  const date = formatDate;
   const details = [
     h.stt ? [h.stt.provider, h.stt.model].filter(Boolean).join(" ") : null,
     h.preset,

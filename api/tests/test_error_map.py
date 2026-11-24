@@ -41,7 +41,7 @@ from test_worker import SID, payload, runner_with
 from onolys_api.adapters import AdapterError, FakeEvaluation
 from onolys_api.adapters.error_map import KIND_BY_CODE, PUBLIC_MESSAGES, classify, to_public
 from onolys_api.errors import ERROR_CODES
-from onolys_api.jobs.worker import MAX_ATTEMPTS
+from onolys_api.jobs.worker import MAX_ATTEMPTS, RetryableError
 
 # env is parametrized [fake, firestore]; [firestore] twins run only for tests/params marked
 # pytest.mark.firestore_smoke (see conftest.py).
@@ -172,10 +172,22 @@ def test_wrapper_records_code_and_one_failed_line(repo, caplog, make, stage, att
     def fn(ctx):
         raise exc
 
-    runner = runner_with(repo, fn, kind=step if stage == "stt" else "validate")
+    kind = step if stage == "stt" else "validate"
+    runner = runner_with(repo, fn, kind=kind)
+
+    # the app's attempt counter counts claims (A13): reach attempt N by N-1 earlier deliveries
+    # that each claimed, failed transiently and released the record
+    def earlier(ctx):
+        raise RetryableError(UPSTREAM)
+
+    for n in range(attempt - 1):
+        assert (
+            runner_with(repo, earlier, kind=kind).handle(payload(kind), retry_count=n).outcome
+            == "retry"
+        )
     caplog.clear()
     with caplog.at_level(logging.INFO):
-        r = runner.handle(payload(step if stage == "stt" else "validate"), retry_count=attempt - 1)
+        r = runner.handle(payload(kind), retry_count=attempt - 1)
     last = attempt >= MAX_ATTEMPTS
     if retryable and not last:
         assert (r.status_code, r.outcome) == (503, "retry") and failed(caplog) == []
@@ -234,7 +246,10 @@ def test_output_invalid_has_a_fixed_public_message_and_never_retries():
     failure = OutputInvalid(1, [ValidationIssue(path="/field", message="invalid type")])
     assert to_public(failure) == ("output_invalid", False)
     assert "output_invalid" in ERROR_CODES
-    assert PUBLIC_MESSAGES["output_invalid"] == "The engine returned an answer that did not match its schema."
+    assert (
+        PUBLIC_MESSAGES["output_invalid"]
+        == "The engine returned an answer that did not match its schema."
+    )
 
 
 # ---- 03-failure-policy R1: kind per source, stages validate/stt/run ----
@@ -294,7 +309,9 @@ def _output_invalid():
 
 
 @pytest.mark.parametrize("stage", ["validate", "stt", "run"])
-@pytest.mark.parametrize("make,code,kind", [c[1:] for c in KIND_CASES], ids=[c[0] for c in KIND_CASES])
+@pytest.mark.parametrize(
+    "make,code,kind", [c[1:] for c in KIND_CASES], ids=[c[0] for c in KIND_CASES]
+)
 def test_classify_table(make, code, kind, stage):
     f = classify(make(), stage)
     assert (f.code, f.kind) == (code, kind)

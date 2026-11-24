@@ -242,15 +242,15 @@ async def test_checkpoint_for_a_deleted_interview_on_client_drop_is_a_noop(tmp_p
     async with serve(env.app) as base:
         c = await connect(base)
         await ready(c)
-        real = env.repo.get_interview
+        real = env.repo.update_interview_if_conn
 
         def gone(*a, **k):
             raise NotFoundError()
 
-        monkeypatch.setattr(env.repo, "get_interview", gone)
+        monkeypatch.setattr(env.repo, "update_interview_if_conn", gone)
         await c.ws.close()
         await asyncio.sleep(0.1)
-        monkeypatch.setattr(env.repo, "get_interview", real)
+        monkeypatch.setattr(env.repo, "update_interview_if_conn", real)
     assert env.doc().disconnected_at is None  # nothing written, nothing crashed
     assert env.app.state.voice_connections == {}
 
@@ -282,7 +282,7 @@ async def test_unexpected_error_in_a_pump_task_surfaces_internal_error(tmp_path,
         def boom(*a, **k):
             raise RuntimeError("db exploded")
 
-        monkeypatch.setattr(env.repo, "update_interview", boom)
+        monkeypatch.setattr(env.repo, "update_interview_if_conn", boom)
         await env.clock.advance(10)  # poll checkpoint hits the failing write
         msgs = await c.drain_json(0.15)
         assert {"type": "error", "code": "internal_error"} in msgs

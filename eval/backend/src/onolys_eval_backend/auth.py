@@ -1,11 +1,17 @@
 """Separate Firebase user and Google service-account OIDC trust boundaries."""
 
+import asyncio
+import json
+import time
+from collections.abc import Callable
+from types import SimpleNamespace
 from typing import Any, Protocol
 
 from google.auth import exceptions
 from google.auth.transport.requests import Request
 from google.oauth2 import id_token
 from onolys_admin_auth import AdminAuthMiddleware, InvalidToken, UpstreamUnavailable
+from onolys_admin_auth.verifier import CertificateCache, token_key_id
 
 from onolys_eval_backend.config import EvalConfig
 
@@ -19,13 +25,34 @@ class TokenVerifier(Protocol):
 class TaskOidcVerifier:
     """google-auth validates signature, expiration, audience and Google issuer."""
 
-    def __init__(self, audience: str) -> None:
+    def __init__(
+        self,
+        audience: str,
+        *,
+        request=None,
+        clock: Callable[[], float] = time.monotonic,
+        ttl_s: float = 3600,
+    ) -> None:
         self.audience = audience
-        self.request = Request()
+        self.request = request or Request()
+        self._cache = CertificateCache(self._fetch_certs, ttl_s=ttl_s, clock=clock)
+
+    def _fetch_certs(self):
+        response = self.request(
+            "https://www.googleapis.com/oauth2/v1/certs", method="GET", timeout=5
+        )
+        if response.status != 200:
+            raise exceptions.TransportError("Certificate service unavailable")
+        return json.loads(response.data.decode("utf-8"))
 
     def verify(self, token: str) -> dict[str, Any]:
+        certs = self._cache.get(token_key_id(token))
+
+        def cached_request(*args, **kwargs):
+            return SimpleNamespace(status=200, data=json.dumps(certs).encode())
+
         try:
-            return id_token.verify_oauth2_token(token, self.request, audience=self.audience)
+            return id_token.verify_oauth2_token(token, cached_request, audience=self.audience)
         except exceptions.TransportError:
             raise UpstreamUnavailable from None
         except (ValueError, exceptions.GoogleAuthError):
@@ -70,7 +97,7 @@ class EvalAuthMiddleware:
         if len(authorization) != 2 or authorization[0].lower() != "bearer":
             return await self.admin._deny(send, 401, "unauthenticated", "Authentication required.")
         try:
-            claims = self.task_verifier.verify(authorization[1])
+            claims = await asyncio.to_thread(self.task_verifier.verify, authorization[1])
         except InvalidToken:
             return await self.admin._deny(send, 401, "unauthenticated", "Authentication required.")
         except UpstreamUnavailable:

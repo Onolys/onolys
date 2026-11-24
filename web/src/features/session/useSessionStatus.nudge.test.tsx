@@ -112,12 +112,71 @@ describe("useSessionStatus: stale transcribing nudge", () => {
     expect(get).toHaveBeenCalledTimes(2);
     warn.mockRestore();
   });
-
-  it("never nudges for other states", () => {
+  it.each([
+    ["created", 16],
+    ["uploading", 16],
+    ["validating", 23],
+    ["running", 23],
+  ] as const)("M-3: %s nudges at its server threshold (%i min), then at most once per 60 s", (state, min) => {
     mount();
-    act(() => emitter.emit("s1", doc("running")));
-    advance(20 * MIN);
+    act(() => emitter.emit("s1", doc(state)));
+    advance(min * MIN - 1);
     expect(get).not.toHaveBeenCalled();
+    advance(1);
+    expect(get).toHaveBeenCalledTimes(1);
+    advance(MIN - 1);
+    expect(get).toHaveBeenCalledTimes(1);
+    advance(1);
+    expect(get).toHaveBeenCalledTimes(2);
+  });
+
+  it("M-3: counts from stage_started_at when the doc has it", () => {
+    mount();
+    const started = new Date(Date.now() - 30 * MIN).toISOString();
+    act(() => emitter.emit("s1", { ...doc("running"), stage_started_at: started }));
+    advance(0);
+    expect(get).toHaveBeenCalledTimes(1);
+  });
+
+  it.each(["awaiting_input", "upload_incomplete", "report_ready", "failed"] as const)("never nudges for %s", (state) => {
+    mount();
+    act(() => emitter.emit("s1", doc(state)));
+    advance(60 * MIN);
+    expect(get).not.toHaveBeenCalled();
+  });
+});
+
+describe("useSessionStatus: updates held back while quiet (drop)", () => {
+  afterEach(() => {
+    quiet.current = false;
+  });
+
+  it("replays the latest held doc once quiet clears (a failed DELETE)", () => {
+    const { result } = mount();
+    act(() => emitter.emit("s1", doc("awaiting_input")));
+    expect(result.current).toMatchObject({ phase: "live", doc: { state: "awaiting_input" } });
+    quiet.current = true; // DELETE in flight
+    act(() => emitter.emit("s1", doc("running")));
+    act(() => emitter.emit("s1", doc("report_ready")));
+    advance(2_000);
+    expect(result.current).toMatchObject({ doc: { state: "awaiting_input" } }); // still held back
+    quiet.current = false; // DELETE failed
+    advance(1_000);
+    expect(result.current).toMatchObject({ phase: "live", doc: { state: "report_ready" } });
+  });
+
+  it("replays a held listener error as a drop (fallback) once quiet clears", async () => {
+    get.mockResolvedValue({ data: { status: "awaiting_input", progress: 50, flags: {} }, response: { ok: true } });
+    const { result } = mount();
+    act(() => emitter.emit("s1", doc("awaiting_input")));
+    quiet.current = true;
+    act(() => emitter.emitError("s1", new Error("blip")));
+    advance(1_000);
+    expect(result.current.phase).toBe("live");
+    quiet.current = false;
+    advance(1_000);
+    await act(async () => void (await vi.advanceTimersByTimeAsync(0)));
+    expect(result.current.phase).toBe("fallback");
   });
 });
 

@@ -5,6 +5,7 @@ from datetime import UTC, datetime
 from types import SimpleNamespace
 
 import pytest
+from fastapi.testclient import TestClient
 from onolys_engine_core.transcript_v1 import TranscriptV1
 from onolys_miti.stt import SttCompletion, SttParams, SttRun
 from test_app import AUTH, client
@@ -35,8 +36,13 @@ def transcript(roles=True):
 class Queue:
     def __init__(self):
         self.tasks = []
+        self.task_ids = set()
 
-    def enqueue(self, kind, payload, *, delay_seconds=0):
+    def enqueue(self, kind, payload, *, delay_seconds=0, task_id=None):
+        if task_id is not None:
+            if task_id in self.task_ids:
+                return
+            self.task_ids.add(task_id)
         self.tasks.append((kind, payload, delay_seconds))
 
 
@@ -286,7 +292,6 @@ def test_queue_failure_retries_persisted_stt_handle(services):
         raise RuntimeError("unavailable")
 
     services.queue.enqueue = unavailable
-    from fastapi.testclient import TestClient
     from test_app import ENV, TASK_CLAIMS, Verifier
 
     from onolys_eval_backend import create_app
@@ -437,3 +442,227 @@ def test_default_english_maps_to_supported_google_stt_locale_only(
     )
     services.routes = RouteRegistry({}, {"configured-prod": Preset({}, stt="selected")})
     assert services.stt_params(language).language == expected
+
+
+# --- LM-18 / D3 / M-7 / B7 ---------------------------------------------------------------
+
+
+class FakeClock:
+    def __init__(self):
+        from datetime import UTC, datetime
+
+        self.value = datetime(2026, 1, 1, tzinfo=UTC)
+
+    def __call__(self):
+        return self.value
+
+    def advance(self, seconds):
+        from datetime import timedelta
+
+        self.value += timedelta(seconds=seconds)
+
+
+@pytest.fixture
+def clock(monkeypatch):
+    from onolys_eval_backend import uploads
+
+    fake = FakeClock()
+    monkeypatch.setattr(uploads, "_now", fake)
+    return fake
+
+
+def test_endlessly_pending_transcription_stops_at_deadline(services, clock):
+    from onolys_eval_backend import uploads
+
+    c = client(services=services)
+    uid = upload(c, "x.mp3", b"ID3abc", "audio/mpeg").json()["upload_id"]
+
+    def task():
+        return c.post("/internal/tasks/transcribe", headers=AUTH, json={"upload_id": uid})
+
+    task()  # start
+    for _ in range(3):  # fake provider stays pending across fresh deliveries
+        clock.advance(60)
+        assert task().status_code == 200
+    enqueued = len(services.queue.tasks)
+    assert services.repository.get_upload(uid)["status"] == "transcribing"
+    clock.advance(uploads.TRANSCRIBE_DEADLINE_S)
+    assert task().status_code == 200
+    saved = services.repository.get_upload(uid)
+    assert saved["status"] == "failed" and saved["error"]["code"] == "transcription_timeout"
+    assert len(services.queue.tasks) == enqueued  # the chain ended: nothing re-enqueued
+    services.stt.complete = True
+    assert task().status_code == 200 and services.repository.get_upload(uid)["status"] == "failed"
+
+
+def test_lost_last_poll_is_reconciled_on_read(services, clock):
+    from onolys_eval_backend import uploads
+
+    c = client(services=services)
+    uid = upload(c, "x.mp3", b"ID3abc", "audio/mpeg").json()["upload_id"]
+    assert c.get(f"/v1/uploads/{uid}", headers=AUTH).json()["status"] == "transcribing"
+    clock.advance(uploads.TRANSCRIBE_DEADLINE_S + 1)
+    body = c.get(f"/v1/uploads/{uid}", headers=AUTH).json()
+    assert body["status"] == "failed" and body["error"]["code"] == "transcription_timeout"
+    assert services.repository.get_upload(uid)["status"] == "failed"
+
+
+def test_change_goal_limit_matches_run_request(services):
+    c = client(services=services)
+    assert upload(c, data={"change_goal": "g" * 4000}).status_code == 200
+    assert upload(c, data={"change_goal": "g" * 4001}).status_code == 422
+
+
+def test_multipart_audio_over_cloud_run_cap_gets_json_error(services, monkeypatch):
+    from onolys_eval_backend import uploads
+
+    monkeypatch.setattr(uploads, "MAX_MULTIPART_AUDIO_BYTES", 10)
+    response = upload(client(services=services), "x.wav", b"RIFF\x00\x00\x00\x00WAVEdata", "audio/wav")
+    assert response.status_code == 413
+    assert response.json()["error"]["code"] == "upload_too_large"
+    assert uploads.MAX_BODY_BYTES < 32 * 1024 * 1024
+
+
+def start_direct(c, **body):
+    payload = {"filename": "talk.wav", "content_type": "audio/wav", "size": 5000, **body}
+    return c.post("/v1/uploads/audio", headers=AUTH, json=payload)
+
+
+def test_direct_audio_upload_signed_url_then_complete_enqueues_transcription(services):
+    c = client(services=services)
+    started = start_direct(c, size=200 * 1024 * 1024, change_goal="goal")
+    assert started.status_code == 200, started.text
+    body = started.json()
+    uid = body["upload_id"]
+    assert body["status"] == "awaiting_upload" and body["upload"]["method"] == "PUT"
+    assert body["upload"]["url"].endswith(f"uploads/{uid}/input.wav")
+    assert body["upload"]["headers"]["x-goog-if-generation-match"] == "0"
+    assert services.queue.tasks == []
+    path = f"uploads/{uid}/input.wav"
+    # Not uploaded yet.
+    assert c.post(f"/v1/uploads/{uid}/complete", headers=AUTH).status_code == 409
+    services.bucket.write_bytes(path, b"RIFF\x00\x00\x00\x00WAVEdata", content_type="audio/wav")
+    done = c.post(f"/v1/uploads/{uid}/complete", headers=AUTH)
+    assert done.status_code == 200 and done.json()["status"] == "transcribing"
+    assert services.queue.tasks == [("transcribe", {"upload_id": uid}, 0)]
+    again = c.post(f"/v1/uploads/{uid}/complete", headers=AUTH)  # idempotent
+    assert again.status_code == 200 and len(services.queue.tasks) == 1
+    assert c.post("/internal/tasks/transcribe", headers=AUTH, json={"upload_id": uid}).status_code == 200
+    assert services.stt.starts[0][0].uri == f"gs://eval-test/{path}"
+
+
+def test_direct_audio_upload_rejects_wrong_bytes_and_bad_requests(services):
+    c = client(services=services)
+    uid = start_direct(c).json()["upload_id"]
+    services.bucket.write_bytes(
+        f"uploads/{uid}/input.wav", b"not audio at all....", content_type="audio/wav"
+    )
+    assert c.post(f"/v1/uploads/{uid}/complete", headers=AUTH).status_code == 422
+    assert services.repository.get_upload(uid)["status"] == "failed" and services.queue.tasks == []
+    for bad in (
+        {"filename": "x.exe"},
+        {"size": 0},
+        {"size": 301 * 1024 * 1024},
+        {"change_goal": "g" * 4001},
+        {"extra": 1},
+    ):
+        assert start_direct(c, **bad).status_code in {413, 415, 422}, bad
+
+
+def test_slow_storage_does_not_block_other_requests(services):
+    # B7: a blocking bucket write runs off the event loop, so /healthz answers meanwhile.
+    import threading
+
+    from test_app import ENV, TASK_CLAIMS, Verifier
+
+    from onolys_eval_backend import create_app
+
+    entered, release = threading.Event(), threading.Event()
+    original = services.bucket.write_bytes
+
+    def slow(*args, **kwargs):
+        entered.set()
+        assert release.wait(5)
+        return original(*args, **kwargs)
+
+    services.bucket.write_bytes = slow
+    app = create_app(
+        ENV, services=services, task_verifier=Verifier(TASK_CLAIMS),
+        verifier=Verifier({"email": "alice@example.com", "email_verified": True}),
+    )
+    import asyncio
+
+    import httpx
+
+    async def scenario():
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://t") as http:
+            post = asyncio.create_task(
+                http.post(
+                    "/v1/uploads",
+                    headers=AUTH,
+                    files={"file": ("s.json", json.dumps(transcript()).encode(), "application/json")},
+                )
+            )
+            assert await asyncio.to_thread(entered.wait, 1)
+            assert (await http.get("/healthz", headers=AUTH)).status_code == 200
+            release.set()
+            assert (await post).status_code == 200
+
+    asyncio.run(scenario())
+
+
+def test_direct_completion_retries_failed_enqueue_without_losing_work(services):
+    c = client(services=services)
+    uid = start_direct(c).json()["upload_id"]
+    services.bucket.write_bytes(f"uploads/{uid}/input.wav", b"RIFF1234WAVEdata", content_type="audio/wav")
+    enqueue = services.queue.enqueue
+
+    def unavailable(*args, **kwargs):
+        raise RuntimeError("queue unavailable")
+
+    services.queue.enqueue = unavailable
+    with pytest.raises(RuntimeError, match="queue unavailable"):
+        c.post(f"/v1/uploads/{uid}/complete", headers=AUTH)
+    services.queue.enqueue = enqueue
+    assert c.post(f"/v1/uploads/{uid}/complete", headers=AUTH).status_code == 200
+    assert len(services.queue.tasks) == 1
+
+
+def test_direct_completion_recovers_after_accepted_task_record_failure(services):
+    c = client(services=services)
+    uid = start_direct(c).json()["upload_id"]
+    services.bucket.write_bytes(f"uploads/{uid}/input.wav", b"RIFF1234WAVEdata", content_type="audio/wav")
+    update = services.repository.update_upload
+
+    def crash_record(upload_id, patch):
+        if patch.get("initial_task_enqueued"):
+            raise RuntimeError("record unavailable")
+        return update(upload_id, patch)
+
+    services.repository.update_upload = crash_record
+    with pytest.raises(RuntimeError, match="record unavailable"):
+        c.post(f"/v1/uploads/{uid}/complete", headers=AUTH)
+    assert len(services.queue.tasks) == 1
+    services.repository.update_upload = update
+    assert c.post(f"/v1/uploads/{uid}/complete", headers=AUTH).status_code == 200
+    assert len(services.queue.tasks) == 1
+
+
+def test_delayed_second_completion_does_not_regress_finished_transcription(services):
+    c = client(services=services)
+    uid = start_direct(c).json()["upload_id"]
+    services.bucket.write_bytes(f"uploads/{uid}/input.wav", b"RIFF1234WAVEdata", content_type="audio/wav")
+    size = services.bucket.size
+
+    def second_completes_first(path):
+        services.bucket.size = size
+        assert c.post(f"/v1/uploads/{uid}/complete", headers=AUTH).status_code == 200
+        services.repository.update_upload(uid, {"status": "ready"})
+        return size(path)
+
+    services.bucket.size = second_completes_first
+    response = c.post(f"/v1/uploads/{uid}/complete", headers=AUTH)
+    assert response.json()["status"] == "ready"
+    assert services.repository.get_upload(uid)["status"] == "ready"
+    assert len(services.queue.tasks) == 1

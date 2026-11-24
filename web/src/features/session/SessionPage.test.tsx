@@ -158,14 +158,16 @@ describe("session page: status listener", () => {
     await waitFor(() => expect(subscribed).toBeGreaterThanOrEqual(1));
     act(() => mockEmitter.emitError("s_nope", new Error("permission-denied")));
     const card = await screen.findByRole("alert");
-    expect(card).toHaveTextContent(/upload didn't go through, or the session no longer exists/i);
+    expect(card).toHaveTextContent(/we couldn't find this session/i);
+    expect(card).not.toHaveTextContent(/upload/i);
     expect(screen.getByRole("link", { name: /back to your sessions/i })).toHaveAttribute("href", "/sessions");
   });
 
   it("an unknown session id ends in the not-found card, not an endless spinner (E21)", async () => {
     open("s_nope");
     const card = await screen.findByRole("alert", undefined, { timeout: 4000 });
-    expect(card).toHaveTextContent(/upload didn't go through, or the session no longer exists/i);
+    expect(card).toHaveTextContent(/we couldn't find this session/i);
+    expect(card).not.toHaveTextContent(/upload/i);
   });
 
   it("a malformed session id (422 invalid_parameters) shows the same not-found card (E21)", async () => {
@@ -179,7 +181,8 @@ describe("session page: status listener", () => {
     );
     open("not-hex");
     const card = await screen.findByRole("alert", undefined, { timeout: 4000 });
-    expect(card).toHaveTextContent(/upload didn't go through, or the session no longer exists/i);
+    expect(card).toHaveTextContent(/we couldn't find this session/i);
+    expect(card).not.toHaveTextContent(/upload/i);
   });
 
   it("unsubscribes when the user leaves the page", async () => {
@@ -703,11 +706,12 @@ describe("session page: upload failed (PRD R11)", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent(/^Upload failed: We couldn't read this audio file/);
   });
 
-  it("a stale link without a stub shows the not-found notice with a way to start a new upload", async () => {
+  it("a stale link without a stub shows generic not-found copy (no upload blame, C7) with a way to start a new session", async () => {
     open("s_nope");
     const card = await screen.findByRole("alert", undefined, { timeout: 4000 });
-    expect(card).toHaveTextContent("This upload didn't go through, or the session no longer exists. Start a new upload.");
-    expect(screen.getByRole("link", { name: /start a new upload/i })).toHaveAttribute("href", "/sessions/new");
+    expect(card).toHaveTextContent("We couldn't find this session. It may have been deleted, or the link may be mistyped.");
+    expect(card).not.toHaveTextContent(/upload/i);
+    expect(screen.getByRole("link", { name: /start a new session/i })).toHaveAttribute("href", "/sessions/new");
   });
 });
 

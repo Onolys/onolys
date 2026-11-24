@@ -17,7 +17,12 @@ from pydantic import BaseModel, Field
 from onolys_api.auth.deps import AuthUser, current_user
 from onolys_api.errors import ApiError, ErrorDetail, ErrorResponse
 from onolys_api.jobs.first_run import maybe_start_first_run
-from onolys_api.jobs.machine import has_final_report, invalid_state, rating_final
+from onolys_api.jobs.machine import (
+    has_final_report,
+    invalid_state,
+    rating_final,
+    transition_plan,
+)
 from onolys_api.rating import SCHEMA_VERSION, Issue, has_content, validate_rating
 from onolys_api.repo.base import NotFoundError
 from onolys_api.repo.models import RatingDoc, RatingDraftDoc
@@ -118,29 +123,28 @@ def put_rating(id: ResourceId, body: RatingRequest, request: Request, user: User
         raise _invalid(issues)
     no_rating = body.no_rating or not has_content(body.card)
     rating_id = uuid4().hex
-    repo.put_rating_revision(
-        uid,
-        id,
-        rating_id,
-        RatingDoc(
-            card=body.card,
-            no_rating=no_rating,
-            has_rating=not no_rating,
-            schema_version=SCHEMA_VERSION,
-            created_at=now,
+    revision = RatingDoc(
+        card=body.card,
+        no_rating=no_rating,
+        has_rating=not no_rating,
+        schema_version=SCHEMA_VERSION,
+        created_at=now,
+    )
+
+    def _not_final(s) -> None:  # in the transaction: the loser of two racing submits gets 409
+        if s.rating_submitted or s.state == "report_ready" or s.latest_report_version:
+            raise rating_final()
+
+    # ONE transaction (LM-2): the final-check, the revision and the flags commit together.
+    repo.transition_session(
+        uid, id,
+        transition_plan(
+            flags={"rating_submitted": True, "has_rating": not no_rating},
+            extra_fields={"change_goal": body.card["change_goal"]},
+            guard=_not_final,
         ),
-    )
-    fields: dict[str, Any] = {
-        "change_goal": body.card["change_goal"],
-        "rating_submitted": True,
-        "has_rating": not no_rating,
-    }
-    repo.update_session(
-        uid,
-        id,
-        fields,
-        status={"rating_submitted": True, "has_rating": not no_rating},
-    )
+        children=((f"ratings/{rating_id}", revision.to_store(), True),),
+    )  # fmt: skip
     maybe_start_first_run(
         repo,
         getattr(request.app.state, "queue", None),

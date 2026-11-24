@@ -75,7 +75,7 @@ describe("AuthGate", () => {
     await screen.findByText("the app");
     const base = vi.fn(async () => new Response("{}", { status: 403 }));
     await session.createFetch(base as unknown as typeof fetch)("https://x", {});
-    expect(await screen.findByText(/not on the admin list/i)).toBeTruthy();
+    expect(await screen.findByText(/not allowed to use this app, or its email is not verified/i)).toBeTruthy();
     expect(screen.queryByText("the app")).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Sign out" }));
     await waitFor(() => expect(screen.getByRole("button", { name: "Sign in" })).toBeTruthy());
@@ -96,4 +96,17 @@ describe("AuthGate", () => {
     expect(all).not.toMatch(/createUserWithEmailAndPassword|multiFactor|MultiFactor|sendEmailVerification/);
     expect(all).not.toMatch(/from "firebase\/(?!app"|auth")/);
   });
+});
+
+it.each([
+  ['email_unverified', 'Verify your email, then sign out and sign in again.'],
+  ['not_allowlisted', 'This account is not on the app access list. Contact an administrator.'],
+  ['other', 'This account is not allowed to use this app, or its email is not verified.'],
+])('maps exact public denial code %s and preserves the response body', async (code, message) => {
+  const provider = createFakeProvider({ email: 'a@b.co' }); const session = createAuthSession(provider);
+  render(<AuthGate session={session}>{app}</AuthGate>); await screen.findByText('the app');
+  const body = { error: { code, message: 'server detail' } };
+  const response = await session.createFetch(vi.fn().mockResolvedValue(new Response(JSON.stringify(body), { status: 403 })))('https://api');
+  expect(await response.json()).toEqual(body);
+  expect(await screen.findByText(message)).toBeTruthy(); expect(screen.queryByText('the app')).toBeNull();
 });

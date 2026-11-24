@@ -80,15 +80,28 @@ class _Null(Exception):
     """Internal: a referenced value is missing."""
 
 
-def label_for(value: float | None, reference: Mapping[str, object] | None
-              ) -> Literal["below_fair", "fair", "good"] | None:
+def display_digits(fmt: object) -> int | None:
+    """Decimals a summary `format` ("0.0", "0.00", "percent") shows, as a value precision."""
+    if fmt == "percent":
+        return 2  # shown as whole percent
+    if isinstance(fmt, str) and fmt.startswith("0."):
+        return len(fmt) - 2
+    return None
+
+
+def label_for(value: float | None, reference: Mapping[str, object] | None,
+              ndigits: int | None = None) -> Literal["below_fair", "fair", "good"] | None:
     """Label `value` against a reference level `{fair, good, direction?}`.
 
     higher_better (default): >= good -> good, >= fair -> fair, else below_fair.
     lower_better: <= good -> good, <= fair -> fair, else below_fair. Boundaries inclusive.
+    With `ndigits`, `value` is first rounded to the precision it is shown with, so the label
+    always agrees with the displayed number (3.96 shown as 4.0 is not "fair").
     None value or no reference -> None."""
     if value is None or not reference:
         return None
+    if ndigits is not None:
+        value = round(value, ndigits)
     fair, good = float(reference["fair"]), float(reference["good"])  # type: ignore[arg-type]
     if reference.get("direction", "higher_better") == "lower_better":
         return "good" if value <= good else "fair" if value <= fair else "below_fair"

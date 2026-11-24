@@ -33,7 +33,7 @@ from onolys_miti import globals_pass as globals_mod
 from onolys_miti import miti
 from onolys_miti import tips as tips_mod
 from onolys_miti.build import build_report_no_rating
-from onolys_miti.formula import label_for
+from onolys_miti.formula import display_digits, label_for
 from onolys_miti.hashes import evaluation_prompt_hashes
 from onolys_miti.prepare import Prepared, prepare
 from onolys_miti.report import Report
@@ -106,7 +106,9 @@ def _stat(values: list[float]) -> Stat:
     return Stat(mean=statistics.fmean(values), min=min(values), max=max(values), values=values)
 
 
-def _summary_stat(values: list[float | None], ref: Reference | None) -> SummaryStat:
+def _summary_stat(
+    values: list[float | None], ref: Reference | None, fmt: object = None
+) -> SummaryStat:
     known = [v for v in values if v is not None]
     mean = statistics.fmean(known) if known else None
     return SummaryStat(
@@ -114,7 +116,7 @@ def _summary_stat(values: list[float | None], ref: Reference | None) -> SummaryS
         min=min(known) if known else None,
         max=max(known) if known else None,
         values=values,
-        label=label_for(mean, ref.model_dump() if ref else None),
+        label=label_for(mean, ref.model_dump() if ref else None, display_digits(fmt)),
         reference=ref,
     )
 
@@ -162,9 +164,12 @@ def aggregate(runs: list[RunResult]) -> Aggregate:
     if not runs:
         raise ValueError("aggregate needs at least one run")
     summaries = {}
+    formats = {s["id"]: s.get("format") for s in miti.MITI.data.get("summaries", [])}
     for sid in runs[0].summaries:
         ref = runs[0].summaries[sid].reference
-        summaries[sid] = _summary_stat([r.summaries[sid].value for r in runs], ref)
+        summaries[sid] = _summary_stat(
+            [r.summaries[sid].value for r in runs], ref, formats.get(sid)
+        )
     return Aggregate(
         counts={k: _stat([float(r.counts[k]) for r in runs]) for k in runs[0].counts},
         globals={k: _stat([float(r.globals[k].score) for r in runs]) for k in runs[0].globals},
@@ -181,9 +186,12 @@ async def _one_run(
     run_index: int,
     metrics: MetricsCollector,
     warmed: asyncio.Event,
+    deadline: float | None = None,
 ) -> RunResult:
     """Code pass and globals pass run together; the code pass sets `warmed` after its warm call."""
-    kw = {"language": language, "run_index": run_index, "metrics": metrics}
+    kw = {
+        "language": language, "run_index": run_index, "metrics": metrics, "deadline": deadline
+    }
     code_task = asyncio.ensure_future(
         code_mod.code_pass(client, prepared, params, warmed=warmed, **kw)
     )
@@ -302,7 +310,9 @@ async def _code(
         if i > 0:  # later runs start once the first run's warm call has returned
             await events[0].wait()
         try:
-            res = await _one_run(ctx.llm, prepared, params, lang_arg, i, metrics, events[i])
+            res = await _one_run(
+                ctx.llm, prepared, params, lang_arg, i, metrics, events[i], ctx.deadline
+            )
             log_event("miti.run", request_id=rid, run_index=i, status="ok")
             return res
         except _FAILURES as exc:
@@ -384,7 +394,8 @@ async def _run(
         _emit(progress_cb, "tips", "started", rid)
         try:
             art, tip_warnings = await tips_mod.generate_tips(
-                ctx.llm, transcript, speaker_map, result, metrics=ctx.metrics
+                ctx.llm, transcript, speaker_map, result, metrics=ctx.metrics,
+                deadline=ctx.deadline,
             )
         except BaseException:
             _emit(progress_cb, "tips", "failed", rid)

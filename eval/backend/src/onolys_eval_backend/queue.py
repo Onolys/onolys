@@ -10,14 +10,21 @@ from onolys_eval_backend.config import EvalConfig
 
 
 class TaskQueue(Protocol):
-    def enqueue(self, kind: str, payload: dict, *, delay_seconds: int = 0) -> None: ...
+    def enqueue(
+        self, kind: str, payload: dict, *, delay_seconds: int = 0, task_id: str | None = None
+    ) -> None: ...
 
 
 class InMemoryTaskQueue:
     def __init__(self):
         self.tasks: list[dict] = []
+        self._task_ids: set[str] = set()
 
-    def enqueue(self, kind, payload, *, delay_seconds=0):
+    def enqueue(self, kind, payload, *, delay_seconds=0, task_id=None):
+        if task_id is not None:
+            if task_id in self._task_ids:
+                return
+            self._task_ids.add(task_id)
         self.tasks.append(
             {"kind": kind, "payload": deepcopy(payload), "delay_seconds": delay_seconds}
         )
@@ -27,7 +34,7 @@ class CloudTasksQueue:
     def __init__(self, config: EvalConfig, client, *, now: Callable = lambda: datetime.now(UTC)):
         self.config, self.client, self.now = config, client, now
 
-    def enqueue(self, kind, payload, *, delay_seconds=0):
+    def enqueue(self, kind, payload, *, delay_seconds=0, task_id=None):
         if kind not in {"unit", "transcribe"}:
             raise ValueError("Unknown task kind")
         task = {
@@ -45,4 +52,12 @@ class CloudTasksQueue:
         }
         if delay_seconds:
             task["schedule_time"] = self.now() + timedelta(seconds=delay_seconds)
-        self.client.create_task(parent=self.config.tasks_queue, task=task)
+        if task_id is not None:
+            task["name"] = f"{self.config.tasks_queue}/tasks/{task_id}"
+        from google.api_core.exceptions import AlreadyExists
+
+        try:
+            self.client.create_task(parent=self.config.tasks_queue, task=task)
+        except AlreadyExists:
+            if task_id is None:
+                raise

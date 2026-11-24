@@ -207,3 +207,16 @@ def test_prompt_has_no_clinician_rating_or_diff(transcript, smap, result):
     t4 = next(t for t in user["clinician_turns"] if t["turn_id"] == "t4")
     assert t4["preceding_client_turn"]["turn_id"] == "t3"
     assert "temperature" not in req.__dict__ or req.temperature == 0.0
+
+
+def test_deadline_reaches_both_attempts(transcript, smap, result):
+    stub, seen = StubClient(), []
+
+    def handler(req):
+        seen.append(req)
+        return {"tips": good(1)}
+
+    for tag in ("tips:r0", "tips:r0:retry"):
+        stub.register(tag, handler)
+    asyncio.run(generate_tips(stub, transcript, smap, result, deadline=77.0))
+    assert len(seen) == 2 and [r.deadline for r in seen] == [77.0, 77.0]

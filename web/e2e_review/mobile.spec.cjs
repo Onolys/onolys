@@ -2,8 +2,8 @@ const { test, expect, devices } = require("@playwright/test");
 const { shot, FIX, signUp, spa, openUpload, hasHScroll, accountMenu } = require("./helpers.cjs");
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
-const { defaultBrowserType, ...iphone } = devices["iPhone 13"]; // run on chromium (only chromium is installed)
-test.use({ ...iphone, deviceScaleFactor: 1 });
+const { defaultBrowserType, ...iphone } = devices["iPhone 13"]; // keep viewport/touch coverage across the nightly browser matrix
+test.use({ ...iphone, isMobile: process.env.E2E_BROWSER !== "firefox", deviceScaleFactor: 1 });
 
 const PUBLIC = ["/login", "/signup", "/sample", "/nope", "/auth/action?mode=resetPassword&oobCode=x"];
 

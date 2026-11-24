@@ -13,7 +13,7 @@ name: pr-preview
 #    that serves traffic (Cloud Run v2 PATCH, updateMask=template: traffic and the pr-<N> tag are untouched), so Terraform sees no
 #    drift and a later template-based revision never starts in preview mode. The step runs even if the deploy step failed after
 #    creating the revision; pr-preview-cleanup.yml runs it again (no-op when already matching).
-#  - env/flags this workflow overrides (SERVICE_MODE, ADAPTERS, GIT_SHA, CORS_ORIGINS, --no-cpu-throttling) are also all
+#  - env/flags this workflow overrides (SERVICE_MODE, PR_PREVIEW, ADAPTERS, GIT_SHA, CORS_ORIGINS, --no-cpu-throttling) are also all
 #    re-specified by deploy-staging.yml (deploy-api inputs env_vars + flags), a second line of defence.
 #  - --no-traffic: preview revisions never get traffic; deploy-staging moves 100% to its own, explicitly named revision.
 #  - No shared concurrency group with deploy-staging on purpose: GitHub cancels the older PENDING run of a group, so a
@@ -172,7 +172,8 @@ jobs:
         run: |
           case "$IMAGE" in *@sha256:*) ;; *) echo "image must be pinned by digest" >&2; exit 1 ;; esac
           # Runs as the staging api SA with its secrets (the service template). Combined mode runs tasks in process (in-memory
-          # queue): the TASKS_*/WORKER_URL env inherited from the service are unused. Only these keys are overridden:
+          # queue). PR_PREVIEW explicitly opts into staging-only stub combined mode.
+          # The inherited TASKS_*/WORKER_URL env is unused by the queue. Only these keys are overridden:
           overrides="$(bash scripts/ci/pr_preview.sh env-overrides "$ADAPTERS" "$SHA" "$CHANNEL_URL")"
           for attempt in 1 2 3; do
             if out="$(gcloud run deploy "$SERVICE" \

@@ -1,12 +1,13 @@
 name: CI
 
 on:
+  workflow_call:
   pull_request:
   push:
     branches: [main]
 
 concurrency:
-  group: ci-${{ github.ref }}
+  group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 permissions:
@@ -29,6 +30,27 @@ jobs:
       frontend: ${{ steps.flags.outputs.frontend }}
       web: ${{ steps.flags.outputs.web }}
       infra: ${{ steps.flags.outputs.infra }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: flags
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          if [ "$EVENT" != "pull_request" ]; then
+            export FORCE_ALL=true
+            files=""
+          else
+            files="$(git diff --name-only "$BASE_SHA...$HEAD_SHA")"
+          fi
+          printf '%s\n' "$files" | bash scripts/ci/changes.sh
+
+  guards:
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
     steps:
       - uses: actions/checkout@v4
         with:
@@ -67,19 +89,8 @@ jobs:
         run: bash scripts/ci/test_pr_preview.sh
       - name: actionlint (workflows)
         run: bash <(curl -sSfL https://raw.githubusercontent.com/rhysd/actionlint/v1.7.7/scripts/download-actionlint.bash) 1.7.7 && ./actionlint -color
-      - id: flags
-        env:
-          EVENT: ${{ github.event_name }}
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-        run: |
-          if [ "$EVENT" = "push" ]; then
-            export FORCE_ALL=true
-            files=""
-          else
-            files="$(git diff --name-only "$BASE_SHA...$HEAD_SHA")"
-          fi
-          printf '%s\n' "$files" | bash scripts/ci/changes.sh
+      - name: Test CI tiers and required gate
+        run: python3 scripts/ci/test_ci_gate.py
 
   engine-core:
     needs: changes
@@ -182,6 +193,7 @@ jobs:
       - run: uv run --no-sync --package onolys-eval-backend ruff check eval/backend
       - run: uv run --no-sync --package onolys-eval-backend pytest eval/backend -m "not live"
       - name: Build eval image and verify offline runtime, auth and data isolation
+        if: github.event_name != 'pull_request'
         run: bash scripts/ci/test_eval_image.sh onolys-eval-backend:ci
 
   eval-web:
@@ -314,7 +326,6 @@ jobs:
         with:
           enable-cache: true
           cache-dependency-glob: uv.lock
-      - run: uv sync --frozen --package onolys-api
       - uses: actions/download-artifact@v4
         with:
           pattern: api-coverage-*
@@ -322,17 +333,17 @@ jobs:
           merge-multiple: true
       - name: Combine coverage and enforce the gate
         run: |
-          uv run --no-sync --package onolys-api coverage combine cov-data/unit.cov cov-data/emulator.cov
+          uvx --from coverage==7.17.3 coverage combine cov-data/unit.cov cov-data/emulator.cov
           {
             echo "### Coverage: onolys-api (unit + emulator combined)"
-            uv run --no-sync --package onolys-api coverage report --format=markdown
+            uvx --from coverage==7.17.3 coverage report --format=markdown
           } >> "$GITHUB_STEP_SUMMARY"
-          uv run --no-sync --package onolys-api coverage report --fail-under=94
+          uvx --from coverage==7.17.3 coverage report --fail-under=94
 
-  # Non-blocking: known-flaky emulator-contention tests. Job is green even when the step fails.
+  # Slow contention tests run on exact main candidates and nightly; failures remain visible.
   api-flaky:
     needs: changes
-    if: needs.changes.outputs.api == 'true'
+    if: needs.changes.outputs.api == 'true' && github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
@@ -363,7 +374,7 @@ jobs:
         run: npm install --prefix ~/.firebase-tools firebase-tools@${{ env.FIREBASE_TOOLS_VERSION }}
       - run: echo "$HOME/.firebase-tools/node_modules/.bin" >> "$GITHUB_PATH"
       - run: uv sync --frozen --package onolys-api
-      # Setup must fail loudly; only the pytest step below is allowed to fail.
+      # Setup and regression failures both fail the exact-candidate check.
       - name: Verify firebase-tools is usable
         run: firebase --version
       - name: Collect flaky tests (no emulator)
@@ -377,10 +388,9 @@ jobs:
           if [ $rc -eq 5 ]; then echo "no flaky tests"; echo "found=false" >> "$GITHUB_OUTPUT"; exit 0; fi
           if [ $rc -ne 0 ]; then exit $rc; fi
           echo "found=true" >> "$GITHUB_OUTPUT"
-      - name: pytest flaky (non-blocking)
+      - name: pytest contention regressions
         id: flaky_api
         if: steps.flaky_collect.outputs.found == 'true'
-        continue-on-error: true
         shell: bash
         run: |
           set +e
@@ -389,11 +399,6 @@ jobs:
           rc=$?
           if [ $rc -eq 5 ]; then echo "no flaky tests"; exit 0; fi
           exit $rc
-      - name: Warn on flaky api failures
-        if: steps.flaky_api.outcome == 'failure'
-        run: |
-          echo "::warning title=Flaky tests failed::api flaky tests failed (non-blocking). See this step's log; open a follow-up to fix the root cause."
-          echo "### :warning: api flaky tests failed (non-blocking)" >> "$GITHUB_STEP_SUMMARY"
 
   api-rules:
     needs: changes
@@ -431,7 +436,7 @@ jobs:
 
   api-image:
     needs: changes
-    if: needs.changes.outputs.api == 'true'
+    if: needs.changes.outputs.api == 'true' && github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -490,6 +495,7 @@ jobs:
       - run: uv run --no-sync --package onolys-admin-backend ruff check admin/backend
       - run: uv run --no-sync --package onolys-admin-backend pytest admin/backend
       - name: Image builds, rejects anonymous calls, refuses an empty allowlist, ships no eval data
+        if: github.event_name != 'pull_request'
         run: bash scripts/ci/test_admin_image.sh onolys-admin-backend:ci
 
   frontend:
@@ -510,6 +516,7 @@ jobs:
       - run: npm ci
       - run: npm run typecheck
       - run: npm test
+      - run: npm run build
 
   web:
     needs: changes
@@ -542,15 +549,6 @@ jobs:
             cat coverage-summary.txt
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
-      - name: vitest flaky (non-blocking)
-        id: flaky_web
-        continue-on-error: true   # never fails the job; surfaced by the warning step below
-        run: npm run test:flaky
-      - name: Warn on flaky web failures
-        if: steps.flaky_web.outcome == 'failure'
-        run: |
-          echo "::warning title=Flaky tests failed::web flaky tests failed (non-blocking). See this step's log; open a follow-up to fix the root cause."
-          echo "### :warning: web flaky tests failed (non-blocking)" >> "$GITHUB_STEP_SUMMARY"
       - run: npm run build
 
   # Real-browser suite (mock mode, no backend). Runs in parallel with `web`; blocking. Config: web/e2e_review/playwright.config.cjs
@@ -586,7 +584,12 @@ jobs:
         timeout-minutes: 3
         run: npx playwright install chromium
       - name: Playwright e2e (dev server project + CSP/visual/axe project on the built app under the prod CSP)
-        run: npm run e2e -- --trace off
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            npm run e2e -- --config e2e_review/playwright.smoke.config.cjs --trace off
+          else
+            npm run e2e -- --trace off
+          fi
       - name: Upload Playwright results and light/dark screenshots
         if: always()
         uses: actions/upload-artifact@v4
@@ -621,3 +624,22 @@ jobs:
         run: |
           uv sync --frozen --package onolys-admin-auth
           uv run --no-sync --package onolys-admin-auth pytest infra/scripts -q
+
+  required:
+    if: always()
+    needs: [changes, guards, engine-core, oneshot, miti, eval-core, eval-backend, eval-web, api-unit, api-emulator, api-coverage, api-flaky, api-rules, api-image, admin-auth, admin-backend, frontend, web, web-e2e, infra]
+    runs-on: ubuntu-latest
+    timeout-minutes: 1
+    permissions:
+      actions: read
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate every selected job and PR execution budget
+        env:
+          CI_NEEDS: ${{ toJSON(needs) }}
+          CI_EVENT: ${{ github.event_name }}
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          GH_RUN_ID: ${{ github.run_id }}
+        run: python3 scripts/ci/required_gate.py

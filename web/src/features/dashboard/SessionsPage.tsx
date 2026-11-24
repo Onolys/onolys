@@ -10,11 +10,12 @@ import { StatusChip } from "../../components/StatusChip";
 import { ratingEnabled } from "../../config";
 import { ErrorCard } from "../session/ErrorCard";
 import type { components } from "../../api/schema";
-import { STATUS_CHIP, sessionsRefetchInterval } from "./chips";
+import { formatDate } from "../../lib/format";
+import { chipFor, sessionsRefetchInterval } from "./chips";
 
 type SessionListItem = components["schemas"]["SessionListItem"];
 const PAGE = 20;
-const date = (iso: string) => new Date(iso).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
+const date = formatDate;
 
 export function SessionsPage() {
   const client = useApiClient();
@@ -71,7 +72,7 @@ export function SessionsPage() {
         <Card className="py-0">
           <ul className="m-0 grid list-none p-0">
             {items.map((s) => {
-              const chip = STATUS_CHIP[s.status];
+              const chip = chipFor(s.status);
               return (
                 <li key={s.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-border px-4 py-3 last:border-b-0">
                   <Link to={`/sessions/${s.id}`} className={`${LINK} flex min-h-11 items-center`}>

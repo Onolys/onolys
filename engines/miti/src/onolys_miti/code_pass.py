@@ -37,7 +37,9 @@ _OUTPUT_FORMAT = (
     "## Output format\n"
     'Reply with JSON only: {"volleys": [{"volley_id": "...", "utterances": '
     '[{"quote": "...", "code": "<code id or null>", "rationale": "..."}]}]}.\n'
-    "Return one entry per volley you were given, with utterances in text order. `quote` is "
+    "Return one entry per volley you were given: every volley id appears exactly once, in "
+    "the order given. A volley with nothing to code still appears, with an empty "
+    '"utterances" list (an empty list is allowed). Utterances are in text order. `quote` is '
     "copied verbatim from one clinician turn and never spans two turns. Use null for an "
     "utterance that earns no code."
 )
@@ -224,8 +226,10 @@ class _Pass:
         parts: RequestParts,
         run_index: int,
         metrics: MetricsCollector | None,
+        deadline: float | None = None,
     ) -> None:
         self.client, self.parts, self.run_index, self.metrics = client, parts, run_index, metrics
+        self.deadline = deadline
 
     async def _attempt(self, batch: list[Volley], tag: str) -> _Attempt:
         req = LLMRequest(
@@ -237,21 +241,24 @@ class _Pass:
             cache_prefixes=list(self.parts.cache_prefixes),
             unit=f"{batch[0].id}-{batch[-1].id}",
             max_tokens=self.parts.max_tokens,
+            deadline=self.deadline,
         )
         res = await self.client.complete_json(req, self.metrics)
         by_id = {v.id: v for v in batch}
+        returned = [vo.volley_id for vo in res.parsed.volleys]
+        if sorted(returned) != sorted(by_id):  # missing, duplicate or unknown volley ids
+            missing = sorted(set(by_id) - set(returned))
+            extra = sorted({i for i in returned if i not in by_id})
+            dupes = sorted({i for i in returned if returned.count(i) > 1})
+            raise LLMBadOutput(
+                f"incomplete volley coverage: missing={missing} unknown={extra} duplicate={dupes}"
+            )
         by_volley: dict[str, list[Instance]] = {}
         warnings: list[ResultWarning] = []
         total = dropped = 0
         for vo in res.parsed.volleys:
             total += len(vo.utterances)
-            volley = by_id.get(vo.volley_id)
-            if volley is None:  # unknown volley id: nothing to anchor to
-                dropped += len(vo.utterances)
-                warnings += [
-                    ResultWarning(code="quote_not_found", detail=f"{vo.volley_id}: unknown volley")
-                ] * len(vo.utterances)
-                continue
+            volley = by_id[vo.volley_id]
             insts, warns = _locate_volley(volley, vo.utterances)
             by_volley.setdefault(volley.id, []).extend(insts)
             warnings += warns
@@ -299,12 +306,13 @@ async def code_pass(
     run_index: int = 0,
     metrics: MetricsCollector | None = None,
     warmed: asyncio.Event | None = None,
+    deadline: float | None = None,
 ) -> CodePassResult:
     """Run the code pass for one run. Raises `CodePassFailed` when the run cannot be trusted.
     `warmed` (optional) is set once the warm (first) batch has returned, so other runs can
     start their own fan-out against a written cache."""
     parts = build_requests_parts(params, language)
-    runner = _Pass(client, parts, run_index, metrics)
+    runner = _Pass(client, parts, run_index, metrics, deadline)
     size = parts.volleys_per_call
     batches = [prepared.volleys[i : i + size] for i in range(0, len(prepared.volleys), size)]
     if not batches:

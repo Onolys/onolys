@@ -1,5 +1,14 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { activeUploadCount, getJob, registerJob, UploadJob, type UploadTarget } from "./uploader";
+import { ApiError, messageForCode } from "../../api/errors";
+import {
+  activeUploadCount,
+  dropJob,
+  getJob,
+  registerJob,
+  transferTimeoutMs,
+  UploadJob,
+  type UploadTarget,
+} from "./uploader";
 
 class FakeXhr {
   static all: FakeXhr[] = [];
@@ -8,6 +17,7 @@ class FakeXhr {
   headers: Record<string, string> = {};
   body: unknown;
   status = 0;
+  timeout = 0;
   aborted = false;
   onload: (() => void) | null = null;
   onerror: (() => void) | null = null;
@@ -53,13 +63,16 @@ const target = (n: number): UploadTarget => ({
 const tick = () => new Promise((r) => setTimeout(r, 0));
 const last = () => FakeXhr.all[FakeXhr.all.length - 1]!;
 
-function make(opts: { fresh?: number } = {}) {
+const noDelay = async () => undefined;
+
+function make(opts: { fresh?: number; delay?: (ms: number) => Promise<void>; file?: Blob } = {}) {
   let n = opts.fresh ?? 1;
   const requestTarget = vi.fn(async () => target(++n));
   const complete = vi.fn(async () => undefined);
   const job = new UploadJob({
-    file,
+    file: opts.file ?? file,
     first: target(1),
+    delay: opts.delay ?? noDelay,
     requestTarget,
     complete,
     createXhr: () => new FakeXhr() as unknown as XMLHttpRequest,
@@ -171,6 +184,114 @@ describe("UploadJob", () => {
     expect(FakeXhr.all).toHaveLength(1);
     expect(complete).toHaveBeenCalledTimes(2);
     expect(job.getState().phase).toBe("done");
+  });
+});
+
+describe("UploadJob hardening (C12, C13, LM-14)", () => {
+  it("C13: automatic retries back off exponentially instead of firing back to back", async () => {
+    const gates: Array<() => void> = [];
+    const delay = vi.fn(() => new Promise<void>((r) => gates.push(r)));
+    const { job } = make({ delay });
+    void job.start();
+    await tick();
+    last().fail();
+    await tick();
+    expect(delay).toHaveBeenLastCalledWith(1000);
+    expect(FakeXhr.all).toHaveLength(1); // still waiting
+    gates[0]!();
+    await tick();
+    expect(FakeXhr.all).toHaveLength(2);
+    last().fail();
+    await tick();
+    expect(delay).toHaveBeenLastCalledWith(2000);
+    expect(FakeXhr.all).toHaveLength(2);
+    gates[1]!();
+    await tick();
+    expect(FakeXhr.all).toHaveLength(3);
+  });
+
+  it("C13: cancel during the backoff never starts the next PUT", async () => {
+    let gate: () => void = () => {};
+    const delay = vi.fn(() => new Promise<void>((r) => (gate = r)));
+    const { job } = make({ delay });
+    void job.start();
+    await tick();
+    last().fail();
+    await tick();
+    job.cancel();
+    gate();
+    await tick();
+    expect(FakeXhr.all).toHaveLength(1);
+    expect(job.getState().phase).toBe("cancelled");
+  });
+
+  it("LM-14: sets a transfer deadline that scales with the file size", async () => {
+    expect(transferTimeoutMs(1000)).toBe(5 * 60_000);
+    expect(transferTimeoutMs(300 * 1024 * 1024)).toBe(2_400_000);
+    const { job } = make();
+    void job.start();
+    await tick();
+    expect(last().timeout).toBe(5 * 60_000);
+  });
+
+  it("LM-14: releases the File once the transfer is done, even when complete() fails", async () => {
+    const { job, complete } = make();
+    complete.mockRejectedValueOnce(new Error("boom"));
+    expect(job.holdsFile).toBe(true);
+    void job.start();
+    await tick();
+    last().finish(200);
+    await tick();
+    expect(job.getState().phase).toBe("failed");
+    expect(job.holdsFile).toBe(false);
+    void job.retry();
+    await tick();
+    expect(job.getState().phase).toBe("done");
+  });
+
+  it("LM-14: a settled job is evicted once nothing observes it; dropJob removes any job", async () => {
+    const { job } = make();
+    registerJob("s-evict", job);
+    const off = job.subscribe(() => undefined);
+    void job.start();
+    await tick();
+    last().finish(200);
+    await tick();
+    expect(job.getState().phase).toBe("done");
+    expect(getJob("s-evict")).toBe(job); // still observed
+    off();
+    await tick();
+    expect(getJob("s-evict")).toBeUndefined();
+
+    const unobserved = make().job;
+    registerJob("s-drop", unobserved);
+    dropJob("s-drop");
+    expect(getJob("s-drop")).toBeUndefined();
+  });
+
+  it("LM-14: registering a job sweeps finished jobs nobody observes", async () => {
+    const { job } = make();
+    registerJob("s-old", job);
+    void job.start();
+    await tick();
+    last().finish(200);
+    await tick();
+    registerJob("s-new", make().job);
+    expect(getJob("s-old")).toBeUndefined();
+    dropJob("s-new");
+  });
+
+  it("C12: a complete() failure carries the mapped API error into the state", async () => {
+    const { job, complete } = make();
+    complete.mockRejectedValueOnce(new ApiError(409, "invalid_state", []));
+    void job.start();
+    await tick();
+    last().finish(200);
+    await tick();
+    expect(job.getState()).toMatchObject({ phase: "failed", error: { code: "invalid_state", message: messageForCode("invalid_state") } });
+    void job.retry();
+    await tick();
+    expect(job.getState().error).toBeUndefined();
   });
 });
 

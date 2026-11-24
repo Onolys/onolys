@@ -383,8 +383,8 @@ def test_named_text_upload_with_multiple_clients_runs_without_losing_speakers(se
 
     engine.run = capture
     c = client(services=services)
-    labels = ["Alex", *clients, "Alex"]
-    texts = ["synthetic clinician words " * 20, *[f"synthetic client {i} words" for i in range(len(clients))], "synthetic closing words"]
+    labels = ["Alex", *clients, "Alex", *clients]
+    texts = ["synthetic clinician words " * 20, *[f"synthetic client {i} words" for i in range(len(clients))], "synthetic closing words", *[f"synthetic client {i} closing words" for i in range(len(clients))]]
     raw = "\n".join(f"{label}: {text}" for label, text in zip(labels, texts, strict=True))
     response = c.post(
         "/v1/uploads", headers=AUTH,
@@ -406,7 +406,7 @@ def test_named_text_upload_with_multiple_clients_runs_without_losing_speakers(se
     confirmed = services.bucket.read_json(uploaded["transcript_path"])
     assert [turn["speaker"] for turn in confirmed["turns"]] == labels
     assert [turn["text"] for turn in confirmed["turns"]] == [text.strip() for text in texts]
-    assert [turn["role"] for turn in confirmed["turns"]] == ["clinician", *["client"] * len(clients), "clinician"]
+    assert [turn["role"] for turn in confirmed["turns"]] == ["clinician", *["client"] * len(clients), "clinician", *["client"] * len(clients)]
     response = start(c, **selection)
     assert response.status_code == 200, response.text
     rid = response.json()["run_id"]
@@ -480,7 +480,7 @@ def test_bad_upload_span_before_writes(services):
 def test_all_cancelled_and_mixed_failure_finalization(services):
     c = client(services=services)
     rid = start(c).json()["run_id"]
-    assert c.post(f"/v1/runs/{rid}/cancel", headers=AUTH).json()["status"] == "failed"
+    assert c.post(f"/v1/runs/{rid}/cancel", headers=AUTH).json()["status"] == "cancelled"
     assert services.repository.get_run(rid)["cancelled_units"] == 2
     assert all(u["status"] == "cancelled" for u in services.repository.list_units(rid).values())
     services.fake_engine = FakeEngine(fail=True)
@@ -692,7 +692,7 @@ def test_success_spills_large_output_and_uses_model_price_fallback(services):
     assert dispatch(c, rid, uid).status_code == 200
     unit = services.repository.get_unit(rid, uid)
     assert unit["status"] == "done" and unit["output"] is None
-    assert unit["output_ref"] == f"runs/{rid}/{uid}.json"
+    assert unit["output_ref"] == f"runs/{rid}/{uid}/{unit['lease_owner']}.json"
     assert len(load_output(services.bucket, unit)["tips"][0]["observation"]) == INLINE_OUTPUT_LIMIT
     assert unit["cost_usd_est"] == pytest.approx((10 * 2 + 2 * 8) / 1_000_000)
     assert unit["unpriced"] is False
@@ -767,15 +767,33 @@ def test_dataset_full_session_null_span_creates_and_executes_human_unit(services
     assert services.repository.get_unit(rid, uid)["scores"]["counts"] == gold()["counts"]
 
 
-def test_dataset_session_without_gold_is_422_without_orphans(services):
-    # Human is auto-added for datasets, so a missing gold must be rejected cleanly (no
-    # TypeError/503) even when the body omits `human`.
+def test_dataset_session_without_gold_runs_without_human_unit(services):
+    # LM-11: human is only auto-added when every selected session has gold.
+    services.bucket._objects.pop("datasets/synthetic/one/gold.json")
+    response = start(client(services=services), engines=["miti"])
+    assert response.status_code == 200, response.text
+    run = services.repository.get_run(response.json()["run_id"])
+    assert run["engines"] == ["miti"]
+    assert all(u["engine"] != "human" for u in services.repository.list_units(response.json()["run_id"]).values())
+
+
+def test_explicit_human_without_gold_is_422_without_orphans(services):
     services.bucket._objects.pop("datasets/synthetic/one/gold.json")
     before = services.bucket.list("")
-    response = start(client(services=services), engines=["miti"])
-    assert response.status_code == 422, response.text
+    response = start(client(services=services), engines=["human", "miti"])
+    assert response.status_code == 422 and "gold" in response.text
     assert services.repository.list_runs() == {} and services.queue.tasks == []
     assert services.bucket.list("") == before
+
+
+def test_oneshot_without_change_goal_is_422_before_writes(services):
+    # B15: an empty goal would fail every one-shot unit at execution.
+    saved_upload(services)
+    services.repository.update_upload("saved", {"change_goal": ""})
+    before = services.bucket.list("")
+    response = start(client(services=services), input={"upload_id": "saved"}, engines=["oneshot:miti"])
+    assert response.status_code == 422 and "change goal" in response.text
+    assert services.repository.list_runs() == {} and services.bucket.list("") == before
 
 
 def test_combo_unit_executes_on_combo_routes(services):
@@ -1059,3 +1077,138 @@ def test_sibling_units_unaffected(services):
     got = [services.repository.get_unit(rid, u) for u in units]
     assert sorted(u["attempts"] for u in got if u["engine"] != "human") == [1, 2]
     assert all(u["status"] == "done" for u in got)
+
+
+# --- H-6: leases and fenced completion -------------------------------------------------
+
+import onolys_eval_backend.runs as runs_mod  # noqa: E402
+
+
+@pytest.fixture
+def clock(monkeypatch):
+    t = [1_000_000.0]
+    monkeypatch.setattr(runs_mod, "_epoch", lambda: t[0])
+    return t
+
+
+def one_unit(services, c):
+    rid = start(c, engines=["oneshot:miti"]).json()["run_id"]
+    uid = next(iter(services.repository.list_units(rid)))
+    return rid, uid
+
+
+def test_cancelled_attempt_frees_lease_and_redelivery_completes(services, clock):
+    engine = services.fake_engine = FakeEngine()
+    original = engine.run
+
+    async def interrupted(*args, **kwargs):
+        engine.run = original
+        raise asyncio.CancelledError
+
+    engine.run = interrupted
+    c = client(services=services)
+    rid, uid = one_unit(services, c)
+    with pytest.raises(asyncio.CancelledError):
+        asyncio.run(runs_mod.execute_unit(services, rid, uid))
+    assert services.repository.get_unit(rid, uid)["status"] == "running"
+    assert dispatch(c, rid, uid).status_code == 200
+    assert services.repository.get_unit(rid, uid)["status"] == "done"
+    assert services.repository.get_run(rid)["completed_units"] == 1
+
+
+def test_live_lease_defers_then_dead_owner_is_reclaimed(services, clock):
+    engine = services.fake_engine = FakeEngine()
+    c = client(services=services)
+    rid, uid = one_unit(services, c)
+    # A crashed owner: claimed, never finished, lease still live.
+    services.repository.update_unit(
+        rid,
+        uid,
+        {"status": "running", "lease_owner": "dead", "lease_expires_at": clock[0] + 960, "claims": 1},
+    )
+    queued = len(services.queue.tasks)
+    assert dispatch(c, rid, uid).json() == {"status": "deferred"}
+    assert engine.calls == [] and len(services.queue.tasks) == queued + 1
+    assert services.queue.tasks[-1]["delay_seconds"] >= 960
+    clock[0] += 961
+    assert dispatch(c, rid, uid).json() == {"status": "ok"}
+    unit = services.repository.get_unit(rid, uid)
+    assert unit["status"] == "done" and unit["claims"] == 2 and len(engine.calls) == 1
+
+
+def test_stale_owner_cannot_overwrite_new_owner_or_double_count(services, clock):
+    engine = services.fake_engine = FakeEngine()
+    original = engine.run
+    entered, release = Event(), Event()
+
+    async def first_blocks(*args, **kwargs):
+        engine.run = original
+        entered.set()
+        release.wait(5)
+        return await original(*args, **kwargs)
+
+    engine.run = first_blocks
+    c = client(services=services)
+    rid, uid = one_unit(services, c)
+    with ThreadPoolExecutor() as pool:
+        first = pool.submit(asyncio.run, runs_mod.execute_unit(services, rid, uid))
+        assert entered.wait(5)
+        clock[0] += 961  # first attempt's lease expires while it is stuck
+        asyncio.run(runs_mod.execute_unit(services, rid, uid))
+        assert services.repository.get_run(rid)["completed_units"] == 1
+        release.set()
+        first.result()
+    run = services.repository.get_run(rid)
+    assert run["completed_units"] == 1 and run["done_units"] == 1
+    assert run["usage"]["calls"] == 1  # the superseded attempt's spend is not added twice
+
+
+def test_repeatedly_expired_claims_fail_the_unit_once(services, clock):
+    services.fake_engine = FakeEngine()
+    c = client(services=services)
+    rid, uid = one_unit(services, c)
+    services.repository.update_unit(
+        rid, uid, {"status": "running", "lease_owner": "dead", "lease_expires_at": 1.0, "claims": 3}
+    )
+    assert dispatch(c, rid, uid).status_code == 200
+    unit = services.repository.get_unit(rid, uid)
+    assert unit["status"] == "failed" and unit["error"]["code"] == "lease_expired"
+    assert services.repository.get_run(rid)["completed_units"] == 1
+
+
+def test_expired_claim_on_cancelled_run_is_cancelled_not_rerun(services, clock):
+    engine = services.fake_engine = FakeEngine()
+    c = client(services=services)
+    rid, uid = one_unit(services, c)
+    services.repository.update_unit(
+        rid, uid, {"status": "running", "lease_owner": "dead", "lease_expires_at": 1.0, "claims": 1}
+    )
+    services.repository.cancel_run(rid)
+    assert dispatch(c, rid, uid).status_code == 200
+    assert services.repository.get_unit(rid, uid)["status"] == "cancelled" and engine.calls == []
+    assert services.repository.get_run(rid)["cancelled_units"] == 1
+
+
+def test_blocking_storage_does_not_stall_the_event_loop(services, clock):
+    # B7: bucket reads run off the loop, so an independent coroutine keeps running.
+    services.fake_engine = FakeEngine()
+    c = client(services=services)
+    rid, uid = start(c, engines=["human"]).json()["run_id"], "u0000"
+    entered, release = Event(), Event()
+    original = services.bucket.read_json
+
+    def slow(path):
+        entered.set()
+        assert release.wait(5)
+        return original(path)
+
+    services.bucket.read_json = slow
+
+    async def scenario():
+        task = asyncio.create_task(runs_mod.execute_unit(services, rid, uid))
+        assert await asyncio.to_thread(entered.wait, 1)
+        # The loop stayed responsive while the read blocked.
+        release.set()
+        await task
+
+    asyncio.run(scenario())

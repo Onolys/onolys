@@ -22,8 +22,12 @@ export const STATUS_CHIP: Record<State, StatusChip> = {
   deleting: { text: "Deleting", tone: "progress" },
 };
 
+/** A status this build does not know (a newer server) reads neutral instead of crashing the list. */
+const UNKNOWN_CHIP: StatusChip = { text: "Status unavailable", tone: "neutral" };
+export const chipFor = (status: State): StatusChip => STATUS_CHIP[status] ?? UNKNOWN_CHIP;
+
 /** Dashboard auto-refresh (D8): poll while any listed session is still moving. */
 export const DASHBOARD_POLL_MS = 10_000;
 export function sessionsRefetchInterval(items: { status: State }[] | undefined): number | false {
-  return items?.some((s) => STATUS_CHIP[s.status].tone === "progress") ? DASHBOARD_POLL_MS : false;
+  return items?.some((s) => chipFor(s.status).tone === "progress") ? DASHBOARD_POLL_MS : false;
 }

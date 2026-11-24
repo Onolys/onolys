@@ -42,6 +42,25 @@ def spy(repo):
         orig(uid, sid, fields, status=status)
 
     repo.update_session = update_session
+
+    orig_publish = repo.publish_report
+
+    def publish_report(uid, sid, run_id, doc, run_fields, plan_for, date):
+        # Firestore writes the final status inside its transaction, not via update_session.
+        def record(version):
+            plan = plan_for(version)
+
+            def wrapped(s, st):
+                result = plan(s, st)
+                if result and result[1] and "progress" in result[1]:
+                    repo.progress.append(result[1]["progress"])
+                return result
+
+            return wrapped
+
+        return orig_publish(uid, sid, run_id, doc, run_fields, record, date)
+
+    repo.publish_report = publish_report
     return repo
 
 
@@ -245,6 +264,23 @@ async def test_code_failure_fails_run_and_session_and_refunds_the_system_failure
     assert env.repo.list_reports(env.uid, sid) == []
     assert env.counters() == (0, 0)  # system failure after the LLM call: slot and unit refunded
     assert (await env.c.get(f"/v1/sessions/{sid}/reports/1", headers=env.h)).status_code == 404
+
+
+async def test_a_release_failure_on_the_final_attempt_is_retried_by_the_worker(env, monkeypatch):
+    sid = await env.start("[fail:code]")
+    real, n = env.repo.release_run_slot, []
+
+    def flaky(*a, **kw):
+        n.append(1)
+        if len(n) == 1:
+            raise RuntimeError("firestore down")  # the in-handler release
+        return real(*a, **kw)
+
+    monkeypatch.setattr(env.repo, "release_run_slot", flaky)
+    env.drain()
+    assert env.repo.get_session(env.uid, sid).state == "failed"
+    (run,) = env.repo.list_runs(env.uid, sid)
+    assert run.released is True and env.counters()[0] == 0  # no leaked cap slot (M-2)
 
 
 async def test_try_again_after_a_failure_reuses_transcript_and_stored_rating(env):
@@ -463,20 +499,21 @@ async def test_slot_is_kept_while_a_retry_is_pending_and_released_after(env):
     assert env.counters() == (0, 1)
 
 
-async def test_retry_after_the_report_was_stored_only_finishes_the_bookkeeping(env):
+async def test_publish_failure_leaves_no_visible_report_and_the_retry_publishes(env):
     ev = Capture()
     swap_eval(env, ev)
-    orig, boom = env.repo.update_run, []
+    orig, boom = env.repo.publish_report, []
 
-    def update_run(uid, sid, run_id, fields):
-        if "artifacts_prefix" in fields and not boom:  # report stored, then the worker dies
+    def publish_report(uid, sid, *a, **kw):
+        if not boom:  # the worker dies before the publication commits (M-11)
             boom.append(1)
             raise AdapterError("upstream_unavailable")
-        orig(uid, sid, run_id, fields)
+        assert env.repo.list_reports(uid, sid) == []  # nothing was visible in between
+        return orig(uid, sid, *a, **kw)
 
-    env.repo.update_run = update_run
+    env.repo.publish_report = publish_report
     sid = await env.finished()
-    assert ev.calls == 1  # the retry did not evaluate again
+    assert ev.calls == 2  # nothing was committed, so the retry evaluates again
     assert len(env.repo.list_reports(env.uid, sid)) == 1
     s = env.repo.get_session(env.uid, sid)
     assert s.state == "report_ready" and s.latest_report_version == 1
@@ -659,3 +696,44 @@ async def test_interview_first_run_failure_is_never_counted(env):
     s = env.repo.get_session(env.uid, sid)
     assert s.state == "failed" and s.error.counted is False
     assert env.counters() == (0, 0)
+
+
+async def test_cancel_after_the_last_active_check_publishes_no_report(env, monkeypatch):
+    """M-11: a cancel landing between the final `ensure_active` and the publication wins."""
+    import inspect
+
+    from onolys_api.jobs import run as run_mod
+    from onolys_api.repo.limits import LimitDefaults
+
+    real = run_mod.ensure_active
+
+    def late_cancel(repo, blobs, uid, sid):
+        real(repo, blobs, uid, sid)
+        if inspect.stack()[1].function == "_evaluate":  # the check right before the publication
+            repo.cancel_session(uid, sid, caps.utc_date(), LimitDefaults(10, 5))
+
+    monkeypatch.setattr(run_mod, "ensure_active", late_cancel)
+    sid = await env.finished()
+    assert env.repo.list_reports(env.uid, sid) == []
+    s = env.repo.get_session(env.uid, sid)
+    assert s.state == "cancelled" and s.latest_report_version is None
+    assert env.counters()[0] == 0  # the slot is free
+
+
+async def test_failed_run_persists_completed_call_metrics(env):
+    from onolys_engine_core.errors import InputError
+    from onolys_engine_core.llm import LLMRequest, MetricsCollector, Usage
+
+    class RecordedFailure(FakeEvaluation):
+        async def run(self, ctx, *args, **kwargs):
+            ctx.metrics = MetricsCollector()
+            ctx.metrics.record(LLMRequest(tier="mid", system="", user="", response_schema={}),
+                               "fixture", Usage(input_tokens=11, cost_usd=0.02), 1, 1, True)
+            raise InputError("fixture failure")
+
+    swap_eval(env, RecordedFailure())
+    sid = await env.start()
+    env.drain()
+    run = env.repo.list_runs(env.uid, sid)[0]
+    assert run.status == "failed"
+    assert run.run_info["metrics"]["records"][0]["input_tokens"] == 11

@@ -7,7 +7,7 @@
     "protocol": {
       "id": "miti",
       "version": "4.2.1",
-      "pack_hash": "ce8d3b36cc4c3f11",
+      "pack_hash": "d98e79648859d15e",
       "label": "MITI 4.2.1"
     },
     "language": "en",
@@ -78,11 +78,6 @@
         "total_mia",
         "total_mina"
       ]
-    },
-    {
-      "section": "reasons_audit",
-      "title": "Your written reasons, checked against the session",
-      "items": []
     },
     {
       "section": "tips",
@@ -1383,7 +1378,7 @@
     }
   ],
   "method": {
-    "statement": "Onolys reads the recording against the MITI 4.2.1 coding manual and scores the same items you rated. Where Onolys and your rating differ, the report shows Onolys's reading and the lines of the session it is based on, next to the lines that support your rating.",
+    "statement": "Onolys reads the recording against the MITI 4.2.1 coding manual. It codes each clinician utterance, rates the four global items, and shows the lines of the session each reading is based on.",
     "limits": [
       "Onolys reads the transcript only; tone of voice, pauses and body language are not available to it.",
       "Speaker labels and timestamps come from automatic transcription and can contain errors.",
@@ -1418,7 +1413,7 @@
       "pack": {
         "id": "miti",
         "version": "4.2.1",
-        "hash": "ce8d3b36cc4c3f11"
+        "hash": "d98e79648859d15e"
       },
       "prompt_hashes": {
         "tips_system.md": "c101994ac3e665b1",
@@ -1459,14 +1454,14 @@
       "pack": {
         "id": "miti",
         "version": "4.2.1",
-        "hash": "ce8d3b36cc4c3f11"
+        "hash": "d98e79648859d15e"
       },
       "prompt_hashes": {
         "code_system.md": "c2b9e2ee9ad63129",
         "code_fewshot.json": "66067cb3cdb0d3b4",
         "globals_system.md": "defd14fd71dada50",
         "globals_fewshot.json": "d1c0578f710ce40c",
-        "engine:code_output_format": "5cb7e6b942d0602b",
+        "engine:code_output_format": "bd70e3a0f9faa4c8",
         "engine:code_templates": "8a4ebcfbfb90cba0",
         "engine:globals_output_format": "2ef1aa6d4656444c",
         "engine:globals_templates": "a3929d2477e13168"

@@ -1,10 +1,13 @@
 """Authenticated history, comparisons on read, and reruns from saved snapshots."""
 
+import base64
+import binascii
+import json
 import re
 from importlib.resources import files
 
 import yaml
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Query, Request
 from onolys_engine_core.errors import InputError
 from onolys_eval._formulas import compute_summaries
 from onolys_eval.gold import COUNT_IDS, GLOBAL_IDS
@@ -21,6 +24,7 @@ METRIC_IDS = (*COUNT_IDS, *GLOBAL_IDS, *SUMMARY_IDS)
 SUMMARY_FIELDS = (
     "status",
     "created_at",
+    "cancel_requested",
     "input",
     "engines",
     "presets",
@@ -252,14 +256,46 @@ def build_compare(run, units):
     }
 
 
+def _decode_cursor(cursor):
+    try:
+        created_at, rid = json.loads(base64.urlsafe_b64decode(cursor.encode()))
+        if isinstance(created_at, str) and isinstance(rid, str) and _valid_id(rid):
+            return created_at, rid
+    except (ValueError, TypeError, binascii.Error):
+        pass
+    raise HTTPException(422, "Invalid cursor.")
+
+
+def _encode_cursor(created_at, rid):
+    return base64.urlsafe_b64encode(json.dumps([created_at, rid]).encode()).decode()
+
+
 @router.get("/v1/runs")
-def history(request: Request):
+def history(
+    request: Request,
+    limit: int = Query(100, ge=1, le=200),
+    cursor: str | None = Query(None, max_length=512),
+):
+    """Newest first. `next_cursor` (null on the last page) continues the listing."""
     repository = request.app.state.services.repository
-    return {"runs": [run_summary(rid, run) for rid, run in repository.list_runs().items()]}
+    runs, more = repository.list_runs_page(limit, _decode_cursor(cursor) if cursor else None)
+    last = list(runs.items())[-1] if runs else None
+    return {
+        "runs": [run_summary(rid, run) for rid, run in runs.items()],
+        "next_cursor": _encode_cursor(last[1]["created_at"], last[0]) if more and last else None,
+    }
+
+
+def _valid_output_ref(run_id, unit_id, unit):
+    ref = unit.get("output_ref")
+    legacy = f"runs/{run_id}/{unit_id}.json"
+    owner = unit.get("lease_owner")
+    attempt = f"runs/{run_id}/{unit_id}/{owner}.json"
+    return ref == legacy or (isinstance(owner, str) and _valid_id(owner) and ref == attempt)
 
 
 def _public_unit(run_id, unit_id, unit):
-    spilled = unit.get("output_ref") == f"runs/{run_id}/{unit_id}.json"
+    spilled = _valid_output_ref(run_id, unit_id, unit)
     return {
         "unit_id": unit_id,
         **{
@@ -271,6 +307,29 @@ def _public_unit(run_id, unit_id, unit):
     }
 
 
+MAX_INLINE_DETAIL_BYTES = 8 * 1024 * 1024
+
+
+def _bounded_units(run_id, units):
+    """Inline outputs only while the response stays small; the rest load per unit.
+
+    A unit whose output is omitted is exactly like a spilled one: clients fetch
+    /units/{id}/output. Keeps run detail well under the 32 MiB Cloud Run response cap.
+    """
+    out, budget = [], MAX_INLINE_DETAIL_BYTES
+    for uid, unit in units.items():
+        public = _public_unit(run_id, uid, unit)
+        output = public.get("output")
+        if output is not None:
+            size = len(json.dumps(output, separators=(",", ":"), ensure_ascii=False).encode())
+            if size > budget:
+                public.pop("output")
+            else:
+                budget -= size
+        out.append(public)
+    return out
+
+
 @router.get("/v1/runs/{run_id}")
 def run_detail(request: Request, run_id: str):
     repository = request.app.state.services.repository
@@ -278,10 +337,7 @@ def run_detail(request: Request, run_id: str):
     units = repository.list_units(run_id)
     return {
         **run_summary(run_id, run),
-        "units": [
-            _public_unit(run_id, uid, unit)
-            for uid, unit in units.items()
-        ],
+        "units": _bounded_units(run_id, units),
         "compare": build_compare(run, units),
     }
 
@@ -294,7 +350,7 @@ def unit_output(request: Request, run_id: str, unit_id: str):
     if unit is None:
         raise HTTPException(404, "Unit output not found.")
     # Never accept arbitrary paths, URLs, or another run's saved output reference.
-    if unit.get("output_ref") and unit["output_ref"] != f"runs/{run_id}/{unit_id}.json":
+    if unit.get("output_ref") and not _valid_output_ref(run_id, unit_id, unit):
         raise HTTPException(404, "Unit output not found.")
     try:
         output = load_output(services.bucket, unit)

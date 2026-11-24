@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import fixture from '../../fixtures/selection_cases.json';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { NewRun } from './NewRun';
@@ -77,7 +77,7 @@ describe('new run', () => {
   it('loads configured dataset defaults, all sessions, prod labels and starts with a selection', async () => {
     const { api, onRunCreated } = await mount();
     expect(screen.getByLabelText(/Sessions to run: 2 of 2/)).toBeTruthy();
-    expect(checked('Human score')).toBe(true); expect((screen.getByLabelText('Human score') as HTMLInputElement).disabled).toBe(true);
+    expect(checked('Human score')).toBe(true); expect((screen.getByLabelText('Human score') as HTMLInputElement).disabled).toBe(false);
     expect(checked('MITI lean (prod)')).toBe(true);
     expect(checked('Claude')).toBe(true); expect(checked('claude-sonnet-5-5')).toBe(true); expect(checked('low')).toBe(true);
     expect(screen.getByText('4 units = 2 sessions x (1 human + 1 engines x 1 combos x 1 repeats)')).toBeTruthy();
@@ -134,13 +134,13 @@ describe('new run', () => {
     const legacy = { run_id: 'old', status: 'done', created_at: '', input: { dataset_id: 'sample', session_ids: ['s1'] }, engines: ['miti'], repeats: 1, selection: null, combos: null, presets: ['default'], legacy_selection: true, combo_keys: ['preset:default'], combo_labels: { 'preset:default': 'preset: default (legacy)' } } as unknown as RunSummary;
     render(<NewRun api={api} initialRun={legacy} onRunCreated={onRunCreated} />);
     expect(await screen.findByText(/older run chose models by preset/)).toBeTruthy();
-    expect(checked('MITI lean (prod)')).toBe(true); expect(checked('Human score')).toBe(true);
+    expect(checked('MITI lean (prod)')).toBe(true); expect(checked('Human score')).toBe(false);
     expect(checked('Claude')).toBe(false); expect(checked('Gemini')).toBe(false);
     expect(start().disabled).toBe(true);
     fireEvent.click(screen.getByLabelText('Claude')); fireEvent.click(screen.getByLabelText('claude-haiku-5-5')); fireEvent.click(screen.getByLabelText('high'));
     expect(start().disabled).toBe(false);
     fireEvent.click(start());
-    await waitFor(() => expect(api.rerun).toHaveBeenCalledWith('old', { engines: ['human', 'miti'], selection: { models: ['claude'], tiers: ['claude-haiku-5-5'], efforts: ['high'] }, repeats: 1 }));
+    await waitFor(() => expect(api.rerun).toHaveBeenCalledWith('old', { engines: ['miti'], selection: { models: ['claude'], tiers: ['claude-haiku-5-5'], efforts: ['high'] }, repeats: 1 }));
   });
   it('requires a combo when an AI engine is selected and allows Human only', async () => {
     await mount();
@@ -245,4 +245,80 @@ describe('new run', () => {
     await waitFor(() => expect(onRunCreated).toHaveBeenCalledOnce());
   });
 
+  it('flags dataset sessions without gold, leaves them unselected and starts with the rest', async () => {
+    const api = makeApi(); const onRunCreated = vi.fn();
+    api.dataset.mockResolvedValue({ dataset_id: 'sample', title: 'Sample dataset', sessions: [{ session_id: 's1', title: 'First session', has_gold: true }, { session_id: 's2', title: 'Second session', has_gold: false }] });
+    render(<NewRun api={api} onRunCreated={onRunCreated} />);
+    await screen.findByText(/Sessions to run: 1 of 1/);
+    expect(screen.getByText(/without a gold file are excluded/i)).toBeTruthy();
+    await waitFor(() => expect(start().disabled).toBe(false));
+    fireEvent.click(start());
+    await waitFor(() => expect(api.start).toHaveBeenCalledWith(expect.objectContaining({ input: { dataset_id: 'sample', session_ids: ['s1'] } })));
+  });
+  it('runs datasets without gold using AI engines and omits Human', async () => {
+    const api = makeApi();
+    api.dataset.mockResolvedValue({ dataset_id: 'sample', title: 'Sample dataset', sessions: [{ session_id: 's1', title: 'First session', has_gold: false }] });
+    render(<NewRun api={api} onRunCreated={vi.fn()} />);
+    await screen.findByText(/Sessions to run: 1 of 1/);
+    expect(checked('Human score')).toBe(false); expect(start().disabled).toBe(false);
+    fireEvent.click(start()); await waitFor(() => expect(api.start).toHaveBeenCalledWith(expect.objectContaining({ input: { dataset_id: 'sample', session_ids: ['s1'] }, engines: ['miti'] })));
+  });
+  it('includes sessions without gold after deselecting Human on a mixed dataset', async () => {
+    const api = makeApi();
+    api.dataset.mockResolvedValue({ dataset_id: 'sample', title: 'Sample dataset', sessions: [{ session_id: 's1', title: 'First session', has_gold: true }, { session_id: 's2', title: 'Second session', has_gold: false }] });
+    render(<NewRun api={api} onRunCreated={vi.fn()} />);
+    await screen.findByText(/Sessions to run: 1 of 1/); fireEvent.click(screen.getByLabelText('Human score'));
+    expect(screen.getByText(/Sessions to run: 2 of 2/)).toBeTruthy();
+    fireEvent.click(start()); await waitFor(() => expect(api.start).toHaveBeenCalledWith(expect.objectContaining({ input: { dataset_id: 'sample', session_ids: ['s1', 's2'] }, engines: ['miti'] })));
+  });
+  it('limits the change goal to 4000 characters with a counter', async () => {
+    await uploadMode();
+    const goalInput = screen.getByLabelText('Change goal') as HTMLInputElement;
+    expect(goalInput.maxLength).toBe(4000);
+    expect(screen.getByText('14 / 4000')).toBeTruthy();
+  });
+  it('offers only server-allowed audio types for the session file', async () => {
+    await uploadMode();
+    const accept = (screen.getByLabelText('Session file') as HTMLInputElement).accept;
+    expect(accept).toContain('.mp3'); expect(accept).toContain('.ogg'); expect(accept).not.toContain('audio/*');
+  });
+  it('shows Retry (not Reload choices) for a failed prepare and retries the action', async () => {
+    const { api } = await uploadMode(); chooseFile();
+    api.upload.mockRejectedValueOnce(new Error('Upload too large'));
+    fireEvent.click(screen.getByRole('button', { name: 'Prepare upload' }));
+    expect(await screen.findByText('Upload too large')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Reload choices' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    await waitFor(() => expect(api.upload).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(start().disabled).toBe(false));
+  });
+  it('keeps polling transcription with backoff after a failed status check and shows a non-blocking error', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const { api } = await uploadMode(); chooseFile('Session file', 'recording.wav');
+    api.upload.mockResolvedValueOnce({ upload_id: 'plain', status: 'transcribing', has_gold: false, speakers: [] });
+    api.getUpload.mockRejectedValueOnce(new Error('net down')).mockRejectedValueOnce(new Error('net down'))
+      .mockResolvedValueOnce({ upload_id: 'plain', status: 'awaiting_speakers', has_gold: false, speakers: [{ speaker: 'Detected', samples: ['Sample'] }] } as Upload);
+    fireEvent.click(screen.getByRole('button', { name: 'Prepare upload' }));
+    await screen.findByText('Transcribing recording…');
+    const advance = (ms: number) => act(async () => { await vi.advanceTimersByTimeAsync(ms); });
+    await advance(3000); expect(api.getUpload).toHaveBeenCalledTimes(1);
+    expect(screen.getByText(/Could not check transcription status/)).toBeTruthy();
+    expect(screen.getByText('Transcribing recording…')).toBeTruthy();
+    await advance(3000); expect(api.getUpload).toHaveBeenCalledTimes(1);
+    await advance(3100); expect(api.getUpload).toHaveBeenCalledTimes(2);
+    await advance(6000); expect(api.getUpload).toHaveBeenCalledTimes(2);
+    await advance(6100); expect(api.getUpload).toHaveBeenCalledTimes(3);
+    expect(await screen.findByLabelText('Detected')).toBeTruthy();
+    expect(screen.queryByText(/Could not check transcription status/)).toBeNull();
+  });
+});
+
+it('retries preparation with the same input object so a completed PUT is not repeated', async () => {
+  const { api } = await uploadMode(); chooseFile('Session file', 'session.wav');
+  api.upload.mockRejectedValueOnce(new Error('completion unavailable'));
+  fireEvent.click(screen.getByRole('button', { name: 'Prepare upload' }));
+  await screen.findByText('completion unavailable');
+  const initial = api.upload.mock.calls[0][0];
+  fireEvent.click(screen.getByRole('button', { name: 'Retry' })); await screen.findByText(/Upload ready/);
+  expect(api.upload.mock.calls[1][0]).toBe(initial);
 });

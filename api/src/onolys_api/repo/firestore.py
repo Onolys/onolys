@@ -12,7 +12,9 @@ import os
 import random
 import threading
 import time
+import uuid
 import weakref
+from collections.abc import Callable
 from datetime import datetime
 from typing import Any, Literal
 
@@ -28,11 +30,13 @@ from onolys_api.progress import entry_fields
 from onolys_api.repo import large
 from onolys_api.repo.base import (
     CancelOutcome,
+    ChildWrite,
     Claim,
     ConflictError,
     InterviewLinkOutcome,
     NotFoundError,
     Page,
+    SessionPlan,
     StartOutcome,
     decide_claim,
 )
@@ -72,6 +76,7 @@ from onolys_api.repo.models import (
     upload_failed_stub,
     utcnow,
 )
+from onolys_api.repo.scans import ACTIVE_SCAN_PATH, active_cursor
 from onolys_api.storage.base import BlobStore
 
 DRAFT_ID = "draft"
@@ -289,6 +294,107 @@ class FirestoreRepo:
                     raise
                 time.sleep(random.uniform(0.01, 0.15))
 
+    def transition_session(
+        self, uid: str, sid: str, plan: SessionPlan, children: tuple[ChildWrite, ...] = ()
+    ) -> None:
+        sref, _ = self._owned_session(uid, sid)
+        stref = self._top("session_status", sid)
+        refs = []
+        for rel, data, exclusive in children:
+            coll, doc_id = rel.split("/")
+            refs.append((sref.collection(coll).document(doc_id), data, exclusive))
+
+        @firestore.transactional
+        def txn_fn(txn) -> None:
+            snap = sref.get(transaction=txn)
+            stsnap = stref.get(transaction=txn)
+            if (
+                not snap.exists
+                or not stsnap.exists
+                or (snap.to_dict() or {}).get("uid") != uid
+                or (stsnap.to_dict() or {}).get("uid") != uid
+            ):
+                raise NotFoundError()
+            for ref, _, exclusive in refs:
+                if exclusive and ref.get(transaction=txn).exists:
+                    raise ConflictError()
+            result = plan(_load(SessionDoc, snap), _load(SessionStatusDoc, stsnap))
+            if result is None:
+                return
+            s_fields, st_fields = result
+            now = utcnow()
+            txn.update(sref, {**s_fields, "updated_at": now})
+            txn.set(stref, {**st_fields, "uid": uid, "updated_at": now}, merge=True)
+            for ref, data, _ in refs:
+                txn.set(ref, data)
+
+        self._contended(txn_fn, uid)
+
+    def _report_versions(self, uid: str, sid: str, txn) -> list[int]:
+        """Versions of the session's reports, read inside `txn` (uid-scoped via the session ref)."""
+        coll = self._session_ref(uid, sid).collection("reports")
+        return [(s.to_dict() or {}).get("version", 0) for s in coll.stream(transaction=txn)]
+
+    def publish_report(
+        self, uid: str, sid: str, run_id: str, doc: ReportDoc, run_fields: dict[str, Any],
+        plan_for: Callable[[int], SessionPlan], date: str | None,
+    ) -> ReportDoc | None:  # fmt: skip
+        sref, _ = self._owned_session(uid, sid)
+        stref = self._top("session_status", sid)
+        rep_ref = sref.collection("reports").document(run_id)
+        run_ref = sref.collection("runs").document(run_id)
+        user_ref = self._top("users", uid)
+        pointer = large.pack(
+            self._blobs, large.report_key(uid, sid, f"{run_id}-{uuid.uuid4().hex[:8]}"),
+            doc.report or {},
+        )  # a unique key: a duplicate publish must not overwrite a committed report's blob
+        stored = doc.model_copy(
+            update={"report": None if pointer else doc.report, "pointer": pointer}
+        )
+
+        @firestore.transactional
+        def txn_fn(txn) -> ReportDoc | None:
+            snap = sref.get(transaction=txn)
+            stsnap = stref.get(transaction=txn)
+            sess = snap.to_dict() or {}
+            if not snap.exists or not stsnap.exists or sess.get("uid") != uid:
+                raise NotFoundError()
+            rep_snap = rep_ref.get(transaction=txn)
+            if rep_snap.exists:  # already published (redelivery): nothing to write
+                return _load(ReportDoc, rep_snap)
+            if sess.get("state") == "deleting":
+                raise NotFoundError()
+            run_snap = run_ref.get(transaction=txn)
+            if sess.get("state") != "running" or not run_snap.exists:
+                return None  # cancelled / failed under the run: publish nothing
+            run = run_snap.to_dict() or {}
+            versions = self._report_versions(uid, sid, txn)
+            day_key = run.get("cap_date") or date
+            user = user_ref.get(transaction=txn).to_dict() or {}
+            day_ref = self._top("usage", f"{uid}_{day_key}") if day_key else None
+            day = (day_ref.get(transaction=txn).to_dict() or {}) if day_ref else {}
+            version = max(versions, default=0) + 1
+            s_fields, st_fields = plan_for(version)(
+                _load(SessionDoc, snap), _load(SessionStatusDoc, stsnap)
+            )
+            now = utcnow()
+            final = stored.model_copy(update={"version": version})
+            txn.set(rep_ref, final.to_store())
+            self._release_run_in_txn(txn, run_ref, run, user_ref, user, day_ref, day, False)
+            txn.update(run_ref, run_fields)
+            txn.update(sref, {**s_fields, "updated_at": now})
+            txn.set(stref, {**st_fields, "uid": uid, "updated_at": now}, merge=True)
+            return final.model_copy(update={"id": run_id})
+
+        try:
+            out = self._contended(txn_fn, uid)
+        except NotFoundError:
+            self._drop_pointer(pointer)
+            raise
+        if out is None or out.pointer != pointer:
+            self._drop_pointer(pointer)  # not published (or someone else's report won)
+        return out
+
     def confirm_speaker(self, uid: str, sid: str, clinician: str, states: tuple[str, ...]) -> bool:
         """Record the clinician only while the session is still in one of `states` (checked and
         written in one transaction, so a run starting concurrently cannot be overwritten)."""
@@ -353,9 +459,11 @@ class FirestoreRepo:
         before: datetime,
         error: SessionError | None,
         to: str = "failed",
+        release_runs: bool = False,
     ) -> bool:
         sref, _ = self._owned_session(uid, sid)
         stref = self._top("session_status", sid)
+        user_ref = self._top("users", uid)
 
         @firestore.transactional
         def txn_fn(txn) -> bool:
@@ -367,6 +475,32 @@ class FirestoreRepo:
             if sess.get("state") != state or started >= before:
                 return False
             now = utcnow()
+            # all reads before any write: the unreleased runs, the user, each run's cap day
+            runs: list[tuple[Any, dict, Any, dict]] = []
+            user: dict[str, Any] = {}
+            if release_runs:
+                user = user_ref.get(transaction=txn).to_dict() or {}
+                days: dict[str, tuple[Any, dict]] = {}
+                for rs in sref.collection("runs").stream(transaction=txn):
+                    rd = rs.to_dict() or {}
+                    if rd.get("released"):
+                        continue
+                    key = rd.get("cap_date")
+                    if key and key not in days:
+                        dref = self._top("usage", f"{uid}_{key}")
+                        days[key] = (dref, dref.get(transaction=txn).to_dict() or {})
+                    dref, day = days.get(key, (None, {}))
+                    runs.append((rs.reference, rd, dref, day))
+            for rref, rd, dref, day in runs:
+                if rd.get("status") not in ("done", "failed"):
+                    txn.update(rref, {"status": "failed", "ended": now, "error": "run_failed"})
+                refund = rd.get("status") != "done"  # a crash refunds; a finished run keeps it
+                if self._release_run_in_txn(txn, rref, rd, user_ref, user, dref, day, refund):
+                    if dref is not None:  # keep the shared docs current for the next run
+                        user["active_runs"] = max(0, user.get("active_runs", 0) - 1)
+                        if refund and rd.get("counted", True):
+                            f = KIND_FIELD["eval"]
+                            day[f] = max(0, day.get(f, 0) - rd.get("units", 1))
             fields: dict[str, Any] = {"state": to, "error": error.model_dump() if error else None,
                                       "updated_at": now}  # fmt: skip
             if error and error.step and error.step in (sess.get("steps") or {}):
@@ -388,6 +522,79 @@ class FirestoreRepo:
 
         return self._contended(txn_fn, uid)
 
+    def reconcile_active_runs(self, uid: str) -> int:
+        user_ref = self._top("users", uid)
+
+        @firestore.transactional
+        def txn_fn(txn) -> int:
+            user = user_ref.get(transaction=txn).to_dict() or {}
+            held = user.get("active_runs", 0)
+            if held <= 0:
+                return 0
+            mine = _uid_query(self._client.collection_group("runs"), uid).stream(transaction=txn)
+            open_runs = [(rs.reference, rs.to_dict() or {}) for rs in mine]
+            open_runs = [(ref, d) for ref, d in open_runs if not d.get("released")]
+            states = {}
+            for ref, _ in open_runs:
+                parent = ref.parent.parent  # sessions/{sid}
+                if parent.id not in states:
+                    states[parent.id] = (parent.get(transaction=txn).to_dict() or {}).get("state")
+            live, leaked = 0, []
+            for ref, d in open_runs:
+                state = states[ref.parent.parent.id]
+                if state == "deleting" or (
+                    state == "running" and d.get("status") in ("pending", "running")
+                ):
+                    live += 1  # a delete in progress releases its own runs
+                else:
+                    leaked.append((ref, d))
+            for ref, d in leaked:
+                txn.update(ref, {"released": True, "unit_kept": d.get("counted", True)})
+            if held > live:
+                txn.set(user_ref, {"active_runs": live}, merge=True)
+            return max(0, held - live)
+
+        return self._contended(txn_fn, uid)
+
+    def list_sessions_stuck(self, state: str, before: datetime, limit: int) -> list[SessionDoc]:
+        q = (
+            self._client.collection("sessions")
+            .where(filter=FieldFilter("state", "==", state))
+            .where(filter=FieldFilter("stage_started_at", "<", before))
+            .order_by("stage_started_at")
+            .limit(limit)
+        )  # composite index: firestore.indexes.json (state, stage_started_at)
+        return [_load(SessionDoc, snap) for snap in q.stream()]
+
+    def list_uids_with_active_runs(self, limit: int) -> list[str]:
+        if limit <= 0:
+            return []
+        checkpoint = self._client.document(ACTIVE_SCAN_PATH)
+        # The single-field active_runs index includes the document name as its final tie-breaker.
+        # Storing both values works even if the previous candidate is deleted or repaired.
+        query = (self._client.collection("users")
+                 .where(filter=FieldFilter("active_runs", ">", 0))
+                 .order_by("active_runs").order_by("__name__").limit(limit))
+
+        @firestore.transactional
+        def txn_fn(txn) -> list[str]:
+            cursor = active_cursor(checkpoint.get(transaction=txn).to_dict() or {})
+            page_query = query
+            if cursor is not None:
+                count, uid = cursor
+                page_query = query.start_after({
+                    "active_runs": count, "__name__": self._top("users", uid),
+                })
+            page = list(page_query.stream(transaction=txn))
+            if not page and cursor is not None:
+                page = list(query.stream(transaction=txn))  # wrap after the last candidate
+            if page:
+                last = page[-1]
+                txn.set(checkpoint, {"active_runs": last.get("active_runs"), "uid": last.id})
+            return [snap.id for snap in page]
+
+        return self._contended(txn_fn, "_sweep_active_runs")
+
     def delete_session(self, uid: str, sid: str) -> bool:
         sref, ssnap = self._owned_session(uid, sid, missing_ok=True)
         stref, stsnap = self._owned_status(uid, sid, missing_ok=True)
@@ -404,15 +611,31 @@ class FirestoreRepo:
         @firestore.transactional
         def txn_fn(txn) -> None:
             sess = sref.get(transaction=txn).to_dict() or {}
-            if sess.get("uid") != uid or sess.get("state") == "deleting":
+            if sess.get("uid") != uid:
                 raise NotFoundError()
+            if sess.get("state") == "deleting":
+                if sess.get("discard_code") is None:
+                    raise NotFoundError()  # the Delete path owns it
+                return  # our own tombstone from an earlier attempt: resume the cleanup
             if sess.get("state") == "cancelled":
                 raise ConflictError()  # cancel deletes nothing (04-cancel R5)
-            stub = upload_failed_stub(uid, code, utcnow())
+            iid = sess.get("interview_id")
+            iref = self._top("interviews", iid) if iid else None
+            iv = (iref.get(transaction=txn).to_dict() or {}) if iref is not None else {}
+            now = utcnow()
+            stub = upload_failed_stub(uid, code, now)
             txn.set(stref, stub.to_store())  # overwrite: no leftover fields
+            # the exclusive tombstone: `deleting` is terminal (cancel -> 404, advance -> 409)
+            txn.update(sref, {"state": "deleting", "discard_code": code, "updated_at": now})
+            if iref is not None and iv.get("uid") == uid and iv.get("session_id") == sid:
+                state = "ended" if iv.get("state") == "uploaded" else iv.get("state")
+                txn.update(iref, {"session_id": None, "state": state})  # M-4: the unit relinks
 
         self._contended(txn_fn, uid)
-        self._client.recursive_delete(sref)  # doc + recordings, runs, ...
+        snap = sref.get()  # cleanup only while OUR tombstone is still there
+        data = snap.to_dict() or {}
+        if snap.exists and data.get("state") == "deleting" and data.get("discard_code") == code:
+            self._client.recursive_delete(sref)  # doc + recordings, runs, ...
 
     # ---- recordings ----
 
@@ -606,7 +829,9 @@ class FirestoreRepo:
 
     def list_reports(self, uid: str, sid: str) -> list[ReportDoc]:
         coll = self._session_ref(uid, sid).collection("reports")
-        return sorted((_load(ReportDoc, s) for s in coll.stream()), key=lambda r: r.version)
+        # the listing needs no body: project the small fields (the report can be large)
+        small = coll.select(["version", "run_id", "created_at", "report_schema_version"])
+        return sorted((_load(ReportDoc, s) for s in small.stream()), key=lambda r: r.version)
 
     # ---- api keys ----
 
@@ -1176,6 +1401,24 @@ class FirestoreRepo:
         ref = self._top("interviews", iid)
         _owned(ref, uid)
         ref.set(fields, merge=True)
+
+    def update_interview_if_conn(
+        self, uid: str, iid: str, conn_id: str, fields: dict[str, Any]
+    ) -> bool:
+        ref = self._top("interviews", iid)
+        _owned(ref, uid)
+
+        @firestore.transactional
+        def txn_fn(txn) -> bool:
+            data = ref.get(transaction=txn).to_dict() or {}
+            if data.get("uid") != uid:
+                raise NotFoundError()
+            if data.get("conn_id") != conn_id:
+                return False
+            txn.set(ref, fields, merge=True)
+            return True
+
+        return self._contended(txn_fn, uid)
 
     def get_idempotency(self, uid: str, key: str) -> IdempotencyDoc | None:
         ref = self._top("idempotency", _idem_id(uid, key))

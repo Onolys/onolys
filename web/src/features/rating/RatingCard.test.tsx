@@ -3,6 +3,8 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { mockBackend } from "../../mocks/server";
 import { renderApp } from "../../test/renderApp";
+import { renderPage } from "../../test/renderPage";
+import { RatingCard } from "./RatingCard";
 
 const EMAIL = "rater@clinic.org";
 const UID = "u_rater_clinic_org";
@@ -54,7 +56,10 @@ describe("rating card: layout", () => {
     expect(screen.getAllByLabelText(/ count$/)).toHaveLength(10);
     expect(screen.getByLabelText("Additional notes / evaluation reasoning")).toBeInTheDocument();
     expect(screen.getByText(/not parsed/i)).toBeInTheDocument();
-    expect(document.querySelector('input[type="file"]')).toBeNull();
+    // The upload slot (resume-without-job, e49995e) may show a file input on a "created" session; the card itself has none.
+    const form = document.querySelector('form[aria-labelledby="rating-heading"]');
+    expect(form).not.toBeNull();
+    expect(form?.querySelector('input[type="file"]')).toBeNull();
   });
 });
 
@@ -151,6 +156,28 @@ describe("rating card: submit", () => {
     expect(last.body.no_rating).toBeUndefined();
     expect(last.body.card).toMatchObject({ change_goal: "Cut down", globals: { empathy: { score: 5 } } });
     expect(flags(sid).flags).toMatchObject({ rating_submitted: true, has_rating: true });
+  });
+
+  it("locks the card after a successful submit: read-only fields, no more autosave, no 'Draft saved' (C11)", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"], shouldAdvanceTime: true });
+    const sid = newSession();
+    // Mounted alone: the status doc does not flip `readOnly`, as in the gap before it catches up.
+    renderPage(<RatingCard sessionId={sid} />, "/x", { user: USER });
+    await screen.findByLabelText("Change goal");
+    setValue("Change goal", "Cut down");
+    setValue("Empathy score", "5");
+    await userEvent.click(screen.getByRole("button", { name: "Submit rating" }));
+    expect(await screen.findByText(/Rating submitted/)).toBeInTheDocument();
+    expect(screen.getByLabelText("Change goal")).toBeDisabled();
+    expect(screen.queryByRole("button", { name: "Submit rating" })).not.toBeInTheDocument();
+    expect(screen.queryByText("Draft saved")).not.toBeInTheDocument();
+    const before = puts.length;
+    fireEvent.blur(screen.getByLabelText("Change goal"));
+    await vi.advanceTimersByTimeAsync(5000);
+    await Promise.all(pending);
+    expect(puts.slice(before)).toEqual([]);
+    expect(screen.queryByText("Draft saved")).not.toBeInTheDocument();
+    vi.useRealTimers();
   });
 
   it("'No rating' sends final:true and no_rating:true with only goal and span", async () => {

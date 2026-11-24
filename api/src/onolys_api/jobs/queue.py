@@ -1,10 +1,14 @@
 """Task queue (R5): Cloud Tasks in the cloud, an in-memory queue for SERVICE_MODE=combined.
 
 Task names make enqueue idempotent inside Cloud Tasks' dedup window: `{sid}-validate`,
-`{sid}-transcribe`, `{sid}-poll-{n}`, `{run_id}-run`, `{sid}-delete`,
-`{sid}-interview-sweep[-{n}]` (`sid` holds the interview id there). A user-visible retry of a
+`{sid}-transcribe`, `{sid}-poll-{n}`, `{run_id}-run`, `{sid}-delete[-{epoch_s}]`,
+`{sid}-interview-sweep[-{n}]` (`sid` holds the interview id there), `reset-{key}-{n}`
+(password-reset email: `key` is a keyed hash of the address, `n` a 10-minute window, so the name
+never carries the address). A user-visible retry of a
 step adds `-r{retry}` (validate, transcribe, polls) so Cloud Tasks does not drop it as a repeat.
-The payload carries the request id (never any text).
+The payload carries the request id (never any text); the one exception is `reset-email`, whose
+`email` is the delivery address (Cloud Tasks stores it only until the task is delivered; no log
+line carries it).
 `enqueue` is sync: routes and handlers run in threadpool workers.
 """
 
@@ -18,7 +22,9 @@ from pydantic import BaseModel
 from onolys_api import logs
 from onolys_api.config import Settings
 
-TaskKind = Literal["validate", "transcribe", "transcribe-poll", "run", "delete", "interview-sweep"]
+TaskKind = Literal[
+    "validate", "transcribe", "transcribe-poll", "run", "delete", "interview-sweep", "reset-email"
+]
 KINDS: tuple[str, ...] = (
     "validate",
     "transcribe",
@@ -26,6 +32,7 @@ KINDS: tuple[str, ...] = (
     "run",
     "delete",
     "interview-sweep",
+    "reset-email",
 )
 MAX_ATTEMPTS = 2  # the Cloud Tasks queue's max_attempts: the one automatic retry (D3)
 DISPATCH_DEADLINE_S = 600
@@ -36,12 +43,18 @@ class TaskPayload(BaseModel):
     uid: str
     sid: str
     run_id: str | None = None
-    n: int | None = None  # poll sequence number
+    n: int | None = None  # poll sequence number; delete: the enqueue time (epoch s)
     request_id: str | None = None
     retry: int = 0  # the session's `retry_count` when a user-visible retry enqueued it (R4)
+    email: str | None = None  # `reset-email` only: the delivery address (never logged)
+    key: str | None = None  # `reset-email` only: keyed hash of the address, for the task name
 
 
 def task_name(p: TaskPayload) -> str:
+    if p.kind == "reset-email":
+        if not p.key or p.n is None:
+            raise ValueError("reset-email task needs key and n")
+        return f"reset-{p.key}-{p.n}"
     if p.kind == "run":
         if not p.run_id:
             raise ValueError("run task needs run_id")
@@ -55,6 +68,8 @@ def task_name(p: TaskPayload) -> str:
         return f"{p.sid}-poll-{p.n}{suffix}"
     if p.kind == "interview-sweep" and p.n:
         return f"{p.sid}-interview-sweep-{p.n}"  # a re-check: the first sweep's name is spent
+    if p.kind == "delete" and p.n:
+        return f"{p.sid}-delete-{p.n}"  # a repeated DELETE: the first task's name is spent (M-1)
     return f"{p.sid}-{p.kind}{suffix}"
 
 

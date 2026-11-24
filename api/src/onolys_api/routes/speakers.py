@@ -2,7 +2,8 @@
 
 The speaker gate is the last human input. `confirm` sets `speaker_confirmed` and the clinician's
 speaker label (every other speaker counts as client) and calls the first-run gate. In
-`report_ready|failed` it only changes the choice for the NEXT run; reports are never touched.
+`failed` it only changes the choice for the NEXT run; reports are never touched. Not allowed in
+`report_ready` (no rerun is possible there; it would relabel the transcript against a fixed report).
 The transcript read is owner-scoped and `private, no-store`: it carries PHI.
 """
 
@@ -23,7 +24,7 @@ from onolys_api.routes.ids import ResourceId
 
 SAMPLES_PER_SPEAKER = 3
 SAMPLE_MAX_CHARS = 300
-CONFIRM_STATES = ("awaiting_input", "report_ready", "failed")
+CONFIRM_STATES = ("awaiting_input", "failed")  # not report_ready: no rerun, the report is fixed
 
 ERRORS = {"default": {"model": ErrorResponse, "description": "Error"}}
 router = APIRouter(prefix="/sessions/{id}", tags=["speakers"], responses=ERRORS)
@@ -104,8 +105,9 @@ def get_speakers(id: ResourceId, request: Request, user: User) -> SpeakersView:
     response_model=ConfirmResponse,
     summary="Pick the clinician speaker (every other speaker is the client)",
     description=(
-        "Allowed once the transcript is ready and not while a run is in progress. In "
-        "`report_ready|failed` it applies to the next run only. May start the first run (R4)."
+        "Allowed in `awaiting_input` and `failed` once the transcript is ready; any other state "
+        "(a run in progress, `report_ready`) is 409 `invalid_state`. In `failed` it applies to "
+        "the next run only. May start the first run (R4)."
     ),
 )
 def confirm_speakers(

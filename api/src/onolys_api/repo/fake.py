@@ -2,6 +2,8 @@
 
 import copy
 import threading
+import uuid
+from collections.abc import Callable
 from datetime import datetime
 from typing import Any, Literal
 
@@ -12,11 +14,13 @@ from onolys_api.progress import entry_fields
 from onolys_api.repo import large
 from onolys_api.repo.base import (
     CancelOutcome,
+    ChildWrite,
     Claim,
     ConflictError,
     InterviewLinkOutcome,
     NotFoundError,
     Page,
+    SessionPlan,
     StartOutcome,
     decide_claim,
 )
@@ -63,6 +67,7 @@ from onolys_api.repo.models import (
     upload_failed_stub,
     utcnow,
 )
+from onolys_api.repo.scans import ACTIVE_SCAN_PATH, active_cursor
 from onolys_api.storage.base import BlobStore
 
 
@@ -214,6 +219,74 @@ class FakeRepo:
             self._put(f"session_status/{sid}", st)
             self._record_status(uid, sid)
 
+    def transition_session(
+        self, uid: str, sid: str, plan: SessionPlan, children: tuple[ChildWrite, ...] = ()
+    ) -> None:
+        with self._claim_lock:  # the fake's "transaction"
+            sdoc = self._owned(f"sessions/{sid}", uid)
+            stdoc = self._owned(f"session_status/{sid}", uid)
+            assert sdoc is not None and stdoc is not None
+            for rel, _, exclusive in children:
+                if exclusive and f"sessions/{sid}/{rel}" in self._docs:
+                    raise ConflictError()
+            result = plan(
+                self._load(SessionDoc, sid, sdoc), self._load(SessionStatusDoc, sid, stdoc)
+            )
+            if result is None:
+                return
+            s_fields, st_fields = result
+            self.update_session(uid, sid, s_fields, status=st_fields)
+            for rel, data, _ in children:
+                self._put(f"sessions/{sid}/{rel}", data)
+
+    def publish_report(
+        self, uid: str, sid: str, run_id: str, doc: ReportDoc, run_fields: dict[str, Any],
+        plan_for: Callable[[int], SessionPlan], date: str | None,
+    ) -> ReportDoc | None:  # fmt: skip
+        self._own(uid, sid)
+        pointer = large.pack(
+            self._blobs, large.report_key(uid, sid, f"{run_id}-{uuid.uuid4().hex[:8]}"),
+            doc.report or {},
+        )
+        stored = doc.model_copy(
+            update={"report": None if pointer else doc.report, "pointer": pointer}
+        )
+        with self._claim_lock:  # the fake's "transaction"
+            sdoc = self._owned(f"sessions/{sid}", uid)
+            stdoc = self._owned(f"session_status/{sid}", uid)
+            assert sdoc is not None and stdoc is not None
+            existing = self._get(f"sessions/{sid}/reports/{run_id}")
+            if existing is None and sdoc.get("state") == "deleting":
+                self._drop_pointer(pointer)
+                raise NotFoundError()
+            if existing is not None:
+                got = self._load(ReportDoc, run_id, existing)
+                if got.pointer != pointer:
+                    self._drop_pointer(pointer)
+                return self._resolve_report(got, False)
+            run = self._get(f"sessions/{sid}/runs/{run_id}")
+            if sdoc.get("state") != "running" or run is None:
+                self._drop_pointer(pointer)
+                return None
+            version = max((d.get("version", 0) for _, d in self._children(sid, "reports")),
+                          default=0) + 1  # fmt: skip
+            s_fields, st_fields = plan_for(version)(
+                self._load(SessionDoc, sid, sdoc), self._load(SessionStatusDoc, sid, stdoc)
+            )
+            final = stored.model_copy(update={"version": version})
+            self._put(f"sessions/{sid}/reports/{run_id}", final.to_store())
+            self._put(f"sessions/{sid}/runs/{run_id}", {**run, **run_fields})
+            self.update_session(uid, sid, s_fields, status=st_fields)
+            self._release_run_locked(
+                uid, f"sessions/{sid}/runs/{run_id}",
+                self._get(f"sessions/{sid}/runs/{run_id}") or run, False, date,
+            )  # fmt: skip
+            return final.model_copy(update={"id": run_id})
+
+    def _drop_pointer(self, pointer) -> None:
+        if pointer is not None:
+            self._blobs.delete(pointer.key)
+
     def confirm_speaker(self, uid: str, sid: str, clinician: str, states: tuple[str, ...]) -> bool:
         with self._claim_lock:  # the fake's "transaction"
             doc = self._owned(f"sessions/{sid}", uid)
@@ -257,6 +330,7 @@ class FakeRepo:
         before: datetime,
         error: SessionError | None,
         to: str = "failed",
+        release_runs: bool = False,
     ) -> bool:
         with self._claim_lock:  # the fake's "transaction"
             sess = self._owned(f"sessions/{sid}", uid)
@@ -265,6 +339,16 @@ class FakeRepo:
             if sess.get("state") != state or started >= before:
                 return False
             now = utcnow()
+            if release_runs:
+                for rid, run in self._children(sid, "runs"):
+                    if run.get("released"):
+                        continue
+                    path = f"sessions/{sid}/runs/{rid}"
+                    if run.get("status") not in ("done", "failed"):
+                        run = {**run, "status": "failed", "ended": now, "error": "run_failed"}
+                        self._put(path, run)
+                    # a crash is a system failure: refund (a finished run is a success: none)
+                    self._release_run_locked(uid, path, run, run.get("status") != "done", None)
             sess.update(state=to, error=error.model_dump() if error else None, updated_at=now)
             if error and error.step and error.step in (sess.get("steps") or {}):
                 for k, v in (("status", "failed"), ("ended", now), ("error", error.code)):
@@ -280,6 +364,62 @@ class FakeRepo:
             self._put(f"session_status/{sid}", status)
             self._record_status(uid, sid)
             return True
+
+    def reconcile_active_runs(self, uid: str) -> int:
+        with self._claim_lock:  # the fake's "transaction"
+            user = self._get(f"users/{uid}") or {}
+            live, leaked = 0, []
+            for path, d in self._docs.items():
+                parts = path.split("/")
+                if len(parts) != 4 or parts[:1] != ["sessions"] or parts[2] != "runs":
+                    continue
+                if d.get("uid") != uid or d.get("released"):
+                    continue
+                state = (self._docs.get(f"sessions/{parts[1]}") or {}).get("state")
+                if state == "deleting" or (
+                    state == "running" and d.get("status") in ("pending", "running")
+                ):
+                    live += 1  # a delete in progress releases its own runs
+                else:
+                    leaked.append((path, d))
+            for path, d in leaked:
+                self._put(path, {**d, "released": True, "unit_kept": d.get("counted", True)})
+            held = user.get("active_runs", 0)
+            if held > live:
+                self._put(f"users/{uid}", {**user, "active_runs": live})
+            return max(0, held - live)
+
+    def list_sessions_stuck(self, state: str, before: datetime, limit: int) -> list[SessionDoc]:
+        found = sorted(
+            (
+                (d.get("stage_started_at") or d["updated_at"], p.removeprefix("sessions/"), d)
+                for p, d in self._docs.items()
+                if p.count("/") == 1 and p.startswith("sessions/") and d.get("state") == state
+            ),
+            key=lambda t: (t[0], t[1]),
+        )
+        return [
+            self._load(SessionDoc, sid, copy.deepcopy(d))
+            for at, sid, d in found
+            if at < before
+        ][:limit]
+
+    def list_uids_with_active_runs(self, limit: int) -> list[str]:
+        if limit <= 0:
+            return []
+        with self._claim_lock:
+            candidates = sorted(
+                (d["active_runs"], p.removeprefix("users/"))
+                for p, d in self._docs.items()
+                if p.count("/") == 1 and p.startswith("users/") and d.get("active_runs", 0) > 0
+            )
+            cursor = active_cursor(self._get(ACTIVE_SCAN_PATH) or {})
+            after = [item for item in candidates if cursor is None or item > cursor]
+            page = (after or candidates)[:limit]
+            if page:
+                count, uid = page[-1]
+                self._put(ACTIVE_SCAN_PATH, {"active_runs": count, "uid": uid})
+            return [uid for _, uid in page]
 
     def delete_session(self, uid: str, sid: str) -> bool:
         s = self._owned(f"sessions/{sid}", uid, missing_ok=True)
@@ -301,9 +441,18 @@ class FakeRepo:
                 raise ConflictError()  # cancel deletes nothing (04-cancel R5)
             self._put(f"session_status/{sid}", upload_failed_stub(uid, code, utcnow()).to_store())
             self._record_status(uid, sid)
+            self._unlink_interview(uid, sid, doc.get("interview_id"))
             for p in [p for p in self._docs if p.startswith(f"sessions/{sid}/")]:
                 del self._docs[p]
             del self._docs[f"sessions/{sid}"]
+
+    def _unlink_interview(self, uid: str, sid: str, iid: str | None) -> None:
+        """M-4: the discarded session's interview goes back to `ended`, unlinked, so its unit can
+        be linked to a new session."""
+        iv = self._get(f"interviews/{iid}") if iid else None
+        if iv is not None and iv.get("uid") == uid and iv.get("session_id") == sid:
+            state = "ended" if iv.get("state") == "uploaded" else iv.get("state")
+            self._put(f"interviews/{iid}", {**iv, "session_id": None, "state": state})
 
     # ---- recordings ----
 
@@ -870,6 +1019,16 @@ class FakeRepo:
         with self._claim_lock:
             d = self._owned(f"interviews/{iid}", uid)
             self._put(f"interviews/{iid}", {**d, **fields})
+
+    def update_interview_if_conn(
+        self, uid: str, iid: str, conn_id: str, fields: dict[str, Any]
+    ) -> bool:
+        with self._claim_lock:
+            d = self._owned(f"interviews/{iid}", uid)
+            if d.get("conn_id") != conn_id:
+                return False
+            self._put(f"interviews/{iid}", {**d, **fields})
+            return True
 
     def get_idempotency(self, uid: str, key: str) -> IdempotencyDoc | None:
         path = f"idempotency/{_idem_id(uid, key)}"

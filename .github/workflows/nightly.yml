@@ -10,6 +10,13 @@ permissions:
   contents: read
 
 jobs:
+  # Reuse exact-candidate checks: all packages, full browsers, rules and runtime images.
+  full-offline:
+    permissions:
+      actions: read
+      contents: read
+    uses: ./.github/workflows/ci.yml
+
   api-real-mode:
     # SP09 R5: real evaluation with no GCP (fixture STT, real Gemini LLM, fake repo and blobs).
     runs-on: ubuntu-latest
@@ -40,3 +47,88 @@ jobs:
         timeout-minutes: 2
       - run: uv sync --frozen --package onolys-api
       - run: uv run --no-sync --package onolys-api pytest api -m "nightly and not live" --durations=10
+
+  web-campaigns:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+      - name: Record property generator and replay seed
+        run: node -e 'console.log("fast-check=" + require("fast-check").__version + ", seed=20261124, examples=5000")'
+      - name: Extended fixed-seed properties (campaign failure includes replay path)
+        run: NIGHTLY_PROPERTIES=1 timeout 180s npx vitest run src/__fuzz_review__/auth.property.test.ts
+      - name: Narrow auth redirect mutation baseline
+        run: NIGHTLY_MUTATION=1 timeout 480s npx stryker run --mutate src/auth/next.ts --concurrency 1
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: nightly-web-campaigns
+          path: web/reports/mutation/
+          retention-days: 7
+
+  api-emulator-matrix:
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.13", "3.14"]
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+          python-version: ${{ matrix.python }}
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: ./.github/actions/setup-ffmpeg
+      - run: uv sync --frozen --package onolys-api
+      - run: npm install --prefix ~/.firebase-tools firebase-tools@15.37.0
+      - name: Complete serial emulator suite (separate JVM per matrix runner)
+        run: |
+          ~/.firebase-tools/node_modules/.bin/firebase emulators:exec --config api/firebase.json --only firestore --project demo-onolys \
+            'uv run --no-sync --package onolys-api pytest api -m "firestore and not live and not flaky and not nightly" --durations=25'
+
+  browser-matrix:
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [firefox, webkit]
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    defaults:
+      run:
+        working-directory: web
+    env:
+      E2E_BROWSER: ${{ matrix.browser }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+      - run: npx playwright install --with-deps "$E2E_BROWSER"
+      - run: timeout 420s npm run e2e -- --trace off
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: nightly-browser-${{ matrix.browser }}
+          path: web/e2e_review/test-results/
+          retention-days: 7

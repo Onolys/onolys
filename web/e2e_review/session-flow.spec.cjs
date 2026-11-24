@@ -48,8 +48,9 @@ test.describe("browser behaviours (mock backend)", () => {
     await expect(page.getByRole("alert").or(page.getByText(/not found|couldn't/i)).first()).toBeVisible({ timeout: 10_000 });
   });
 
-  test("W26/E19: Settings 'Copy' gives feedback and API key secret dialog restores focus", async ({ page, context }) => {
-    await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+  test("W26/E19: Settings 'Copy' gives feedback and API key secret dialog restores focus", async ({ page, context, browserName }) => {
+    // Firefox/WebKit authorize clipboard writes through the Copy click itself.
+    if (browserName === "chromium") await context.grantPermissions(["clipboard-read", "clipboard-write"]);
     await signUpVerified(page, "key@example.com");
     await accountMenu(page, "Settings");
     await page.getByRole("button", { name: "Create API key" }).click();

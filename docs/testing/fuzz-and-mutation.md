@@ -13,6 +13,8 @@ Added by the 2026-11-21 full-app review (`docs/agent_files/review-full-app-20261
   Today it reports F1/F2/F4/F8/F9 (see findings-fuzz-mutation.md).
 - Markers: the `[firestore]` params carry `pytest.mark.firestore` (registered/auto-applied by api/tests/conftest.py on main after PR #48); everything else is emulator-free.
 
-## Mutation testing (manual, slow, not in CI)
+## Mutation testing (slow; narrow web campaign nightly)
 - api (mutmut 3): from `api/`: `uv run --package onolys-api --with mutmut mutmut run 'onolys_api.auth*' 'onolys_api.repo.limits*' 'onolys_api.jobs.run*'`, then `mutmut results`. Config is `[tool.mutmut]` in `api/pyproject.toml` (only the auth/limits/run tests are used; `repo/firestore.py` needs the emulator and is not scored). Afterwards delete `api/mutants/` and the folders mutmut copies into `api/` (`config`, `docs`, `engines`).
 - web (Stryker): from `web/`: `npx stryker run stryker.conf.json` (about 10 min; runs in a temp copy under `node_modules/.stryker-tmp` (`inPlace: false`)). Report in `web/reports/mutation/` (do not commit).
+
+The bounded nightly web campaign uses `NIGHTLY_PROPERTIES=1 npx vitest run src/__fuzz_review__/auth.property.test.ts` (seed `20261124`, 5,000 examples per property). Fast-check reports the replay seed/path and shrunk counterexample on failure. `NIGHTLY_MUTATION=1 npx stryker run --mutate src/auth/next.ts --concurrency 1` restricts the baseline to redirect unit/property tests. Reports are uploaded even on failure; there is no invented mutation-score threshold. Global timeouts fail rather than accepting incomplete campaigns.

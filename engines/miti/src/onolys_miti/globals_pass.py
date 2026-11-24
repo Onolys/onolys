@@ -101,6 +101,7 @@ def _build_request(
     run_index: int,
     tag: str,
     model: type[BaseModel],
+    deadline: float | None = None,
 ) -> LLMRequest:
     pp = {**miti.MITI.data.get("params", {}), **_overrides(params)}
     system_md = miti.MITI.prompt_paths[2].read_text(encoding="utf-8").strip()
@@ -132,6 +133,7 @@ def _build_request(
         cache_prefixes=[prefix1, "\n".join(header)],
         unit="globals",
         max_tokens=int(pp.get("globals_max_tokens", DEFAULT_GLOBALS_MAX_TOKENS)),
+        deadline=deadline,
     )
 
 
@@ -219,6 +221,7 @@ async def globals_pass(
     language: str | None = None,
     run_index: int = 0,
     metrics: MetricsCollector | None = None,
+    deadline: float | None = None,
 ) -> GlobalsResult:
     """Run the globals pass for one run. Raises `GlobalsPassFailed` when it cannot be trusted."""
     items = global_items()
@@ -228,7 +231,7 @@ async def globals_pass(
     res = None
     for attempt in (1, 2):
         tag = "g" if attempt == 1 else "g-retry"
-        req = _build_request(prepared, params, language, run_index, tag, model)
+        req = _build_request(prepared, params, language, run_index, tag, model, deadline)
         try:
             res = await client.complete_json(req, metrics)
             break

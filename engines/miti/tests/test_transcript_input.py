@@ -24,10 +24,11 @@ def assert_error(call, code, field, issue):
 
 
 def test_text_roles_names_and_ids():
-    transcript = parse_transcript_txt(f"t: {WORDS}\nc: Example answer.\nAlex: Another answer.")
+    source = f"t: {WORDS}\nc: Example answer.\nAlex: Another answer.\nAlex: More."
+    transcript = parse_transcript_txt(source)
     assert isinstance(transcript, TranscriptV1)
     assert [(t.id, t.speaker, t.role) for t in transcript.turns] == [
-        ("t1", "T", "clinician"), ("t2", "C", "client"), ("t3", "Alex", None)
+        ("t1", "T", "clinician"), ("t2", "C", "client"), ("t3", "Alex", None), ("t4", "Alex", None)
     ]
     assert all(t.start_ms is None and t.end_ms is None for t in transcript.turns)
 

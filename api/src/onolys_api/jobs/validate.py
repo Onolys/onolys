@@ -264,11 +264,13 @@ def make_validate_handler(
             ensure_active(ctx)
             try:
                 blobs.upload_from(canonical_key(uid, sid), flac, "audio/flac")
-                if moved:
-                    if src_key != orig:  # sniffed format differs from the earlier attempt's
-                        blobs.move(src_key, orig)
-                else:
-                    blobs.move(src_key, orig)  # also deletes the staged object
+                # Publish the bytes we validated, hashed and transcoded, never a fresh copy of
+                # the remote object: an overlapping signed PUT could have replaced it since the
+                # download (LM-17). The staged object is removed below (`delete_prefix`).
+                if not moved or src_key != orig:  # else `local` IS the stored original already
+                    blobs.upload_from(orig, local, CANONICAL_TYPES[fmt])
+                    if moved:  # sniffed format differs from the earlier attempt's
+                        blobs.delete(src_key)
             except BlobNotFoundError:
                 ensure_active(ctx)  # the DELETE swept the staged object under us
                 raise

@@ -85,7 +85,7 @@ export interface RatingCardProps {
   readOnly?: boolean;
 }
 
-export function RatingCard({ sessionId, debounceMs = 2000, readOnly = false }: RatingCardProps) {
+export function RatingCard({ sessionId, debounceMs = 2000, readOnly: readOnlyProp = false }: RatingCardProps) {
   const client = useApiClient();
   const [load, setLoad] = useState<Load>("loading");
   const [attempt, setAttempt] = useState(0);
@@ -96,6 +96,9 @@ export function RatingCard({ sessionId, debounceMs = 2000, readOnly = false }: R
   const [formError, setFormError] = useState<string | null>(null);
   const [submitted, setSubmitted] = useState<Submitted>(null);
   const [busy, setBusy] = useState(false);
+  // A successful submit is final: lock the card here without waiting for the status doc to say so.
+  const [locked, setLocked] = useState(false);
+  const readOnly = readOnlyProp || locked;
   const saver = useRef<Autosaver | null>(null);
 
   // Restore: draft if present, else the last final revision.
@@ -106,7 +109,7 @@ export function RatingCard({ sessionId, debounceMs = 2000, readOnly = false }: R
         const data = unwrap(await client.GET("/sessions/{id}/rating", { params: { path: { id: sessionId } } }));
         if (!live) return;
         // A final rating shows what was submitted, never a stale draft (FX45).
-        const draft = readOnly ? undefined : data.draft;
+        const draft = readOnlyProp ? undefined : data.draft;
         const next = cardToForm(draft?.card ?? data.final?.card);
         formRef.current = next;
         setForm(next);
@@ -119,7 +122,7 @@ export function RatingCard({ sessionId, debounceMs = 2000, readOnly = false }: R
     return () => {
       live = false;
     };
-  }, [client, sessionId, attempt, readOnly]);
+  }, [client, sessionId, attempt, readOnlyProp]);
 
   // Autosave controller: debounce, blur and page-hide flushes all go through it.
   useEffect(() => {
@@ -189,6 +192,8 @@ export function RatingCard({ sessionId, debounceMs = 2000, readOnly = false }: R
         }),
       );
       setSubmitted(noRating ? "no_rating" : "submitted");
+      saver.current?.cancel();
+      setLocked(true);
     } catch (e) {
       if (e instanceof ApiError && e.code === "rating_invalid") {
         setIssues(issuesFromApi(e));

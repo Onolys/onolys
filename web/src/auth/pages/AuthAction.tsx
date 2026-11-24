@@ -82,6 +82,25 @@ function VerifyEmailAction({ oobCode, continueUrl }: { oobCode: string; continue
   const [failure, setFailure] = useState<string | null>(null);
   const form = useFormError();
   const next = resolveContinue(continueUrl);
+  // Whose link this is, asked only when the signed-in user is already verified: that user's flag says nothing
+  // about another account's code. "dead": no longer valid, so no other account's code to apply either.
+  const alreadyVerified = user?.emailVerified === true;
+  const userEmail = user?.email ?? null;
+  const checkKey = `${oobCode}|${userEmail ?? ""}`;
+  const [checked, setChecked] = useState<{ key: string; owner: "same" | "other" | "dead" } | null>(null);
+  const owner = checked?.key === checkKey ? checked.owner : "pending";
+  useEffect(() => {
+    if (!alreadyVerified) return;
+    let live = true;
+    const settle = (o: "same" | "other" | "dead") => live && setChecked({ key: checkKey, owner: o });
+    service.checkEmailVerificationCode(oobCode).then(
+      (email) => settle(userEmail !== null && email.toLowerCase() === userEmail.toLowerCase() ? "same" : "other"),
+      (err) => settle(EXPIRED.has(errorCode(err) ?? "") ? "dead" : "other"),
+    );
+    return () => {
+      live = false;
+    };
+  }, [alreadyVerified, service, oobCode, userEmail, checkKey]);
 
   // Applied only on click: mail scanners prefetch links and would burn the one-time code.
   async function verify() {
@@ -105,7 +124,11 @@ function VerifyEmailAction({ oobCode, continueUrl }: { oobCode: string; continue
     else void navigate(next.path);
   }
 
-  if (user?.emailVerified && !done) {
+  if (alreadyVerified && !done && owner === "pending") {
+    return <p className={NOTE}>Checking your link…</p>;
+  }
+
+  if (alreadyVerified && !done && (owner === "same" || owner === "dead")) {
     return (
       <div className={STACK}>
         <h1 className={H1}>Already verified</h1>

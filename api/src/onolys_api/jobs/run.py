@@ -35,7 +35,14 @@ from onolys_api.adapters.error_map import kind_for_code, to_public
 from onolys_api.adapters.validated import evaluate_validated
 from onolys_api.jobs.alive import ensure_active
 from onolys_api.jobs.charging import release_failed_run, release_once
-from onolys_api.jobs.machine import RUN_START_PROGRESS, STAGE_WEIGHTS, STAGES, advance, stage_fields
+from onolys_api.jobs.machine import (
+    RUN_START_PROGRESS,
+    STAGE_WEIGHTS,
+    STAGES,
+    advance,
+    stage_fields,
+    transition_plan,
+)
 from onolys_api.jobs.queue import MAX_ATTEMPTS
 from onolys_api.jobs.transcribe import TRANSCRIPT_ID
 from onolys_api.jobs.transcribe import _run as run_coro
@@ -81,21 +88,35 @@ def make_run_handler(
             retryable = isinstance(e, TimeoutError) or e.retryable
             if not retryable or ctx.attempt >= MAX_ATTEMPTS:
                 code = e.code if isinstance(e, TaskError) else "deadline_exceeded"
-                release_failed_run(repo, uid, sid, run_id, kind_for_code(code), date)
+                _release_or_log(repo, uid, sid, run_id, code, date)
             raise
         except Exception as e:
             if isinstance(e, OutputInvalid):
                 fields = {"validation": e.validation}
                 if e.usage is not None:
-                    fields["run_info"] = {"usage": e.usage.model_dump(mode="json")}
+                    fields["run_info"] = {
+                        **(repo.get_run(uid, sid, run_id).run_info or {}),
+                        "usage": e.usage.model_dump(mode="json"),
+                    }
                 repo.update_run(uid, sid, run_id, fields)
             code, retryable = to_public(e, ctx.attempt)
             if not retryable or ctx.attempt >= MAX_ATTEMPTS:
-                release_failed_run(repo, uid, sid, run_id, kind_for_code(code), date)
+                _release_or_log(repo, uid, sid, run_id, code, date)
             raise
         release_once(repo, uid, sid, run_id, False, date)
 
     return run
+
+
+def _release_or_log(repo, uid: str, sid: str, run_id: str, code: str, date) -> None:
+    """Final-attempt release. A failure here must not replace the run's real error (it decides
+    the session's error code); the worker's `_fail` tries the release again and the server sweep
+    repairs a slot that still leaks (M-2)."""
+    try:
+        release_failed_run(repo, uid, sid, run_id, kind_for_code(code), date)
+    except Exception as e:  # noqa: BLE001
+        logs.emit("run_release_failed", logging.ERROR, session_id=sid, run_id=run_id,
+                  exc_class=type(e).__name__)  # fmt: skip
 
 
 def _execute(ctx, blobs, evaluation, run_doc) -> None:
@@ -111,8 +132,10 @@ def _execute(ctx, blobs, evaluation, run_doc) -> None:
     except NotFoundError:
         existing = None
     if existing is None:
-        existing = _evaluate(ctx, blobs, evaluation, run_doc, session)
+        _evaluate(ctx, blobs, evaluation, run_doc, session)  # publishes atomically (M-11)
+        return
 
+    # a report stored by an older build without its bookkeeping: only finish that
     repo.update_run(uid, sid, run_id, {"stage": None})
     if repo.get_session(uid, sid).state != "report_ready":
         advance(
@@ -121,7 +144,7 @@ def _execute(ctx, blobs, evaluation, run_doc) -> None:
         )  # fmt: skip
 
 
-def _evaluate(ctx, blobs, evaluation, run_doc, session) -> ReportDoc:
+def _evaluate(ctx, blobs, evaluation, run_doc, session) -> None:
     uid, sid, run_id, repo = ctx.uid, ctx.sid, run_doc.run_id, ctx.repo
     if session.clinician_speaker is None:
         raise PermanentError("internal_error")
@@ -186,13 +209,25 @@ def _evaluate(ctx, blobs, evaluation, run_doc, session) -> ReportDoc:
         deadline=time.monotonic() + max(0.0, ctx.remaining_s()),
     )  # fmt: skip
     repo.update_run(uid, sid, run_id, {"llm_started": True})  # survives retries: a unit is spent
-    # no catch here: any engine exception reaches the worker, which maps it with `to_public`
-    out = run_coro(
-        evaluate_validated(
-            evaluation, rctx, transcript, {"subject": session.clinician_speaker},
-            params, progress_cb,
-        )
-    )  # fmt: skip
+    # Preserve call accounting before the worker maps the original engine exception.
+    try:
+        out = run_coro(
+            evaluate_validated(
+                evaluation, rctx, transcript, {"subject": session.clinician_speaker},
+                params, progress_cb,
+            )
+        )  # fmt: skip
+    except Exception:
+        if rctx.metrics is not None:
+            # The collector contains call metadata and token/cost totals, never prompt text.
+            try:
+                repo.update_run(
+                    uid, sid, run_id, {"run_info": {"metrics": rctx.metrics.snapshot()}}
+                )
+            except Exception as exc:
+                logs.emit("run_metrics_write_failed", logging.WARNING,
+                          session_id=sid, run_id=run_id, exc_class=type(exc).__name__)
+        raise
 
     prefix = f"{uid}/{sid}/runs/{run_id}/"
     for name in ARTIFACTS:
@@ -201,20 +236,28 @@ def _evaluate(ctx, blobs, evaluation, run_doc, session) -> ReportDoc:
                             "application/json")  # fmt: skip
     ensure_active(repo, blobs, uid, sid)  # a DELETE during the run must not leave artifacts
     # (and a cancel must not get a report: ensure_active raises Cancelled)
-    versions = [r.version for r in repo.list_reports(uid, sid)]
     doc = ReportDoc(
-        version=max(versions, default=0) + 1,
+        version=0,  # assigned by `publish_report` inside its transaction
         run_id=run_id,
         report=out.report,
         report_schema_version=str(out.report.get("schema_version", "")),
     )
-    repo.put_report(uid, sid, run_id, doc)
-    repo.update_run(
-        uid, sid, run_id,
+    # ONE transaction: report + run completion + `report_ready` + slot release, re-checking that
+    # the session is still `running` (a cancel after the last `ensure_active` wins: no report).
+    published = repo.publish_report(
+        uid, sid, run_id, doc,
         {
+            "stage": None,
             "run_info": out.run_info or out.report.get("run_info"),
             "validation": out.run_info.get("validation"),
             "artifacts_prefix": blobs.uri(prefix),
         },
+        lambda version: transition_plan(
+            to="report_ready", step=None, latest_report_version=version
+        ),
+        run_doc.cap_date,
     )  # fmt: skip
-    return doc
+    if published is None:
+        if repo.get_session(uid, sid).state == "cancelled":
+            raise Cancelled()
+        raise PermanentError("internal_error")

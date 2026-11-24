@@ -131,7 +131,7 @@ CHECKLIST: dict[int, list[tuple[str, str]]] = {
         ("test_dev_script_and_image.py", "test_dev_script_checks_and_runs_combined_quickstart"),
     ],
     18: [
-        ("test_first_run.py", "test_confirm_in_report_ready_changes_next_run_only_report_unchanged")
+        ("test_first_run.py", "test_confirm_in_report_ready_is_refused_and_changes_nothing")
     ],
 }
 

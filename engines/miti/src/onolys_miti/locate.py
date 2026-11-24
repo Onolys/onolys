@@ -52,11 +52,32 @@ def _trim(text: str, start: int, end: int) -> tuple[int, int] | None:
 
 
 def _find_all(hay: str, needle: str) -> list[int]:
+    """Start offsets of `needle` in `hay` that begin and end on a word boundary ("you" is not
+    found inside "young")."""
     out, i = [], hay.find(needle)
     while i != -1:
-        out.append(i)
+        end = i + len(needle)
+        starts_mid_word = i > 0 and needle[0].isalnum() and hay[i - 1].isalnum()
+        ends_mid_word = end < len(hay) and needle[-1].isalnum() and hay[end].isalnum()
+        if not (starts_mid_word or ends_mid_word):
+            out.append(i)
         i = hay.find(needle, i + 1)
     return out
+
+
+_TOKEN_TYPO_MIN = 75
+
+
+def _tokens_differ_by_typos(needle: str, window: str) -> bool:
+    """True when every word present on one side only has a close spelling on the other
+    (a typo); False when a word was swapped for a different word."""
+    a, b = Counter(_TOKEN.findall(needle)), Counter(_TOKEN.findall(window))
+    only_a, only_b = list((a - b).elements()), list((b - a).elements())
+    for left, right in ((only_a, only_b), (only_b, only_a)):
+        for tok in left:
+            if not right or max(fuzz.ratio(tok, o) for o in right) < _TOKEN_TYPO_MIN:
+                return False
+    return True
 
 
 def _guard_tokens(s: str) -> Counter:
@@ -115,6 +136,8 @@ def _locate_one(text: str, needle: str, hint: int | None, cfg: LocateConfig) -> 
     if not _WINDOW_MIN <= ratio <= _WINDOW_MAX:
         return None
     if _guard_tokens(nneedle) != _guard_tokens(window):
+        return None
+    if not _tokens_differ_by_typos(nneedle, window):
         return None
     lead = len(ntext[ds:de]) - len(ntext[ds:de].lstrip())
     a, b = ds + lead, ds + lead + len(window)

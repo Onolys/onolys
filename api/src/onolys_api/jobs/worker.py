@@ -4,11 +4,11 @@ Per delivery: claim the step/run record (lease = deadline + 60 s), run the handl
 - success: record `done` (unless the handler finishes the step itself: `complete=False`);
 - PermanentError: record `failed` + error code, answer 2xx (no retry);
 - any other exception: `error_map.to_public` picks the public code and retry rule (SP09 R3);
-- RetryableError / TimeoutError: if another attempt is left (X-CloudTasks-TaskRetryCount + 1 <
-  MAX_ATTEMPTS) release the claim and answer 503 so Cloud Tasks retries; on the last attempt
-  record `failed` and answer 2xx.
+- RetryableError / TimeoutError: if another attempt is left (the claim counter < MAX_ATTEMPTS;
+  X-CloudTasks-TaskRetryCount only for tasks without a claim) release the claim and answer 503 so
+  Cloud Tasks retries; on the last attempt record `failed` and answer 2xx.
 Duplicate deliveries find `done`/`failed` and do nothing; a live lease always answers 503 (a dropped
-task is recovered by the lazy stale check on read, `jobs/stale.py`).
+task is recovered by the stale check on read and by the server sweep, `jobs/stale.py`).
 Every session transition goes through `advance`, which mirrors session_status.
 Logs carry codes and ids only, never text.
 """
@@ -25,6 +25,7 @@ from onolys_engine_core.log_context import log_context
 from onolys_api import logs
 from onolys_api.adapters.error_map import kind_for_code, to_public
 from onolys_api.errors import ApiError
+from onolys_api.jobs.charging import release_failed_run
 from onolys_api.jobs.machine import advance
 from onolys_api.jobs.queue import MAX_ATTEMPTS, TaskPayload, TaskQueue
 from onolys_api.repo.base import NotFoundError, Repo
@@ -162,7 +163,7 @@ class TaskRunner:
                 step=payload.kind,
             )
             return TaskResult(200, "skipped")  # nothing a retry could fix
-        attempt = retry_count + 1
+        attempt = retry_count + 1  # un-claimed tasks (polls): Cloud Tasks' own counter
         last = attempt >= MAX_ATTEMPTS
         now = self.clock()
         lease_s = self._deadline_s + LEASE_GRACE_S
@@ -173,7 +174,10 @@ class TaskRunner:
                     return TaskResult(200, "duplicate")
                 if claim.outcome == "busy":
                     return TaskResult(503, "busy")  # never 2xx: the live holder may crash (A1)
-                attempt = max(attempt, claim.attempts)
+                # the app's budget counts CLAIMS: a lease-busy 503 is not an attempt (Cloud Tasks
+                # still counts it), and a reclaimed crashed attempt is (A13)
+                attempt = claim.attempts
+                last = attempt >= MAX_ATTEMPTS  # one counter for `ctx.attempt` and `last`
             ctx = TaskContext(
                 payload, self.repo, self.queue, attempt,
                 now + timedelta(seconds=self._deadline_s), self.clock,
@@ -254,19 +258,30 @@ class TaskRunner:
     def _fail(
         self, spec: HandlerSpec, p: TaskPayload, code: str, exc_class: str, bookkeeping: bool = True
     ) -> None:
+        if not bookkeeping:  # the session is gone (an upload failure): nothing to mark
+            # a routine user-file rejection (R11), not a system failure: its own WARNING line, so
+            # the prod `status=failed` alert only fires for failures we must act on (A16)
+            logs.emit(
+                "upload_rejected", logging.WARNING, status="rejected", session_id=p.sid,
+                step=spec.step or "run", error_code=code, exc_class=exc_class,
+                request_id=p.request_id,
+            )  # fmt: skip
+            return
         logs.failed(
             "run_failed" if spec.scope == "run" else "step_failed", session_id=p.sid,
             run_id=p.run_id, step=spec.step or "run", error_code=code, exc_class=exc_class,
             request_id=p.request_id,
         )  # fmt: skip
-        if not bookkeeping:  # the session is gone (an upload failure): nothing to mark
-            return
         if self._is_cancelled(p):  # never write `failed` over `cancelled` (R5)
             return
         self._safe(self._record, spec, p, status="failed", ended=self.clock(), error=code)
         label = spec.step or "run"
         counted = None
         if spec.scope == "run" and p.run_id:  # the refund already ran in `run.py`
+            # backstop (M-2): if that release failed, try again; a no-op when it already ran
+            self._safe(
+                release_failed_run, self.repo, p.uid, p.sid, p.run_id, kind_for_code(code), None
+            )
             try:
                 counted = self.repo.get_run(p.uid, p.sid, p.run_id).unit_kept
             except NotFoundError:

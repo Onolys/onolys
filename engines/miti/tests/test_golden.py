@@ -88,7 +88,7 @@ async def test_golden_report_against_api_local_schema():
 async def test_fixture_keys_match_existing_golden_filenames(monkeypatch):
     """Freeze request hashes before extracting the shared LLM implementation."""
     expected = {
-        "0041dea5d075fde958d921148c11543d6f7fd0ac72b964f6f82236d74e8e3e74",
+        "8340f9e78d95ffa99a37a4ac7015423258eb01f2d2b22d5871e83b9d78645623",
         "c24dfc214fee7fdb4aa02911ec86b49e7e4dca8b2b4c3f1feba40db6033602a2",
     }
     seen = set()

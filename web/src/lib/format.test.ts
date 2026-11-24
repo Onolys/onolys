@@ -9,3 +9,15 @@ describe("formatResetTime", () => {
     expect(out.replace(/^\d{1,2}:\d{2}\s?(AM|PM)?/i, "").trim()).not.toBe("");
   });
 });
+
+describe("formatDate (C14)", () => {
+  it("uses the given locale and zone, one shared format", async () => {
+    const { formatDate } = await import("./format");
+    expect(formatDate("2026-11-24T23:30:00.000Z", { locale: "en-US", timeZone: "UTC" })).toBe("Nov 24, 2026");
+    expect(formatDate("2026-11-24T23:30:00.000Z", { locale: "en-US", timeZone: "Asia/Tokyo" })).toBe("Nov 25, 2026");
+  });
+  it("returns the input when it is not a date", async () => {
+    const { formatDate } = await import("./format");
+    expect(formatDate("garbage")).toBe("garbage");
+  });
+});

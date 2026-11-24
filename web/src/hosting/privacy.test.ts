@@ -125,9 +125,15 @@ describe("no app data in browser storage", () => {
 });
 
 describe("no PHI in titles or console output", () => {
-  it("the document title is the static one in index.html and never assigned", () => {
+  it("index.html carries the static title; only the route-title hook assigns one, from a fixed table of page names", () => {
     expect(read(join(WEB_ROOT, "index.html"))).toMatch(/<title>Onolys<\/title>/);
-    for (const f of files) expect(read(f), rel(f)).not.toMatch(/document\.title|<title|react-helmet/);
+    const HOOK = "src/routes/routeTitle.tsx";
+    for (const f of files.filter((f) => rel(f) !== HOOK)) expect(read(f), rel(f)).not.toMatch(/document\.title|<title|react-helmet/);
+    const hook = read(join(WEB_ROOT, HOOK));
+    // The title is built only from the fixed names in the table, never from the URL, params or any data.
+    expect(hook.match(/document\.title/g)).toHaveLength(1);
+    expect(hook).toMatch(/document\.title = titleForPath\(pathname\)/);
+    expect(hook).not.toMatch(/useParams|useSearchParams|location\.search|location\.hash/);
   });
 
   it("the only console calls log span ids or the boot error, not text", () => {

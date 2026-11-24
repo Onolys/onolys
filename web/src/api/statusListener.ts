@@ -39,6 +39,43 @@ export interface SessionStatusDoc {
   has_rating: boolean;
 }
 
+const isoOrNull = (v: unknown): string | null => {
+  if (typeof v === "string") return v;
+  if (v && typeof (v as { toDate?: unknown }).toDate === "function") return (v as { toDate(): Date }).toDate().toISOString();
+  return null;
+};
+const numOrNull = (v: unknown): number | null => (typeof v === "number" && Number.isFinite(v) ? v : null);
+
+/**
+ * The one place a raw status doc (Firestore data with Timestamps, or the REST detail reshaped to the same keys)
+ * becomes a `SessionStatusDoc`. Both the live listener and the REST fallback go through it so they cannot drift:
+ * add a field to `SessionStatusDoc` here and both paths carry it.
+ */
+export function normalizeStatusDoc(d: Record<string, unknown>): SessionStatusDoc {
+  return {
+    uid: String(d.uid ?? ""),
+    state: d.state as SessionStatusDoc["state"],
+    step: typeof d.step === "string" ? d.step : null,
+    progress: Number(d.progress ?? 0),
+    error_code: typeof d.error_code === "string" ? d.error_code : null,
+    error_kind: typeof d.error_kind === "string" ? (d.error_kind as FailureKind) : null,
+    retries_left: numOrNull(d.retries_left),
+    counted: typeof d.counted === "boolean" ? d.counted : null,
+    latest_report_version: numOrNull(d.latest_report_version),
+    updated_at: isoOrNull(d.updated_at) ?? new Date(0).toISOString(),
+    started_at: isoOrNull(d.started_at),
+    stage_started_at: isoOrNull(d.stage_started_at),
+    waited_ms: numOrNull(d.waited_ms) ?? 0,
+    audio_s: numOrNull(d.audio_s),
+    progress_next: numOrNull(d.progress_next),
+    stage_expected_s: numOrNull(d.stage_expected_s),
+    transcript_ready: d.transcript_ready === true,
+    speaker_confirmed: d.speaker_confirmed === true,
+    rating_submitted: d.rating_submitted === true,
+    has_rating: d.has_rating === true,
+  };
+}
+
 export type Unsubscribe = () => void;
 
 export interface StatusListener {

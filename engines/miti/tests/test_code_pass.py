@@ -271,3 +271,56 @@ async def test_metrics_passed_through(tmp_path, pack_data):
     m = MetricsCollector()
     await run(C(lambda req, n: good(req)), make_pack(tmp_path, pack_data), volleys(1), metrics=m)
     assert seen == [m]
+
+
+def _resp(req, ids):
+    return req.response_model.model_validate(
+        {"volleys": [{"volley_id": v, "utterances": [utt("First thing here.")]} for v in ids]}
+    )
+
+
+@pytest.mark.parametrize(
+    "ids",
+    [[], ["v1", "v3"], ["v1", "v2", "v2", "v3"], ["v1", "v2", "v3", "vX"], ["v1", "v2", "vX"]],
+    ids=["empty_outer", "omitted_middle", "duplicate", "unknown_extra", "unknown_replaces"],
+)
+async def test_incomplete_coverage_fails_run(tmp_path, pack_data, ids):
+    client = FakeClient(lambda req, n: _resp(req, ids))
+    with pytest.raises(CodePassFailed):
+        await run(client, make_pack(tmp_path, pack_data), volleys(3))
+
+
+async def test_incomplete_coverage_recovers_via_halving(tmp_path, pack_data):
+    def handler(req, n):
+        return _resp(req, [] if n == 1 else [v["volley_id"] for v in _req_volleys(req)])
+
+    client = FakeClient(handler)
+    out = await run(client, make_pack(tmp_path, pack_data), volleys(2))
+    assert [len(_req_volleys(r)) for r in client.requests] == [2, 1, 1]
+    assert len(out.instances) == 2
+
+
+async def test_complete_response_and_explicit_empty_list_valid(tmp_path, pack_data):
+    def handler(req, n):
+        return req.response_model.model_validate({"volleys": [
+            {"volley_id": "v1", "utterances": [utt("First thing here.")]},
+            {"volley_id": "v2", "utterances": []},
+        ]})
+
+    out = await run(FakeClient(handler), make_pack(tmp_path, pack_data), volleys(2))
+    assert [i.volley_id for i in out.instances] == ["v1"]
+
+
+async def test_deadline_reaches_every_request(tmp_path, pack_data):
+    client = FakeClient(lambda req, n: good(req))
+    await run(client, make_pack(tmp_path, pack_data, {}), volleys(26), deadline=123.5)
+    assert len(client.requests) == 2
+    assert [r.deadline for r in client.requests] == [123.5, 123.5]
+
+
+async def test_output_format_says_all_ids_returned_and_empty_allowed(tmp_path, pack_data):
+    from onolys_miti.code_pass import _OUTPUT_FORMAT
+
+    text = " ".join(_OUTPUT_FORMAT.split())
+    assert "every volley id appears exactly once" in text
+    assert "empty" in text and "allowed" in text

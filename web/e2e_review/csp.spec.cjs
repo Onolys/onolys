@@ -45,8 +45,9 @@ test.describe("CSP smoke: zero violations under the prod CSP", () => {
     expect(await csp.all()).toEqual([]);
   });
 
-  test("account menu, settings secret dialog, native select, session DeleteDialog", async ({ page, context }) => {
-    await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+  test("account menu, settings secret dialog, native select, session DeleteDialog", async ({ page, context, browserName }) => {
+    // Firefox/WebKit authorize clipboard writes through the Copy click itself.
+    if (browserName === "chromium") await context.grantPermissions(["clipboard-read", "clipboard-write"]);
     const csp = await watchCsp(page);
     await signUpVerified(page, "csp@example.com");
 

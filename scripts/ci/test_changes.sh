@@ -91,7 +91,7 @@ run false "core=false oneshot=true miti=true api=true admin-auth=false admin-bac
 run false "core=false oneshot=true miti=true api=true admin-auth=false admin-backend=false eval=true eval-backend=false eval-web=false frontend=false web=false infra=false" engines/miti/src/onolys_miti/data/prompts/globals_system.md
 run false "core=false oneshot=true miti=true api=true admin-auth=false admin-backend=false eval=true eval-backend=false eval-web=false frontend=false web=false infra=false" engines/miti/src/onolys_miti/data/fixtures/good_practice.json
 run false "core=false oneshot=true miti=false api=false admin-auth=false admin-backend=false eval=false eval-backend=false eval-web=false frontend=false web=false infra=false" scripts/gen_miti_schema.py
-run false "core=false oneshot=true miti=false api=false admin-auth=false admin-backend=false eval=false eval-backend=false eval-web=false frontend=false web=false infra=false" config/staging/routes.yaml
+run false "core=false oneshot=true miti=false api=true admin-auth=false admin-backend=false eval=false eval-backend=false eval-web=false frontend=false web=false infra=false" config/staging/routes.yaml
 run false "core=false oneshot=false miti=false api=false admin-auth=false admin-backend=false eval=false eval-backend=false eval-web=false frontend=false web=false infra=false" scripts/gen_miti_schema.py.bak
 run false "core=false oneshot=false miti=true api=true admin-auth=false admin-backend=false eval=true eval-backend=false eval-web=false frontend=false web=false infra=false" engines/miti/src/onolys_miti/data/pack.yaml.bak
 run false "core=true oneshot=true miti=true api=true admin-auth=true admin-backend=true eval=true eval-backend=false eval-web=false frontend=false web=false infra=false" uv.lock
@@ -109,7 +109,7 @@ run false "core=false oneshot=true miti=false api=false admin-auth=false admin-b
 run false "core=false oneshot=false miti=false api=false admin-auth=false admin-backend=false eval=true eval-backend=true eval-web=false frontend=false web=false infra=false" eval/core/src/onolys_eval/adapters.py
 run false "core=true oneshot=true miti=true api=true admin-auth=false admin-backend=false eval=true eval-backend=true eval-web=false frontend=false web=false infra=false" engines/core/src/context.py
 run false "core=false oneshot=false miti=true api=true admin-auth=false admin-backend=false eval=true eval-backend=true eval-web=false frontend=false web=false infra=false" engines/miti/src/engine.py
-run false "core=false oneshot=true miti=false api=false admin-auth=false admin-backend=false eval=false eval-backend=true eval-web=false frontend=false web=false infra=false" config/staging/routes.yaml
+run false "core=false oneshot=true miti=false api=true admin-auth=false admin-backend=false eval=false eval-backend=true eval-web=false frontend=false web=false infra=false" config/staging/routes.yaml
 run false "core=false oneshot=false miti=false api=false admin-auth=false admin-backend=false eval=false eval-backend=true eval-web=false frontend=false web=false infra=false" protocols/miti/pack.yaml
 run false "core=false oneshot=false miti=false api=false admin-auth=false admin-backend=true eval=false eval-backend=true eval-web=false frontend=false web=false infra=false" .dockerignore
 run false "core=false oneshot=false miti=false api=false admin-auth=false admin-backend=false eval=false eval-backend=false eval-web=true frontend=true web=false infra=false" frontend/src/auth/AuthGate.tsx
@@ -117,11 +117,15 @@ run false "core=false oneshot=false miti=false api=false admin-auth=false admin-
 run false "core=false oneshot=false miti=false api=false admin-auth=false admin-backend=false eval=false eval-backend=false eval-web=false frontend=true web=false infra=false" frontend/src/transport/authFetch.ts.bak
 run false "core=false oneshot=false miti=false api=true admin-auth=false admin-backend=false eval=false eval-backend=false eval-web=true frontend=false web=false infra=false" api/openapi.json
 run false "core=false oneshot=false miti=false api=true admin-auth=false admin-backend=false eval=false eval-backend=false eval-web=false frontend=false web=false infra=false" api/openapi.json.bak
-run false "core=false oneshot=false miti=false api=false admin-auth=false admin-backend=false eval=false eval-backend=false eval-web=true frontend=false web=false infra=false" docs/contracts/public/transcript.v1.schema.json
+run false "core=false oneshot=false miti=false api=true admin-auth=false admin-backend=false eval=false eval-backend=false eval-web=true frontend=false web=false infra=false" docs/contracts/public/transcript.v1.schema.json
 run false "core=true oneshot=true miti=true api=true admin-auth=true admin-backend=true eval=true eval-backend=true eval-web=false frontend=false web=false infra=false" uv.lock
 run false "core=true oneshot=true miti=true api=true admin-auth=true admin-backend=true eval=true eval-backend=true eval-web=false frontend=false web=false infra=false" pyproject.toml
 run false "core=true oneshot=true miti=true api=true admin-auth=true admin-backend=true eval=true eval-backend=true eval-web=true frontend=true web=false infra=false" scripts/ci/changes.sh
 run false "core=true oneshot=true miti=true api=true admin-auth=true admin-backend=true eval=true eval-backend=true eval-web=true frontend=true web=false infra=false" .github/workflows/ci.yml
 run true "core=true oneshot=true miti=true api=true admin-auth=true admin-backend=true eval=true eval-backend=true eval-web=true frontend=true web=false infra=false" docs/readme.md
 run false "core=false oneshot=false miti=false api=false admin-auth=false admin-backend=false eval=false eval-backend=false eval-web=false frontend=false web=false infra=false" docs/readme.md
+# Shared runtime settings/contracts must run API validation; action changes affect all jobs.
+run false "core=false oneshot=true miti=false api=true admin-auth=false admin-backend=false eval=false eval-backend=true eval-web=false frontend=false web=false infra=false" config/staging/routes.yaml
+run false "core=false oneshot=false miti=false api=true admin-auth=false admin-backend=false eval=false eval-backend=false eval-web=true frontend=false web=false infra=false" docs/contracts/public/session.schema.json
+run false "core=true oneshot=true miti=true api=true admin-auth=true admin-backend=true eval=true eval-backend=true eval-web=true frontend=true web=false infra=false" .github/actions/setup-python/action.yml
 exit $fail

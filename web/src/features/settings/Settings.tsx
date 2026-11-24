@@ -43,6 +43,7 @@ export function Settings() {
   const { signOut, error: signOutError } = useSignOut();
   const key = useQuery({ queryKey: ["api-key"], queryFn: async () => unwrap(await client.GET("/api-key")) });
   const usage = useUsage();
+  const usageErr = usage.error ? describeError(usage.error) : null;
 
   const [confirm, setConfirm] = useState<Confirm>(null);
   const regenerateBtn = useRef<HTMLButtonElement>(null);
@@ -174,6 +175,12 @@ export function Settings() {
               Interviews: <UsageLeft kind="interview" period="day" />
             </p>
           </>
+        ) : usage.isError ? (
+          <ErrorCard code={usageErr?.code} reference={usageErr?.requestId} message="We couldn't load your usage.">
+            <Button type="button" variant="secondary" onClick={() => void usage.refetch()}>
+              Retry
+            </Button>
+          </ErrorCard>
         ) : (
           <p className={NOTE}>Loading…</p>
         )}

@@ -15,6 +15,7 @@ from onolys_api.adapters.base import AdapterError
 from onolys_api.auth.deps import AuthUser, current_user_unverified_ok
 from onolys_api.email.rate import client_ip
 from onolys_api.errors import ApiError, ErrorResponse
+from onolys_api.jobs.reset_email import reset_payload
 
 ERRORS = {"default": {"model": ErrorResponse, "description": "Error"}}
 router = APIRouter(prefix="/auth/email", tags=["auth-email"], responses=ERRORS)
@@ -90,7 +91,7 @@ def send_verification(request: Request, body: VerificationRequest, user: Unverif
 
 
 def _send_reset(service, email: str) -> None:
-    """Background: runs after the 202, so a failure is only logged."""
+    """In-process fallback (no queue, or enqueue failed): runs after the 202, only logged."""
     try:
         sent = service.send_password_reset(email)
     except Exception as exc:
@@ -120,5 +121,19 @@ def send_password_reset(request: Request, body: ResetRequest, background: Backgr
     if not limiter.check_reset(body.email, ip):
         logs.emit("auth_email", logging.WARNING, email_kind="reset", outcome="rate_limited")
         return Empty()
-    background.add_task(_send_reset, service, body.email)
+    queue = getattr(request.app.state, "queue", None)
+    if queue is not None:  # durable: enqueued before the 202, sent by the worker with a retry (M-5)
+        try:
+            state = request.app.state
+            queue.enqueue(
+                reset_payload(
+                    state.settings, body.email, getattr(request.state, "request_id", None),
+                    state.clock(),
+                )
+            )
+            return Empty()
+        except Exception as exc:  # noqa: BLE001 - never leak "known account" through a 5xx
+            logs.emit("auth_email", logging.ERROR, email_kind="reset", outcome="enqueue_failed",
+                      exc_class=type(exc).__name__)  # fmt: skip
+    background.add_task(_send_reset, service, body.email)  # no queue (local) or queue down
     return Empty()

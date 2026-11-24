@@ -87,6 +87,32 @@ describe("/auth/action pre-check failures and already verified (FX17)", () => {
     expect(screen.queryByText(/invalid/)).toBeNull();
   });
 
+  it("verifyEmail: a verified user opening ANOTHER account's valid link is not told 'Already verified' and can verify it (LM-12)", async () => {
+    const service = createFakeAuthService();
+    await service.signUp("b@clinic.org", "password1");
+    await service.signOut();
+    const code = service.issueActionCode("verifyEmail", "b@clinic.org");
+    service.signedInAs("a@clinic.org", { verified: true });
+    const check = vi.spyOn(service, "checkEmailVerificationCode");
+    renderApp(`/auth/action?mode=verifyEmail&oobCode=${code}`, { service, user: { email: "a@clinic.org", verified: true } });
+    await waitFor(() => expect(check).toHaveBeenCalledTimes(1)); // the signed-in user arrived; the link's owner is checked
+    const verify = await screen.findByRole("button", { name: "Verify my email" });
+    expect(screen.queryByRole("heading", { name: "Already verified" })).toBeNull();
+    expect(service.calls.emailVerifications).toBe(0); // checked, not consumed
+    await userEvent.setup().click(verify);
+    await h1("Email verified");
+    expect(service.calls.emailVerifications).toBe(1);
+  });
+
+  it("verifyEmail: a verified user opening their OWN still-valid link sees Already verified (case-insensitive)", async () => {
+    const service = createFakeAuthService();
+    service.signedInAs("a@clinic.org", { verified: true });
+    const code = service.issueActionCode("verifyEmail", "A@Clinic.org");
+    renderApp(`/auth/action?mode=verifyEmail&oobCode=${code}`, { service, user: { email: "a@clinic.org", verified: true } });
+    await h1("Already verified");
+    expect(service.calls.emailVerifications).toBe(0);
+  });
+
   it("resetPassword: a network failure of the pre-check shows the network message and Try again, then recovers", async () => {
     const service = await svc();
     const code = service.issueActionCode("resetPassword", "a@clinic.org");

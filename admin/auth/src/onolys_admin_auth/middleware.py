@@ -1,5 +1,6 @@
 """Pure ASGI middleware. Never logs the token or the email."""
 
+import asyncio
 import json
 import logging
 
@@ -29,7 +30,7 @@ class AdminAuthMiddleware:
         if token is None:
             return await self._deny(send, 401, "unauthenticated", "Authentication required.")
         try:
-            claims = self.verifier.verify(token)
+            claims = await asyncio.to_thread(self.verifier.verify, token)
         except InvalidToken:
             log.info("admin auth denied: invalid token")
             return await self._deny(send, 401, "unauthenticated", "Authentication required.")
@@ -41,10 +42,10 @@ class AdminAuthMiddleware:
         email = claims.get("email")
         if claims.get("email_verified") is not True or not isinstance(email, str) or not email:
             log.info("admin auth denied: email not verified")
-            return await self._deny(send, 403, "forbidden", "Not allowed.")
+            return await self._deny(send, 403, "email_unverified", "Not allowed.")
         if email.strip().lower() not in self.config.allowed_emails:
             log.info("admin auth denied: not on allowlist")
-            return await self._deny(send, 403, "forbidden", "Not allowed.")
+            return await self._deny(send, 403, "not_allowlisted", "Not allowed.")
         await self.app(scope, receive, send)
 
     @staticmethod

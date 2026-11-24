@@ -38,14 +38,14 @@ function Login({ session }: { session: AuthSession }) {
 
 /** Renders children only for a signed-in admin. Mounted only when the gate is on (see gate.ts). */
 export function AuthGate({ session, children }: { session: AuthSession; children: ReactNode }) {
-  const { status } = useSyncExternalStore(session.subscribe, session.getSnapshot);
+  const { status, denialCode } = useSyncExternalStore(session.subscribe, session.getSnapshot);
   if (status === "loading") return <p role="status">Loading sign-in…</p>;
   if (status === "signed-out") return <Login session={session} />;
   if (status === "forbidden") {
     return (
       <div className="app-message" role="alert">
         <h2>Not allowed</h2>
-        <p>This account is not on the admin list.</p>
+        <p>{denialCode === "email_unverified" ? "Verify your email, then sign out and sign in again." : denialCode === "not_allowlisted" ? "This account is not on the app access list. Contact an administrator." : "This account is not allowed to use this app, or its email is not verified."}</p>
         <button type="button" onClick={() => void session.signOut()}>Sign out</button>
       </div>
     );

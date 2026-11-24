@@ -163,6 +163,12 @@ export function createFirebaseAuthService(config: FirebaseWebConfig): AuthServic
         emit();
       }
     },
+    async checkEmailVerificationCode(oobCode) {
+      const info = await checkActionCode(auth, oobCode); // does not consume the code
+      const email = info.data.email;
+      if (info.operation !== "VERIFY_EMAIL" || !email) throw new AuthError("auth/invalid-action-code");
+      return email;
+    },
     async verifyPasswordResetCode(oobCode) {
       return fbVerifyPasswordResetCode(auth, oobCode);
     },

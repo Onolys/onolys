@@ -149,3 +149,14 @@ def test_verbatim_quote_containing_ellipsis_is_found_whole():
     m = locate(t, q, None, CFG)
     assert m is not None and (m.tier, m.start) == ("exact", 53)
     assert sl(t, m) == q
+
+
+def test_exact_requires_word_boundaries():
+    text = "She is young."
+    assert locate(text, "you", None, CFG) is None
+    assert locate(text, "young", None, CFG).tier == "exact"
+
+
+def test_fuzzy_rejects_one_word_swap():
+    text = "I think we should really stop doing that now"
+    assert locate(text, "I think you should really stop doing that now", None, CFG) is None

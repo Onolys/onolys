@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { drinkingSampleNotCoded, drinkingSampleReport, drinkingSampleTurns } from "../../mocks/fixtures/sample";
+import { formatDate } from "../../lib/format";
 import { ReportView } from "./ReportView";
 
 const ready = { status: "ready" as const, turns: drinkingSampleTurns };
@@ -51,7 +52,7 @@ describe("ReportView", () => {
     expect(screen.getByText("Cut down on drinking")).toBeTruthy();
     expect(screen.getByText("MITI 4.2.1")).toBeTruthy();
     expect(screen.getByText("Full conversation (54 utterances)")).toBeTruthy();
-    expect(screen.getByText("20 Nov 2026")).toBeTruthy();
+    expect(screen.getByText(formatDate("2026-11-20T09:30:00.000Z"))).toBeTruthy();
   });
 
   it("shows the four globals with value and reason", () => {
@@ -209,5 +210,46 @@ describe("ReportView", () => {
   it("emits no inline style attribute", () => {
     const { container } = view();
     expect(container.innerHTML).not.toMatch(/style=/);
+  });
+});
+
+describe("ReportView follow-ups (C14, C15, warnings)", () => {
+  it("formats the header date with the shared formatter (user's locale and zone)", async () => {
+    view();
+    expect(screen.getByText(formatDate("2026-11-20T09:30:00.000Z"))).toBeTruthy();
+    expect(screen.queryByText("20 Nov 2026")).toBeNull();
+  });
+
+  it("shows a dash labelled 'no data' (not 0) when a behaviour has no onolys_count, and no total from nothing", () => {
+    const r = structuredClone(drinkingSampleReport);
+    delete (r.behaviours!.find((b) => b.item_id === "confront") as { onolys_count?: unknown }).onolys_count;
+    view({ report: r });
+    const t = screen.getByRole("table", { name: "Behaviour counts" });
+    const row = within(t).getAllByRole("row").find((tr) => within(tr).queryAllByRole("cell")[1]?.textContent === "Confront")!;
+    const cell = within(row).getAllByRole("cell").at(-1)!;
+    expect(cell.textContent).toBe("–");
+    expect(within(cell).getByRole("img", { name: "no data" })).toBeTruthy();
+  });
+
+  it("explains per-run engine codes in plain language, once each", () => {
+    const codes = ["quote_not_found", "overlap", "insufficient_evidence", "capped", "reason_withheld_tone"];
+    const r = { ...drinkingSampleReport, warnings: [...codes, "quote_not_found", "reason_withheld_tone"].map((code) => ({ code, item_id: "gi" })) };
+    view({ report: r });
+    const notes = screen.getAllByRole("note");
+    expect(notes).toHaveLength(codes.length);
+    for (const n of notes) expect(n.textContent).not.toMatch(/_|processing note/);
+  });
+
+  it("shows an unknown warning code as a generic note instead of hiding it (once)", () => {
+    const r = { ...drinkingSampleReport, warnings: [{ code: "brand_new_code" }, { code: "another_new_code" }] };
+    view({ report: r });
+    const notes = screen.getAllByRole("note");
+    expect(notes).toHaveLength(1);
+    expect(notes[0]!.textContent).toBe("Some parts of this report had a processing note.");
+  });
+
+  it("the sample and mock fixtures still render with no warning notes", async () => {
+    view();
+    expect(screen.queryAllByRole("note")).toHaveLength(0);
   });
 });

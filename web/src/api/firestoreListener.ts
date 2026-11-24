@@ -4,7 +4,7 @@
  * the named database from `VITE_FIRESTORE_DATABASE` and, in dev, the emulator from
  * `VITE_FIRESTORE_EMULATOR` (`host:port`). `firebase/firestore` loads lazily.
  */
-import type { SessionStatusDoc, StatusListener } from "./statusListener";
+import { normalizeStatusDoc, type StatusListener } from "./statusListener";
 
 export interface FirestoreListenerConfig {
   /** `staging` or `(default)`. */
@@ -37,28 +37,6 @@ function getDb(config: FirestoreListenerConfig): Promise<Firestore> {
   return dbPromise;
 }
 
-const iso = (v: unknown): string => {
-  if (typeof v === "string") return v;
-  if (v && typeof (v as { toDate?: unknown }).toDate === "function") return (v as { toDate(): Date }).toDate().toISOString();
-  return new Date(0).toISOString();
-};
-
-function toStatusDoc(d: Record<string, unknown>): SessionStatusDoc {
-  return {
-    uid: String(d.uid ?? ""),
-    state: d.state as SessionStatusDoc["state"],
-    step: (d.step as string | null | undefined) ?? null,
-    progress: Number(d.progress ?? 0),
-    error_code: (d.error_code as string | null | undefined) ?? null,
-    latest_report_version: (d.latest_report_version as number | null | undefined) ?? null,
-    updated_at: iso(d.updated_at),
-    transcript_ready: d.transcript_ready === true,
-    speaker_confirmed: d.speaker_confirmed === true,
-    rating_submitted: d.rating_submitted === true,
-    has_rating: d.has_rating === true,
-  };
-}
-
 export function createFirestoreStatusListener(config: FirestoreListenerConfig = {}): StatusListener {
   return {
     subscribe(sessionId, onStatus, onError) {
@@ -72,7 +50,7 @@ export function createFirestoreStatusListener(config: FirestoreListenerConfig = 
           if (cancelled) return;
           off = onSnapshot(
             doc(db, "session_status", sessionId),
-            (snap) => onStatus(snap.exists() ? toStatusDoc(snap.data() as Record<string, unknown>) : null),
+            (snap) => onStatus(snap.exists() ? normalizeStatusDoc(snap.data() as Record<string, unknown>) : null),
             (err) => onError(err),
           );
         } catch (e) {

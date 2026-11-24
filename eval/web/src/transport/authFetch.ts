@@ -4,8 +4,8 @@ export interface AuthFetchDeps {
   getToken: (forceRefresh?: boolean) => Promise<string | null>;
   /** Still 401 after one forced refresh: go to login. */
   onUnauthorized: () => void;
-  /** 403: signed in but not on the admin list. */
-  onForbidden: () => void;
+  /** 403: signed in but not allowed (not on the admin list, or email not verified). */
+  onForbidden: (code?: string) => void;
 }
 
 /** fetch wrapper: `Authorization: Bearer <ID token>`; 401 -> one forced refresh + retry, then login; 403 -> forbidden. */
@@ -23,7 +23,11 @@ export function createAuthFetch({ fetch: doFetch, getToken, onUnauthorized, onFo
       res = await send(input, init, true);
       if (res.status === 401) onUnauthorized();
     }
-    if (res.status === 403) onForbidden();
+    if (res.status === 403) {
+      const body = await res.clone().json().catch(() => null);
+      const code = body?.error?.code;
+      onForbidden(code === "email_unverified" || code === "not_allowlisted" ? code : undefined);
+    }
     return res;
   };
 }

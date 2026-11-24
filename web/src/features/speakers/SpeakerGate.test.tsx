@@ -1,7 +1,7 @@
 import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, onTestFinished } from "vitest";
 import { mockBackend, server } from "../../mocks/server";
 import { renderApp } from "../../test/renderApp";
 
@@ -72,6 +72,36 @@ describe("speaker gate", () => {
     expect(mockBackend.getSpeakers(UID, sid).clinician_speaker).toBe("spk_1");
   });
 
+  it("shows friendly numbered labels, never the raw speaker id (C9)", async () => {
+    const sid = create();
+    toAwaiting(sid);
+    open(sid);
+    const list = await cards();
+    expect(within(list[0]).getByRole("heading", { level: 3, name: "Speaker 1" })).toBeInTheDocument();
+    expect(within(list[1]).getByRole("heading", { level: 3, name: "Speaker 2" })).toBeInTheDocument();
+    expect(screen.queryByText(/spk_\d/)).not.toBeInTheDocument();
+  });
+
+  it("stays locked after a successful confirm until the status doc moves on (LM-16)", async () => {
+    const user = userEvent.setup();
+    const sid = create();
+    toAwaiting(sid);
+    let posts = 0;
+    // The API accepts but the status doc has not moved yet: the gate must not re-enable.
+    server.use(
+      http.post("*/v1/sessions/:id/speakers/confirm", () => {
+        posts++;
+        return HttpResponse.json({ schema_version: "0.0.1", session: { id: sid, status: "awaiting_input" }, clinician_speaker: "spk_0" }, { status: 202 });
+      }),
+    );
+    open(sid);
+    const list = await cards();
+    await user.click(within(list[0]).getByRole("button", { name: "This is the clinician" }));
+    await waitFor(() => expect(posts).toBe(1));
+    await act(async () => {});
+    for (const b of screen.getAllByRole("button", { name: "This is the clinician" })) expect(b).toBeDisabled();
+  });
+
   it("works from the keyboard", async () => {
     const user = userEvent.setup();
     const sid = create();
@@ -134,9 +164,13 @@ describe("change who the clinician is", () => {
     expect(mockBackend.listRuns(UID, sid)).toHaveLength(1);
   });
 
-  it("after a failed run, preselects the current clinician and tries the run again", async () => {
+  it("after a transient failure, preselects the current clinician, saves, then re-runs via /retry (never /runs)", async () => {
     const user = userEvent.setup();
-    const sid = reportReady("fail-code");
+    const sid = reportReady("fail-transient");
+    const hits: string[] = [];
+    const log = ({ request }: { request: Request }) => void hits.push(`${request.method} ${new URL(request.url).pathname}`);
+    server.events.on("request:start", log);
+    onTestFinished(() => void server.events.removeListener("request:start", log));
     open(sid);
     await user.click(await screen.findByRole("button", { name: "Change who the clinician is" }));
     const list = await cards();
@@ -147,11 +181,43 @@ describe("change who the clinician is", () => {
     await waitFor(() => expect(mockBackend.listRuns(UID, sid)).toHaveLength(2));
     expect(mockBackend.getSpeakers(UID, sid).clinician_speaker).toBe("spk_1");
     await waitFor(() => expect(screen.queryByRole("list", { name: "Speakers" })).not.toBeInTheDocument());
+    expect(hits.filter((h) => /speakers\/confirm|\/retry|\/runs$/.test(h))).toEqual([
+      `POST /v1/sessions/${sid}/speakers/confirm`,
+      `POST /v1/sessions/${sid}/retry`,
+    ]);
+  });
+
+  it("is not offered after a permanent failure: only retryable failures re-run (H-5)", async () => {
+    const sid = reportReady("fail-code");
+    open(sid);
+    await screen.findByRole("link", { name: "Start a new session" });
+    expect(screen.queryByRole("button", { name: "Change who the clinician is" })).not.toBeInTheDocument();
+  });
+
+  it("says the clinician was saved when the re-run itself fails (no half-applied silence)", async () => {
+    const user = userEvent.setup();
+    const sid = reportReady("fail-transient");
+    server.use(
+      http.post("*/v1/sessions/:id/retry", () =>
+        HttpResponse.json(
+          { schema_version: "0.0.1", error: { code: "invalid_state", message: "Not now.", request_id: "req_7", details: [] } },
+          { status: 409 },
+        ),
+      ),
+    );
+    open(sid);
+    await user.click(await screen.findByRole("button", { name: "Change who the clinician is" }));
+    const list = await cards();
+    await user.click(within(list[1]).getByRole("radio", { name: "This is the clinician" }));
+    await user.click(screen.getByRole("button", { name: "Save and try again" }));
+    expect(await screen.findByText(/clinician was saved, but the re-run didn't start/i)).toBeInTheDocument();
+    expect(mockBackend.getSpeakers(UID, sid).clinician_speaker).toBe("spk_1");
+    expect(screen.getByRole("button", { name: "Save and try again" })).toBeEnabled();
   });
 
   it("can be reopened by keyboard after a failed run", async () => {
     const user = userEvent.setup();
-    const sid = reportReady("fail-code");
+    const sid = reportReady("fail-transient");
     open(sid);
     const link = await screen.findByRole("button", { name: "Change who the clinician is" });
     act(() => link.focus());

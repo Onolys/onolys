@@ -480,3 +480,77 @@ def test_partial_human_scores_leave_missing_metrics_null():
     values = _values(PartialScores(counts={"question": 3, "cr": 1, "sr": 1}, quality_label="low"))
     assert values["question"] == 3 and values["gi"] is None and values["cct"] is None
     assert values["pct_cr"] == .5 and values["reflection_question_ratio"] == 2 / 3
+
+
+def test_history_paginates_past_default_cap_with_stable_cursor(services):
+    # D8: nothing is silently dropped; next_cursor walks the whole history newest first.
+    repository = services.repository
+    for i in range(7):
+        repository.create_run(
+            f"r{i}",
+            {"created_at": f"2026-01-01T00:00:0{i}+00:00", "input": {}, "engines": []},
+            {},
+        )
+    c = client(services=services)
+    seen, cursor = [], None
+    while True:
+        params = {"limit": 3, **({"cursor": cursor} if cursor else {})}
+        page = c.get("/v1/runs", headers=AUTH, params=params).json()
+        seen += [r["run_id"] for r in page["runs"]]
+        cursor = page["next_cursor"]
+        if cursor is None:
+            break
+    assert seen == [f"r{i}" for i in reversed(range(7))]
+    # Backward compatible: no params still returns {runs} (plus a null cursor) in one page.
+    default = c.get("/v1/runs", headers=AUTH).json()
+    assert len(default["runs"]) == 7 and default["next_cursor"] is None
+
+
+@pytest.mark.parametrize("params", [{"limit": 0}, {"limit": 201}, {"cursor": "!!"}])
+def test_history_rejects_bad_limit_or_cursor(services, params):
+    assert client(services=services).get("/v1/runs", headers=AUTH, params=params).status_code == 422
+
+
+def test_summary_exposes_cancel_requested(services):
+    c = client(services=services)
+    rid = start(c).json()["run_id"]
+    assert c.get("/v1/runs", headers=AUTH).json()["runs"][0]["cancel_requested"] is False
+    services.repository.cancel_run(rid)
+    assert detail(c, rid)["cancel_requested"] is True
+
+
+def test_detail_stops_inlining_outputs_past_the_budget(services, monkeypatch):
+    # B14: omitted outputs load through /units/{id}/output like spilled ones.
+    from onolys_eval_backend import read_runs
+
+    monkeypatch.setattr(read_runs, "MAX_INLINE_DETAIL_BYTES", 40)
+    c = client(services=services)
+    rid = start(c).json()["run_id"]
+    finish(services, rid, [scores(), scores()])
+    units = detail(c, rid)["units"]
+    assert [("output" in u) for u in units] == [True, False]
+
+
+def test_detail_inline_budget_counts_utf8_bytes(monkeypatch):
+    from onolys_eval_backend import read_runs
+
+    output = {"text": "é" * 10}
+    monkeypatch.setattr(read_runs, "MAX_INLINE_DETAIL_BYTES", 25)
+    public = read_runs._bounded_units("r", {"u": {"output": output}})
+    assert "output" not in public[0]
+
+
+def test_attempt_scoped_output_is_fetchable_only_for_the_recorded_owner(services):
+    c = client(services=services)
+    rid = start(c).json()["run_id"]
+    uid = next(iter(services.repository.list_units(rid)))
+    path = f"runs/{rid}/{uid}/current.json"
+    services.bucket.write_json(path, {"result": "saved"})
+    services.repository.update_unit(rid, uid, {
+        "lease_owner": "current", "output_ref": path, "output": None,
+    })
+    url = f"/v1/runs/{rid}/units/{uid}/output"
+    assert c.get(url, headers=AUTH).json() == {"result": "saved"}
+    assert "output" not in detail(c, rid)["units"][0]
+    services.repository.update_unit(rid, uid, {"lease_owner": "superseded"})
+    assert c.get(url, headers=AUTH).status_code == 404

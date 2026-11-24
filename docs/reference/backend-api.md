@@ -21,8 +21,11 @@ Every request except a CORS preflight (`OPTIONS`) must carry `Authorization: Bea
 | HTTP | `error.code` | When |
 |---|---|---|
 | 401 | `unauthenticated` | No bearer header, or the token is invalid or expired. Reply carries `WWW-Authenticate: Bearer`. |
-| 403 | `forbidden` | Valid token, but the email is unverified or not on the list. |
+| 403 | `email_unverified` | Valid token, but the email is missing or unverified. |
+| 403 | `not_allowlisted` | Verified email is not on the allowlist. |
 | 503 | `upstream_unavailable` | The token signing keys could not be fetched. |
+
+Signing keys are cached for one hour. Refreshes (including unknown key IDs and failed fetches) share a 30-second cooldown. Expired keys are never used after a failed refresh; that returns 503. A newly rotated key may return 401 until the cooldown ends. Network calls have a five-second timeout and cache lock waits have a six-second limit. Verification runs outside the ASGI event loop. The eval backend shares this cache policy for its separate Google service-account verifier; its internal task identity mismatches retain the generic `forbidden` code.
 
 These replies use a small body `{"error": {"code", "message"}}`.
 

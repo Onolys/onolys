@@ -204,6 +204,7 @@ class SessionDoc(Doc):
     updated_at: datetime = Field(default_factory=utcnow)
     stage_started_at: datetime | None = None  # entered this state; other writes never bump it
     latest_report_version: int | None = None
+    discard_code: str | None = None  # tombstone of `discard_failed_upload` (state is `deleting`)
 
 
 class SessionStatusDoc(Doc):

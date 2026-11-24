@@ -2,6 +2,7 @@ from pathlib import Path
 
 import pytest
 
+from onolys_engine_core.errors import ConfigError
 from onolys_engine_core.llm.models import load_models
 from onolys_engine_core.llm.routes import load_registry, resolve_preset
 
@@ -53,3 +54,16 @@ def test_prod_base_routes_remain_gemini():
     assert routes["cheap"].litellm_id == "gemini/gemini-4-hydrogen"
     for name in TEXT_ROUTES[1:]:
         assert routes[name].litellm_id == "gemini/gemini-4-neon"
+
+
+def test_prod_has_oneshot_route():
+    reg = load_registry(ROOT / "config/prod/routes.yaml", env={})
+    assert reg.routes()["oneshot"].litellm_id == "gemini/gemini-4-neon"
+    assert reg.routes()["oneshot"].max_output_tokens == 4096
+
+
+def test_llm_override_without_models_file_names_models_file(tmp_path, monkeypatch):
+    monkeypatch.delenv("ROUTES_FILE", raising=False)
+    monkeypatch.delenv("MODELS_FILE", raising=False)
+    with pytest.raises(ConfigError, match="MODELS_FILE"):
+        load_registry(env={"LLM_PROVIDER": "anthropic", "LLM_MODEL": "x"})

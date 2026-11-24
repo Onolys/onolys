@@ -138,3 +138,12 @@ async def test_missing_attempt_usage_keeps_known_tokens_and_unknown_total_price(
     got = await run_validated(engine, context(), TranscriptV1(turns=[]), {})
     assert got.run_info.usage.calls == 1
     assert got.run_info.usage.cost_usd is None
+
+
+async def test_failure_after_a_completed_attempt_keeps_its_usage():
+    failure = RuntimeError("second attempt failed")
+    engine, ctx = StubEngine([result({}), failure]), context()
+    with pytest.raises(RuntimeError) as caught:
+        await run_validated(engine, ctx, TranscriptV1(turns=[]), {})
+    assert caught.value is failure
+    assert caught.value.usage.calls == 1 and caught.value.usage.cost_usd == 0.01

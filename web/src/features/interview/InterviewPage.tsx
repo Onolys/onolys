@@ -107,14 +107,16 @@ function InterviewView({ id }: { id: string }) {
     return block;
   });
 
-  // Tear down when the page goes away: socket closed, mic released.
-  useEffect(
-    () => () => {
+  // Tear down when the page goes away: socket closed, mic released. `mounted` lets a startup that resolves later bail out.
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
       ctlRef.current?.dispose();
       engineRef.current?.close();
-    },
-    [],
-  );
+    };
+  }, []);
   // Closing the tab mid-interview loses the recording: ask first.
   useEffect(() => {
     if (!active || leaving.current) return;
@@ -134,16 +136,22 @@ function InterviewView({ id }: { id: string }) {
     setStartingUi(true);
     setMicError(false);
     const engine = createAudioEngine({ onCaptureFrame: (f) => ctlRef.current?.sendFrame(f) });
+    engineRef.current = engine; // retained before awaiting so an unmount mid-startup can release the mic
     try {
       await engine.start(); // a user gesture: mic + audio context
     } catch {
       engine.close();
+      if (!mounted.current) return;
+      engineRef.current = null;
       starting.current = false;
       setStartingUi(false);
       setMicError(true);
       return;
     }
-    engineRef.current = engine;
+    if (!mounted.current) {
+      engine.close(); // left the page while the mic was starting: no controller, no socket
+      return;
+    }
     const c = createLiveController({
       url: interview.data?.voice_url ?? "",
       getToken: () => service.getToken(),
@@ -214,14 +222,18 @@ function InterviewView({ id }: { id: string }) {
   };
 
   // The relay ended it (time up): wrap up without a click.
+  // Fires at most once: a failure shows the error and the manual "Try again" button, never a retry loop.
   const phase = live?.phase;
   const timeUp = live?.timeUp ?? false;
+  const autoEnded = useRef(false);
+  const { mutate: finishMutate } = finish;
   useEffect(() => {
-    if (phase === "ended" && timeUp && !finishing.current && !discard.isPending && !discard.isSuccess) {
+    if (phase === "ended" && timeUp && !autoEnded.current && !finishing.current && !discard.isPending && !discard.isSuccess) {
+      autoEnded.current = true;
       finishing.current = true;
-      finish.mutate();
+      finishMutate();
     }
-  }, [phase, timeUp, finish, discard.isPending, discard.isSuccess]);
+  }, [phase, timeUp, finishMutate, discard.isPending, discard.isSuccess]);
 
   // Owner rule D6: leaving ends the interview. A live interview found on page load was left earlier: no rejoin.
   const staleLive = interview.data?.state === "live" && !startingUi && !active;
@@ -308,7 +320,7 @@ function InterviewView({ id }: { id: string }) {
           </p>
           <div role="status" aria-live="polite" className="grid gap-3 empty:hidden">
             {live?.phase === "connecting" ? <p>Connecting…</p> : null}
-            {live?.phase === "reconnecting" ? <Notice>Reconnecting… keep talking, your recording continues.</Notice> : null}
+            {live?.phase === "reconnecting" ? <Notice>Reconnecting… your recording is paused until the connection is back.</Notice> : null}
             {live?.phase === "live" ? <p className={NOTE}>{live.aiSpeaking ? "The client is speaking" : "Listening"}</p> : null}
             {live?.timeUp ? <p>Time's up. Wrapping up…</p> : null}
             {live?.phase === "ended" && !live.timeUp && !finish.isPending ? (

@@ -75,6 +75,7 @@ MAX_SESSION_RETRIES = 3
 class Settings:
     env: str = "test"
     service_mode: str = "combined"
+    pr_preview: bool = False  # staging-only combined mode with stub providers
     auth_mode: str = "fake"
     adapters: str = "stub"
     gcp_project: str = ""
@@ -140,6 +141,7 @@ class Settings:
             raise ConfigError("MAX_ACTIVE_RUNS must be an integer") from None
         s = cls(
             env=env,
+            pr_preview=_bool(e, "PR_PREVIEW", cls.pr_preview),
             stt_cap_factor=_float(e, "STT_CAP_FACTOR", cls.stt_cap_factor),
             stt_cap_min_s=_float(e, "STT_CAP_MIN_S", cls.stt_cap_min_s),
             stt_time_limit_s=_float(e, "STT_TIME_LIMIT_S", cls.stt_time_limit_s),
@@ -206,6 +208,16 @@ class Settings:
         ):
             if value not in allowed:
                 raise ConfigError(f"{name} must be one of {', '.join(allowed)}")
+        if self.pr_preview and not (
+            self.env == "staging"
+            and self.service_mode == "combined"
+            and self.adapters == "stub"
+            and self.firestore_database == "staging"
+        ):
+            raise ConfigError(
+                "PR_PREVIEW requires ENV=staging, SERVICE_MODE=combined, "
+                "ADAPTERS=stub and FIRESTORE_DATABASE=staging"
+            )
         if self.auth_mode == "fake" and self.env not in LOCAL_ENVS:
             raise ConfigError("AUTH_MODE=fake is only allowed when ENV is local or test")
         if self.env not in LOCAL_ENVS and not self.uid_hmac_key:
@@ -249,3 +261,20 @@ class Settings:
             scheme = ("ws://", "wss://") if self.env in LOCAL_ENVS else ("wss://",)
             if not self.voice_url.startswith(scheme) or self.voice_url.endswith("/"):
                 raise ConfigError("VOICE_URL must be a wss:// base URL without a trailing slash")
+
+        if self.env not in LOCAL_ENVS:
+            if self.service_mode == "combined" and not self.pr_preview:
+                raise ConfigError(
+                    "SERVICE_MODE=combined requires local/test or an explicit staging PR_PREVIEW"
+                )
+            if self.adapters == "real" or self.pr_preview:
+                required = ["GCP_PROJECT", "REGION", "AUTH_PROJECT"]
+                if self.service_mode in ("api", "worker"):
+                    required += ["AUDIO_BUCKET", "TASKS_QUEUE", "TASKS_SA", "WORKER_URL"]
+                if self.service_mode == "api" or self.pr_preview:
+                    required += ["VOICE_URL"]
+                if self.pr_preview:
+                    required += ["AUDIO_BUCKET"]
+                for name in required:
+                    if not getattr(self, name.lower()).strip():
+                        raise ConfigError(f"{name} is required for deployed {self.service_mode}")

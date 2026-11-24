@@ -18,7 +18,7 @@ export interface DatasetMetadata {
 export interface Dataset extends DatasetMetadata { sessions: { session_id: string; title: string; has_gold?: boolean; coded_span?: CodedSpan }[] }
 export interface Upload {
   upload_id: string;
-  status: 'ready' | 'awaiting_speakers' | 'transcribing' | 'failed';
+  status: 'awaiting_upload' | 'ready' | 'awaiting_speakers' | 'transcribing' | 'failed';
   has_gold: boolean;
   speakers: { speaker: string; samples: string[] }[];
   error?: { code: string; message: string };
@@ -36,7 +36,7 @@ export interface RunInput {
 export type RunStatus = 'queued' | 'running' | 'done' | 'partial' | 'failed' | 'cancelled';
 export interface RunSummary extends Omit<RunInput, 'selection'> {
  selection: Selection | null; combos: Combo[] | null; legacy_selection: boolean; combo_keys: string[]; combo_labels: Record<string, string>; presets?: string[];
- run_id: string; status: RunStatus; created_at: string;
+ run_id: string; status: RunStatus; created_at: string; cancel_requested?: boolean;
  total_units: number; completed_units: number; done_units: number; failed_units: number; cancelled_units: number;
  usage: { input_tokens: number; output_tokens: number; cost_usd?: number | null; calls?: number };
  cost_usd_est: number | null; unpriced_units: number;
@@ -72,7 +72,7 @@ export interface RunDetail extends RunSummary { units: RunUnit[]; compare: Compa
 export type RunSelection = Pick<RunInput, 'engines' | 'selection' | 'repeats'>;
 export interface EvalApi {
   me(): Promise<unknown>;
-  runs(signal?: AbortSignal): Promise<{ runs: RunSummary[] }>;
+  runs(signal?: AbortSignal, cursor?: string): Promise<{ runs: RunSummary[]; next_cursor?: string | null }>;
   run(id: string, signal?: AbortSignal): Promise<RunDetail>;
   output(runId: string, unitId: string, signal?: AbortSignal): Promise<unknown>;
   cancel(id: string): Promise<{ run_id: string; status: RunStatus }>;
@@ -85,12 +85,28 @@ export interface EvalApi {
   speakers(id: string, speaker: string): Promise<Upload>;
   start(input: RunInput): Promise<{ run_id: string; status: string }>;
 }
-export function createEvalApi(base: string, fetcher: typeof fetch): EvalApi {
+const text = (value: unknown) => typeof value === 'string' && value.trim() ? value : undefined;
+/** Message from an error body: `{error:{message}}`, FastAPI `{detail: str}` or `{detail:{message}}`; a list `detail` (422) maps to a fixed text because it echoes request input. */
+export function errorText(body: unknown, status: number): string {
+  const b = (body && typeof body === 'object' ? body : {}) as { error?: { message?: unknown }; detail?: unknown };
+  const detail = b.detail;
+  const message = text(b.error?.message) ?? text(detail) ?? (detail && typeof detail === 'object' && !Array.isArray(detail) ? text((detail as { message?: unknown }).message) : undefined);
+  if (message) return message;
+  if (Array.isArray(detail)) return 'Some values were not accepted. Check the form and try again.';
+  return `Request failed (${status}). Please try again.`;
+}
+export class ApiError extends Error {
+  readonly status: number;
+  constructor(message: string, status: number) { super(message); this.name = 'ApiError'; this.status = status; }
+}
+export function createEvalApi(base: string, fetcher: typeof fetch, storageFetch: typeof fetch = (input, init) => fetch(input, init)): EvalApi {
+  // Only retain pending attempts for this form object. Completed attempts can be collected.
+  const pending = new WeakMap<UploadInput, { upload_id: string; upload: { url: string; method: string; headers: Record<string, string> }; written: boolean }>();
   const request = async <T>(path: string, init?: RequestInit): Promise<T> => {
     const response = await fetcher(`${base.replace(/\/$/, '')}/v1${path}`, init);
     if (!response.ok) {
       const body = await response.json().catch(() => null);
-      throw new Error(body?.error?.message || `Request failed (${response.status}). Please try again.`);
+      throw new ApiError(errorText(body, response.status), response.status);
     }
     return response.json() as Promise<T>;
   };
@@ -98,7 +114,7 @@ export function createEvalApi(base: string, fetcher: typeof fetch): EvalApi {
   const id = encodeURIComponent;
   return {
     me: () => request('/me'),
-    runs: signal => request('/runs', { signal }),
+    runs: (signal, cursor) => request(`/runs${cursor ? `?cursor=${id(cursor)}` : ''}`, { signal }),
     run: (runId, signal) => request(`/runs/${id(runId)}`, { signal }),
     output: (runId, unitId, signal) => request(`/runs/${id(runId)}/units/${id(unitId)}/output`, { signal }),
     cancel: runId => request(`/runs/${id(runId)}/cancel`, json({})),
@@ -106,7 +122,45 @@ export function createEvalApi(base: string, fetcher: typeof fetch): EvalApi {
     options: (mode, uploadId) => request(`/options?mode=${mode}${uploadId ? `&upload_id=${id(uploadId)}` : ''}`),
     datasets: () => request('/datasets'),
     dataset: datasetId => request(`/datasets/${id(datasetId)}`),
-    upload: input => {
+    upload: async input => {
+      const audio = /\.(mp3|wav|m4a|webm|ogg)$/i.test(input.file.name);
+      if (audio && input.file.size > 300 * 1024 * 1024) throw new Error('Recordings must be at most 300 MiB.');
+      if (audio && input.file.size > 25 * 1024 * 1024) {
+        let saved = pending.get(input);
+        if (!saved) {
+          if (input.gold && input.gold.size > 1024 * 1024) throw new Error('Gold file must be at most 1 MiB.');
+          let gold: unknown;
+          try { gold = input.gold ? JSON.parse(await input.gold.text()) : undefined; }
+          catch { throw new Error('Gold file must contain valid JSON.'); }
+          const started = await request<{ upload_id: string; upload: { url: string; method: string; headers: Record<string, string> } }>('/uploads/audio', json({
+            filename: input.file.name, content_type: input.file.type, size: input.file.size,
+            change_goal: input.change_goal, language: input.language, coded_span: input.coded_span, ...(gold === undefined ? {} : { gold }),
+          }));
+          saved = { ...started, written: false }; pending.set(input, saved);
+        }
+        if (!saved.written) {
+          let response: Response;
+          try {
+            response = await storageFetch(saved.upload.url, { method: saved.upload.method, headers: saved.upload.headers, body: input.file, credentials: 'omit' });
+          } catch {
+            throw new Error('Recording upload could not connect. Check your connection and storage CORS configuration, then retry.');
+          }
+          // A lost PUT response may already have created the object. The server checks
+          // the object before completing; the signed precondition prevents overwrites.
+          if (!response.ok && response.status !== 412) {
+            if (response.status === 403) pending.delete(input);
+            throw new Error(response.status === 403 ? 'Recording upload permission expired or was denied. Retry to prepare a new upload.' : `Recording upload failed (${response.status}). Retry the upload.`);
+          }
+          saved.written = true;
+        }
+        try {
+          const completed = await request<Upload>(`/uploads/${id(saved.upload_id)}/complete`, json({}));
+          pending.delete(input); return completed;
+        } catch (error) {
+          if (error instanceof ApiError && (error.status === 409 || error.status === 422)) pending.delete(input);
+          throw error;
+        }
+      }
       const body = new FormData();
       body.set('file', input.file);
       if (input.gold) body.set('gold', input.gold);

@@ -78,8 +78,12 @@ def build_report_no_rating(
     global_ids = [i["id"] for i in d.items if i["kind"] == "global"]
     count_ids = [i["id"] for i in d.items if i["kind"] == "count"]
 
-    out_warnings: list[Warning] = [Warning(code=w.code, item_id=w.item_id)
-                                   for w in result.warnings]
+    # Top-level result warnings, then every run's own (quote_not_found, overlap,
+    # insufficient_evidence, capped, ...). The report `Warning` carries code + item only.
+    out_warnings: list[Warning] = [
+        Warning(code=w.code, item_id=w.item_id)
+        for w in [*result.warnings, *(w for r in result.results for w in r.warnings)]
+    ]
     scorecard: list[ScorecardRow] = []
     globals_: list[GlobalEntry] = []
     behaviours: list[BehaviourEntry] = []
@@ -95,9 +99,13 @@ def build_report_no_rating(
         expl, w = explain(item_id=g, kind="global", diff=diff, onolys_value=o.mean,
                           reason=gl.reason, onolys_lines=evidence, rules=tone)
         out_warnings += w
+        reason = gl.reason
+        if reason and tone.lint(reason):  # same policy as the explanation body: withhold
+            reason = None
+            out_warnings.append(Warning(code="reason_withheld_tone", item_id=g))
         globals_.append(GlobalEntry(
             item_id=g,
-            onolys=OnolysGlobal(score=gl.score, source=gl.source, reason=gl.reason,
+            onolys=OnolysGlobal(score=gl.score, source=gl.source, reason=reason,
                                 evidence=evidence),
             clinician=ClinicianGlobal(value=None), diff=diff, explanation=expl))
 
@@ -108,6 +116,10 @@ def build_report_no_rating(
             item_id=k, kind="count", label=labels[k], clinician={"value": None},
             onolys={"value": o.mean, **_stats(o).model_dump()}, diff=diff))
         inst = representative_instances(result, k)
+        for i in inst:
+            if i.rationale and tone.lint(i.rationale):  # withhold, keep the quote
+                i.rationale = ""
+                out_warnings.append(Warning(code="reason_withheld_tone", item_id=k))
         expl, w = explain(item_id=k, kind="count", diff=diff, onolys_value=o.mean, reason=None,
                           onolys_lines=inst, rules=tone)
         out_warnings += w

@@ -233,3 +233,37 @@ async def test_deeply_nested_json_is_a_safe_input_error(client, queue):
     r = await upload(client, sid, "[" * 10000 + "]" * 10000)
     assert r.status_code == 422
     assert r.json()["details"][0]["code"] == "transcript_invalid"
+
+
+async def test_racing_transcript_put_cannot_overwrite_the_winner(client, app, queue):
+    """N1: a competing PUT commits between the `created` check and the write."""
+    from onolys_engine_core.transcript_input import validate_transcript_input
+
+    from onolys_api.jobs.machine import advance
+
+    repo = app.state.repo
+    sid = await create(client)
+    winner = validate_transcript_input({"turns": [
+        {"id": "t1", "speaker": "A", "text": "winner " * 60, "role": "clinician"},
+        {"id": "t2", "speaker": "B", "text": "other " * 60, "role": "client"},
+    ]})  # fmt: skip
+    fired = []
+
+    def race_once():
+        if not fired:
+            fired.append(1)
+            repo.put_transcript("upload-user", sid, "current", winner)
+            advance(repo, "upload-user", sid, to="awaiting_input", step=None)
+
+    for name in ("put_transcript", "transition_session"):  # old write path / new write path
+        real = getattr(repo, name)
+
+        def wrapped(*a, _real=real, **kw):
+            race_once()
+            return _real(*a, **kw)
+
+        setattr(repo, name, wrapped)
+    r = await upload(client, sid, json.dumps(document()))
+    assert r.status_code == 409, r.text
+    t = repo.get_transcript("upload-user", sid, "current").transcript
+    assert t.turns[0].text.startswith("winner")  # the loser did not overwrite it

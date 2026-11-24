@@ -61,7 +61,7 @@ describe("readNext", () => {
             expect(sameOrigin(readNext(q(next)))).toBe(true);
           },
         ),
-        { numRuns: 500, examples: [["/\t/evil.com"]] },
+        { numRuns: fc.readConfigureGlobal().numRuns ?? 500, examples: [["/\t/evil.com"]] },
       );
     },
   );

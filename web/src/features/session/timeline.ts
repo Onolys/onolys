@@ -38,7 +38,7 @@ const LABELS: Record<StepKey, string> = {
   transcribe: "Transcribe",
   speaker: "Confirm speaker",
   rating: "Your rating",
-  run: "Rate session",
+  run: "Onolys scoring",
   report: "Report",
 };
 const ORDER = Object.keys(LABELS) as StepKey[];

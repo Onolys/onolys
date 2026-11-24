@@ -12,6 +12,7 @@ Provider keys are the standard variables LiteLLM reads, for example `GEMINI_API_
 |---|---|---|
 | `ENV` | none (required) | `local`, `test`, `staging` or `prod`. `local` and `test` are refused on Cloud Run. |
 | `SERVICE_MODE` | `combined` locally, else `api` | `api`, `worker`, `combined` or `voice`. |
+| `PR_PREVIEW` | `false` | Explicit combined preview opt-in; requires `ENV=staging`, `ADAPTERS=stub`, `FIRESTORE_DATABASE=staging`. Deployed auth, HMAC, project, bucket and voice settings remain required. |
 | `AUTH_MODE` | `fake` locally, else `idp` | `fake` (`Bearer test:<uid>`, only `local`/`test`) or `idp` (Identity Platform). |
 | `ADAPTERS` | `stub` locally, else `real` | `stub` or `real` STT and LLM adapters. |
 | `GCP_PROJECT`, `REGION`, `AUTH_PROJECT` | empty | Project, region, and the project whose ID tokens are accepted. |

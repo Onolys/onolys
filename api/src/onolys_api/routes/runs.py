@@ -13,7 +13,7 @@ from datetime import datetime
 from typing import Annotated, Any
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, Request, Response
+from fastapi import APIRouter, Depends, Path, Request, Response
 from onolys_miti.result import CodedSpan
 from pydantic import BaseModel, Field
 
@@ -92,6 +92,9 @@ class RunView(BaseModel):
 
 class RunList(BaseModel):
     items: list[RunView]
+
+
+MAX_REPORT_VERSION = 1_000_000  # far past any real count; keeps the query clear of int64 overflow
 
 
 class ReportListItem(BaseModel):
@@ -189,10 +192,14 @@ def begin_run(
     date = caps.utc_date()
     # One transaction: state check, cap reservation, run creation, first_run_id and `running`.
     # The loser of a race gets 409 and holds no slot.
-    outcome = repo.start_run(
-        uid, id, run_id, date, LimitDefaults.from_settings(settings), settings.max_active_runs,
-        settings.git_sha, RUN_START_PROGRESS, allowed, n_runs, preset,
-        coded_span=span.model_dump(exclude_none=True) if span else None, retry_max=retry_max,
+    outcome = caps.start_with_repair(
+        repo, uid,
+        lambda: repo.start_run(
+            uid, id, run_id, date, LimitDefaults.from_settings(settings),
+            settings.max_active_runs, settings.git_sha, RUN_START_PROGRESS, allowed, n_runs,
+            preset, coded_span=span.model_dump(exclude_none=True) if span else None,
+            retry_max=retry_max,
+        ),
     )  # fmt: skip
     if outcome == "not_ready":
         raise invalid_state()
@@ -285,7 +292,13 @@ def list_reports(id: ResourceId, request: Request, user: User) -> ReportList:
     summary="One report by integer version (the public report address)",
     description="`Cache-Control: private, no-store`: the report carries PHI.",
 )
-def get_report(id: ResourceId, version: int, request: Request, response: Response, user: User):
+def get_report(
+    id: ResourceId,
+    version: Annotated[int, Path(ge=1, le=MAX_REPORT_VERSION)],
+    request: Request,
+    response: Response,
+    user: User,
+):
     _open_session(request, user, id)
     d = request.app.state.repo.get_report_by_version(user.uid, id, version)
     response.headers["Cache-Control"] = "private, no-store"
