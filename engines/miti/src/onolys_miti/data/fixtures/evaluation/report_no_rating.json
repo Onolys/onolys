@@ -7,7 +7,7 @@
     "protocol": {
       "id": "miti",
       "version": "4.2.1",
-      "pack_hash": "a6296dcf8f4acefb",
+      "pack_hash": "90176563e1bf97b0",
       "label": "MITI 4.2.1"
     },
     "language": "en",
@@ -1457,7 +1457,7 @@
         "hash": "d98e79648859d15e"
       },
       "prompt_hashes": {
-        "code_system.md": "c2b9e2ee9ad63129",
+        "code_system.md": "fe6abdc6e916c3a8",
         "code_fewshot.json": "66067cb3cdb0d3b4",
         "globals_system.md": "defd14fd71dada50",
         "globals_fewshot.json": "d1c0578f710ce40c",

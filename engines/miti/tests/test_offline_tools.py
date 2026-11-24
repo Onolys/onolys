@@ -41,7 +41,7 @@ def test_audit_covers_every_hand_fixture_with_real_requests():
 
 def test_regen_is_byte_and_mtime_noop_on_current_goldens():
     regen = load("regen_goldens", ROOT / "tools" / "regen_goldens.py")
-    paths = [*regen.GOLD.glob("*.json"), regen.GOLDEN_TEST, regen.DATA_TEST, regen.REPORT]
+    paths = [*regen.GOLD.glob("*.json"), regen.GOLDEN_TEST, regen.DATA_TEST, regen.PACK_TEST, regen.REPORT]
     before = {p: (p.read_bytes(), p.stat().st_mtime_ns) for p in paths}
     assert regen.regenerate() == []
     assert before == {p: (p.read_bytes(), p.stat().st_mtime_ns) for p in paths}
@@ -68,7 +68,7 @@ def test_regen_rekeys_changed_requests_preserving_stub_bytes(tmp_path, monkeypat
     from onolys_engine_core.llm.fixture_client import FixtureClient
 
     regen = load("regen_goldens", ROOT / "tools" / "regen_goldens.py")
-    for attr in ("GOLD", "GOLDEN_TEST", "DATA_TEST", "REPORT"):
+    for attr in ("GOLD", "GOLDEN_TEST", "DATA_TEST", "PACK_TEST", "REPORT"):
         original = getattr(regen, attr)
         target = tmp_path / attr
         if original.is_dir():

@@ -17,7 +17,10 @@ aid, not an official MITI coding.
 - When unsure whether to split an utterance, prefer fewer splits.
 - Prefer null over a weak code. Good practice that does not clearly fit a code stays uncoded.
 - Persuade vs Giving Information: if undecided, use Giving Information.
-- Persuade and Persuade with Permission in the same utterance: use Persuade with Permission.
+- Persuade and Persuade with Permission in the same utterance: use Persuade with Permission
+  (manual p. 20). Software counts one persuasion slot per volley (manual p. 13). Giving
+  Persuade with Permission precedence across separate utterances is an engineering extension,
+  not a manual rule specifying which code wins across utterances.
 - Simple vs Complex Reflection: if undecided, use Simple Reflection.
 - Affirm / Seeking Collaboration / Emphasizing Autonomy: when unsure, use the lower of the
   three (Affirm is lowest, Emphasizing Autonomy highest). When unsure whether an utterance is one

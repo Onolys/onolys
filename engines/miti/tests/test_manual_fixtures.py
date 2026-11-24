@@ -17,32 +17,13 @@ FIXTURES = yaml.safe_load((audit.FIX / "expected.yaml").read_text())["fixtures"]
 
 
 @pytest.mark.parametrize("name", ["batch_edge", "sparse_evidence"])
-def test_hand_counts_with_documented_pre_alignment_discrepancy(name):
+def test_hand_counts_match_manual_targets(name):
     expected = FIXTURES[name]
     transcript, _, prepared = audit.load_fixture(expected)
     source = audit.hand_instances(prepared, expected["utterances"])
     final, warnings = apply_rules(source, miti.MITI.data["rules"])
     actual = count_instances(final, audit.code_pass.count_codes())
-    slot_present = any(
-        rule["kind"] == "exclusive_group"
-        and set(rule["codes"]) == {"persuade", "persuade_permission"}
-        for rule in miti.MITI.data["rules"]
-    )
-    target = dict(expected["counts"])
-    if name == "batch_edge" and not slot_present:
-        # Task 3 exposes the existing defect; Task 4 will remove this discrepancy.
-        assert expected["pre_alignment"]["count_delta"] == {"persuade": 1}
-        target["persuade"] += 1
-    assert actual == target
-    # Independently exercise the hand target using the documented slot contract,
-    # while leaving the production rule change to Task 4.
-    aligned_rules = [*miti.MITI.data["rules"], {
-        "kind": "exclusive_group", "unit": "volley",
-        "codes": ["persuade_permission", "persuade"],
-        "precedence": ["persuade_permission", "persuade"],
-    }]
-    aligned, _ = apply_rules(source, aligned_rules)
-    assert count_instances(aligned, audit.code_pass.count_codes()) == expected["counts"]
+    assert actual == expected["counts"]
     assert warnings == []
     assert set(expected["counts"]) == set(audit.code_pass.count_codes())
     assert set(expected["summaries"]) == {s["id"] for s in miti.MITI.data["summaries"]}
@@ -80,17 +61,18 @@ def test_sparse_evidence_has_hand_set_high_sst_without_sustain_talk():
     assert set(expected["globals"]) == {"cct", "sst", "partnership", "empathy"}
 
 
-def test_audit_includes_new_fixtures_and_exposes_persuasion_double():
+def test_audit_all_fixtures_have_no_persuasion_double_or_count_drift():
     rows = {r["fixture"]: r for r in audit.build_audit()["fixtures"]}
     assert {"batch_edge", "sparse_evidence"} <= rows.keys()
     assert rows["batch_edge"]["batch_count"] == 2
     assert rows["sparse_evidence"]["counts"] == FIXTURES["sparse_evidence"]["counts"]
-    # Once the slot is aligned, there must be no double; before then, exactly v26.
-    if rows["batch_edge"]["counts"] == FIXTURES["batch_edge"]["counts"]:
-        assert rows["batch_edge"]["persuasion_double_count_volleys"] == []
-    else:
-        assert rows["batch_edge"]["persuasion_double_count_volleys"] == ["v26"]
-        assert rows["batch_edge"]["count_drift"]["persuade"] == 1
+    assert rows["batch_edge"]["summaries_with_hand_globals"]["total_mina"] == 0
+    assert rows["batch_edge"]["summary_drift"]["total_mina"] == 0
+    assert len(rows) == 5
+    for row in rows.values():
+        assert row["counts"] == row["target_counts"]
+        assert all(d == 0 for d in row["count_drift"].values())
+        assert row["persuasion_double_count_volleys"] == []
 
 
 def test_generated_six_thousand_word_portion_has_disjoint_batches():

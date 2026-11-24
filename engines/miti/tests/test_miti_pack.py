@@ -14,6 +14,8 @@ from onolys_miti.prepare import OTHER, SUBJECT, CheckInput, RoleTurn
 
 pytestmark = pytest.mark.unit
 
+KNOWN_PACK_HASH = "90176563e1bf97b0"
+
 GLOBALS = ["cct", "sst", "partnership", "empathy"]
 CODES = ["gi", "persuade", "persuade_permission", "question", "sr", "cr", "affirm",
          "seek_collab", "emphasize_autonomy", "confront"]
@@ -36,7 +38,7 @@ def test_loads_and_has_all_items(pack):
     assert pack.data["volley"] == {
         "breaks_on": "other_speaker", "min_other_words": 3, "min_other_chars": 6,
     }
-    assert pack.hash == "a6296dcf8f4acefb"
+    assert pack.hash == KNOWN_PACK_HASH
 
 
 def test_prompt_files_present_and_json_valid(pack):
@@ -77,6 +79,9 @@ def test_rules(pack):
         {"kind": "max_per_unit", "unit": "volley", "code": "any", "n": 1},
         {"kind": "exclusive_group", "unit": "volley", "codes": ["sr", "cr"],
          "precedence": ["cr", "sr"]},
+        {"kind": "exclusive_group", "unit": "volley",
+         "codes": ["persuade_permission", "persuade"],
+         "precedence": ["persuade_permission", "persuade"]},
     ]
 
 

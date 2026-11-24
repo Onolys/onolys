@@ -23,6 +23,7 @@ ROOT = Path(__file__).resolve().parents[1]
 GOLD = FIX / "golden" / "good_practice"
 GOLDEN_TEST = ROOT / "tests" / "test_golden.py"
 DATA_TEST = ROOT / "tests" / "test_data.py"
+PACK_TEST = ROOT / "tests" / "test_miti_pack.py"
 REPORT = FIX / "evaluation" / "report_no_rating.json"
 
 
@@ -98,14 +99,15 @@ def regenerate(*, responses=None):
     if n != 1:
         raise ValueError("cannot find unique expected hash set in test_golden.py")
     planned[GOLDEN_TEST] = test.encode()
-    data_test, n = re.subn(
-        r'KNOWN_PACK_HASH = "[0-9a-f]+"',
-        f'KNOWN_PACK_HASH = "{miti.MITI.hash}"',
-        DATA_TEST.read_text(),
-    )
-    if n != 1:
-        raise ValueError("cannot find pack hash pin in test_data.py")
-    planned[DATA_TEST] = data_test.encode()
+    for pin_test in (DATA_TEST, PACK_TEST):
+        pinned, n = re.subn(
+            r'KNOWN_PACK_HASH = "[0-9a-f]+"',
+            f'KNOWN_PACK_HASH = "{miti.MITI.hash}"',
+            pin_test.read_text(),
+        )
+        if n != 1:
+            raise ValueError(f"cannot find pack hash pin in {pin_test.name}")
+        planned[pin_test] = pinned.encode()
     # Only pack metadata is repinned here; behavior changes need deliberate report rebaselining.
     report = json.loads(REPORT.read_text())
     old_hash = report["header"]["protocol"]["pack_hash"]
