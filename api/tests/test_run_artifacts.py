@@ -58,8 +58,10 @@ class Env:
         )
         await self.c.post(f"/v1/sessions/{sid}/audio/complete", headers=self.h)
         self.app.state.queue.drain()
+        # Install the fixture before acceptance freezes transcript and speaker inputs.
+        self.repo.put_transcript(self.uid, sid, TRANSCRIPT_ID, TRANSCRIPT)
         await self.c.post(
-            f"/v1/sessions/{sid}/speakers/confirm", json={"clinician_speaker": "S1"}, headers=self.h
+            f"/v1/sessions/{sid}/speakers/confirm", json={"clinician_speaker": "A"}, headers=self.h
         )
         if rating is not None:
             r = await self.c.put(
@@ -69,11 +71,6 @@ class Env:
         else:  # awaiting input: start the run without a rating
             r = await self.c.post(f"/v1/sessions/{sid}/runs", json={}, headers=self.h)
             assert r.status_code == 202, r.text
-        # swap in the fixture transcript + its speaker before the run task executes
-        self.repo.put_transcript(
-            self.uid, sid, TRANSCRIPT_ID, TRANSCRIPT
-        )
-        self.repo.update_session(self.uid, sid, {"clinician_speaker": "A"})
         self.app.state.queue.drain()
         return sid
 

@@ -101,18 +101,15 @@ class Env:
         return sid
 
     async def run(self, sid: str, card: dict) -> None:
+        # Install the fixture before acceptance freezes transcript and speaker inputs.
+        self.repo.put_transcript(self.uid, sid, TRANSCRIPT_ID, TRANSCRIPT)
         await self.c.post(
-            f"/v1/sessions/{sid}/speakers/confirm", json={"clinician_speaker": "S1"}, headers=self.h
+            f"/v1/sessions/{sid}/speakers/confirm", json={"clinician_speaker": "A"}, headers=self.h
         )
         r = await self.c.put(
             f"/v1/sessions/{sid}/rating", json={"final": True, "card": card}, headers=self.h
         )
         assert r.status_code in (200, 202), r.text
-        # the fixture transcript + its speaker replace the STT one before the run task executes
-        self.repo.put_transcript(
-            self.uid, sid, TRANSCRIPT_ID, TRANSCRIPT
-        )
-        self.repo.update_session(self.uid, sid, {"clinician_speaker": "A"})
         self.app.state.queue.drain()
 
 
