@@ -1,6 +1,6 @@
 ---
-status: in-progress
-summary: Implementation and review complete; branch pushed at 549b3b3; final integrated verification in progress.
+status: done
+summary: Implementation, independent review and final integrated verification complete; authorized branch push only.
 date: 2026-11-24
 ---
 # session-report-ux
@@ -41,4 +41,4 @@ Dependency: `01 ──(commit order only)──▶ 02`.
 - 01 [RESOLVED]: failure is terminal; unconfirmed speaker + failure stays failed.
 - 02: no open items (threshold tuning and coverage retry are [DEFERRED]).
 
-All requested product/eval code follow-ups and independent review are complete; Compare/Summary remains [design-only](eval-compare-summary-proposal.md) (`eccd65b`). The branch was pushed to origin at `549b3b3`; no PR or deployment was performed. Final integrated verification is in progress. See the [latest pointer](review-2026-11-24-2222.md) for commits, task-checkpoint evidence and current remote state.
+All requested product/eval code follow-ups and independent review are complete; Compare/Summary remains [design-only](eval-compare-summary-proposal.md) (`eccd65b`). The earlier branch push reached `549b3b3`; final integrated verification through `fc08361` passed and the final evidence is prepared for the authorized branch push. No PR or deployment was performed. See the [latest pointer](review-2026-11-24-2222.md) for commits, task-checkpoint evidence and current remote state.
