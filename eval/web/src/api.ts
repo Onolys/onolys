@@ -125,7 +125,7 @@ export function createEvalApi(base: string, fetcher: typeof fetch, storageFetch:
     upload: async input => {
       const audio = /\.(mp3|wav|m4a|webm|ogg)$/i.test(input.file.name);
       if (audio && input.file.size > 300 * 1024 * 1024) throw new Error('Recordings must be at most 300 MiB.');
-      if (audio && input.file.size > 25 * 1024 * 1024) {
+      if (audio) {
         let saved = pending.get(input);
         if (!saved) {
           if (input.gold && input.gold.size > 1024 * 1024) throw new Error('Gold file must be at most 1 MiB.');

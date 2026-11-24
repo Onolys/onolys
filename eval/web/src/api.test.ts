@@ -2,10 +2,10 @@ import { describe, expect, it, vi } from 'vitest';
 import { createEvalApi } from './api';
 
 describe('eval API', () => {
-  it('sends multipart upload fields without a JSON content type and encodes IDs', async () => {
+  it.each(['txt', 'json'])('sends .%s and gold as multipart without a JSON content type and encodes IDs', async extension => {
     const fetcher = vi.fn<typeof fetch>(async () => new Response('{}'));
     const api = createEvalApi('https://eval-api/', fetcher);
-    const file = new File(['input'], 'input.txt'); const gold = new File(['gold'], 'gold.json');
+    const file = new File(['input'], `input.${extension}`); const gold = new File(['gold'], 'gold.json');
     await api.upload({ file, gold, change_goal: 'Goal', language: 'en', coded_span: { start_turn: 0, end_turn: 5 } });
     const [url, init] = fetcher.mock.calls[0];
     expect(url).toBe('https://eval-api/v1/uploads'); expect(init?.headers).toBeUndefined();
@@ -62,38 +62,35 @@ it('retains HTTP status and pages history using the opaque cursor', async () => 
   const missing = createEvalApi('', vi.fn().mockResolvedValue(new Response('{}', { status: 404 })));
   await expect(missing.run('gone')).rejects.toMatchObject({ status: 404 });
 });
-it('uploads large audio raw without auth and passes all metadata through the signed start route', async () => {
+it.each([['session.wav', 5], ['session.mp3', 5], ['session.m4a', 5], ['session.webm', 5], ['session.OGG', 5], ['session.wav', 25 * 1024 * 1024], ['session.wav', 25 * 1024 * 1024 + 1], ['session.wav', 300 * 1024 * 1024]])('uploads %s (%i bytes) directly without auth and preserves metadata', async (filename, size) => {
   const signed = { url: 'https://storage.googleapis.com/private/input', method: 'PUT', headers: { 'Content-Type': 'audio/wav', 'x-goog-if-generation-match': '0' } };
   const auth = vi.fn<typeof fetch>().mockResolvedValueOnce(new Response(JSON.stringify({ upload_id: 'large/id', status: 'awaiting_upload', upload: signed }))).mockResolvedValueOnce(new Response(JSON.stringify({ upload_id: 'large/id', status: 'transcribing' })));
   const raw = vi.fn<typeof fetch>().mockResolvedValue(new Response(null));
   const api = createEvalApi('', auth, raw);
-  const file = new File(['audio'], 'session.wav', { type: 'audio/wav' }); Object.defineProperty(file, 'size', { value: 25 * 1024 * 1024 + 1 });
+  const file = new File(['audio'], filename, { type: 'audio/wav' }); Object.defineProperty(file, 'size', { value: size });
   const gold = new File(['{"test":true}'], 'gold.json');
   Object.defineProperty(gold, 'text', { value: async () => '{"test":true}' });
   const input = { file, gold, change_goal: 'Goal', language: 'en', coded_span: { start_turn: 0, end_turn: 5 } };
   expect(await api.upload(input)).toMatchObject({ status: 'transcribing' });
   expect(auth.mock.calls.map(c => c[0])).toEqual(['/v1/uploads/audio', '/v1/uploads/large%2Fid/complete']);
-  expect(JSON.parse(String(auth.mock.calls[0][1]?.body))).toEqual({ filename: 'session.wav', content_type: 'audio/wav', size: file.size, gold: { test: true }, change_goal: 'Goal', language: 'en', coded_span: input.coded_span });
+  expect(JSON.parse(String(auth.mock.calls[0][1]?.body))).toEqual({ filename, content_type: 'audio/wav', size: file.size, gold: { test: true }, change_goal: 'Goal', language: 'en', coded_span: input.coded_span });
   expect(raw).toHaveBeenCalledExactlyOnceWith(signed.url, { method: 'PUT', headers: signed.headers, body: file, credentials: 'omit' });
 });
 it('retries completion without reuploading a successfully written recording', async () => {
   const auth = vi.fn<typeof fetch>().mockResolvedValueOnce(new Response(JSON.stringify({ upload_id: 'u', upload: { url: 'https://storage.googleapis.com/b/o', method: 'PUT', headers: {} } }))).mockResolvedValueOnce(new Response('{}', { status: 503 })).mockResolvedValueOnce(new Response('{"status":"transcribing"}'));
   const raw = vi.fn<typeof fetch>().mockResolvedValue(new Response(null)); const api = createEvalApi('', auth, raw);
-  const file = new File(['a'], 'x.mp3'); Object.defineProperty(file, 'size', { value: 26 * 1024 * 1024 });
+  const file = new File(['a'], 'x.mp3');
   const input = { file, change_goal: 'g', language: 'en' };
   await expect(api.upload(input)).rejects.toThrow(); await api.upload(input);
   expect(raw).toHaveBeenCalledTimes(1); expect(auth.mock.calls.map(c => c[0])).toEqual(['/v1/uploads/audio', '/v1/uploads/u/complete', '/v1/uploads/u/complete']);
 });
 
-it('keeps audio at the multipart cap on the ordinary route and rejects over 300 MiB before starting', async () => {
-  const auth = vi.fn<typeof fetch>().mockResolvedValue(new Response('{}')); const raw = vi.fn<typeof fetch>();
+it('rejects audio over 300 MiB before starting an upload or calling storage', async () => {
+  const auth = vi.fn<typeof fetch>(); const raw = vi.fn<typeof fetch>();
   const api = createEvalApi('', auth, raw); const file = new File(['audio'], 'x.mp3');
-  Object.defineProperty(file, 'size', { value: 25 * 1024 * 1024, configurable: true });
-  await api.upload({ file, change_goal: 'g', language: 'en' });
-  expect(auth.mock.calls[0][0]).toBe('/v1/uploads'); expect(auth.mock.calls[0][1]?.body).toBeInstanceOf(FormData);
   Object.defineProperty(file, 'size', { value: 300 * 1024 * 1024 + 1 });
   await expect(api.upload({ file, change_goal: 'g', language: 'en' })).rejects.toThrow('300 MiB');
-  expect(auth).toHaveBeenCalledTimes(1); expect(raw).not.toHaveBeenCalled();
+  expect(auth).not.toHaveBeenCalled(); expect(raw).not.toHaveBeenCalled();
 });
 it('handles a lost PUT response using the write-once conflict then completion', async () => {
   const auth = vi.fn<typeof fetch>().mockResolvedValueOnce(new Response(JSON.stringify({ upload_id: 'u', upload: { url: 'https://storage.googleapis.com/b/o', method: 'PUT', headers: {} } }))).mockResolvedValueOnce(new Response('{"status":"transcribing"}'));
@@ -109,7 +106,7 @@ it('restarts expired signed PUT attempts without sending storage failures throug
   const target = { upload_id: 'u', upload: { url: 'https://storage.googleapis.com/b/o', method: 'PUT', headers: {} } };
   const auth = vi.fn<typeof fetch>().mockImplementation(async () => new Response(JSON.stringify(target)));
   const raw = vi.fn<typeof fetch>().mockImplementation(async () => new Response(null, { status: 403 }));
-  const api = createEvalApi('', auth, raw); const file = new File(['a'], 'x.mp3'); Object.defineProperty(file, 'size', { value: 26 * 1024 * 1024 });
+  const api = createEvalApi('', auth, raw); const file = new File(['a'], 'x.mp3');
   const input = { file, change_goal: 'g', language: 'en' };
   await expect(api.upload(input)).rejects.toThrow('permission expired'); await expect(api.upload(input)).rejects.toThrow('permission expired');
   expect(auth.mock.calls.map(c => c[0])).toEqual(['/v1/uploads/audio', '/v1/uploads/audio']);
