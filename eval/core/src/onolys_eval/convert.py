@@ -324,6 +324,7 @@ _CSV_CONVERTERS = {
     "mitags_csv": ("mitags", "convert_mitags_dataset"),
     "annomi_csv": ("annomi", "convert_annomi_dataset"),
     "hlqc_zip": ("hlqc", "convert_hlqc_dataset"),
+    "automisc_zip": ("automisc", "convert_automisc_dataset"),
 }
 
 

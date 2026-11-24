@@ -1,0 +1,246 @@
+dataset_id: automisc-human
+title: AutoMISC human-coded subsets (10 HLQC + 10 smoking-chatbot conversations)
+license_note: 'Public GitHub repo (cimhasgithub/AutoMISC); GitHub reports no license. Paper: https://aclanthology.org/2025.nlpai4health-main.4/ (says code and annotated datasets are released, states no data license). HLQC text is the HLQC corpus; smoking transcripts come from a chatbot study. Internal evaluation use only; owner to confirm terms before any redistribution.'
+source_page: https://github.com/cimhasgithub/AutoMISC
+miti_version: null
+label_scheme: MISC 2.5 (human) mapped to MITI counts
+source_media:
+- transcript
+labels_summary: Human MISC 2.5 counsellor codes mapped to 9 MITI counts (not seek_collab); whole conversations coded; HLQC sessions also carry the high/low quality label
+source_format: automisc_zip
+source_files:
+- https://github.com/cimhasgithub/AutoMISC/archive/refs/heads/main.zip
+overlaps_with:
+- dataset_id: hlqc
+  note: The 10 hlqc-* sessions are HLQC conversations high_001, high_099, high_117, high_121, high_127, low_001, low_026, low_031, low_033, low_080 (same ids as in the hlqc dataset). Transcripts were re-parsed by AutoMISC into utterances, so turn text and count can differ from the hlqc dataset.
+sessions:
+- session_id: hlqc-high-001
+  title: HLQC high_001 (high quality)
+  source_media:
+  - video
+  - transcript
+  clinician_labels:
+  - counsellor
+  code_header: null
+  change_goal: Behavior change discussed in the session (the source does not record it)
+  change_goal_source: curated
+  coded_span: null
+  notes: 35 human-coded utterances, whole conversation; HLQC captions
+- session_id: hlqc-high-099
+  title: HLQC high_099 (high quality)
+  source_media:
+  - video
+  - transcript
+  clinician_labels:
+  - counsellor
+  code_header: null
+  change_goal: Behavior change discussed in the session (the source does not record it)
+  change_goal_source: curated
+  coded_span: null
+  notes: 276 human-coded utterances, whole conversation; HLQC captions
+- session_id: hlqc-high-117
+  title: HLQC high_117 (high quality)
+  source_media:
+  - video
+  - transcript
+  clinician_labels:
+  - counsellor
+  code_header: null
+  change_goal: Behavior change discussed in the session (the source does not record it)
+  change_goal_source: curated
+  coded_span: null
+  notes: 173 human-coded utterances, whole conversation; HLQC captions
+- session_id: hlqc-high-121
+  title: HLQC high_121 (high quality)
+  source_media:
+  - video
+  - transcript
+  clinician_labels:
+  - counsellor
+  code_header: null
+  change_goal: Behavior change discussed in the session (the source does not record it)
+  change_goal_source: curated
+  coded_span: null
+  notes: 318 human-coded utterances, whole conversation; HLQC captions
+- session_id: hlqc-high-127
+  title: HLQC high_127 (high quality)
+  source_media:
+  - video
+  - transcript
+  clinician_labels:
+  - counsellor
+  code_header: null
+  change_goal: Behavior change discussed in the session (the source does not record it)
+  change_goal_source: curated
+  coded_span: null
+  notes: 109 human-coded utterances, whole conversation; HLQC captions
+- session_id: hlqc-low-001
+  title: HLQC low_001 (low quality)
+  source_media:
+  - video
+  - transcript
+  clinician_labels:
+  - counsellor
+  code_header: null
+  change_goal: Behavior change discussed in the session (the source does not record it)
+  change_goal_source: curated
+  coded_span: null
+  notes: 227 human-coded utterances, whole conversation; HLQC captions
+- session_id: hlqc-low-026
+  title: HLQC low_026 (low quality)
+  source_media:
+  - video
+  - transcript
+  clinician_labels:
+  - counsellor
+  code_header: null
+  change_goal: Behavior change discussed in the session (the source does not record it)
+  change_goal_source: curated
+  coded_span: null
+  notes: 229 human-coded utterances, whole conversation; HLQC captions
+- session_id: hlqc-low-031
+  title: HLQC low_031 (low quality)
+  source_media:
+  - video
+  - transcript
+  clinician_labels:
+  - counsellor
+  code_header: null
+  change_goal: Behavior change discussed in the session (the source does not record it)
+  change_goal_source: curated
+  coded_span: null
+  notes: 260 human-coded utterances, whole conversation; HLQC captions
+- session_id: hlqc-low-033
+  title: HLQC low_033 (low quality)
+  source_media:
+  - video
+  - transcript
+  clinician_labels:
+  - counsellor
+  code_header: null
+  change_goal: Behavior change discussed in the session (the source does not record it)
+  change_goal_source: curated
+  coded_span: null
+  notes: 230 human-coded utterances, whole conversation; HLQC captions
+- session_id: hlqc-low-080
+  title: HLQC low_080 (low quality)
+  source_media:
+  - video
+  - transcript
+  clinician_labels:
+  - counsellor
+  code_header: null
+  change_goal: Behavior change discussed in the session (the source does not record it)
+  change_goal_source: curated
+  coded_span: null
+  notes: 68 human-coded utterances, whole conversation; HLQC captions
+- session_id: smoking-59cb95053306be000195be2e
+  title: Smoking cessation chatbot study 59cb95053306be000195be2e
+  source_media:
+  - transcript
+  clinician_labels:
+  - counsellor
+  code_header: null
+  change_goal: Quit smoking
+  change_goal_source: curated
+  coded_span: null
+  notes: 73 human-coded utterances, whole conversation; the counsellor is an LLM chatbot and the client a human smoker (typed chat)
+- session_id: smoking-60dde1621f6e206dea63a7dd
+  title: Smoking cessation chatbot study 60dde1621f6e206dea63a7dd
+  source_media:
+  - transcript
+  clinician_labels:
+  - counsellor
+  code_header: null
+  change_goal: Quit smoking
+  change_goal_source: curated
+  coded_span: null
+  notes: 109 human-coded utterances, whole conversation; the counsellor is an LLM chatbot and the client a human smoker (typed chat)
+- session_id: smoking-6127b32b912465823dca1e4b
+  title: Smoking cessation chatbot study 6127b32b912465823dca1e4b
+  source_media:
+  - transcript
+  clinician_labels:
+  - counsellor
+  code_header: null
+  change_goal: Quit smoking
+  change_goal_source: curated
+  coded_span: null
+  notes: 119 human-coded utterances, whole conversation; the counsellor is an LLM chatbot and the client a human smoker (typed chat)
+- session_id: smoking-6481e7756969fcd48ea9c634
+  title: Smoking cessation chatbot study 6481e7756969fcd48ea9c634
+  source_media:
+  - transcript
+  clinician_labels:
+  - counsellor
+  code_header: null
+  change_goal: Quit smoking
+  change_goal_source: curated
+  coded_span: null
+  notes: 61 human-coded utterances, whole conversation; the counsellor is an LLM chatbot and the client a human smoker (typed chat)
+- session_id: smoking-663b79f76293a4480abba57d
+  title: Smoking cessation chatbot study 663b79f76293a4480abba57d
+  source_media:
+  - transcript
+  clinician_labels:
+  - counsellor
+  code_header: null
+  change_goal: Quit smoking
+  change_goal_source: curated
+  coded_span: null
+  notes: 68 human-coded utterances, whole conversation; the counsellor is an LLM chatbot and the client a human smoker (typed chat)
+- session_id: smoking-663fd7ca84b7978432d6070b
+  title: Smoking cessation chatbot study 663fd7ca84b7978432d6070b
+  source_media:
+  - transcript
+  clinician_labels:
+  - counsellor
+  code_header: null
+  change_goal: Quit smoking
+  change_goal_source: curated
+  coded_span: null
+  notes: 37 human-coded utterances, whole conversation; the counsellor is an LLM chatbot and the client a human smoker (typed chat)
+- session_id: smoking-671fff4fced93c3e5a17f230
+  title: Smoking cessation chatbot study 671fff4fced93c3e5a17f230
+  source_media:
+  - transcript
+  clinician_labels:
+  - counsellor
+  code_header: null
+  change_goal: Quit smoking
+  change_goal_source: curated
+  coded_span: null
+  notes: 84 human-coded utterances, whole conversation; the counsellor is an LLM chatbot and the client a human smoker (typed chat)
+- session_id: smoking-67203fd3fe9e55e9ec82fc1f
+  title: Smoking cessation chatbot study 67203fd3fe9e55e9ec82fc1f
+  source_media:
+  - transcript
+  clinician_labels:
+  - counsellor
+  code_header: null
+  change_goal: Quit smoking
+  change_goal_source: curated
+  coded_span: null
+  notes: 109 human-coded utterances, whole conversation; the counsellor is an LLM chatbot and the client a human smoker (typed chat)
+- session_id: smoking-67336dc4beb89674ca687d87
+  title: Smoking cessation chatbot study 67336dc4beb89674ca687d87
+  source_media:
+  - transcript
+  clinician_labels:
+  - counsellor
+  code_header: null
+  change_goal: Quit smoking
+  change_goal_source: curated
+  coded_span: null
+  notes: 96 human-coded utterances, whole conversation; the counsellor is an LLM chatbot and the client a human smoker (typed chat)
+- session_id: smoking-6735337bd46a0b33a2bcf429
+  title: Smoking cessation chatbot study 6735337bd46a0b33a2bcf429
+  source_media:
+  - transcript
+  clinician_labels:
+  - counsellor
+  code_header: null
+  change_goal: Quit smoking
+  change_goal_source: curated
+  coded_span: null
+  notes: 65 human-coded utterances, whole conversation; the counsellor is an LLM chatbot and the client a human smoker (typed chat)

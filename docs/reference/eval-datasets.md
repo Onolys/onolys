@@ -64,6 +64,33 @@ Terms: unless noted, reuse terms are not separately confirmed and every dataset 
 - Overlaps: the AutoMISC human-coded subset re-parses 10 HLQC conversations (`automisc-human`); the full MI-TAGS set reportedly includes 140 HLQC transcripts (not in the public sample).
 - Terms: public download from the authors' page with no stated license; internal evaluation use only.
 
+## automisc-human
+
+- Source: AutoMISC repo <https://github.com/cimhasgithub/AutoMISC> (`archive/refs/heads/main.zip`). Paper: Mahmood et al., NLP4Health 2025, <https://aclanthology.org/2025.nlpai4health-main.4/>. Only the two human-annotated files under `data/manual/` are read: `HLQC_balanced_manual.csv` and `MIV6.3A_manual.csv`. The repo's automated (LLM) codes (`*_auto` columns, `data/parsed/`, `data/*.csv`, the `AnnoMI` files) are never used.
+- Sessions (20): 10 HLQC conversations (`hlqc-high-001`, `hlqc-high-099`, `hlqc-high-117`, `hlqc-high-121`, `hlqc-high-127`, `hlqc-low-001`, `hlqc-low-026`, `hlqc-low-031`, `hlqc-low-033`, `hlqc-low-080`; 1,925 utterances, the paper says 1,924) and 10 smoking-cessation study conversations (`smoking-<conv_id>`; 821 utterances, 580 counsellor and 241 client, consensus labels from 4 annotators per the paper). Every conversation is coded in full (utterance indexes run contiguously from 0), so counts cover the whole session, `coded_span` is null, and there are no coverage warnings.
+- Original media: HLQC sessions are counseling videos (automatic captions, see `hlqc`); the smoking sessions are text chats from a chatbot study (counsellor is a chatbot per the paper's "chatbot study"; client is a human smoker). Dataset-level `source_media` is `[transcript]` with a per-session `[video, transcript]` override for HLQC; `transcript_origin` is omitted because it differs by session.
+- Turns: the coded utterances (a volley is split into utterances). Speakers `counsellor` / `client` map to roles clinician / client. Gold `utterance_codes` list the mapped MITI code per clinician utterance.
+- Mapping (`onolys_eval/automisc.py`), using the repo's `t2_label_GT` (MISC 2.5 tier 2) code set `CR AF SU RF EC SR ADP RCP GI ADW CO DI RCW WA OQ CQ FA FI ST`:
+
+| MISC 2.5 code | Gold count |
+|---|---|
+| OQ (open question), CQ (closed question) | `question` |
+| SR (simple reflection) | `sr` |
+| CR (complex reflection) | `cr` |
+| AF (affirm) | `affirm` |
+| GI (give information) | `gi` |
+| ADP (advise with permission), RCP (raise concern with permission) | `persuade_permission` |
+| ADW (advise without permission), RCW (raise concern without permission) | `persuade` |
+| EC (emphasize control) | `emphasize_autonomy` |
+| CO (confront) | `confront` |
+| FI, FA, ST, SU, RF, WA, DI | not counted |
+
+- Not counted: FI (filler), FA (facilitate), ST (structure), SU (support), RF (reframe), WA (warn), DI (direct). MISC has no Seek Collaboration, so `seek_collab` is `null`. WA and DI sit under the repo's "Imperative without permission" group; whether MITI Persuade should include them is not settled here, so `persuade` is a lower bound. `cr` is a lower bound when RF occurs. Client codes (N, R+, C+, ...) are ignored; a client code on a counsellor turn, a counsellor code on a client turn, or an unknown code is a parse warning (none occur). The MISC code definitions come from the paper's prompt appendix (the repo has no code book).
+- Labels: partial counts only (9 of 10 ids are integers, 0 when absent). No globals, no summaries. HLQC sessions also carry `quality_label` (high/low from the conversation id); smoking sessions have none. `label_scheme`: "MISC 2.5 (human) mapped to MITI counts"; `miti_version: null`.
+- Overlaps: the 10 HLQC sessions are the same conversations as `hlqc` ids `high-001` etc., but AutoMISC re-parsed the transcripts into utterances, so turn text and turn count differ. No AnnoMI overlap: the manual files contain no AnnoMI sessions (AutoMISC's AnnoMI codes are automated and excluded).
+- Change goal: smoking sessions "Quit smoking" (curated); HLQC sessions generic.
+- Terms: no license on the repo; the paper says the code and annotated data are released without stating a data license. Internal evaluation use only; confirm before any redistribution.
+
 ## Gated / not added
 
 | Dataset | Why not added | How to get it |
