@@ -259,7 +259,7 @@ The earlier proposal: eval sessions and runs in the existing database under a sy
 - The prod report schema validation must accept every engine eval compares, or those engines stay out of the worker.
 - Eval deletes: removing one eval run must not delete a shared dataset session used by other combos.
 - Dataset licensing: datasets must not land in a database or bucket with real client data (another reason for a separate database).
-- Migration: none. Existing staging eval data is dropped, not migrated (decision 5). The deletion is a separate, owner-confirmed step.
+- Migration: none. Existing staging eval data is dropped, not migrated (decision 5; deletion done 2026-11-24).
 
 ### Sessions and runs, in plain words
 
@@ -275,14 +275,18 @@ The earlier proposal: eval sessions and runs in the existing database under a sy
 2. The public prod API endpoint never accepts or understands these parameters: request models reject unknown fields, so users cannot set them. Only the separate eval API endpoint can, restricted to allowlisted users checked after Firebase login (ID token email + allowlist, as eval does today via `onolys_admin_auth`). Defence in depth: the internal function also refuses `is_eval` unless the deployment config enables eval mode.
 3. One session per dataset session, many runs per session (each combo x repeat is one run). See the plain-words explanation above. Resolves the old "session vs unit" question and the route-override question (a field on the run, set via `is_eval`).
 4. A third Terraform environment `eval` is approved: same `infra/modules/environment` module, own Firestore database `eval`, bucket, queue, and Cloud Run services from the same image, eval mode on. Why: it isolates eval load, data and allowlist from staging and prod while running identical code.
-5. Existing eval data (staging `eval_runs` and `eval_uploads` collections, and eval run outputs in `onolys-eval-data-staging`) is dropped and deleted, not migrated. Deletion is a separate owner-confirmed step. Datasets (read-only reference data) are kept unless the owner says otherwise.
+5. Existing eval data (staging `eval_runs` and `eval_uploads` collections, and eval run outputs in `onolys-eval-data-staging`) is dropped and deleted, not migrated. Deletion was done 2026-11-24 on the owner's instruction. Datasets (read-only reference data) are kept.
+
+6. Names approved: Firestore database `eval`, bucket `onolys-audio-eval`.
+7. Human gold labels stay as files in the eval bucket, referenced by sha256. No new `GoldDoc` collection.
+8. Retention: eval data is kept until the owner deletes an eval run. Deleting an eval run deletes its runs, reports and outputs. Datasets and gold files stay.
+9. Concurrency: no many-writers-on-one-session problem, by design. The eval scheduler never has two runs active on the same session at once. Runs for one session (combo x repeat) are queued one after another. Parallelism comes from running DIFFERENT sessions at the same time, in batches. The scheduler enqueues the next batch while the current one is still running (pipelined), capped by the eval queue's max concurrent dispatches. Example: 12 sessions x 6 combos x 3 repeats = 216 runs. Up to N sessions are in flight; each works through its own 18 runs in order, and as one session finishes, the next session starts. Trade-off: a single session's runs finish later (18 in a row); total time is governed by how many sessions are in flight. This replaces the old open question about run-handler concurrency on one shared session.
+10. Owner-run security step, prepared by the agent when the eval environment is built, executed ONLY by the owner (agents must not run it). A script/runbook that: creates a read-only service account (e.g. `claude-readonly`, roles `datastore.viewer`, `logging.viewer`, `run.viewer`, `monitoring.viewer`); switches the automation machine's Application Default Credentials to impersonate it; then the owner removes their personal ADC file, runs `firebase logout`, and revokes the machine's access in Google Account -> Security. Consequence: Terraform and secret seeding then need the owner's own login.
+11. Old staging eval data (`eval_runs`, `eval_uploads`, eval run outputs/uploads in `onolys-eval-data-staging`) is being deleted now on the owner's instruction; datasets are kept.
 
 ### Still open (storage)
 
-- Exact eval database and bucket names (module naming proposal: database `eval`, bucket `onolys-audio-eval`); confirm.
-- Human gold: does gold need a prod-shaped home (for example a `GoldDoc`) or stay as bucket files with a sha reference?
-- Retention: eval data deleted with its eval run, or kept until manual removal as today?
-- Run handler concurrency on one shared session (see Risks): verify; fallback is one session per unit.
+- None. All storage questions are resolved by decisions 6-9.
 
 ## Phased build order
 
