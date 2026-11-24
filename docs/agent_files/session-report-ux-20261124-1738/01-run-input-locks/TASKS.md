@@ -8,13 +8,13 @@ Source of truth: docs/agent_files/session-report-ux-20261124-1738/01-run-input-l
 
 | # | Task | Depends on | Status |
 |---|---|---|---|
-| 1 | TranscriptDoc factory: sha256 + language | - | todo |
-| 2 | Speaker write-once lock | - | todo |
-| 3 | Goal lock after first run | - | todo |
-| 4 | RunDoc snapshot in start txns + retry guard | 1 | todo |
-| 5 | Worker reads RunDoc only, hash check | 4 | todo |
-| 6 | Web: speaker gate and rating card read-only | 2, 3 | todo |
-| 7 | No-exposure and engine-output guards | 5 | todo |
+| 1 | TranscriptDoc factory: sha256 + language | - | done |
+| 2 | Speaker write-once lock | - | done |
+| 3 | Goal lock after first run | - | done |
+| 4 | RunDoc snapshot in start txns + retry guard | 1 | done |
+| 5 | Worker reads RunDoc only, hash check | 4 | done |
+| 6 | Web: speaker gate and rating card read-only | 2, 3 | done |
+| 7 | No-exposure and engine-output guards | 5 | done |
 
 ## Task 1 — TranscriptDoc factory: sha256 + language
 What it is / what it means: Every stored transcript carries a content hash and its effective language, computed once in one place. Traces to R4, D5, D7, D10, AC 8, 9.

@@ -1,12 +1,14 @@
 ---
 status: in-progress
-summary: UX done; design for run input locks + MITI manual alignment drafted (PRDs awaiting approval)
+summary: UX done; SP01 implementation and review PASS; SP02 offline baseline tooling active
 date: 2026-11-24
 ---
 # session-report-ux
 
 - [Code run and verification](code-2026-11-24-1738.md)
 - [Full branch review — PASS](review-2026-11-24-1739.md)
+- [SP01 implementation](01-run-input-locks/code-2026-11-24-2130.md)
+- [SP01 review — PASS](01-run-input-locks/review-2026-11-24-2130.md)
 - [Completed session inputs and MITI runs brainstorm](brainstorm.md)
 - [Eval: run input pinning](eval-run-inputs.md)
 - [Eval: MITI coding vs manual 4.2.1](eval-miti-coding.md)
@@ -14,8 +16,8 @@ date: 2026-11-24
 ## Design: run input locks + MITI manual alignment
 | # | Sub-project | Scope | Depends | Status |
 |---|---|---|---|---|
-| 01 | [Run input locks](01-run-input-locks/PRD.md) · [tasks](01-run-input-locks/TASKS.md) | Speaker + goal write-once; inputs copied onto RunDoc in start txn; worker reads RunDoc; transcript sha256 | — | tasks ready |
-| 02 | [MITI manual alignment](02-miti-manual-alignment/PRD.md) · [tasks](02-miti-manual-alignment/TASKS.md) | Volley break per manual, one persuasion slot/volley, remove globals reset, bounded client context, coverage metric, new fixtures, measurement | — (commits after 01) | tasks ready |
+| 01 | [Run input locks](01-run-input-locks/PRD.md) · [tasks](01-run-input-locks/TASKS.md) | Speaker + goal write-once; inputs copied onto RunDoc in start txn; worker reads RunDoc; transcript sha256 | — | done — review PASS |
+| 02 | [MITI manual alignment](02-miti-manual-alignment/PRD.md) · [tasks](02-miti-manual-alignment/TASKS.md) | Volley break per manual, one persuasion slot/volley, remove globals reset, bounded client context, coverage metric, new fixtures, measurement | — (commits after 01) | in-progress — Task 1 active |
 
 Dependency: `01 ──(commit order only)──▶ 02` ; one PR.
 
