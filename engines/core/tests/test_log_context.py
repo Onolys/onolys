@@ -66,3 +66,9 @@ def test_survives_anyio_hops():
     with lc.log_context(run_id="r"):
         out = anyio.run(inner)
     assert out == {"tg": {"run_id": "r"}, "thread": {"run_id": "r"}}
+
+
+def test_client_version_is_a_request_scoped_key():
+    with lc.log_context(client_version="abc123"):
+        assert lc.snapshot() == {"client_version": "abc123"}
+    assert lc.snapshot() == {}

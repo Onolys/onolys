@@ -10,10 +10,13 @@ Values are ids, codes and numbers only.
 import hashlib
 import hmac
 import logging
+import re
 import threading
 
 from onolys_engine_core.json_logging import configure_logging
+from onolys_engine_core.log_context import bind
 from onolys_engine_core.safe_log import clean_value, register_fields, safe_fields
+from starlette.requests import HTTPConnection
 
 from onolys_api.config import Settings
 
@@ -88,3 +91,21 @@ def failed(
         event, logging.ERROR, status="failed", session_id=session_id, run_id=run_id, step=step,
         error_code=error_code, exc_class=exc_class, request_id=request_id,
     )  # fmt: skip
+
+
+_ID_PARAMS = ("id", "sid", "iid", "interview_id")
+_RESOURCE_ID = re.compile(r"^[0-9a-f]{32}$")
+
+
+async def bind_session(conn: HTTPConnection) -> None:
+    """Router dependency: bind the `{id}` path param (session or interview id) as `session_id`.
+
+    Async on purpose: a sync dependency runs in a threadpool copy of the context and its set
+    would be lost. Only well-formed resource ids are bound; the request-scoped middleware resets
+    the context when the request ends.
+    """
+    for name in _ID_PARAMS:
+        value = conn.path_params.get(name)
+        if isinstance(value, str) and _RESOURCE_ID.match(value):
+            bind(session_id=value)
+            return

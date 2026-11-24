@@ -19,6 +19,8 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Literal
 
+from onolys_engine_core.log_context import log_context
+
 from onolys_api import logs
 from onolys_api.adapters.error_map import to_public
 from onolys_api.errors import ApiError
@@ -127,7 +129,20 @@ class TaskRunner:
     # ---- delivery ----
 
     def handle(self, payload: TaskPayload, retry_count: int = 0) -> TaskResult:
+        """Run one delivery with the log ids bound (reset when it ends, however it ends).
+
+        Interview tasks carry the interview id in `sid`, so it is bound as `session_id`.
+        """
         spec = self._registry.get(payload.kind)
+        with log_context(
+            session_id=payload.sid,
+            run_id=payload.run_id,
+            request_id=payload.request_id,
+            step=(spec.step if spec else None) or payload.kind,
+        ):
+            return self._handle(spec, payload, retry_count)
+
+    def _handle(self, spec: HandlerSpec | None, payload: TaskPayload, retry_count: int):
         if spec is None:
             logs.emit(
                 "no_handler",

@@ -1,4 +1,4 @@
-"""Per-task log ids (session, run, step, request) carried in contextvars.
+"""Per-task log ids (session, run, step, request, client version) carried in contextvars.
 
 Engines read these via ``snapshot()``; they never import ``api``. Context is
 copied by ``asyncio.run``, ``asyncio.to_thread`` and anyio task hops.
@@ -13,7 +13,7 @@ from typing import Any
 
 _VARS: dict[str, ContextVar[str | None]] = {
     name: ContextVar(f"log_{name}", default=None)
-    for name in ("session_id", "run_id", "step", "request_id")
+    for name in ("session_id", "run_id", "step", "request_id", "client_version")
 }
 
 LogToken = dict[str, Token]

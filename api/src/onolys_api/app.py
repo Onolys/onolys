@@ -6,11 +6,12 @@ import time
 import uuid
 from datetime import UTC, datetime
 
-from fastapi import APIRouter, FastAPI, Request
+from fastapi import APIRouter, Depends, FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from onolys_engine_core.errors import ConfigError
+from onolys_engine_core.log_context import bind, reset
 from onolys_miti.voice.select import allowed_voices, load_voice_config
 from pydantic import BaseModel
 from starlette.exceptions import HTTPException as StarletteHTTPException
@@ -66,6 +67,7 @@ from onolys_api.voice.scenarios import load_scenarios
 
 log = logging.getLogger("onolys_api")
 _REQUEST_ID_OK = re.compile(r"^[A-Za-z0-9._-]{1,64}$")
+_CLIENT_VERSION_OK = re.compile(r"^[A-Za-z0-9._+-]{1,64}$")
 ERROR_RESPONSES = {"default": {"model": ErrorResponse, "description": "Error"}}
 
 
@@ -86,9 +88,12 @@ class RequestIdMiddleware:
             await self.app(scope, receive, send)
             return
         rid = ""
+        client_version = ""
         for k, v in scope["headers"]:
             if k == b"x-request-id":
                 rid = v.decode("latin-1")
+            elif k == b"x-client-version":
+                client_version = v.decode("latin-1")
         if not _REQUEST_ID_OK.match(rid):
             rid = uuid.uuid4().hex
         scope.setdefault("state", {})["request_id"] = rid
@@ -100,7 +105,16 @@ class RequestIdMiddleware:
                 message = {**message, "headers": headers}
             await send(message)
 
-        await self.app(scope, receive, send_with_id)
+        # bound before RequestLogMiddleware (inside us) logs, reset when the request ends
+        token = bind(
+            session_id=None,  # `bind_session` sets it later; reset below clears it
+            request_id=rid,
+            client_version=client_version if _CLIENT_VERSION_OK.match(client_version) else None,
+        )
+        try:
+            await self.app(scope, receive, send_with_id)
+        finally:
+            reset(token)
 
 
 MAX_JSON_BODY_BYTES = (
@@ -466,6 +480,7 @@ def create_app(
     register_error_handlers(app)
 
     router = APIRouter(prefix="/v1")
+    by_id = [Depends(logs.bind_session)]  # sets session_id for lines logged during the request
 
     @router.get(
         "/healthz",
@@ -480,7 +495,7 @@ def create_app(
 
     if voice_mode:  # the relay serves only its socket and a health check
         app.include_router(router)
-        app.include_router(voice_relay.router)
+        app.include_router(voice_relay.router, dependencies=[Depends(logs.bind_session)])
         return app
 
     cached: list = []
@@ -500,16 +515,16 @@ def create_app(
     app.state.auth_email = auth_email
     router.include_router(api_key_routes.router)
     router.include_router(auth_email_routes.router)
-    router.include_router(session_routes.router)
-    router.include_router(audio_routes.router)
-    router.include_router(rating_routes.router)
-    router.include_router(speaker_routes.router)
-    router.include_router(transcript_routes.router)
-    router.include_router(run_routes.router)
+    router.include_router(session_routes.router, dependencies=by_id)
+    router.include_router(audio_routes.router, dependencies=by_id)
+    router.include_router(rating_routes.router, dependencies=by_id)
+    router.include_router(speaker_routes.router, dependencies=by_id)
+    router.include_router(transcript_routes.router, dependencies=by_id)
+    router.include_router(run_routes.router, dependencies=by_id)
     router.include_router(run_routes.runs_router)
     router.include_router(usage_routes.router)
     router.include_router(scenario_routes.router)
-    router.include_router(interview_routes.router)
+    router.include_router(interview_routes.router, dependencies=by_id)
     app.include_router(router)
     app.include_router(make_docs_router())
 

@@ -90,9 +90,9 @@ async def test_request_line_has_method_route_template_status_latency(env, caplog
     assert (req["method"], req["route"], req["status"]) == ("GET", "/v1/sessions/{id}", 200)
     assert isinstance(req["duration_ms"], int | float) and req["request_id"] == "req-1"
     assert req["auth_kind"] == "token"
-    assert sid not in server_text(caplog) and env.uid not in server_text(
-        caplog
-    )  # no ids from the path
+    assert req["session_id"] == sid  # bound by `bind_session` (02-logging R2)
+    assert env.uid not in server_text(caplog)  # no uid; the path itself is never logged
+    assert f"/v1/sessions/{sid}" not in server_text(caplog)
 
 
 async def test_request_line_for_unmatched_route_has_no_path_or_query(env, caplog):
