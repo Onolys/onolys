@@ -92,3 +92,60 @@ def test_broken_preset_beats_env_override():
     for name in TEXT:
         assert r[name].litellm_id == "gemini/gemini-does-not-exist-0"
     assert routes(env, "test-broken-tiers")["cheap"].litellm_id.endswith("does-not-exist-0")
+
+
+@pytest.mark.parametrize("effort", ["low", "medium", "high", "max"])
+def test_effort_override_on_default_text_routes(effort, baseline):
+    r = routes({"LLM_EFFORT": effort})
+    for name in TEXT:
+        assert r[name].extra_params["reasoning_effort"] == effort
+        assert r[name].litellm_id == baseline[name].litellm_id
+        assert r[name].max_output_tokens == baseline[name].max_output_tokens
+    assert r["oneshot"] == baseline["oneshot"]
+
+
+def test_effort_override_with_model_and_preset_precedence():
+    env = {"LLM_PROVIDER": "gemini", "LLM_MODEL": "gemini-4-neon", "LLM_EFFORT": "high"}
+    assert routes(env)["miti_code"].extra_params["reasoning_effort"] == "high"
+    assert routes(env, "claude")["miti_code"].extra_params == {}
+    assert routes(env, "test-broken-llm")["miti_code"].extra_params["reasoning_effort"] == "low"
+
+
+@pytest.mark.parametrize("effort", ["LOW", "High", " high", "high\n", "", "ultra", "low,EVIL=1", "low\nEVIL=1"])
+def test_invalid_effort_is_rejected(effort):
+    if not effort:
+        assert routes({"LLM_EFFORT": effort}) == routes({})
+        return
+    with pytest.raises(ConfigError, match="LLM_EFFORT"):
+        routes({"LLM_EFFORT": effort})
+
+
+def test_effort_must_be_supported_by_selected_model():
+    with pytest.raises(ConfigError, match="LLM_EFFORT.*max"):
+        routes({"LLM_PROVIDER": "gemini", "LLM_MODEL": "gemini-4-neon", "LLM_EFFORT": "max"})
+
+
+def test_effort_only_validates_effective_miti_model():
+    with pytest.raises(ConfigError, match="LLM_EFFORT"):
+        routes({"MITI_MODEL_MID": "gemini/gemini-4-neon", "LLM_EFFORT": "max"})
+    with pytest.raises(ConfigError, match="LLM_EFFORT"):
+        routes({"MITI_MODEL_MID": "unknown/model", "LLM_EFFORT": "low"})
+
+
+@pytest.mark.parametrize("field,value", [("LLM_PROVIDER", "anthropic\n"), ("LLM_MODEL", "claude-sonnet-5-5\n"), ("LLM_MODEL", "claude-sonnet-5-5,EVIL=1")])
+def test_override_rejects_values_unsafe_for_deployment(field, value):
+    env = {"LLM_PROVIDER": "anthropic", "LLM_MODEL": "claude-sonnet-5-5", field: value}
+    with pytest.raises(ConfigError):
+        routes(env)
+
+
+def test_effort_preserves_other_extra_params(tmp_path):
+    import yaml
+
+    data = yaml.safe_load(STAGING.read_text())
+    data["cheap"]["extra_params"] = {"reasoning_effort": "low", "other": 42}
+    source = tmp_path / "routes.yaml"
+    source.write_text(yaml.safe_dump(data))
+    env = {"MODELS_FILE": str(ROOT / "config/models.yaml"), "LLM_EFFORT": "medium"}
+    r = load_registry(source, env).routes()
+    assert r["cheap"].extra_params == {"reasoning_effort": "medium", "other": 42}

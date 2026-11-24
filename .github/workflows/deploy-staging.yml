@@ -5,6 +5,7 @@ name: deploy-staging
 #   WIF_PROVIDER, DEPLOYER_STAGING_SA, GCP_PROJECT (optional, default onolys), GCP_REGION (optional, default us-central1),
 #   STAGING_VITE_FIREBASE_API_KEY, STAGING_VITE_FIREBASE_AUTH_DOMAIN, STAGING_VITE_FIREBASE_APP_ID,
 #   STAGING_VITE_FIREBASE_STORAGE_BUCKET, STAGING_VITE_FIREBASE_MESSAGING_SENDER_ID, STAGING_VITE_CONTACT_EMAIL (optional)
+#   LLM_PROVIDER + LLM_MODEL (both or neither), LLM_EFFORT (optional; supported lowercase tier effort)
 on:
   workflow_run:
     workflows: [CI]
@@ -42,6 +43,9 @@ jobs:
       contents: read
       id-token: write
     outputs:
+      llm_provider: ${{ steps.llm.outputs.provider }}
+      llm_model: ${{ steps.llm.outputs.model }}
+      llm_effort: ${{ steps.llm.outputs.effort }}
       sha: ${{ steps.vars.outputs.sha }}
       image: ${{ steps.vars.outputs.repo }}@${{ steps.push.outputs.digest }}
     steps:
@@ -56,6 +60,14 @@ jobs:
           ref: ${{ steps.vars.outputs.sha }}
       - name: Config guard (source tree)
         run: bash scripts/ci/check_config.sh
+      - uses: astral-sh/setup-uv@v5
+      - name: Validate staging LLM configuration before cloud side effects
+        id: llm
+        env:
+          LLM_PROVIDER: ${{ vars.LLM_PROVIDER }}
+          LLM_MODEL: ${{ vars.LLM_MODEL }}
+          LLM_EFFORT: ${{ vars.LLM_EFFORT }}
+        run: uv run --frozen --package onolys-engine-core python scripts/ci/validate_staging_llm.py
       - id: auth
         uses: google-github-actions/auth@v2
         with:
@@ -108,8 +120,9 @@ jobs:
         CORS_ORIGINS=https://onolys-app-staging.web.app\,http://localhost:5173
         APP_BASE_URL=https://onolys-app-staging.web.app
         EMAIL_FROM=Onolys <no-reply@onolys.com>
-        LLM_PROVIDER=${{ vars.LLM_PROVIDER }}
-        LLM_MODEL=${{ vars.LLM_MODEL }}
+        LLM_PROVIDER=${{ needs.build.outputs.llm_provider }}
+        LLM_MODEL=${{ needs.build.outputs.llm_model }}
+        LLM_EFFORT=${{ needs.build.outputs.llm_effort }}
       flags: --cpu-throttling
       pin_traffic: true
     secrets: inherit
@@ -150,8 +163,9 @@ jobs:
       git_sha: ${{ needs.build.outputs.sha }}
       # Empty vars = no override (routes.yaml wins). See docs/reference/infra.md "LLM provider and model".
       env_vars: |-
-        LLM_PROVIDER=${{ vars.LLM_PROVIDER }}
-        LLM_MODEL=${{ vars.LLM_MODEL }}
+        LLM_PROVIDER=${{ needs.build.outputs.llm_provider }}
+        LLM_MODEL=${{ needs.build.outputs.llm_model }}
+        LLM_EFFORT=${{ needs.build.outputs.llm_effort }}
     secrets: inherit
 
   deploy-voice:

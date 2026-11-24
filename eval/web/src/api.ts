@@ -123,9 +123,18 @@ export function createEvalApi(base: string, fetcher: typeof fetch, storageFetch:
     datasets: () => request('/datasets'),
     dataset: datasetId => request(`/datasets/${id(datasetId)}`),
     upload: async input => {
+      const multipart = () => {
+        const body = new FormData();
+        body.set('file', input.file);
+        if (input.gold) body.set('gold', input.gold);
+        body.set('change_goal', input.change_goal); body.set('language', input.language);
+        if (input.coded_span) body.set('coded_span', JSON.stringify(input.coded_span));
+        return request<Upload>('/uploads', { method: 'POST', body });
+      };
       const audio = /\.(mp3|wav|m4a|webm|ogg)$/i.test(input.file.name);
       if (audio && input.file.size > 300 * 1024 * 1024) throw new Error('Recordings must be at most 300 MiB.');
-      if (audio && input.file.size > 25 * 1024 * 1024) {
+      if (audio) {
+        const legacySize = input.file.size <= 25 * 1024 * 1024;
         let saved = pending.get(input);
         if (!saved) {
           if (input.gold && input.gold.size > 1024 * 1024) throw new Error('Gold file must be at most 1 MiB.');
@@ -135,7 +144,11 @@ export function createEvalApi(base: string, fetcher: typeof fetch, storageFetch:
           const started = await request<{ upload_id: string; upload: { url: string; method: string; headers: Record<string, string> } }>('/uploads/audio', json({
             filename: input.file.name, content_type: input.file.type, size: input.file.size,
             change_goal: input.change_goal, language: input.language, coded_span: input.coded_span, ...(gold === undefined ? {} : { gold }),
-          }));
+          })).catch(error => {
+            if (legacySize && error instanceof ApiError && error.status >= 500) return null;
+            throw error;
+          });
+          if (!started) return multipart();
           saved = { ...started, written: false }; pending.set(input, saved);
         }
         if (!saved.written) {
@@ -143,6 +156,9 @@ export function createEvalApi(base: string, fetcher: typeof fetch, storageFetch:
           try {
             response = await storageFetch(saved.upload.url, { method: saved.upload.method, headers: saved.upload.headers, body: input.file, credentials: 'omit' });
           } catch {
+            // No completion has been attempted, so this cannot queue a second
+            // transcription. A PUT whose response was lost can leave unused bytes.
+            if (legacySize) { pending.delete(input); return multipart(); }
             throw new Error('Recording upload could not connect. Check your connection and storage CORS configuration, then retry.');
           }
           // A lost PUT response may already have created the object. The server checks
@@ -161,12 +177,7 @@ export function createEvalApi(base: string, fetcher: typeof fetch, storageFetch:
           throw error;
         }
       }
-      const body = new FormData();
-      body.set('file', input.file);
-      if (input.gold) body.set('gold', input.gold);
-      body.set('change_goal', input.change_goal); body.set('language', input.language);
-      if (input.coded_span) body.set('coded_span', JSON.stringify(input.coded_span));
-      return request('/uploads', { method: 'POST', body });
+      return multipart();
     },
     getUpload: (uploadId, signal) => request(`/uploads/${id(uploadId)}`, { signal }),
     speakers: (uploadId, speaker) => request(`/uploads/${id(uploadId)}/speakers`, json({ clinician_speaker: speaker })),
