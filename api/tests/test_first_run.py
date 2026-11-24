@@ -549,14 +549,53 @@ async def test_confirm_in_report_ready_is_refused_and_changes_nothing(env):
     assert repo.list_runs(uid, sid) == [] and queue.calls == []
 
 
-async def test_confirm_in_failed_allowed(env):
+@pytest.mark.parametrize("state", ["failed", "cancelled", "deleting"])
+@pytest.mark.parametrize("speaker", ["S1", "S2"])
+async def test_confirm_terminal_state_refused_even_same_speaker(env, state, speaker):
     c, h, repo, uid, queue = env
-    sid = new_session(repo, uid, state="failed", ready=True, clinician_speaker="S1",
-                      speaker_confirmed=True, first_run_id="run0")  # fmt: skip
-    r = await c.post(f"/v1/sessions/{sid}/speakers/confirm", json={"clinician_speaker": "S2"},
-                     headers=h)  # fmt: skip
-    assert r.status_code == 202 and repo.get_session(uid, sid).clinician_speaker == "S2"
+    sid = new_session(repo, uid, state=state, ready=True, clinician_speaker="S1",
+                      speaker_confirmed=True, first_run_id="run0")
+    before = repo.get_session(uid, sid)
+    r = await c.post(f"/v1/sessions/{sid}/speakers/confirm",
+                     json={"clinician_speaker": speaker}, headers=h)
+    assert r.status_code == (404 if state == "deleting" else 409)
+    assert repo.get_session(uid, sid) == before
     assert queue.calls == []
+
+
+@pytest.mark.parametrize("state", ["awaiting_input", "running", "report_ready"])
+async def test_confirm_same_speaker_no_write_and_attempts_start(env, monkeypatch, state):
+    from onolys_api.routes import speakers
+
+    c, h, repo, uid, _ = env
+    sid = new_session(repo, uid, state=state, ready=True, clinician_speaker="S1",
+                      speaker_confirmed=True)
+    before, status = repo.get_session(uid, sid), repo.get_status(uid, sid)
+    calls = []
+    monkeypatch.setattr(speakers, "maybe_start_first_run", lambda *args: calls.append(args))
+    r = await c.post(f"/v1/sessions/{sid}/speakers/confirm",
+                     json={"clinician_speaker": "S1"}, headers=h)
+    assert r.status_code == 202
+    assert r.json()["session"]["status"] == state
+    assert repo.get_session(uid, sid) == before
+    assert repo.get_status(uid, sid) == status
+    assert len(calls) == 1 and calls[0][2:4] == (uid, sid)
+    for different in ("S2", "ZZ"):
+        r = await c.post(f"/v1/sessions/{sid}/speakers/confirm",
+                         json={"clinician_speaker": different}, headers=h)
+        assert r.status_code == 409 and r.json()["details"][0]["code"] == "invalid_state"
+    assert len(calls) == 1
+    assert repo.get_session(uid, sid) == before
+
+
+async def test_confirm_same_speaker_recovers_missed_first_start(env):
+    c, h, repo, uid, queue = env
+    sid = new_session(repo, uid, state="awaiting_input", ready=True,
+                      clinician_speaker="S1", speaker_confirmed=True, rating_submitted=True)
+    r = await c.post(f"/v1/sessions/{sid}/speakers/confirm",
+                     json={"clinician_speaker": "S1"}, headers=h)
+    assert r.status_code == 202
+    _assert_one_run(repo, queue, uid, sid)
 
 
 async def test_transcript_read_owner_scoped_no_store_with_roles(env):

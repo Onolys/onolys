@@ -287,18 +287,24 @@ class FakeRepo:
         if pointer is not None:
             self._blobs.delete(pointer.key)
 
-    def confirm_speaker(self, uid: str, sid: str, clinician: str, states: tuple[str, ...]) -> bool:
+    def confirm_speaker(
+        self, uid: str, sid: str, clinician: str, states: tuple[str, ...]
+    ) -> Literal["written", "same", "conflict"]:
         with self._claim_lock:  # the fake's "transaction"
             doc = self._owned(f"sessions/{sid}", uid)
+            if doc.get("state") in ("failed", "cancelled", "deleting"):
+                return "conflict"
+            if doc.get("speaker_confirmed"):
+                return "same" if doc.get("clinician_speaker") == clinician else "conflict"
             if doc.get("state") not in states:
-                return False
+                return "conflict"
             self.update_session(
                 uid,
                 sid,
                 {"clinician_speaker": clinician, "speaker_confirmed": True},
                 status={"speaker_confirmed": True},
             )
-            return True
+            return "written"
 
     def list_sessions(
         self, uid: str, limit: int = 20, cursor: str | None = None

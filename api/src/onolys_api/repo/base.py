@@ -128,9 +128,11 @@ class Repo(Protocol):
         self, uid: str, sid: str, run_id: str, doc: ReportDoc, run_fields: dict[str, Any],
         plan_for: Callable[[int], SessionPlan], date: str | None,
     ) -> ReportDoc | None: ...  # fmt: skip
+    # Atomic write-once selection; same returns without writing, even after a run starts.
+    # Failed/cancelled/deleting sessions conflict before the idempotency check.
     def confirm_speaker(
         self, uid: str, sid: str, clinician: str, states: tuple[str, ...]
-    ) -> bool: ...
+    ) -> Literal["written", "same", "conflict"]: ...
     def list_sessions(
         self, uid: str, limit: int = 20, cursor: str | None = None
     ) -> Page[SessionDoc]: ...

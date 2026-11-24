@@ -1023,17 +1023,33 @@ def test_rotate_api_key_leaves_one_active_even_under_concurrency(repo):
     assert repo.active_api_key(uid) is None
 
 
-def test_confirm_speaker_only_in_allowed_states(repo):
+def test_confirm_speaker_write_once_and_idempotent(repo):
     uid, sid = seed(repo)
-    allowed = ("awaiting_input", "report_ready", "failed")
-    repo.update_session(uid, sid, {"state": "running"})
-    assert repo.confirm_speaker(uid, sid, "A", allowed) is False
-    assert repo.get_session(uid, sid).clinician_speaker is None
+    allowed = ("awaiting_input",)
+    assert repo.confirm_speaker(uid, sid, "A", allowed) == "conflict"
     repo.update_session(uid, sid, {"state": "awaiting_input"})
-    assert repo.confirm_speaker(uid, sid, "A", allowed) is True
-    s = repo.get_session(uid, sid)
-    assert s.clinician_speaker == "A" and s.speaker_confirmed
+    assert repo.confirm_speaker(uid, sid, "A", allowed) == "written"
     assert repo.get_status(uid, sid).speaker_confirmed
+    for state in ("awaiting_input", "running", "report_ready"):
+        repo.update_session(uid, sid, {"state": state})
+        before, status = repo.get_session(uid, sid), repo.get_status(uid, sid)
+        assert repo.confirm_speaker(uid, sid, "A", allowed) == "same"
+        assert repo.confirm_speaker(uid, sid, "B", allowed) == "conflict"
+        assert repo.get_session(uid, sid) == before
+        assert repo.get_status(uid, sid) == status
+
+
+@pytest.mark.parametrize("state", ["failed", "cancelled", "deleting"])
+@pytest.mark.parametrize("confirmed", [False, True])
+def test_confirm_speaker_terminal_states_precede_idempotency(repo, state, confirmed):
+    uid, sid = seed(repo)
+    repo.update_session(uid, sid, {
+        "state": state, "speaker_confirmed": confirmed, "clinician_speaker": "A",
+    })
+    before = repo.get_session(uid, sid)
+    for speaker in ("A", "B"):
+        assert repo.confirm_speaker(uid, sid, speaker, ("awaiting_input",)) == "conflict"
+    assert repo.get_session(uid, sid) == before
 
 
 def test_txn_does_not_retry_unrelated_value_error(repo):

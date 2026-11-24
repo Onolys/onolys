@@ -4920,7 +4920,7 @@
     },
     "/v1/sessions/{id}/speakers/confirm": {
       "post": {
-        "description": "Allowed in `awaiting_input` and `failed` once the transcript is ready; any other state (a run in progress, `report_ready`) is 409 `invalid_state`. In `failed` it applies to the next run only. May start the first run (R4).",
+        "description": "First selection is allowed in `awaiting_input` once the transcript is ready. An identical confirmed selection returns 202 without writing and may start the first run, including after a run starts. A different selection or a failed/cancelled session is 409 `invalid_state`; deleting sessions are 404.",
         "operationId": "confirmSpeakers",
         "parameters": [
           {

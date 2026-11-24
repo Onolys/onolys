@@ -395,27 +395,36 @@ class FirestoreRepo:
             self._drop_pointer(pointer)  # not published (or someone else's report won)
         return out
 
-    def confirm_speaker(self, uid: str, sid: str, clinician: str, states: tuple[str, ...]) -> bool:
-        """Record the clinician only while the session is still in one of `states` (checked and
-        written in one transaction, so a run starting concurrently cannot be overwritten)."""
+    def confirm_speaker(
+        self, uid: str, sid: str, clinician: str, states: tuple[str, ...]
+    ) -> Literal["written", "same", "conflict"]:
+        """Select once in `states`, or accept an identical retry without writing.
+
+        Terminal failure/cancellation/deletion precedes idempotency. All checks and writes
+        share a transaction so concurrent selections cannot overwrite the chosen speaker.
+        """
         sref = self._top("sessions", sid)  # read inside the txn only: a plain read can abort
         stref = self._top("session_status", sid)
 
         @firestore.transactional
-        def txn_fn(txn) -> bool:
+        def txn_fn(txn) -> Literal["written", "same", "conflict"]:
             snap = sref.get(transaction=txn)
             cur = snap.to_dict() or {}
             if not snap.exists or cur.get("uid") != uid:
                 raise NotFoundError()
+            if cur.get("state") in ("failed", "cancelled", "deleting"):
+                return "conflict"
+            if cur.get("speaker_confirmed"):
+                return "same" if cur.get("clinician_speaker") == clinician else "conflict"
             if cur.get("state") not in states:
-                return False
+                return "conflict"
             now = utcnow()
             txn.update(
                 sref,
                 {"clinician_speaker": clinician, "speaker_confirmed": True, "updated_at": now},
             )
             txn.set(stref, {"speaker_confirmed": True, "uid": uid, "updated_at": now}, merge=True)
-            return True
+            return "written"
 
         return self._contended(txn_fn, uid)
 
