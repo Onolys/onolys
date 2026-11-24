@@ -6,6 +6,7 @@ import { History, RunView } from './Runs';
 import { getConfig } from './config';
 import { NewRun } from './NewRun';
 import './app.css';
+import { Button } from '@onolys/ui';
 
 const browserFetch: typeof fetch = (input, init) => fetch(input, init);
 export function Root({ session, baseFetch = browserFetch }: { session: AuthSession; baseFetch?: typeof fetch }) {
@@ -16,19 +17,21 @@ function AllowedApp({ session, baseFetch }: { session: AuthSession; baseFetch: t
   const [access, setAccess] = useState<'loading' | 'allowed' | 'error'>('loading');
   const [attempt, setAttempt] = useState(0);
   const [location, setLocation] = useState(() => new URL(window.location.href).searchParams);
-  const [initialRun, setInitialRun] = useState<RunSummary>();
+  const [initialRun, setInitialRun] = useState<RunSummary | undefined>(() => window.history.state?.initialRun);
   const runId = location.get('run');
-  const navigate = (id?: string, history = false) => {
+  const navigate = (id?: string, history = false, saved?: RunSummary) => {
     const url = new URL(window.location.href);
     url.searchParams.delete('run'); url.searchParams.delete('view');
     if (id) url.searchParams.set('run', id);
     else if (history) url.searchParams.set('view', 'history');
-    window.history.pushState({}, '', url);
+    window.history.pushState(saved ? { initialRun: saved } : {}, '', url);
+    window.dispatchEvent(new PopStateEvent('popstate'));
+    setInitialRun(saved);
     setLocation(url.searchParams);
   };
-  const rerun = (run: RunSummary) => { setInitialRun(run); navigate(); };
+  const rerun = (run: RunSummary) => navigate(undefined, false, run);
   useEffect(() => {
-    const update = () => { setInitialRun(undefined); setLocation(new URL(window.location.href).searchParams); };
+    const update = () => { setInitialRun(window.history.state?.initialRun); setLocation(new URL(window.location.href).searchParams); };
     window.addEventListener('popstate', update);
     return () => window.removeEventListener('popstate', update);
   }, []);
@@ -37,15 +40,11 @@ function AllowedApp({ session, baseFetch }: { session: AuthSession; baseFetch: t
     api.me().then(() => { if (active) setAccess('allowed'); }).catch(() => { if (active) setAccess('error'); });
     return () => { active = false; };
   }, [api, attempt]);
-  return <div className="shell">
-    <header><p className="eyebrow">Onolys · Evaluation</p><p>MITI 4.2.1 coding comparison</p></header>
-    <main>
+  return <>
       {access === 'loading' && <p role="status">Checking access…</p>}
-      {access === 'error' && <div role="alert"><p>Could not reach the server.</p><button onClick={() => { setAccess('loading'); setAttempt(n => n + 1); }}>Retry</button></div>}
+      {access === 'error' && <div role="alert"><p>Could not reach the server.</p><Button onClick={() => { setAccess('loading'); setAttempt(n => n + 1); }}>Retry</Button></div>}
       {access === 'allowed' && <>
-        <nav aria-label="Evaluation"><button onClick={() => { setInitialRun(undefined); navigate(); }}>New run</button><button onClick={() => navigate(undefined, true)}>History</button></nav>
         {runId ? <RunView key={runId} api={api} runId={runId} onRerun={rerun} /> : location.get('view') === 'history' ? <History api={api} onOpen={navigate} onRerun={rerun} /> : <NewRun key={initialRun?.run_id ?? 'new'} api={api} initialRun={initialRun} onRunCreated={navigate} />}
       </>}
-    </main>
-  </div>;
+  </>;
 }

@@ -25,6 +25,8 @@ export interface Upload {
 }
 export interface UploadInput { file: File; gold?: File; change_goal: string; language: string; coded_span?: CodedSpan }
 export interface RunInput {
+  name?: string | null;
+  description?: string | null;
   input: { dataset_id: string; session_ids: string[] } | { upload_id: string };
   engines: string[];
   selection: Selection;
@@ -69,7 +71,7 @@ export interface Compare {
  aggregates: CompareAggregate[]; notes: string[];
 }
 export interface RunDetail extends RunSummary { units: RunUnit[]; compare: Compare }
-export type RunSelection = Pick<RunInput, 'engines' | 'selection' | 'repeats'>;
+export type RunSelection = Pick<RunInput, 'engines' | 'selection' | 'repeats' | 'name' | 'description'>;
 export interface EvalApi {
   me(): Promise<unknown>;
   runs(signal?: AbortSignal, cursor?: string): Promise<{ runs: RunSummary[]; next_cursor?: string | null }>;

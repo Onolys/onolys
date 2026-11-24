@@ -54,7 +54,8 @@ describe("AuthGate", () => {
   it("signed in: shows the app with a Sign out button that returns to login", async () => {
     const { provider } = mount({ email: "a@b.co" });
     expect(await screen.findByText("the app")).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Sign out" }));
+    fireEvent.keyDown(screen.getByRole("button", { name: "Account menu" }), { key: "Enter" });
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Sign out" }));
     expect(await screen.findByRole("button", { name: "Sign in" })).toBeTruthy();
     expect(provider.signOut).toHaveBeenCalledOnce();
   });
@@ -77,7 +78,8 @@ describe("AuthGate", () => {
     await session.createFetch(base as unknown as typeof fetch)("https://x", {});
     expect(await screen.findByText(/not allowed to use this app, or its email is not verified/i)).toBeTruthy();
     expect(screen.queryByText("the app")).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: "Sign out" }));
+    fireEvent.keyDown(screen.getByRole("button", { name: "Account menu" }), { key: "Enter" });
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Sign out" }));
     await waitFor(() => expect(screen.getByRole("button", { name: "Sign in" })).toBeTruthy());
   });
 
@@ -86,7 +88,7 @@ describe("AuthGate", () => {
     await screen.findByRole("button", { name: "Sign in" });
     const text = document.body.textContent ?? "";
     expect(text).not.toMatch(/sign.?up|create (an )?account|register|forgot|verification code|two-factor|mfa|authenticator/i);
-    expect(document.querySelectorAll("a")).toHaveLength(0);
+    expect(screen.queryByRole("link", { name: /sign.?up|forgot|register/i })).toBeNull();
   });
 
   it("auth source never imports sign-up or MFA APIs", () => {

@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
 import { Root } from './Root';
 import { createAuthSession } from './auth/session';
@@ -56,4 +56,30 @@ it('restores an existing backend run from its URL after reload and handles brows
   window.dispatchEvent(new PopStateEvent('popstate'));
   expect(await screen.findByRole('heading', { name: 'History' })).toBeTruthy();
   view.unmount(); window.history.replaceState({}, '', '/');
+});
+
+it('offers avatar signout when access is denied', async () => {
+  const provider = createFakeProvider({ email: 'a@example.com' });
+  render(<Root session={createAuthSession(provider)} baseFetch={vi.fn().mockResolvedValue(new Response('{}', { status: 403 }))} />);
+  await screen.findByText('Not allowed');
+  fireEvent.keyDown(screen.getByRole('button', { name: 'Account menu' }), { key: 'Enter' });
+  fireEvent.click(await screen.findByRole('menuitem', { name: 'Sign out' }));
+  await screen.findByRole('button', { name: 'Sign in' });
+  expect(provider.signOut).toHaveBeenCalledOnce();
+});
+
+it('restores a rerun draft through history navigation without starting it', async () => {
+  const saved = { run_id: 'saved', input: { dataset_id: 'sample', session_ids: ['s1'] }, engines: ['human'], selection: { models: [], tiers: [], efforts: [] }, repeats: 3, name: 'Saved draft', description: 'Keep this context' };
+  window.history.replaceState({ initialRun: saved }, '', '/?other=keep');
+  const baseFetch = vi.fn(async (input: RequestInfo | URL) => new Response(JSON.stringify(String(input).includes('/options') ? { engines: [{ id: 'human', label: 'Human', engine: 'human', prod: false }], models: [], defaults: { dataset: { engines: [], selection: { models: [], tiers: [], efforts: [] } } } } : String(input).endsWith('/runs') ? { runs: [] } : {})));
+  render(<Root session={createAuthSession(createFakeProvider({ email: 'a@example.com' }))} baseFetch={baseFetch} />);
+  expect((await screen.findByLabelText('Name (optional)') as HTMLInputElement).value).toBe('Saved draft');
+  fireEvent.click(screen.getByRole('link', { name: 'History' }));
+  await screen.findByRole('heading', { name: 'History' });
+  expect(window.location.search).toContain('other=keep');
+  window.history.back();
+  await waitFor(() => expect((screen.getByLabelText('Name (optional)') as HTMLInputElement).value).toBe('Saved draft'));
+  expect((screen.getByLabelText('Runs per cell') as HTMLSelectElement).value).toBe('3');
+  expect(baseFetch.mock.calls.every(call => !String(call[0]).endsWith('/rerun'))).toBe(true);
+  window.history.replaceState({}, '', '/');
 });

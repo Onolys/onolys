@@ -15,9 +15,12 @@
     "dev": "vite"
   },
   "dependencies": {
+    "@onolys/ui": "git+https://github.com/Onolys/onolys-ui.git#v0.3.0",
+    "@tailwindcss/vite": "4.3.5",
     "firebase": "13.4.0",
     "react": "19.3.1",
-    "react-dom": "19.3.1"
+    "react-dom": "19.3.1",
+    "tailwindcss": "4.3.5"
   },
   "devDependencies": {
     "@eslint/js": "9.39.5",
