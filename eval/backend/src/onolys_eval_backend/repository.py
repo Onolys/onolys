@@ -20,7 +20,9 @@ class EvalRepository(Protocol):
     def create_upload(self, upload_id: str, data: Record) -> None: ...
     def get_upload(self, upload_id: str) -> Record | None: ...
     def update_upload(self, upload_id: str, updates: Record) -> None: ...
-    def transition_upload(self, upload_id: str, expected: str, updates: Record) -> bool: ...
+    def transition_upload(
+        self, upload_id: str, expected: str, updates: Record, *, match: Record | None = None
+    ) -> bool: ...
     def create_run(self, run_id: str, data: Record, units: Mapping[str, Record]) -> None: ...
     def get_run(self, run_id: str) -> Record | None: ...
     def list_runs(self, limit: int = 100) -> dict[str, Record]: ...
@@ -58,10 +60,11 @@ class InMemoryEvalRepository:
         with self._lock:
             self._uploads[upload_id].update(deepcopy(updates))
 
-    def transition_upload(self, upload_id, expected, updates):
+    def transition_upload(self, upload_id, expected, updates, *, match=None):
         with self._lock:
             saved = self._uploads.get(upload_id)
-            if saved is None or saved['status'] != expected:
+            if (saved is None or saved['status'] != expected
+                    or any(saved.get(key) != value for key, value in (match or {}).items())):
                 return False
             saved.update(deepcopy(updates))
             return True
@@ -160,7 +163,7 @@ class FirestoreEvalRepository:
     def update_upload(self, upload_id, updates):
         self._update(self.uploads.document(upload_id), updates)
 
-    def transition_upload(self, upload_id, expected, updates):
+    def transition_upload(self, upload_id, expected, updates, *, match=None):
         from google.cloud import firestore
 
         ref = self.uploads.document(upload_id)
@@ -168,7 +171,11 @@ class FirestoreEvalRepository:
         @firestore.transactional
         def apply(transaction):
             snapshot = ref.get(transaction=transaction)
-            if not snapshot.exists or snapshot.to_dict()['status'] != expected:
+            if not snapshot.exists:
+                return False
+            saved = snapshot.to_dict()
+            if (saved['status'] != expected
+                    or any(saved.get(key) != value for key, value in (match or {}).items())):
                 return False
             transaction.update(ref, updates)
             return True

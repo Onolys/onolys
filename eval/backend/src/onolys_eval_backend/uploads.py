@@ -82,6 +82,34 @@ TRANSCRIBE_TIMEOUT = {
 }
 
 
+# Provider submission can outlive a delivery; only its current owner may publish a handle.
+STT_START_LEASE_S = 120
+
+
+def _transcribe_match(saved):
+    return {key: saved.get(key) for key in (
+        "stt_handle", "transcribing_since", "created_at", "stt_start_owner", "stt_start_until",
+    )}
+
+
+async def _transcribe_transition(services, uid, saved, updates):
+    return await asyncio.to_thread(
+        services.repository.transition_upload, uid, "transcribing", updates,
+        match=_transcribe_match(saved),
+    )
+
+
+async def _discard_candidate(bucket, path):
+    # Only an unpublished, UUID-named candidate may be removed. Never remove a
+    # published transcript: a run or concurrent reader may still reference it.
+    delete = getattr(bucket, "delete", None)
+    if delete is not None:
+        try:
+            await asyncio.to_thread(delete, path)
+        except Exception:
+            pass  # Best effort; cleanup must not turn a lost race into a user failure.
+
+
 def response(upload_id, saved):
     data = {
         "upload_id": upload_id,
@@ -418,7 +446,11 @@ async def complete_audio_upload(upload_id: str, request: Request):
                 "code": "audio_invalid", "message": "Audio bytes do not match the file type."
             },
         }
-        await asyncio.to_thread(services.repository.update_upload, upload_id, failed)
+        changed = await asyncio.to_thread(
+            services.repository.transition_upload, upload_id, "awaiting_upload", failed
+        )
+        if not changed:
+            return response(upload_id, await read_upload(request, upload_id))
         error(422, "audio_invalid", "Audio bytes do not match the file type.")
     updates = {"status": "transcribing", "transcribing_since": _now().isoformat()}
     transitioned = await asyncio.to_thread(
@@ -438,10 +470,11 @@ async def get_upload(upload_id: str, request: Request):
     saved = await read_upload(request, upload_id)
     if saved["status"] == "transcribing" and _transcribe_expired(saved):
         # Reconcile a chain whose last poll was lost: the budget, not a task, ends it.
-        await asyncio.to_thread(
-            bundle(request).repository.update_upload, upload_id, TRANSCRIBE_TIMEOUT
+        changed = await _transcribe_transition(
+            bundle(request), upload_id, saved, TRANSCRIBE_TIMEOUT
         )
-        saved = {**saved, **TRANSCRIBE_TIMEOUT}
+        saved = ({**saved, **TRANSCRIBE_TIMEOUT} if changed
+                 else await read_upload(request, upload_id))
     return response(upload_id, saved)
 
 
@@ -473,10 +506,23 @@ async def pick_speaker(upload_id: str, request: Request):
     )
     metadata = transcript_metadata(transcript)
     await asyncio.to_thread(
-        services.bucket.write_json, saved["transcript_path"], transcript.model_dump(mode="json")
+        services.bucket.write_json,
+        path := f"uploads/{upload_id}/transcripts/{uuid4().hex}.json",
+        transcript.model_dump(mode="json"),
     )
-    await asyncio.to_thread(services.repository.update_upload, upload_id, metadata)
-    return response(upload_id, {**saved, **metadata})
+    metadata["transcript_path"] = path
+    changed = await asyncio.to_thread(
+        services.repository.transition_upload, upload_id, saved["status"], metadata,
+        match={"transcript_path": saved["transcript_path"],
+               "clinician_speaker": saved.get("clinician_speaker")},
+    )
+    if changed:
+        return response(upload_id, {**saved, **metadata})
+    await _discard_candidate(services.bucket, path)
+    current = await read_upload(request, upload_id)
+    if current["status"] == "ready" and current.get("clinician_speaker") == speaker:
+        return response(upload_id, current)
+    error(409, "speaker_conflict", "The speaker choice changed. Reload the upload and try again.")
 
 
 @router.post("/internal/tasks/transcribe")
@@ -494,7 +540,14 @@ async def transcribe_task(request: Request):
         return {"status": "ok"}
     if _transcribe_expired(saved):
         # Bounds the self-re-enqueueing poll chain: new tasks get fresh delivery retries.
-        await asyncio.to_thread(services.repository.update_upload, uid, TRANSCRIBE_TIMEOUT)
+        await _transcribe_transition(services, uid, saved, TRANSCRIBE_TIMEOUT)
+        return {"status": "ok"}
+    until = saved.get("stt_start_until")
+    if not saved.get("stt_handle") and until is not None and datetime.fromisoformat(until) > _now():
+        # Queue errors stay retryable; they are not transcription failures.
+        await asyncio.to_thread(
+            services.queue.enqueue, "transcribe", {"upload_id": uid}, delay_seconds=15
+        )
         return {"status": "ok"}
     try:
         params = SttParams.model_validate(saved["stt_params"])
@@ -503,6 +556,13 @@ async def transcribe_task(request: Request):
         )
         handle = saved.get("stt_handle")
         if not handle:
+            claim = {
+                "stt_start_owner": uuid4().hex,
+                "stt_start_until": (_now() + timedelta(seconds=STT_START_LEASE_S)).isoformat(),
+            }
+            if not await _transcribe_transition(services, uid, saved, claim):
+                return {"status": "ok"}
+            saved = {**saved, **claim}
             handle = await adapter.start(
                 AudioRef(
                     uri=f"gs://{request.app.state.config.bucket}/{saved['input_path']}",
@@ -510,7 +570,10 @@ async def transcribe_task(request: Request):
                 ),
                 params,
             )
-            await asyncio.to_thread(services.repository.update_upload, uid, {"stt_handle": handle})
+            updates = {"stt_handle": handle, "stt_start_until": None}
+            if not await _transcribe_transition(services, uid, saved, updates):
+                return {"status": "ok"}
+            saved = {**saved, **updates}
         else:
             complete = await adapter.poll(handle)
             if complete is not None:
@@ -526,19 +589,20 @@ async def transcribe_task(request: Request):
                 metadata = transcript_metadata(transcript)
                 await asyncio.to_thread(
                     services.bucket.write_json,
-                    saved["transcript_path"],
+                    path := f"uploads/{uid}/transcripts/{uuid4().hex}.json",
                     transcript.model_dump(mode="json"),
                 )
-                await asyncio.to_thread(
-                    services.repository.update_upload,
-                    uid,
-                    {**metadata, "stt_run": complete.run.model_dump(mode="json")},
+                changed = await _transcribe_transition(
+                    services, uid, saved,
+                    {**metadata, "transcript_path": path,
+                     "stt_run": complete.run.model_dump(mode="json")},
                 )
+                if not changed:
+                    await _discard_candidate(services.bucket, path)
                 return {"status": "ok"}
     except Exception:
-        await asyncio.to_thread(
-            services.repository.update_upload,
-            uid,
+        await _transcribe_transition(
+            services, uid, saved,
             {
                 "status": "failed",
                 "error": {"code": "transcription_failed", "message": "Transcription failed."},

@@ -20,6 +20,7 @@ class Bucket(Protocol):
     ) -> dict: ...
     def size(self, path: str) -> int | None: ...
     def read_head(self, path: str, n: int) -> bytes: ...
+    def delete(self, path: str) -> None: ...
 
 
 def _encode(data: Any) -> bytes:
@@ -53,6 +54,14 @@ class GCSBucket(_JSONBucket):
 
     def list(self, prefix: str) -> list[str]:
         return sorted(blob.name for blob in self.bucket.list_blobs(prefix=prefix))
+
+    def delete(self, path):
+        from google.api_core.exceptions import NotFound
+
+        try:
+            self.bucket.blob(path).delete()
+        except NotFound:
+            pass
 
     def signed_upload_url(self, path, content_type, *, expires_s, max_bytes):
         """V4 signed PUT for a browser upload. Signs through IAM signBlob using the runtime
@@ -108,6 +117,10 @@ class InMemoryBucket(_JSONBucket):
     def list(self, prefix: str) -> list[str]:
         with self._lock:
             return sorted(path for path in self._objects if path.startswith(prefix))
+
+    def delete(self, path):
+        with self._lock:
+            self._objects.pop(path, None)
 
     def signed_upload_url(self, path, content_type, *, expires_s, max_bytes):
         headers = {
