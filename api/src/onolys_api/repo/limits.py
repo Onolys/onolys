@@ -6,7 +6,7 @@ Lives under `repo/` (imports only `config` and `logs`) so `FirestoreRepo`, `Fake
 
 import logging
 from dataclasses import dataclass
-from typing import Any, Literal
+from typing import Any, Literal, NamedTuple
 
 from onolys_api import logs
 from onolys_api.config import Settings
@@ -110,6 +110,32 @@ def decide_start(
     if not exempt:
         return decide_reserve(user, day, "eval", d, max_active, units)
     return "concurrent" if _at_active_limit(user or {}, max_active) else "ok"
+
+
+class CancelCharge(NamedTuple):
+    units: int  # 0 or 1, never `n_runs`
+    counted: bool  # did the session consume a unit at its end state
+
+
+_CANCEL_EARLY = frozenset({"created", "uploading", "upload_incomplete", "validating"})
+
+
+def decide_cancel(
+    state: str, stt_operation_set: bool, run_counted: bool | None, interview_id: str | None
+) -> CancelCharge:
+    """Charge for a user cancel (04-cancel R4, D2/D6): pure, so the rule is testable without a
+    database. `run_counted` is the reserved run's `counted` (None: no run reserved).
+    Interview-linked sessions (same exempt predicate as `start_first_run`) cost 0 everywhere.
+    `running` adds 0 (the run's slot was charged at start) and reports the run's `counted`."""
+    if state not in _CANCEL_EARLY | {"transcribing", "awaiting_input", "running"}:
+        raise ValueError(f"state {state!r} cannot be cancelled")
+    if interview_id:
+        return CancelCharge(0, False)
+    if state == "running":
+        return CancelCharge(0, bool(run_counted))
+    if state == "awaiting_input" or (state == "transcribing" and stt_operation_set):
+        return CancelCharge(1, True)
+    return CancelCharge(0, False)
 
 
 # `decide_start` outcome -> repo `StartOutcome` and the session error code a held first run gets.

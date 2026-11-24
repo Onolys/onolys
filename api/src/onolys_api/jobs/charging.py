@@ -6,6 +6,9 @@ counted (they are created `counted=False`, so a release never gives anything bac
 """
 
 from onolys_api.repo.base import NotFoundError
+from onolys_api.repo.limits import decide_cancel
+
+__all__ = ["decide_cancel", "release_failed_run", "release_once", "should_refund"]
 
 
 def should_refund(kind: str, llm_started: bool) -> bool:
