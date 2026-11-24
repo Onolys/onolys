@@ -858,3 +858,98 @@ describe("tenancy, list, delete, idempotency", () => {
     expectHttp(() => backend.createSession(U, { preset: "nope" }), 422, "invalid_parameters");
   });
 });
+
+describe("cancelSession (04-cancel R2/R4)", () => {
+  const usedEval = (b: MockBackend) => b.getUsage(U).eval.day.used;
+
+  it.each(["created", "uploading", "validating"] as const)("an early state (%s) is cancelled without a charge", (state) => {
+    const { backend } = ctx;
+    const { session } = backend.createSession(U, {});
+    const sid = session.id;
+    if (state !== "created") backend.requestAudio(U, sid, MP3);
+    if (state === "validating") backend.completeAudio(U, sid);
+    expect(status(backend, sid).status).toBe(state);
+    expect(backend.cancelSession(U, sid)).toEqual({ counted: false });
+    expect(status(backend, sid)).toMatchObject({ status: "cancelled", counted: false, cancel: { counted: false, units: 0 } });
+    expect(usedEval(backend)).toBe(0);
+  });
+
+  it("transcribing without an STT job is free; with the job submitted it counts once", () => {
+    const { backend } = ctx;
+    const free = started(backend);
+    backend.advance(free); // validating -> transcribing
+    expect(status(backend, free).status).toBe("transcribing");
+    expect(backend.cancelSession(U, free)).toEqual({ counted: false });
+    const paid = started(backend);
+    backend.advance(paid);
+    backend.submitStt(paid);
+    expect(backend.cancelSession(U, paid)).toEqual({ counted: true });
+    expect(status(backend, paid).cancel).toMatchObject({ counted: true, units: 1 });
+    expect(usedEval(backend)).toBe(1);
+  });
+
+  it("awaiting_input counts", () => {
+    const { backend } = ctx;
+    const sid = started(backend);
+    backend.advance(sid);
+    backend.advance(sid);
+    expect(status(backend, sid).status).toBe("awaiting_input");
+    expect(backend.cancelSession(U, sid)).toEqual({ counted: true });
+  });
+
+  it("running reports the run's counted and adds no new charge", () => {
+    const { backend } = ctx;
+    const sid = started(backend);
+    backend.settle(sid);
+    backend.confirmSpeaker(U, sid, "spk_0");
+    backend.putRating(U, sid, { final: true, card: SCORED });
+    expect(status(backend, sid).status).toBe("running");
+    const before = usedEval(backend);
+    expect(backend.cancelSession(U, sid)).toEqual({ counted: true });
+    expect(usedEval(backend)).toBe(before);
+    expect(backend.listRuns(U, sid).at(-1)?.status).toBe("failed");
+  });
+
+  it("an interview-linked session is never counted", () => {
+    const { backend } = ctx;
+    const sid = started(backend);
+    backend.advance(sid);
+    backend.advance(sid);
+    (backend as unknown as { sessions: Map<string, { interview_id?: string }> }).sessions.get(sid)!.interview_id = "iv_1";
+    expect(backend.cancelSession(U, sid)).toEqual({ counted: false });
+  });
+
+  it("repeating returns the same counted and charges nothing more", () => {
+    const { backend } = ctx;
+    const sid = started(backend);
+    backend.advance(sid);
+    backend.advance(sid);
+    expect(backend.cancelSession(U, sid)).toEqual({ counted: true });
+    expect(backend.cancelSession(U, sid)).toEqual({ counted: true });
+    expect(usedEval(backend)).toBe(1);
+  });
+
+  it("is 409 for report_ready and failed, 404 for another user's session", () => {
+    const { backend } = ctx;
+    const failed = started(backend, "fail-no_speech");
+    backend.settle(failed);
+    expectHttp(() => backend.cancelSession(U, failed), 409, "invalid_state");
+    const ok = started(backend);
+    backend.settle(ok);
+    backend.confirmSpeaker(U, ok, "spk_0");
+    backend.putRating(U, ok, { final: true, card: SCORED });
+    backend.settle(ok);
+    expect(status(backend, ok).status).toBe("report_ready");
+    expectHttp(() => backend.cancelSession(U, ok), 409, "invalid_state");
+    expectHttp(() => backend.cancelSession("other", ok), 404, "not_found");
+  });
+
+  it("is allowed over the cap and the worker no longer moves a cancelled session", () => {
+    const { backend } = make({ caps: { eval: { day: 0 } } });
+    const sid = started(backend);
+    backend.advance(sid);
+    backend.advance(sid);
+    expect(backend.cancelSession(U, sid)).toEqual({ counted: true });
+    expect(backend.advance(sid)).toBe(false);
+  });
+});

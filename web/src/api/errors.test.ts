@@ -9,6 +9,7 @@ import {
   describeLookupError,
   isNotFoundError,
   failureView,
+  cancelErrorMessage,
   messageForCode,
   parseErrorBody,
 } from "./errors";
@@ -252,5 +253,13 @@ describe("failureView (PRD R6, D2)", () => {
     expect(failureView(doc({ error_kind: "transient", error_code: "run_failed", retries_left: 1, counted: true })).note).toBe(
       "This did not count toward your limit.",
     );
+  });
+});
+
+describe("cancelErrorMessage", () => {
+  it("409 reads as already finished; anything else as a retryable failure", () => {
+    expect(cancelErrorMessage(parseErrorBody(409, "invalid_state"))).toBe("This session already finished or failed.");
+    expect(cancelErrorMessage(parseErrorBody(500, "internal_error"))).toBe("We couldn't cancel this session. Try again.");
+    expect(cancelErrorMessage(new TypeError("network"))).toBe("We couldn't cancel this session. Try again.");
   });
 });

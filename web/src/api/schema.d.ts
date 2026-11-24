@@ -260,6 +260,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/sessions/{id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Cancel a session that is still being processed
+         * @description Moves a session in any in-progress state (`created` ... `running`) to the terminal `cancelled` state in one transaction; workers stop at their next check and nothing is deleted. `counted` says whether a unit was used: transcription had started and no run was reserved (interview sessions never count). Repeating it answers 200 with the same `counted` and charges nothing more. Never 429, even over the cap. `report_ready` and `failed` are 409 `invalid_state`; `deleting`, unknown or another user's is 404.
+         */
+        post: operations["cancelSession"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/sessions/{id}/rating": {
         parameters: {
             query?: never;
@@ -271,7 +291,7 @@ export interface paths {
         get: operations["getRating"];
         /**
          * Save the rating card (draft autosave or final revision)
-         * @description `final=false`: overwrites the draft; the shape and size limits are checked (an unset `change_goal` is fine) and nothing else changes. `final=true`: validates the card (`change_goal` required), writes a new revision and sets `rating_submitted`/`has_rating`; `no_rating=true`, or a card with no scores, counts or notes, is a "no rating" revision (`has_rating=false`). Over 1,000 chars per reason/note/example or 3,000 for `notes` is 422 `rating_invalid`. Allowed in every state but `deleting`; a final card is refused with 409 `rating_final` once a rating was submitted (or a report exists): the rating is final, only drafts stay open. A final card may start the first run (R4).
+         * @description `final=false`: overwrites the draft; the shape and size limits are checked (an unset `change_goal` is fine) and nothing else changes. `final=true`: validates the card (`change_goal` required), writes a new revision and sets `rating_submitted`/`has_rating`; `no_rating=true`, or a card with no scores, counts or notes, is a "no rating" revision (`has_rating=false`). Over 1,000 chars per reason/note/example or 3,000 for `notes` is 422 `rating_invalid`. Allowed in every state but `deleting` (404) and `cancelled` (409 `invalid_state`); a final card is refused with 409 `rating_final` once a rating was submitted (or a report exists): the rating is final, only drafts stay open. A final card may start the first run (R4).
          */
         put: operations["putRating"];
         post?: never;
@@ -527,6 +547,14 @@ export interface components {
             upload_id: string;
             /** Upload Url */
             upload_url: string;
+        };
+        /** CancelResult */
+        CancelResult: {
+            /**
+             * Counted
+             * @description Did the cancel use a unit of the daily limit
+             */
+            counted: boolean;
         };
         /**
          * ClientInfo
@@ -1008,8 +1036,30 @@ export interface components {
              */
             voice: string;
         };
+        /**
+         * SessionCancel
+         * @description The result of a user cancel (04-cancel R7): did it use a unit, how many, and when.
+         */
+        SessionCancel: {
+            /**
+             * At
+             * Format: date-time
+             */
+            at: string;
+            /** Counted */
+            counted: boolean;
+            /** Units */
+            units: number;
+        };
         /** SessionDetail */
         SessionDetail: {
+            /** @description Set once cancelled: whether it used a unit, how many, and when */
+            cancel?: components["schemas"]["SessionCancel"] | null;
+            /**
+             * Counted
+             * @description Did the session end (cancelled or failed) having used a unit; null n/a
+             */
+            counted?: boolean | null;
             /**
              * Created At
              * Format: date-time
@@ -1075,6 +1125,11 @@ export interface components {
         };
         /** SessionListItem */
         SessionListItem: {
+            /**
+             * Counted
+             * @description Did the session end (cancelled or failed) having used a unit; null n/a
+             */
+            counted?: boolean | null;
             /**
              * Created At
              * Format: date-time
@@ -2340,6 +2395,73 @@ export interface operations {
             };
             /** @description `upstream_unavailable`: retry shortly */
             503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    cancelSession: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CancelResult"];
+                };
+            };
+            /** @description `unauthenticated`: missing, invalid or revoked credentials */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description `not_found`: no such resource for this user (never 403, so ids cannot be probed) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description `invalid_parameters` (incl. a malformed id, cursor or body), `unsupported_audio`, `audio_too_large`, `rating_invalid`, `invalid_coded_span` or `session_too_long` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description `daily_cap_reached` (daily run cap), `concurrent_runs` (a run is already in progress) or `rate_limited` */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description `internal_error` */
+            500: {
                 headers: {
                     [name: string]: unknown;
                 };

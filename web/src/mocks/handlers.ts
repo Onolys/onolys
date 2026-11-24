@@ -93,6 +93,7 @@ export function createHandlers(b: MockBackend): HttpHandler[] {
       json(b.startRun(uid, params.id, await body(request)), 202),
     )),
     http.post(`${V1}/sessions/:id/retry`, guarded(({ uid, params }) => json(b.retrySession(uid, params.id), 202))),
+    http.post(`${V1}/sessions/:id/cancel`, guarded(({ uid, params }) => json(b.cancelSession(uid, params.id)))),
     http.get(`${V1}/runs/:run_id`, guarded(({ uid, params }) => json(b.getRun(uid, params.run_id)))),
     http.get(`${V1}/sessions/:id/reports`, guarded(({ uid, params }) => json({ items: b.listReports(uid, params.id) }))),
     http.get(`${V1}/sessions/:id/reports/:version`, guarded(({ uid, params }) =>

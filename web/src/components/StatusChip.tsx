@@ -16,7 +16,7 @@ const TONE: Record<ChipTone, string> = {
   agree: GOOD,
   differs: LOW,
   flagged: FAIR,
-  neutral: "",
+  neutral: "text-muted-foreground",
 };
 
 /** Badge (which has no tone variants) plus a `data-tone` hook and token classes. Pass the visible text as children. */

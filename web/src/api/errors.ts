@@ -65,6 +65,14 @@ export function messageForCode(code: string | undefined, ctx: MessageContext = {
   return MESSAGES[code];
 }
 
+/** Cancel copy (04-cancel R9): a 409 means the session already ended; anything else is a retryable failure. */
+export const CANCEL_CONFLICT_MESSAGE = "This session already finished or failed.";
+export const CANCEL_FAILED_MESSAGE = "We couldn't cancel this session. Try again.";
+
+export function cancelErrorMessage(err: unknown): string {
+  return err instanceof ApiError && err.status === 409 ? CANCEL_CONFLICT_MESSAGE : CANCEL_FAILED_MESSAGE;
+}
+
 /** Failure kinds the server persists on the status doc (D2). */
 export type FailureKind = "transient" | "permanent_internal" | "user_file";
 

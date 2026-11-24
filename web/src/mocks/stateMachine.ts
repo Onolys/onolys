@@ -123,6 +123,10 @@ interface SessionRec {
   uploadId: string | null;
   uploadType: string | null;
   interview_id?: string;
+  /** Whether a (mock) Chirp job has been submitted while transcribing: decides the cancel charge (R4). */
+  sttSubmitted: boolean;
+  /** Set once cancelled (the API's `cancel`). */
+  cancel: S["SessionCancel"] | null;
   finals: Rating[];
   draft: { card: RatingCard; updated_at: string; seq: number } | null;
   runs: RunRec[];
@@ -228,7 +232,7 @@ export class MockBackend {
       error_code: s.error?.code ?? null,
       error_kind: s.state === "failed" ? kindFor(s.error?.code) : null,
       retries_left: s.state === "failed" && kindFor(s.error?.code) === "transient" ? MAX_SESSION_RETRIES - s.retries : 0,
-      counted: s.state === "failed" ? this.failureCounted(s) : null,
+      counted: s.state === "failed" ? this.failureCounted(s) : s.state === "cancelled" ? (s.cancel?.counted ?? false) : null,
       latest_report_version: s.reports.at(-1)?.version ?? null,
       updated_at: this.now().toISOString(),
       ...s.flags,
@@ -431,6 +435,8 @@ export class MockBackend {
       first_run_id: null,
       holdFirstStart: false,
       uploadId: null,
+      sttSubmitted: false,
+      cancel: null,
       uploadType: null,
       finals: [],
       draft: null,
@@ -489,6 +495,10 @@ export class MockBackend {
       links: { self: `/v1/sessions/${s.id}` },
     };
     if (s.error) detail.error = { ...s.error };
+    if (s.cancel) {
+      detail.cancel = { ...s.cancel };
+      detail.counted = s.cancel.counted;
+    }
     return detail;
   }
 
@@ -763,6 +773,38 @@ export class MockBackend {
     const prior = s.runs.at(-1);
     const run = this.createRun(s, prior ? { preset: prior.preset, n_runs: prior.n_runs } : {});
     return { run_id: run.run_id, session: { id: s.id, status: s.state } };
+  }
+
+  /** Test hook: the mock STT job is submitted (a cancel from here on is charged, R4). */
+  submitStt(sid: string): void {
+    const s = this.sessions.get(sid);
+    if (s) s.sttSubmitted = true;
+  }
+
+  /**
+   * POST /sessions/{id}/cancel (04-cancel R2/R4): any in-progress state becomes `cancelled`; a repeat answers
+   * the stored `counted`; report_ready/failed are 409. Charged states: transcribing with the STT job
+   * submitted, awaiting_input. A running session reports its run's `counted` (no new charge). Interview
+   * sessions never count. Cancel is allowed over the cap.
+   */
+  cancelSession(uid: string, sid: string): S["CancelResult"] {
+    const s = this.own(uid, sid);
+    if (s.state === "cancelled") return { counted: s.cancel?.counted ?? false };
+    if (s.state === "report_ready" || s.state === "failed" || s.state === "deleting")
+      bad(409, "invalid_state", "This session already finished or failed.");
+    let counted: boolean;
+    if (s.state === "running") {
+      const run = s.runs.at(-1);
+      counted = run?.counted ?? false;
+      if (run && run.status !== "done") run.status = "failed";
+    } else if (s.interview_id) counted = false;
+    else if (s.state === "awaiting_input") counted = true;
+    else counted = s.state === "transcribing" && s.sttSubmitted;
+    if (counted && s.state !== "running") this.count(uid, "eval");
+    s.cancel = { counted, units: counted ? 1 : 0, at: this.now().toISOString() };
+    s.state = "cancelled";
+    this.emit(s);
+    return { counted };
   }
 
   listRuns(uid: string, sid: string): S["RunView"][] {
