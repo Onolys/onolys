@@ -353,3 +353,13 @@ class FakeVoice:
     async def open(self, params: VoiceParams) -> VoiceSession:
         self.opened.append(params)
         return await self._inner.open(params)
+
+
+class FakeEmailSender:
+    """In-memory email outbox, used only with stub adapters."""
+
+    def __init__(self) -> None:
+        self.messages: list[dict[str, str]] = []
+
+    def send(self, to: str, subject: str, html: str, text: str) -> None:
+        self.messages.append({"to": to, "subject": subject, "html": html, "text": text})

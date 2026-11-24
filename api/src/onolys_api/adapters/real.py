@@ -36,7 +36,7 @@ from onolys_miti.voice import VoiceAdapter, VoiceParams, VoiceSession
 from onolys_miti.voice.fixture import FixtureVoice
 from onolys_miti.voice.gemini_live_vertex import GeminiLiveVertex
 
-from onolys_api.adapters.base import EvaluationOutput, ProgressCb
+from onolys_api.adapters.base import AdapterError, EvaluationOutput, ProgressCb
 from onolys_api.config import Settings
 from onolys_api.engines import build_engine_registry
 
@@ -158,3 +158,40 @@ class RealEvaluation:
             report=payload["output"], artifacts=payload["artifacts"] or {},
             run_info=payload["run_info"],
         )
+
+
+class UnconfiguredEmailSender:
+    def send(self, to: str, subject: str, html: str, text: str) -> None:
+        raise AdapterError("email_unconfigured")
+
+
+class ResendEmailSender:
+    """One bounded request, without retries or provider error text."""
+
+    def __init__(self, api_key: str, sender: str) -> None:
+        self._api_key = api_key
+        self._sender = sender
+
+    def send(self, to: str, subject: str, html: str, text: str) -> None:
+        import requests
+
+        try:
+            response = requests.post(
+                "https://api.resend.com/emails",
+                headers={"Authorization": f"Bearer {self._api_key}"},
+                json={
+                    "from": self._sender,
+                    "to": [to],
+                    "subject": subject,
+                    "html": html,
+                    "text": text,
+                },
+                timeout=5,
+                allow_redirects=False,
+            )
+        except requests.RequestException:
+            raise AdapterError("email_send_failed") from None
+        if not 200 <= response.status_code < 300:
+            error = AdapterError("email_send_failed")
+            error.provider_status = response.status_code
+            raise error

@@ -17,6 +17,7 @@ from pydantic import BaseModel, Field
 
 __all__ = [
     "AdapterError",
+    "EmailSender",
     "Evaluation",
     "EvaluationOutput",
     "ProgressCb",
@@ -79,3 +80,9 @@ class Voice(Protocol):
     `params.provider` picks the core adapter; nothing else in the API names a provider."""
 
     async def open(self, params: VoiceParams) -> VoiceSession: ...
+
+
+class EmailSender(Protocol):
+    """Transactional email delivery; failures contain safe codes only."""
+
+    def send(self, to: str, subject: str, html: str, text: str) -> None: ...

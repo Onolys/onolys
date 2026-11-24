@@ -8,6 +8,7 @@ from onolys_miti.stt.fixture import FixtureStt
 
 from onolys_api.adapters.base import (
     AdapterError,
+    EmailSender,
     Evaluation,
     EvaluationOutput,
     ProgressCb,
@@ -16,10 +17,16 @@ from onolys_api.adapters.base import (
     Stt,
     Voice,
 )
-from onolys_api.adapters.fake import FakeEvaluation, FakeStt, FakeVoice
+from onolys_api.adapters.fake import (
+    FakeEmailSender,
+    FakeEvaluation,
+    FakeStt,
+    FakeVoice,
+)
 from onolys_api.config import Settings
 
 __all__ = [
+    "EmailSender", "FakeEmailSender", "build_email_sender",
     "AdapterError", "Adapters", "Evaluation", "EvaluationOutput", "FakeEvaluation", "FakeStt",
     "FakeVoice", "FixtureStt", "ProgressCb", "Stage", "StageStatus", "Stt", "Voice",
     "build_adapters",
@@ -60,3 +67,13 @@ def build_voice_adapter(settings: Settings) -> Voice:
     from onolys_api.adapters.real import RealVoice
 
     return RealVoice()
+
+
+def build_email_sender(settings: Settings) -> EmailSender:
+    if settings.adapters == "stub":
+        return FakeEmailSender()
+    from onolys_api.adapters.real import ResendEmailSender, UnconfiguredEmailSender
+
+    if not settings.resend_api_key:
+        return UnconfiguredEmailSender()
+    return ResendEmailSender(settings.resend_api_key, settings.email_from)
