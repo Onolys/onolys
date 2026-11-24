@@ -59,13 +59,17 @@ These are transcript-based MITI 4.2.1 comparisons, not diagnosis or judgments of
 
 ## Dataset manifest: original source fields
 
-A dataset `manifest.yaml` records what the dataset ORIGINALLY provides (we always store `transcript.v1`). The Dataset picker shows it as `Original: Video + audio + transcript · Transcript: human · Labels: ... · MITI 4.2.1`, or `Original: Transcript only (no audio)`.
+A dataset `manifest.yaml` records what the dataset ORIGINALLY provides (we always store `transcript.v1`). The Dataset picker shows it as `Original: Video + audio + transcript · Transcript: human · Labels: ... · MITI 4.2.1 · Scheme: ...`, or `Original: Transcript only (no audio)`.
 
 | Field | Type / allowed values | Notes |
 |---|---|---|
 | `source_media` | required list, unique, any of `audio`, `video`, `transcript` | What the original source offers |
 | `transcript_origin` | optional: `human`, `auto_captions`, `translated`, `stt_ours` | Where the transcript came from |
 | `labels_summary` | optional non-empty string | Human labels available, e.g. `MITI 4.2.1 behavior counts + 4 global ratings` |
-| `miti_version` | required, `4.2.1` | |
+| `miti_version` | required key: `4.2.1`, `4.2`, `4.0` or `null` | `null` = labels are not MITI-coded; the picker then shows `Not MITI-coded` instead of `MITI x` |
+| `label_scheme` | optional non-empty string | Shown as `Scheme: ...`, e.g. `MITI 4.2`, `MISC 2.5 mapped to MITI`, `AnnoMI codes mapped to MITI`, `none` |
+| `source_format` | `pdf` (default) or `mitags_csv` | `pdf`: per-session `coded_url`/`uncoded_url`. `mitags_csv`: dataset-level `source_files` (CSV URLs) and no per-session URLs |
 | `overlaps_with` | optional list of `{dataset_id, note}` | Datasets sharing interviews |
 | `sessions[].source_media` | optional per-session override, same values | |
+
+Per-dataset sources, mappings and gaps: [eval-datasets.md](eval-datasets.md).
