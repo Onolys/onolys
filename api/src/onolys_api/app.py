@@ -1,6 +1,7 @@
 """App factory. One codebase, SERVICE_MODE=api|worker|combined|voice."""
 
 import logging
+import os
 import re
 import time
 import uuid
@@ -17,13 +18,22 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from onolys_api import logs
-from onolys_api.adapters import Adapters, build_adapters, build_voice_adapter
+from onolys_api.adapters import (
+    Adapters,
+    build_adapters,
+    build_auth_links,
+    build_email_sender,
+    build_voice_adapter,
+)
+from onolys_api.adapters.base import AuthLinks, EmailSender
 from onolys_api.audio import AudioTools, FfmpegTools
 from onolys_api.auth.deps import Authenticator
 from onolys_api.auth.idtoken import InvalidToken, TokenVerifier
 from onolys_api.auth.oidc import OidcVerifier
 from onolys_api.config import LOCAL_ENVS, Settings
 from onolys_api.docs import DESCRIPTION, add_error_responses, make_docs_router
+from onolys_api.email.rate import EmailRateLimiter, MemoryRateStore, RateStore
+from onolys_api.email.service import AuthEmailService
 from onolys_api.errors import ApiError, ErrorDetail, ErrorResponse, error_body
 from onolys_api.factory import build_blobs, build_repo
 from onolys_api.jobs.delete import make_delete_handler
@@ -38,6 +48,7 @@ from onolys_api.rating import load_schema as load_rating_schema
 from onolys_api.repo.base import Repo
 from onolys_api.routes import api_key as api_key_routes
 from onolys_api.routes import audio as audio_routes
+from onolys_api.routes import auth_email as auth_email_routes
 from onolys_api.routes import interviews as interview_routes
 from onolys_api.routes import rating as rating_routes
 from onolys_api.routes import runs as run_routes
@@ -336,6 +347,9 @@ def create_app(
     oidc_verifier: OidcVerifier | None = None,
     audio_tools: AudioTools | None = None,
     adapters: Adapters | None = None,
+    email_sender: EmailSender | None = None,
+    auth_links: AuthLinks | None = None,
+    email_rate_store: RateStore | None = None,
 ) -> FastAPI:
     settings = settings or Settings.from_env()
     logs.configure(settings)
@@ -468,7 +482,31 @@ def create_app(
         app.include_router(voice_relay.router)
         return app
 
+    cached: list = []
+
+    def auth_email() -> tuple[AuthEmailService, EmailRateLimiter]:
+        """Built on first use: the app starts and serves without Resend or Admin SDK set up."""
+        if not cached:
+            store = email_rate_store
+            if store is None:
+                if settings.env in LOCAL_ENVS and not os.environ.get("FIRESTORE_EMULATOR_HOST"):
+                    store = MemoryRateStore()
+                else:
+                    from onolys_api.email.rate import FirestoreRateStore
+                    from onolys_api.repo.firestore import make_firestore_client
+
+                    store = FirestoreRateStore(make_firestore_client(settings))
+            service = AuthEmailService(
+                settings,
+                auth_links or build_auth_links(settings),
+                email_sender or build_email_sender(settings),
+            )
+            cached.append((service, EmailRateLimiter(store, settings.uid_hmac_key.encode())))
+        return cached[0]
+
+    app.state.auth_email = auth_email
     router.include_router(api_key_routes.router)
+    router.include_router(auth_email_routes.router)
     router.include_router(session_routes.router)
     router.include_router(audio_routes.router)
     router.include_router(rating_routes.router)
