@@ -96,6 +96,7 @@ def test_coverage_counts_union_including_uncoded_spans():
 
     from onolys_engine_core.transcript import Turn
 
+    from onolys_miti.coverage import coverage
     from onolys_miti.prepare import Prepared, Volley
 
     audit = load("audit_report", ROOT / "audit_report.py")
@@ -107,6 +108,7 @@ def test_coverage_counts_union_including_uncoded_spans():
         SimpleNamespace(turn_id="t1", start=4, end=13),
     ]
     result = audit.coverage(prepared, spans)
+    assert result == coverage(prepared.volleys, spans)
     assert result["clinician_words"] == 4
     assert result["covered_words"] == 3
     assert result["residual_words"] == 1

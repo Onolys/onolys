@@ -24,6 +24,7 @@ from onolys_engine_core.transcript import Turn
 from pydantic import BaseModel, create_model
 
 from onolys_miti import miti
+from onolys_miti.coverage import Coverage, coverage
 from onolys_miti.locate import locate
 from onolys_miti.prepare import Prepared, Volley
 from onolys_miti.result import Instance, ResultWarning
@@ -66,6 +67,7 @@ _CFG = _LocateCfg()
 class CodePassResult:
     instances: list[Instance] = field(default_factory=list)
     warnings: list[ResultWarning] = field(default_factory=list)
+    coverage: Coverage = field(default_factory=lambda: coverage([], []))
 
 
 @dataclass(frozen=True)
@@ -352,4 +354,13 @@ async def code_pass(
             n += 1
             inst.id = f"i{n}"
             out.instances.append(inst)
+    out.coverage = coverage(prepared.volleys, out.instances)
+    for row in out.coverage["volleys"]:
+        if row["clinician_words"] >= 40 and not by_volley.get(row["volley_id"]):
+            out.warnings.append(ResultWarning(
+                code="coverage_gap",
+                severity="info",
+                detail=f"{row['volley_id']}: {row['clinician_words']} clinician words "
+                "with no located utterance",
+            ))
     return out

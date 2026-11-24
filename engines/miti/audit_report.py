@@ -8,7 +8,6 @@ including repeated prefixes across batches. No tips, schema, retries, token/cost
 import argparse
 import hashlib
 import json
-import re
 from pathlib import Path
 
 import yaml
@@ -17,6 +16,7 @@ from onolys_engine_core.llm.fixture_client import FixtureClient
 from onolys_engine_core.transcript import Transcript
 
 from onolys_miti import code_pass, globals_pass, miti
+from onolys_miti.coverage import coverage as word_coverage
 from onolys_miti.prepare import prepare
 from onolys_miti.result import Instance
 from onolys_miti.score import apply_rules, compute_summaries, count_instances
@@ -103,29 +103,7 @@ def coverage(prepared, instances):
     A word is covered if any non-whitespace character overlaps a located span. This is an
     offline proxy over hand utterances, not a calibrated quality gate or model coverage.
     """
-    rows = []
-    for volley in prepared.volleys:
-        total = covered = 0
-        for turn in volley.turns:
-            spans = [(i.start, i.end) for i in instances if i.turn_id == turn.id]
-            for word in re.finditer(r"\S+", turn.text):
-                total += 1
-                covered += any(a < word.end() and b > word.start() for a, b in spans)
-        rows.append(
-            {
-                "volley_id": volley.id,
-                "clinician_words": total,
-                "covered_words": covered,
-                "residual_words": total - covered,
-            }
-        )
-    return {
-        **{
-            k: sum(r[k] for r in rows)
-            for k in ("clinician_words", "covered_words", "residual_words")
-        },
-        "volleys": rows,
-    }
+    return word_coverage(prepared.volleys, instances)
 
 
 def build_audit(fixture_dir=FIX):
@@ -197,7 +175,7 @@ def build_audit(fixture_dir=FIX):
         "expected_sha256": hashlib.sha256(raw).hexdigest(),
         "source_sha256": {
             name: hashlib.sha256((miti.PKG_DIR / name).read_bytes()).hexdigest()
-            for name in ("prepare.py", "score.py", "code_pass.py", "globals_pass.py")
+            for name in ("prepare.py", "score.py", "code_pass.py", "globals_pass.py", "coverage.py")
         },
         "stages": ["code", "globals"],
         "request_words_method": "Whitespace words in cache prefixes + system + user per initial "

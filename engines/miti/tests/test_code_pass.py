@@ -233,6 +233,8 @@ async def test_locate_offsets_and_overlap(tmp_path, pack_data):
     assert (second.start, second.end) == (18, 37)
     assert second.quote == "Delta epsilon zeta."  # text as in the turn, not as the model wrote it
     assert second.code is None and second.counted is False and second.uncounted_reason == "uncoded"
+    assert out.coverage['covered_words'] == out.coverage['clinician_words'] == 6
+    assert out.coverage['residual_words'] == 0
 
 
 async def test_quote_never_crosses_turn_boundary(tmp_path, pack_data):
@@ -438,3 +440,82 @@ def test_real_fewshots_use_context_before():
     examples = json.loads(path.read_text())
     assert all('context_before' in ex['input'] for ex in examples)
     assert 'previous_other_turn' not in path.read_text()
+
+
+def test_coverage_partial_words_union_and_uncounted_evidence():
+    from onolys_miti.coverage import coverage
+    from onolys_miti.result import Instance
+
+    vs = [Volley('v1', [Turn(id='t1', speaker='A', text='one two\tthree four')]),
+          Volley('v2', [Turn(id='t2', speaker='A', text='five six')])]
+
+    def evidence(start, end, code, reason):
+        return Instance(id='', volley_id='v1', turn_id='t1', start=start, end=end,
+                        quote=vs[0].turns[0].text[start:end], code=code, counted=False,
+                        uncounted_reason=reason, rationale='hand evidence')
+
+    result = coverage(vs, [evidence(1, 6, None, 'uncoded'),
+                           evidence(5, 9, 'a', 'downcounted'),
+                           evidence(7, 8, None, 'uncoded')])  # whitespace alone
+    assert result == {
+        'clinician_words': 6, 'covered_words': 3, 'residual_words': 3,
+        'volleys': [
+            {'volley_id': 'v1', 'clinician_words': 4, 'covered_words': 3, 'residual_words': 1},
+            {'volley_id': 'v2', 'clinician_words': 2, 'covered_words': 0, 'residual_words': 2},
+        ],
+    }
+
+
+async def test_coverage_gap_threshold_no_retry_and_uncoded_is_located(tmp_path, pack_data):
+    vs = [Volley(f'v{i}', [Turn(id=f't{i}', speaker='A', text='word ' * words)])
+          for i, words in enumerate([39, 40, 40], 1)]
+
+    def handler(req, n):
+        return good(req, lambda vid: [utt('word', None)] if vid == 'v3' else [])
+
+    client = StubClient(handler)
+    out = await run(client, make_pack(tmp_path, pack_data, {'volleys_per_call': 1}), vs)
+    assert len(client.requests) == 3
+    assert [(w.code, w.severity) for w in out.warnings] == [('coverage_gap', 'info')]
+    assert 'v2' in out.warnings[0].detail
+    assert out.coverage['clinician_words'] == 119
+    assert out.coverage['covered_words'] == 1
+    assert out.coverage['residual_words'] == 118
+    assert [v['residual_words'] for v in out.coverage['volleys']] == [39, 40, 39]
+
+
+async def test_coverage_uses_only_accepted_retry_and_all_clinician_turns(tmp_path, pack_data):
+    v = Volley('v1', [Turn(id='t1', speaker='A', text='one two'),
+                      Turn(id='t2', speaker='A', text='three ' * 38)],
+               {'client_turns': ['client ' * 100]})
+
+    def handler(req, n):
+        return good(req, lambda vid: [utt('one two'), utt('invented text')]
+                    if n == 1 else [])
+
+    client = StubClient(handler)
+    out = await run(client, make_pack(tmp_path, pack_data), [v])
+    assert len(client.requests) == 2  # actual quote drop retries; coverage never adds a call
+    assert out.instances == []
+    assert [(w.code, w.severity) for w in out.warnings] == [('coverage_gap', 'info')]
+    assert out.coverage['clinician_words'] == out.coverage['residual_words'] == 40
+    assert out.coverage['covered_words'] == 0
+
+
+async def test_empty_code_pass_has_zero_coverage(tmp_path, pack_data):
+    client = StubClient(lambda req, n: good(req))
+    out = await run(client, make_pack(tmp_path, pack_data), [])
+    assert client.requests == [] and out.warnings == []
+    assert out.coverage == {'clinician_words': 0, 'covered_words': 0,
+                            'residual_words': 0, 'volleys': []}
+
+
+async def test_context_only_gap_remains_info_without_retry(tmp_path, pack_data):
+    v = Volley('v1', [Turn(id='t1', speaker='A', text='word ' * 40)],
+               {'client_turns': ['A context sentence.']})
+    client = StubClient(lambda req, n: good(req, lambda vid: [utt('A context sentence.')]))
+    out = await run(client, make_pack(tmp_path, pack_data), [v])
+    assert len(client.requests) == 1
+    assert [(w.code, w.severity) for w in out.warnings] == [
+        ('context_quote', 'warning'), ('coverage_gap', 'info')]
+    assert out.coverage['residual_words'] == 40
