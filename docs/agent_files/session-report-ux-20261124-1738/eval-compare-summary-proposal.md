@@ -181,7 +181,7 @@ There is no limit on the number of combos in a run (the backend caps a run at 49
 
 ## Storage and pipeline: one codebase, two deployments
 
-Status: proposal, not decided. Based on a code read of `eval/backend`, `api/` and `infra/` on this branch (2026-11-24). Owner direction (updated): eval is allowlisted users only, so it may have its own API endpoint and its own database. But it must use the same infra and the same code: same document shapes, same run pipeline, same storage layout. Reason: a change to the prod pipeline must not force a significant change to eval, or the reverse. Two copies of the same logic is a maintenance headache. This replaces the earlier "same database, synthetic uid, `eval = true`" recommendation (kept below as the alternative).
+Status: owner decisions recorded 2026-11-24 (see "Decisions" below); a few questions remain open. Based on a code read of `eval/backend`, `api/` and `infra/` on this branch (2026-11-24). Owner direction (updated): eval is allowlisted users only, so it may have its own API endpoint and its own database. But it must use the same infra and the same code: same document shapes, same run pipeline, same storage layout. Reason: a change to the prod pipeline must not force a significant change to eval, or the reverse. Two copies of the same logic is a maintenance headache. This replaces the earlier "same database, synthetic uid, `eval = true`" recommendation (kept below as the alternative).
 
 ### Principle
 
@@ -211,8 +211,8 @@ Key finding: eval's per-session snapshot already looks like a RunDoc, field for 
 | Unit output | `ReportDoc` (`models.py:356`) + `{uid}/{sid}/runs/{run_id}/{code,tips}.json` | Reuse; eval reads the saved report for compare |
 | Engine call | `evaluate_validated` -> `run_validated` (`adapters/validated.py:35`, `adapters/real.py:159`) | Reuse; eval calls `run_validated` directly today (`runs.py:782`) |
 | Provenance (`engine_git_sha`, `engine_versions`, resolved combos, drift guard) | `RunDoc.code_version`, `run_info` | Reuse + extra fields: resolved route snapshot on the run; drift check stays as an eval rule |
-| Combo route override (model/tier/effort) | Only `preset` names today (`adapters/real.py:145`) | Extra field `route_override` on the run, accepted only when the deployment is eval |
-| Engines other than prod (oneshot, miti_lean configs) | Worker runs only `settings.prod_engine` (`adapters/real.py:144`) | Extra field `engine` on the run, allowed only in eval deployment (open question 1) |
+| Combo route override (model/tier/effort) | Only `preset` names today (`adapters/real.py:145`) | Extra field `route_override` on the run, set only through the internal `is_eval` path (decision 1) |
+| Engines other than prod (oneshot, miti_lean configs) | Worker runs only `settings.prod_engine` (`adapters/real.py:144`) | Extra field `engine` on the run, set only through the internal `is_eval` path (decision 1) |
 | Cost / usage | `run_info.usage` | Reuse; price book and cost estimate are eval-only |
 | Per-user usage cap | `counted`, `released`, `cap_date` on `RunDoc` | Eval deployment: caps off (or `counted = false`) |
 | Eval run grouping (`eval_runs`: sessions x combos x repeats, name, description, base preset) | None (prod has no multi-session group) | Eval-only doc; its units are references to RunDocs |
@@ -241,7 +241,7 @@ Each time the prod run input changes (as on this branch: four new pinned fields)
 - Human gold labels and the human "engine" (gold is a read-only reference, not a run).
 - Datasets, upload manifests, gold validation.
 - Compare aggregation, leaderboard, heatmap, line view, and the compare UI.
-- Per-run model/tier/effort override and non-prod engine selection, as fields on the run, honoured only when the deployment is eval (config flag on the shared code, for example `EVAL_MODE=true`; prod rejects the fields).
+- Per-run model/tier/effort override and non-prod engine selection, as fields on the run, honoured only via the internal `is_eval` path, and only when the deployment config enables eval mode (for example `EVAL_MODE=true`). The public prod endpoint rejects the fields.
 - Price book and cost estimate; allowlist auth.
 
 ### Infra: same environment module
@@ -255,21 +255,34 @@ The earlier proposal: eval sessions and runs in the existing database under a sy
 ### Risks
 
 - Run handler concurrency: many runs on one shared session may conflict on session `state` / `latest_report_version`; unverified. Fallback: one session per unit sharing transcript content by reference.
-- Engine choice and route override widen the run API; they must be rejected outside eval mode, tested in both modes.
+- Engine choice and route override widen the internal run-creation function; the public prod endpoint must reject them (unknown fields) and the function must refuse `is_eval` outside eval mode. Test both modes.
 - The prod report schema validation must accept every engine eval compares, or those engines stay out of the worker.
 - Eval deletes: removing one eval run must not delete a shared dataset session used by other combos.
 - Dataset licensing: datasets must not land in a database or bucket with real client data (another reason for a separate database).
-- Migration: existing `eval_runs` data in the `staging` database would need a one-off import or stay read-only legacy; no compat layer proposed.
+- Migration: none. Existing staging eval data is dropped, not migrated (decision 5). The deletion is a separate, owner-confirmed step.
 
-### Open questions
+### Sessions and runs, in plain words
 
-1. Engines other than the prod engine (oneshot, miti_lean configs): add an engine selector to the shared run handler (eval mode only), or keep a thin eval wrapper that still writes prod-shaped RunDocs?
-2. One session with many runs, or one session per unit?
-3. Eval database name and bucket naming; is a third Terraform environment acceptable on cost and ops?
-4. Do existing `staging` eval runs need migrating, or may they be dropped (owner has said no legacy handling for the lock work)?
-5. Human gold: does gold need a prod-shaped home (for example a `GoldDoc`) or stay as bucket files with a sha reference?
-6. Route override: a field on `RunDoc`, or a named eval-only preset resolved by the same preset code (smaller surface)?
-7. Retention: eval data deleted with its eval run, or kept until manual removal as today?
+- A session is one recording/transcript: `users/{uid}/sessions/{sid}` (`SessionDoc`, `api/src/onolys_api/repo/models.py:180`).
+- A run is one analysis of that session with its inputs pinned: `sessions/{sid}/runs/{run_id}` (`RunDoc`, `models.py:325`).
+- A user retry (`POST /sessions/{id}/retry`, capped) creates a NEW run id with the same inputs. It is a new run, not a re-run of the old one.
+- `attempts` inside a run are internal task retries (max 2). `n_runs` is the engine's own repeats inside one run. Neither creates a new run.
+- Eval mapping: one dataset session = one session. Each combo x repeat = one run in that session. A session therefore holds many runs, one per combo x repeat.
+
+### Decisions (2026-11-24)
+
+1. Engine selection is an internal capability of the prod run path. The internal run-creation function takes an optional `is_eval` flag. When set, it writes the eval fields (`eval_run_id`, `combo_key`, `repeat`, `engine`, route override of provider/model/tier/effort) and allows the override. When unset, behaviour is exactly today's prod.
+2. The public prod API endpoint never accepts or understands these parameters: request models reject unknown fields, so users cannot set them. Only the separate eval API endpoint can, restricted to allowlisted users checked after Firebase login (ID token email + allowlist, as eval does today via `onolys_admin_auth`). Defence in depth: the internal function also refuses `is_eval` unless the deployment config enables eval mode.
+3. One session per dataset session, many runs per session (each combo x repeat is one run). See the plain-words explanation above. Resolves the old "session vs unit" question and the route-override question (a field on the run, set via `is_eval`).
+4. A third Terraform environment `eval` is approved: same `infra/modules/environment` module, own Firestore database `eval`, bucket, queue, and Cloud Run services from the same image, eval mode on. Why: it isolates eval load, data and allowlist from staging and prod while running identical code.
+5. Existing eval data (staging `eval_runs` and `eval_uploads` collections, and eval run outputs in `onolys-eval-data-staging`) is dropped and deleted, not migrated. Deletion is a separate owner-confirmed step. Datasets (read-only reference data) are kept unless the owner says otherwise.
+
+### Still open (storage)
+
+- Exact eval database and bucket names (module naming proposal: database `eval`, bucket `onolys-audio-eval`); confirm.
+- Human gold: does gold need a prod-shaped home (for example a `GoldDoc`) or stay as bucket files with a sha reference?
+- Retention: eval data deleted with its eval run, or kept until manual removal as today?
+- Run handler concurrency on one shared session (see Risks): verify; fallback is one session per unit.
 
 ## Phased build order
 
