@@ -21,7 +21,7 @@ from collections.abc import Awaitable, Callable
 from typing import Any, Literal
 
 from onolys_engine_core.context import RunContext
-from onolys_engine_core.errors import InputError, OnolysError
+from onolys_engine_core.errors import InputError, OnolysError, RunAborted
 from onolys_engine_core.llm import LLMClient, LLMError, MetricsCollector
 from onolys_engine_core.llm.routes import Route, resolve_preset
 from onolys_engine_core.safe_log import log_event, register_fields
@@ -232,11 +232,14 @@ def _language(params: dict[str, Any], transcript: Transcript) -> str:
 
 
 def _emit(cb: ProgressCb | None, stage: Stage, status: StageStatus, rid: str | None) -> None:
-    """Call the progress callback; an error in it is logged (class name only) and ignored."""
+    """Call the progress callback; an error in it is logged (class name only) and ignored,
+    except `RunAborted`, which stops the run."""
     if cb is None:
         return
     try:
         cb(stage, status)
+    except RunAborted:
+        raise
     except Exception as exc:  # noqa: BLE001 - a callback must never break the run
         log_event(
             "miti.progress_cb_error",

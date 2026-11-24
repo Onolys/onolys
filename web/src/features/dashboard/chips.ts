@@ -4,7 +4,7 @@ type State = components["schemas"]["SessionListItem"]["status"];
 
 export interface StatusChip {
   text: string;
-  tone: "progress" | "wait" | "done" | "failed" | "neutral";
+  tone: "progress" | "wait" | "done" | "failed" | "neutral" | "muted";
 }
 
 /** Dashboard status chip (PRD R5): text says it, tone only adds colour. */
@@ -18,7 +18,7 @@ export const STATUS_CHIP: Record<State, StatusChip> = {
   running: { text: "Rating", tone: "progress" },
   report_ready: { text: "Report ready", tone: "done" },
   failed: { text: "Failed", tone: "failed" },
-  cancelled: { text: "Cancelled", tone: "neutral" },
+  cancelled: { text: "Cancelled", tone: "muted" },
   deleting: { text: "Deleting", tone: "progress" },
 };
 

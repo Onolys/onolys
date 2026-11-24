@@ -13,6 +13,7 @@ import time
 import jsonschema
 import pytest
 from onolys_engine_core.context import RunContext
+from onolys_engine_core.errors import RunAborted
 from onolys_engine_core.json_logging import render
 from onolys_engine_core.llm import LLMBadOutput, LLMResult, LLMUnavailable, MetricsCollector, Usage
 from onolys_engine_core.transcript import Transcript
@@ -168,6 +169,19 @@ async def test_raising_callback_is_ignored(caplog):
 
     assert isinstance(await go(cb=boom), MitiOutput)
     assert "cb exploded" not in rendered(caplog)
+
+
+async def test_aborting_callback_propagates_and_stops_the_run():
+    seen = []
+
+    def stop(stage, status):
+        seen.append((stage, status))
+        if (stage, status) == ("code", "done"):
+            raise RunAborted("cancelled")
+
+    with pytest.raises(RunAborted):
+        await go(cb=stop)
+    assert ("tips", "started") not in seen  # nothing runs after the abort
 
 
 async def test_no_callback_ok():

@@ -19,6 +19,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Literal
 
+from onolys_engine_core.errors import RunAborted
 from onolys_engine_core.log_context import log_context
 
 from onolys_api import logs
@@ -34,7 +35,7 @@ LEASE_GRACE_S = 60  # lease = deadline + 60 s
 RETRYABLE_CODES = ("upstream_unavailable", "deadline_exceeded", "rate_limited")
 
 
-class Cancelled(Exception):
+class Cancelled(RunAborted):
     """The session was cancelled (04-cancel R5): stop quietly, answer 200 `cancelled`, write no
     failure. Not a TaskError: it is neither retried nor recorded."""
 
@@ -189,6 +190,8 @@ class TaskRunner:
         except Cancelled:
             return self._cancelled(spec, payload)
         except TaskError as e:
+            if self._is_cancelled(payload):  # a late error must not overwrite the cancel
+                return self._cancelled(spec, payload)
             return self._on_error(spec, payload, e, last)
         except Exception as e:
             if self._is_cancelled(payload):  # backstop (D4): e.g. `advance` -> invalid_state

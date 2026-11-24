@@ -18,7 +18,7 @@ from onolys_api.jobs import caps
 from onolys_api.jobs.alive import ensure_active
 from onolys_api.jobs.queue import InMemoryQueue, TaskPayload
 from onolys_api.jobs.stale import settle_if_stale
-from onolys_api.jobs.worker import Cancelled, HandlerSpec, PermanentError, TaskRunner
+from onolys_api.jobs.worker import Cancelled, HandlerSpec, PermanentError, RetryableError, TaskRunner
 from onolys_api.repo.base import NotFoundError
 from onolys_api.repo.fake import FakeRepo
 from onolys_api.repo.limits import LimitDefaults
@@ -119,6 +119,57 @@ def test_fail_never_overwrites_cancelled(blobs):
     s = repo.get_session(UID, SID)
     assert s.state == "cancelled" and s.error is None and s.steps["validate"].status != "failed"
     assert repo.get_status(UID, SID).state == "cancelled"
+
+
+def test_retryable_error_after_cancel_answers_cancelled_not_pending(blobs):
+    repo = _unit_repo(blobs)
+
+    def fn(ctx):
+        cancel(repo, UID, SID)
+        raise RetryableError("upstream_unavailable")
+
+    r = _runner(repo, fn).handle(P, retry_count=0)
+    assert (r.status_code, r.outcome) == (200, "cancelled")
+    s = repo.get_session(UID, SID)
+    assert s.state == "cancelled" and s.error is None
+    assert s.steps["validate"].status not in ("pending", "failed")
+    assert repo.get_status(UID, SID).state == "cancelled"
+
+
+def test_cancelled_is_an_engine_abort():
+    from onolys_engine_core.errors import RunAborted
+
+    assert issubclass(Cancelled, RunAborted)
+
+
+async def test_cancel_stops_a_run_whose_engine_swallows_callback_errors(env):  # noqa: F811
+    """Mirrors miti `_emit`: it catches every Exception from the callback except RunAborted."""
+    from onolys_engine_core.errors import RunAborted
+
+    from onolys_api.adapters import Adapters, FakeEvaluation
+
+    class Swallowing(FakeEvaluation):
+        async def run(self, ctx, transcript, speaker_map, params, progress_cb=None):
+            def cb(stage, status):
+                if progress_cb is None:
+                    return
+                try:
+                    progress_cb(stage, status)
+                except RunAborted:
+                    raise
+                except Exception:  # noqa: BLE001
+                    pass
+                if stage == "code" and status == "started":
+                    cancel(env.repo, env.uid, holder["sid"])
+
+            return await super().run(ctx, transcript, speaker_map, params, cb)
+
+    holder = {}
+    env.app.state.adapters = Adapters(stt=env.stt, evaluation=Swallowing())
+    sid = holder["sid"] = await env.start()
+    env.drain()
+    s = env.repo.get_session(env.uid, sid)
+    assert s.state == "cancelled" and env.repo.list_reports(env.uid, sid) == []
 
 
 def test_stale_check_ignores_cancelled(blobs):
