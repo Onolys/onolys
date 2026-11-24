@@ -10,10 +10,10 @@ Source of truth: docs/agent_files/feat-session-ux-logging-claude-email-20261123-
 |---|---|---|---|
 | 1 | onolys-ui: Spinner and Progress components | - | done |
 | 2 | onolys-ui: release prep (version, changelog) | 1 | done |
-| 3 | API: progress fields on status doc and detail | - | todo |
-| 4 | Contract regen, mocks, status-doc note | 3 | todo |
-| 5 | Web: timeline steps and hint | 4 | todo |
-| 6 | Web: progress.ts and useSessionStatus | 4 | todo |
+| 3 | API: progress fields on status doc and detail | - | done |
+| 4 | Contract regen, mocks, status-doc note | 3 | done |
+| 5 | Web: timeline steps and hint | 4 | done |
+| 6 | Web: progress.ts and useSessionStatus | 4 | done |
 | 7 | Bump @onolys/ui to the new tag | 2 (+ owner step: tag) | todo |
 | 8 | Web: SessionPage steps, bar, hint, cancel slot | 5, 6, 7 | todo |
 | 9 | Docs: user-rating concept and hint consistency | 8 | todo |
