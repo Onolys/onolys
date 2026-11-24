@@ -122,16 +122,23 @@ def test_convert_dataset_end_to_end_and_cli(tmp_path, monkeypatch):
                 source_files=["https://example.org/g.csv", "https://example.org/u.csv"])
     data["sessions"] = [{"session_id": "synthetic-video", "title": "Synthetic Video",
                          "clinician_labels": ["T"], "code_header": None, "change_goal": "Goal",
+                         "change_goal_source": "curated", "coded_span": None, "notes": "n"},
+                        {"session_id": "other-video", "title": "Other video",
+                         "clinician_labels": ["T"], "code_header": None, "change_goal": "Goal",
                          "change_goal_source": "curated", "coded_span": None, "notes": "n"}]
     manifest = DatasetManifest.model_validate(data)
     status, report = mitags.convert_mitags_dataset(manifest, tmp_path / "cache")
     assert status == 0
+    other = json.loads((tmp_path / "cache/mi-tags-synth/other-video/gold.json").read_text())
+    assert other["source"]["coded_url"] == "https://example.org/u.csv"
+    assert other["source"]["sha256"] == "c" * 64
     gold = json.loads((tmp_path / "cache/mi-tags-synth/synthetic-video/gold.json").read_text())
     assert gold["source"]["sha256"] == "b" * 64 and gold["counts"]["question"] == 1
-    assert any("1 utterance rows" in line for line in report)
+    assert gold["source"]["coded_url"] == "https://example.org/g.csv"
     transcript = json.loads((tmp_path / "cache/mi-tags-synth/synthetic-video/transcript.json").read_text())
     assert transcript["language"] == "en" and len(transcript["turns"]) == 7
     # unknown manifest title is an error, never a guess
+    manifest.sessions = manifest.sessions[:1]
     manifest.sessions[0].title = "Missing"
     with pytest.raises(ValueError, match="not found"):
         mitags.convert_mitags_dataset(manifest, tmp_path / "cache")

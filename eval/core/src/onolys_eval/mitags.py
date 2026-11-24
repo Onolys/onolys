@@ -30,7 +30,6 @@ actually contains such a tag. Summaries are omitted (partial gold).
 """
 import csv
 import io
-import json
 import re
 from collections import Counter
 from pathlib import Path
@@ -38,6 +37,7 @@ from pathlib import Path
 from .fetch import default_cache, require_external_path
 from .gold import COUNT_IDS, GLOBAL_IDS, Gold
 from .manifest import DatasetManifest
+from .publicsets import convert_sessions, read_provenance, source_record
 
 LABEL_SCHEME = "MITI 4.2"
 _CLINICIAN_CODES = {
@@ -178,54 +178,32 @@ def convert_mitags_dataset(manifest: DatasetManifest, cache: Path | None = None,
                            session_id: str | None = None):
     """Write transcript.json and gold.json per manifest session; return (status, report)."""
     cache = require_external_path(cache if cache is not None else default_cache())
-    root = cache / manifest.dataset_id
-    raw = root / "raw"
-    provenance = json.loads((raw / "fetch.json").read_text())
-    if provenance["dataset_id"] != manifest.dataset_id:
-        raise ValueError("fetch.json dataset_id does not match manifest")
-    globals_rows, utterance_rows, global_file = [], [], None
-    for name in sorted(provenance["files"]):
+    raw = cache / manifest.dataset_id / "raw"
+    files = read_provenance(raw, manifest.dataset_id)
+    globals_rows, utterance_rows, global_file, utterance_file = [], [], None, None
+    for name in sorted(files):
         rows = _read(raw / name)
         if rows and "Tagged Text" in rows[0]:
             globals_rows, global_file = rows, name
         elif rows and "Turn" in rows[0]:
-            utterance_rows = rows
-    sessions = [s for s in manifest.sessions if session_id in (None, s.session_id)]
-    if not sessions:
-        raise ValueError(f"Unknown session: {session_id}")
-    status, report, used = 0, [], set()
-    for session in sessions:
-        target = require_external_path(root / session.session_id)
-        record = provenance["files"].get(global_file or "", {})
-        common = {"retrieved_at": record.get("retrieved_at"), "sha256": record.get("sha256"),
-                  "coded_url": record.get("url")}
+            utterance_rows, utterance_file = rows, name
+    used = set()
+
+    def build(session):
         if any(row["Video Title"] == session.title for row in globals_rows):
-            transcript, gold, warnings = build_session_from_global_row(
+            return build_session_from_global_row(
                 manifest.dataset_id, session.session_id,
-                pick_global_row(globals_rows, session.title), **common)
-        else:
-            rows = [r for r in utterance_rows if r["Video Title"] == session.title]
-            if not rows:
-                raise ValueError(f"Video title not found: {session.title}")
-            turns, warnings = turns_from_utterance_rows(rows)
-            used.update(id(r) for r in rows)
-            transcript, gold, warnings = build_session_from_turns(
-                manifest.dataset_id, session.session_id, turns, None, warnings,
-                annotator=rows[0]["Annotator"], **common)
-        for warning in warnings:
-            report.append(f"{session.session_id}: {warning}")
-        if gold is None:
-            for filename in ("transcript.json", "gold.json"):
-                require_external_path(target / filename).unlink(missing_ok=True)
-            status = 1
-            continue
-        target.mkdir(parents=True, exist_ok=True)
-        for filename, data in (("transcript.json", transcript),
-                               ("gold.json", gold.model_dump(mode="json", by_alias=True))):
-            require_external_path(target / filename).write_text(json.dumps(data, indent=2) + "\n")
-        report.append(f"{session.session_id}: converted ({len(warnings)} unresolved warnings)")
-        if warnings:
-            status = 1
+                pick_global_row(globals_rows, session.title), **source_record(files, global_file))
+        rows = [r for r in utterance_rows if r["Video Title"] == session.title]
+        if not rows:
+            raise ValueError(f"Video title not found: {session.title}")
+        turns, warnings = turns_from_utterance_rows(rows)
+        used.update(id(r) for r in rows)
+        return build_session_from_turns(
+            manifest.dataset_id, session.session_id, turns, None, warnings,
+            annotator=rows[0]["Annotator"], **source_record(files, utterance_file))
+
+    status, report = convert_sessions(manifest, cache, session_id, build)
     left = [r for r in utterance_rows if id(r) not in used]
     if left:
         titles = {r["Video Title"] for r in left}
