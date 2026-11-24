@@ -46,14 +46,21 @@ export interface Aggregate {
  n: number; counts: Record<string, ErrorMetric>; summaries: Record<string, ErrorMetric>;
  globals: Record<string, ErrorMetric & { within_1: { n: number; total: number; fraction: number | null } }>;
 }
-export interface Compare {
- has_human: boolean; metrics: { id: string; group: 'counts' | 'globals' | 'summaries'; label: string }[];
- sessions: { session_id: string; human: Record<string, number | null> | null; cells: {
- engine: string; preset: string; n: number; failed: number; unit_ids: string[];
+export interface CompareCell {
+ engine: string; combo_key: string; label: string; n: number; failed: number; error_code: string | null; unit_ids: string[];
  values: Record<string, { mean: number | null; min: number | null; max: number | null; n: number }>;
  diff?: Record<string, number | null>;
- }[] }[];
- aggregates: { engine: string; preset: string; metrics: Aggregate }[]; notes: string[];
+ error: Record<string, ErrorMetric> | null;
+}
+export interface CompareAggregate {
+ engine: string; combo_key: string; label: string; n: number; failed: number;
+ within_1: Record<string, { n: number; total: number; fraction: number | null }>;
+ usage: { input_tokens: number; output_tokens: number; calls: number }; cost_usd_est: number | null; metrics: Aggregate;
+}
+export interface Compare {
+ has_human: boolean; metrics: { id: string; group: 'counts' | 'globals' | 'summaries'; label: string }[];
+ sessions: { session_id: string; human: Record<string, number | null> | null; cells: CompareCell[] }[];
+ aggregates: CompareAggregate[]; notes: string[];
 }
 export interface RunDetail extends RunSummary { units: RunUnit[]; compare: Compare }
 export type RunSelection = Pick<RunInput, 'engines' | 'selection' | 'repeats'>;

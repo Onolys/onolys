@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import type { Compare, EvalApi, RunDetail, RunSummary, RunUnit } from './api';
+import type { Compare, CompareAggregate, ErrorMetric, EvalApi, RunDetail, RunSummary, RunUnit } from './api';
 
 const errorMessage = (error: unknown) => error instanceof Error ? error.message : 'Could not load run. Please try again.';
 const terminal = (status: string) => !['queued', 'running'].includes(status);
@@ -12,21 +12,62 @@ function Usage({ run }: { run: RunSummary }) {
 function Provenance({ run }: { run: RunSummary }) {
   return <details><summary>Saved configuration and versions</summary><pre>{JSON.stringify({ input: run.input, change_goal: run.change_goal, language: run.language, coded_span: run.coded_span, engines: run.engines, presets: run.presets, repeats: run.repeats, engine_versions: run.engine_versions, engine_git_sha: run.engine_git_sha, resolved_presets: run.resolved_presets }, null, 2)}</pre></details>;
 }
+const sortValue = (a: CompareAggregate, key: string): number | string | null => {
+  if (key === 'label') return `${a.engine} · ${a.label}`;
+  if (key === 'n') return a.n;
+  if (key === 'failed') return a.failed;
+  if (key === 'tokens') return a.usage.input_tokens + a.usage.output_tokens;
+  if (key === 'cost') return a.cost_usd_est;
+  if (key.startsWith('w1:')) return a.within_1[key.slice(3)]?.fraction ?? null;
+  const [group, id] = key.split(':'); return (a.metrics[group as 'counts'] as Record<string, ErrorMetric> | undefined)?.[id]?.mae ?? null;
+};
+export function SummaryView({ compare }: { compare: Compare }) {
+  const [sort, setSort] = useState<{ key: string; dir: 'ascending' | 'descending' } | null>(null);
+  const globals = compare.metrics.filter(m => m.group === 'globals');
+  const columns = [...compare.metrics.map(m => ({ key: `${m.group}:${m.id}`, label: `MAE ${m.label}`, mae: true })), ...globals.map(m => ({ key: `w1:${m.id}`, label: `Within 1 ${m.label}`, mae: false })),
+    { key: 'n', label: 'n sessions', mae: false }, { key: 'failed', label: 'Failed units', mae: false }, { key: 'tokens', label: 'Tokens', mae: false }, { key: 'cost', label: 'Est. cost', mae: false }];
+  const best: Record<string, number | undefined> = {};
+  for (const c of columns.filter(c => c.mae)) { const v = compare.aggregates.map(a => sortValue(a, c.key)).filter((x): x is number => typeof x === 'number'); if (v.length) best[c.key] = Math.min(...v); }
+  const rows = [...compare.aggregates];
+  if (sort) rows.sort((x, y) => {
+    const a = sortValue(x, sort.key), b = sortValue(y, sort.key);
+    if (a == null || b == null) return a == null ? (b == null ? 0 : 1) : -1;
+    const c = typeof a === 'string' ? a.localeCompare(b as string) : a - (b as number);
+    return sort.dir === 'ascending' ? c : -c;
+  });
+  const toggle = (key: string) => setSort(s => s?.key === key ? { key, dir: s.dir === 'ascending' ? 'descending' : 'ascending' } : { key, dir: 'ascending' });
+  const head = (key: string, label: string) => <th scope="col" key={key} aria-sort={sort?.key === key ? sort.dir : 'none'}><button type="button" className="sort" onClick={() => toggle(key)}>{label}</button></th>;
+  const cost = (v: number | null) => v == null ? '—' : `$${v.toFixed(4)}`;
+  return <div className="table-scroll"><table className="matrix"><caption>Mean absolute error (MAE) per engine and combo, over successful units; lower is better and the best value per column is highlighted. Within 1 is the share of global ratings within one point of Human.</caption>
+    <thead><tr>{head('label', 'Engine / combo')}{columns.map(c => head(c.key, c.label))}</tr></thead>
+    <tbody>{rows.map(a => <tr key={`${a.engine}/${a.combo_key}`}><th scope="row">{a.engine} · {a.label}</th>
+      {columns.map(c => {
+        const v = sortValue(a, c.key); const isBest = c.mae && typeof v === 'number' && v === best[c.key];
+        const text = c.key.startsWith('w1:') ? (a.within_1[c.key.slice(3)]?.fraction == null ? '—' : String(Number(a.within_1[c.key.slice(3)].fraction!.toFixed(3)))) : c.key === 'cost' ? cost(a.cost_usd_est) : c.mae ? number(v as number | null, c.key.split(':')[1]) : String(v);
+        return <td key={c.key} className={isBest ? 'best' : undefined} data-best={isBest ? 'true' : undefined}>{text}{isBest && <span className="sr-only"> (best)</span>}</td>;
+      })}</tr>)}</tbody></table></div>;
+}
 export function CompareView({ compare }: { compare: Compare }) {
   const [sessionId, setSessionId] = useState(compare.sessions[0]?.session_id ?? '');
+  const [tab, setTab] = useState<'compare' | 'summary'>('compare');
   const session = compare.sessions.find(s => s.session_id === sessionId) ?? compare.sessions[0];
   if (!session) return <p>Comparison will appear when units are available.</p>;
+  const showSummary = compare.has_human && tab === 'summary';
   return <section><h2>Compare</h2>
+    {compare.has_human && <div role="tablist" aria-label="Results view"><button type="button" role="tab" aria-selected={!showSummary} onClick={() => setTab('compare')}>Compare</button><button type="button" role="tab" aria-selected={showSummary} onClick={() => setTab('summary')}>Summary</button></div>}
+    {showSummary ? <SummaryView compare={compare} /> : <>
     <label>Session<select value={session.session_id} onChange={event => setSessionId(event.target.value)}>{compare.sessions.map(s => <option key={s.session_id} value={s.session_id}>{s.session_id}</option>)}</select></label>
-    {session.cells.map(cell => cell.failed > 0 && <p key={`${cell.engine}/${cell.preset}`} role="status">{cell.engine} · {cell.preset}: {cell.failed} failed unit(s), excluded from values{compare.has_human ? ' and MAE' : ''}.</p>)}
-    <div className="table-scroll"><table><caption>Successful unit means and min–max ranges; n counts defined values.{compare.has_human && ' MAE over successful run units across sessions and repeats; n counts defined unit comparisons.'}</caption>
-      <thead><tr><th scope="col">Metric</th>{compare.has_human && <th scope="col">Human</th>}{session.cells.map(cell => <th scope="col" key={`${cell.engine}/${cell.preset}`}>{cell.engine} · {cell.preset}</th>)}{compare.has_human && session.cells.map(cell => <th scope="col" key={`diff/${cell.engine}/${cell.preset}`}>Diff vs Human · {cell.engine} · {cell.preset}</th>)}{compare.has_human && session.cells.map(cell => <th scope="col" key={`mae/${cell.engine}/${cell.preset}`}>MAE · {cell.engine} · {cell.preset}</th>)}</tr></thead>
-      <tbody>{compare.metrics.map(metric => <tr key={metric.id}><th scope="row">{metric.label}</th>
-        {compare.has_human && <td>{session.human?.[metric.id] == null ? '—, n=0' : `${number(session.human[metric.id], metric.id)}, n=1`}</td>}
-        {session.cells.map(cell => { const value = cell.values[metric.id]; return <td key={`${cell.engine}/${cell.preset}`}>{value?.mean == null ? `—, n=${value?.n ?? 0}` : `${number(value.mean, metric.id)} (${number(value.min, metric.id)}–${number(value.max, metric.id)}), n=${value.n}`}</td>; })}
-        {compare.has_human && session.cells.map(cell => <td key={`diff/${cell.engine}/${cell.preset}`}>{number(cell.diff?.[metric.id], metric.id)}</td>)}
-        {compare.has_human && session.cells.map(cell => { const aggregate = compare.aggregates.find(a => a.engine === cell.engine && a.preset === cell.preset); const value = aggregate?.metrics[metric.group][metric.id]; return <td key={`mae/${cell.engine}/${cell.preset}`}>{number(value?.mae, metric.id)}, n={value?.n ?? 0}</td>; })}
-      </tr>)}</tbody></table></div>
+    <div className="table-scroll"><table className="matrix"><caption>Successful unit means and min–max ranges; n counts defined values.{compare.has_human && ' Beneath each value: signed diff vs Human and session MAE over successful units.'} Failed units are excluded from values{compare.has_human ? ' and MAE' : ''}.</caption>
+      <thead><tr><th scope="col">Engine / combo</th>{compare.metrics.map(m => <th scope="col" key={m.id}>{m.label}</th>)}</tr></thead>
+      <tbody>
+        {compare.has_human && <tr><th scope="row">Human</th>{compare.metrics.map(m => <td key={m.id}>{session.human?.[m.id] == null ? '—, n=0' : `${number(session.human[m.id], m.id)}, n=1`}</td>)}</tr>}
+        {session.cells.map(cell => <tr key={`${cell.engine}/${cell.combo_key}`}><th scope="row">{cell.engine} · {cell.label}{cell.failed > 0 && <span role="status" className="failed"> {cell.failed} failed{cell.error_code ? ` (${cell.error_code})` : ''}</span>}</th>
+          {compare.metrics.map(m => { const value = cell.values[m.id]; const err = cell.error?.[m.id];
+            return <td key={m.id}>{value?.mean == null ? `—, n=${value?.n ?? 0}` : `${number(value.mean, m.id)} (${number(value.min, m.id)}–${number(value.max, m.id)}), n=${value.n}`}
+              {compare.has_human && cell.diff && <small className="sub"> diff {number(cell.diff[m.id], m.id)}</small>}
+              {compare.has_human && err && <small className="sub"> MAE {number(err.mae, m.id)}</small>}</td>; })}
+        </tr>)}
+      </tbody></table></div></>}
     {compare.notes.map((note, index) => <p key={index}>{note}</p>)}
   </section>;
 }
