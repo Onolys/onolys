@@ -266,6 +266,23 @@ async def test_code_failure_fails_run_and_session_and_refunds_the_system_failure
     assert (await env.c.get(f"/v1/sessions/{sid}/reports/1", headers=env.h)).status_code == 404
 
 
+async def test_a_release_failure_on_the_final_attempt_is_retried_by_the_worker(env, monkeypatch):
+    sid = await env.start("[fail:code]")
+    real, n = env.repo.release_run_slot, []
+
+    def flaky(*a, **kw):
+        n.append(1)
+        if len(n) == 1:
+            raise RuntimeError("firestore down")  # the in-handler release
+        return real(*a, **kw)
+
+    monkeypatch.setattr(env.repo, "release_run_slot", flaky)
+    env.drain()
+    assert env.repo.get_session(env.uid, sid).state == "failed"
+    (run,) = env.repo.list_runs(env.uid, sid)
+    assert run.released is True and env.counters()[0] == 0  # no leaked cap slot (M-2)
+
+
 async def test_try_again_after_a_failure_reuses_transcript_and_stored_rating(env):
     sid = await env.finished("[fail:code]")
     rating_id = env.repo.latest_rating(env.uid, sid).id

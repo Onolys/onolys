@@ -12,6 +12,7 @@ docs the reservation was made on, even if the UTC day has rolled over since.
 `reserve_run`/`release_run` are the eval wrappers the run call sites use.
 """
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import NoReturn
@@ -34,6 +35,7 @@ __all__ = [
     "release",
     "reserve_run",
     "release_run",
+    "start_with_repair",
     "usage_view",
     "utc_date",
     "resets_at",
@@ -123,6 +125,16 @@ def reserve_run(repo: Repo, settings: Settings, uid: str, now: datetime | None =
 
 def release_run(repo: Repo, uid: str, date: str, refund: bool) -> None:
     release(repo, uid, Reservation("eval", date), refund)
+
+
+def start_with_repair(repo: Repo, uid: str, start: Callable[[], str]) -> str:
+    """Run a start transaction; when it is refused for the concurrent-run cap, first reconcile
+    the user's `active_runs` against the runs that really hold a slot (M-2: a leaked slot would
+    otherwise 429 the user forever) and try once more if that freed any."""
+    outcome = start()
+    if outcome == "concurrent" and repo.reconcile_active_runs(uid) > 0:
+        outcome = start()
+    return outcome
 
 
 def usage_view(repo: Repo, settings: Settings, uid: str, now: datetime | None = None) -> UsageView:

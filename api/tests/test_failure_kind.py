@@ -70,7 +70,9 @@ def _fail_via_worker(fake_repo, exc):
     def fn(ctx):
         raise exc
 
-    runner_with(fake_repo, fn).handle(payload(), retry_count=1)
+    runner = runner_with(fake_repo, fn)
+    runner.handle(payload(), retry_count=0)  # attempt 1 (a retryable error is retried)
+    runner.handle(payload(), retry_count=1)  # attempt 2, the last
     return fake_repo.get_session(UID, SID), fake_repo.get_status(UID, SID)
 
 
@@ -119,15 +121,15 @@ def test_stale_write_site_persists_kind(repo):  # noqa: F811
     s = repo.get_session(uid, sid)
     done = settle_if_stale(repo, s, T_OLD + timedelta(days=1), mk_settings())
     st = repo.get_status(uid, sid)
-    assert done.state == "failed" and done.error.code == "transcription_failed"
-    assert (done.error.kind, st.error_kind) == ("user_file", "user_file")
-    assert st.retries_left == 0
+    assert done.state == "failed" and done.error.code == "deadline_exceeded"  # LM-1: lost task
+    assert (done.error.kind, st.error_kind) == ("transient", "transient")
+    assert st.retries_left == MAX_SESSION_RETRIES
     uid, sid = seed_state(repo, "validating", T_OLD, step="validate")
     done = settle_if_stale(
         repo, repo.get_session(uid, sid), T_OLD + timedelta(days=1), mk_settings()
     )
-    assert done.error.code == "internal_error"
-    assert done.error.kind == repo.get_status(uid, sid).error_kind == "permanent_internal"
+    assert done.error.code == "deadline_exceeded"
+    assert done.error.kind == repo.get_status(uid, sid).error_kind == "transient"
 
 
 def test_fail_stale_session_mirrors_kind_to_status(repo):  # noqa: F811

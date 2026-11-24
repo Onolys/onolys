@@ -189,10 +189,14 @@ def begin_run(
     date = caps.utc_date()
     # One transaction: state check, cap reservation, run creation, first_run_id and `running`.
     # The loser of a race gets 409 and holds no slot.
-    outcome = repo.start_run(
-        uid, id, run_id, date, LimitDefaults.from_settings(settings), settings.max_active_runs,
-        settings.git_sha, RUN_START_PROGRESS, allowed, n_runs, preset,
-        coded_span=span.model_dump(exclude_none=True) if span else None, retry_max=retry_max,
+    outcome = caps.start_with_repair(
+        repo, uid,
+        lambda: repo.start_run(
+            uid, id, run_id, date, LimitDefaults.from_settings(settings),
+            settings.max_active_runs, settings.git_sha, RUN_START_PROGRESS, allowed, n_runs,
+            preset, coded_span=span.model_dump(exclude_none=True) if span else None,
+            retry_max=retry_max,
+        ),
     )  # fmt: skip
     if outcome == "not_ready":
         raise invalid_state()

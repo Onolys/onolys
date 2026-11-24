@@ -88,7 +88,7 @@ def make_run_handler(
             retryable = isinstance(e, TimeoutError) or e.retryable
             if not retryable or ctx.attempt >= MAX_ATTEMPTS:
                 code = e.code if isinstance(e, TaskError) else "deadline_exceeded"
-                release_failed_run(repo, uid, sid, run_id, kind_for_code(code), date)
+                _release_or_log(repo, uid, sid, run_id, code, date)
             raise
         except Exception as e:
             if isinstance(e, OutputInvalid):
@@ -98,11 +98,22 @@ def make_run_handler(
                 repo.update_run(uid, sid, run_id, fields)
             code, retryable = to_public(e, ctx.attempt)
             if not retryable or ctx.attempt >= MAX_ATTEMPTS:
-                release_failed_run(repo, uid, sid, run_id, kind_for_code(code), date)
+                _release_or_log(repo, uid, sid, run_id, code, date)
             raise
         release_once(repo, uid, sid, run_id, False, date)
 
     return run
+
+
+def _release_or_log(repo, uid: str, sid: str, run_id: str, code: str, date) -> None:
+    """Final-attempt release. A failure here must not replace the run's real error (it decides
+    the session's error code); the worker's `_fail` tries the release again and the server sweep
+    repairs a slot that still leaks (M-2)."""
+    try:
+        release_failed_run(repo, uid, sid, run_id, kind_for_code(code), date)
+    except Exception as e:  # noqa: BLE001
+        logs.emit("run_release_failed", logging.ERROR, session_id=sid, run_id=run_id,
+                  exc_class=type(e).__name__)  # fmt: skip
 
 
 def _execute(ctx, blobs, evaluation, run_doc) -> None:

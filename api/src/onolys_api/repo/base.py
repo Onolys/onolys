@@ -150,6 +150,10 @@ class Repo(Protocol):
     # marked failed; `error` is None for the non-terminal `upload_incomplete`) and return True.
     # Anything else (moved on, written to since, already failed): nothing, False.
     # Used by the lazy stale check on read; a poll that just finished wins the race.
+    # `release_runs` (the `running` stale case, M-2): in the SAME transaction every run of the
+    # session that is not `released` is marked `failed` (`error=run_failed`, unless it is `done`)
+    # and its cap slot is handed back (refund unless the run is `done`), so a failure of a
+    # separate release step can never leave the session `failed` with a leaked `active_runs`.
     def fail_stale_session(
         self,
         uid: str,
@@ -158,7 +162,23 @@ class Repo(Protocol):
         before: datetime,
         error: SessionError | None,
         to: str = "failed",
+        release_runs: bool = False,
     ) -> bool: ...
+
+    # M-2 self-repair, ONE transaction over `users/{uid}` and the user's runs: `active_runs` is
+    # lowered to the number of runs that really hold a slot (unreleased, `pending|running`, in a
+    # `running` or `deleting` session: the delete owns that one). Any other unreleased run is a
+    # leak: marked `released` (no refund; `unit_kept` = counted). Returns the slots reclaimed.
+    def reconcile_active_runs(self, uid: str) -> int: ...
+
+    # Server sweep reads (M-1, M-3). NOT uid-scoped on purpose: the internal worker sweep walks
+    # every user. Sessions in `state` whose `stage_started_at` is before `before`, oldest first,
+    # at most `limit`. Never used by a user-facing route.
+    def list_sessions_stuck(
+        self, state: str, before: datetime, limit: int
+    ) -> list[SessionDoc]: ...
+    # uids whose `users/{uid}.active_runs` is above 0 (candidates for `reconcile_active_runs`).
+    def list_uids_with_active_runs(self, limit: int) -> list[str]: ...
 
     # children of a session
     def add_recording(self, uid: str, sid: str, rid: str, rec: RecordingDoc) -> None: ...

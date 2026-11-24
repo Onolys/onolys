@@ -162,6 +162,39 @@ def test_concurrent_delivery_busy_then_lease_expiry_reclaims(repo):
     assert runner2.handle(payload(), retry_count=0).status_code == 200 and calls == [2]
 
 
+def test_last_attempt_follows_the_claim_counter_after_a_lease_reclaim(repo):
+    # an earlier delivery crashed holding the lease: this claim is attempt 2 of 2 (A13)
+    long_ago = datetime.now(UTC) - timedelta(hours=1)
+    assert repo.claim_step(UID, SID, "validate", long_ago, 540).outcome == "claimed"
+    seen = []
+
+    def fn(ctx):
+        seen.append(ctx.attempt)
+        raise RetryableError("upstream_unavailable")
+
+    r = runner_with(repo, fn).handle(payload(), retry_count=0)
+    assert seen == [2]
+    assert r.status_code == 200 and repo.get_session(UID, SID).steps["validate"].status == "failed"
+
+
+def test_lease_busy_deliveries_do_not_burn_the_apps_attempt_budget(repo):
+    seen = []
+
+    def fn(ctx):
+        seen.append(ctx.attempt)
+        raise RetryableError("upstream_unavailable")
+
+    assert repo.claim_step(UID, SID, "validate", datetime.now(UTC), 540).outcome == "claimed"
+    runner = runner_with(repo, fn)
+    assert runner.handle(payload(), retry_count=0).outcome == "busy"
+    assert runner.handle(payload(), retry_count=1).outcome == "busy"
+    # the holder fails retryably and releases its claim (its own attempt was number 1)
+    repo.update_session(UID, SID, {"steps.validate.status": "pending"})
+    r = runner.handle(payload(), retry_count=2)  # Cloud Tasks counted the two busy answers
+    assert seen == [2]  # the app's budget counts claims only: this is attempt 2 of 2, not 3
+    assert r.status_code == 200 and repo.get_session(UID, SID).steps["validate"].status == "failed"
+
+
 def test_run_scope_claims_run_record_and_fails_session(repo):
     repo.update_session(UID, SID, {"state": "running"}, status={"state": "running"})
     calls = []

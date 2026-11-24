@@ -3,6 +3,7 @@
 Auth: a Google-signed OIDC token whose audience is the worker URL and whose email is the
 tasks-invoker SA (Cloud Run IAM already requires the SA; this checks the audience too).
 Bypassed only when ENV is local or test.
+`POST /tasks/sweep` is the Cloud Scheduler entry (no payload): see `jobs/sweep.py`.
 """
 
 from fastapi import APIRouter, Header, Request, Response
@@ -11,6 +12,7 @@ from onolys_api.auth.idtoken import InvalidToken
 from onolys_api.config import LOCAL_ENVS
 from onolys_api.errors import ApiError
 from onolys_api.jobs.queue import KINDS, TaskPayload
+from onolys_api.jobs.sweep import run_sweep
 from onolys_api.jobs.worker import TaskRunner
 
 router = APIRouter(include_in_schema=False)
@@ -30,6 +32,17 @@ def check_oidc(request: Request, authorization: str | None) -> None:
         request.app.state.oidc.verify(token)
     except InvalidToken:
         raise _unauthenticated() from None
+
+
+@router.post("/tasks/sweep")
+def run_sweep_route(
+    request: Request, authorization: str | None = Header(default=None)
+) -> dict[str, int]:
+    """The periodic server sweep (Cloud Scheduler, same OIDC as the task routes): settle stale
+    sessions, resume stuck deletions, repair leaked run slots. Bounded and idempotent."""
+    check_oidc(request, authorization)
+    state = request.app.state
+    return run_sweep(state.repo, state.blobs, state.settings, state.clock()).as_dict()
 
 
 @router.post("/tasks/{kind}")

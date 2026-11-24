@@ -148,3 +148,42 @@ def test_discard_failed_upload_unlinks_the_interview(repos):
     assert (iv.state, iv.session_id) == ("ended", None)
     with pytest.raises(Exception):  # noqa: B017  (NotFoundError: the session is gone)
         repos[2].get_session(uid, sid)
+
+
+def test_stale_fail_releases_runs_in_one_txn_and_reconcile_repairs_a_leak(repos):
+    """M-2: `fail_stale_session(release_runs=True)` writes the failure and the slot releases of
+    every unreleased run (two here: no two-writes-to-one-doc trouble) in ONE transaction;
+    `reconcile_active_runs` lowers `active_runs` to the runs that really hold a slot."""
+    from datetime import timedelta
+
+    from onolys_api.repo.limits import LimitDefaults
+    from onolys_api.repo.models import RunDoc, SessionError
+
+    uid, sid = f"u-{uuid.uuid4().hex[:10]}", f"s-{uuid.uuid4().hex[:10]}"
+    day = caps.utc_date()
+    _running_session(repos[0], uid, sid)
+    defaults = LimitDefaults(10, 5)
+    for rid in ("r1", "r2"):
+        assert repos[0].reserve_usage(uid, "eval", day, defaults, 9) == "ok"
+        repos[0].create_run(
+            uid, sid, rid, RunDoc(uid=uid, session_id=sid, run_id=rid, status="running",
+                                  cap_date=day),
+        )  # fmt: skip
+    err = SessionError(code="deadline_exceeded", step="run", kind="transient")
+    future = datetime.now(UTC) + timedelta(days=1)
+    assert repos[1].fail_stale_session(uid, sid, "running", future, err, release_runs=True)
+    assert repos[2].get_session(uid, sid).state == "failed"
+    assert repos[2].get_user(uid).active_runs == 0
+    for rid in ("r1", "r2"):
+        run = repos[2].get_run(uid, sid, rid)
+        assert (run.status, run.released, run.error) == ("failed", True, "run_failed")
+    assert repos[2].get_usage_doc(uid, day).runs == 0  # a crash refunds the units
+
+    # a leak: the counter claims a slot no run holds any more
+    repos[0].reserve_usage(uid, "eval", day, defaults, 9)
+    assert repos[0].get_user(uid).active_runs == 1
+    assert repos[1].reconcile_active_runs(uid) == 1
+    assert repos[2].get_user(uid).active_runs == 0
+    assert repos[1].reconcile_active_runs(uid) == 0  # idempotent
+    assert uid not in repos[2].list_uids_with_active_runs(500)
+    assert sid not in [s.id for s in repos[2].list_sessions_stuck("running", future, 500)]

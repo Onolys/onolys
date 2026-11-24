@@ -37,9 +37,12 @@ def maybe_start_first_run(
         return
     run_id = uuid4().hex
     date = caps.utc_date()
-    outcome = repo.start_first_run(
-        uid, sid, run_id, date, LimitDefaults.from_settings(settings), settings.max_active_runs,
-        settings.git_sha, RUN_START_PROGRESS,
+    outcome = caps.start_with_repair(
+        repo, uid,
+        lambda: repo.start_first_run(
+            uid, sid, run_id, date, LimitDefaults.from_settings(settings),
+            settings.max_active_runs, settings.git_sha, RUN_START_PROGRESS,
+        ),
     )  # fmt: skip
     if outcome != "started":
         if outcome in ("daily_cap", "concurrent"):

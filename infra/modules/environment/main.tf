@@ -70,6 +70,37 @@ resource "google_cloud_tasks_queue" "steps" {
   }
 }
 
+# --- Server sweep (M-1, M-2, M-3) ---
+# Settles stale sessions, resumes stuck deletions and repairs leaked run slots without anyone
+# reading the page. Same OIDC as Cloud Tasks (tasks-invoker SA, audience = worker URL); the SA
+# already holds run.invoker on the worker. Idempotent and bounded: a missed or doubled tick is
+# harmless. Needs cloudscheduler.googleapis.com (infra/main.tf).
+resource "google_cloud_scheduler_job" "sweep" {
+  project          = var.project
+  region           = var.region
+  name             = "sweep-${var.env}"
+  description      = "Onolys server sweep: stale sessions, stuck deletes, leaked run slots"
+  schedule         = "*/15 * * * *"
+  time_zone        = "Etc/UTC"
+  attempt_deadline = "180s"
+
+  retry_config {
+    retry_count = 1
+  }
+
+  http_target {
+    http_method = "POST"
+    uri         = "${local.worker_url}/tasks/sweep"
+
+    oidc_token {
+      service_account_email = google_service_account.tasks_invoker.email
+      audience              = local.worker_url
+    }
+  }
+
+  depends_on = [google_cloud_run_v2_service_iam_member.worker_tasks_invoker]
+}
+
 # --- Service accounts (PRD R9) ---
 resource "google_service_account" "api" {
   project      = var.project

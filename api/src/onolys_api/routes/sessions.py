@@ -570,7 +570,11 @@ def delete_session(id: ResourceId, request: Request, user: User) -> Response:
         queue = getattr(request.app.state, "queue", None)
         try:
             if queue is not None:
-                queue.enqueue(TaskPayload(kind="delete", uid=user.uid, sid=id, request_id=rid))
+                # unique name per attempt: Cloud Tasks would drop a repeat of `{sid}-delete` (M-1)
+                at = int(request.app.state.clock().timestamp())
+                queue.enqueue(
+                    TaskPayload(kind="delete", uid=user.uid, sid=id, request_id=rid, n=at)
+                )
         except Exception as qe:
             logs.emit(
                 "delete_enqueue_failed",

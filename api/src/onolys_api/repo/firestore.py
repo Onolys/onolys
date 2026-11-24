@@ -458,9 +458,11 @@ class FirestoreRepo:
         before: datetime,
         error: SessionError | None,
         to: str = "failed",
+        release_runs: bool = False,
     ) -> bool:
         sref, _ = self._owned_session(uid, sid)
         stref = self._top("session_status", sid)
+        user_ref = self._top("users", uid)
 
         @firestore.transactional
         def txn_fn(txn) -> bool:
@@ -472,6 +474,32 @@ class FirestoreRepo:
             if sess.get("state") != state or started >= before:
                 return False
             now = utcnow()
+            # all reads before any write: the unreleased runs, the user, each run's cap day
+            runs: list[tuple[Any, dict, Any, dict]] = []
+            user: dict[str, Any] = {}
+            if release_runs:
+                user = user_ref.get(transaction=txn).to_dict() or {}
+                days: dict[str, tuple[Any, dict]] = {}
+                for rs in sref.collection("runs").stream(transaction=txn):
+                    rd = rs.to_dict() or {}
+                    if rd.get("released"):
+                        continue
+                    key = rd.get("cap_date")
+                    if key and key not in days:
+                        dref = self._top("usage", f"{uid}_{key}")
+                        days[key] = (dref, dref.get(transaction=txn).to_dict() or {})
+                    dref, day = days.get(key, (None, {}))
+                    runs.append((rs.reference, rd, dref, day))
+            for rref, rd, dref, day in runs:
+                if rd.get("status") not in ("done", "failed"):
+                    txn.update(rref, {"status": "failed", "ended": now, "error": "run_failed"})
+                refund = rd.get("status") != "done"  # a crash refunds; a finished run keeps it
+                if self._release_run_in_txn(txn, rref, rd, user_ref, user, dref, day, refund):
+                    if dref is not None:  # keep the shared docs current for the next run
+                        user["active_runs"] = max(0, user.get("active_runs", 0) - 1)
+                        if refund and rd.get("counted", True):
+                            f = KIND_FIELD["eval"]
+                            day[f] = max(0, day.get(f, 0) - rd.get("units", 1))
             fields: dict[str, Any] = {"state": to, "error": error.model_dump() if error else None,
                                       "updated_at": now}  # fmt: skip
             if error and error.step and error.step in (sess.get("steps") or {}):
@@ -492,6 +520,54 @@ class FirestoreRepo:
             return True
 
         return self._contended(txn_fn, uid)
+
+    def reconcile_active_runs(self, uid: str) -> int:
+        user_ref = self._top("users", uid)
+
+        @firestore.transactional
+        def txn_fn(txn) -> int:
+            user = user_ref.get(transaction=txn).to_dict() or {}
+            held = user.get("active_runs", 0)
+            if held <= 0:
+                return 0
+            mine = _uid_query(self._client.collection_group("runs"), uid).stream(transaction=txn)
+            open_runs = [(rs.reference, rs.to_dict() or {}) for rs in mine]
+            open_runs = [(ref, d) for ref, d in open_runs if not d.get("released")]
+            states = {}
+            for ref, _ in open_runs:
+                parent = ref.parent.parent  # sessions/{sid}
+                if parent.id not in states:
+                    states[parent.id] = (parent.get(transaction=txn).to_dict() or {}).get("state")
+            live, leaked = 0, []
+            for ref, d in open_runs:
+                state = states[ref.parent.parent.id]
+                if state == "deleting" or (
+                    state == "running" and d.get("status") in ("pending", "running")
+                ):
+                    live += 1  # a delete in progress releases its own runs
+                else:
+                    leaked.append((ref, d))
+            for ref, d in leaked:
+                txn.update(ref, {"released": True, "unit_kept": d.get("counted", True)})
+            if held > live:
+                txn.set(user_ref, {"active_runs": live}, merge=True)
+            return max(0, held - live)
+
+        return self._contended(txn_fn, uid)
+
+    def list_sessions_stuck(self, state: str, before: datetime, limit: int) -> list[SessionDoc]:
+        q = (
+            self._client.collection("sessions")
+            .where(filter=FieldFilter("state", "==", state))
+            .where(filter=FieldFilter("stage_started_at", "<", before))
+            .order_by("stage_started_at")
+            .limit(limit)
+        )  # composite index: firestore.indexes.json (state, stage_started_at)
+        return [_load(SessionDoc, snap) for snap in q.stream()]
+
+    def list_uids_with_active_runs(self, limit: int) -> list[str]:
+        q = self._client.collection("users").where(filter=FieldFilter("active_runs", ">", 0))
+        return [snap.id for snap in q.limit(limit).stream()]
 
     def delete_session(self, uid: str, sid: str) -> bool:
         sref, ssnap = self._owned_session(uid, sid, missing_ok=True)

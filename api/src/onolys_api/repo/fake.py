@@ -329,6 +329,7 @@ class FakeRepo:
         before: datetime,
         error: SessionError | None,
         to: str = "failed",
+        release_runs: bool = False,
     ) -> bool:
         with self._claim_lock:  # the fake's "transaction"
             sess = self._owned(f"sessions/{sid}", uid)
@@ -337,6 +338,16 @@ class FakeRepo:
             if sess.get("state") != state or started >= before:
                 return False
             now = utcnow()
+            if release_runs:
+                for rid, run in self._children(sid, "runs"):
+                    if run.get("released"):
+                        continue
+                    path = f"sessions/{sid}/runs/{rid}"
+                    if run.get("status") not in ("done", "failed"):
+                        run = {**run, "status": "failed", "ended": now, "error": "run_failed"}
+                        self._put(path, run)
+                    # a crash is a system failure: refund (a finished run is a success: none)
+                    self._release_run_locked(uid, path, run, run.get("status") != "done", None)
             sess.update(state=to, error=error.model_dump() if error else None, updated_at=now)
             if error and error.step and error.step in (sess.get("steps") or {}):
                 for k, v in (("status", "failed"), ("ended", now), ("error", error.code)):
@@ -352,6 +363,52 @@ class FakeRepo:
             self._put(f"session_status/{sid}", status)
             self._record_status(uid, sid)
             return True
+
+    def reconcile_active_runs(self, uid: str) -> int:
+        with self._claim_lock:  # the fake's "transaction"
+            user = self._get(f"users/{uid}") or {}
+            live, leaked = 0, []
+            for path, d in self._docs.items():
+                parts = path.split("/")
+                if len(parts) != 4 or parts[:1] != ["sessions"] or parts[2] != "runs":
+                    continue
+                if d.get("uid") != uid or d.get("released"):
+                    continue
+                state = (self._docs.get(f"sessions/{parts[1]}") or {}).get("state")
+                if state == "deleting" or (
+                    state == "running" and d.get("status") in ("pending", "running")
+                ):
+                    live += 1  # a delete in progress releases its own runs
+                else:
+                    leaked.append((path, d))
+            for path, d in leaked:
+                self._put(path, {**d, "released": True, "unit_kept": d.get("counted", True)})
+            held = user.get("active_runs", 0)
+            if held > live:
+                self._put(f"users/{uid}", {**user, "active_runs": live})
+            return max(0, held - live)
+
+    def list_sessions_stuck(self, state: str, before: datetime, limit: int) -> list[SessionDoc]:
+        found = sorted(
+            (
+                (d.get("stage_started_at") or d["updated_at"], p.removeprefix("sessions/"), d)
+                for p, d in self._docs.items()
+                if p.count("/") == 1 and p.startswith("sessions/") and d.get("state") == state
+            ),
+            key=lambda t: (t[0], t[1]),
+        )
+        return [
+            self._load(SessionDoc, sid, copy.deepcopy(d))
+            for at, sid, d in found
+            if at < before
+        ][:limit]
+
+    def list_uids_with_active_runs(self, limit: int) -> list[str]:
+        return sorted(
+            p.removeprefix("users/")
+            for p, d in self._docs.items()
+            if p.count("/") == 1 and p.startswith("users/") and d.get("active_runs", 0) > 0
+        )[:limit]
 
     def delete_session(self, uid: str, sid: str) -> bool:
         s = self._owned(f"sessions/{sid}", uid, missing_ok=True)

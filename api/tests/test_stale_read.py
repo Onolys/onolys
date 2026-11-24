@@ -72,10 +72,10 @@ async def test_read_past_cap_plus_margin_fails_it(client, repo, clock):
     clock.now = T0 + timedelta(seconds=600 + STALE_MARGIN_S + 1)
     body = (await get(client)).json()
     assert body["status"] == "failed"
-    assert body["error"] == {"code": "transcription_failed"}
+    assert body["error"] == {"code": "deadline_exceeded"}  # LM-1: a lost task is retryable
     s, st = repo.get_session("alice", S1), repo.get_status("alice", S1)
     assert (s.state, s.steps["transcribe"].status) == ("failed", "failed")
-    assert (st.state, st.error_code) == ("failed", "transcription_failed")  # the web listener
+    assert (st.state, st.error_code) == ("failed", "deadline_exceeded")  # the web listener
 
 
 async def test_second_read_is_idempotent(client, repo, clock):
@@ -113,7 +113,7 @@ async def test_stuck_validating_is_failed(client, repo, clock):
     seed(repo, state="validating")
     clock.now = T0 + timedelta(hours=1)
     body = (await get(client)).json()
-    assert body["status"] == "failed" and body["error"] == {"code": "internal_error"}
+    assert body["status"] == "failed" and body["error"] == {"code": "deadline_exceeded"}
 
 
 async def test_stuck_running_is_failed_and_releases_the_slot(client, repo, clock):
@@ -123,7 +123,7 @@ async def test_stuck_running_is_failed_and_releases_the_slot(client, repo, clock
                                                 status="running", cap_date="2026-01-01"))  # fmt: skip
     clock.now = T0 + timedelta(hours=1)
     body = (await get(client)).json()
-    assert body["status"] == "failed" and body["error"] == {"code": "run_failed"}
+    assert body["status"] == "failed" and body["error"] == {"code": "deadline_exceeded"}
     run = repo.get_run("alice", S1, "r1")
     assert (run.status, run.released) == ("failed", True)
 
@@ -134,15 +134,12 @@ async def test_worker_crash_refunds_the_unit(client, repo, clock, monkeypatch):
     repo.create_run("alice", S1, "r1", RunDoc(uid="alice", session_id=S1, run_id="r1",
                                                 status="running", cap_date="2026-01-01",
                                                 llm_started=True))  # fmt: skip
-    calls = []
-    orig = repo.release_run_slot
-    monkeypatch.setattr(
-        repo, "release_run_slot",
-        lambda uid, sid, rid, refund, date: calls.append(refund) or orig(uid, sid, rid, refund, date),
-    )  # fmt: skip
+    repo.add_usage("alice", "2026-01-01", runs=1)  # the unit the run spent
     clock.now = T0 + timedelta(hours=1)
     await get(client)
-    assert calls == [True]
+    run = repo.get_run("alice", S1, "r1")
+    assert (run.released, run.unit_kept) == (True, False)  # refunded, in the failing transaction
+    assert repo.get_usage("alice", "2026-01-01").runs == 0
 
 
 async def test_later_writes_do_not_delay_the_stale_cutoff(client, repo, clock):
@@ -160,10 +157,10 @@ async def test_a_poll_that_just_finished_wins_the_race(client, repo, clock, monk
     clock.now = T0 + timedelta(seconds=900)
     real = repo.fail_stale_session
 
-    def racing(uid, sid, state, before, error):
+    def racing(uid, sid, state, before, error, **kw):
         repo.update_session(uid, sid, {"state": "awaiting_input"},
                             status={"state": "awaiting_input"})  # fmt: skip
-        return real(uid, sid, state, before, error)
+        return real(uid, sid, state, before, error, **kw)
 
     monkeypatch.setattr(repo, "fail_stale_session", racing)
     body = (await get(client)).json()
@@ -180,7 +177,7 @@ async def test_chain_that_never_started_is_failed_too(client, repo, clock):
     )  # fmt: skip
     clock.now = T0 + timedelta(seconds=1200 + STALE_MARGIN_S + 1)
     body = (await get(client)).json()
-    assert body["status"] == "failed" and body["error"] == {"code": "transcription_failed"}
+    assert body["status"] == "failed" and body["error"] == {"code": "deadline_exceeded"}
 
 
 async def test_list_fails_stale_items_too(client, repo, clock):
@@ -190,7 +187,7 @@ async def test_list_fails_stale_items_too(client, repo, clock):
     items = {i["id"]: i for i in (await client.get("/v1/sessions", headers=A)).json()["items"]}
     assert (items["old"]["status"], items["old"]["error_code"]) == (
         "failed",
-        "transcription_failed",
+        "deadline_exceeded",
     )
     assert items["new"]["status"] == "transcribing"
     assert repo.get_session("alice", "old").state == "failed"

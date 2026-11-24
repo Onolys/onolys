@@ -1,7 +1,7 @@
 """Task queue (R5): Cloud Tasks in the cloud, an in-memory queue for SERVICE_MODE=combined.
 
 Task names make enqueue idempotent inside Cloud Tasks' dedup window: `{sid}-validate`,
-`{sid}-transcribe`, `{sid}-poll-{n}`, `{run_id}-run`, `{sid}-delete`,
+`{sid}-transcribe`, `{sid}-poll-{n}`, `{run_id}-run`, `{sid}-delete[-{epoch_s}]`,
 `{sid}-interview-sweep[-{n}]` (`sid` holds the interview id there). A user-visible retry of a
 step adds `-r{retry}` (validate, transcribe, polls) so Cloud Tasks does not drop it as a repeat.
 The payload carries the request id (never any text).
@@ -36,7 +36,7 @@ class TaskPayload(BaseModel):
     uid: str
     sid: str
     run_id: str | None = None
-    n: int | None = None  # poll sequence number
+    n: int | None = None  # poll sequence number; delete: the enqueue time (epoch s)
     request_id: str | None = None
     retry: int = 0  # the session's `retry_count` when a user-visible retry enqueued it (R4)
 
@@ -55,6 +55,8 @@ def task_name(p: TaskPayload) -> str:
         return f"{p.sid}-poll-{p.n}{suffix}"
     if p.kind == "interview-sweep" and p.n:
         return f"{p.sid}-interview-sweep-{p.n}"  # a re-check: the first sweep's name is spent
+    if p.kind == "delete" and p.n:
+        return f"{p.sid}-delete-{p.n}"  # a repeated DELETE: the first task's name is spent (M-1)
     return f"{p.sid}-{p.kind}{suffix}"
 
 
