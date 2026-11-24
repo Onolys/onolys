@@ -324,160 +324,116 @@ describe("session page: upload incomplete (D4)", () => {
   });
 });
 
-describe("session page: error cards", () => {
-  const UPLOAD_NEW = [
+describe("session page: failure cards (PRD R6)", () => {
+  const withKind = (sid: string, code: string, extra: Record<string, unknown>): SessionStatusDoc =>
+    ({ ...failedDoc(sid, code), ...extra }) as SessionStatusDoc;
+  const show = async (extra: Record<string, unknown>, code = "upstream_unavailable") => {
+    const sid = create();
+    open(sid);
+    await ready();
+    act(() => mockEmitter.emit(sid, withKind(sid, code, extra)));
+    return { sid, card: await screen.findByRole("alert") };
+  };
+
+  it("transient with retries left: message, not-counted sentence, Reference, disabled Retry (5)", async () => {
+    const { sid, card } = await show({ error_kind: "transient", retries_left: 2, counted: false });
+    expect(card).toHaveTextContent(/busy right now/i);
+    expect(card).toHaveTextContent("This did not count toward your limit.");
+    expect(card).toHaveTextContent(`Reference: ${sid}`);
+    expect(within(card).getByRole("button", { name: "Retry (5)" })).toHaveAttribute("aria-disabled", "true");
+    expect(within(card).queryByRole("link", { name: /Start a new session|Upload a different file/ })).not.toBeInTheDocument();
+  });
+
+  it("Retry enables after 5 s and POSTs /sessions/{id}/retry", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      let posts = 0;
+      server.use(
+        http.post("*/v1/sessions/:id/retry", () => {
+          posts += 1;
+          return HttpResponse.json({ session_id: "x" }, { status: 202 });
+        }),
+      );
+      const { card } = await show({ error_kind: "transient", retries_left: 1 });
+      await act(async () => void vi.advanceTimersByTime(5000));
+      const btn = within(card).getByRole("button", { name: "Retry" });
+      await act(async () => btn.click());
+      await waitFor(() => expect(posts).toBe(1));
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("transient at retries_left=0: several-tries copy and a new-session CTA, no Retry", async () => {
+    const { sid, card } = await show({ error_kind: "transient", retries_left: 0 });
+    expect(card).toHaveTextContent("We couldn't finish this after several tries. Start a new session.");
+    expect(card).toHaveTextContent(`Reference: ${sid}`);
+    expect(within(card).getByRole("link", { name: "Start a new session" })).toHaveAttribute("href", "/sessions/new");
+    expect(within(card).queryByRole("button", { name: /Retry/ })).not.toBeInTheDocument();
+  });
+
+  it("permanent_internal: our-side copy, new-session CTA, no Retry", async () => {
+    const { sid, card } = await show({ error_kind: "permanent_internal", retries_left: 0 }, "internal_error");
+    expect(card).toHaveTextContent(
+      "Something went wrong on our side. This did not count toward your limit. Please start a new session.",
+    );
+    expect(card).toHaveTextContent(`Reference: ${sid}`);
+    expect(within(card).getByRole("link", { name: "Start a new session" })).toBeInTheDocument();
+    expect(within(card).queryByRole("button", { name: /Retry/ })).not.toBeInTheDocument();
+  });
+
+  it.each([
     ["unsupported_audio", /can't use this file type/i],
-    ["audio_too_long", /longer than 20 minutes/i],
-    ["audio_too_large", /over 300 MB/i],
     ["audio_unreadable", /couldn't read this audio file/i],
     ["no_speech", /couldn't hear enough speech in this recording/i],
     ["speakers_not_separated", /couldn't tell the two speakers apart in this recording/i],
     ["transcription_failed", /Transcription didn't finish/i],
-  ] as const;
-  const TRY_AGAIN = [
-    ["rating_invalid", /needs a change/i],
-    ["upstream_unavailable", /busy right now/i],
-    ["daily_cap_reached", /reached today's limit/i],
-    ["concurrent_runs", /already have a rating running/i],
-    ["email_unverified", /verify your email/i],
-    ["invalid_state", /isn't possible at this stage/i],
-    ["rate_limited", /a little fast/i],
-    ["internal_error", /something went wrong/i],
-    ["some_new_code", /something went wrong/i],
-  ] as const;
-
-  it.each(UPLOAD_NEW)("%s: message, reference id and a new-upload recovery", async (code, message) => {
-    const sid = create();
-    open(sid);
-    await ready();
-    act(() => mockEmitter.emit(sid, { ...failedDoc(sid, code), transcript_ready: false, speaker_confirmed: false, rating_submitted: false }));
-    const card = await screen.findByRole("alert");
+  ] as const)("user_file %s: per-code text, Reference, Upload a different file", async (code, message) => {
+    const { sid, card } = await show({ error_kind: "user_file", retries_left: 0, counted: false }, code);
     expect(card).toHaveTextContent(message);
     expect(card).toHaveTextContent(`Reference: ${sid}`);
     expect(within(card).getByRole("link", { name: "Upload a different file" })).toHaveAttribute(
       "href",
       `/sessions/new?from=${sid}`,
     );
-    expect(within(card).queryByRole("button", { name: "Try again" })).not.toBeInTheDocument();
+    expect(card).not.toHaveTextContent("counted toward your limit");
+    expect(within(card).queryByRole("button", { name: /Retry/ })).not.toBeInTheDocument();
   });
 
-  it.each(TRY_AGAIN)("%s: message, reference id and Try again", async (code, message) => {
-    const sid = create();
-    open(sid);
-    await ready();
-    act(() => mockEmitter.emit(sid, failedDoc(sid, code)));
-    const card = await screen.findByRole("alert");
-    expect(card).toHaveTextContent(message);
+  it("user_file with counted=true appends the counted sentence", async () => {
+    const { card } = await show({ error_kind: "user_file", retries_left: 0, counted: true }, "no_speech");
+    expect(card).toHaveTextContent("This counted toward your limit.");
+  });
+
+  it("unknown code and no kind falls back to permanent_internal copy", async () => {
+    const { sid, card } = await show({}, "some_new_code");
+    expect(card).toHaveTextContent(/on our side/);
     expect(card).toHaveTextContent(`Reference: ${sid}`);
-    expect(within(card).getByRole("button", { name: "Try again" })).toBeEnabled();
-    expect(within(card).queryByRole("link", { name: "Upload a different file" })).not.toBeInTheDocument();
+    expect(within(card).queryByRole("button", { name: /Retry/ })).not.toBeInTheDocument();
   });
 
-  it.each(["internal_error", "upstream_unavailable"])("%s before a transcript offers a new upload, not Try again (BH2)", async (code) => {
-    const sid = create();
-    open(sid);
-    await ready();
-    act(() => mockEmitter.emit(sid, { ...failedDoc(sid, code), transcript_ready: false, speaker_confirmed: false, rating_submitted: false }));
-    const card = await screen.findByRole("alert");
-    expect(within(card).getByRole("link", { name: "Upload a different file" })).toBeInTheDocument();
-    expect(within(card).queryByRole("button", { name: "Try again" })).not.toBeInTheDocument();
-  });
-
-  it("Try again starts a new run and the timeline moves on", async () => {
-    const user = userEvent.setup();
-    const sid = create("fail-code");
-    toAwaiting(sid);
-    mockBackend.confirmSpeaker(UID, sid, "spk_0");
-    mockBackend.putRating(UID, sid, { final: true, no_rating: true, card: { change_goal: "g" } });
-    mockBackend.settle(sid);
-    open(sid);
-    const card = await screen.findByRole("alert");
-    expect(card).toHaveTextContent(/something went wrong/i);
-    await user.click(within(card).getByRole("button", { name: "Try again" }));
-    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Coding the session"));
-    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
-  });
-
-  it("keeps Try again locked after a successful POST until the session state changes (W15)", async () => {
-    const user = userEvent.setup();
-    const sid = create();
-    open(sid);
-    await ready();
-    act(() => mockEmitter.emit(sid, failedDoc(sid, "internal_error")));
-    let posts = 0;
-    server.use(
-      http.post("*/v1/sessions/:id/runs", () => {
-        posts += 1;
-        return HttpResponse.json({ session_id: sid }, { status: 202 });
-      }),
-    );
-    const btn = await screen.findByRole("button", { name: "Try again" });
-    await user.click(btn);
-    await waitFor(() => expect(posts).toBe(1));
-    await waitFor(() => expect(btn).toBeDisabled());
-    await user.click(btn);
-    expect(posts).toBe(1);
-  });
-
-  it("shows the API's message and request id when Try again itself fails", async () => {
-    const user = userEvent.setup();
-    const sid = create();
-    open(sid);
-    await ready();
-    act(() => mockEmitter.emit(sid, failedDoc(sid, "internal_error")));
-    server.use(
-      http.post("*/v1/sessions/:id/runs", () =>
-        HttpResponse.json(
-          {
-            schema_version: "0.0.1",
-            status: 503,
-            message: "x",
-            details: [{ code: "upstream_unavailable", message: "x" }],
-            request_id: "req_abc123",
-          },
-          { status: 503 },
+  it("shows the API's message when Retry itself fails", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      server.use(
+        http.post("*/v1/sessions/:id/retry", () =>
+          HttpResponse.json(
+            { schema_version: "0.0.1", status: 409, message: "x", details: [{ code: "invalid_state", message: "x" }], request_id: "req_abc123" },
+            { status: 409 },
+          ),
         ),
-      ),
-    );
-    await user.click(await screen.findByRole("button", { name: "Try again" }));
-    const alerts = await screen.findAllByRole("alert");
-    const text = alerts.map((a) => a.textContent).join(" ");
-    expect(text).toMatch(/busy right now/i);
-    expect(text).toContain("Reference: req_abc123");
-  });
-
-  it("cap reached at auto-start shows the limit message with Start, and Start runs", async () => {
-    const user = userEvent.setup();
-    const sid = create("cap-held");
-    toAwaiting(sid);
-    mockBackend.confirmSpeaker(UID, sid, "spk_0");
-    mockBackend.putRating(UID, sid, { final: true, no_rating: true, card: { change_goal: "g" } });
-    open(sid);
-    const status = await ready();
-    await waitFor(() => expect(status).toHaveTextContent(/You've reached today's limit\. You can start the rating after .+\./));
-    await user.click(screen.getByRole("button", { name: "Start" }));
-    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Coding the session"));
-  });
-
-  it("disables Try again and Start with the reset time when today's runs are used up", async () => {
-    const sid = create("cap-held");
-    toAwaiting(sid);
-    mockBackend.confirmSpeaker(UID, sid, "spk_0");
-    mockBackend.putRating(UID, sid, { final: true, no_rating: true, card: { change_goal: "g" } });
-    mockBackend.configure({ caps: { eval: { day: 1 } } });
-    const other = create();
-    toAwaiting(other);
-    mockBackend.confirmSpeaker(UID, other, "spk_0");
-    mockBackend.putRating(UID, other, { final: true, no_rating: true, card: { change_goal: "g" } }); // uses the one run
-    open(sid);
-    const start = await screen.findByRole("button", { name: "Start" });
-    await waitFor(() => expect(start).toBeDisabled());
-    expect(screen.getByRole("status")).toHaveTextContent(/start the rating after/i);
-
-    act(() => mockEmitter.emit(sid, failedDoc(sid, "internal_error")));
-    const run = await screen.findByRole("button", { name: "Try again" });
-    await waitFor(() => expect(run).toBeDisabled());
-    expect(screen.getByRole("alert")).toHaveTextContent(/after .+/i);
+      );
+      const { card } = await show({ error_kind: "transient", retries_left: 1 });
+      await act(async () => void vi.advanceTimersByTime(5000));
+      await act(async () => within(card).getByRole("button", { name: "Retry" }).click());
+      await waitFor(() => {
+        const text = screen.getAllByRole("alert").map((a) => a.textContent).join(" ");
+        expect(text).toMatch(/isn't possible at this stage/i);
+        expect(text).toContain("Reference: req_abc123");
+      });
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 
@@ -582,61 +538,6 @@ describe("session page: start held by an active run (review R2)", () => {
     );
     expect(screen.getByRole("status")).not.toHaveTextContent(/limit|start the rating after/i);
     expect(await screen.findByRole("button", { name: "Start" })).toBeEnabled();
-  });
-});
-
-describe("session page: Try again after a failed free interview run (review R1)", () => {
-  const failedAtCap = (freeRun: boolean) => {
-    const sid = create();
-    toAwaiting(sid);
-    mockBackend.configure({ caps: { eval: { day: 0 } } });
-    server.use(
-      http.get("*/v1/sessions/:id", ({ params }) =>
-        HttpResponse.json({
-          ...mockBackend.getSession(UID, String(params.id)),
-          interview_id: "iv1",
-          free_run: freeRun,
-        }),
-      ),
-    );
-    return sid;
-  };
-
-  it("keeps Try again enabled at a full eval cap when the failed run was free", async () => {
-    const sid = failedAtCap(true);
-    open(sid);
-    await ready();
-    act(() => mockEmitter.emit(sid, failedDoc(sid, "internal_error")));
-    const run = await screen.findByRole("button", { name: "Try again" });
-    await waitFor(() => expect(getCalls.length).toBeGreaterThan(0)); // the detail (free_run) loads
-    await waitFor(() => expect(run).toBeEnabled());
-    expect(screen.getByRole("alert")).not.toHaveTextContent(/reached today's limit/i);
-  });
-
-  it("still disables Try again at a full eval cap when the interview's free run was voided", async () => {
-    const sid = failedAtCap(false);
-    open(sid);
-    await ready();
-    act(() => mockEmitter.emit(sid, failedDoc(sid, "internal_error")));
-    const run = await screen.findByRole("button", { name: "Try again" });
-    await waitFor(() => expect(getCalls.length).toBeGreaterThan(0));
-    await waitFor(() => expect(run).toBeDisabled());
-  });
-});
-
-describe("session page: period-aware caps", () => {
-  it.each([
-    [{ eval: { day: 0 } }, /reached today's limit/i],
-  ] as const)("disables Try again with the matching message for caps %j", async (caps, message) => {
-    const sid = create();
-    toAwaiting(sid);
-    mockBackend.configure({ caps });
-    open(sid);
-    await ready();
-    act(() => mockEmitter.emit(sid, failedDoc(sid, "internal_error")));
-    const run = await screen.findByRole("button", { name: "Try again" });
-    await waitFor(() => expect(run).toBeDisabled());
-    expect(screen.getByRole("alert")).toHaveTextContent(message);
   });
 });
 

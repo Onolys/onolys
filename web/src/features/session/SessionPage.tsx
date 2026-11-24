@@ -8,7 +8,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import { unwrap } from "../../api/client";
-import { describeError, failureAction, messageForCode } from "../../api/errors";
+import { describeError, failureView } from "../../api/errors";
 import type { SessionStatusDoc } from "../../api/statusListener";
 import { useApiClient } from "../../auth/useApiClient";
 import { ACTIONS, H1, LINK, LINK_BTN, NOTE, PAGE } from "../../components/classes";
@@ -18,6 +18,7 @@ import { blockingPeriod, formatBlockingReset } from "../usage/usage";
 import { USAGE_KEY, useUsage } from "../usage/useUsage";
 import { DeleteDialog } from "./DeleteDialog";
 import { ErrorCard } from "./ErrorCard";
+import { RetryButton } from "./RetryButton";
 import { RatingCardSlot, SpeakerGateSlot, UploadSlot } from "./slots";
 import { deriveTimeline } from "./timeline";
 import { useSessionStatus } from "./useSessionStatus";
@@ -58,8 +59,7 @@ function SessionView({ id }: { id: string }) {
   const now = useNow(runStartedAt !== null);
 
   const needsUsage =
-    doc !== null &&
-    (doc.state === "failed" || doc.error_code === "daily_cap_reached");
+    doc !== null && doc.error_code === "daily_cap_reached";
   const usage = useUsage({ enabled: needsUsage });
   const blocking = blockingPeriod(usage.data, "eval");
   const atCap = blocking !== null;
@@ -72,16 +72,12 @@ function SessionView({ id }: { id: string }) {
     doc !== null &&
     doc.state === "awaiting_input" &&
     (doc.error_code === "daily_cap_reached" || doc.error_code === "concurrent_runs");
-  // Try again after a failed FREE run is free too (the rating the interview paid for is owed), so it is
-  // not blocked by the eval cap either: the detail's `free_run` says so.
-  const failed = doc !== null && doc.state === "failed";
   const detail = useQuery({
     queryKey: ["session-detail", id],
-    enabled: firstStartHeld || failed,
+    enabled: firstStartHeld,
     queryFn: async () => unwrap(await client.GET("/sessions/{id}", { params: { path: { id } } })),
   });
   const freeFirstRun = firstStartHeld && Boolean(detail.data?.free_run);
-  const freeRetry = failed && Boolean(detail.data?.free_run);
 
   const run = useMutation({
     mutationFn: async () => unwrap(await client.POST("/sessions/{id}/runs", { params: { path: { id } } })),
@@ -89,10 +85,25 @@ function SessionView({ id }: { id: string }) {
     onError: () => void queryClient.invalidateQueries({ queryKey: USAGE_KEY }),
   });
 
+  // Retry of a failed step (PRD R6). TODO(Task 10): the typed client lacks this path until schema.d.ts is regenerated.
+  const retry = useMutation({
+    mutationFn: async () => {
+      const post = client.POST as unknown as (
+        path: string,
+        init: { params: { path: { id: string } } },
+      ) => Promise<Parameters<typeof unwrap>[0]>;
+      return unwrap(await post("/sessions/{id}/retry", { params: { path: { id } } }));
+    },
+  });
+
   // A successful POST keeps the buttons locked until the status doc moves on (else a second POST races it).
   const { reset: resetRun } = run;
   const docState = doc?.state;
-  useEffect(() => resetRun(), [docState, resetRun]);
+  const { reset: resetRetry } = retry;
+  useEffect(() => {
+    resetRun();
+    resetRetry();
+  }, [docState, resetRun, resetRetry]);
 
   const remove = useMutation({
     mutationFn: async () => {
@@ -129,9 +140,9 @@ function SessionView({ id }: { id: string }) {
   }
 
   const timeline = doc ? deriveTimeline(doc, { resetsAt }) : null;
-  const failureCode = doc?.state === "failed" ? (doc.error_code ?? undefined) : undefined;
+  const failure = doc?.state === "failed" ? failureView(doc) : null;
   const runError = run.error ? describeError(run.error, { resetsAt }) : null;
-  const runLocked = run.isPending || run.isSuccess || (atCap && !freeRetry);
+  const retryError = retry.error ? describeError(retry.error) : null;
 
   return (
     <div className={PAGE}>
@@ -198,23 +209,23 @@ function SessionView({ id }: { id: string }) {
             </div>
           ) : null}
 
-          {doc.state === "failed" ? (
-            <ErrorCard code={failureCode} reference={id} resetsAt={resetsAt}>
-              {failureAction(failureCode, doc.transcript_ready) === "upload_new" ? (
+          {failure ? (
+            <ErrorCard code={doc.error_code ?? undefined} message={failure.message} note={failure.note} reference={id}>
+              {failure.action === "retry" ? (
+                <RetryButton pending={retry.isPending || retry.isSuccess} onRetry={() => retry.mutate()} />
+              ) : failure.action === "upload_different" ? (
                 <Button asChild>
                   <Link to={`/sessions/new?from=${encodeURIComponent(id)}`}>Upload a different file</Link>
                 </Button>
               ) : (
-                <>
-                  <Button type="button" disabled={runLocked} onClick={() => run.mutate()}>
-                    Try again
-                  </Button>
-                  {blocking && !freeRetry ? <span>{messageForCode("daily_cap_reached", { resetsAt })}</span> : null}
-                </>
+                <Button asChild>
+                  <Link to="/sessions/new">Start a new session</Link>
+                </Button>
               )}
             </ErrorCard>
           ) : null}
 
+          {retryError ? <ErrorCard code={retryError.code} reference={retryError.requestId} /> : null}
           {runError ? <ErrorCard code={runError.code} reference={runError.requestId} resetsAt={resetsAt} /> : null}
 
           {doc.state === "created" || doc.state === "uploading" || doc.state === "upload_incomplete" ? <UploadSlot sessionId={id} doc={doc} /> : null}

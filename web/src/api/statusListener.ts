@@ -12,6 +12,10 @@ export interface SessionStatusDoc {
   step: string | null;
   progress: number;
   error_code: string | null;
+  /** TODO(Task 10): regenerate from the OpenAPI schema. Absent on docs written before 03-failure-policy. */
+  error_kind?: "transient" | "permanent_internal" | "user_file" | null;
+  retries_left?: number | null;
+  counted?: boolean | null;
   latest_report_version: number | null;
   updated_at: string;
   transcript_ready: boolean;
