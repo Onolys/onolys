@@ -1,0 +1,682 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Eval compare mockup</title>
+<style>
+:root{--ink:#1f2933;--mute:#5f6b7a;--line:#dde2e8;--bg:#f6f8fa;--card:#fff;--human:#444;
+--A:#0072B2;--B:#E69F00;--C:#009E73;--D:#8E5BB5;--good:#e6f4ec;--warn:#fff7dc}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{font:14px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;color:var(--ink);background:var(--bg);overflow-x:hidden}
+.banner{background:#fff1c2;border-bottom:2px solid #e0b100;padding:8px 14px;font-weight:600;text-align:center}
+.wrap{max-width:1200px;margin:0 auto;padding:12px}
+h1{font-size:20px;margin:6px 0 2px}
+h2{font-size:17px;margin:0 0 6px}
+h3{font-size:15px;margin:14px 0 4px}
+.sub{color:var(--mute);margin:0 0 10px}
+.tabs{display:flex;gap:4px;border-bottom:2px solid var(--line);margin:10px 0 12px;flex-wrap:wrap}
+.tabs button{border:0;background:none;padding:10px 14px;font:inherit;font-weight:600;color:var(--mute);cursor:pointer;border-bottom:3px solid transparent;margin-bottom:-2px}
+.tabs button[aria-selected=true]{color:var(--ink);border-bottom-color:#2b5fd9}
+section.tab{display:none}section.tab.on{display:block}
+.card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:14px;margin-bottom:14px;min-width:0}
+.help{font-size:12.5px;color:var(--mute);margin:8px 0 0;background:#f1f4f8;border-radius:6px;padding:6px 9px}
+.help b{color:var(--ink)}
+.scroll{overflow-x:auto;max-width:100%}
+table{border-collapse:collapse;width:100%}
+th,td{padding:6px 8px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+th{font-size:12px;color:var(--mute);font-weight:600;white-space:nowrap}
+td.n,th.n{text-align:right;font-variant-numeric:tabular-nums}
+.dot{display:inline-block;width:11px;height:11px;border-radius:3px;margin-right:6px;vertical-align:-1px}
+.rank{display:inline-flex;width:22px;height:22px;border-radius:50%;background:#e9edf2;align-items:center;justify-content:center;font-weight:700;font-size:12px;margin-right:6px}
+.rank.r1{background:#f6c945}
+td.best{background:var(--good);font-weight:700;box-shadow:inset 3px 0 0 #2f9e63}
+.verdict{background:#eef5ff;border-color:#b9d0f5}
+.verdict p{margin:4px 0}
+.verdict .big{font-size:16px}
+.grid2{display:grid;grid-template-columns:1.5fr 1fr;gap:14px}
+.grid2>*{min-width:0}
+@media(max-width:900px){.grid2{grid-template-columns:1fr}}
+.hm td,.hm th{padding:4px 6px}
+.hm td.grp{background:#eef1f5;font-weight:700;font-size:12px;color:var(--mute);text-transform:uppercase;letter-spacing:.04em}
+.hm td.cell{text-align:center;font-variant-numeric:tabular-nums;cursor:pointer;border-left:2px solid #fff;min-width:46px}
+.hm td.low{background:#e9e9e9!important;color:#8a8a8a;font-style:italic}
+.trophy{color:#b07d00;font-weight:700;margin-left:3px}
+.legend{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:12px;color:var(--mute);margin-top:8px}
+.legend .bar{width:140px;height:10px;border-radius:5px;background:linear-gradient(90deg,#b5e0c8,#fff3b8,#f2a48a)}
+.sw{display:inline-block;width:14px;height:14px;border-radius:3px;vertical-align:-3px;margin-right:4px}
+.sbar{display:flex;align-items:center;gap:8px;margin:7px 0}
+.sbar .lab{width:96px;font-size:12.5px;flex:none}
+.sbar .trk{flex:1;background:#eef1f5;border-radius:4px;height:20px;position:relative}
+.sbar .fil{height:100%;border-radius:4px}
+.sbar .v{width:28px;text-align:right;font-weight:700;flex:none}
+.foot{font-size:12.5px;color:var(--mute);margin-top:8px}
+.picker{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;padding:8px 10px;background:#fff;border:1px solid var(--line);border-radius:8px;margin-bottom:12px}
+.picker label{display:inline-flex;align-items:center;gap:5px;cursor:pointer;padding:3px 8px;border-radius:14px;border:1px solid var(--line);font-size:13px}
+.picker label.on{background:#f3f6fb;border-color:#9aa7b8}
+.picker .hum{padding:3px 10px;border-radius:14px;background:var(--human);color:#fff;font-size:13px}
+.pb{font:inherit;font-size:12.5px;padding:3px 10px;border:1px solid var(--line);background:#fff;border-radius:14px;cursor:pointer}
+th.sortable{cursor:pointer;text-decoration:underline dotted}
+.cleg{display:flex;flex-wrap:wrap;gap:2px 12px;font-size:12px;margin-bottom:6px}
+.legendrow{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:12.5px;margin-bottom:6px}
+.cg{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.cg>*{min-width:0}
+@media(max-width:900px){.cg{grid-template-columns:1fr}}
+.cw{overflow-x:auto;max-width:100%}
+.cw svg{display:block}
+svg text{font-family:inherit;fill:#33404d}
+.chip{display:inline-block;padding:1px 6px;border-radius:10px;font-size:12px;font-weight:600;border:1.5px solid var(--c,#999);background:#fff;color:var(--ink);white-space:nowrap}
+.chip.h{background:var(--human);border-color:var(--human);color:#fff}
+.chip.bad{background:#fff0e8;border-style:dashed;border-color:#c4501f}
+.chip small{font-weight:500;color:var(--mute);margin-left:3px}
+.mat td,.mat th{padding:3px 5px;text-align:center;font-variant-numeric:tabular-nums;font-size:12.5px;border:1px solid #edf0f3}
+.mat th.rl{text-align:right;white-space:nowrap}
+.mat td.diag{outline:2px solid #2f9e63;outline-offset:-2px;font-weight:700}
+ul.top{margin:6px 0 0;padding-left:18px}
+details{border:1px solid var(--line);border-radius:6px;margin:6px 0;background:#fff}
+details>summary{cursor:pointer;padding:8px 10px;font-weight:600;list-style:none;display:flex;flex-wrap:wrap;gap:4px 10px;align-items:center}
+details>summary::before{content:"\25B8";color:var(--mute)}
+details[open]>summary::before{content:"\25BE"}
+details .body{padding:4px 12px 12px}
+.sn{font-size:12.5px;margin:5px 0;padding:5px 8px;border-left:3px solid var(--c);background:#fafbfc}
+.sn i{color:var(--mute)}
+.fi{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;margin:8px 0}
+.fi select,.fi input{font:inherit}
+.fi label{display:flex;align-items:center;gap:4px;max-width:100%;min-width:0}.fi select{padding:4px 6px;max-width:100%;min-width:0;flex:1}
+.lines{border:1px solid var(--line);border-radius:6px;overflow:hidden}
+.ln{display:grid;grid-template-columns:34px minmax(0,1fr) auto;gap:4px 10px;padding:6px 8px;border-bottom:1px solid #edf0f3;align-items:center;cursor:pointer;background:#fff}
+.ln:hover{background:#f3f7ff}
+.ln.diff{background:#fff7dc}
+.ln.diff:hover{background:#ffefb3}
+.ln.cl{cursor:default;color:#6a7683;background:#fbfbfc}
+.ln .no{color:var(--mute);font-size:12px}
+.ln .spk{font-size:11px;font-weight:700;color:var(--mute);text-transform:uppercase;display:block}
+.ln .lane{display:flex;flex-wrap:wrap;gap:4px;justify-content:flex-end;max-width:360px}
+@media(max-width:700px){.ln{grid-template-columns:28px minmax(0,1fr)}.ln .lane{grid-column:2;justify-content:flex-start;max-width:none}}
+.modal{position:fixed;inset:0;background:rgba(20,28,38,.5);display:none;align-items:center;justify-content:center;padding:12px;z-index:50}
+.modal.on{display:flex}
+.mbox{background:#fff;border-radius:10px;max-width:640px;width:100%;max-height:90vh;overflow:auto;padding:16px}
+.mbox .x{float:right;border:1px solid var(--line);background:#fff;border-radius:6px;padding:2px 10px;font-size:16px;cursor:pointer}
+.mrow{border-top:1px solid var(--line);padding:8px 0}
+#tip{position:fixed;display:none;max-width:280px;background:#1f2933;color:#fff;padding:7px 10px;border-radius:6px;font-size:12.5px;z-index:60;pointer-events:none}
+.gd{font-size:12px}
+.gd td{padding:5px 6px;vertical-align:top}
+.gd .rs{display:block;color:var(--mute);font-size:11.5px;font-style:italic}
+.up{color:#b3541e}.dn{color:#1f6fb0}
+.pill{display:inline-block;background:#e6f4ec;border-radius:10px;padding:0 7px;font-size:12px}
+</style>
+</head>
+<body>
+<div class="banner">Mockup — all sessions, lines and numbers are invented examples.</div>
+<div class="wrap">
+<h1>Compare combos against human coding</h1>
+<p class="sub">MITI 4.2.1 · Human is the reference; "better" means closer to human. <span id="dsinfo"></span></p>
+<div class="tabs" role="tablist">
+<button role="tab" id="tab-overview" aria-selected="true" data-t="overview">1. Overview</button>
+<button role="tab" id="tab-deep" aria-selected="false" data-t="deep">2. Deep dive</button>
+<button role="tab" id="tab-session" aria-selected="false" data-t="session">3. Session / line view</button>
+</div>
+
+<section class="tab on" id="sec-overview">
+<div class="card verdict"><h2>Which combo for prod?</h2><div id="verdict"></div></div>
+<div class="card"><h2>Leaderboard</h2>
+<div class="scroll"><table id="lb"></table></div>
+<p class="help"><b>How to read this:</b> one row per combo. Green cell = best in that column. Rank uses the first five accuracy columns (average of the column ranks); cost and time are shown for the trade-off only.</p></div>
+<div class="grid2">
+<div class="card"><h2>Where is each combo closer to human?</h2>
+<div class="cleg" id="hmleg"></div>
+<div class="scroll"><table class="hm" id="hm"></table></div>
+<div class="legend"><span>Close to human</span><span class="bar"></span><span>Far from human</span><span><span class="trophy">&#9733;</span> closest in row</span><span><span class="sw" style="background:#e9e9e9"></span>too few lines</span></div>
+<p class="help"><b>How to read this:</b> each number is how far the combo is from human on average per session (lines for codes, points for globals, ratio for R:Q, percentage points for %CR). Smaller is better. Tap or hover a cell for the details.</p></div>
+<div class="card"><h2>Strengths</h2><div id="str"></div>
+<p class="help"><b>How to read this:</b> number of heatmap rows where the combo is the closest to human. Rows with too few lines are not counted. Ties count for every tied combo.</p></div>
+</div>
+<p class="foot" id="foot1"></p>
+</section>
+
+<section class="tab" id="sec-deep">
+<div class="picker" id="pk1"></div>
+<div class="legendrow" id="lg1"></div>
+<div class="card"><h2>Globals (1 to 5)</h2>
+<div class="cg" id="globals"></div>
+<p class="help"><b>How to read this:</b> each column of dots is one session. The big dark dot is the human score; coloured dots are each combo's average over its repeats. Dots close to the dark one are good. "Within ±1" is the share of runs that landed within one point of human.</p></div>
+<div class="card"><h2>Counts per code</h2>
+<h3>Total lines coded, all 12 sessions</h3>
+<div class="cw"><div id="gbar"></div></div>
+<p class="help"><b>How to read this:</b> bars are total lines per code (combos are averaged over their repeats). A combo bar much taller or shorter than the dark Human bar means it over- or under-counts that code.</p>
+<h3>Over- or under-counting vs human</h3>
+<div class="cw"><div id="dbar"></div></div>
+<p class="help"><b>How to read this:</b> bars to the right of the centre line = combo coded the behaviour more often than human (over-count); to the left = less often. Short bars are good.</p></div>
+<div class="card"><h2>Per-line agreement</h2>
+<p class="sub">Line by line: did the combo give the same code as the human on the same line?</p>
+<div class="scroll"><table id="prf"></table></div>
+<p class="help"><b>Precision</b> = when the combo says SR, how often the human agrees (combo says SR 10 times, human agrees on 8: 0.80). <b>Recall</b> = of the human's SR lines, how many the combo found (human has 10, combo finds 7: 0.70). <b>F1</b> = one blended number; it drops if either of the other two is low. Each cell shows precision / recall / F1.</p>
+<h3>Confusion matrix</h3>
+<div class="fi"><label>Combo: <select id="cmsel"></select></label></div>
+<div class="scroll"><table class="mat" id="mat"></table></div>
+<ul class="top" id="topc"></ul>
+<p class="help"><b>How to read this:</b> rows = what the human coded, columns = what the combo said. Numbers are average lines per run across all sessions. A green outlined cell on the diagonal is agreement; everything else is a mix-up.</p></div>
+<div class="card"><h2>Reasoning roll-up</h2>
+<div id="roll"></div>
+<p class="help"><b>How to read this:</b> open a code to see how many lines each combo gave it versus human, plus sample reasons the combos wrote (invented examples).</p></div>
+</section>
+
+<section class="tab" id="sec-session">
+<div class="picker" id="pk2"></div>
+<div class="card"><h2>Session and line view</h2>
+<div class="fi">
+<label>Session: <select id="ssel"></select></label>
+<label><input type="checkbox" id="fdiff"> Only disagreements</label>
+<label>Code: <select id="fcode"></select></label>
+<label>Combo differs: <select id="fcombo"></select></label>
+</div>
+<p class="sub" id="ssum"></p>
+<div class="lines" id="lines"></div>
+<p class="help"><b>How to read this:</b> each row is one line of a (fictional) session. Lanes show the human code (dark) and each chosen combo's most common code over its repeats (with more than 5 combos chosen, only the ones that differ are shown). Yellow rows = at least one combo differs from human; dashed orange chip = that combo differs. Small "2/3" = how many repeats agreed. Click a row for reasons.</p></div>
+<div class="card"><h2>Globals for this session</h2>
+<div class="scroll"><table class="gd" id="sg"></table></div>
+<p class="help"><b>How to read this:</b> scores are 1 to 5; combo scores are the average of its repeats, with the difference from human in brackets. The short reason under each is an invented example.</p></div>
+</section>
+</div>
+
+<div class="modal" id="modal" role="dialog" aria-modal="true"><div class="mbox" id="mbox"></div></div>
+<div id="tip"></div>
+
+<script>
+(function(){
+/* ---------- seeded random ---------- */
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;var t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+var rnd=mulberry32(20261124);
+function gauss(){var u=0,v=0;while(!u)u=rnd();while(!v)v=rnd();return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v)}
+function pick(a){return a[Math.floor(rnd()*a.length)]}
+function f(x,d){return (+x).toFixed(d)}
+function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;')}
+
+/* ---------- static definitions ---------- */
+var COMBOS=[
+ {id:'A',name:'Gemini 3.5 Flash · low effort',color:'#0072B2',cost:0.03,time:18},
+ {id:'B',name:'Gemini 3.5 Pro · medium',color:'#E69F00',cost:0.19,time:52},
+ {id:'C',name:'Claude Sonnet · medium',color:'#009E73',cost:0.14,time:41},
+ {id:'D',name:'Gemini 3.5 Flash · high',color:'#8E5BB5',cost:0.07,time:33},
+ {id:'E',name:'Claude Haiku · low',color:'#CC79A7',cost:0.02,time:12},
+ {id:'F',name:'Gemini 3.5 Pro · high',color:'#7A5C2E',cost:0.31,time:85}];
+var NC=6,NS=12,NR=3;
+var CODES=[
+ {s:'GI',ab:'GI',label:'Giving Information',p:.15,alt:[[3,.3],[1,.25],[4,.2],[2,.25]]},
+ {s:'Persuade',ab:'Persuade',label:'Persuade',p:.04,alt:[[0,.45],[2,.35],[9,.1],[3,.1]]},
+ {s:'Persuade w/ Perm',ab:'Pers+Perm',label:'Persuade with Permission',p:.025,alt:[[1,.4],[0,.4],[7,.1],[3,.1]]},
+ {s:'Q',ab:'Q',label:'Question',p:.24,alt:[[7,.5],[0,.2],[4,.3]]},
+ {s:'SR',ab:'SR',label:'Simple Reflection',p:.17,alt:[[5,.55],[3,.25],[0,.2]]},
+ {s:'CR',ab:'CR',label:'Complex Reflection',p:.165,alt:[[4,.7],[0,.1],[3,.2]]},
+ {s:'AF',ab:'AF',label:'Affirm',p:.08,alt:[[4,.3],[5,.3],[0,.2],[8,.2]]},
+ {s:'Seek',ab:'Seek',label:'Seeking Collaboration',p:.06,alt:[[3,.6],[8,.2],[0,.2]]},
+ {s:'Auto',ab:'Auto',label:'Emphasizing Autonomy',p:.055,alt:[[7,.35],[6,.25],[0,.2],[4,.2]]},
+ {s:'Confront',ab:'Confront',label:'Confront',p:.015,alt:[[1,.6],[0,.2],[3,.2]]}];
+var K=CODES.length,QI=3,SRI=4,CRI=5,LOWN=20;
+var GLOB=['Cultivating Change Talk','Softening Sustain Talk','Partnership','Empathy'];
+var GSD=[[.9,.7,.8,.8,.95,.7],[.9,.8,.45,.85,.9,.75],[.12,.8,.9,.9,.8,.8],[.8,.5,.7,.75,.9,.6]]; /* [global][combo] */
+var GBIAS=[[-.1,0,0,.1,-.2,.1],[.2,.1,0,.2,.3,.1],[0,0,-.1,.1,.1,0],[.1,0,-.1,.1,.2,0]];
+var BASEACC=[.74,.88,.77,.76,.68,.82];
+var CODEOFF=[.04,-.12,-.14,.08,0,-.06,0,-.08,-.06,-.12];
+var CROFF=[-.1,-.02,.14,-.08,-.12,-.03];
+var EXTRAQ=[.05,.03,.04,.045,.06,.035];
+var TOPICS=['daily walking','sleep routine','healthy eating','cutting back on screen time','taking medication','a savings plan','cutting back on drinks','stretching exercises','a morning routine','quitting smoking','a study schedule','less sugar'];
+var FAILED={'3-1':1,'8-0':1}; /* D units (session-repeat) */
+
+var TXT=[
+['Here is how the weekly plan works: you set a goal and we check in each visit.','Many people find that {t} gets easier after the first two weeks.','The handout lists three options for {t}.','Our sessions run about thirty minutes, and we start with a quick review.'],
+['You really should start {t} this week; it will help.','The best thing is to just commit to {t} every day, no excuses.','I strongly suggest you drop the other plans and focus on {t}.'],
+['Would it be okay if I shared what has worked for others with {t}?','If you are open to it, one idea is a small reminder for {t}. Is that alright?','May I offer a thought about {t}? You can say no.'],
+['What would be different if {t} went well?','How often has {t} come up this week?','What got in the way last time?','What makes {t} important to you right now?','Who could support you with {t}?','How confident are you about {t}, from one to ten?'],
+['You are finding {t} hard right now.','So {t} has been on your mind.','Some days are better than others.','You tried, and it did not stick.'],
+['Part of you wants to change {t}, and another part worries what it would cost you.','It sounds like {t} matters because it connects to being there for your family.','You are tired of the back and forth, and still hopeful that this time can be different.','Doing {t} would mean admitting things are not under control, and that feels risky.'],
+['You showed real determination sticking with {t} this week.','Coming in today took courage.','It is clear you care about getting {t} right.'],
+['What do you think would work best for you? I would like us to plan {t} together.','Let us figure out the next step for {t} together. What are your thoughts?','How should we use our time today so that it works for you?'],
+['It is up to you whether and how to change {t}; you know your life best.','You get to decide what happens with {t}.','Nobody can make this choice for you, and that includes me.'],
+['That is an excuse. You have never really tried {t}.','You are not serious about {t}, are you?']];
+var CLIENT=['I mean, I want to, but {t} is hard with everything else going on.','Honestly I have not done much about {t} this week.','Some days it goes fine, other days I just skip it.','My family keeps bringing up {t}, which annoys me.','I think I could try a small step.','Yeah, that makes sense.','I am not sure it is worth the effort.','It is hard to say. Maybe.','I did {t} twice and felt better afterwards.'];
+var RAT=[
+['Provides facts or explains the plan without asking for anything.','Offers neutral information about the process.','Educates the client; no advice or push toward change.'],
+['Tries to steer the client toward a specific action without asking first.','Directive advice using "should" language.','Argues for a change; no permission sought.'],
+['Asks permission before offering a suggestion.','Frames advice with "would it be okay", then shares an idea.','Emphasizes choice while gently persuading.'],
+['Open or closed question inviting a client reply.','Seeks information and ends with a question mark.','Prompts the client to elaborate.'],
+['Repeats or lightly rephrases the client\'s words.','Stays close to what was said and adds little new meaning.','Simple mirror of the client\'s statement.'],
+['Adds meaning, feeling or a link beyond the client\'s words.','Infers an underlying value or emotion.','Makes a guess about what the client has not yet said.'],
+['Comments on a strength or effort of the client.','Compliments persistence.','Notes positive intent.'],
+['Invites the client into shared planning.','Asks for the client\'s input on how to proceed together.','Expresses a collaborative stance.'],
+['Stresses the client\'s freedom to choose.','States that the decision belongs to the client.','Acknowledges the client\'s control.'],
+['Disagrees with, blames or criticizes the client.','Dismisses the client\'s view.','Judgmental tone toward the client.']];
+var GREAS=[
+ {up:'read mild client talk as strong change talk',dn:'missed subtle change talk',ok:'noticed the same change-talk moments'},
+ {up:'thought the clinician softened resistance more than they did',dn:'did not credit the reframes',ok:'saw the same softening moments'},
+ {up:'counted shared planning turns generously',dn:'treated planning as clinician-led',ok:'saw the same shared decisions'},
+ {up:'took warmth as accurate understanding',dn:'wanted more reflected feeling',ok:'saw similar understanding of the client'}];
+
+/* ---------- generate data ---------- */
+var ACC=[];
+for(var c=0;c<NC;c++){ACC[c]=[];for(var k=0;k<K;k++){var a=BASEACC[c]+CODEOFF[k]+(k===CRI?CROFF[c]:0);ACC[c][k]=Math.max(.35,Math.min(.97,a))}}
+function drawLab(c,h){
+  if(h!==QI&&rnd()<EXTRAQ[c])return QI;
+  if(rnd()<ACC[c][h])return h;
+  var alt=CODES[h].alt,tot=0,i,w=[];
+  for(i=0;i<alt.length;i++){var x=alt[i][1]*(alt[i][0]===QI?2.4:1);w.push(x);tot+=x}
+  var r=rnd()*tot;for(i=0;i<alt.length;i++){r-=w[i];if(r<=0)return alt[i][0]}
+  return alt[alt.length-1][0];
+}
+function drawHuman(){var r=rnd(),t=0;for(var k=0;k<K;k++){t+=CODES[k].p;if(r<=t)return k}return 0}
+var SESS=[];
+for(var s=0;s<NS;s++){
+  var topic=TOPICS[s],n=30+Math.floor(rnd()*13),lines=[],no=1;
+  for(var i=0;i<n;i++){
+    var h=drawHuman();
+    var tl={no:no++,spk:'Clinician',h:h,text:pick(TXT[h]).replace('{t}',topic),labs:[],maj:[],rat:[]};
+    for(c=0;c<NC;c++){
+      var prim=drawLab(c,h),ls=[];
+      for(var r=0;r<NR;r++){
+        if(c===3&&FAILED[s+'-'+r]){ls.push(null);continue}
+        ls.push(rnd()<.78?prim:drawLab(c,h));
+      }
+      tl.labs.push(ls);
+      var dist={},best=-1,bn=0;
+      ls.forEach(function(L){if(L===null)return;dist[L]=(dist[L]||0)+1});
+      ls.forEach(function(L){if(L!==null&&dist[L]>bn){bn=dist[L];best=L}});
+      tl.maj.push({k:best,n:bn,tot:ls.filter(function(L){return L!==null}).length,dist:dist});
+      tl.rat.push(RAT[best][(tl.no+c)%3]);
+    }
+    lines.push(tl);
+    lines.push({no:no++,spk:'Client',h:null,text:pick(CLIENT).replace('{t}',topic)});
+  }
+  var hg=[];for(var g=0;g<4;g++)hg.push(Math.max(1,Math.min(5,Math.round(3.4+gauss()*.85))));
+  var cg=[];
+  for(c=0;c<NC;c++){
+    var perG=[];
+    for(g=0;g<4;g++){
+      var off=gauss()*GSD[g][c]*.6,units=[];
+      for(r=0;r<NR;r++){
+        if(c===3&&FAILED[s+'-'+r]){units.push(null);continue}
+        units.push(Math.max(1,Math.min(5,Math.round(hg[g]+GBIAS[g][c]+off+gauss()*GSD[g][c]*.6))));
+      }
+      perG.push(units);
+    }
+    cg.push(perG);
+  }
+  SESS.push({id:s+1,topic:topic,lines:lines,hg:hg,cg:cg});
+}
+
+/* ---------- analysis ---------- */
+function mean(a){var t=0,n=0;a.forEach(function(x){if(x!==null&&x!==undefined){t+=x;n++}});return n?t/n:0}
+var H=SESS.map(function(S){var a=new Array(K).fill(0);S.lines.forEach(function(L){if(L.h!==null)a[L.h]++});return a});
+var Htot=new Array(K).fill(0);H.forEach(function(a){a.forEach(function(v,k){Htot[k]+=v})});
+var U=[]; /* U[c][s][r] counts or null */
+for(c=0;c<NC;c++){U[c]=[];for(s=0;s<NS;s++){U[c][s]=[];for(r=0;r<NR;r++){
+  if(c===3&&FAILED[s+'-'+r]){U[c][s][r]=null;continue}
+  var cnt=new Array(K).fill(0);
+  SESS[s].lines.forEach(function(L){if(L.h!==null){cnt[L.labs[c][r]]++}});
+  U[c][s][r]=cnt}}}
+function avgCnt(c,s,k){return mean(U[c][s].map(function(u){return u?u[k]:null}))}
+function rq(cnt){return (cnt[SRI]+cnt[CRI])/Math.max(cnt[QI],1)}
+function pcr(cnt){return 100*cnt[CRI]/Math.max(cnt[SRI]+cnt[CRI],1)}
+var Hrq=H.map(rq),Hpcr=H.map(pcr);
+var ST=[];
+for(c=0;c<NC;c++){
+  var o={miss:[],bias:[],tot:[],conf:[],prf:[],gmiss:[],gwithin:[],gavg:[],gh:[]};
+  for(k=0;k<K;k++){
+    var m=[],b=[],t=0;
+    for(s=0;s<NS;s++){var a=avgCnt(c,s,k);m.push(Math.abs(a-H[s][k]));b.push(a-H[s][k]);t+=a}
+    o.miss.push(mean(m));o.bias.push(mean(b));o.tot.push(t);
+  }
+  o.avgMiss=mean(o.miss);
+  o.conf=[];for(var h2=0;h2<K;h2++)o.conf.push(new Array(K).fill(0));
+  var okc=0,allc=0;
+  SESS.forEach(function(S){S.lines.forEach(function(L){if(L.h===null)return;for(var r=0;r<NR;r++){var q=L.labs[c][r];if(q===null)continue;o.conf[L.h][q]++;allc++;if(q===L.h)okc++}})});
+  o.acc=okc/allc;
+  var fs=[];
+  for(k=0;k<K;k++){
+    var tp=o.conf[k][k],pred=0,real=0;
+    for(var j=0;j<K;j++){pred+=o.conf[j][k];real+=o.conf[k][j]}
+    var P=pred?tp/pred:0,R=real?tp/real:0,F=(P+R)?2*P*R/(P+R):0;
+    o.prf.push({p:P,r:R,f:F});fs.push(F);
+  }
+  o.macroF1=mean(fs);
+  /* globals */
+  var wi=0,wn=0;
+  for(var g=0;g<4;g++){
+    var gm=[],ga=[],gw=0,gn=0;
+    for(s=0;s<NS;s++){
+      var av=mean(SESS[s].cg[c][g]);ga.push(av);gm.push(Math.abs(av-SESS[s].hg[g]));
+      SESS[s].cg[c][g].forEach(function(v){if(v===null)return;gn++;if(Math.abs(v-SESS[s].hg[g])<=1)gw++});
+    }
+    o.gmiss.push(mean(gm));o.gwithin.push(gw/gn);o.gavg.push(ga);wi+=gw;wn+=gn;
+  }
+  o.gwithinAll=wi/wn;
+  var rqm=[],rqb=[],pm=[],pb=[],rqa=[],pa=[];
+  for(s=0;s<NS;s++){
+    var rv=mean(U[c][s].map(function(u){return u?rq(u):null})),pv=mean(U[c][s].map(function(u){return u?pcr(u):null}));
+    rqm.push(Math.abs(rv-Hrq[s]));rqb.push(rv-Hrq[s]);pm.push(Math.abs(pv-Hpcr[s]));pb.push(pv-Hpcr[s]);rqa.push(rv);pa.push(pv);
+  }
+  o.rqMiss=mean(rqm);o.rqAvg=mean(rqa);o.pcrMiss=mean(pm);o.pcrAvg=mean(pa);
+  var fl=0,un=0;for(s=0;s<NS;s++)for(r=0;r<NR;r++){un++;if(U[c][s][r]===null)fl++}
+  o.failed=fl;o.units=un;
+  ST.push(o);
+}
+var HrqAvg=mean(Hrq),HpcrAvg=mean(Hpcr);
+var Hgavg=[0,1,2,3].map(function(g){return mean(SESS.map(function(S){return S.hg[g]}))});
+
+/* heatmap rows */
+var ROWS=[];
+CODES.forEach(function(C,k){ROWS.push({grp:'Behavior codes',label:C.label,short:C.s,kind:'code',k:k,low:Htot[k]<LOWN,
+  vals:ST.map(function(o){return o.miss[k]}),good:.7,bad:3,unit:'lines',d:1,
+  href:mean(H.map(function(a){return a[k]})),cavg:ST.map(function(o){return o.tot[k]/NS})})});
+GLOB.forEach(function(G,g){ROWS.push({grp:'Global scores (1 to 5)',label:G,short:G,kind:'glob',k:g,low:false,
+  vals:ST.map(function(o){return o.gmiss[g]}),good:.3,bad:1,unit:'points',d:2,
+  href:Hgavg[g],cavg:ST.map(function(o){return mean(o.gavg[g])})})});
+ROWS.push({grp:'Summary scores',label:'R:Q ratio (reflections per question)',short:'R:Q',kind:'rq',low:false,vals:ST.map(function(o){return o.rqMiss}),good:.15,bad:.6,unit:'ratio points',d:2,href:HrqAvg,cavg:ST.map(function(o){return o.rqAvg})});
+ROWS.push({grp:'Summary scores',label:'% Complex Reflection',short:'%CR',kind:'pcr',low:false,vals:ST.map(function(o){return o.pcrMiss}),good:4,bad:15,unit:'percentage points',d:1,href:HpcrAvg,cavg:ST.map(function(o){return o.pcrAvg})});
+var WINS=new Array(NC).fill(0);
+ROWS.forEach(function(R){
+  var mn=Math.min.apply(null,R.vals.map(function(v){return +f(v,2)}));
+  R.win=R.vals.map(function(v){return !R.low&&+f(v,2)===mn});
+  if(!R.low)R.win.forEach(function(w,c){if(w)WINS[c]++});
+});
+var MEASURED=ROWS.filter(function(R){return !R.low}).length;
+/* ranking */
+function ranks(vals,asc){var idx=vals.map(function(v,i){return i}).sort(function(a,b){return asc?vals[a]-vals[b]:vals[b]-vals[a]});var r=[];idx.forEach(function(i,p){r[i]=p+1});return r}
+var colMetrics=[
+ ST.map(function(o){return o.avgMiss}),ST.map(function(o){return o.gwithinAll}),ST.map(function(o){return o.acc}),ST.map(function(o){return o.macroF1}),ST.map(function(o){return o.failed})];
+var colAsc=[true,false,false,false,true];
+var rk=colMetrics.map(function(v,i){return ranks(v,colAsc[i])});
+var comp=COMBOS.map(function(x,c){return mean(rk.map(function(r){return r[c]}))});
+var order=COMBOS.map(function(x,c){return c}).sort(function(a,b){return comp[a]-comp[b]||ST[b].macroF1-ST[a].macroF1});
+var RANK=[];order.forEach(function(c,p){RANK[c]=p+1});
+window.MOCK={ST:ST,ROWS:ROWS,WINS:WINS,RANK:RANK,order:order,comp:comp,Htot:Htot};
+
+/* ---------- helpers ---------- */
+function cname(c){return COMBOS[c].id+' · '+COMBOS[c].name}
+function dotc(c){return '<span class="dot" style="background:'+COMBOS[c].color+'"></span>'}
+function chip(c,k,extra,bad){
+  var t=CODES[k].s;
+  return '<span class="chip'+(bad?' bad':'')+'" style="--c:'+COMBOS[c].color+'" title="'+esc(cname(c))+'">'+COMBOS[c].id+'·'+esc(t)+(extra?'<small>'+extra+'</small>':'')+'</span>';
+}
+function heat(v,good,bad){
+  var t=Math.max(0,Math.min(1,(v-good)/(bad-good)));
+  var a=[181,224,200],m=[255,243,184],z=[242,164,138],p,q,u;
+  if(t<.5){p=a;q=m;u=t*2}else{p=m;q=z;u=(t-.5)*2}
+  return 'rgb('+[0,1,2].map(function(i){return Math.round(p[i]+(q[i]-p[i])*u)}).join(',')+')';
+}
+var sel=order.slice(0,3).sort(),cmCombo=order[0],lbSort={i:-1,asc:true};
+
+/* ---------- Overview ---------- */
+function renderOverview(){
+  document.getElementById('dsinfo').textContent='Sample dataset: '+NS+' sessions × '+NR+' repeats, '+NC+' combos.';
+  var w=order[0],o=ST[w],second=order[1];
+  function rowBy(label){return ROWS.filter(function(R){return R.label===label})[0]}
+  function winnersOf(R){var a=[];R.win.forEach(function(x,c){if(x)a.push(COMBOS[c].id)});return a.join(' and ')}
+  var qrow=ROWS[QI],qb=ST.map(function(x){return x.bias[QI]});
+  var allOver=qb.every(function(b){return b>0});
+  var cheapest=ST.map(function(x,c){return c}).sort(function(a,b){return COMBOS[a].cost-COMBOS[b].cost})[0];
+  var failD=ST.map(function(x,c){return x.failed?COMBOS[c].id+' had '+x.failed+' failed run'+(x.failed>1?'s':'')+' out of '+x.units:null}).filter(Boolean).join('; ');
+  var h='<p class="big"><b>Best overall: '+esc(cname(w))+'.</b> Closest to human in '+WINS[w]+' of '+MEASURED+' comparisons ('+(WINS[w]>=WINS[second]+3?'clear lead':'narrow lead')+'), average count miss '+f(o.avgMiss,2)+' lines, line-by-line accuracy '+f(100*o.acc,0)+'%, macro F1 '+f(o.macroF1,2)+'.</p>';
+  h+='<p><b>Where others win:</b> '+winnersOf(rowBy('Partnership'))+' is best on Partnership; '+winnersOf(rowBy('Complex Reflection'))+' is best on Complex Reflection; '+winnersOf(rowBy('Softening Sustain Talk'))+' is best on Softening Sustain Talk.</p>';
+  h+='<p><b>Common weakness:</b> '+(allOver?'every combo over-counts Questions':'Questions are off')+' (by '+f(Math.min.apply(null,qb),1)+' to '+f(Math.max.apply(null,qb),1)+' extra lines per session). '+(failD?'Reliability: '+failD+'.':'')+'</p>';
+  h+='<p><b>Cost trade-off:</b> '+COMBOS[w].id+' costs about $'+f(COMBOS[w].cost,2)+' per session and '+COMBOS[w].time+'s, versus $'+f(COMBOS[cheapest].cost,2)+' for '+COMBOS[cheapest].id+' ('+f(COMBOS[w].cost/COMBOS[cheapest].cost,1)+'x more). Runner-up '+COMBOS[second].id+' is $'+f(COMBOS[second].cost,2)+' with macro F1 '+f(ST[second].macroF1,2)+'.</p>';
+  h+='<p><b>Suggested pick:</b> '+COMBOS[w].id+' for prod; revisit '+COMBOS[second].id+' if cost matters, and add a Question-count check for all combos.</p>';
+  document.getElementById('verdict').innerHTML=h;
+  /* leaderboard */
+  var cols=[
+   {h:'Avg count miss',t:'Average lines per code per session that the combo is off from human. Lower is better.',v:function(c){return ST[c].avgMiss},fmt:function(x){return f(x,2)},best:'min'},
+   {h:'Globals within ±1',t:'Share of global scores within one point of human.',v:function(c){return ST[c].gwithinAll},fmt:function(x){return f(100*x,0)+'%'},best:'max'},
+   {h:'Per-line accuracy',t:'Share of lines with exactly the same code as human.',v:function(c){return ST[c].acc},fmt:function(x){return f(100*x,0)+'%'},best:'max'},
+   {h:'Macro F1',t:'Balance of precision and recall, averaged over the 10 codes.',v:function(c){return ST[c].macroF1},fmt:function(x){return f(x,2)},best:'max'},
+   {h:'Failed runs',t:'Runs (session × repeat) that produced no result.',v:function(c){return ST[c].failed},fmt:function(x,c){return x+' / '+ST[c].units},best:'min'},
+   {h:'Est. cost / session',t:'Invented example cost.',v:function(c){return COMBOS[c].cost},fmt:function(x){return '$'+f(x,2)},best:'min'},
+   {h:'Avg time',t:'Invented example time per session.',v:function(c){return COMBOS[c].time},fmt:function(x){return x+' s'},best:'min'}];
+  var bests=cols.map(function(col){var vs=COMBOS.map(function(x,c){return col.v(c)});return col.best==='min'?Math.min.apply(null,vs):Math.max.apply(null,vs)});
+  var lo=order.slice();if(lbSort.i>=0){lo.sort(function(a,b){var d=cols[lbSort.i].v(a)-cols[lbSort.i].v(b);return lbSort.asc?d:-d})}
+  var t='<tr><th class="sortable" data-s="-1" title="Sort by rank">Combo (rank)</th>'+cols.map(function(c,i){return '<th class="n sortable" data-s="'+i+'" title="'+esc(c.t)+' Click to sort.">'+c.h+(lbSort.i===i?(lbSort.asc?' &#9650;':' &#9660;'):'')+'</th>'}).join('')+'</tr>';
+  lo.forEach(function(c){
+    t+='<tr><td><span class="rank'+(RANK[c]===1?' r1':'')+'">'+RANK[c]+'</span>'+dotc(c)+'<b>'+esc(cname(c))+'</b></td>';
+    cols.forEach(function(col,i){var v=col.v(c);t+='<td class="n'+(Math.abs(v-bests[i])<1e-9?' best':'')+'">'+col.fmt(v,c)+'</td>'});
+    t+='</tr>';
+  });
+  document.getElementById('lb').innerHTML=t;
+  document.getElementById('lb').onclick=function(e){var th=e.target.closest('th.sortable');if(!th)return;var i=+th.dataset.s;if(i<0)lbSort={i:-1,asc:true};else if(lbSort.i===i)lbSort.asc=!lbSort.asc;else lbSort={i:i,asc:cols[i].best==='min'};renderOverview()};
+  /* heatmap */
+  var hm='<tr><th>Row</th>'+COMBOS.map(function(x,c){return '<th style="text-align:center" title="'+esc(cname(c))+'">'+dotc(c)+x.id+'</th>'}).join('')+'</tr>';
+  var last='';
+  ROWS.forEach(function(R,ri){
+    if(R.grp!==last){hm+='<tr><td class="grp" colspan="'+(NC+1)+'">'+R.grp+'</td></tr>';last=R.grp}
+    hm+='<tr><td>'+esc(R.label)+'</td>';
+    R.vals.forEach(function(v,c){
+      var dir=R.cavg[c]-R.href,tip=cname(c)+' on '+R.label+': off from human by '+f(v,R.d)+' '+R.unit+' per session on average (smaller is better). Human average '+f(R.href,R.d)+'; this combo '+f(R.cavg[c],R.d)+' ('+(Math.abs(dir)<.05?'about level':dir>0?'higher':'lower')+').';
+      if(R.low)tip+=' Greyed: only '+Htot[R.k]+' human lines of this code in the whole dataset, so treat with caution.';
+      hm+='<td class="cell'+(R.low?' low':'')+'" data-tip="'+esc(tip)+'" style="background:'+heat(v,R.good,R.bad)+'">'+f(v,R.d)+(R.win[c]?'<span class="trophy" title="closest to human">&#9733;</span>':'')+'</td>';
+    });
+    hm+='</tr>';
+  });
+  document.getElementById('hm').innerHTML=hm;
+  document.getElementById('hmleg').innerHTML=COMBOS.map(function(x,c){return '<span>'+dotc(c)+'<b>'+x.id+'</b> '+esc(x.name)+'</span>'}).join('');
+  /* strengths */
+  var mx=Math.max.apply(null,WINS),s='';
+  order.slice().sort(function(x,y){return WINS[y]-WINS[x]}).forEach(function(c){s+='<div class="sbar"><span class="lab">'+dotc(c)+COMBOS[c].id+' · '+esc(COMBOS[c].name.split(' · ')[0].replace('Gemini 3.5 ','G3.5 '))+'</span><span class="trk"><span class="fil" style="display:block;width:'+(mx?100*WINS[c]/mx:0)+'%;background:'+COMBOS[c].color+'"></span></span><span class="v">'+WINS[c]+'</span></div>'});
+  document.getElementById('str').innerHTML=s+'<div class="foot">out of '+MEASURED+' rows with enough data</div>';
+  var lowRows=ROWS.filter(function(R){return R.low}).map(function(R){return R.short+' ('+Htot[R.k]+')'}).join(', ');
+  document.getElementById('foot1').innerHTML='Sample size: '+NS+' sessions × '+NR+' repeats = '+(NS*NR)+' runs per combo ('+ST.map(function(o,c){return o.failed?COMBOS[c].id+' has '+(o.units-o.failed)+' after '+o.failed+' failed':null}).filter(Boolean).join('; ')+'). Grey cells = fewer than '+LOWN+' human lines of that code in the dataset: '+(lowRows||'none')+'. They get no star.';
+}
+
+/* ---------- pickers ---------- */
+function renderPickers(){
+  ['pk1','pk2'].forEach(function(id){
+    var h='<span class="hum">Human (always on)</span>';
+    COMBOS.forEach(function(x,c){h+='<label class="'+(sel.indexOf(c)>=0?'on':'')+'"><input type="checkbox" data-c="'+c+'"'+(sel.indexOf(c)>=0?' checked':'')+'>'+dotc(c)+esc(cname(c))+'</label>'});
+    document.getElementById(id).innerHTML=h+'<button type="button" class="pb" data-p="top3">Top 3</button><button type="button" class="pb" data-p="all">All</button>';
+  });
+}
+document.addEventListener('click',function(e){var b=e.target.closest&&e.target.closest('.pb');if(!b)return;sel=b.dataset.p==='all'?COMBOS.map(function(x,c){return c}):order.slice(0,3).sort();renderPickers();renderDeep();renderSession()});
+document.addEventListener('change',function(e){
+  var t=e.target;
+  if(t.matches&&t.matches('.picker input')){
+    var c=+t.dataset.c,i=sel.indexOf(c);
+    if(t.checked&&i<0)sel.push(c);else if(!t.checked&&i>=0){if(sel.length===1){t.checked=true;return}sel.splice(i,1)}
+    sel.sort();renderPickers();renderDeep();renderSession();
+  }
+});
+
+/* ---------- Deep dive ---------- */
+function legend(){
+  document.getElementById('lg1').innerHTML='<span><span class="dot" style="background:#444"></span>Human</span>'+sel.map(function(c){return '<span>'+dotc(c)+esc(cname(c))+'</span>'}).join('');
+}
+function dotChart(g){
+  var W=520,Hh=190,L=34,R=10,T=14,B=26,pw=W-L-R,x=function(i){return L+pw*(i+.5)/NS},y=function(v){return T+(5-v)*(Hh-T-B)/4};
+  var s='<svg viewBox="0 0 '+W+' '+Hh+'" width="100%" style="min-width:440px" role="img" aria-label="'+esc(GLOB[g])+' by session">';
+  for(var v=1;v<=5;v++)s+='<line x1="'+L+'" x2="'+(W-R)+'" y1="'+y(v)+'" y2="'+y(v)+'" stroke="#e3e7ec"/><text x="'+(L-8)+'" y="'+(y(v)+4)+'" font-size="11" text-anchor="end">'+v+'</text>';
+  for(var i=0;i<NS;i++){
+    s+='<text x="'+x(i)+'" y="'+(Hh-8)+'" font-size="10.5" text-anchor="middle">S'+(i+1)+'</text>';
+    var n=sel.length;
+    sel.forEach(function(c,j){var av=mean(SESS[i].cg[c][g]),dx=(j-(n-1)/2)*4.5;
+      s+='<circle cx="'+(x(i)+dx)+'" cy="'+y(av)+'" r="3.8" fill="'+COMBOS[c].color+'" stroke="#fff" stroke-width=".8"><title>'+esc(cname(c))+', session '+(i+1)+': '+f(av,1)+' (human '+SESS[i].hg[g]+')</title></circle>'});
+    s+='<rect x="'+(x(i)-5)+'" y="'+(y(SESS[i].hg[g])-5)+'" width="10" height="10" transform="rotate(45 '+x(i)+' '+y(SESS[i].hg[g])+')" fill="none" stroke="#333" stroke-width="2"><title>Human, session '+(i+1)+': '+SESS[i].hg[g]+'</title></rect>';
+  }
+  return s+'</svg>';
+}
+function renderGlobals(){
+  var h='';
+  GLOB.forEach(function(G,g){
+    h+='<div><h3 style="margin-top:0">'+G+'</h3><div class="cw">'+dotChart(g)+'</div><table class="gd"><tr><th>Combo</th><th class="n">Avg miss (points)</th><th class="n">Within ±1</th></tr>';
+    var best=Math.min.apply(null,sel.map(function(c){return +f(ST[c].gmiss[g],2)}));
+    sel.forEach(function(c){h+='<tr><td>'+dotc(c)+COMBOS[c].id+'</td><td class="n'+(+f(ST[c].gmiss[g],2)===best?' best':'')+'">'+f(ST[c].gmiss[g],2)+'</td><td class="n">'+f(100*ST[c].gwithin[g],0)+'%</td></tr>'});
+    h+='</table></div>';
+  });
+  document.getElementById('globals').innerHTML=h;
+}
+function groupedBar(){
+  var W=760,Hh=300,L=44,R=8,T=14,B=44,ser=[{n:'Human',c:'#444',v:Htot}].concat(sel.map(function(c){return {n:cname(c),c:COMBOS[c].color,v:ST[c].tot}}));
+  var mx=Math.max.apply(null,[].concat.apply([],ser.map(function(x){return x.v})));mx=Math.ceil(mx/20)*20;
+  var ph=Hh-T-B,gw=(W-L-R)/K,bw=Math.min(15,(gw-8)/ser.length),y=function(v){return T+ph*(1-v/mx)};
+  var s='<svg viewBox="0 0 '+W+' '+Hh+'" width="100%" style="min-width:600px" role="img" aria-label="Total lines per code">';
+  for(var i=0;i<=4;i++){var v=mx*i/4;s+='<line x1="'+L+'" x2="'+(W-R)+'" y1="'+y(v)+'" y2="'+y(v)+'" stroke="#e3e7ec"/><text x="'+(L-6)+'" y="'+(y(v)+4)+'" font-size="11" text-anchor="end">'+Math.round(v)+'</text>'}
+  CODES.forEach(function(C,k){
+    var x0=L+gw*k+(gw-bw*ser.length)/2;
+    ser.forEach(function(sr,j){s+='<rect x="'+(x0+j*bw)+'" y="'+y(sr.v[k])+'" width="'+(bw-1)+'" height="'+(T+ph-y(sr.v[k]))+'" fill="'+sr.c+'"><title>'+esc(sr.n)+' · '+esc(C.label)+': '+f(sr.v[k],k===0?1:1)+' lines</title></rect>'});
+    s+='<text x="'+(L+gw*(k+.5))+'" y="'+(Hh-B+16)+'" font-size="11" text-anchor="middle">'+esc(C.ab)+'</text>';
+  });
+  return s+'</svg>';
+}
+function divBar(){
+  var W=720,L=96,R=40,rh=sel.length*13+12,T=26,Hh=T+K*rh+8;
+  var mx=0;sel.forEach(function(c){ST[c].tot.forEach(function(t,k){mx=Math.max(mx,Math.abs(t-Htot[k]))})});mx=Math.ceil(mx/5)*5||5;
+  var cx=L+(W-L-R)/2,sc=(W-L-R)/2/mx;
+  var s='<svg viewBox="0 0 '+W+' '+Hh+'" width="100%" style="min-width:560px" role="img" aria-label="Over and under counting per code">';
+  s+='<text x="'+(cx+8)+'" y="12" font-size="11">over-counts &#8594;</text><text x="'+(cx-8)+'" y="12" font-size="11" text-anchor="end">&#8592; under-counts</text>';
+  CODES.forEach(function(C,k){
+    var y0=T+k*rh;
+    if(k%2===0)s+='<rect x="0" y="'+y0+'" width="'+W+'" height="'+rh+'" fill="#f6f8fa"/>';
+    s+='<text x="'+(L-8)+'" y="'+(y0+rh/2+4)+'" font-size="11.5" text-anchor="end">'+esc(C.ab)+'</text>';
+    sel.forEach(function(c,j){
+      var d=ST[c].tot[k]-Htot[k],bx=d>=0?cx:cx+d*sc;
+      s+='<rect x="'+bx+'" y="'+(y0+6+j*13)+'" width="'+Math.abs(d*sc)+'" height="10" fill="'+COMBOS[c].color+'"><title>'+esc(cname(c))+' · '+esc(C.label)+': '+(d>=0?'+':'')+f(d,1)+' lines vs human (total over all sessions)</title></rect>';
+      s+='<text x="'+(d>=0?cx+d*sc+4:cx+d*sc-4)+'" y="'+(y0+15+j*13)+'" font-size="10" text-anchor="'+(d>=0?'start':'end')+'">'+(d>=0?'+':'')+f(d,0)+'</text>';
+    });
+  });
+  s+='<line x1="'+cx+'" x2="'+cx+'" y1="'+T+'" y2="'+(Hh-8)+'" stroke="#444" stroke-width="1.5"/>';
+  return s+'</svg>';
+}
+function renderPRF(){
+  var t='<tr><th>Code</th>'+sel.map(function(c){return '<th class="n">'+dotc(c)+COMBOS[c].id+'<br>P / R / F1</th>'}).join('')+'</tr>';
+  CODES.forEach(function(C,k){
+    var bestF=Math.max.apply(null,sel.map(function(c){return ST[c].prf[k].f}));
+    t+='<tr><td>'+esc(C.label)+(Htot[k]<LOWN?' <span class="pill" style="background:#e9e9e9" title="few human lines">low n</span>':'')+'</td>'+sel.map(function(c){var q=ST[c].prf[k];return '<td class="n'+(q.f===bestF&&Htot[k]>=LOWN&&sel.length>1?' best':'')+'" style="white-space:nowrap">'+f(q.p,2)+' / '+f(q.r,2)+' / <b>'+f(q.f,2)+'</b></td>'}).join('')+'</tr>';
+  });
+  t+='<tr><td><b>Macro F1</b></td>'+sel.map(function(c){return '<td class="n"><b>'+f(ST[c].macroF1,2)+'</b></td>'}).join('')+'</tr>';
+  document.getElementById('prf').innerHTML=t;
+}
+function renderMatrix(){
+  var c=cmCombo,o=ST[c],t='<tr><th></th><th colspan="'+K+'" style="text-align:center">Combo '+COMBOS[c].id+' said &#8594;</th></tr><tr><th class="rl">Human coded &#8595;</th>'+CODES.map(function(C){return '<th title="'+esc(C.label)+'">'+esc(C.ab)+'</th>'}).join('')+'</tr>';
+  var offs=[];
+  for(var h=0;h<K;h++){
+    t+='<tr><th class="rl">'+esc(CODES[h].ab)+'</th>';
+    var rowTot=o.conf[h].reduce(function(a,b){return a+b},0)||1;
+    for(var q=0;q<K;q++){
+      var v=o.conf[h][q]/NR,share=o.conf[h][q]/rowTot,bg=h===q?'rgba(47,158,99,'+(.12+.55*share)+')':'rgba(230,120,50,'+Math.min(.65,share*1.6)+')';
+      if(h!==q)offs.push({h:h,q:q,v:v});
+      t+='<td class="'+(h===q?'diag':'')+'" style="background:'+bg+'" title="Human '+esc(CODES[h].s)+' &#8594; combo '+esc(CODES[q].s)+': '+f(v,1)+' lines per run">'+(v<.5?'&middot;':Math.round(v))+'</td>';
+    }
+    t+='</tr>';
+  }
+  document.getElementById('mat').innerHTML=t;
+  offs.sort(function(a,b){return b.v-a.v});
+  document.getElementById('topc').innerHTML=offs.slice(0,4).map(function(x){return '<li><b>'+COMBOS[c].id+'</b> called about '+Math.round(x.v)+' lines '+esc(CODES[x.q].s)+' that human coded '+esc(CODES[x.h].s)+' (per run, all sessions).</li>'}).join('');
+}
+function renderRoll(){
+  var h='';
+  CODES.forEach(function(C,k){
+    h+='<details><summary><span>'+esc(C.label)+'</span><span class="chip h">Human '+Htot[k]+'</span>'+sel.map(function(c){return '<span class="chip" style="--c:'+COMBOS[c].color+'">'+COMBOS[c].id+' '+f(ST[c].tot[k],0)+'</span>'}).join('')+'</summary><div class="body">';
+    h+='<table class="gd"><tr><th>Combo</th><th class="n">Lines (avg per run)</th><th class="n">vs human</th></tr>';
+    sel.forEach(function(c){var d=ST[c].tot[k]-Htot[k];h+='<tr><td>'+dotc(c)+COMBOS[c].id+'</td><td class="n">'+f(ST[c].tot[k],1)+'</td><td class="n '+(d>0?'up':'dn')+'">'+(d>=0?'+':'')+f(d,1)+'</td></tr>'});
+    h+='</table>';
+    sel.forEach(function(c){
+      var ag=[],dg=[];
+      SESS.forEach(function(S){S.lines.forEach(function(L){if(L.h!==null&&L.maj[c].k===k){(L.h===k?ag:dg).push({S:S,L:L})}})});
+      var chosen=[];
+      if(ag.length)chosen.push(ag[(k*7+c*3)%ag.length]);
+      if(ag.length>1)chosen.push(ag[(k*5+c*11+1)%ag.length]);
+      if(dg.length)chosen.push(dg[(k+c)%dg.length]);
+      h+='<div style="margin-top:8px"><b>'+dotc(c)+esc(cname(c))+'</b>';
+      if(!chosen.length)h+='<div class="sn" style="--c:'+COMBOS[c].color+'"><i>Never gave this code.</i></div>';
+      chosen.forEach(function(x){h+='<div class="sn" style="--c:'+COMBOS[c].color+'">&ldquo;'+esc(x.L.text)+'&rdquo; <i>(session '+x.S.id+', line '+x.L.no+')</i><br>Reason: '+esc(x.L.rat[c])+' <i>'+(x.L.h===k?'Human agrees.':'Human coded '+esc(CODES[x.L.h].s)+'.')+'</i></div>'});
+      h+='</div>';
+    });
+    h+='</div></details>';
+  });
+  document.getElementById('roll').innerHTML=h;
+}
+function renderDeep(){
+  legend();renderGlobals();
+  document.getElementById('gbar').innerHTML=groupedBar();
+  document.getElementById('dbar').innerHTML=divBar();
+  renderPRF();renderMatrix();renderRoll();
+}
+
+/* ---------- Session / line view ---------- */
+var curS=0;
+function setupSession(){
+  document.getElementById('ssel').innerHTML=SESS.map(function(S,i){return '<option value="'+i+'">Session '+S.id+' · '+esc(S.topic)+' (fictional)</option>'}).join('');
+  document.getElementById('fcode').innerHTML='<option value="">All codes</option>'+CODES.map(function(C,k){return '<option value="'+k+'">'+esc(C.label)+'</option>'}).join('');
+  document.getElementById('fcombo').innerHTML='<option value="">Any</option>'+COMBOS.map(function(x,c){return '<option value="'+c+'">'+esc(cname(c))+'</option>'}).join('');
+  ['ssel','fdiff','fcode','fcombo'].forEach(function(id){document.getElementById(id).addEventListener('change',function(){curS=+document.getElementById('ssel').value;renderSession()})});
+}
+function renderSession(){
+  var S=SESS[curS],onlyD=document.getElementById('fdiff').checked,fc=document.getElementById('fcode').value,fcb=document.getElementById('fcombo').value;
+  var html='',nd=0,nt=0,shown=0;
+  S.lines.forEach(function(L,idx){
+    if(L.h===null){
+      if(!onlyD&&fc===''&&fcb===''){html+='<div class="ln cl"><span class="no">'+L.no+'</span><span><span class="spk">Client</span>'+esc(L.text)+'</span><span></span></div>';shown++}
+      return;
+    }
+    nt++;
+    var diffs=sel.filter(function(c){return L.maj[c].k!==L.h}),isD=diffs.length>0;
+    if(isD)nd++;
+    if(onlyD&&!isD)return;
+    if(fc!==''&&!(L.h===+fc||sel.some(function(c){return L.maj[c].k===+fc})))return;
+    if(fcb!==''&&L.maj[+fcb].k===L.h)return;
+    if(fcb!==''&&sel.indexOf(+fcb)<0)return;
+    var lane='<span class="chip h" title="Human">H·'+esc(CODES[L.h].s)+'</span>';
+    var collapse=sel.length>5,agree=0;
+    sel.forEach(function(c){var m=L.maj[c];if(collapse&&m.k===L.h){agree++;return}lane+=chip(c,m.k,m.n<m.tot?m.n+'/'+m.tot:'',m.k!==L.h)});
+    if(collapse)lane+='<span class="chip" style="--c:#bbb" title="combos that match human">'+agree+'/'+sel.length+' match</span>';
+    html+='<div class="ln'+(isD?' diff':'')+'" tabindex="0" role="button" data-i="'+idx+'"><span class="no">'+L.no+'</span><span><span class="spk">Clinician</span>'+esc(L.text)+'</span><span class="lane">'+lane+'</span></div>';
+    shown++;
+  });
+  document.getElementById('lines').innerHTML=html||'<div class="ln cl"><span></span><span>No lines match these filters.</span></div>';
+  document.getElementById('ssum').textContent='Session '+S.id+' · '+esc(S.topic)+' · '+nt+' coded clinician lines; '+nd+' differ from human for at least one chosen combo. All text is fictional.';
+  /* globals */
+  var t='<tr><th>Global</th><th class="n">Human</th>'+sel.map(function(c){return '<th>'+dotc(c)+COMBOS[c].id+'</th>'}).join('')+'</tr>';
+  GLOB.forEach(function(G,g){
+    t+='<tr><td>'+G+'</td><td class="n"><b>'+S.hg[g]+'</b></td>';
+    sel.forEach(function(c){
+      var av=mean(S.cg[c][g]),d=av-S.hg[g],rs=Math.abs(d)<=.34?GREAS[g].ok:(d>0?'scored higher: '+GREAS[g].up:'scored lower: '+GREAS[g].dn);
+      t+='<td><b>'+f(av,1)+'</b> <span class="'+(d>.34?'up':d<-.34?'dn':'')+'">('+(d>=0?'+':'')+f(d,1)+')</span><span class="rs">'+esc(rs)+'</span></td>';
+    });
+    t+='</tr>';
+  });
+  document.getElementById('sg').innerHTML=t;
+}
+document.getElementById('lines').addEventListener('click',function(e){var r=e.target.closest('.ln[data-i]');if(r)openModal(+r.dataset.i)});
+document.getElementById('lines').addEventListener('keydown',function(e){if(e.key==='Enter'||e.key===' '){var r=e.target.closest('.ln[data-i]');if(r){e.preventDefault();openModal(+r.dataset.i)}}});
+function openModal(i){
+  var S=SESS[curS],L=S.lines[i];
+  var h='<button class="x" id="mx" aria-label="Close">&times;</button><h2>Session '+S.id+', line '+L.no+'</h2><p><b>'+L.spk+':</b> &ldquo;'+esc(L.text)+'&rdquo; <i style="color:#5f6b7a">(fictional)</i></p>';
+  h+='<div class="mrow"><span class="chip h">Human</span> coded <b>'+esc(CODES[L.h].label)+'</b></div>';
+  sel.forEach(function(c){
+    var m=L.maj[c],same=m.k===L.h,dist=Object.keys(m.dist).map(function(k){return m.dist[k]+' said '+CODES[k].s}).join(', ');
+    var failed=m.tot<NR?' ('+(NR-m.tot)+' of '+NR+' runs failed)':'';
+    h+='<div class="mrow">'+dotc(c)+'<b>'+esc(cname(c))+'</b>: '+chip(c,m.k,'',!same)+' '+(same?'<span class="pill">matches human</span>':'<span class="pill" style="background:#fde5d8">differs from human</span>')+'<br>Reason: '+esc(L.rat[c])+'<br><span style="color:#5f6b7a">Repeat agreement: '+m.n+'/'+m.tot+' repeats said '+esc(CODES[m.k].s)+(m.n<m.tot?' ('+dist+')':'')+failed+'</span></div>';
+  });
+  document.getElementById('mbox').innerHTML=h;
+  document.getElementById('modal').classList.add('on');
+  document.getElementById('mx').focus();
+  document.getElementById('mx').addEventListener('click',closeModal);
+}
+function closeModal(){document.getElementById('modal').classList.remove('on')}
+document.getElementById('modal').addEventListener('click',function(e){if(e.target.id==='modal')closeModal()});
+document.addEventListener('keydown',function(e){if(e.key==='Escape')closeModal()});
+
+/* ---------- tooltip ---------- */
+var tip=document.getElementById('tip');
+function showTip(el,x,y){tip.textContent=el.dataset.tip;tip.style.display='block';var w=tip.offsetWidth,h=tip.offsetHeight;tip.style.left=Math.max(6,Math.min(innerWidth-w-6,x-w/2))+'px';tip.style.top=(y+14+h>innerHeight?y-h-10:y+14)+'px'}
+document.addEventListener('mouseover',function(e){var el=e.target.closest&&e.target.closest('[data-tip]');if(el)showTip(el,e.clientX,e.clientY);else tip.style.display='none'});
+document.addEventListener('click',function(e){var el=e.target.closest&&e.target.closest('[data-tip]');if(el)showTip(el,e.clientX,e.clientY);else tip.style.display='none'});
+
+/* ---------- tabs & init ---------- */
+document.querySelector('.tabs').addEventListener('click',function(e){
+  var b=e.target.closest('button');if(!b)return;
+  document.querySelectorAll('.tabs button').forEach(function(x){x.setAttribute('aria-selected',x===b)});
+  document.querySelectorAll('section.tab').forEach(function(s){s.classList.toggle('on',s.id==='sec-'+b.dataset.t)});
+});
+document.getElementById('cmsel').innerHTML=COMBOS.map(function(x,c){return '<option value="'+c+'"'+(c===cmCombo?' selected':'')+'>'+esc(cname(c))+'</option>'}).join('');
+document.getElementById('cmsel').addEventListener('change',function(e){cmCombo=+e.target.value;renderMatrix()});
+renderOverview();renderPickers();renderDeep();setupSession();renderSession();
+})();
+</script>
+</body>
+</html>
