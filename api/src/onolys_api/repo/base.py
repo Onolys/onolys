@@ -5,6 +5,7 @@ Every call takes `uid` first. A document that is missing, or owned by another ui
 Sync on purpose: routes/handlers call it from threadpool workers.
 """
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from typing import Any, Literal, Protocol
@@ -42,6 +43,15 @@ class NotFoundError(ApiError):
 class ConflictError(ApiError):
     def __init__(self) -> None:
         super().__init__(409, "Conflict.", [{"code": "conflict", "message": "Conflict."}])
+
+
+# `Repo.transition_session`: pure `(session, status) -> (session_fields, status_fields)` run INSIDE
+# the transaction on the freshly read docs; raise to refuse; None = nothing to write.
+SessionPlan = Callable[
+    [SessionDoc, SessionStatusDoc], "tuple[dict[str, Any], dict[str, Any]] | None"
+]
+# a child doc written in the same transaction: ("transcripts/current", stored dict, exclusive)
+ChildWrite = tuple[str, dict[str, Any], bool]
 
 
 @dataclass
@@ -99,6 +109,25 @@ class Repo(Protocol):
     def update_session(
         self, uid: str, sid: str, fields: dict[str, Any], status: dict[str, Any] | None = None
     ) -> None: ...
+    # ONE transaction (M-10/N1/LM-2): reads the session and its status, runs `plan` on them (it
+    # does the allowed-source check and may raise), then writes session + status and every
+    # `children` doc ("<subcollection>/<id>"; `exclusive` -> ConflictError if it exists). A
+    # concurrent cancel/delete mark is therefore never overwritten. NotFoundError for a foreign,
+    # missing session. The plan may run more than once (txn retry): keep it pure.
+    def transition_session(
+        self, uid: str, sid: str, plan: SessionPlan, children: tuple[ChildWrite, ...] = ()
+    ) -> None: ...
+    # ONE transaction (M-11): publish a finished run. If the report doc `report_id=run_id`
+    # exists it is returned unchanged (nothing written). If the session is `deleting` ->
+    # NotFoundError; if it is not `running` (cancelled, failed, ...) -> None and nothing is
+    # written. Else it writes the report (the version is max+1, assigned in the txn; a large body
+    # goes to a blob first), updates the run with `run_fields`, moves the session with
+    # `plan_for(version)` and releases the run's slot without refund. All or nothing: a report is
+    # visible only together with its run completion and `report_ready`.
+    def publish_report(
+        self, uid: str, sid: str, run_id: str, doc: ReportDoc, run_fields: dict[str, Any],
+        plan_for: Callable[[int], SessionPlan], date: str | None,
+    ) -> ReportDoc | None: ...  # fmt: skip
     def confirm_speaker(
         self, uid: str, sid: str, clinician: str, states: tuple[str, ...]
     ) -> bool: ...
@@ -106,10 +135,14 @@ class Repo(Protocol):
         self, uid: str, limit: int = 20, cursor: str | None = None
     ) -> Page[SessionDoc]: ...
     def delete_session(self, uid: str, sid: str) -> bool: ...
-    # R11: a validation file-check failure is an upload failure. Writes the data-free status stub
-    # (`state=upload_failed`, `error_code`, `expire_at` +7 days), then deletes the session doc and
-    # every subcollection (recordings, runs). NotFoundError if the session is not the caller's,
-    # is gone or is `deleting` (the Delete path owns it). Idempotent for a redelivered task.
+    # R11: a validation file-check failure is an upload failure. ONE transaction writes the
+    # data-free status stub (`state=upload_failed`, `error_code`, `expire_at` +7 days), marks the
+    # session `deleting` with a `discard_code` tombstone (hidden; cancel and every transition
+    # refuse it) and unlinks its interview (back to `ended`, `session_id` cleared) so the unit can
+    # be linked again (M-4). Then it deletes the session doc and every subcollection, but only
+    # while the tombstone is still there. NotFoundError if the session is not the caller's, is
+    # gone or is `deleting` for any other reason (the Delete path owns it); ConflictError if
+    # `cancelled`. Idempotent: a redelivered task resumes the cleanup.
     def discard_failed_upload(self, uid: str, sid: str, code: str) -> None: ...
 
     # One transaction: if the session is still in `state` with `updated_at < before`, set it

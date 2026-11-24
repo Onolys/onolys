@@ -19,6 +19,7 @@ from onolys_api.app import create_app
 from onolys_api.config import Settings
 from onolys_api.rating import validate_rating
 from onolys_api.repo.fake import FakeRepo
+from onolys_api.repo.models import RatingDoc, utcnow
 from onolys_api.routes import rating as rating_routes
 
 pytestmark = pytest.mark.unit
@@ -447,3 +448,26 @@ def test_card_valid_for_web_schema_is_accepted_by_api_and_engine():
     bad = {**c, "globals": {"nope": {"score": 3}}}
     assert validate_rating(bad, final=False)
     assert engine_validate(bad, False)
+
+
+async def test_two_racing_final_ratings_the_second_conflicts_and_adds_no_revision(env):
+    """LM-2: a competing submit commits between the route's check and its write."""
+    c, h, repo, uid, sid = env
+    rid = "rev-winner"
+    orig_list = repo.list_reports
+    fired = []
+
+    def list_then_race(u, s):  # runs inside the route's final-check (old and new code alike)
+        out = orig_list(u, s)
+        if not fired:
+            fired.append(1)
+            repo.put_rating_revision(u, s, rid, RatingDoc(card=card(), created_at=utcnow()))
+            repo.update_session(
+                u, s, {"rating_submitted": True}, status={"rating_submitted": True}
+            )
+        return out
+
+    repo.list_reports = list_then_race
+    r = await c.put(f"/v1/sessions/{sid}/rating", json={"final": True, "card": card()}, headers=h)
+    assert r.status_code == 409 and r.json()["details"][0]["code"] == "rating_final", r.text
+    assert repo.latest_rating(uid, sid).id == rid  # no second revision

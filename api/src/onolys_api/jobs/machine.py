@@ -1,13 +1,15 @@
 """Job state machine core (PRD R4, D13): states, allowed transitions, flags, progress table.
 
 `advance` is the single status-mirror helper: every state/step/progress/flag/error change goes
-through it, and it writes `sessions/{sid}` and `session_status/{sid}` in one repo call. The
-status document carries no text (R7, AC11).
+through it, and it writes `sessions/{sid}` and `session_status/{sid}` in ONE repo transaction
+(`Repo.transition_session`): the read, the allowed-source check and the write are atomic, so a
+concurrent cancel/delete mark cannot be overwritten. The status document carries no text (R7, AC11).
 
-Not transactional: callers that race (the first-run gate, `POST /runs`) use their own repo
-transaction (`start_first_run`, `start_run`) for the check-and-move to `running`.
+The first-run gate and `POST /runs` still use their own repo transactions (`start_first_run`,
+`start_run`) because they also reserve usage.
 """
 
+from collections.abc import Callable
 from typing import Any, get_args
 
 from onolys_api.errors import ApiError
@@ -20,8 +22,15 @@ from onolys_api.progress import (  # noqa: F401  (re-exported: the tables moved 
     entry_fields,
     stage_fields,
 )
-from onolys_api.repo.base import Repo
-from onolys_api.repo.models import SessionError, SessionState, error_status_fields, utcnow
+from onolys_api.repo.base import NotFoundError, Repo
+from onolys_api.repo.models import (
+    SessionDoc,
+    SessionError,
+    SessionState,
+    SessionStatusDoc,
+    error_status_fields,
+    utcnow,
+)
 
 STATES: tuple[str, ...] = get_args(SessionState)
 
@@ -101,10 +110,10 @@ def stage_progress(current: int, stage: str) -> int:
     return min(99, current + STAGE_WEIGHTS[stage])
 
 
-def advance(
-    repo: Repo,
-    uid: str,
-    sid: str,
+Plan = Callable[[SessionDoc, SessionStatusDoc], "tuple[dict[str, Any], dict[str, Any]] | None"]
+
+
+def transition_plan(
     *,
     to: str | None = None,
     step: Any = _KEEP,
@@ -112,23 +121,46 @@ def advance(
     flags: dict[str, bool] | None = None,
     stage_done: str | None = None,
     latest_report_version: int | None | Any = _KEEP,
-) -> None:
-    """Apply one change to the session and mirror it to `session_status` in the same write.
-
-    `to`: validated against TRANSITIONS (409 invalid_state). `step`: the stage label.
-    `error`: the error (session.error + status.error_code); entering a non-failed state clears
-    it unless given; `failed` requires one. `stage_done`: a stage finished or failed, adds its
-    weight. Raises NotFoundError for another user's session.
-    """
-    session = repo.get_session(uid, sid)
-    status = repo.get_status(uid, sid)
-    if to is not None:
-        check_transition(session.state, to)
-        if to == "failed" and (error is _KEEP or error is None):
-            raise ValueError("a failed session needs an error")
+    only_from: tuple[str, ...] | None = None,
+    extra_fields: dict[str, Any] | None = None,
+    guard: Callable[[SessionDoc], None] | None = None,
+) -> Plan:
+    """Build the pure function `Repo.transition_session` runs INSIDE its transaction: it gets the
+    freshly read session and status and returns `(session_fields, status_fields)` (or None for
+    "nothing to write"). It raises for a refused move (409 invalid_state), so the check and the
+    write see the same state. `only_from`: the session must be in one of these states.
+    `extra_fields`: more session-only fields. `guard`: an extra check on the session.
+    A change without `to` on a `deleting` session is a 404, on a `cancelled` one a 409."""
+    if to == "failed" and (error is _KEEP or error is None):
+        raise ValueError("a failed session needs an error")
     if flags and not set(flags) <= set(FLAGS):
         raise ValueError("unknown flag")
 
+    def plan(session: SessionDoc, status: SessionStatusDoc):
+        if to is None:
+            if session.state == "deleting":
+                raise NotFoundError()
+            if session.state == "cancelled":
+                raise invalid_state()
+        elif to == "deleting" and session.state == "deleting":
+            return None  # a second Delete (or the cleanup task) finds it already marked
+        else:
+            check_transition(session.state, to)
+        if only_from is not None and session.state not in only_from:
+            raise invalid_state()
+        if guard is not None:
+            guard(session)
+        return _build_fields(
+            session, status, to, step, error, flags, stage_done, latest_report_version,
+            extra_fields,
+        )  # fmt: skip
+
+    return plan
+
+
+def _build_fields(
+    session, status, to, step, error, flags, stage_done, latest_report_version, extra_fields
+):
     new_state = to or session.state
     progress = status.progress
     if to == "running" and session.state in ("report_ready", "failed"):
@@ -167,4 +199,35 @@ def advance(
     for k, v in (flags or {}).items():
         s_fields[k] = v
         st_fields[k] = v
-    repo.update_session(uid, sid, s_fields, status=st_fields)
+    s_fields.update(extra_fields or {})
+    return s_fields, st_fields
+
+
+def advance(
+    repo: Repo,
+    uid: str,
+    sid: str,
+    *,
+    to: str | None = None,
+    step: Any = _KEEP,
+    error: SessionError | None | Any = _KEEP,
+    flags: dict[str, bool] | None = None,
+    stage_done: str | None = None,
+    latest_report_version: int | None | Any = _KEEP,
+) -> None:
+    """Apply one change to the session and mirror it to `session_status` in ONE repo transaction
+    (`transition_session`): the state check and the write see the same state, so a concurrent
+    cancel/delete mark is never overwritten.
+
+    `to`: validated against TRANSITIONS (409 invalid_state). `step`: the stage label.
+    `error`: the error (session.error + status.error_code); entering a non-failed state clears
+    it unless given; `failed` requires one. `stage_done`: a stage finished or failed, adds its
+    weight. Raises NotFoundError for another user's session.
+    """
+    repo.transition_session(
+        uid, sid,
+        transition_plan(
+            to=to, step=step, error=error, flags=flags, stage_done=stage_done,
+            latest_report_version=latest_report_version,
+        ),
+    )  # fmt: skip

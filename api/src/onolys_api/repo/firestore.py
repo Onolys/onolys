@@ -12,7 +12,9 @@ import os
 import random
 import threading
 import time
+import uuid
 import weakref
+from collections.abc import Callable
 from datetime import datetime
 from typing import Any, Literal
 
@@ -28,11 +30,13 @@ from onolys_api.progress import entry_fields
 from onolys_api.repo import large
 from onolys_api.repo.base import (
     CancelOutcome,
+    ChildWrite,
     Claim,
     ConflictError,
     InterviewLinkOutcome,
     NotFoundError,
     Page,
+    SessionPlan,
     StartOutcome,
     decide_claim,
 )
@@ -289,6 +293,107 @@ class FirestoreRepo:
                     raise
                 time.sleep(random.uniform(0.01, 0.15))
 
+    def transition_session(
+        self, uid: str, sid: str, plan: SessionPlan, children: tuple[ChildWrite, ...] = ()
+    ) -> None:
+        sref, _ = self._owned_session(uid, sid)
+        stref = self._top("session_status", sid)
+        refs = []
+        for rel, data, exclusive in children:
+            coll, doc_id = rel.split("/")
+            refs.append((sref.collection(coll).document(doc_id), data, exclusive))
+
+        @firestore.transactional
+        def txn_fn(txn) -> None:
+            snap = sref.get(transaction=txn)
+            stsnap = stref.get(transaction=txn)
+            if (
+                not snap.exists
+                or not stsnap.exists
+                or (snap.to_dict() or {}).get("uid") != uid
+                or (stsnap.to_dict() or {}).get("uid") != uid
+            ):
+                raise NotFoundError()
+            for ref, _, exclusive in refs:
+                if exclusive and ref.get(transaction=txn).exists:
+                    raise ConflictError()
+            result = plan(_load(SessionDoc, snap), _load(SessionStatusDoc, stsnap))
+            if result is None:
+                return
+            s_fields, st_fields = result
+            now = utcnow()
+            txn.update(sref, {**s_fields, "updated_at": now})
+            txn.set(stref, {**st_fields, "uid": uid, "updated_at": now}, merge=True)
+            for ref, data, _ in refs:
+                txn.set(ref, data)
+
+        self._contended(txn_fn, uid)
+
+    def _report_versions(self, uid: str, sid: str, txn) -> list[int]:
+        """Versions of the session's reports, read inside `txn` (uid-scoped via the session ref)."""
+        coll = self._session_ref(uid, sid).collection("reports")
+        return [(s.to_dict() or {}).get("version", 0) for s in coll.stream(transaction=txn)]
+
+    def publish_report(
+        self, uid: str, sid: str, run_id: str, doc: ReportDoc, run_fields: dict[str, Any],
+        plan_for: Callable[[int], SessionPlan], date: str | None,
+    ) -> ReportDoc | None:  # fmt: skip
+        sref, _ = self._owned_session(uid, sid)
+        stref = self._top("session_status", sid)
+        rep_ref = sref.collection("reports").document(run_id)
+        run_ref = sref.collection("runs").document(run_id)
+        user_ref = self._top("users", uid)
+        pointer = large.pack(
+            self._blobs, large.report_key(uid, sid, f"{run_id}-{uuid.uuid4().hex[:8]}"),
+            doc.report or {},
+        )  # a unique key: a duplicate publish must not overwrite a committed report's blob
+        stored = doc.model_copy(
+            update={"report": None if pointer else doc.report, "pointer": pointer}
+        )
+
+        @firestore.transactional
+        def txn_fn(txn) -> ReportDoc | None:
+            snap = sref.get(transaction=txn)
+            stsnap = stref.get(transaction=txn)
+            sess = snap.to_dict() or {}
+            if not snap.exists or not stsnap.exists or sess.get("uid") != uid:
+                raise NotFoundError()
+            rep_snap = rep_ref.get(transaction=txn)
+            if rep_snap.exists:  # already published (redelivery): nothing to write
+                return _load(ReportDoc, rep_snap)
+            if sess.get("state") == "deleting":
+                raise NotFoundError()
+            run_snap = run_ref.get(transaction=txn)
+            if sess.get("state") != "running" or not run_snap.exists:
+                return None  # cancelled / failed under the run: publish nothing
+            run = run_snap.to_dict() or {}
+            versions = self._report_versions(uid, sid, txn)
+            day_key = run.get("cap_date") or date
+            user = user_ref.get(transaction=txn).to_dict() or {}
+            day_ref = self._top("usage", f"{uid}_{day_key}") if day_key else None
+            day = (day_ref.get(transaction=txn).to_dict() or {}) if day_ref else {}
+            version = max(versions, default=0) + 1
+            s_fields, st_fields = plan_for(version)(
+                _load(SessionDoc, snap), _load(SessionStatusDoc, stsnap)
+            )
+            now = utcnow()
+            final = stored.model_copy(update={"version": version})
+            txn.set(rep_ref, final.to_store())
+            self._release_run_in_txn(txn, run_ref, run, user_ref, user, day_ref, day, False)
+            txn.update(run_ref, run_fields)
+            txn.update(sref, {**s_fields, "updated_at": now})
+            txn.set(stref, {**st_fields, "uid": uid, "updated_at": now}, merge=True)
+            return final.model_copy(update={"id": run_id})
+
+        try:
+            out = self._contended(txn_fn, uid)
+        except NotFoundError:
+            self._drop_pointer(pointer)
+            raise
+        if out is None or out.pointer != pointer:
+            self._drop_pointer(pointer)  # not published (or someone else's report won)
+        return out
+
     def confirm_speaker(self, uid: str, sid: str, clinician: str, states: tuple[str, ...]) -> bool:
         """Record the clinician only while the session is still in one of `states` (checked and
         written in one transaction, so a run starting concurrently cannot be overwritten)."""
@@ -404,15 +509,31 @@ class FirestoreRepo:
         @firestore.transactional
         def txn_fn(txn) -> None:
             sess = sref.get(transaction=txn).to_dict() or {}
-            if sess.get("uid") != uid or sess.get("state") == "deleting":
+            if sess.get("uid") != uid:
                 raise NotFoundError()
+            if sess.get("state") == "deleting":
+                if sess.get("discard_code") is None:
+                    raise NotFoundError()  # the Delete path owns it
+                return  # our own tombstone from an earlier attempt: resume the cleanup
             if sess.get("state") == "cancelled":
                 raise ConflictError()  # cancel deletes nothing (04-cancel R5)
-            stub = upload_failed_stub(uid, code, utcnow())
+            iid = sess.get("interview_id")
+            iref = self._top("interviews", iid) if iid else None
+            iv = (iref.get(transaction=txn).to_dict() or {}) if iref is not None else {}
+            now = utcnow()
+            stub = upload_failed_stub(uid, code, now)
             txn.set(stref, stub.to_store())  # overwrite: no leftover fields
+            # the exclusive tombstone: `deleting` is terminal (cancel -> 404, advance -> 409)
+            txn.update(sref, {"state": "deleting", "discard_code": code, "updated_at": now})
+            if iref is not None and iv.get("uid") == uid and iv.get("session_id") == sid:
+                state = "ended" if iv.get("state") == "uploaded" else iv.get("state")
+                txn.update(iref, {"session_id": None, "state": state})  # M-4: the unit relinks
 
         self._contended(txn_fn, uid)
-        self._client.recursive_delete(sref)  # doc + recordings, runs, ...
+        snap = sref.get()  # cleanup only while OUR tombstone is still there
+        data = snap.to_dict() or {}
+        if snap.exists and data.get("state") == "deleting" and data.get("discard_code") == code:
+            self._client.recursive_delete(sref)  # doc + recordings, runs, ...
 
     # ---- recordings ----
 

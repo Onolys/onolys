@@ -237,11 +237,13 @@ async def test_audio_complete_marks_interview_uploaded(settings, repo, blobs):
     assert repo.get_interview("alice", iid).state == "uploaded"
 
 
-async def test_failed_validation_leaves_interview_linked_uploaded(settings, repo, blobs):
+async def test_failed_validation_unlinks_the_interview_so_the_unit_can_relink(
+    settings, repo, blobs
+):
     iid = interview(repo)
-    sid = await upload(settings, repo, blobs, 640.0, iid)
-    iv = repo.get_interview("alice", iid)
-    assert (iv.state, iv.session_id) == ("uploaded", sid)
+    await upload(settings, repo, blobs, 640.0, iid)
+    iv = repo.get_interview("alice", iid)  # M-4: back to `ended`, unlinked (not lost)
+    assert (iv.state, iv.session_id) == ("ended", None)
 
 
 # ---- 03-failure-policy R9: a relay/upload mismatch beyond max(60 s, 15 %) is OUR error ----

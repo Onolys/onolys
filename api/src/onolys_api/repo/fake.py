@@ -2,6 +2,8 @@
 
 import copy
 import threading
+import uuid
+from collections.abc import Callable
 from datetime import datetime
 from typing import Any, Literal
 
@@ -12,11 +14,13 @@ from onolys_api.progress import entry_fields
 from onolys_api.repo import large
 from onolys_api.repo.base import (
     CancelOutcome,
+    ChildWrite,
     Claim,
     ConflictError,
     InterviewLinkOutcome,
     NotFoundError,
     Page,
+    SessionPlan,
     StartOutcome,
     decide_claim,
 )
@@ -214,6 +218,74 @@ class FakeRepo:
             self._put(f"session_status/{sid}", st)
             self._record_status(uid, sid)
 
+    def transition_session(
+        self, uid: str, sid: str, plan: SessionPlan, children: tuple[ChildWrite, ...] = ()
+    ) -> None:
+        with self._claim_lock:  # the fake's "transaction"
+            sdoc = self._owned(f"sessions/{sid}", uid)
+            stdoc = self._owned(f"session_status/{sid}", uid)
+            assert sdoc is not None and stdoc is not None
+            for rel, _, exclusive in children:
+                if exclusive and f"sessions/{sid}/{rel}" in self._docs:
+                    raise ConflictError()
+            result = plan(
+                self._load(SessionDoc, sid, sdoc), self._load(SessionStatusDoc, sid, stdoc)
+            )
+            if result is None:
+                return
+            s_fields, st_fields = result
+            self.update_session(uid, sid, s_fields, status=st_fields)
+            for rel, data, _ in children:
+                self._put(f"sessions/{sid}/{rel}", data)
+
+    def publish_report(
+        self, uid: str, sid: str, run_id: str, doc: ReportDoc, run_fields: dict[str, Any],
+        plan_for: Callable[[int], SessionPlan], date: str | None,
+    ) -> ReportDoc | None:  # fmt: skip
+        self._own(uid, sid)
+        pointer = large.pack(
+            self._blobs, large.report_key(uid, sid, f"{run_id}-{uuid.uuid4().hex[:8]}"),
+            doc.report or {},
+        )
+        stored = doc.model_copy(
+            update={"report": None if pointer else doc.report, "pointer": pointer}
+        )
+        with self._claim_lock:  # the fake's "transaction"
+            sdoc = self._owned(f"sessions/{sid}", uid)
+            stdoc = self._owned(f"session_status/{sid}", uid)
+            assert sdoc is not None and stdoc is not None
+            existing = self._get(f"sessions/{sid}/reports/{run_id}")
+            if existing is None and sdoc.get("state") == "deleting":
+                self._drop_pointer(pointer)
+                raise NotFoundError()
+            if existing is not None:
+                got = self._load(ReportDoc, run_id, existing)
+                if got.pointer != pointer:
+                    self._drop_pointer(pointer)
+                return self._resolve_report(got, False)
+            run = self._get(f"sessions/{sid}/runs/{run_id}")
+            if sdoc.get("state") != "running" or run is None:
+                self._drop_pointer(pointer)
+                return None
+            version = max((d.get("version", 0) for _, d in self._children(sid, "reports")),
+                          default=0) + 1  # fmt: skip
+            s_fields, st_fields = plan_for(version)(
+                self._load(SessionDoc, sid, sdoc), self._load(SessionStatusDoc, sid, stdoc)
+            )
+            final = stored.model_copy(update={"version": version})
+            self._put(f"sessions/{sid}/reports/{run_id}", final.to_store())
+            self._put(f"sessions/{sid}/runs/{run_id}", {**run, **run_fields})
+            self.update_session(uid, sid, s_fields, status=st_fields)
+            self._release_run_locked(
+                uid, f"sessions/{sid}/runs/{run_id}",
+                self._get(f"sessions/{sid}/runs/{run_id}") or run, False, date,
+            )  # fmt: skip
+            return final.model_copy(update={"id": run_id})
+
+    def _drop_pointer(self, pointer) -> None:
+        if pointer is not None:
+            self._blobs.delete(pointer.key)
+
     def confirm_speaker(self, uid: str, sid: str, clinician: str, states: tuple[str, ...]) -> bool:
         with self._claim_lock:  # the fake's "transaction"
             doc = self._owned(f"sessions/{sid}", uid)
@@ -301,9 +373,18 @@ class FakeRepo:
                 raise ConflictError()  # cancel deletes nothing (04-cancel R5)
             self._put(f"session_status/{sid}", upload_failed_stub(uid, code, utcnow()).to_store())
             self._record_status(uid, sid)
+            self._unlink_interview(uid, sid, doc.get("interview_id"))
             for p in [p for p in self._docs if p.startswith(f"sessions/{sid}/")]:
                 del self._docs[p]
             del self._docs[f"sessions/{sid}"]
+
+    def _unlink_interview(self, uid: str, sid: str, iid: str | None) -> None:
+        """M-4: the discarded session's interview goes back to `ended`, unlinked, so its unit can
+        be linked to a new session."""
+        iv = self._get(f"interviews/{iid}") if iid else None
+        if iv is not None and iv.get("uid") == uid and iv.get("session_id") == sid:
+            state = "ended" if iv.get("state") == "uploaded" else iv.get("state")
+            self._put(f"interviews/{iid}", {**iv, "session_id": None, "state": state})
 
     # ---- recordings ----
 

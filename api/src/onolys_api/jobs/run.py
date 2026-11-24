@@ -35,7 +35,14 @@ from onolys_api.adapters.error_map import kind_for_code, to_public
 from onolys_api.adapters.validated import evaluate_validated
 from onolys_api.jobs.alive import ensure_active
 from onolys_api.jobs.charging import release_failed_run, release_once
-from onolys_api.jobs.machine import RUN_START_PROGRESS, STAGE_WEIGHTS, STAGES, advance, stage_fields
+from onolys_api.jobs.machine import (
+    RUN_START_PROGRESS,
+    STAGE_WEIGHTS,
+    STAGES,
+    advance,
+    stage_fields,
+    transition_plan,
+)
 from onolys_api.jobs.queue import MAX_ATTEMPTS
 from onolys_api.jobs.transcribe import TRANSCRIPT_ID
 from onolys_api.jobs.transcribe import _run as run_coro
@@ -111,8 +118,10 @@ def _execute(ctx, blobs, evaluation, run_doc) -> None:
     except NotFoundError:
         existing = None
     if existing is None:
-        existing = _evaluate(ctx, blobs, evaluation, run_doc, session)
+        _evaluate(ctx, blobs, evaluation, run_doc, session)  # publishes atomically (M-11)
+        return
 
+    # a report stored by an older build without its bookkeeping: only finish that
     repo.update_run(uid, sid, run_id, {"stage": None})
     if repo.get_session(uid, sid).state != "report_ready":
         advance(
@@ -121,7 +130,7 @@ def _execute(ctx, blobs, evaluation, run_doc) -> None:
         )  # fmt: skip
 
 
-def _evaluate(ctx, blobs, evaluation, run_doc, session) -> ReportDoc:
+def _evaluate(ctx, blobs, evaluation, run_doc, session) -> None:
     uid, sid, run_id, repo = ctx.uid, ctx.sid, run_doc.run_id, ctx.repo
     if session.clinician_speaker is None:
         raise PermanentError("internal_error")
@@ -201,20 +210,28 @@ def _evaluate(ctx, blobs, evaluation, run_doc, session) -> ReportDoc:
                             "application/json")  # fmt: skip
     ensure_active(repo, blobs, uid, sid)  # a DELETE during the run must not leave artifacts
     # (and a cancel must not get a report: ensure_active raises Cancelled)
-    versions = [r.version for r in repo.list_reports(uid, sid)]
     doc = ReportDoc(
-        version=max(versions, default=0) + 1,
+        version=0,  # assigned by `publish_report` inside its transaction
         run_id=run_id,
         report=out.report,
         report_schema_version=str(out.report.get("schema_version", "")),
     )
-    repo.put_report(uid, sid, run_id, doc)
-    repo.update_run(
-        uid, sid, run_id,
+    # ONE transaction: report + run completion + `report_ready` + slot release, re-checking that
+    # the session is still `running` (a cancel after the last `ensure_active` wins: no report).
+    published = repo.publish_report(
+        uid, sid, run_id, doc,
         {
+            "stage": None,
             "run_info": out.run_info or out.report.get("run_info"),
             "validation": out.run_info.get("validation"),
             "artifacts_prefix": blobs.uri(prefix),
         },
+        lambda version: transition_plan(
+            to="report_ready", step=None, latest_report_version=version
+        ),
+        run_doc.cap_date,
     )  # fmt: skip
-    return doc
+    if published is None:
+        if repo.get_session(uid, sid).state == "cancelled":
+            raise Cancelled()
+        raise PermanentError("internal_error")

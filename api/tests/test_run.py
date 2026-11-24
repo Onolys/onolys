@@ -463,20 +463,21 @@ async def test_slot_is_kept_while_a_retry_is_pending_and_released_after(env):
     assert env.counters() == (0, 1)
 
 
-async def test_retry_after_the_report_was_stored_only_finishes_the_bookkeeping(env):
+async def test_publish_failure_leaves_no_visible_report_and_the_retry_publishes(env):
     ev = Capture()
     swap_eval(env, ev)
-    orig, boom = env.repo.update_run, []
+    orig, boom = env.repo.publish_report, []
 
-    def update_run(uid, sid, run_id, fields):
-        if "artifacts_prefix" in fields and not boom:  # report stored, then the worker dies
+    def publish_report(uid, sid, *a, **kw):
+        if not boom:  # the worker dies before the publication commits (M-11)
             boom.append(1)
             raise AdapterError("upstream_unavailable")
-        orig(uid, sid, run_id, fields)
+        assert env.repo.list_reports(uid, sid) == []  # nothing was visible in between
+        return orig(uid, sid, *a, **kw)
 
-    env.repo.update_run = update_run
+    env.repo.publish_report = publish_report
     sid = await env.finished()
-    assert ev.calls == 1  # the retry did not evaluate again
+    assert ev.calls == 2  # nothing was committed, so the retry evaluates again
     assert len(env.repo.list_reports(env.uid, sid)) == 1
     s = env.repo.get_session(env.uid, sid)
     assert s.state == "report_ready" and s.latest_report_version == 1
@@ -659,3 +660,25 @@ async def test_interview_first_run_failure_is_never_counted(env):
     s = env.repo.get_session(env.uid, sid)
     assert s.state == "failed" and s.error.counted is False
     assert env.counters() == (0, 0)
+
+
+async def test_cancel_after_the_last_active_check_publishes_no_report(env, monkeypatch):
+    """M-11: a cancel landing between the final `ensure_active` and the publication wins."""
+    import inspect
+
+    from onolys_api.jobs import run as run_mod
+    from onolys_api.repo.limits import LimitDefaults
+
+    real = run_mod.ensure_active
+
+    def late_cancel(repo, blobs, uid, sid):
+        real(repo, blobs, uid, sid)
+        if inspect.stack()[1].function == "_evaluate":  # the check right before the publication
+            repo.cancel_session(uid, sid, caps.utc_date(), LimitDefaults(10, 5))
+
+    monkeypatch.setattr(run_mod, "ensure_active", late_cancel)
+    sid = await env.finished()
+    assert env.repo.list_reports(env.uid, sid) == []
+    s = env.repo.get_session(env.uid, sid)
+    assert s.state == "cancelled" and s.latest_report_version is None
+    assert env.counters()[0] == 0  # the slot is free
