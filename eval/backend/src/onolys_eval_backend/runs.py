@@ -21,7 +21,6 @@ from onolys_engine_core.errors import ConfigError, InputError
 from onolys_engine_core.llm.config import LLMConfig
 from onolys_engine_core.llm.errors import LLMError, LLMRateLimited, LLMTimeout, is_transient
 from onolys_engine_core.llm.litellm_client import LiteLLMClient
-from onolys_engine_core.llm.models import load_models, models_path
 from onolys_engine_core.llm.routes import combo_routes, resolve_preset
 from onolys_engine_core.llm.types import MetricsCollector
 from onolys_engine_core.transcript_input import (
@@ -254,9 +253,7 @@ def create_run(services, config, body, created_by, *, registry=None, input_ref=N
     }
     if any(e != "human" and e not in choices for e in body.engines):
         raise ValueError("Unknown engine")
-    models = getattr(services, "models", None) or load_models(
-        models_path(os.environ, config.routes_file)
-    )
+    models = services.models
     engines = list(body.engines)
     if body.input.dataset_id and "human" not in engines:
         engines.append("human")

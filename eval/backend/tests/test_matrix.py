@@ -36,14 +36,14 @@ def test_table(case):
     assert len(units) == expect["units"]
 
 
-def test_plan_units_shape_and_no_gold():
+def test_plan_units_shape():
     combo = {"model": "claude", "tier": "t", "effort": "low"}
     units = plan_units(
-        [{"session_id": "a", "has_gold": False}], ["miti", "human"], [combo], 3
+        [{"session_id": "a"}], ["miti", "human"], [combo], 3
     )
     assert units[-1] == {
         "session_id": "a", "engine": "human", "combo": None, "combo_key": None,
-        "repeat": 0, "skipped": "no_gold",
+        "repeat": 0,
     }
     assert [u["repeat"] for u in units[:3]] == [0, 1, 2]
     assert units[0]["combo_key"] == "claude/t/low" and units[0]["combo"] == combo

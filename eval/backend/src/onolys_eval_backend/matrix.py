@@ -74,8 +74,7 @@ def validate_selection(models: dict, selection: dict, needs_combos: bool = True)
 def plan_units(sessions: list, engines: list, combos: list, repeats: int) -> list:
     """Expand sessions x engines x combos x repeats; human has one unit per session.
 
-    sessions: [{session_id, has_gold?}]. Raises RunTooLarge above 499 units.
-    A human unit for a session without gold is kept but flagged skipped: no_gold.
+    sessions: [{session_id}]. Raises RunTooLarge above 499 units.
     """
     ai = sum(e != "human" for e in engines)
     count = len(sessions) * (int("human" in engines) + ai * len(combos) * repeats)
@@ -85,16 +84,15 @@ def plan_units(sessions: list, engines: list, combos: list, repeats: int) -> lis
     for session in sessions:
         for engine in engines:
             if engine == "human":
-                unit = {
-                    "session_id": session["session_id"],
-                    "engine": engine,
-                    "combo": None,
-                    "combo_key": None,
-                    "repeat": 0,
-                }
-                if session.get("has_gold", True) is False:
-                    unit["skipped"] = "no_gold"
-                units.append(unit)
+                units.append(
+                    {
+                        "session_id": session["session_id"],
+                        "engine": engine,
+                        "combo": None,
+                        "combo_key": None,
+                        "repeat": 0,
+                    }
+                )
                 continue
             for combo in combos:
                 for repeat in range(repeats):
