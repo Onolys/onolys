@@ -36,17 +36,19 @@ CANONICAL_TYPES: dict[str, str] = {
     "webm": "audio/webm",
     "ogg": "audio/ogg",
 }
-_MIME_ALIASES: dict[str, str] = {
-    "audio/mpeg": "mp3", "audio/mp3": "mp3", "audio/x-mp3": "mp3", "audio/mpeg3": "mp3",
-    "audio/wav": "wav", "audio/x-wav": "wav", "audio/wave": "wav", "audio/vnd.wave": "wav",
-    "audio/mp4": "m4a", "audio/x-m4a": "m4a", "audio/m4a": "m4a",
-    "audio/webm": "webm",
-    "audio/ogg": "ogg", "application/ogg": "ogg",
-}  # fmt: skip
-_EXT_ALIASES: dict[str, str] = {
-    "mp3": "mp3", "wav": "wav", "wave": "wav", "m4a": "m4a", "mp4": "m4a", "webm": "webm",
-    "ogg": "ogg", "oga": "ogg",
-}  # fmt: skip
+# The one accepted-types table (R10): format key -> (accepted MIME types, accepted extensions).
+# `sniff` returns only these keys; `resolve_format` and `GET /v1/upload-limits` derive from it.
+ACCEPTED_FORMATS: dict[str, tuple[tuple[str, ...], tuple[str, ...]]] = {
+    "mp3": (("audio/mpeg", "audio/mp3", "audio/x-mp3", "audio/mpeg3"), ("mp3",)),
+    "wav": (("audio/wav", "audio/x-wav", "audio/wave", "audio/vnd.wave"), ("wav", "wave")),
+    "m4a": (("audio/mp4", "audio/x-m4a", "audio/m4a"), ("m4a", "mp4")),
+    "webm": (("audio/webm",), ("webm",)),
+    "ogg": (("audio/ogg", "application/ogg"), ("ogg", "oga")),
+}
+_MIME_ALIASES: dict[str, str] = {m: f for f, (ms, _) in ACCEPTED_FORMATS.items() for m in ms}
+_EXT_ALIASES: dict[str, str] = {e: f for f, (_, es) in ACCEPTED_FORMATS.items() for e in es}
+ACCEPTED_MIME_TYPES: tuple[str, ...] = tuple(_MIME_ALIASES)
+ACCEPTED_EXTENSIONS: tuple[str, ...] = tuple(_EXT_ALIASES)
 
 
 def resolve_format(content_type: str | None, filename_ext: str | None) -> str | None:

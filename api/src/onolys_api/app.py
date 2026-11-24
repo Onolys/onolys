@@ -57,6 +57,7 @@ from onolys_api.routes import sessions as session_routes
 from onolys_api.routes import speakers as speaker_routes
 from onolys_api.routes import tasks as task_routes
 from onolys_api.routes import transcript as transcript_routes
+from onolys_api.routes import upload_limits as upload_limits_routes
 from onolys_api.routes import usage as usage_routes
 from onolys_api.storage.base import BlobStore
 from onolys_api.storage.fake import FAKE_ROUTE, FakeBlobStore
@@ -523,6 +524,7 @@ def create_app(
     router.include_router(run_routes.router, dependencies=by_id)
     router.include_router(run_routes.runs_router)
     router.include_router(usage_routes.router)
+    router.include_router(upload_limits_routes.router)
     router.include_router(scenario_routes.router)
     router.include_router(interview_routes.router, dependencies=by_id)
     app.include_router(router)
