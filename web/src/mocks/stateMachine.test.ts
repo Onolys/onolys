@@ -340,11 +340,19 @@ describe("failure injection by title", () => {
     return { backend, sid };
   }
 
-  it("fail-code fails the run and the session (can Try again)", () => {
+  it("fail-code fails the run and the session; /runs is 409 from failed like the real API (H-5)", () => {
     const { backend, sid } = ready("fail-code");
     expect(status(backend, sid)).toMatchObject({ status: "failed", error: { code: "internal_error", step: "code" } });
     expect(status(backend, sid).latest_report_version).toBeNull();
-    backend.startRun(U, sid, {}); // a system failure offers Try again (same stored rating)
+    expectHttp(() => backend.startRun(U, sid, {}), 409, "invalid_state");
+    expect(status(backend, sid)).toMatchObject({ status: "failed" });
+  });
+
+  it("fail-transient fails the session; /retry (not /runs) re-runs with the same stored rating", () => {
+    const { backend, sid } = ready("fail-transient");
+    expect(status(backend, sid)).toMatchObject({ status: "failed", error: { code: "upstream_unavailable", step: "code" } });
+    expectHttp(() => backend.startRun(U, sid, {}), 409, "invalid_state");
+    backend.retrySession(U, sid);
     expect(status(backend, sid)).toMatchObject({ status: "running", progress: 45 });
     expect(backend.listRuns(U, sid)[1].rating_id).toBe(backend.listRuns(U, sid)[0].rating_id);
   });
@@ -462,11 +470,11 @@ describe("free interview runs mirror the API (review round 2)", () => {
 
   it("a failed free run: Try again at the cap succeeds without counting", () => {
     const { backend } = make({ caps: { eval: { day: 0 } } });
-    const sid = interviewSession(backend, "fail-code");
+    const sid = interviewSession(backend, "fail-transient");
     backend.putRating(U, sid, { final: true, card: SCORED });
     backend.settle(sid);
     expect(status(backend, sid)).toMatchObject({ status: "failed" });
-    backend.startRun(U, sid, {});
+    backend.retrySession(U, sid);
     expect(status(backend, sid)).toMatchObject({ status: "running" });
     expect(backend.getUsage(U).eval.day.used).toBe(0);
   });
@@ -482,13 +490,13 @@ describe("free interview runs mirror the API (review round 2)", () => {
 
   it("a non-interview Try again at the cap is still 429 daily_cap_reached", () => {
     const { backend } = make({ caps: { eval: { day: 1 } } });
-    const sid = started(backend, "fail-code");
+    const sid = started(backend, "fail-transient");
     backend.settle(sid);
     backend.confirmSpeaker(U, sid, "spk_0");
     backend.putRating(U, sid, { final: true, card: SCORED });
     backend.settle(sid);
     expect(status(backend, sid)).toMatchObject({ status: "failed", free_run: false });
-    expectHttp(() => backend.startRun(U, sid, {}), 429, "daily_cap_reached");
+    expectHttp(() => backend.retrySession(U, sid), 429, "daily_cap_reached");
   });
 });
 
@@ -601,27 +609,27 @@ describe("final ratings and report versions (FX45)", () => {
 
   it("a bad-file failure is not retryable (invalid_state); a system failure is", () => {
     const { backend } = ctx;
-    const sid = started(backend, "fail-code");
+    const sid = started(backend, "fail-transient");
     backend.settle(sid);
     backend.confirmSpeaker(U, sid, "spk_0");
     backend.putRating(U, sid, { final: true, card: SCORED });
     backend.settle(sid);
-    expect(status(backend, sid).error?.code).toBe("internal_error");
-    backend.startRun(U, sid, {}); // internal_error: Try again
+    expect(status(backend, sid).error?.code).toBe("upstream_unavailable");
+    backend.retrySession(U, sid); // a transient failure: Try again goes through /retry
     const bad = started(backend, "fail-no_speech");
     backend.settle(bad);
     expectHttp(() => backend.startRun(U, bad, {}), 409, "invalid_state");
   });
 
-  it("Try again ignores the client's preset and n_runs and reuses the failed run's", () => {
+  it("Try again (/retry) reuses the failed run's preset and n_runs", () => {
     const { backend } = ctx;
-    const sid = started(backend, "fail-code");
+    const sid = started(backend, "fail-transient");
     backend.settle(sid);
     backend.confirmSpeaker(U, sid, "spk_0");
     backend.putRating(U, sid, { final: true, card: SCORED });
     backend.settle(sid);
     const [first] = backend.listRuns(U, sid);
-    backend.startRun(U, sid, { preset: "fast", n_runs: 3 });
+    backend.retrySession(U, sid);
     const second = backend.listRuns(U, sid).at(-1)!;
     expect(second.run_id).not.toBe(first.run_id);
     expect([second.preset, second.n_runs]).toEqual([first.preset, first.n_runs]);

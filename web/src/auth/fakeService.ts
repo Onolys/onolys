@@ -167,6 +167,9 @@ export function createFakeAuthService(options: FakeAuthOptions = {}): FakeAuthSe
         emit();
       }
     },
+    async checkEmailVerificationCode(oobCode) {
+      return takeCode(oobCode, "verifyEmail", false).email;
+    },
     async verifyPasswordResetCode(oobCode) {
       return takeCode(oobCode, "resetPassword", false).email;
     },

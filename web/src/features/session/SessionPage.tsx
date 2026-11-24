@@ -26,7 +26,7 @@ import { RatingCardSlot, SpeakerGateSlot, UploadSlot } from "./slots";
 import { deriveTimeline } from "./timeline";
 import { useProgress, useSessionStatus } from "./useSessionStatus";
 
-const NOT_FOUND_MESSAGE = "This upload didn't go through, or the session no longer exists. Start a new upload.";
+const NOT_FOUND_MESSAGE = "We couldn't find this session. It may have been deleted, or the link may be mistyped.";
 
 const STEP_CLASS = {
   done: "border-score-good text-score-good",
@@ -132,7 +132,7 @@ function SessionView({ id }: { id: string }) {
     return (
       <div className={PAGE}>
         <h1 className={H1}>Session</h1>
-        {/* A stale link to a failed upload (session gone, no stub) lands here too (R11). */}
+        {/* A failed upload with a stub shows UploadFailedView; a missing session without one is generic not-found (R11). */}
         <ErrorCard
           code={view.error.code}
           message={view.error.code === "not_found" ? NOT_FOUND_MESSAGE : undefined}
@@ -143,7 +143,7 @@ function SessionView({ id }: { id: string }) {
           </Link>
           {view.error.code === "not_found" ? (
             <Link to="/sessions/new" className={LINK}>
-              Start a new upload
+              Start a new session
             </Link>
           ) : null}
         </ErrorCard>

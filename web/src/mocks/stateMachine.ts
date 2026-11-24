@@ -800,10 +800,8 @@ export class MockBackend {
     const s = this.own(uid, sid);
     if (s.state === "report_ready" || s.reports.length > 0)
       bad(409, "rating_final", "The rating is final once the report is ready.");
-    const ok = s.state === "awaiting_input" || s.state === "failed";
-    if (s.state === "failed" && s.error && BAD_FILE_CODES.has(s.error.code))
-      bad(409, "invalid_state", "A run cannot start in this state.");
-    if (!ok || !s.flags.transcript_ready || !s.flags.speaker_confirmed)
+    // Like the real API (RERUN_STATES): only awaiting_input starts a run; a failed session re-runs via /retry.
+    if (s.state !== "awaiting_input" || !s.flags.transcript_ready || !s.flags.speaker_confirmed)
       bad(409, "invalid_state", "A run cannot start in this state.");
     if (body.n_runs != null && (!Number.isInteger(body.n_runs) || body.n_runs < 1 || body.n_runs > 5))
       invalidParam("n_runs must be an integer from 1 to 5");
@@ -817,9 +815,7 @@ export class MockBackend {
         ]);
       }
     }
-    // Try again re-runs the SAME submission: the client's preset / n_runs are ignored
-    const prior = s.state === "failed" ? s.runs.at(-1) : undefined;
-    const run = this.createRun(s, prior ? { preset: prior.preset, n_runs: prior.n_runs } : body);
+    const run = this.createRun(s, body);
     return { run_id: run.run_id, session: { id: s.id, status: s.state } };
   }
 

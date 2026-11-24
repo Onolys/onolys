@@ -4,6 +4,7 @@
  */
 import { Button } from "@onolys/ui";
 import { useState } from "react";
+import { failureView } from "../../api/errors";
 import type { SessionStatusDoc } from "../../api/statusListener";
 import { LINK_BTN } from "../../components/classes";
 import { SpeakerGate } from "../speakers/SpeakerGate";
@@ -37,7 +38,8 @@ export function RatingCardSlot({ sessionId, doc, readOnly = false }: SlotProps &
 
 export function SpeakerGateSlot({ sessionId, doc }: SlotProps) {
   const [open, setOpen] = useState(false);
-  const rerunnable = doc.state === "failed"; // a ready report is final (FX45)
+  // Only a retryable failure re-runs (via /retry); a ready report is final (FX45) and a permanent failure needs a new session.
+  const rerunnable = doc.state === "failed" && failureView(doc).action === "retry";
   return (
     <div data-slot="speaker-gate" data-session={sessionId}>
       {!doc.speaker_confirmed ? (

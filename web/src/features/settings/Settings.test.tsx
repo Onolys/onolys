@@ -32,6 +32,30 @@ const everythingLogged = () => JSON.stringify(spies.flatMap((s) => s.mock.calls)
 const everythingStored = () =>
   JSON.stringify({ l: { ...localStorage }, s: { ...sessionStorage } });
 
+describe("settings: usage failure (I2)", () => {
+  it("shows an error with Retry, not 'Loading…' forever, then recovers", async () => {
+    const user = userEvent.setup();
+    let fail = true;
+    server.use(
+      http.get("*/v1/usage", ({ request }) => {
+        if (!fail) return undefined;
+        void request;
+        return HttpResponse.json(
+          { schema_version: "0.0.1", error: { code: "internal_error", message: "boom", request_id: "req_u", details: [] } },
+          { status: 500 },
+        );
+      }),
+    );
+    renderApp("/settings", { user: USER });
+    const retry = await main().findByRole("button", { name: "Retry" }, { timeout: 4000 });
+    expect(main().queryByText("Loading…")).toBeNull();
+    fail = false;
+    await user.click(retry);
+    expect(await main().findByText(/Ratings:/)).toBeInTheDocument();
+    expect(main().queryByRole("button", { name: "Retry" })).toBeNull();
+  });
+});
+
 describe("settings: API key", () => {
   it("shows 'no key' and offers Create when none is active", async () => {
     renderApp("/settings", { user: USER });

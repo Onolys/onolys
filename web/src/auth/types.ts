@@ -42,6 +42,8 @@ export interface AuthService {
   refreshUser(): Promise<AuthUser | null>;
   /** Consumes a verifyEmail action code; if signed in, refreshes the user so guards see `emailVerified`. */
   applyEmailVerification(oobCode: string): Promise<void>;
+  /** Checks a verifyEmail code (does not consume it) and returns the email of the account it verifies. */
+  checkEmailVerificationCode(oobCode: string): Promise<string>;
   /** Checks a password-reset code (does not consume it) and returns the account email. */
   verifyPasswordResetCode(oobCode: string): Promise<string>;
   confirmPasswordReset(oobCode: string, newPassword: string): Promise<void>;
