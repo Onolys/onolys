@@ -64,11 +64,15 @@ def test_api_and_worker_grants_unchanged():
     main = (MOD / "main.tf").read_text()
     assert re.search(r"runtime_sas = \{\s*api\s*=\s*google_service_account\.api\.email\s*worker\s*=\s*google_service_account\.worker\.email\s*\}", main)
     assert "voice" not in main and "voice" not in (MOD / "secrets.tf").read_text()
+    # SP07 R8/AC10: firebaseauth.admin is the only added api grant, and only when resend_secret_wired (count-gated).
+    gated = blocks(main, "google_project_iam_member")["api_firebaseauth_admin"]
+    assert re.search(r'role\s*=\s*"roles/firebaseauth\.admin"', gated)
+    assert re.search(r"count\s*=\s*var\.resend_secret_wired\s*\?\s*1\s*:\s*0", gated)
     api_roles = sorted(
         re.search(r'role\s*=\s*"([^"]+)"', b).group(1)
         for t in GRANT_TYPES
-        for b in blocks(main, t).values()
-        if "runtime_sas" in b or "google_service_account.api.email" in b
+        for k, b in blocks(main, t).items()
+        if ("runtime_sas" in b or "google_service_account.api.email" in b) and k != "api_firebaseauth_admin"
     )
     assert api_roles == sorted(
         ["roles/datastore.user", "roles/storage.objectAdmin", "roles/cloudtasks.enqueuer",
