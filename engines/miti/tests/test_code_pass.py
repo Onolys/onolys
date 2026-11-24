@@ -390,10 +390,67 @@ async def test_context_only_quote_dropped_without_retry(tmp_path, pack_data, con
     vs = context_volleys(spec)
     client = StubClient(lambda req, n: good(req, lambda vid: [utt(text)]
                         if vid == vs[-1].id else []))
-    out = await run(client, make_pack(tmp_path, pack_data), vs)
-    assert len(client.requests) == 1
+    out = await run(client, make_pack(tmp_path, pack_data, {"volleys_per_call": 1}), vs)
+    assert len(client.requests) == len(vs)
     assert out.instances == []
     assert [w.code for w in out.warnings] == ['context_quote']
+
+
+@pytest.mark.parametrize("batch_size, expected", [(1, "context_quote"), (2, "quote_not_found")])
+async def test_context_quote_requires_absence_from_actual_batch(
+    tmp_path, pack_data, batch_size, expected,
+):
+    previous = "Permission was already granted."
+    current = ["One aaa.", "Two bbb.", "Three ccc.", "Four ddd."]
+    vs = context_volleys([('A', previous), ('B', 'A substantive client response.'),
+                          ('A', ' '.join(current))])
+    client = StubClient(lambda req, n: good(req, lambda vid: [
+        *(utt(text) for text in current), utt(previous),
+    ] if vid == vs[-1].id else []))
+    out = await run(client, make_pack(tmp_path, pack_data, {"volleys_per_call": batch_size}), vs)
+    assert len(client.requests) == (2 if batch_size == 1 else 1)
+    assert [w.code for w in out.warnings] == [expected]
+    assert [i.quote for i in out.instances] == current
+    assert {i.turn_id for i in out.instances} == {vs[-1].turns[0].id}
+
+
+async def test_same_batch_context_quote_counts_toward_retry_rate(tmp_path, pack_data):
+    previous = "Permission was already granted."
+    vs = context_volleys([('A', previous), ('B', 'A substantive client response.'),
+                          ('A', TEXTS['t0'])])
+    client = StubClient(lambda req, n: good(req, lambda vid: [utt(previous)]
+                        if vid == vs[-1].id else []))
+    with pytest.raises(CodePassFailed):
+        await run(client, make_pack(tmp_path, pack_data), vs)
+    assert len(client.requests) == 2
+
+
+async def test_context_guard_uses_actual_half_batch_after_bad_output(tmp_path, pack_data):
+    vs = context_volleys([
+        ('A', 'Permission was already granted.'), ('B', 'A substantive client response.'),
+        ('A', TEXTS['t0']), ('B', 'Another substantive client response.'),
+        ('A', TEXTS['t1']), ('B', 'One more substantive client response.'),
+        ('A', TEXTS['t2']),
+    ])
+    current = ['Third thing', 'here.', 'Fourth thing', 'here.']
+
+    def handler(req, n):
+        if n == 1:
+            raise LLMBadOutput('truncated')
+        return good(req, lambda vid: [utt(TEXTS['t0'])] if vid == vs[2].id else [
+            *(utt(text) for text in current), utt(TEXTS['t1']),
+        ] if vid == vs[3].id else [])
+
+    client = StubClient(handler)
+    out = await run(client, make_pack(tmp_path, pack_data, {"volleys_per_call": 4}), vs)
+    assert [len(_req_volleys(req)) for req in client.requests] == [4, 2, 2]
+    # v2 is outside the actual second half; v3 is still inside it.
+    assert [(w.code, w.detail) for w in out.warnings] == [
+        ('context_quote', f'{vs[2].id}: utterance dropped'),
+        ('quote_not_found', f'{vs[3].id}: utterance dropped'),
+    ]
+    assert [i.quote for i in out.instances] == current
+    assert {i.turn_id for i in out.instances} == {vs[3].turns[0].id}
 
 
 async def test_current_quote_wins_over_context_and_overlap_is_still_a_failure(tmp_path, pack_data):

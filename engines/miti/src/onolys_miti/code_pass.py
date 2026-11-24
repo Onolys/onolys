@@ -178,7 +178,7 @@ class _Attempt:
 
 
 def _locate_volley(
-    volley: Volley, utterances: list[Any]
+    volley: Volley, utterances: list[Any], batch: list[Volley]
 ) -> tuple[list[Instance], list[ResultWarning]]:
     """Locate utterances in text order inside the volley's turns, never across a turn boundary."""
     out: list[Instance] = []
@@ -193,18 +193,25 @@ def _locate_volley(
                 found = (j, base + m.start, base + m.end)
                 break
         if found is None:
-            seen_earlier = any(
+            seen_earlier = (ti > 0 or cursor > 0) and any(
                 locate(t.text, u.quote, None, _CFG) is not None for t in volley.turns
             )
-            context = volley.context_before
-            context_texts = [*context.get("client_turns", [])]
-            if previous := context.get("previous_clinician_volley"):
-                context_texts.append(previous)
-            in_context = any(locate(text, u.quote, None, _CFG) is not None
-                             for text in context_texts)
-            code = (
-                "overlap" if seen_earlier else "context_quote" if in_context else "quote_not_found"
-            )
+            code = "overlap" if seen_earlier else "quote_not_found"
+            if not seen_earlier:
+                context = volley.context_before
+                context_texts = [*context.get("client_turns", [])]
+                if previous := context.get("previous_clinician_volley"):
+                    context_texts.append(previous)
+                in_context = any(
+                    locate(text, u.quote, None, _CFG) is not None for text in context_texts
+                )
+                # Search other owned turns only for a context candidate. They cannot
+                # supply an anchor, but a same-batch quote is still a real drop.
+                if in_context and not any(
+                    locate(t.text, u.quote, None, _CFG) is not None
+                    for other in batch if other.id != volley.id for t in other.turns
+                ):
+                    code = "context_quote"
             warns.append(ResultWarning(code=code, detail=f"{volley.id}: utterance dropped"))
             continue
         j, start, end = found
@@ -270,7 +277,7 @@ class _Pass:
         for vo in res.parsed.volleys:
             total += len(vo.utterances)
             volley = by_id[vo.volley_id]
-            insts, warns = _locate_volley(volley, vo.utterances)
+            insts, warns = _locate_volley(volley, vo.utterances, batch)
             by_volley.setdefault(volley.id, []).extend(insts)
             warnings += warns
             context_drops = sum(w.code == "context_quote" for w in warns)
