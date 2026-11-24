@@ -1,7 +1,6 @@
 """App factory. One codebase, SERVICE_MODE=api|worker|combined|voice."""
 
 import logging
-import os
 import re
 import time
 import uuid
@@ -32,10 +31,10 @@ from onolys_api.auth.idtoken import InvalidToken, TokenVerifier
 from onolys_api.auth.oidc import OidcVerifier
 from onolys_api.config import LOCAL_ENVS, Settings
 from onolys_api.docs import DESCRIPTION, add_error_responses, make_docs_router
-from onolys_api.email.rate import EmailRateLimiter, MemoryRateStore, RateStore
+from onolys_api.email.rate import EmailRateLimiter, RateStore
 from onolys_api.email.service import AuthEmailService
 from onolys_api.errors import ApiError, ErrorDetail, ErrorResponse, error_body
-from onolys_api.factory import build_blobs, build_repo
+from onolys_api.factory import build_blobs, build_email_rate_store, build_repo
 from onolys_api.jobs.delete import make_delete_handler
 from onolys_api.jobs.interview_sweep import make_interview_sweep_handler
 from onolys_api.jobs.queue import build_queue
@@ -487,15 +486,7 @@ def create_app(
     def auth_email() -> tuple[AuthEmailService, EmailRateLimiter]:
         """Built on first use: the app starts and serves without Resend or Admin SDK set up."""
         if not cached:
-            store = email_rate_store
-            if store is None:
-                if settings.env in LOCAL_ENVS and not os.environ.get("FIRESTORE_EMULATOR_HOST"):
-                    store = MemoryRateStore()
-                else:
-                    from onolys_api.email.rate import FirestoreRateStore
-                    from onolys_api.repo.firestore import make_firestore_client
-
-                    store = FirestoreRateStore(make_firestore_client(settings))
+            store = email_rate_store or build_email_rate_store(settings)
             service = AuthEmailService(
                 settings,
                 auth_links or build_auth_links(settings),

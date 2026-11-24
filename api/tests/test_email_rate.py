@@ -12,7 +12,7 @@ from onolys_api.email.rate import (
     EmailRateLimiter,
     FirestoreRateStore,
     MemoryRateStore,
-    first_forwarded_ip,
+    client_ip,
 )
 
 T0 = datetime(2026, 11, 24, 12, 0, 0, tzinfo=UTC)
@@ -167,14 +167,36 @@ def test_denial_does_not_extend_window(limiter, clock, uid):
 
 
 @pytest.mark.parametrize(
-    "header,expected",
+    "header,hops,expected",
     [
-        ("203.0.113.7, 10.0.0.1, 10.0.0.2", "203.0.113.7"),
-        ("  198.51.100.4  ", "198.51.100.4"),
-        ("", "unknown"),
-        (None, "unknown"),
-        (" , 1.2.3.4", "unknown"),
+        ("203.0.113.7, 130.211.0.1", 1, "203.0.113.7"),  # Hosting path: client, hosting hop
+        ("  198.51.100.4  ", 1, "198.51.100.4"),  # shorter than hops+1: clamp to leftmost
+        ("6.6.6.6, 7.7.7.7, 203.0.113.7, 130.211.0.1", 1, "203.0.113.7"),  # spoofed prefix ignored
+        ("1.2.3.4, 5.6.7.8, 203.0.113.7", 0, "203.0.113.7"),
+        ("1.2.3.4, 5.6.7.8, 203.0.113.7", 2, "1.2.3.4"),
+        ("2001:db8::1, 130.211.0.1", 1, "2001:db8::1"),
+        ("", 1, "unknown"),
+        (None, 1, "unknown"),
+        (" , ", 1, "unknown"),
+        ("evil<script>, 130.211.0.1", 1, "unknown"),  # garbage never becomes a bucket key
     ],
 )
-def test_first_forwarded_ip(header, expected):
-    assert first_forwarded_ip(header) == expected
+def test_client_ip(header, hops, expected):
+    assert client_ip(header, hops) == expected
+
+
+def test_spoofed_prefix_does_not_change_ip_bucket(limiter):
+    real = "203.0.113.9, 130.211.0.1"
+    for i in range(20):
+        spoof = f"10.0.{i}.{i + 1}, {real}"
+        assert limiter.check_reset(_email(), client_ip(spoof, 1)) is True
+    assert limiter.check_reset(_email(), client_ip("10.9.9.9, " + real, 1)) is False  # same bucket
+
+
+def test_ip_over_cap_does_not_consume_victim_email_slots(limiter, clock):
+    ip = "198.51.100.200"
+    for _ in range(20):
+        assert limiter.check_reset(_email(), ip) is True
+    victim = _email()
+    assert limiter.check_reset(victim, ip) is False  # blocked by the IP cap
+    assert limiter.check_reset(victim, "192.0.2.50") is True  # victim's email slot untouched

@@ -37,7 +37,7 @@ def _validate_app_base_url(value: str, env: str) -> None:
     except ValueError:
         pass
     raise ConfigError(
-        "APP_BASE_URL is required and must be an HTTPS origin on a known app host "
+        "APP_BASE_URL must be an HTTPS origin on a known app host "
         "(http://localhost:<port> is allowed for local or test)"
     )
 
@@ -109,10 +109,11 @@ class Settings:
     ai_max_frame_bytes: int = 65536
     ai_max_audio_bytes_per_s: int = 128000
     ai_max_connects: int = 30
-    # Explicit construction supports local tests; from_env requires APP_BASE_URL without a default.
+    # Explicit construction supports local tests; from_env leaves it empty when unset (emails 503).
     app_base_url: str = "http://localhost:5173"
     email_from: str = "Onolys <no-reply@onolys.com>"
     resend_api_key: str = ""
+    client_ip_trusted_hops: int = 1  # X-Forwarded-For hops to skip from the right (infra.md)
     uid_hmac_key: str = ""  # keys the `uid_hash` log field (Secret Manager `uid-hmac-key-{env}`)
 
     @classmethod
@@ -176,6 +177,7 @@ class Settings:
             ai_max_connects=_int(e, "AI_MAX_CONNECTS", cls.ai_max_connects),
             uid_hmac_key=e.get("UID_HMAC_KEY", ""),
             app_base_url=e.get("APP_BASE_URL", ""),
+            client_ip_trusted_hops=_int(e, "CLIENT_IP_TRUSTED_HOPS", cls.client_ip_trusted_hops),
             email_from=e.get("EMAIL_FROM", cls.email_from),
             resend_api_key=e.get("RESEND_API_KEY", ""),
         )
@@ -195,7 +197,10 @@ class Settings:
             raise ConfigError("AUTH_MODE=fake is only allowed when ENV is local or test")
         if self.env not in LOCAL_ENVS and not self.uid_hmac_key:
             raise ConfigError("UID_HMAC_KEY is required when ENV is staging or prod")
-        _validate_app_base_url(self.app_base_url, self.env)
+        if self.client_ip_trusted_hops < 0:
+            raise ConfigError("CLIENT_IP_TRUSTED_HOPS must be >= 0")
+        if self.app_base_url:  # unset is allowed: auth-email endpoints then answer 503
+            _validate_app_base_url(self.app_base_url, self.env)
         for kind, day in (("EVAL", self.eval_cap_day), ("AI", self.ai_cap_day)):
             if day < 0:
                 raise ConfigError(f"{kind}_CAP_DAY must be >= 0")

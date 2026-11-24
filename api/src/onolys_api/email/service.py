@@ -5,7 +5,7 @@ from html import escape
 from importlib.resources import files
 from string import Template
 
-from onolys_api.adapters.base import AuthLinks, EmailSender
+from onolys_api.adapters.base import AdapterError, AuthAccount, AuthLinks, EmailSender
 from onolys_api.config import Settings
 from onolys_api.email.links import EmailKind, build_action_link
 
@@ -45,9 +45,19 @@ class AuthEmailService:
         email = render_email(kind, link)
         self._sender.send(to, email.subject, email.html, email.text)
 
-    def send_verification(self, uid: str, next_path: str | None = None) -> bool:
+    def require_configured(self) -> None:
+        if not self._settings.app_base_url:  # same path as a missing RESEND_API_KEY (AC7)
+            raise AdapterError("email_unconfigured")
+
+    def get_account(self, uid: str) -> AuthAccount:
+        return self._links.get_user(uid)
+
+    def send_verification(
+        self, uid: str, next_path: str | None = None, account: AuthAccount | None = None
+    ) -> bool:
         """Send to the account's own address; False when already verified (nothing sent)."""
-        account = self._links.get_user(uid)
+        self.require_configured()
+        account = account or self._links.get_user(uid)
         if account.email_verified:
             return False
         self._send("verify", account.email, self._links.verification(uid), next_path)
@@ -55,6 +65,7 @@ class AuthEmailService:
 
     def send_password_reset(self, email: str) -> bool:
         """False for unknown/disabled accounts (nothing sent)."""
+        self.require_configured()
         code = self._links.password_reset(email)
         if code is None:
             return False

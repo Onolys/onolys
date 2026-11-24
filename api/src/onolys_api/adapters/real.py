@@ -256,7 +256,11 @@ class FirebaseAuthLinks:
                 raise AdapterError("auth_links_failed")
             return codes[0]
         except Exception as exc:
-            if kind == "reset" and isinstance(exc, getattr(self._sdk, "UserNotFoundError", ())):
+            ineligible = tuple(  # no such account / disabled: nothing to send, not an error
+                c for n in ("UserNotFoundError", "EmailNotFoundError", "UserDisabledError")
+                if isinstance(c := getattr(self._sdk, n, None), type)
+            )
+            if kind == "reset" and ineligible and isinstance(exc, ineligible):
                 return None
             raise AdapterError("auth_links_failed") from None
 

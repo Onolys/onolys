@@ -89,6 +89,24 @@ def test_unknown_reset_account_and_safe_sdk_failures():
         links.password_reset("person@example.com")
 
 
+@pytest.mark.parametrize("name", ["EmailNotFoundError", "UserNotFoundError", "UserDisabledError"])
+def test_real_sdk_ineligible_account_errors_mean_no_send(name):
+    from firebase_admin import auth
+
+    from onolys_api.adapters.real import FirebaseAuthLinks
+
+    exc = getattr(auth, name)("private email")  # real SDK classes, constructed as the SDK does
+    sdk = SimpleNamespace(
+        ActionCodeSettings=lambda **kwargs: SimpleNamespace(**kwargs),
+        EmailNotFoundError=auth.EmailNotFoundError,
+        UserNotFoundError=auth.UserNotFoundError,
+        UserDisabledError=auth.UserDisabledError,
+        generate_password_reset_link=Mock(side_effect=exc),
+    )
+    links = FirebaseAuthLinks("project", "https://app.onolys.com", auth_sdk=sdk)
+    assert links.password_reset("person@example.com") is None
+
+
 def test_missing_sdk_code_is_safe_failure():
     from onolys_api.adapters.real import FirebaseAuthLinks
 

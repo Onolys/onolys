@@ -7,6 +7,7 @@ is the Firestore TTL field. The limiter only answers allow/deny; routes decide t
 
 import hashlib
 import hmac
+import ipaddress
 import random
 import threading
 import time
@@ -88,10 +89,22 @@ class FirestoreRateStore:
         return {d.id: d.to_dict() for d in self._client.collection(self._collection).stream()}
 
 
-def first_forwarded_ip(header: str | None) -> str:
-    """First `X-Forwarded-For` hop (Cloud Run puts the client there); 'unknown' if absent."""
-    first = (header or "").split(",", 1)[0].strip()
-    return first or "unknown"
+def client_ip(header: str | None, trusted_hops: int = 1) -> str:
+    """Client IP from `X-Forwarded-For`, counting `trusted_hops` proxy entries from the right.
+
+    Each Google front end appends the address it saw, so the right-hand entries are ours and the
+    left-hand ones are client-controlled. Entry `parts[-(hops+1)]`, clamped to the leftmost when
+    the header is shorter; anything that is not an IP address falls back to 'unknown'.
+    """
+    parts = [p.strip() for p in (header or "").split(",")]
+    parts = [p for p in parts if p]
+    if not parts:
+        return "unknown"
+    candidate = parts[max(len(parts) - 1 - max(trusted_hops, 0), 0)]
+    try:
+        return str(ipaddress.ip_address(candidate))
+    except ValueError:
+        return "unknown"
 
 
 class EmailRateLimiter:
@@ -121,8 +134,9 @@ class EmailRateLimiter:
     def check_reset(self, email: str, client_ip: str) -> bool:
         """Reset email per email-HMAC: 1/60 s and 5/h; plus per client IP 20/h."""
         e = email.strip().lower()
+        # IP first: a flooding IP must not burn a victim email's slots
         return (
-            self._hit("reset-email", e, MINUTE, 1)
+            self._hit("reset-ip", client_ip or "unknown", HOUR, 20)
+            and self._hit("reset-email", e, MINUTE, 1)
             and self._hit("reset-email", e, HOUR, 5)
-            and self._hit("reset-ip", client_ip or "unknown", HOUR, 20)
         )

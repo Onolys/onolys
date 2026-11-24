@@ -73,7 +73,8 @@ Set by Terraform (`infra/modules/environment/services.tf`). Values below are the
 | `DEFAULT_PRESET` | yes | yes | `default` |
 | `CORS_ORIGINS` | yes | no | staging `https://onolys-app-staging.web.app,http://localhost:5173`; prod `https://app.onolys.com` |
 | `UID_HMAC_KEY` | yes | yes | secret ref `uid-hmac-key-{env}` (keys the `uid_hash` log field) |
-| `APP_BASE_URL` | yes | yes (voice too) | staging `https://onolys-app-staging.web.app`, prod `https://app.onolys.com` (root/module var `app_base_url`; required at startup by `Settings` in every service mode; `deploy-staging.yml` re-sets it on the api) |
+| `APP_BASE_URL` | yes | no | staging `https://onolys-app-staging.web.app`, prod `https://app.onolys.com` (root/module var `app_base_url`; api only, `deploy-staging.yml` re-sets it on the api). Optional for `Settings`: when unset the service starts and `POST /v1/auth/email/verification` answers 503 `email_unavailable` (password reset stays 202 and logs `outcome=unconfigured`). When set it must be an HTTPS origin on a known app host or startup fails. The PR preview does not set it, so its auth-email endpoints answer 503 |
+| `CLIENT_IP_TRUSTED_HOPS` | no | no | integer >= 0, default `1`. Number of proxy entries to skip from the right of `X-Forwarded-For` when picking the client IP for the password-reset per-IP cap (`parts[-(hops+1)]`, clamped to the leftmost; non-IP values fall back to the `unknown` bucket). See "Client IP and `X-Forwarded-For`" below |
 | `EMAIL_FROM` | yes | no | `Onolys <no-reply@onolys.com>` (module var `email_from`; also in `deploy-staging.yml`) |
 | `RESEND_API_KEY` | yes | no | secret ref `resend-api-key-{env}`, only when root map var `resend_secret_wired[env]` is true (default false for both; a revision fails if the secret has no version). Without it the api answers 503 `email_unavailable` |
 | `GEMINI_API_KEY` (evaluation LLM) and `ANTHROPIC_API_KEY` (only for the `claude` preset) | no | yes | secret refs `gemini-api-key-{env}` and `anthropic-api-key-{env}` (one ref per `llm_secrets` / `stt_secrets` entry, always the env's own secret; staging and prod use separate provider keys) |
@@ -83,6 +84,14 @@ Set by Terraform (`infra/modules/environment/services.tf`). Values below are the
 There are no STT env vars. No model id appears in infra.
 
 The two cap vars are integers >= 0 (0 disables that kind). There are no monthly caps: one daily limit per flow (evaluation, AI interview). The old single daily-run-cap var and the `EVAL_CAP_MONTH` / `AI_CAP_MONTH` vars were removed; a leftover value on a service is ignored. `MAX_ACTIVE_RUNS` (concurrent evaluation runs per user) defaults to `1`: one run at a time; `users/{uid}.max_active_runs` overrides per user.
+
+## Client IP and `X-Forwarded-For`
+
+Each Google front end appends the address it saw to whatever `X-Forwarded-For` the caller sent, so entries on the left are client-controlled and entries on the right are ours. The reset endpoint's per-IP cap (20/h) takes entry `parts[-(CLIENT_IP_TRUSTED_HOPS+1)]`.
+
+- Default `1` is chosen for the Firebase Hosting `/v1/**` rewrite (the path the web uses). Third-party reports (not Google documentation) show that path arriving as `client, hosting-hop`, so one hop from the right is the client and any prefix the caller injects sits to its left and is ignored.
+- Direct calls to the api's `run.app` URL (ingress is `ALL`) arrive as `<caller-supplied>, client`. With the default, such a caller can choose the bucket by sending a second entry, so the per-IP cap can be evaded on that path (set `0` to protect the direct path instead, at the cost of putting every Hosting user in one shared bucket). Per-email caps (1/min, 5/h) still apply either way.
+- Not verified against live traffic. Before relying on it, check on staging: send one reset request through the Hosting URL and one directly to `run.app` with a forged `X-Forwarded-For`, and compare the chain lengths and the entry that lands in the bucket. Adjust `CLIENT_IP_TRUSTED_HOPS` if the Hosting chain length differs.
 
 ## Per-user limits (Firebase console)
 

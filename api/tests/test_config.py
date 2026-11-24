@@ -187,7 +187,6 @@ def test_app_base_url_allowed(env, url):
 @pytest.mark.parametrize(
     "url",
     [
-        "",
         "app.onolys.com",
         "http://app.onolys.com",
         "https://evil.example",
@@ -211,9 +210,27 @@ def test_app_base_url_rejects_invalid_origin(url):
 
 
 @pytest.mark.parametrize("env", ["local", "test", "staging", "prod"])
-def test_app_base_url_is_required(env):
+@pytest.mark.parametrize("mode", ["api", "worker", "voice", "combined"])
+def test_app_base_url_is_optional_in_every_mode(env, mode):
+    s = Settings.from_env({"ENV": env, "SERVICE_MODE": mode, "UID_HMAC_KEY": "k",
+                           "AUTH_MODE": "fake" if env in ("local", "test") else "idp"})  # fmt: skip
+    assert s.app_base_url == ""
+
+
+@pytest.mark.parametrize("mode", ["api", "worker", "voice"])
+def test_invalid_app_base_url_still_rejected_in_any_mode(mode):
     with pytest.raises(ConfigError, match="APP_BASE_URL"):
-        Settings.from_env({"ENV": env, "UID_HMAC_KEY": "k"})
+        Settings.from_env({"ENV": "staging", "SERVICE_MODE": mode, "UID_HMAC_KEY": "k",
+                           "APP_BASE_URL": "https://evil.example.com"})  # fmt: skip
+
+
+def test_client_ip_trusted_hops_setting():
+    base = {"ENV": "local"}
+    assert Settings.from_env(base).client_ip_trusted_hops == 1
+    assert Settings.from_env({**base, "CLIENT_IP_TRUSTED_HOPS": "0"}).client_ip_trusted_hops == 0
+    for bad in ("-1", "x"):
+        with pytest.raises(ConfigError, match="CLIENT_IP_TRUSTED_HOPS"):
+            Settings.from_env({**base, "CLIENT_IP_TRUSTED_HOPS": bad})
 
 
 @pytest.mark.parametrize("env", ["staging", "prod"])
@@ -237,13 +254,12 @@ def test_email_settings_read_overrides():
     assert s.resend_api_key == "secret"
 
 
-def test_normal_startup_rejects_missing_app_base_url(monkeypatch):
+def test_normal_startup_allows_missing_app_base_url(monkeypatch):
     from onolys_api.app import create_app
 
     monkeypatch.setenv("ENV", "test")
     monkeypatch.delenv("APP_BASE_URL", raising=False)
-    with pytest.raises(ConfigError, match="APP_BASE_URL"):
-        create_app()
+    assert create_app().state.settings.app_base_url == ""
 
 
 def test_staging_startup_without_resend_key():

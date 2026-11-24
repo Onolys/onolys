@@ -201,3 +201,64 @@ async def test_app_serves_without_resend_key_and_verify_503(blobs):  # AC7
         assert r.json()["details"][0]["code"] == "email_unavailable"
         r = await c.post(RESET, json={"email": EMAIL})
         assert (r.status_code, r.text) == (202, "{}")
+
+
+async def test_already_verified_consumes_no_rate_slot(env):  # AC4, R1
+    env.links.accounts["u1"] = AuthAccount(email=EMAIL, email_verified=True)
+    async with env.client() as c:
+        h = bearer(mint("u1", verified=True))
+        for _ in range(3):
+            assert (await c.post(VERIFY, json={}, headers=h)).status_code == 202
+        assert env.sender.messages == []
+        env.links.accounts["u1"] = AuthAccount(email=EMAIL, email_verified=False)
+        r = await c.post(VERIFY, json={}, headers=h)
+    assert r.status_code == 202 and len(env.sender.messages) == 1  # not 429
+
+
+async def test_reset_ip_bucket_ignores_spoofed_forwarded_prefix(blobs):
+    env = Env(blobs)
+    async with env.client() as c:
+        for i in range(20):
+            xff = f"10.0.0.{i}, 203.0.113.9, 130.211.0.1"
+            assert (await c.post(RESET, json={"email": f"x{i}@example.org"},
+                                 headers={"X-Forwarded-For": xff})).status_code == 202  # fmt: skip
+        r = await c.post(RESET, json={"email": EMAIL},
+                         headers={"X-Forwarded-For": "10.9.9.9, 203.0.113.9, 130.211.0.1"})  # fmt: skip
+    assert r.status_code == 202 and env.sender.messages == []  # 21st from the same real IP
+
+
+@pytest.mark.parametrize("mode", ["worker", "voice"])
+async def test_worker_and_voice_start_without_app_base_url(blobs, mode):
+    settings = Settings.from_env({"ENV": "staging", "SERVICE_MODE": mode, "UID_HMAC_KEY": "k",
+                                  "ADAPTERS": "stub", "AUTH_MODE": "idp", "AUTH_PROJECT": PROJECT,
+                                  "WORKER_URL": "https://w.run.app", "TASKS_SA": "t@p.iam"})  # fmt: skip
+    app = create_app(settings, repo=FakeRepo(blobs), blobs=blobs,
+                     token_verifier=IdTokenVerifier(PROJECT, fetch_certs=lambda: {KID: PUB}))  # fmt: skip
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app, raise_app_exceptions=False), base_url="http://t"
+    ) as c:
+        assert (await c.get("/v1/healthz")).status_code == 200
+
+
+async def test_api_starts_without_app_base_url_verify_503_reset_logged(blobs, caplog):
+    settings = Settings.from_env({"ENV": "staging", "SERVICE_MODE": "api", "UID_HMAC_KEY": "k",
+                                  "ADAPTERS": "stub", "AUTH_MODE": "idp", "AUTH_PROJECT": PROJECT})  # fmt: skip
+    sender = FakeEmailSender()
+    app = create_app(settings, repo=FakeRepo(blobs), blobs=blobs,
+                     token_verifier=IdTokenVerifier(PROJECT, fetch_certs=lambda: {KID: PUB}),
+                     auth_links=FakeAuthLinks(accounts()), email_sender=sender,
+                     email_rate_store=MemoryRateStore())  # fmt: skip
+    with caplog.at_level(logging.INFO):
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=app, raise_app_exceptions=False), base_url="http://t"
+        ) as c:
+            assert (await c.get("/v1/healthz")).status_code == 200
+            r = await c.post(VERIFY, json={}, headers=bearer(mint(verified=False)))
+            assert r.status_code == 503
+            assert r.json()["details"][0]["code"] == "email_unavailable"
+            r = await c.post(RESET, json={"email": EMAIL})
+            assert (r.status_code, r.text) == (202, "{}")
+    assert sender.messages == []
+    outs = [json.loads(x.getMessage()).get("outcome") for x in caplog.records
+            if x.name == "onolys_api.events" and '"email_kind": "reset"' in x.getMessage()]  # fmt: skip
+    assert "unconfigured" in outs

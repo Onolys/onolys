@@ -13,7 +13,7 @@ from pydantic import BaseModel, Field
 from onolys_api import logs
 from onolys_api.adapters.base import AdapterError
 from onolys_api.auth.deps import AuthUser, current_user_unverified_ok
-from onolys_api.email.rate import first_forwarded_ip
+from onolys_api.email.rate import client_ip
 from onolys_api.errors import ApiError, ErrorResponse
 
 ERRORS = {"default": {"model": ErrorResponse, "description": "Error"}}
@@ -44,6 +44,14 @@ def _failure_fields(exc: Exception) -> dict:
     }
 
 
+def _verify_failed(exc: Exception, uid_hash: str):
+    logs.emit("auth_email", logging.ERROR, email_kind="verify", uid_hash=uid_hash,
+              exc_class=type(exc).__name__,
+              **(_failure_fields(exc) if isinstance(exc, AdapterError)
+                 else {"outcome": "send_failed"}))  # fmt: skip
+    raise ApiError.of(503, "email_unavailable", "Email is temporarily unavailable.") from None
+
+
 @router.post(
     "/verification",
     operation_id="sendVerificationEmail",
@@ -59,18 +67,23 @@ def _failure_fields(exc: Exception) -> dict:
 def send_verification(request: Request, body: VerificationRequest, user: UnverifiedOkUser) -> Empty:
     service, limiter = request.app.state.auth_email()
     uid_hash = logs.uid_hash(user.uid)
+    try:
+        service.require_configured()
+        account = service.get_account(user.uid)
+        if account.email_verified:  # no send, no rate consumption (AC4)
+            logs.emit("auth_email", email_kind="verify", uid_hash=uid_hash,
+                      outcome="already_verified")  # fmt: skip
+            return Empty()
+    except Exception as exc:
+        _verify_failed(exc, uid_hash)
     if not limiter.check_verify(user.uid):
         logs.emit("auth_email", logging.WARNING, email_kind="verify", outcome="rate_limited",
                   uid_hash=uid_hash)  # fmt: skip
         raise ApiError.of(429, "rate_limited", "Too many requests.")
     try:
-        sent = service.send_verification(user.uid, body.next)
+        sent = service.send_verification(user.uid, body.next, account=account)
     except Exception as exc:
-        logs.emit("auth_email", logging.ERROR, email_kind="verify", uid_hash=uid_hash,
-                  exc_class=type(exc).__name__,
-                  **(_failure_fields(exc) if isinstance(exc, AdapterError)
-                     else {"outcome": "send_failed"}))  # fmt: skip
-        raise ApiError.of(503, "email_unavailable", "Email is temporarily unavailable.") from None
+        _verify_failed(exc, uid_hash)
     logs.emit("auth_email", email_kind="verify", uid_hash=uid_hash,
               outcome="sent" if sent else "already_verified")  # fmt: skip
     return Empty()
@@ -101,7 +114,9 @@ def _send_reset(service, email: str) -> None:
 )
 def send_password_reset(request: Request, body: ResetRequest, background: BackgroundTasks) -> Empty:
     service, limiter = request.app.state.auth_email()
-    ip = first_forwarded_ip(request.headers.get("x-forwarded-for"))
+    ip = client_ip(
+        request.headers.get("x-forwarded-for"), request.app.state.settings.client_ip_trusted_hops
+    )
     if not limiter.check_reset(body.email, ip):
         logs.emit("auth_email", logging.WARNING, email_kind="reset", outcome="rate_limited")
         return Empty()
