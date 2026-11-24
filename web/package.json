@@ -70,6 +70,15 @@
   "overrides": {
     "openapi-typescript": {
       "typescript": "$typescript"
+    },
+    "@firebase/firestore": {
+      "@grpc/grpc-js": "1.13.7"
+    },
+    "@stryker-mutator/core": {
+      "minimatch": "11.0.9"
+    },
+    "typed-rest-client": {
+      "qs": "6.16.2"
     }
   }
 }
