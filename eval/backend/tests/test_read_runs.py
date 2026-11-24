@@ -20,6 +20,25 @@ def scores(**counts):
     ).model_dump(mode="json")
 
 
+def start_legacy(c, **kwargs):
+    """Create a run, then rewrite it as a stored legacy-preset run (read path until Task 6)."""
+    response = start(c, **kwargs)
+    to_legacy(c, response.json()["run_id"])
+    return response
+
+
+def to_legacy(c, rid):
+    repository = c.app.state.services.repository
+    repository.update_run(
+        rid, {"presets": ["configured-prod"], "resolved_presets": {"configured-prod": {}}}
+    )
+    for uid, unit in repository.list_units(rid).items():
+        if unit["engine"] != "human":
+            repository.update_unit(
+                rid, uid, {"preset": "configured-prod", "combo": None, "combo_key": None}
+            )
+
+
 def finish(services, rid, values):
     units = services.repository.list_units(rid)
     for uid, score in zip(units, values, strict=True):
@@ -44,7 +63,7 @@ def detail(c, rid):
 
 def test_compare_repeats_equal_core_unit_aggregate(services):
     c = client(services=services)
-    rid = start(c, repeats=3).json()["run_id"]
+    rid = start_legacy(c, repeats=3).json()["run_id"]
     human = scores(question=2, sr=1, cr=1)
     low, high = scores(question=0, sr=0, cr=0), scores(question=4, sr=2, cr=2)
     finish(services, rid, [human, low, high, None])
@@ -81,7 +100,7 @@ def test_multiple_sessions_and_repeats_aggregate_not_cell_means(services):
     )
     services.bucket.write_json("datasets/synthetic/two/gold.json", {**gold(), "session_id": "two"})
     c = client(services=services)
-    rid = start(
+    rid = start_legacy(
         c, input={"dataset_id": "synthetic", "session_ids": ["one", "two"]}, repeats=3
     ).json()["run_id"]
     h = scores(question=2)
@@ -102,6 +121,7 @@ def test_multiple_sessions_and_repeats_aggregate_not_cell_means(services):
 def test_no_human_even_with_saved_gold_has_no_diffs_or_errors(services):
     c = client(services=services)
     rid = start_ai(services, c, engines=["miti"], repeats=3).json()["run_id"]
+    to_legacy(c, rid)
     finish(services, rid, [scores(question=0, sr=0, cr=0), None, None])
     result = detail(c, rid)["compare"]
     assert result["has_human"] is False and result["aggregates"] == []
@@ -118,7 +138,7 @@ def test_no_human_even_with_saved_gold_has_no_diffs_or_errors(services):
 @pytest.mark.parametrize("state", ["queued", "failed"])
 def test_unfinished_human_does_not_use_saved_gold(services, state):
     c = client(services=services)
-    rid = start(c).json()["run_id"]
+    rid = start_legacy(c).json()["run_id"]
     finish(services, rid, [None, scores()])
     uid = next(iter(services.repository.list_units(rid)))
     services.repository.update_unit(rid, uid, {"status": state})
@@ -131,7 +151,7 @@ def test_unfinished_human_does_not_use_saved_gold(services, state):
 
 def test_history_provenance_and_private_snapshot_paths(services):
     c = client(services=services)
-    rid = start(c).json()["run_id"]
+    rid = start_legacy(c).json()["run_id"]
     services.repository.update_run(
         rid,
         {

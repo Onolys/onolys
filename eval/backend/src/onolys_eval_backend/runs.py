@@ -20,7 +20,7 @@ from onolys_engine_core.errors import InputError
 from onolys_engine_core.llm.config import LLMConfig
 from onolys_engine_core.llm.litellm_client import LiteLLMClient
 from onolys_engine_core.llm.models import load_models, models_path
-from onolys_engine_core.llm.routes import resolve_preset
+from onolys_engine_core.llm.routes import combo_routes, resolve_preset
 from onolys_engine_core.llm.types import MetricsCollector
 from onolys_engine_core.transcript_input import (
     inferred_clinician_speaker,
@@ -34,7 +34,13 @@ from pydantic import BaseModel, ConfigDict, Field, StrictInt, model_validator
 
 from onolys_eval_backend.catalog import _IDENTIFIER, read_dataset
 from onolys_eval_backend.costs import PriceBook
-from onolys_eval_backend.matrix import RunTooLarge, SelectionError, plan_units, validate_selection
+from onolys_eval_backend.matrix import (
+    RunTooLarge,
+    SelectionError,
+    combo_key,
+    plan_units,
+    validate_selection,
+)
 from onolys_eval_backend.storage import store_output
 from onolys_eval_backend.uploads import validate_gold, validate_span
 
@@ -260,10 +266,10 @@ def create_run(services, config, body, created_by, *, registry=None, input_ref=N
     session_ids = body.input.session_ids if body.input.dataset_id else [body.input.upload_id]
     # Pure and IO-free: oversized runs are rejected before anything is read or written.
     plan = plan_units([{"session_id": sid} for sid in session_ids], engines, combos, body.repeats)
-    # Transitional until unit execution moves to combo routes (Task 4).
-    bridge = config.default_preset
-    bridge_models = {
-        name: route.litellm_id for name, route in resolve_preset(bridge, services.routes)[0].items()
+    base = config.default_preset
+    resolved_combos = {
+        combo_key(c): _combo_snapshot(_routes_for(services.routes, base, models, c), c)
+        for c in combos
     }
     sources = (
         _validate_sources(services, input_ref["sessions"], body)
@@ -293,7 +299,7 @@ def create_run(services, config, body, created_by, *, registry=None, input_ref=N
             units[uid] = {
                 "session_id": sid,
                 "engine": engine,
-                "preset": None if engine == "human" else bridge,
+                "preset": None,
                 "combo": planned["combo"],
                 "combo_key": planned["combo_key"],
                 "repeat": planned["repeat"],
@@ -310,7 +316,10 @@ def create_run(services, config, body, created_by, *, registry=None, input_ref=N
         "engines": engines,
         "selection": body.selection.model_dump(),
         "combos": combos,
-        "presets": [bridge] if combos else [],
+        # Legacy-shaped fields keep read_runs working until Task 6 reads combos.
+        "presets": [],
+        "resolved_presets": {},
+        "base_preset": base,
         "repeats": body.repeats,
         "change_goal": body.change_goal,
         "language": body.language,
@@ -329,7 +338,7 @@ def create_run(services, config, body, created_by, *, registry=None, input_ref=N
         "unpriced_units": 0,
         "engine_git_sha": _git_sha(),
         "engine_versions": {e: choices[e].version for e in engines if e != "human"},
-        "resolved_presets": {bridge: bridge_models} if combos else {},
+        "resolved_combos": resolved_combos,
     }
     services.repository.create_run(rid, run, units)
     for uid in units:
@@ -445,7 +454,11 @@ def _estimate_cost(services, run, unit, usage, metrics):
         estimates = [prices.estimate(record, record["model"]) for record in metrics.records]
         unknown = any(e.cost_usd is None for e in estimates)
         return sum(e.cost_usd or 0 for e in estimates), unknown
-    models = set(run["resolved_presets"].get(unit["preset"], {}).values())
+    if unit.get("combo_key"):
+        snap = run["resolved_combos"].get(unit["combo_key"])
+        models = {snap["litellm_id"]} if snap else set()
+    else:
+        models = set(run["resolved_presets"].get(unit["preset"], {}).values())
     estimate = prices.estimate(usage, next(iter(models)) if len(models) == 1 else "")
     return estimate.cost_usd, estimate.cost_usd is None
 
@@ -456,6 +469,25 @@ def _cost(services, run, unit, usage, metrics):
         return _estimate_cost(services, run, unit, usage, metrics)
     except Exception:
         return usage.cost_usd, usage.cost_usd is None
+
+
+def _routes_for(registry, base_preset, models, combo):
+    """Route set for one combo: the base preset's routes re-pointed at the combo (PRD R6)."""
+    model = next(m for m in models.values() if m.id == combo["model"])
+    base = resolve_preset(base_preset, registry)[0]
+    return combo_routes(base, model, combo["tier"], combo["effort"])
+
+
+def _combo_snapshot(routes, combo):
+    route = next(iter(routes.values()))
+    return {
+        "litellm_id": route.litellm_id,
+        "effort": combo["effort"],
+        "max_output_tokens": route.max_output_tokens,
+        "context_tokens": route.context_tokens,
+        "supports_temperature": route.supports_temperature,
+        "caching_mode": route.caching_mode,
+    }
 
 
 class _ExecutionConfigChanged(Exception):
@@ -500,13 +532,26 @@ async def execute_unit(services, rid, uid):
             transcript = validate_transcript_input(
                 services.bucket.read_json(source["transcript_path"])
             )
-            routes, _ = resolve_preset(unit["preset"], services.routes)
             engine = services.engine(unit["engine"])
+            if unit.get("combo"):
+                # Combo unit: rebuild routes from the live models.yaml and compare to the
+                # snapshot taken at creation (drift guard).
+                routes = _routes_for(
+                    services.routes, run["base_preset"], services.models, unit["combo"]
+                )
+                config_changed = run["resolved_combos"].get(unit["combo_key"]) != _combo_snapshot(
+                    routes, unit["combo"]
+                )
+            else:
+                # Legacy preset unit, kept until stored legacy runs drain.
+                routes, _ = resolve_preset(unit["preset"], services.routes)
+                config_changed = run["resolved_presets"].get(unit["preset"]) != {
+                    name: route.litellm_id for name, route in routes.items()
+                }
             if (
                 run["engine_git_sha"] != _git_sha()
                 or run["engine_versions"].get(unit["engine"]) != engine.version
-                or run["resolved_presets"].get(unit["preset"])
-                != {name: route.litellm_id for name, route in routes.items()}
+                or config_changed
             ):
                 raise _ExecutionConfigChanged
             factory = getattr(services, "llm_factory", None)

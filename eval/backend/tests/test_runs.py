@@ -2,6 +2,7 @@
 
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
+from dataclasses import replace
 from pathlib import Path
 from threading import Event
 from types import SimpleNamespace
@@ -116,7 +117,12 @@ def test_expansion_human_once_and_immutable_provenance(services):
     assert all(t["kind"] == "unit" and t["payload"]["run_id"] == rid for t in services.queue.tasks)
     assert run["created_by"] == "alice@example.com"
     assert run["engine_versions"]["oneshot:miti"] and run["engine_git_sha"]
-    assert run["resolved_presets"]["configured-prod"] == {"oneshot": "synthetic/model"}
+    assert run["presets"] == [] and run["resolved_presets"] == {}
+    assert set(run["resolved_combos"]) == {
+        "claude/claude-sonnet-5-5/low",
+        "claude/claude-sonnet-5-5/high",
+    }
+    assert all(u["preset"] is None for u in units.values())
     saved = run["input_ref"]["sessions"][0]
     assert saved["coded_span"] == {"start_turn": 0, "end_turn": 2}
     assert saved["change_goal"] == "Test goal" and saved["transcript_sha256"]
@@ -253,7 +259,7 @@ def test_transient_execution_snapshot_read_failure_can_retry(services, monkeypat
     assert len(engine.calls) == 1
 
 
-@pytest.mark.parametrize("changed", ["sha", "version", "routes"])
+@pytest.mark.parametrize("changed", ["sha", "version", "models"])
 def test_execution_config_drift_fails_before_provider_work(services, monkeypatch, changed):
     engine = services.fake_engine = FakeEngine()
     monkeypatch.setenv("GIT_SHA", "before-deployment")
@@ -266,7 +272,9 @@ def test_execution_config_drift_fails_before_provider_work(services, monkeypatch
     elif changed == "version":
         engine.version = "after-deployment"
     else:
-        services.routes.raw_routes["oneshot"]["litellm_id"] = "synthetic/changed-model"
+        services.models = {
+            k: replace(m, provider="changed-provider") for k, m in services.models.items()
+        }
     assert dispatch(c, rid, uid).status_code == 200
     assert dispatch(c, rid, uid).status_code == 200
     unit = services.repository.get_unit(rid, uid)
@@ -286,7 +294,6 @@ def test_rerun_uses_current_execution_snapshot_and_matching_config_runs(services
     rid = start(c, engines=["oneshot:miti"]).json()["run_id"]
     original = services.repository.get_run(rid)
     monkeypatch.setenv("GIT_SHA", "after-deployment")
-    services.routes.raw_routes["oneshot"]["litellm_id"] = "synthetic/changed-model"
     engine.version = "after-deployment"
     monkeypatch.setattr(services.registry.get("oneshot"), "version", engine.version)
     response = c.post(
@@ -298,7 +305,9 @@ def test_rerun_uses_current_execution_snapshot_and_matching_config_runs(services
     saved = services.repository.get_run(rerun_id)
     assert saved["engine_git_sha"] == "after-deployment" != original["engine_git_sha"]
     assert saved["engine_versions"]["oneshot:miti"] == engine.version
-    assert saved["resolved_presets"] == {"configured-prod": {"oneshot": "synthetic/changed-model"}}
+    assert saved["resolved_combos"]["claude/claude-sonnet-5-5/low"]["litellm_id"] == (
+        "anthropic/claude-sonnet-5-5"
+    )
     uid = next(iter(services.repository.list_units(rerun_id)))
     assert dispatch(c, rerun_id, uid).status_code == 200
     assert services.repository.get_unit(rerun_id, uid)["status"] == "done"
@@ -653,7 +662,7 @@ def test_success_spills_large_output_and_uses_model_price_fallback(services):
 
     services.prices = PriceBook(
         {
-            "synthetic/model": {
+            "anthropic/claude-sonnet-5-5": {
                 "input_usd_per_million": 2,
                 "output_usd_per_million": 8,
             }
@@ -756,3 +765,57 @@ def test_dataset_full_session_null_span_creates_and_executes_human_unit(services
     assert dispatch(c, rid, uid).status_code == 200
     assert services.repository.get_run(rid)["status"] == "done"
     assert services.repository.get_unit(rid, uid)["scores"]["counts"] == gold()["counts"]
+
+
+def test_combo_unit_executes_on_combo_routes(services):
+    engine = services.fake_engine = FakeEngine()
+    seen = []
+    services.llm_factory = lambda routes, metrics: seen.append(routes) or SimpleNamespace(
+        routes=routes
+    )
+    c = client(services=services)
+    rid = start_ai(services, c, engines=["oneshot:miti"], selection=SEL2).json()["run_id"]
+    run = services.repository.get_run(rid)
+    assert run["resolved_combos"]["claude/claude-sonnet-5-5/high"] == {
+        "litellm_id": "anthropic/claude-sonnet-5-5",
+        "effort": "high",
+        "max_output_tokens": 48000,
+        "context_tokens": 1000000,
+        "supports_temperature": False,
+        "caching_mode": "anthropic_ephemeral",
+    }
+    units = services.repository.list_units(rid)
+    uid = next(u for u, v in units.items() if v["combo"]["effort"] == "high")
+    assert dispatch(c, rid, uid).status_code == 200
+    assert services.repository.get_unit(rid, uid)["status"] == "done"
+    (routes,) = seen
+    route = routes["oneshot"]
+    assert route.litellm_id == "anthropic/claude-sonnet-5-5"
+    assert route.extra_params["reasoning_effort"] == "high"
+    assert route.max_output_tokens == 48000 and route.timeout_s == 300
+    ((_, params),) = engine.calls
+    assert params["preset"] is None
+
+
+def test_legacy_preset_unit_still_executes_via_preset_branch(services):
+    engine = services.fake_engine = FakeEngine()
+    seen = []
+    services.llm_factory = lambda routes, metrics: seen.append(routes) or SimpleNamespace(
+        routes=routes
+    )
+    c = client(services=services)
+    rid = start_ai(services, c, engines=["oneshot:miti"]).json()["run_id"]
+    uid = next(iter(services.repository.list_units(rid)))
+    services.repository.update_run(
+        rid,
+        {"resolved_presets": {"configured-prod": {"oneshot": "synthetic/model"}},
+         "resolved_combos": {}},
+    )
+    services.repository.update_unit(
+        rid, uid, {"preset": "configured-prod", "combo": None, "combo_key": None}
+    )
+    assert dispatch(c, rid, uid).status_code == 200
+    assert services.repository.get_unit(rid, uid)["status"] == "done"
+    assert seen[0]["oneshot"].litellm_id == "synthetic/model"
+    ((_, params),) = engine.calls
+    assert params["preset"] == "configured-prod"
