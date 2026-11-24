@@ -153,3 +153,20 @@ variable "ai_mic_gate" {
   type    = bool
   default = false
 }
+
+variable "app_base_url" {
+  description = "Public web app origin the api puts in auth-email links (api APP_BASE_URL; required by Settings in staging/prod for api, worker and voice)."
+  type        = string
+}
+
+variable "email_from" {
+  description = "From header for auth emails (api EMAIL_FROM)."
+  type        = string
+  default     = "Onolys <no-reply@onolys.com>"
+}
+
+variable "resend_secret_wired" {
+  description = "Wire RESEND_API_KEY on the api via secret_key_ref. Keep false until the owner has seeded a version of resend-api-key-<env> (a revision fails to start if the secret has no version)."
+  type        = bool
+  default     = false
+}

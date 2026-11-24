@@ -107,6 +107,8 @@ module "staging" {
   stt_secrets              = var.stt_secrets
   admin_enabled            = var.admin_enabled["staging"]
   git_sha                  = var.git_sha["staging"]
+  app_base_url             = "https://${var.app_staging_site_id}.web.app"
+  resend_secret_wired      = var.resend_secret_wired["staging"]
   alerts_enabled           = var.staging_alerts
   notification_channel_ids = [google_monitoring_notification_channel.owner_email.id]
   admin_cors_origins = [
@@ -139,6 +141,8 @@ module "prod" {
   stt_secrets              = var.stt_secrets
   admin_enabled            = var.admin_enabled["prod"]
   git_sha                  = var.git_sha["prod"]
+  app_base_url             = "https://app.onolys.com"
+  resend_secret_wired      = var.resend_secret_wired["prod"]
   alerts_enabled           = true
   notification_channel_ids = [google_monitoring_notification_channel.owner_email.id]
   admin_cors_origins       = ["https://${var.admin_site_id}.web.app"]

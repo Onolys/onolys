@@ -26,6 +26,7 @@ staging: same shape, site onolys-app-staging, Firestore DB `staging`, *-staging 
 | Cloud Tasks queue | `steps-staging` | `steps-prod` |
 | Service accounts (`@onolys.iam.gserviceaccount.com`) | `api-staging`, `worker-staging`, `tasks-invoker-staging`, `deployer-staging` | `api-prod`, `worker-prod`, `tasks-invoker-prod`, `deployer-prod` |
 | Secret `uid-hmac-key-{env}` | `uid-hmac-key-staging` | `uid-hmac-key-prod` |
+| Secret `resend-api-key-{env}` (shell; owner seeds the value) | `resend-api-key-staging` | `resend-api-key-prod` (shell only; not wired) |
 | Secret `<base>-{env}` per `llm_secrets` / `stt_secrets` entry (default bases `gemini-api-key`, `anthropic-api-key`) | `gemini-api-key-staging`, `anthropic-api-key-staging` | `gemini-api-key-prod`, `anthropic-api-key-prod` |
 | Log-based metric (5xx) | `onolys-api-5xx-staging` | `onolys-api-5xx-prod` |
 | Alert policies | none while `staging_alerts=false` | `Onolys failed step/run (prod)`, `Onolys api 5xx rate (prod)` |
@@ -72,6 +73,9 @@ Set by Terraform (`infra/modules/environment/services.tf`). Values below are the
 | `DEFAULT_PRESET` | yes | yes | `default` |
 | `CORS_ORIGINS` | yes | no | staging `https://onolys-app-staging.web.app,http://localhost:5173`; prod `https://app.onolys.com` |
 | `UID_HMAC_KEY` | yes | yes | secret ref `uid-hmac-key-{env}` (keys the `uid_hash` log field) |
+| `APP_BASE_URL` | yes | yes (voice too) | staging `https://onolys-app-staging.web.app`, prod `https://app.onolys.com` (root/module var `app_base_url`; required at startup by `Settings` in every service mode; `deploy-staging.yml` re-sets it on the api) |
+| `EMAIL_FROM` | yes | no | `Onolys <no-reply@onolys.com>` (module var `email_from`; also in `deploy-staging.yml`) |
+| `RESEND_API_KEY` | yes | no | secret ref `resend-api-key-{env}`, only when root map var `resend_secret_wired[env]` is true (default false for both; a revision fails if the secret has no version). Without it the api answers 503 `email_unavailable` |
 | `GEMINI_API_KEY` (evaluation LLM) and `ANTHROPIC_API_KEY` (only for the `claude` preset) | no | yes | secret refs `gemini-api-key-{env}` and `anthropic-api-key-{env}` (one ref per `llm_secrets` / `stt_secrets` entry, always the env's own secret; staging and prod use separate provider keys) |
 | `LLM_PROVIDER`, `LLM_MODEL` | yes | yes | staging only, set by `deploy-staging.yml` from GitHub repo variables `LLM_PROVIDER` / `LLM_MODEL`; not set by Terraform. Empty = no override. See "LLM provider and model" |
 | `GIT_SHA` | yes | yes | set by CI at deploy. `unset` until the first CI deploy (the services still run the placeholder image `us-docker.pkg.dev/cloudrun/container/hello`) |
