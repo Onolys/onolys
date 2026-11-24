@@ -29,7 +29,7 @@ function makeApi(sessionCount = 2) {
 async function mount(sessionCount = 2) {
   const api = makeApi(sessionCount); const onRunCreated = vi.fn();
   render(<NewRun api={api} onRunCreated={onRunCreated} />);
-  await screen.findByLabelText('First session');
+  await screen.findByRole('slider');
   return { api, onRunCreated };
 }
 async function uploadMode() {
@@ -47,6 +47,28 @@ const checked = (name: string) => (screen.getByLabelText(name) as HTMLInputEleme
 const start = () => screen.getByRole('button', { name: 'Start run' }) as HTMLButtonElement;
 
 describe('new run', () => {
+  it('defaults the session slider to 50 for a large dataset and submits the first 50 in order', async () => {
+    const { api } = await mount(200);
+    const slider = screen.getByRole('slider') as HTMLInputElement;
+    expect(slider.min).toBe('1'); expect(slider.max).toBe('200'); expect(slider.value).toBe('50');
+    expect(screen.getByLabelText('Sessions to run: 50 of 200')).toBe(slider);
+    fireEvent.click(start());
+    await waitFor(() => expect(api.start).toHaveBeenCalled());
+    const ids = (api.start as ReturnType<typeof vi.fn>).mock.calls[0][0].input.session_ids;
+    expect(ids).toHaveLength(50); expect(ids.slice(0, 3)).toEqual(['s1', 'x1', 'x2']); expect(ids[49]).toBe('x49');
+  });
+  it('defaults the slider to the total when the dataset has fewer than 50 sessions', async () => {
+    await mount(7);
+    const slider = screen.getByRole('slider') as HTMLInputElement;
+    expect(slider.value).toBe('7'); expect(screen.getByLabelText('Sessions to run: 7 of 7')).toBe(slider);
+  });
+  it('moving the slider changes the submitted session list', async () => {
+    const { api } = await mount(200);
+    fireEvent.change(screen.getByRole('slider'), { target: { value: '3' } });
+    expect(screen.getByLabelText('Sessions to run: 3 of 200')).toBeTruthy();
+    fireEvent.click(start());
+    await waitFor(() => expect(api.start).toHaveBeenCalledWith(expect.objectContaining({ input: { dataset_id: 'sample', session_ids: ['s1', 'x1', 'x2'] } })));
+  });
   it('shows the original source media line for the selected dataset', async () => {
     await mount();
     expect(screen.getByTestId('dataset-source').textContent).toBe('Original: Video + transcript · Transcript: human · Labels: MITI counts · MITI 4.2.1');
@@ -54,7 +76,7 @@ describe('new run', () => {
   });
   it('loads configured dataset defaults, all sessions, prod labels and starts with a selection', async () => {
     const { api, onRunCreated } = await mount();
-    expect(checked('First session')).toBe(true); expect(checked('Second session')).toBe(true);
+    expect(screen.getByLabelText(/Sessions to run: 2 of 2/)).toBeTruthy();
     expect(checked('Human score')).toBe(true); expect((screen.getByLabelText('Human score') as HTMLInputElement).disabled).toBe(true);
     expect(checked('MITI lean (prod)')).toBe(true);
     expect(checked('Claude')).toBe(true); expect(checked('claude-sonnet-5-5')).toBe(true); expect(checked('low')).toBe(true);
@@ -99,9 +121,11 @@ describe('new run', () => {
   });
   it('disables Start with the server message above 499 units', async () => {
     await mount(250);
+    const slider = screen.getByRole('slider');
+    fireEvent.change(slider, { target: { value: '250' } });
     expect(screen.getByText('Run has 500 units; the maximum is 499. Remove sessions, combos or repeats.')).toBeTruthy();
     expect(start().disabled).toBe(true);
-    fireEvent.click(screen.getByLabelText('First session'));
+    fireEvent.change(slider, { target: { value: '249' } });
     expect(screen.queryByText(/the maximum is 499/)).toBeNull();
     expect(start().disabled).toBe(false);
   });
