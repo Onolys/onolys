@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
+import os
 import random
 import re
 import sys
@@ -82,6 +84,36 @@ def _status(exc: BaseException) -> int | None:
     if code is None:
         code = getattr(getattr(exc, "response", None), "status_code", None)
     return code if isinstance(code, int) else None
+
+
+def _safe_provider_message(exc: BaseException, req: LLMRequest, route: Route) -> str:
+    """Keep short provider diagnostics while removing credentials and request text."""
+    message = str(exc)
+    sensitive = [req.system, req.user, req.cache_prefix, *(req.cache_prefixes or [])]
+    sensitive.extend(
+        value for name, value in os.environ.items()
+        if value and (name == route.api_key_env or any(
+            part in name.upper() for part in ("KEY", "TOKEN", "SECRET", "PASSWORD", "CREDENTIAL")
+        ))
+    )
+    for value in sorted((s for s in sensitive if s), key=len, reverse=True):
+        message = message.replace(value, "[REDACTED]")
+    message = re.sub(r"(?i)\bBearer\s+[^\s,'\"}]+", "Bearer [REDACTED]", message)
+    message = re.sub(
+        r"(?i)([\"']?(?:api[_-]?key|x-api-key|x-goog-api-key|access_token|key)"
+        r"[\"']?\s*[:=]\s*)[\"']?[^\s,}\"'&]+",
+        r"\1[REDACTED]", message,
+    )
+    return message[:300]
+
+
+def _log_provider_error(exc: BaseException, req: LLMRequest, route: Route) -> None:
+    provider, _, model = route.litellm_id.partition("/")
+    logging.getLogger("miti").warning(
+        "llm.provider_error provider=%s model=%s status_code=%s exc_class=%s message=%s",
+        provider, model, _status(exc), type(exc).__name__,
+        json.dumps(_safe_provider_message(exc, req, route)),
+    )
 
 
 def _is_rate_limit(exc: BaseException) -> bool:
@@ -318,10 +350,12 @@ class LiteLLMClient:
                 async with asyncio.timeout(timeout_s):
                     resp = await self._call()(**self._kwargs(req, timeout_s))
             except TimeoutError as exc:
+                _log_provider_error(exc, req, route)
                 raise LLMTimeout("LLM call timed out") from exc
             except asyncio.CancelledError:
                 raise
             except Exception as exc:
+                _log_provider_error(exc, req, route)
                 if _is_rate_limit(exc):
                     raise LLMRateLimited(
                         f"LLM provider rate limited ({_status(exc) or type(exc).__name__})",
