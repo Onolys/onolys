@@ -73,6 +73,10 @@ resource "google_cloud_run_v2_service" "api" {
         value = "api"
       }
       env {
+        name  = "PR_PREVIEW"
+        value = "false"
+      }
+      env {
         # V4 signed URLs on Cloud Run have no private key: GcsBlobStore signs through IAM signBlob as this SA
         # (api_self_token_creator grants it). Without it the upload-URL call fails with a 500.
         name  = "BLOB_SIGNER_EMAIL"

@@ -57,7 +57,7 @@ env_overrides() {
   [[ "$adapters" =~ ^[a-z]+$ ]] || die "bad adapters: '$adapters'"
   [[ "$sha" =~ ^[0-9a-f]{7,40}$ ]] || die "bad sha: '$sha'"
   [[ "$cors" =~ ^https://[A-Za-z0-9.-]+$ ]] || die "bad cors origin: '$cors'"
-  printf '^|^SERVICE_MODE=combined|ADAPTERS=%s|GIT_SHA=%s|CORS_ORIGINS=%s\n' "$adapters" "$sha" "$cors"
+  printf '^|^SERVICE_MODE=combined|PR_PREVIEW=true|ADAPTERS=%s|GIT_SHA=%s|CORS_ORIGINS=%s\n' "$adapters" "$sha" "$cors"
 }
 
 tag_url() {

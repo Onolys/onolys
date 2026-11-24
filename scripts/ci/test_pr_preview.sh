@@ -66,6 +66,7 @@ hasnt "no pull_request_target"                  "$WF" 'pull_request_target'
 
 # --- deploy-staging.yml / _deploy-cloudrun.yml: previews share the staging API service, so staging must not inherit them
 has   "staging api resets SERVICE_MODE=api"     "$DS" 'SERVICE_MODE=api'
+has   "staging api resets PR_PREVIEW=false"   "$DS" 'PR_PREVIEW=false'
 has   "staging api resets ADAPTERS=real"        "$DS" 'ADAPTERS=real'
 has   "staging api resets CORS_ORIGINS"         "$DS" 'CORS_ORIGINS=https://onolys-app-staging\.web\.app'
 has   "staging api resets CPU throttling"       "$DS" 'flags: --cpu-throttling'
@@ -114,7 +115,7 @@ bash "$PP" firebase-config "$API" "$T/norw.json" "$T/x.json" >/dev/null 2>&1 && 
 
 # --- helper: env-overrides (gcloud --update-env-vars with ^|^ delimiter) and tag-url
 ovr="$(bash "$PP" env-overrides stub abcdef1234567890abcdef1234567890abcdef12 https://onolys-app-staging--pr-42-x1.web.app)"
-[[ "$ovr" == "^|^SERVICE_MODE=combined|ADAPTERS=stub|GIT_SHA=abcdef1234567890abcdef1234567890abcdef12|CORS_ORIGINS=https://onolys-app-staging--pr-42-x1.web.app" ]] && ok "env-overrides: combined, stub, sha, CORS = channel origin only" || bad "env-overrides output: $ovr"
+[[ "$ovr" == "^|^SERVICE_MODE=combined|PR_PREVIEW=true|ADAPTERS=stub|GIT_SHA=abcdef1234567890abcdef1234567890abcdef12|CORS_ORIGINS=https://onolys-app-staging--pr-42-x1.web.app" ]] && ok "env-overrides: combined, PR_PREVIEW, stub, sha, CORS = channel origin only" || bad "env-overrides output: $ovr"
 bash "$PP" env-overrides stub "bad sha" https://x.web.app >/dev/null 2>&1 && bad "env-overrides rejects bad sha" || ok "env-overrides rejects bad sha"
 bash "$PP" env-overrides stub abcdef1 "https://x.web.app|EVIL=1" >/dev/null 2>&1 && bad "env-overrides rejects delimiter injection" || ok "env-overrides rejects delimiter injection"
 [[ "$(bash "$PP" tag-url https://onolys-api-staging-abc123-uc.a.run.app 42)" == "https://pr-42---onolys-api-staging-abc123-uc.a.run.app" ]] && ok "tag-url form" || bad "tag-url form"

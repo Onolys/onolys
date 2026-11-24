@@ -1,5 +1,7 @@
+import subprocess
 from pathlib import Path
 
+import httpx
 import pytest
 from onolys_engine_core.errors import ConfigError
 
@@ -365,3 +367,85 @@ def test_combined_is_local_only():
 @pytest.mark.parametrize("mode", ["api", "worker", "voice"])
 def test_deployed_service_complete_configuration(mode):
     assert Settings.from_env({**DEPLOYED, "SERVICE_MODE": mode}).service_mode == mode
+
+
+PREVIEW = {
+    **DEPLOYED,
+    "ENV": "staging",
+    "SERVICE_MODE": "combined",
+    "ADAPTERS": "stub",
+    "FIRESTORE_DATABASE": "staging",
+    "PR_PREVIEW": "true",
+    "K_SERVICE": "onolys-api-staging",
+    "K_REVISION": "onolys-api-staging-pr-58-abcdef1-50-1",
+}
+
+
+def test_staging_combined_preview_configuration():
+    settings = Settings.from_env(PREVIEW)
+    assert settings.service_mode == "combined"
+    assert settings.pr_preview is True
+    assert settings.auth_mode == "idp"
+
+
+def test_preview_workflow_overrides_produce_valid_configuration():
+    root = Path(__file__).resolve().parents[2]
+    overrides = subprocess.check_output(
+        ["bash", str(root / "scripts/ci/pr_preview.sh"), "env-overrides", "stub",
+         "abcdef1234567890", "https://onolys-app-staging--pr-58-x.web.app"],
+        text=True,
+    ).strip()
+    assert overrides.startswith("^|^")
+    env = {**DEPLOYED, "ENV": "staging", "FIRESTORE_DATABASE": "staging"}
+    env.update(item.split("=", 1) for item in overrides[3:].split("|"))
+    settings = Settings.from_env(env)
+    assert settings.pr_preview is True
+    assert settings.service_mode == "combined"
+
+
+@pytest.mark.parametrize("override", [
+    {"ENV": "prod"}, {"ENV": "local", "K_SERVICE": ""},
+    {"ENV": "test", "K_SERVICE": ""},
+    {"SERVICE_MODE": "api"}, {"SERVICE_MODE": "worker"}, {"SERVICE_MODE": "voice"},
+    {"ADAPTERS": "real"}, {"FIRESTORE_DATABASE": "(default)"},
+])
+def test_preview_flag_rejects_other_deployment_profiles(override):
+    with pytest.raises(ConfigError, match="PR_PREVIEW"):
+        Settings.from_env({**PREVIEW, **override})
+
+
+@pytest.mark.parametrize("override,missing", [
+    ({"AUTH_MODE": "fake"}, "AUTH_MODE"), ({"UID_HMAC_KEY": ""}, "UID_HMAC_KEY"),
+    ({"GCP_PROJECT": ""}, "GCP_PROJECT"), ({"REGION": ""}, "REGION"),
+    ({"AUTH_PROJECT": ""}, "AUTH_PROJECT"), ({"AUDIO_BUCKET": ""}, "AUDIO_BUCKET"),
+    ({"VOICE_URL": ""}, "VOICE_URL"),
+])
+def test_preview_preserves_deployed_dependencies(override, missing):
+    with pytest.raises(ConfigError, match=missing):
+        Settings.from_env({**PREVIEW, **override})
+
+
+@pytest.mark.parametrize("flag", ["false", ""])
+def test_staging_combined_still_requires_preview_opt_in(flag):
+    with pytest.raises(ConfigError, match="combined"):
+        Settings.from_env({**PREVIEW, "PR_PREVIEW": flag})
+
+
+def test_invalid_preview_flag_rejected():
+    with pytest.raises(ConfigError, match="PR_PREVIEW"):
+        Settings.from_env({**PREVIEW, "PR_PREVIEW": "maybe"})
+
+
+async def test_preview_starts_with_in_process_tasks_and_idp(blobs):
+    from onolys_api.app import create_app
+    from onolys_api.jobs.queue import InMemoryQueue
+    from onolys_api.repo.fake import FakeRepo
+
+    settings = Settings.from_env(PREVIEW)
+    app = create_app(settings, repo=FakeRepo(blobs), blobs=blobs)
+    assert isinstance(app.state.queue, InMemoryQueue)
+    assert app.state.settings.auth_mode == "idp"
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://preview"
+    ) as client:
+        assert (await client.get("/v1/healthz")).status_code == 200

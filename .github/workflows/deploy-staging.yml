@@ -103,6 +103,7 @@ jobs:
       # and pin traffic to this revision by name.
       env_vars: |-
         SERVICE_MODE=api
+        PR_PREVIEW=false
         ADAPTERS=real
         CORS_ORIGINS=https://onolys-app-staging.web.app\,http://localhost:5173
         APP_BASE_URL=https://onolys-app-staging.web.app
