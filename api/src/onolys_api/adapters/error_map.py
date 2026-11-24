@@ -53,27 +53,6 @@ PUBLIC_MESSAGES = {
     INTERNAL: "Something went wrong on our side. Run again.",
 }
 
-# AdapterError codes that already are public codes: code -> retryable (SP04 R5)
-_ADAPTER_CODES = {
-    UPSTREAM: True,
-    DEADLINE: True,
-    "rate_limited": True,
-    TRANSCRIPTION: False,
-    "no_speech": False,
-    "speakers_not_separated": False,
-}
-
-_GOOGLE_TRANSIENT = (
-    gexc.TooManyRequests,
-    gexc.ServiceUnavailable,
-    gexc.InternalServerError,
-    gexc.GatewayTimeout,
-    gexc.DeadlineExceeded,
-    gexc.Aborted,
-    gexc.RetryError,
-)
-
-
 # public code -> kind (one table; fills `SessionError.kind` at every write site)
 KIND_BY_CODE: dict[str, Kind] = {
     UPSTREAM: TRANSIENT,

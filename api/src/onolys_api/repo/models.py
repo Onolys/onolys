@@ -24,19 +24,7 @@ SessionState = Literal[
     "upload_incomplete",
 ]
 # Only the status doc has this state (R11): the session doc of a discarded upload is gone.
-StatusState = Literal[
-    "created",
-    "uploading",
-    "validating",
-    "transcribing",
-    "awaiting_input",
-    "running",
-    "report_ready",
-    "failed",
-    "deleting",
-    "upload_incomplete",
-    "upload_failed",
-]
+StatusState = Literal[SessionState, "upload_failed"]
 UPLOAD_FAILED_TTL = timedelta(days=7)
 InterviewState = Literal["created", "live", "ended", "abandoned", "uploaded"]
 RunStatus = Literal["pending", "running", "done", "failed"]

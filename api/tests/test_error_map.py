@@ -324,3 +324,12 @@ def test_second_transient_stt_stays_upstream_unavailable_d6():
 def test_kind_by_code_covers_every_public_message_code():
     assert set(PUBLIC_MESSAGES) <= set(KIND_BY_CODE)
     assert set(KIND_BY_CODE.values()) <= {T, P, U}
+
+
+def test_every_session_state_is_a_valid_status_state():
+    """StatusState derives from SessionState: a new session state must validate in status docs."""
+    from typing import get_args
+
+    from onolys_api.repo.models import SessionState, StatusState
+
+    assert set(get_args(SessionState)) | {"upload_failed"} == set(get_args(StatusState))

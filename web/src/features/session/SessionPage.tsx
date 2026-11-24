@@ -96,11 +96,13 @@ function SessionView({ id }: { id: string }) {
   // A successful POST keeps the buttons locked until the status doc moves on (else a second POST races it).
   const { reset: resetRun } = run;
   const docState = doc?.state;
+  // A merged failed -> failed snapshot keeps the state but changes retries_left: also a move-on.
+  const retriesLeft = doc?.retries_left;
   const { reset: resetRetry } = retry;
   useEffect(() => {
     resetRun();
     resetRetry();
-  }, [docState, resetRun, resetRetry]);
+  }, [docState, retriesLeft, resetRun, resetRetry]);
 
   const remove = useMutation({
     mutationFn: async () => {

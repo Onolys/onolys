@@ -364,6 +364,32 @@ describe("session page: failure cards (PRD R6)", () => {
     }
   });
 
+  it("Retry unlocks again when a failed->failed snapshot changes retries_left after a successful retry", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      let posts = 0;
+      server.use(
+        http.post("*/v1/sessions/:id/retry", () => {
+          posts += 1;
+          return HttpResponse.json({ session_id: "x" }, { status: 202 });
+        }),
+      );
+      const { sid, card } = await show({ error_kind: "transient", retries_left: 2 });
+      await act(async () => void vi.advanceTimersByTime(5000));
+      await act(async () => within(card).getByRole("button", { name: "Retry" }).click());
+      await waitFor(() => expect(posts).toBe(1));
+      // locked while the successful POST waits for the status doc to move
+      await waitFor(() => expect(within(card).getByRole("button", { name: /Retry/ })).toHaveAttribute("aria-disabled", "true"));
+      act(() => mockEmitter.emit(sid, withKind(sid, "upstream_unavailable", { error_kind: "transient", retries_left: 1 })));
+      await act(async () => void vi.advanceTimersByTime(5000));
+      await waitFor(() =>
+        expect(within(screen.getByRole("alert")).getByRole("button", { name: "Retry" })).not.toHaveAttribute("aria-disabled", "true"),
+      );
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("transient at retries_left=0: several-tries copy and a new-session CTA, no Retry", async () => {
     const { sid, card } = await show({ error_kind: "transient", retries_left: 0 });
     expect(card).toHaveTextContent("We couldn't finish this after several tries. Start a new session.");
