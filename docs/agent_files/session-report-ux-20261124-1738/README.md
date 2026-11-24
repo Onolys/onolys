@@ -25,10 +25,9 @@ Dependency: `01 ──(commit order only)──▶ 02` ; one PR.
 - Speaker and change goal are write-once ("once selected is selected"), even after failure.
 - Successful report final; only failed runs retry. Auto retry = same run ID; user Retry = new run ID, failed run kept.
 - MITI 4.2.1 manual (https://casaa.unm.edu/assets/docs/miti4_21.pdf) is authoritative; globals start at 3, never null; forced evidence reset removed.
-- No hard ship gate: baseline-vs-new measurement with check.py + manual audit; claim manual alignment + non-regression, not accuracy.
+- No live measurement (no API key): deterministic offline audit + unit tests + manual audit; claim manual alignment + non-regression, not accuracy.
 - Dropped from brainstorm: lineage, requested-vs-actual settings, quote-validation rework, compact anchors, null globals.
 
 ### Cross-cutting open questions
 - 01 [RESOLVED]: failure is terminal; unconfirmed speaker + failure stays failed.
-- 02 [OPEN]: volley `min_other_words: 5` + `?` exception to tune on new fixtures; report schema/UI accepts empty `evidence`; coverage retry thresholds from baseline.
-- Live measurement needs GEMINI_API_KEY on the machine.
+- 02: no open items (threshold tuning and coverage retry are [DEFERRED]).
