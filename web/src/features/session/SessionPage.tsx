@@ -8,7 +8,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import { unwrap } from "../../api/client";
-import { describeError, failureView } from "../../api/errors";
+import { cancelErrorMessage, describeError, failureView } from "../../api/errors";
 import type { SessionStatusDoc } from "../../api/statusListener";
 import { useApiClient } from "../../auth/useApiClient";
 import { ACTIONS, H1, LINK, LINK_BTN, NOTE, PAGE } from "../../components/classes";
@@ -16,6 +16,8 @@ import { Notice } from "../../components/Notice";
 import { formatElapsed, formatResetTime } from "../../lib/format";
 import { blockingPeriod, formatBlockingReset } from "../usage/usage";
 import { USAGE_KEY, useUsage } from "../usage/useUsage";
+import { CancelLink, isCancellable } from "./CancelLink";
+import { CancelledView } from "./CancelledView";
 import { DeleteDialog } from "./DeleteDialog";
 import { ErrorCard } from "./ErrorCard";
 import { RetryButton } from "./RetryButton";
@@ -71,16 +73,24 @@ function SessionView({ id }: { id: string }) {
 
   // An interview-linked session's first run is free (SP11 R5), so a held first start is not blocked by
   // the eval cap. The status doc is PHI-free and carries no link: ask the session detail, only then.
+  const [cancelOpened, setCancelOpened] = useState(false);
   const firstStartHeld =
     doc !== null &&
     doc.state === "awaiting_input" &&
     (doc.error_code === "daily_cap_reached" || doc.error_code === "concurrent_runs");
   const detail = useQuery({
     queryKey: ["session-detail", id],
-    enabled: firstStartHeld,
+    // The cancel dialog needs `free_run` too (D7), but only once it is opened: no extra GET otherwise.
+    enabled: firstStartHeld || (cancelOpened && isCancellable(doc?.state)),
     queryFn: async () => unwrap(await client.GET("/sessions/{id}", { params: { path: { id } } })),
   });
   const freeFirstRun = firstStartHeld && Boolean(detail.data?.free_run);
+
+  // Cancel (04-cancel R9): idempotent, so a failed POST is safe to retry.
+  const cancel = useMutation({
+    mutationFn: async () => unwrap(await client.POST("/sessions/{id}/cancel", { params: { path: { id } } })),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: USAGE_KEY }),
+  });
 
   const run = useMutation({
     mutationFn: async () => unwrap(await client.POST("/sessions/{id}/runs", { params: { path: { id } } })),
@@ -157,6 +167,8 @@ function SessionView({ id }: { id: string }) {
     );
   }
 
+  const cancelled = doc?.state === "cancelled" || cancel.isSuccess;
+  const cancelledCounted = doc?.state === "cancelled" ? doc.counted : cancel.data?.counted;
   const timeline = doc ? deriveTimeline(doc, { resetsAt }) : null;
   const failure = doc?.state === "failed" ? failureView(doc) : null;
   const runError = run.error ? describeError(run.error, { resetsAt }) : null;
@@ -166,11 +178,15 @@ function SessionView({ id }: { id: string }) {
     <div className={PAGE}>
       <h1 className={H1}>Session</h1>
 
-      <div className="grid gap-1 font-semibold" role="status" aria-live="polite">
-        {timeline ? timeline.lines.map((l) => <p key={l}>{l}</p>) : <p>Loading session…</p>}
-      </div>
+      {cancelled ? (
+        <CancelledView counted={cancelledCounted} onDelete={() => setConfirmDelete(true)} deleteRef={deleteButton} />
+      ) : null}
 
-      {!doc || !timeline ? null : (
+      {cancelled ? null : <div className="grid gap-1 font-semibold" role="status" aria-live="polite">
+        {timeline ? timeline.lines.map((l) => <p key={l}>{l}</p>) : <p>Loading session…</p>}
+      </div>}
+
+      {cancelled || !doc || !timeline ? null : (
         <>
           {view.phase === "fallback" && view.exhausted ? (
             <Notice role="alert">
@@ -250,6 +266,25 @@ function SessionView({ id }: { id: string }) {
           {doc.state !== "deleting" ? <RatingCardSlot sessionId={id} doc={doc} readOnly={doc.rating_submitted || doc.state === "report_ready"} /> : null}
           {doc.transcript_ready && doc.state !== "deleting" && (!doc.speaker_confirmed || doc.state === "failed") ? (
             <SpeakerGateSlot sessionId={id} doc={doc} />
+          ) : null}
+
+          {cancel.error ? (
+            <ErrorCard message={cancelErrorMessage(cancel.error)} code={undefined} reference={id} />
+          ) : null}
+
+          {isCancellable(doc.state) ? (
+            <div className={ACTIONS}>
+              <CancelLink
+                state={doc.state}
+                freeRun={Boolean(detail.data?.free_run)}
+                pending={cancel.isPending}
+                onOpen={() => {
+                  setCancelOpened(true);
+                  cancel.reset();
+                }}
+                onConfirm={() => cancel.mutate()}
+              />
+            </div>
           ) : null}
 
           <div className={ACTIONS}>

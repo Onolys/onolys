@@ -953,3 +953,26 @@ describe("cancelSession (04-cancel R2/R4)", () => {
     expect(backend.advance(sid)).toBe(false);
   });
 });
+
+describe("cancelled sessions answer 409 invalid_state (04-cancel R6)", () => {
+  it("rating, speakers, runs, retry, upload and transcript routes", () => {
+    const { backend: b } = make();
+    const uid = "u1";
+    const sid = b.createSession(uid, {}).session.id;
+    b.cancelSession(uid, sid);
+    const code = (fn: () => unknown) => {
+      try {
+        fn();
+      } catch (e) {
+        return (e as { status?: number }).status;
+      }
+      return "no error";
+    };
+    expect(code(() => b.putRating(uid, sid, { card: {} } as never))).toBe(409);
+    expect(code(() => b.confirmSpeaker(uid, sid, "A"))).toBe(409);
+    expect(code(() => b.startRun(uid, sid, {}))).toBe(409);
+    expect(code(() => b.retrySession(uid, sid))).toBe(409);
+    expect(code(() => b.requestAudio(uid, sid, { content_type: "audio/mpeg", size_bytes: 1, filename_ext: "mp3" }))).toBe(409);
+    expect(code(() => b.completeAudio(uid, sid))).toBe(409);
+  });
+});

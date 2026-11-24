@@ -168,9 +168,17 @@ export function deriveTimeline(doc: TimelineInput, opts: TimelineOptions = {}): 
     case "upload_failed": // SessionPage shows its own view; this keeps the switch exhaustive
       lines = ["This session couldn't be completed."];
       break;
+    case "cancelled": // SessionPage shows CancelledView before the timeline
+      lines = ["This session was cancelled."];
+      break;
     case "deleting":
       lines = ["Deleting this session."];
       break;
+    default: {
+      // A new SessionState must be handled above: this fails typecheck until it is.
+      const unhandled: never = state;
+      lines = [String(unhandled)];
+    }
   }
 
   return { steps, lines, showRunCopy: state === "running", capReached };

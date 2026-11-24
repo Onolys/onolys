@@ -1,4 +1,4 @@
-import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -708,5 +708,130 @@ describe("session page: upload failed (PRD R11)", () => {
     const card = await screen.findByRole("alert", undefined, { timeout: 4000 });
     expect(card).toHaveTextContent("This upload didn't go through, or the session no longer exists. Start a new upload.");
     expect(screen.getByRole("link", { name: /start a new upload/i })).toHaveAttribute("href", "/sessions/new");
+  });
+});
+
+describe("session page: cancel (04-cancel R9)", () => {
+  const link = () => screen.getByRole("button", { name: "Cancel session" });
+  const confirm = async () => {
+    await userEvent.click(link());
+    const dlg = await screen.findByRole("alertdialog", { name: "Cancel this session?" });
+    return dlg;
+  };
+  const confirmBtn = (dlg: HTMLElement) => within(dlg).getByRole("button", { name: "Cancel session" });
+
+  it("link is blue with red hover and shown only in the seven states", async () => {
+    const sid = create();
+    open(sid);
+    await ready();
+    expect(link()).toHaveClass("text-primary", "hover:text-destructive");
+    for (const state of ["report_ready", "failed", "cancelled"] as const) {
+      act(() => mockEmitter.emit(sid, { ...failedDoc(sid, "x"), state }));
+      await waitFor(() => expect(screen.queryByRole("button", { name: "Cancel session" })).not.toBeInTheDocument());
+    }
+  });
+
+  it("variant A copy before transcription, variant B once it started", async () => {
+    const sid = create();
+    upload(sid);
+    open(sid);
+    await ready();
+    let dlg = await confirm();
+    expect(dlg).toHaveTextContent("Your upload stays until you delete the session. This won't count toward your limit.");
+    await userEvent.click(within(dlg).getByRole("button", { name: "Keep processing" }));
+    tick(sid);
+    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Transcribing the recording."));
+    dlg = await confirm();
+    expect(dlg).toHaveTextContent("Transcription has started, so this counts toward your daily limit.");
+  });
+
+  it("confirm shows Cancelling… with a spinner, then the not-counted message", async () => {
+    const sid = create();
+    upload(sid);
+    let release!: () => void;
+    server.use(
+      http.post("*/v1/sessions/:id/cancel", async () => {
+        await new Promise<void>((r) => (release = r));
+        return HttpResponse.json(mockBackend.cancelSession(UID, sid));
+      }),
+    );
+    open(sid);
+    await ready();
+    await userEvent.click(confirmBtn(await confirm()));
+    const busy = await screen.findByRole("button", { name: /Cancelling…/ });
+    expect(busy).toBeDisabled();
+    expect(busy).toHaveAttribute("aria-busy", "true");
+    expect(busy.querySelector('[data-slot="spinner"]')).not.toBeNull();
+    act(() => release());
+    expect(await screen.findByRole("heading", { name: "Cancelled" })).toBeInTheDocument();
+    expect(screen.getByText("Session cancelled. This did not count toward your limit.")).toBeInTheDocument();
+  });
+
+  it("a counted cancel says so, and a reload shows the persisted message", async () => {
+    const sid = create();
+    toAwaiting(sid);
+    open(sid);
+    await ready();
+    await userEvent.click(confirmBtn(await confirm()));
+    expect(await screen.findByText("Session cancelled. This counted toward your limit.")).toBeInTheDocument();
+    cleanup();
+    open(sid);
+    expect(await screen.findByText("Session cancelled. This counted toward your limit.")).toBeInTheDocument();
+  });
+
+  it("the cancelled view has Delete only: no rating, speaker gate, retry or cancel link", async () => {
+    const sid = create();
+    toAwaiting(sid);
+    open(sid);
+    await ready();
+    await userEvent.click(confirmBtn(await confirm()));
+    await screen.findByRole("heading", { name: "Cancelled" });
+    expect(screen.getByRole("button", { name: "Delete session" })).toBeInTheDocument();
+    for (const name of [/cancel session/i, /start/i, /retry/i, /submit/i, /confirm/i]) {
+      expect(screen.queryByRole("button", { name })).not.toBeInTheDocument();
+    }
+    expect(screen.queryByRole("heading", { name: /rating|speaker/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("list", { name: "Progress" })).not.toBeInTheDocument();
+    expect(screen.queryByText(/retry/i)).not.toBeInTheDocument();
+  });
+
+  it("an omitted counted shows no sentence", async () => {
+    const sid = create();
+    open(sid);
+    await ready();
+    act(() => mockEmitter.emit(sid, { ...failedDoc(sid, "x"), state: "cancelled", counted: null }));
+    expect(await screen.findByRole("heading", { name: "Cancelled" })).toBeInTheDocument();
+    expect(screen.queryByText(/Session cancelled/)).not.toBeInTheDocument();
+  });
+
+  it("a 500 shows the error card with Reference and the link returns", async () => {
+    const sid = create();
+    upload(sid);
+    server.use(http.post("*/v1/sessions/:id/cancel", () => new HttpResponse(null, { status: 500 })));
+    open(sid);
+    await ready();
+    await userEvent.click(confirmBtn(await confirm()));
+    const card = await screen.findByRole("alert");
+    expect(card).toHaveTextContent("We couldn't cancel this session. Try again.");
+    expect(card).toHaveTextContent(`Reference: ${sid}`);
+    expect(link()).toBeEnabled();
+    expect(screen.queryByRole("heading", { name: "Cancelled" })).not.toBeInTheDocument();
+  });
+
+  it("a 409 shows the already-finished copy and the page follows the live status", async () => {
+    const sid = create();
+    upload(sid);
+    server.use(
+      http.post("*/v1/sessions/:id/cancel", () =>
+        HttpResponse.json({ schema_version: "0.0.1", status: 409, message: "x", details: [{ code: "invalid_state", message: "x" }], request_id: "r" }, { status: 409 }),
+      ),
+    );
+    open(sid);
+    await ready();
+    await userEvent.click(confirmBtn(await confirm()));
+    expect(await screen.findByRole("alert")).toHaveTextContent("This session already finished or failed.");
+    act(() => mockEmitter.emit(sid, { ...failedDoc(sid, "x"), state: "report_ready", latest_report_version: 1 }));
+    await waitFor(() => expect(screen.queryByRole("button", { name: "Cancel session" })).not.toBeInTheDocument());
+    expect(screen.getByRole("link", { name: "View report" })).toBeInTheDocument();
   });
 });

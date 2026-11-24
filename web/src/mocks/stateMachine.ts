@@ -563,6 +563,7 @@ export class MockBackend {
   putRating(uid: string, sid: string, body: S["RatingRequest"]): S["RatingSaved"] {
     const s = this.own(uid, sid);
     if (s.state === "deleting") bad(409, "invalid_state", "Session is being deleted.");
+    if (s.state === "cancelled") bad(409, "invalid_state", "This session was cancelled.");
     const card = (body.card ?? {}) as RatingCard;
     validateCard(card, body.final === true);
     if (body.final === true && (s.flags.rating_submitted || s.state === "report_ready" || s.reports.length > 0)) {
@@ -635,7 +636,7 @@ export class MockBackend {
 
   confirmSpeaker(uid: string, sid: string, speaker: string): S["CreateSessionResponse"] {
     const s = this.own(uid, sid);
-    if (!s.flags.transcript_ready || s.state === "running" || s.state === "deleting")
+    if (!s.flags.transcript_ready || s.state === "running" || s.state === "deleting" || s.state === "cancelled")
       bad(409, "invalid_state", "Speakers cannot be confirmed now.");
     if (!this.turns(s).some((t) => t.speaker === speaker)) invalidParam("clinician_speaker is not a speaker");
     s.clinician_speaker = speaker;
