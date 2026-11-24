@@ -17,13 +17,20 @@ import { goalIssues, saveGoal, SetupFields } from "../rating/SetupFields";
 import { ErrorCard } from "../session/ErrorCard";
 import { DEFAULT_LANGUAGE, LANGUAGES } from "./config";
 import { FileNotices } from "./FileNotices";
-import { fileExtension } from "./precheck";
+import { fileExtension, limitsNote, validateTranscriptFile } from "./precheck";
 import { prepareUpload } from "./startUpload";
 import { getJob } from "./uploader";
 import { useFilePick } from "./useFilePick";
+import { useUploadLimits } from "./useUploadLimits";
+
+/** A 4xx the user must fix in the input (not auth, rate limit or a timeout, which a retry can clear). */
+function isTerminalPrepareError(e: unknown): boolean {
+  return e instanceof ApiError && e.status >= 400 && e.status < 500 && ![401, 403, 408, 409, 425, 429].includes(e.status);
+}
 
 export function NewSessionPage() {
   const client = useApiClient();
+  const limits = useUploadLimits();
   const navigate = useNavigate();
   const [params] = useSearchParams();
   const from = params.get("from");
@@ -67,6 +74,7 @@ export function NewSessionPage() {
       const trimmed = title.trim();
       const body = { language, ...(trimmed ? { title: trimmed } : {}) };
       const bodyKey = JSON.stringify(body);
+      if (source === "transcript") await validateTranscriptFile(f); // before a session exists
       if (!created.current || created.current.body !== bodyKey) {
         const key = created.current ? globalThis.crypto.randomUUID() : formKey.current;
         const res = unwrap(
@@ -80,15 +88,31 @@ export function NewSessionPage() {
         goalSaved.current.add(id);
         setSavedId(id);
       }
-      if (source === "transcript") {
-        unwrap(await client.PUT("/sessions/{id}/transcript", {
-          params: { path: { id } },
-          headers: { "Content-Type": fileExtension(f.name) === "json" ? "application/json" : "text/plain" },
-          body: "",
-          bodySerializer: () => f,
-        }));
-      } else {
-        await prepareUpload(client, id, f);
+      try {
+        if (source === "transcript") {
+          unwrap(await client.PUT("/sessions/{id}/transcript", {
+            params: { path: { id } },
+            headers: { "Content-Type": fileExtension(f.name) === "json" ? "application/json" : "text/plain" },
+            body: "",
+            bodySerializer: () => f,
+          }));
+        } else {
+          await prepareUpload(client, id, f);
+        }
+      } catch (e) {
+        if (isTerminalPrepareError(e)) {
+          // The input must change: drop the half-made session (best effort) so no orphan is left, and start clean.
+          try {
+            await client.DELETE("/sessions/{id}", { params: { path: { id } } });
+          } catch {
+            /* the server's stale check settles it */
+          }
+          created.current = null;
+          formKey.current = globalThis.crypto.randomUUID(); // the old key would replay the deleted session
+          goalSaved.current.delete(id);
+          setSavedId(null);
+        }
+        throw e;
       }
       return id;
     },
@@ -170,7 +194,7 @@ export function NewSessionPage() {
           </Field>
           <p className={NOTE}>
             {source === "audio"
-              ? "Drop a file here or choose one. mp3, wav, m4a, webm or ogg, up to 300 MB, 10 to 20 minutes."
+              ? `Drop a file here or choose one. mp3, wav, m4a, webm or ogg${limits ? `, ${limitsNote(limits)}` : ""}.`
               : "Drop a file here or choose one. json or txt transcript, up to 1 MB."}
           </p>
           {file ? <p className={NOTE}>{file.name}</p> : null}

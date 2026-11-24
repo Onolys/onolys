@@ -5,6 +5,11 @@ import { UploadSlot } from "./UploadSlot";
 import * as uploader from "./uploader";
 
 vi.mock("../../auth/useApiClient", () => ({ useApiClient: () => ({}) }));
+// The no-job branch now renders the resume form (react-query hooks); this test only reads the fraction.
+vi.mock("@tanstack/react-query", () => ({
+  useMutation: () => ({ mutate: vi.fn(), isPending: false, error: null }),
+  useQuery: () => ({ data: undefined }),
+}));
 
 const doc = { state: "uploading" } as SessionStatusDoc;
 afterEach(() => vi.restoreAllMocks());

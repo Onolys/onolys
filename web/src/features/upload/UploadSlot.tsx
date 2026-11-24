@@ -1,7 +1,7 @@
 /** Upload progress, cancel, "Retry upload" and "Resume upload" on the session page (PRD R3, D4). */
 import { Button, Input } from "@onolys/ui";
 import { useMutation } from "@tanstack/react-query";
-import { useEffect, useRef, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useRef, useSyncExternalStore } from "react";
 import { describeError } from "../../api/errors";
 import type { SessionStatusDoc } from "../../api/statusListener";
 import { useApiClient } from "../../auth/useApiClient";
@@ -80,10 +80,9 @@ export function UploadSlot({
   onFraction?: (fraction: number | null) => void;
 }) {
   const job = useJob(sessionId);
-  const state = useSyncExternalStore(
-    (fn) => (job ? job.subscribe(fn) : () => undefined),
-    () => (job ? job.getState() : NO_STATE),
-  );
+  // Stable per job: a new function each render would unsubscribe and resubscribe (and evict a finished job).
+  const subscribe = useCallback((fn: () => void) => (job ? job.subscribe(fn) : () => undefined), [job]);
+  const state = useSyncExternalStore(subscribe, () => (job ? job.getState() : NO_STATE));
 
   const fraction = job && state.total > 0 ? Math.min(1, state.loaded / state.total) : null;
   useEffect(() => {
@@ -91,21 +90,20 @@ export function UploadSlot({
   }, [fraction, onFraction]);
 
   const running = job !== undefined && (state.phase === "uploading" || state.phase === "completing");
-  if (doc.state === "upload_incomplete" && !running) {
+  // No upload running in this tab (stale server state, a reload, a second tab): pick the file again.
+  if (!running && (doc.state === "upload_incomplete" || !job)) {
     return (
       <div data-slot="upload" data-session={sessionId} className="grid gap-3">
-        <Notice>Pick the same recording again to resume the upload.</Notice>
+        <Notice>
+          {doc.state === "upload_incomplete"
+            ? "Pick the same recording again to resume the upload."
+            : "This upload isn't running in this tab. Pick the same recording again to continue it."}
+        </Notice>
         <ResumeUpload sessionId={sessionId} />
       </div>
     );
   }
-  if (!job) {
-    return (
-      <div data-slot="upload" data-session={sessionId} className="grid gap-3">
-        <Notice>This upload isn't running in this tab. Start a new session to upload the file again.</Notice>
-      </div>
-    );
-  }
+  if (!job) return null;
 
   const pct = state.total > 0 ? Math.min(100, Math.round((state.loaded / state.total) * 100)) : 0;
   return (
@@ -127,7 +125,7 @@ export function UploadSlot({
       {state.phase === "done" ? <p className={NOTE}>Upload finished.</p> : null}
       {state.phase === "failed" || state.phase === "cancelled" ? (
         <>
-          <ErrorNote role="alert">{state.phase === "cancelled" ? "Upload cancelled." : "The upload didn't finish."}</ErrorNote>
+          <ErrorNote role="alert">{state.phase === "cancelled" ? "Upload cancelled." : (state.error?.message ?? "The upload didn't finish.")}</ErrorNote>
           <Button type="button" className="justify-self-start" onClick={() => void job.retry()}>
             Retry upload
           </Button>

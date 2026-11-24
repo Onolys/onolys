@@ -367,3 +367,123 @@ describe("Transcript upload with the mock API", () => {
     }
   });
 });
+
+describe("New session form: prepare failures (M-8, C10, C19)", () => {
+  const V1 = "/v1/sessions";
+  let calls: { m: string; path: string; body?: unknown }[];
+  beforeEach(() => {
+    calls = [];
+    server.events.on("request:start", async ({ request }) => {
+      const p = new URL(request.url).pathname;
+      if (!p.startsWith(V1)) return;
+      const text = request.method === "GET" ? "" : await request.clone().text();
+      let body: unknown;
+      try {
+        body = text ? JSON.parse(text) : undefined;
+      } catch {
+        body = text;
+      }
+      calls.push({ m: request.method, path: p, body });
+    });
+  });
+  afterEach(() => server.events.removeAllListeners());
+  const creates = () => calls.filter((c) => c.m === "POST" && c.path === V1);
+  const deletes = () => calls.filter((c) => c.m === "DELETE");
+  const err422 = (code: string) =>
+    HttpResponse.json({ status: 422, details: [{ code, message: "x" }], request_id: "r" }, { status: 422 });
+  const pickTranscript = async (file: File) => {
+    await userEvent.click(screen.getByRole("radio", { name: "Transcript" }));
+    await userEvent.setup({ applyAccept: false }).upload(screen.getByLabelText("Transcript file"), file);
+    await goal();
+  };
+  const startBtn = () => screen.getByRole("button", { name: "Start" });
+
+  it("M-8: a transcript that is not valid JSON is rejected before any session is created", async () => {
+    await open();
+    await pickTranscript(new File(["{not json"], "visit.json"));
+    await userEvent.click(startBtn());
+    expect(await screen.findByRole("alert")).toHaveTextContent(/couldn't read this transcript/i);
+    expect(creates()).toHaveLength(0);
+  });
+
+  it("M-8: an empty transcript is rejected before any session is created", async () => {
+    await open();
+    await pickTranscript(new File(["   \n"], "visit.txt"));
+    await userEvent.click(startBtn());
+    expect(await screen.findByRole("alert")).toHaveTextContent(/at least 50 words/i);
+    expect(creates()).toHaveLength(0);
+  });
+
+  it("M-8: a terminal transcript error deletes the just-created session, and a resubmit starts clean", async () => {
+    let reject = true;
+    server.use(
+      http.put("*/v1/sessions/:id/transcript", ({ params }) =>
+        reject ? err422("transcript_invalid") : HttpResponse.json({ session: { id: params.id, status: "awaiting_input" } }, { status: 202 }),
+      ),
+    );
+    const { router } = await open();
+    await pickTranscript(new File(["Alex: Hello\nSam: Hi"], "visit.txt"));
+    await userEvent.click(startBtn());
+    expect(await screen.findByRole("alert")).toHaveTextContent(/couldn't read this transcript/i);
+    await waitFor(() => expect(deletes()).toHaveLength(1));
+    const orphan = creates().length === 1 ? deletes()[0]!.path.split("/")[3] : "";
+    expect(orphan).toBeTruthy();
+    expect(startBtn()).toBeEnabled();
+    expect(screen.getByLabelText(/change goal/i)).toBeEnabled(); // nothing is locked to the deleted session
+    reject = false;
+    await userEvent.type(screen.getByLabelText(/title/i), "Fixed");
+    await userEvent.click(startBtn());
+    await waitFor(() => expect(here(router)).toMatch(/^\/sessions\/(?!new$)[^/]+$/));
+    expect(creates()).toHaveLength(2);
+    expect(here(router)).not.toContain(orphan!);
+  });
+
+  it("M-8: resubmitting the same body after cleanup creates a fresh session (new idempotency key)", async () => {
+    server.use(http.put("*/v1/sessions/:id/transcript", () => err422("transcript_invalid")));
+    const keys: string[] = [];
+    server.events.on("request:start", ({ request }) => {
+      const k = request.headers.get("idempotency-key");
+      if (k && request.method === "POST") keys.push(k);
+    });
+    await open();
+    await pickTranscript(new File(["Alex: Hello\nSam: Hi"], "visit.txt"));
+    await userEvent.click(startBtn());
+    await waitFor(() => expect(deletes()).toHaveLength(1));
+    await waitFor(() => expect(startBtn()).toBeEnabled());
+    await userEvent.click(startBtn());
+    await waitFor(() => expect(deletes()).toHaveLength(2));
+    expect(keys).toHaveLength(2);
+    expect(new Set(keys).size).toBe(2);
+  });
+
+  it("M-8: a terminal audio prepare error (422) deletes the new session", async () => {
+    server.use(http.post("*/v1/sessions/:id/audio", () => err422("unsupported_audio")));
+    await open();
+    await choose(mp3());
+    await goal();
+    await userEvent.click(startBtn());
+    expect(await screen.findByRole("alert")).toHaveTextContent(/can't use this file type/i);
+    await waitFor(() => expect(deletes()).toHaveLength(1));
+  });
+
+  it("C10: the chosen language is sent with the session create on the transcript path", async () => {
+    server.use(http.put("*/v1/sessions/:id/transcript", ({ params }) => HttpResponse.json({ session: { id: params.id, status: "awaiting_input" } }, { status: 202 })));
+    const { router } = await open();
+    await userEvent.selectOptions(screen.getByLabelText("Language"), "en-GB");
+    await pickTranscript(new File(["Alex: Hello\nSam: Hi"], "visit.txt"));
+    await userEvent.click(startBtn());
+    await waitFor(() => expect(here(router)).toMatch(/^\/sessions\/(?!new$)[^/]+$/));
+    expect(creates()[0]!.body).toMatchObject({ language: "en-GB" });
+  });
+
+  it("C19: the audio note is derived from the served upload limits", async () => {
+    server.use(
+      http.get("*/v1/upload-limits", () =>
+        HttpResponse.json({ ...UPLOAD_LIMITS, max_bytes: 100 * 1024 * 1024, max_duration_s: 30 * 60, short_warning_s: 8 * 60 }),
+      ),
+    );
+    await open();
+    expect(await screen.findByText(/up to 100 MB, 8 to 30 minutes/)).toBeInTheDocument();
+    expect(screen.queryByText(/300 MB/)).toBeNull();
+  });
+});

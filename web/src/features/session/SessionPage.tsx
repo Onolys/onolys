@@ -22,6 +22,7 @@ import { DeleteDialog } from "./DeleteDialog";
 import { ErrorCard } from "./ErrorCard";
 import { RetryButton } from "./RetryButton";
 import { UploadFailedView } from "./UploadFailedView";
+import { dropJob } from "../upload/uploader";
 import { RatingCardSlot, SpeakerGateSlot, UploadSlot } from "./slots";
 import { deriveTimeline } from "./timeline";
 import { useProgress, useSessionStatus } from "./useSessionStatus";
@@ -118,6 +119,7 @@ function SessionView({ id }: { id: string }) {
       }
     },
     onSuccess: () => {
+      dropJob(id); // a deleted session's upload job (and its File) goes with it
       void queryClient.invalidateQueries({ queryKey: ["sessions"] });
       void navigate("/sessions");
     },

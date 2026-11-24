@@ -45,8 +45,22 @@ export function detailToDoc(d: Detail): SessionStatusDoc {
 
 /** A session stuck in `transcribing` this long gets a `GET /sessions/{id}`, which makes the API settle it. */
 export const STALE_NUDGE_AFTER_MS = 6 * 60_000;
-/** While it stays `transcribing`, nudge at most this often. */
+/**
+ * The API settles stuck sessions lazily, on a read (api jobs/stale.py). Per state, how long a stuck session
+ * waits before that settles it: uploads = signed-URL lifetime (15 min) + 60 s; validating/running =
+ * 2 attempts x (480 s deadline + 60 s lease) + 300 s retry slack. `transcribing` has its own, shorter cap.
+ */
+export const STALE_NUDGE_AFTER_BY_STATE: Partial<Record<SessionStatusDoc["state"], number>> = {
+  created: 16 * 60_000,
+  uploading: 16 * 60_000,
+  transcribing: STALE_NUDGE_AFTER_MS,
+  validating: 23 * 60_000,
+  running: 23 * 60_000,
+};
+/** While it stays in such a state, nudge at most this often. */
 export const STALE_NUDGE_EVERY_MS = 60_000;
+/** How often a held-back update is checked for release (the `quiet` ref has no change event). */
+const QUIET_CHECK_MS = 250;
 
 /** Resubscribe delays after a listener drop (D7); when they run out the page shows "Live updates stopped". */
 export const RESUBSCRIBE_DELAYS_MS = [1_000, 2_000, 4_000, 8_000, 16_000];
@@ -116,13 +130,13 @@ export function useSessionStatus(id: string, quiet: RefObject<boolean>): StatusV
       nudgeTimer = undefined;
       firstSeenAt = 0;
     };
-    const armNudge = (doc: SessionStatusDoc, gen: number) => {
+    const armNudge = (doc: SessionStatusDoc, gen: number, afterMs: number) => {
       clearTimeout(nudgeTimer);
       const now = Date.now();
       firstSeenAt ||= now;
-      const since = Date.parse(doc.updated_at);
+      const since = Date.parse(doc.stage_started_at ?? doc.updated_at);
       const dueAt = Math.max(
-        (Number.isNaN(since) ? firstSeenAt : since) + STALE_NUDGE_AFTER_MS,
+        (Number.isNaN(since) ? firstSeenAt : since) + afterMs,
         lastNudgeAt ? lastNudgeAt + STALE_NUDGE_EVERY_MS : 0,
       );
       nudgeTimer = setTimeout(() => {
@@ -132,13 +146,32 @@ export function useSessionStatus(id: string, quiet: RefObject<boolean>): StatusV
         void client
           .GET("/sessions/{id}", { params: { path: { id } } })
           .catch(() => undefined);
-        armNudge(doc, gen);
+        armNudge(doc, gen, afterMs);
       }, Math.max(0, dueAt - now));
+    };
+
+    // Updates and errors that arrive while `quiet` (a DELETE in flight) are held, not lost: if the DELETE
+    // fails, `quiet` clears and the latest one is replayed.
+    let held: { gen: number; doc: SessionStatusDoc | null | "error" } | undefined;
+    let heldTimer: ReturnType<typeof setInterval> | undefined;
+    const hold = (gen: number, doc: SessionStatusDoc | null | "error") => {
+      held = { gen, doc };
+      heldTimer ??= setInterval(() => {
+        if (done || quiet.current) return;
+        clearInterval(heldTimer);
+        heldTimer = undefined;
+        const h = held;
+        held = undefined;
+        if (!h || h.gen !== generation) return;
+        if (h.doc === "error" || h.doc === null) drop();
+        else apply(h.doc, h.gen);
+      }, QUIET_CHECK_MS);
     };
 
     const drop = () => {
       if (done || quiet.current) return;
       generation++;
+      held = undefined;
       stopNudge();
       off?.();
       off = undefined;
@@ -150,34 +183,41 @@ export function useSessionStatus(id: string, quiet: RefObject<boolean>): StatusV
       }
     };
 
+    const apply = (incoming: SessionStatusDoc, gen: number) => {
+      attempt = 0;
+      setLink("up");
+      const nudgeAfter = STALE_NUDGE_AFTER_BY_STATE[incoming.state];
+      if (nudgeAfter !== undefined) armNudge(incoming, gen, nudgeAfter);
+      else stopNudge();
+      const [doc, nextFloor] = keepMax(floorRef.current, incoming);
+      floorRef.current = nextFloor;
+      setFloor(nextFloor);
+      setView((prev) => ({
+        phase: "live",
+        doc,
+        runStartedAt:
+          doc.state !== "running"
+            ? null
+            : prev.phase === "live" && prev.doc.state === "running" && prev.runStartedAt !== null
+              ? prev.runStartedAt
+              : Date.parse(doc.started_at ?? "") || Date.parse(doc.updated_at) || Date.now(),
+      }));
+    };
+
     const connect = () => {
       const gen = ++generation;
       const unsubscribe = getStatusListener().subscribe(
         id,
         (doc) => {
-          if (done || gen !== generation || quiet.current) return;
+          if (done || gen !== generation) return;
+          if (quiet.current) return hold(gen, doc);
           if (doc === null) return drop();
-          attempt = 0;
-          setLink("up");
-          if (doc.state === "transcribing") armNudge(doc, gen);
-          else stopNudge();
-          const [shown, nextFloor] = keepMax(floorRef.current, doc);
-          floorRef.current = nextFloor;
-          setFloor(nextFloor);
-          doc = shown;
-          setView((prev) => ({
-            phase: "live",
-            doc,
-            runStartedAt:
-              doc.state !== "running"
-                ? null
-                : prev.phase === "live" && prev.doc.state === "running" && prev.runStartedAt !== null
-                  ? prev.runStartedAt
-                  : Date.parse(doc.started_at ?? "") || Date.parse(doc.updated_at) || Date.now(),
-          }));
+          apply(doc, gen);
         },
         () => {
-          if (gen === generation) drop();
+          if (gen !== generation) return;
+          if (quiet.current) return hold(gen, "error");
+          drop();
         },
       );
       off = unsubscribe;
@@ -192,6 +232,7 @@ export function useSessionStatus(id: string, quiet: RefObject<boolean>): StatusV
     return () => {
       done = true;
       clearTimeout(retryTimer);
+      clearInterval(heldTimer);
       stopNudge();
       off?.();
     };
