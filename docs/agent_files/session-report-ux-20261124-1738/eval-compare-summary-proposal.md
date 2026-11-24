@@ -35,7 +35,7 @@ One plain sentence generated from the data, for example:
 
 > B is closest to human overall; A is best on Partnership; all combos over-count Questions.
 
-Rules: built only from table values shown below; says "too few sessions to say" when n is small; never names a winner on a metric with no human label.
+Rules: built only from table values shown below; shows n beside any claim (for example "1 session") so thin evidence is visible; never names a winner on a metric with no human label or one that shows "n/a".
 
 ### Leaderboard
 
@@ -54,7 +54,7 @@ C  prov2/model     5.0          64%         58%               0.44         0    
 
 Column meanings (one line each; fuller rules in the appendix):
 
-- **Count error:** on average, how many tallies per session the combo misses versus human, summed over the 10 behavior codes. Example: human has 5 Questions, combo has 8, miss = 3.
+- **Count error:** on average, how many tallies per session the combo misses versus human, summed over the 10 behavior codes, all weighted equally (per-code rows are visible in the heatmap and Deep dive). Example: human has 5 Questions, combo has 8, miss = 3.
 - **Globals within +-1:** share of global ratings (1 to 5) that are no more than one point from human. Example: human 4, combo 3 counts as within.
 - **Line match (accuracy):** share of lines where the combo gave the same code as human. Only shown when human line labels exist.
 - **Line match (macro F1):** one score from 0 to 1 that averages how well each code is found and correctly named, so rare codes count as much as common ones.
@@ -62,31 +62,31 @@ Column meanings (one line each; fuller rules in the appendix):
 
 ### Heatmap: who is best at what
 
-Rows are the 10 behavior codes, the 4 globals, R:Q and %CR. Columns are the combos, as compact columns with short labels (A, B, C, ...) and a legend mapping each label to provider/model/effort; beyond about 8 columns the grid scrolls horizontally with the row labels frozen. Each cell shows closeness to human; color intensity shows closeness. The winner per row is marked. This is the main "who is best at what" view.
+Rows are the 10 behavior codes, the 4 globals, R:Q and %CR. Columns are the combos, as compact columns with short labels (A, B, C, ...) and a legend mapping each label to provider/model/effort; beyond about 8 columns the grid scrolls horizontally with the row labels frozen. Each cell shows closeness to human and always shows its n (sessions behind it), so a 1-session cell is visibly thin; color intensity shows closeness. A cell is colored from 1 session. A metric that cannot be calculated exactly shows "n/a" with the reason, never a blank or zero. The winner per row is marked. This is the main "who is best at what" view.
 
 ```text
-                          A       B       C
-Questions                 -2.1    -0.4 *  -1.8     (avg miss; closer to 0 is better)
-Simple Reflections         0.9     1.2     0.3 *
-Complex Reflections        1.5     0.8     0.2 *
-Affirmations               0.7 *   1.1     1.4
-Cultivating Change Talk    0.3 *   1.0     0.9
-Softening Sustain Talk     1.2     0.2 *   0.8
+                          A            B            C
+Questions                 -2.1 (n=12)  -0.4 * (n=12) -1.8 (n=12)   (avg miss; closer to 0 is better)
+Simple Reflections         0.9 (n=12)   1.2 (n=12)    0.3 * (n=12)
+Complex Reflections        1.5 (n=12)   0.8 (n=12)    0.2 * (n=12)
+Affirmations               0.7 * (n=1)  1.1 (n=1)     1.4 (n=1)    <- 1 session: colored, visibly thin
+Cultivating Change Talk    0.3 * (n=12) 1.0 (n=12)    0.9 (n=12)
+Softening Sustain Talk     1.2 (n=12)   0.2 * (n=12)  0.8 (n=12)
 ...
-Partnership (global)       0.2 *   0.4     0.6
-R:Q                        0.3     0.2 *   0.5
-(example numbers; grey = fewer than 5 paired sessions, no winner marked)
+Partnership (global)       n/a - not labeled in this dataset
+R:Q                        0.3 (n=12)   0.2 * (n=12)  0.5 (n=12)
+(example numbers; n always shown)
 ```
 
 Cell reading: a signed number shows direction (negative = under-counts vs human, positive = over-counts). Color shows size only, so over- and under-counting are not confused. Click a cell to open the Deep dive on that row.
 
 ### Sample-size note
 
-Beside the tables: "12 sessions, 3 repeats each; 11 paired for this metric." Cells with too little data go grey and cannot win. Sessions, not repeats, are the n shown first.
+Beside the tables: "12 sessions, 3 repeats each; 11 paired for this metric." Every cell always shows its n; there is no grey-out and no minimum, so a cell from 1 session is colored and can win but is visibly thin. Sessions, not repeats, are the n shown first.
 
 ## Level 2: Deep dive
 
-Human is always shown. Default selection is the top 3 combos by Count error; tick more (or any) to add them, so charts stay readable. Four sections, stacked vertically.
+Human is always shown. Default selection is the top 3 combos by Count error; a picker lets the owner add any of the rest, so charts stay readable (the Overview, by contrast, shows all combos). Four sections, stacked vertically.
 
 ### Globals
 
@@ -110,7 +110,9 @@ Questions    H ████████ 80   A ██████████ 10
 
 ### Per-line agreement
 
-Needs human line labels (gold `utterance_codes`). Not every dataset has them; AnnoMI maps only Question, SR, CR and GI. Where labels are missing the section says so and shows nothing for the unmapped codes.
+Needs human line labels (gold `utterance_codes`). Not every dataset has them; AnnoMI labels only Question, SR, CR and GI. Codes with no human label show "n/a - not labeled in this dataset".
+
+If either side is missing (no human line labels, or the combo's engine produced no line-level output), the line-level views are hidden and the screen says "no line-level output" and names which side is missing (human, a named combo, or both).
 
 Per code, per combo, three numbers in plain words:
 
@@ -130,7 +132,7 @@ Human: CR               0    14   11   1    5     <- A called 14 CR lines SR
 
 ### Reasoning roll-up
 
-Per code, one panel per combo next to human: total count, plus grouped rationale snippets taken from the combo's saved report (`rationale` on each coded instance). Rationales are grouped by similarity so the owner can read "how does A reason about Complex Reflections" in one place. Human has no rationale in most datasets; its column shows counts and, where present, the gold note. Snippets are shown verbatim from saved output, never rewritten.
+Per code, one panel per combo next to human: total count, plus grouped rationale snippets taken from the combo's saved report (`rationale` on each coded instance). Rationales are grouped by code only (no similarity grouping) so the owner can read "how does A reason about Complex Reflections" in one place. Human has no rationale in most datasets; its column shows counts and, where present, the gold note. Snippets are shown verbatim from saved output, never rewritten.
 
 ## Level 3: Session / line view
 
@@ -150,7 +152,7 @@ Session 03   [x] only disagreements  [code: all v]  [combo: all v]
 - **Click a line** opens a popup: the line text, the human code, each combo's code with its rationale, and the repeat spread when several repeats exist (for example "2 of 3 repeats said SR").
 - **Per-session globals table** under the transcript: human rating versus each combo's rating, with the combo's stated reason and the evidence lines it cites.
 
-Line text, speakers and any timestamps come only from the saved input. Nothing is invented. If a combo's engine produced no line-level output, its lane says "no line-level output" and is left blank, not filled with "none".
+Line text, speakers and any timestamps come only from the saved input. Nothing is invented. If a combo's engine produced no line-level output, its lane says "no line-level output" and is left blank, not filled with "none". If the human has no line labels, the whole line view is hidden and says "no line-level output (human)".
 
 ## What data exists today vs what is new
 
@@ -158,17 +160,17 @@ Line text, speakers and any timestamps come only from the saved input. Nothing i
 |---|---|---|
 | Per-session metric values per combo | `build_compare` returns per-session, per-combo cells: mean/min/max, n, failed, unit ids, human values, signed diff | Nothing for raw values |
 | Avg miss and within +-1 per combo | `aggregates` rows (only when the human engine is selected): MAE, bias, within_1, usage, cost, failed. Backend counts per successful repeat | Session-balanced aggregation per combo vs human; common cohort across combos; "which combo wins" flags per row |
-| Heatmap (code x combo) | Underlying per-metric errors are in `aggregates[].metrics` | Reshape to row-per-metric with winner and grey-out rules |
+| Heatmap (code x combo) | Underlying per-metric errors are in `aggregates[].metrics` | Reshape to row-per-metric with winner marks and n per cell |
 | Verdict line | None | Generate from leaderboard and heatmap values |
-| Time per combo | Per unit `started_at` (set at claim) and `finished_at` (set on completion) in `runs.py` | Time = `finished_at` - `started_at` per unit, averaged per combo. Caveat: `started_at` resets if a unit is re-claimed after a lease expiry, so time can be understated for retried units |
+| Time per combo | Per unit `started_at` (set at claim) and `finished_at` (set on completion) in `runs.py` | Time = `finished_at` - `started_at` per unit, averaged per combo. Retried units are kept; footnote: `started_at` resets if a unit is re-claimed after a lease expiry, so time may read short for retried units |
 | Human line labels | Gold `utterance_codes` (turn_id, codes), present for AnnoMI, AnnoSUM, MiTags, MIDAS, AutoMISC; absent for HLQC, PHAC | Safe projection of saved gold to the web |
 | Combo line codes and rationale | MITI report instances carry `turn_id`, `quote`, `id` (code) and `rationale`; read via the saved output endpoint, not in `build_compare` | Aggregate instances per turn and combo; return compactly |
 | Precision/recall/F1, confusion matrix | None | New server calculation using the alignment policy below |
-| Rationale roll-up grouping | None | Group by code and combo; similarity grouping is a later nicety (plain grouping by code first) |
+| Rationale roll-up grouping | None | Group by code and combo; grouped by code only (decided) |
 | Global reasons and evidence lines | MITI report global evidence | Surface per session |
 | Transcript for line view | Saved private input snapshots | Authenticated projection of saved turns |
 
-**Per-line alignment policy.** Match human and combo lines by `turn_id`. A line counts only when the combo's report and the gold share that turn id. A turn the human coded and the combo did not code becomes "none" for the combo, only when the combo's engine produces line-level output at all. If an engine has no line-level output (for example one-shot scores without spans), it gets no line metrics and its lane says so. Dataset caveat: AnnoMI codes per utterance while the engine applies volley rules, so some lines legitimately differ in grouping; note this beside line metrics for that dataset.
+**Per-line alignment policy.** Match human and combo lines by `turn_id`. A line counts only when the combo's report and the gold share that turn id. A turn the human coded and the combo did not code becomes "none" for the combo, only when the combo's engine produces line-level output at all. If an engine has no line-level output (for example one-shot scores without spans), it gets no line metrics and its lane says so. If the human has no line labels, line-level views are hidden for the dataset. Dataset caveat: AnnoMI codes per utterance while the engine applies volley rules, so some lines legitimately differ in grouping; note this beside line metrics for that dataset.
 
 ## Scaling to many combos
 
@@ -290,30 +292,36 @@ The earlier proposal: eval sessions and runs in the existing database under a sy
 
 ## Phased build order
 
-1. **Overview.** Backend per-combo aggregation vs human, verdict line, leaderboard, heatmap, sample-size notes. Acceptance: partial labels show "not labeled" not zero; each session counts once; grey cells cannot win; no human numeric labels means the view says "no human reference" instead of showing a table.
+1. **Overview.** Backend per-combo aggregation vs human, verdict line, leaderboard, heatmap, sample-size notes. Acceptance: partial labels show "n/a - not labeled in this dataset" not zero; each session counts once; every cell shows n; no human numeric labels means the view says "no human reference" instead of showing a table.
 2. **Deep dive.** Globals dots, count bars with bias, per-line precision/recall/F1 and confusion matrix, reasoning roll-up. Acceptance: matrix totals equal the number of aligned lines; datasets without line labels show a clear message.
 3. **Line view.** Transcript lanes, disagreement filters, click-through popup, per-session globals table. Acceptance: every cited line shows exact saved text; unsupported evidence is blank, never invented.
 
+## Decisions on screen questions (2026-11-24)
+
+1. **Combos shown.** The Overview (leaderboard and heatmap) shows all combos in the run. The Deep dive starts at the top 3 plus Human, with a picker for the rest.
+2. **Minimum sessions per heatmap cell.** 1. Every cell always shows its n (sessions behind it), so a 1-session cell is visibly thin. No grey-out and no "no winner under 5" rule.
+3. **Count error weighting.** All 10 codes weighted equally; per-code rows stay visible.
+4. **Time and retried units.** Retried units are kept; a footnote says their time may read short.
+5. **Reasoning roll-up.** Grouped by code only.
+6. **Exact values only.** A value is shown if and only if it can be calculated exactly from data that exists; otherwise it shows "n/a" with the reason. No "derived" label anywhere. R:Q = (SR+CR)/Q and %CR = CR/(SR+CR) are exact arithmetic, so for AnnoMI (which labels Question, SR, CR, GI) they show as normal values. Summaries needing data the dataset lacks (for example Technical/Relational need the four global ratings, not in AnnoMI) show "n/a - needs <inputs>, not in this dataset". Division by zero shows "n/a - no Questions in this session" (or equivalent). Codes or globals with no human label show "n/a - not labeled in this dataset".
+7. **Missing line-level data.** If either the human line labels or the engine's line-level output is missing, line-level views are hidden and the screen shows "no line-level output" and which side is missing.
+
 ## Open questions
 
-- Should the overview default to "all 4 combos selected" or require choosing combos first? Default proposed: all combos in the leaderboard and heatmap; deep dive starts at the top 3 plus Human with a picker for the rest.
-- What is the minimum number of paired sessions before a heatmap cell is colored (proposed 5)?
-- Should "Count error" sum all 10 codes equally, or let the owner weight codes that matter for prod? Proposed: equal, with per-code rows visible.
-- Time understates retried units (`started_at` resets on re-claim after lease expiry). Accept with a footnote, or exclude retried units from the Time average?
-- How should the roll-up group rationale snippets: by code only (simple) or by similarity (useful, more work)?
-- Do we show AnnoMI-derived R:Q and %CR (computed from the four mapped counts) in the heatmap, marked "derived", or hide them? Proposed: show, marked.
-- Datasets where the human has line labels but the combo's engine does not (or reverse): confirm "no line-level output" is acceptable wording.
+None.
 
 ## Appendix: Calculation rules (plain language)
 
 - **Each session counts once.** If a combo ran a session three times, average the repeats within the session first, then average across sessions. Repeats never inflate the number of sessions. Today's backend counts each successful repeat as its own comparison; the new aggregation changes that and shows "sessions" and "repeats" as separate numbers.
 - **Miss per session.** For one session and one metric: absolute difference between combo and human. Example: human 10, repeats 8/10/12 give misses 2, 0, 2, so the session's average miss is 1.33. Never average the repeats first: their mean is 10, a miss of 0, which hides the instability.
 - **Over/under bias.** Signed difference, combo minus human. Positive means over-counts.
-- **Partial human labels.** A code or global the human did not label is "not labeled", not zero. It is excluded from that row and shown as such. AnnoMI labels only Question, SR, CR and GI; the other six counts and all four globals are not labeled.
+- **Partial human labels.** A code or global the human did not label shows "n/a - not labeled in this dataset", not zero, and is excluded from that row. AnnoMI labels only Question, SR, CR and GI; the other six counts and all four globals are not labeled. Summaries that need unlabeled inputs (for example Technical/Relational, which need the four global ratings) show "n/a - needs <inputs>, not in this dataset".
 - **Same sessions for everyone.** For a given metric, only sessions where every selected combo has a result and human has a label are used, so combos are compared on the same sessions. The cohort is shown ("11 paired of 12").
 - **A real zero counts.** A successful count of 0 is included. A failed or missing run is excluded and shown as such.
-- **Honest n.** Sample sizes sit next to every number. Too few sessions turns the cell grey and removes any winner mark.
+- **n always shown.** Sample sizes sit next to every number. There is no minimum and no grey-out: a 1-session cell is colored and can win, but its n makes it visibly thin.
+- **Count error weights.** All 10 codes count equally.
+- **Time footnote.** Retried units are kept in the Time average; their time may read short because `started_at` resets on re-claim.
 - **No invented evidence.** No quotes, speakers or timestamps beyond what the saved input and saved outputs contain. Missing evidence says "unavailable".
 - **No composite score.** Counts, ratings, ratios and percentages stay in their own units; no single blended quality score.
-- **Derived ratios.** R:Q and %CR from AnnoMI's four mapped counts are derived values, labeled as such.
+- **Exact values only.** A value is shown if and only if it can be calculated exactly from data that exists; otherwise "n/a" with the reason. R:Q = (SR+CR)/Q and %CR = CR/(SR+CR) are exact arithmetic on counts, so they show as normal values whenever those counts are labeled (including AnnoMI); no "derived" label. Division by zero shows "n/a - no Questions in this session" (or equivalent).
 - **Not statistics.** Min/max across repeats is the observed range, not a confidence interval. No significance claims at this stage.
