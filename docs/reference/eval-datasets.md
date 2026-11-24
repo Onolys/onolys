@@ -53,6 +53,17 @@ Terms: unless noted, reuse terms are not separately confirmed and every dataset 
 - Overlaps: none recorded. The AutoMISC repo ships automated MISC codes for AnnoMI; those are excluded (see automisc-human).
 - Terms: the repo declares no license and the README has no reuse statement. Internal evaluation use only; confirm before any redistribution.
 
+## hlqc
+
+- Source: HLQC (High and Low Quality Counseling), Perez-Rosas et al., ACL 2019 (<https://aclanthology.org/P19-1088/>). Archive: <https://web.eecs.umich.edu/~mihalcea/downloads/HighLowQualityCounseling.zip> (`labels.csv` plus `transcripts/<id>` text files; a `__MACOSX` folder is ignored).
+- Size: `labels.csv` lists 259 ids (155 high, 104 low) but the archive holds 258 transcript files (154 high, 104 low). `high_022` has a label and no transcript file, so it is not included. Session ids are the archive ids with `-` for `_` (`high-001`, `low-104`).
+- Original media: counseling videos plus transcript. Transcript origin: automatic captions. The archive has no timestamps.
+- Labels: session `quality_label` (high/low) only. The archive contains no turn-level codes (no questions or reflections), so all counts are null, there are no globals or summaries, `miti_version: null` and `label_scheme` is "Session quality label (high/low) only".
+- Speakers: every transcript marks speakers as `T:` (therapist, role clinician) or `C:` (client). A few lines use variants (`T: <TAB>`, `C<TAB>`, and `high_140` uses `T: text` with a space); these are accepted. Lines with no speaker tag (caption wraps; `high-102`, `high-104`, `high-135`, `low-006`, ...) are appended to the previous turn and reported by `convert`, never given a new speaker. No session was skipped for missing roles.
+- Change goal: the source has none, so every session uses a generic curated goal ("Behavior change discussed in the session (the source does not record it)").
+- Overlaps: the AutoMISC human-coded subset re-parses 10 HLQC conversations (`automisc-human`); the full MI-TAGS set reportedly includes 140 HLQC transcripts (not in the public sample).
+- Terms: public download from the authors' page with no stated license; internal evaluation use only.
+
 ## Gated / not added
 
 | Dataset | Why not added | How to get it |

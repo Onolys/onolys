@@ -319,7 +319,7 @@ def test_catalog_lists_committed_public_datasets(services):
 
     from onolys_eval.manifest import load_manifest
     root = Path(__file__).resolve().parents[2] / "datasets"
-    for ident in ("casaa-miti-practice", "mi-tags-sample", "annomi"):
+    for ident in ("casaa-miti-practice", "mi-tags-sample", "annomi", "hlqc"):
         manifest = load_manifest(root / ident / "manifest.yaml")
         services.bucket.write_json(f"datasets/{ident}/manifest.json", manifest.model_dump(mode="json"))
     c = client(services)
@@ -333,3 +333,5 @@ def test_catalog_lists_committed_public_datasets(services):
     assert rows["annomi"]["session_count"] == 133 and rows["annomi"]["miti_version"] is None
     assert rows["annomi"]["source_media"] == ["video", "transcript"]
     assert rows["annomi"]["label_scheme"] == "AnnoMI codes mapped to MITI counts (partial)"
+    assert rows["hlqc"]["session_count"] == 258 and rows["hlqc"]["transcript_origin"] == "auto_captions"
+    assert rows["hlqc"]["label_scheme"] == "Session quality label (high/low) only"

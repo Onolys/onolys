@@ -65,7 +65,7 @@ class SessionManifest(Contract):
 
 
 SourceFormat = Literal[
-    "pdf", "mitags_csv", "annomi_csv"]
+    "pdf", "mitags_csv", "annomi_csv", "hlqc_zip"]
 
 
 class DatasetManifest(Contract):
