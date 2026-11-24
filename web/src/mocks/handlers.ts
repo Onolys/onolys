@@ -40,6 +40,16 @@ async function body<T>(request: Request): Promise<T> {
   return (text ? JSON.parse(text) : {}) as T;
 }
 
+/** Stand-in for `GET /v1/upload-limits` (same shape and values as the API's defaults). */
+export const UPLOAD_LIMITS = {
+  max_bytes: 300 * 1024 * 1024,
+  max_duration_s: 20 * 60,
+  interview_max_duration_s: 10 * 60,
+  short_warning_s: 10 * 60,
+  extensions: ["mp3", "wav", "wave", "m4a", "mp4", "webm", "ogg", "oga"],
+  mime_types: ["audio/mpeg", "audio/mp3", "audio/wav", "audio/x-wav", "audio/mp4", "audio/x-m4a", "audio/m4a", "audio/webm", "audio/ogg"],
+};
+
 export function createHandlers(b: MockBackend): HttpHandler[] {
   const json = (data: unknown, status = 200) => HttpResponse.json(data as never, { status });
   return [
@@ -99,6 +109,7 @@ export function createHandlers(b: MockBackend): HttpHandler[] {
     http.post(`${V1}/interviews/:id/end`, guarded(async ({ uid, params, request }) =>
       json(b.endInterview(uid, params.id, await body(request))),
     )),
+    http.get(`${V1}/upload-limits`, guarded(() => json(UPLOAD_LIMITS))),
     http.get(`${V1}/usage`, guarded(({ uid }) => json(b.getUsage(uid)))),
 
     // Stand-in for the GCS signed URL: pinned to the canonical Content-Type, like the real one.

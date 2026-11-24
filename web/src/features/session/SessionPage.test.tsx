@@ -158,14 +158,14 @@ describe("session page: status listener", () => {
     await waitFor(() => expect(subscribed).toBeGreaterThanOrEqual(1));
     act(() => mockEmitter.emitError("s_nope", new Error("permission-denied")));
     const card = await screen.findByRole("alert");
-    expect(card).toHaveTextContent(/couldn't find that/i);
+    expect(card).toHaveTextContent(/upload didn't go through, or the session no longer exists/i);
     expect(screen.getByRole("link", { name: /back to your sessions/i })).toHaveAttribute("href", "/sessions");
   });
 
   it("an unknown session id ends in the not-found card, not an endless spinner (E21)", async () => {
     open("s_nope");
     const card = await screen.findByRole("alert", undefined, { timeout: 4000 });
-    expect(card).toHaveTextContent(/couldn't find that/i);
+    expect(card).toHaveTextContent(/upload didn't go through, or the session no longer exists/i);
   });
 
   it("a malformed session id (422 invalid_parameters) shows the same not-found card (E21)", async () => {
@@ -179,7 +179,7 @@ describe("session page: status listener", () => {
     );
     open("not-hex");
     const card = await screen.findByRole("alert", undefined, { timeout: 4000 });
-    expect(card).toHaveTextContent(/couldn't find that/i);
+    expect(card).toHaveTextContent(/upload didn't go through, or the session no longer exists/i);
   });
 
   it("unsubscribes when the user leaves the page", async () => {
@@ -646,5 +646,41 @@ describe("transcript speaker gate", () => {
       expect(screen.getByRole("heading", { name: "Speaker Sam" })).toBeInTheDocument();
       expect(screen.getByText("Let's talk about walking.")).toBeInTheDocument();
     }
+  });
+});
+
+describe("session page: upload failed (PRD R11)", () => {
+  const stub = (code: string): SessionStatusDoc =>
+    ({ ...failedDoc("x", code), state: "upload_failed", progress: 0, transcript_ready: false, speaker_confirmed: false, rating_submitted: false, has_rating: false }) as unknown as SessionStatusDoc;
+
+  it("shows UploadFailedView (reason, way back, Reference) when the status is upload_failed", async () => {
+    const sid = create();
+    open(sid);
+    await ready();
+    act(() => mockEmitter.emit(sid, stub("audio_too_long")));
+    const card = await screen.findByRole("alert");
+    expect(card).toHaveTextContent("Upload failed: This recording is longer than 20 minutes. Upload a shorter one. Choose a different file.");
+    expect(card).toHaveTextContent(`Reference: ${sid}`);
+    expect(screen.getByRole("link", { name: /choose a different file/i })).toHaveAttribute("href", "/sessions/new");
+    expect(screen.queryByRole("button", { name: /delete session/i })).not.toBeInTheDocument();
+  });
+
+  it("a stale link whose stub exists shows the same view", async () => {
+    // The status listener's first snapshot is the stub doc (the session itself is gone: GET would 404).
+    setStatusListener({
+      subscribe(_id, onStatus) {
+        queueMicrotask(() => onStatus(stub("audio_unreadable")));
+        return () => {};
+      },
+    });
+    open("s_gone");
+    expect(await screen.findByRole("alert")).toHaveTextContent(/^Upload failed: We couldn't read this audio file/);
+  });
+
+  it("a stale link without a stub shows the not-found notice with a way to start a new upload", async () => {
+    open("s_nope");
+    const card = await screen.findByRole("alert", undefined, { timeout: 4000 });
+    expect(card).toHaveTextContent("This upload didn't go through, or the session no longer exists. Start a new upload.");
+    expect(screen.getByRole("link", { name: /start a new upload/i })).toHaveAttribute("href", "/sessions/new");
   });
 });

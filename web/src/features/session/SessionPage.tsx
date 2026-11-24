@@ -19,9 +19,12 @@ import { USAGE_KEY, useUsage } from "../usage/useUsage";
 import { DeleteDialog } from "./DeleteDialog";
 import { ErrorCard } from "./ErrorCard";
 import { RetryButton } from "./RetryButton";
+import { UploadFailedView } from "./UploadFailedView";
 import { RatingCardSlot, SpeakerGateSlot, UploadSlot } from "./slots";
 import { deriveTimeline } from "./timeline";
 import { useSessionStatus } from "./useSessionStatus";
+
+const NOT_FOUND_MESSAGE = "This upload didn't go through, or the session no longer exists. Start a new upload.";
 
 const STEP_CLASS = {
   done: "border-score-good",
@@ -130,11 +133,31 @@ function SessionView({ id }: { id: string }) {
     return (
       <div className={PAGE}>
         <h1 className={H1}>Session</h1>
-        <ErrorCard code={view.error.code} reference={view.error.requestId}>
+        {/* A stale link to a failed upload (session gone, no stub) lands here too (R11). */}
+        <ErrorCard
+          code={view.error.code}
+          message={view.error.code === "not_found" ? NOT_FOUND_MESSAGE : undefined}
+          reference={view.error.requestId}
+        >
           <Link to="/sessions" className={LINK}>
             Back to your sessions
           </Link>
+          {view.error.code === "not_found" ? (
+            <Link to="/sessions/new" className={LINK}>
+              Start a new upload
+            </Link>
+          ) : null}
         </ErrorCard>
+      </div>
+    );
+  }
+
+  // TODO(Task 10): `upload_failed` joins the generated state enum; until then compare as a string.
+  if (doc && (doc.state as string) === "upload_failed") {
+    return (
+      <div className={PAGE}>
+        <h1 className={H1}>Session</h1>
+        <UploadFailedView code={doc.error_code} reference={id} />
       </div>
     );
   }
