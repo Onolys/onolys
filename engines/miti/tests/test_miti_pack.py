@@ -33,8 +33,10 @@ def test_loads_and_has_all_items(pack):
     assert [i["id"] for i in pack.items if i["kind"] == "global"] == GLOBALS
     assert [i["id"] for i in pack.items if i["kind"] == "count"] == CODES
     assert pack.data["speaker_roles"] == {"subject": "clinician", "other": "client"}
-    assert pack.data["volley"] == {"breaks_on": "other_speaker", "min_other_words": 0}
-    assert pack.hash == "d98e79648859d15e"
+    assert pack.data["volley"] == {
+        "breaks_on": "other_speaker", "min_other_words": 3, "min_other_chars": 6,
+    }
+    assert pack.hash == "a6296dcf8f4acefb"
 
 
 def test_prompt_files_present_and_json_valid(pack):

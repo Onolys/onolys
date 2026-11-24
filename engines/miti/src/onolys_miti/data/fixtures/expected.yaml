@@ -6,6 +6,20 @@ fixtures:
     transcript: good_practice.json
     params: good_practice.params.json
     change_goal: walk more during the working week
+    volleys:
+      count: 10
+      reason: Manual pp. 13, 15–16; substantive client turns break, consecutive clinician turns stay together.
+      turn_ids:
+      - [t2]
+      - [t4]
+      - [t6]
+      - [t8, t9]
+      - [t11]
+      - [t13]
+      - [t15]
+      - [t17]
+      - [t19]
+      - [t21]
     warnings: []
     counts:
       gi: 1
@@ -179,6 +193,22 @@ fixtures:
     transcript: poor_practice.json
     params: poor_practice.params.json
     change_goal: cut back on evening drinking
+    volleys:
+      count: 12
+      reason: Manual pp. 13, 15–16; substantive client turns break, consecutive clinician turns stay together.
+      turn_ids:
+      - [t2]
+      - [t4]
+      - [t6]
+      - [t8]
+      - [t10]
+      - [t12]
+      - [t14]
+      - [t16]
+      - [t18]
+      - [t20]
+      - [t22]
+      - [t24]
     warnings: []
     counts:
       gi: 2
@@ -356,6 +386,15 @@ fixtures:
     transcript: short_session.json
     params: short_session.params.json
     change_goal: take blood pressure medicine every day
+    volleys:
+      count: 5
+      reason: Manual pp. 13, 15–16; substantive client turns break, consecutive clinician turns stay together.
+      turn_ids:
+      - [t2]
+      - [t4]
+      - [t6]
+      - [t8]
+      - [t10]
     warnings:
     - short_session
     counts:

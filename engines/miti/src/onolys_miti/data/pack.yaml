@@ -263,12 +263,12 @@ rules:
     codes: [sr, cr]
     precedence: [cr, sr]
 
-# Manual p. 13: a volley is uninterrupted clinician speech, ended by client speech other than
-# facilitative comments ("yeah, right, good"). Default: any client turn breaks a volley
-# (Tejit, accepted default); raise min_other_words to let short acknowledgements through.
+# Manual pp. 13, 15–16: facilitative client input does not end a clinician volley;
+# answers to a direct clinician question do. Numeric thresholds are engineering choices.
 volley:
   breaks_on: other_speaker
-  min_other_words: 0
+  min_other_words: 3
+  min_other_chars: 6
 
 # Manual section H (pp. 32-33) formulas; reference levels from section I (p. 33).
 summaries:

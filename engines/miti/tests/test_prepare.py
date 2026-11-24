@@ -133,21 +133,68 @@ def _seq(spec):
     ]
 
 
-def test_mm_hm_breaks_volley_by_default():
-    vs = build_volleys(
-        _seq(
-            [
-                ("A", "one two"),
-                ("B", "mm-hm"),
-                ("A", "three"),
-                ("B", "long reply here"),
-                ("A", "four"),
-            ]
-        ),
-        {"breaks_on": "other_speaker"},
-    )
-    assert [v.id for v in vs] == ["v1", "v2", "v3"]
-    assert vs[1].prev_other.text == "mm-hm" and vs[0].prev_other is None
+def test_facilitative_client_turn_is_preserved_but_not_codable(tmp_path, pack_data):
+    make_pack(tmp_path, pack_data, checks=[], volley=REAL_MITI.data["volley"])
+    turns = _seq([("A", "one two"), ("B", "mm-hm"), ("A", "three"),
+                  ("B", "long reply here"), ("A", "four")])
+    p = prepare(Transcript(turns=[rt.turn for rt in turns]), params())
+    assert [[t.id for t in v.turns] for v in p.volleys] == [["t0", "t2"], ["t4"]]
+    assert p.turns[1].turn.text == "mm-hm" and p.turns[1].role == "other"
+    assert p.volleys[1].prev_other.text == "long reply here"
+
+
+@pytest.mark.parametrize("client,breaks", [
+    ("yeah", False), ("I will", False), ("yeah right good", True),
+    ("I can do that", True),
+    ("好的", False), ("一二三四五", False), ("一二三四五六", True),
+    ("一 二 三 四 五", False), ("一 二 三 四 五 六", True),
+    ("あいうえお", False), ("あいうえおか", True),
+    ("กขคงจ", False), ("กขคงจฉ", True),
+    ("中文ab", False), ("中文ab c", False),
+    ("中文中abc", True), ("中文ab cd", False),
+    ("中文abcd", False), ("中文ab c d", True),
+])
+def test_facilitative_size_boundaries(client, breaks):
+    vs = build_volleys(_seq([("A", "A statement."), ("B", client),
+                            ("A", "Another statement.")]), REAL_MITI.data["volley"])
+    assert len(vs) == (2 if breaks else 1)
+
+
+@pytest.mark.parametrize("clinician,breaks", [
+    ("What happened?", True), ("どうですか？", True), ("كيف؟", True),
+    ('What happened? ”)]  ', True), ("What happened? Go on.", True),
+    ("What happened? Please go on.", True),
+    ("What happened? Please tell me more.", False),
+    ("What happened? This is a longer final statement.", False),
+    ("どうですか？一二三四五六", True), ("どうですか？一二三四五六七", False),
+])
+def test_short_answer_breaks_only_after_direct_question(clinician, breaks):
+    vs = build_volleys(_seq([("A", clinician), ("B", "yeah"), ("A", "Next.")]),
+                       REAL_MITI.data["volley"])
+    assert len(vs) == (2 if breaks else 1)
+
+
+def test_question_before_multiple_client_turns_breaks():
+    vs = build_volleys(_seq([("A", "What happened?"), ("B", "yeah"),
+                            ("B", "right"), ("A", "Next.")]), REAL_MITI.data["volley"])
+    assert [[t.id for t in v.turns] for v in vs] == [["t0"], ["t3"]]
+
+
+def test_existing_hand_fixture_volley_groups():
+    import json
+    from pathlib import Path
+
+    import yaml
+
+    fix = Path(__file__).resolve().parents[1] / "src/onolys_miti/data/fixtures"
+    for spec in yaml.safe_load((fix / "expected.yaml").read_text())["fixtures"].values():
+        if "volleys" not in spec:
+            continue
+        transcript = Transcript.model_validate(json.loads((fix / spec["transcript"]).read_text()))
+        role_turns, _ = mark_roles(transcript, SM)
+        volleys = build_volleys(role_turns, REAL_MITI.data["volley"])
+        assert len(volleys) == spec["volleys"]["count"]
+        assert [[t.id for t in v.turns] for v in volleys] == spec["volleys"]["turn_ids"]
 
 
 def test_min_other_words_knob():

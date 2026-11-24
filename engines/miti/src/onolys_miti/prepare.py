@@ -1,6 +1,7 @@
 """Pure steps before any model call (PRD R2 steps 1-3): role marking, span selection,
 input checks and volley building. Protocol-agnostic: "subject" / "other" roles only."""
 
+import unicodedata
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -25,7 +26,7 @@ class RoleTurn:
 @dataclass(frozen=True)
 class Volley:
     id: str  # v1..vN
-    turns: list[Turn]  # consecutive subject turns
+    turns: list[Turn]  # subject turns, possibly separated by facilitative client input
     prev_other: Turn | None  # most recent other-speaker turn before the volley (context only)
 
 
@@ -108,10 +109,49 @@ def select_turns(
     return kept, []
 
 
+def _spaceless_script(text: str) -> bool:
+    letters = [c for c in text if c.isalpha()]
+
+    def relevant(c: str) -> bool:
+        n = ord(c)
+        return (
+            0x0E00 <= n <= 0x0E7F  # Thai
+            or 0x3040 <= n <= 0x30FF  # Hiragana / Katakana
+            or 0x31F0 <= n <= 0x31FF  # Katakana extensions
+            or 0xFF66 <= n <= 0xFF9D  # half-width Katakana
+            or unicodedata.name(c, "").startswith(
+                ("CJK UNIFIED IDEOGRAPH", "CJK COMPATIBILITY IDEOGRAPH")
+            )
+        )
+    return bool(letters) and sum(relevant(c) for c in letters) * 2 >= len(letters)
+
+
+def _size(text: str) -> tuple[int, bool]:
+    spaceless = _spaceless_script(text)
+    return (sum(not c.isspace() for c in text) if spaceless else _words(text)), spaceless
+
+
+def _asks_question(text: str) -> bool:
+    # A short tail after the final question is still a direct question (R1).
+    text = text.rstrip()
+    while text and (text[-1] in "\"'" or unicodedata.category(text[-1]) in {"Pe", "Pf"}):
+        text = text[:-1].rstrip()
+    last = max(text.rfind(marker) for marker in ("?", "？", "؟"))
+    if last < 0:
+        return False
+    tail = text[last + 1:].strip()
+    size, spaceless = _size(tail)
+    return size <= (6 if spaceless else 3)
+
+
 def build_volleys(turns: list[RoleTurn], volley_cfg: dict[str, Any]) -> list[Volley]:
-    """Consecutive subject turns = one volley. An other-speaker turn breaks it when it has at
-    least `min_other_words` words (default 0: any other turn breaks)."""
-    min_words = int(volley_cfg.get("min_other_words", 0))
+    """Keep facilitative client input within a clinician volley (manual pp.13, 15–16).
+
+    Size thresholds are engineering approximations; answers to a direct question
+    always break. Client turns stay in Prepared.turns, never in codable volley turns.
+    """
+    min_words = int(volley_cfg.get("min_other_words", 3))
+    min_chars = int(volley_cfg.get("min_other_chars", 6))
     volleys: list[Volley] = []
     current: list[Turn] = []
     prev_other: Turn | None = None
@@ -130,7 +170,10 @@ def build_volleys(turns: list[RoleTurn], volley_cfg: dict[str, Any]) -> list[Vol
             current.append(rt.turn)
         else:
             prev_other = rt.turn
-            if _words(rt.turn.text) >= min_words:
+            size, spaceless = _size(rt.turn.text)
+            if size >= (min_chars if spaceless else min_words) or (
+                current and _asks_question(current[-1].text)
+            ):
                 flush()
     flush()
     return volleys
