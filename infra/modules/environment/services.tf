@@ -96,7 +96,7 @@ resource "google_cloud_run_v2_service" "api" {
         value = join(",", var.cors_origins)
       }
       env {
-        # Only the api builds auth-email links; unset elsewhere is fine (Settings treats it as optional).
+        # Verification links and the API reset fallback use the public app origin.
         name  = "APP_BASE_URL"
         value = var.app_base_url
       }
@@ -206,6 +206,30 @@ resource "google_cloud_run_v2_service" "worker" {
           }
         }
       }
+      # Durable password-reset jobs generate links and send mail in this service.
+      # Keep the whole worker email configuration off until the secret has a version.
+      dynamic "env" {
+        for_each = var.resend_secret_wired ? {
+          APP_BASE_URL = var.app_base_url
+          EMAIL_FROM   = var.email_from
+        } : {}
+        content {
+          name  = env.key
+          value = env.value
+        }
+      }
+      dynamic "env" {
+        for_each = var.resend_secret_wired ? [1] : []
+        content {
+          name = "RESEND_API_KEY"
+          value_source {
+            secret_key_ref {
+              secret  = google_secret_manager_secret.resend.secret_id
+              version = "latest"
+            }
+          }
+        }
+      }
       dynamic "env" {
         for_each = local.platform_env
         content {
@@ -253,6 +277,8 @@ resource "google_cloud_run_v2_service" "worker" {
   depends_on = [
     google_secret_manager_secret_iam_member.hmac,
     google_secret_manager_secret_iam_member.worker_provider,
+    google_secret_manager_secret_iam_member.resend_worker,
+    google_project_iam_member.worker_auth_email,
   ]
 }
 

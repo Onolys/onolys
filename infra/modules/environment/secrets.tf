@@ -52,6 +52,15 @@ resource "google_secret_manager_secret_iam_member" "resend_api" {
   member    = "serviceAccount:${google_service_account.api.email}"
 }
 
+# The reset-email worker needs only this environment's Resend key, after activation.
+resource "google_secret_manager_secret_iam_member" "resend_worker" {
+  count     = var.resend_secret_wired ? 1 : 0
+  project   = var.project
+  secret_id = google_secret_manager_secret.resend.secret_id
+  role      = "roles/secretmanager.secretAccessor"
+  member    = "serviceAccount:${google_service_account.worker.email}"
+}
+
 resource "google_secret_manager_secret_iam_member" "hmac" {
   for_each  = local.runtime_sas
   project   = var.project

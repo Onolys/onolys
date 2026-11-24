@@ -166,18 +166,18 @@ variable "ai_mic_gate" {
 }
 
 variable "app_base_url" {
-  description = "Public web app origin the api puts in auth-email links (api only; unset means the auth-email endpoints answer 503 email_unavailable)."
+  description = "Public web app origin used in auth-email links by the api and activated reset-email worker."
   type        = string
 }
 
 variable "email_from" {
-  description = "From header for auth emails (api EMAIL_FROM)."
+  description = "From header for auth emails (api and activated worker EMAIL_FROM)."
   type        = string
   default     = "Onolys <no-reply@onolys.com>"
 }
 
 variable "resend_secret_wired" {
-  description = "Wire RESEND_API_KEY on the api via secret_key_ref. Keep false until the owner has seeded a version of resend-api-key-<env> (a revision fails to start if the secret has no version)."
+  description = "Wire RESEND_API_KEY on the api and worker via secret_key_ref, plus worker email settings and IAM. Keep false until the owner has seeded a version of resend-api-key-<env> (a revision fails to start if the secret has no version)."
   type        = bool
   default     = false
 }

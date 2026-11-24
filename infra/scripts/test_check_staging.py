@@ -106,3 +106,20 @@ def test_worker_env_allows_uid_hmac_secret_ref():
     assert chk.worker_env_problems(base + [ref("UID_HMAC_KEY", "uid-hmac-key-staging")]) == []
     assert chk.worker_env_problems(base + [{"name": "UID_HMAC_KEY", "value": "plain"}])  # plaintext rejected
     assert chk.worker_env_problems(base + [ref("OTHER_SECRET", "x")])  # other refs still rejected
+
+
+def test_worker_env_allows_optional_resend_secret_but_never_plaintext():
+    ref = lambda n, s: {"name": n, "valueSource": {"secretKeyRef": {"secret": s}}}
+    base = [ref("GEMINI_API_KEY", "gemini-api-key-staging"), ref("ANTHROPIC_API_KEY", "anthropic-api-key-staging")]
+    assert chk.worker_env_problems(base + [ref("RESEND_API_KEY", "resend-api-key-staging")]) == []
+    assert chk.worker_env_problems(base + [{"name": "RESEND_API_KEY", "value": "plain"}])
+
+
+def test_worker_email_custom_role_is_allowed_only_for_its_environment_worker():
+    role = "projects/onolys/roles/workerAuthEmail_staging"
+    policy = {"bindings": [{"role": role, "members": [SA]}]}
+    assert chk.project_iam_problems(policy, [SA]) == []
+    assert chk.project_iam_problems(policy, [SA], env="prod")
+    api_sa = "serviceAccount:api-staging@onolys.iam.gserviceaccount.com"
+    policy["bindings"][0]["members"] = [api_sa]
+    assert chk.project_iam_problems(policy, [api_sa])

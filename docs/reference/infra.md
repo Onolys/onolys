@@ -51,7 +51,7 @@ Region note: STT v2 Chirp 3 is not offered in `us-central1`, so STT uses locatio
 
 ## Environment variables (Cloud Run)
 
-Set by Terraform (`infra/modules/environment/services.tf`). Values below are the live ones, checked with the Cloud Run API on 2026-11-20.
+Set by Terraform (`infra/modules/environment/services.tf`). Base service values were checked with the Cloud Run API on 2026-11-20; auth-email rows describe the Terraform configuration and its activation gate.
 
 | Var | api | worker | Value |
 |---|---|---|---|
@@ -73,10 +73,10 @@ Set by Terraform (`infra/modules/environment/services.tf`). Values below are the
 | `DEFAULT_PRESET` | yes | yes | `default` |
 | `CORS_ORIGINS` | yes | no | staging `https://onolys-app-staging.web.app,http://localhost:5173`; prod `https://app.onolys.com` |
 | `UID_HMAC_KEY` | yes | yes | secret ref `uid-hmac-key-{env}` (keys the `uid_hash` log field) |
-| `APP_BASE_URL` | yes | no | staging `https://onolys-app-staging.web.app`, prod `https://app.onolys.com` (root/module var `app_base_url`; api only, `deploy-staging.yml` re-sets it on the api). Optional for `Settings`: when unset the service starts and `POST /v1/auth/email/verification` answers 503 `email_unavailable` (password reset stays 202 and logs `outcome=unconfigured`). When set it must be an HTTPS origin on a known app host or startup fails. The PR preview does not set it, so its auth-email endpoints answer 503 |
+| `APP_BASE_URL` | yes | when activated | staging `https://onolys-app-staging.web.app`, prod `https://app.onolys.com` (module var `app_base_url`; `deploy-staging.yml` re-sets it on the api). The worker receives it only when `resend_secret_wired[env]` is true. Optional for `Settings`: when unset the service starts and `POST /v1/auth/email/verification` answers 503 `email_unavailable` (password reset stays 202 and logs `outcome=unconfigured`). When set it must be an HTTPS origin on a known app host or startup fails. The PR preview does not set it, so verification answers 503 and reset retains its generic 202 |
 | `CLIENT_IP_TRUSTED_HOPS` | no | no | integer >= 0, default `1`. Number of proxy entries to skip from the right of `X-Forwarded-For` when picking the client IP for the password-reset per-IP cap (`parts[-(hops+1)]`, clamped to the leftmost; non-IP values fall back to the `unknown` bucket). See "Client IP and `X-Forwarded-For`" below |
-| `EMAIL_FROM` | yes | no | `Onolys <no-reply@onolys.com>` (module var `email_from`; also in `deploy-staging.yml`) |
-| `RESEND_API_KEY` | yes | no | secret ref `resend-api-key-{env}`, only when root map var `resend_secret_wired[env]` is true (default false for both; a revision fails if the secret has no version). Without it the api answers 503 `email_unavailable` |
+| `EMAIL_FROM` | yes | when activated | `Onolys <no-reply@onolys.com>` (module var `email_from`; also in `deploy-staging.yml`) |
+| `RESEND_API_KEY` | when activated | when activated | secret ref `resend-api-key-{env}`, only when root map var `resend_secret_wired[env]` is true (default false for both; a revision fails if the secret has no version). Without it verification answers 503 `email_unavailable`; reset still returns generic 202 and its delivery logs `outcome=unconfigured` |
 | `GEMINI_API_KEY` (evaluation LLM) and `ANTHROPIC_API_KEY` (only for the `claude` preset) | no | yes | secret refs `gemini-api-key-{env}` and `anthropic-api-key-{env}` (one ref per `llm_secrets` / `stt_secrets` entry, always the env's own secret; staging and prod use separate provider keys) |
 | `LLM_PROVIDER`, `LLM_MODEL` | yes | yes | staging only, set by `deploy-staging.yml` from GitHub repo variables `LLM_PROVIDER` / `LLM_MODEL`; not set by Terraform. Empty = no override. See "LLM provider and model" |
 | `GIT_SHA` | yes | yes | set by CI at deploy. `unset` until the first CI deploy (the services still run the placeholder image `us-docker.pkg.dev/cloudrun/container/hello`) |
@@ -190,6 +190,49 @@ python3 infra/scripts/seed-secrets.py --env staging     # also: --env prod
 ```
 
 It creates `uid-hmac-key-{env}` (random, only if missing) and writes the key for each `--map ENVVAR=base-id` (default `GEMINI_API_KEY=gemini-api-key` and `ANTHROPIC_API_KEY=anthropic-api-key`; a key whose variable is unset keeps its existing version) into `<base-id>-{env}`, so `--env staging` and `--env prod` fill different secrets from the key in your shell. Re-running is a no-op unless a value changed.
+
+### Auth-email staging activation (two phases)
+
+Verification is sent by the API; password-reset requests enqueue a durable `reset-email` task and the worker generates the action link and sends through Resend. The API can also send a reset as a fallback if enqueueing fails. Both therefore need the email settings and the same environment's Resend key. The shared Identity Platform user pool is project-wide.
+
+Defaults remain `resend_secret_wired={staging=false,prod=false}`. The API has its public app origin and From header already, but no key until activation. Worker email settings, Resend accessor, and action-link IAM are all gated off by default. Activation grants the worker `roles/secretmanager.secretAccessor` on `resend-api-key-staging` only and a custom project role `workerAuthEmail_staging` containing only `firebaseauth.users.sendEmail`. The existing API `roles/firebaseauth.admin` grant is also gated. The worker generates reset links without user lookup or signing; [Google's `accounts.sendOobCode` reference](https://docs.cloud.google.com/identity-platform/docs/reference/rest/v1/accounts/sendOobCode) documents the action-link permission.
+
+1. Create only the staging secret shell from `infra/` (no plaintext or secret versions enter Terraform):
+
+   ```bash
+   terraform plan -target='module.staging.google_secret_manager_secret.resend' -out=staging-resend-shell.tfplan
+   terraform apply staging-resend-shell.tfplan
+   ```
+
+2. The owner verifies the Resend sending domain, creates a sending-only key, and adds an enabled version of `resend-api-key-staging` in Secret Manager. The seed helper can alternatively read the key from the environment with `python3 infra/scripts/seed-secrets.py --env staging --map RESEND_API_KEY=resend-api-key` (run from the repo root; supply the environment securely, never put the value in a command, tfvars, or a plan). Confirm version metadata only before proceeding. An empty shell cannot start a Cloud Run revision that references it.
+
+3. After the version exists, persist this non-secret setting in the operator's existing ignored `infra/terraform.tfvars` (or an existing `*.auto.tfvars` file), retaining every other operator variable and replacing any existing `resend_secret_wired` assignment rather than duplicating it:
+
+   ```hcl
+   resend_secret_wired = { staging = true, prod = false }
+   ```
+
+   Terraform automatically loads those filenames from its root, so a later ordinary plan/apply retains staging activation. Use the complete two-entry map; setting only `staging` fails validation. An explicitly named operator tfvars file instead needs `-var-file` on every plan. Carry the non-secret activation setting into every checkout used to operate this state; git deliberately excludes local tfvars. Then make a narrowly targeted activation plan from `infra/`. Supply the services' currently deployed commit SHAs to preserve `GIT_SHA`; `STAGING_SHA` and `PROD_SHA` below are operator variables, not secrets.
+
+   ```bash
+   terraform plan \
+     -var 'resend_secret_wired={staging=true,prod=false}' \
+     -var "git_sha={staging=\"${STAGING_SHA}\",prod=\"${PROD_SHA}\"}" \
+     -target='module.staging.google_secret_manager_secret_iam_member.resend_api' \
+     -target='module.staging.google_secret_manager_secret_iam_member.resend_worker[0]' \
+     -target='module.staging.google_project_iam_member.api_firebaseauth_admin[0]' \
+     -target='module.staging.google_project_iam_custom_role.worker_auth_email[0]' \
+     -target='module.staging.google_project_iam_member.worker_auth_email[0]' \
+     -target='module.staging.google_cloud_run_v2_service.api' \
+     -target='module.staging.google_cloud_run_v2_service.worker' \
+     -out=staging-resend-activate.tfplan
+   terraform show staging-resend-activate.tfplan
+   terraform apply staging-resend-activate.tfplan
+   ```
+
+Review the saved plan before applying: targets include dependencies, so confirm every planned change is intended and no production resource changes. Terraform preserves each service's CI-owned image, but rewrites its env, including any CI-only `LLM_PROVIDER`/`LLM_MODEL` overrides (see below). After activation, verify healthy API and worker revisions, effective traffic, verification delivery, and queued password-reset delivery with an owner-controlled account. Re-run the staging deploy if needed to restore CI overrides. `latest` secret env values resolve when a revision starts; rotate by deploying fresh revisions.
+
+The explicit `-var 'resend_secret_wired={staging=true,prod=false}'` above also makes the initial activation plan self-contained. Retain the same map in the automatically loaded operator tfvars file for later plans/applies. Without either input, false defaults disable email wiring. Production activation remains a separate rollout; these commands neither create nor activate its Resend resources. Targeting is an exceptional staged rollout tool; review a subsequent full plan for unrelated drift without applying it automatically.
 
 ### Cutover: shared `anthropic-api-key` to per-env secrets (one-time, owner decision 2026-11-20)
 
