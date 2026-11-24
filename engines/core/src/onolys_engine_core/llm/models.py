@@ -1,6 +1,7 @@
 """Shared model capabilities for route overrides and eval selection."""
 
 import os
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -50,17 +51,26 @@ def _positive_int(value: object, name: str) -> int:
     return value
 
 
-def _models_path() -> Path:
-    if path := os.environ.get("MODELS_FILE"):
+def models_path(
+    env: Mapping[str, str] | None = None, routes_file: Path | str | None = None
+) -> Path:
+    """MODELS_FILE, else <routes file dir>/../models.yaml (routes_file, then ROUTES_FILE)."""
+    env = os.environ if env is None else env
+    if path := env.get("MODELS_FILE"):
         return Path(path)
     # Deployments select config/<environment>/routes.yaml. Capabilities live above it.
-    routes = Path(os.environ.get("ROUTES_FILE") or "config/staging/routes.yaml")
+    routes = Path(routes_file or env.get("ROUTES_FILE") or "config/staging/routes.yaml")
     return routes.parent.parent / "models.yaml"
+
+
+def find_model(models: Mapping[str, Model], provider: str, tier: str) -> Model | None:
+    """The model block of `provider` that owns `tier` (tier ids are unique across models)."""
+    return next((m for m in models.values() if m.provider == provider and tier in m.tiers), None)
 
 
 def load_models(path: Path | str | None = None) -> dict[str, Model]:
     """Load version 1 capabilities; explicit path wins over MODELS_FILE and ROUTES_FILE."""
-    source = Path(path) if path is not None else _models_path()
+    source = Path(path) if path is not None else models_path()
     try:
         data = yaml.safe_load(source.read_text(encoding="utf-8"))
     except (OSError, yaml.YAMLError) as exc:
@@ -116,4 +126,4 @@ def load_models(path: Path | str | None = None) -> dict[str, Model]:
     return models
 
 
-__all__ = ["Model", "Tier", "load_models"]
+__all__ = ["Model", "Tier", "find_model", "load_models", "models_path"]

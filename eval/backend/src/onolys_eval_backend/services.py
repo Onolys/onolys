@@ -1,10 +1,12 @@
 """Lazy production composition; constructing an app never loads cloud credentials."""
 
+import os
 from functools import cached_property
 from pathlib import Path
 
 from onolys_engine_core.engine import Engine
 from onolys_engine_core.errors import InputError
+from onolys_engine_core.llm.models import Model, load_models, models_path
 from onolys_engine_core.llm.routes import RouteRegistry, load_registry
 from onolys_engine_core.registry import EngineRegistry
 
@@ -46,6 +48,10 @@ class EvalServices:
     @cached_property
     def routes(self) -> RouteRegistry:
         return load_registry(Path(self.config.routes_file))
+
+    @cached_property
+    def models(self) -> dict[str, Model]:
+        return load_models(models_path(os.environ, self.config.routes_file))
 
     @cached_property
     def registry(self) -> EngineRegistry:

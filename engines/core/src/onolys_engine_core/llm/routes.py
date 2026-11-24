@@ -17,7 +17,7 @@ import yaml
 
 from onolys_engine_core.config import locate_config_file
 from onolys_engine_core.errors import ConfigError, InputError
-from onolys_engine_core.llm.models import load_models
+from onolys_engine_core.llm.models import find_model, load_models
 
 ROUTES_ENV = "ROUTES_FILE"
 DEFAULT_PRESET_ENV = "DEFAULT_PRESET"
@@ -106,13 +106,12 @@ def _llm_override(env: dict[str, str], models_path: Path | None) -> dict[str, st
     owners = [m for m in entries.values() if m.provider == provider]
     if not owners:
         raise ConfigError(f"{PROVIDER_ENV}={provider!r} unknown; expected one of {providers}")
-    for m in owners:
-        if model in m.tiers:
-            return {
-                "litellm_id": f"{provider}/{model}",
-                "api_key_env": m.api_key_env,
-                "caching_mode": m.caching_mode,
-            }
+    if m := find_model(entries, provider, model):
+        return {
+            "litellm_id": f"{provider}/{model}",
+            "api_key_env": m.api_key_env,
+            "caching_mode": m.caching_mode,
+        }
     known = sorted(t for m in owners for t in m.tiers)
     raise ConfigError(f"{MODEL_ENV}={model!r} unknown for provider {provider!r}; expected {known}")
 
