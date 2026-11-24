@@ -35,7 +35,7 @@ from onolys_api.adapters.error_map import kind_for_code, to_public
 from onolys_api.adapters.validated import evaluate_validated
 from onolys_api.jobs.alive import ensure_active
 from onolys_api.jobs.charging import release_failed_run, release_once
-from onolys_api.jobs.machine import RUN_START_PROGRESS, STAGE_WEIGHTS, advance
+from onolys_api.jobs.machine import RUN_START_PROGRESS, STAGE_WEIGHTS, STAGES, advance, stage_fields
 from onolys_api.jobs.queue import MAX_ATTEMPTS
 from onolys_api.jobs.transcribe import TRANSCRIPT_ID
 from onolys_api.jobs.transcribe import _run as run_coro
@@ -51,7 +51,7 @@ from onolys_api.repo.models import ReportDoc
 from onolys_api.storage.base import BlobStore
 
 ARTIFACTS = ("code", "tips")
-MAX_PROGRESS = 99
+MAX_PROGRESS = 99  # same as `progress.MAX_PROGRESS`
 
 
 def artifact_key(uid: str, sid: str, run_id: str, name: str) -> str:
@@ -149,13 +149,21 @@ def _evaluate(ctx, blobs, evaluation, run_doc, session) -> ReportDoc:
         try:
             ensure_active(repo, blobs, uid, sid)  # stage boundary: stop when cancelled/deleted
             if status == "started":
-                repo.update_session(uid, sid, {"step": stage}, status={"step": stage})
+                repo.update_session(
+                    uid, sid, {"step": stage},
+                    status={"step": stage, **stage_fields("running", stage, None)},
+                )
             elif stage not in done:
                 done.add(stage)
                 total = RUN_START_PROGRESS + sum(STAGE_WEIGHTS[s] for s in done)
                 shown = repo.get_status(uid, sid).progress
+                after = STAGES[STAGES.index(stage) + 1 :][:1]  # the stage that starts next
                 repo.update_session(
-                    uid, sid, {}, status={"progress": max(shown, min(MAX_PROGRESS, total))}
+                    uid, sid, {},
+                    status={
+                        "progress": max(shown, min(MAX_PROGRESS, total)),
+                        **stage_fields("running", after[0] if after else stage, None),
+                    },
                 )
         except (NotFoundError, Cancelled):
             raise

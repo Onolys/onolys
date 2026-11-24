@@ -552,7 +552,10 @@ async def test_no_report_text_in_session_status(env):
     assert set(st) <= {
         "id", "uid", "state", "step", "progress", "error_code", "error_kind", "retries_left",
         "counted", "latest_report_version", "updated_at", "expire_at", "transcript_ready", "speaker_confirmed", "rating_submitted", "has_rating",
+        "started_at", "stage_started_at", "waited_ms", "audio_s", "progress_next", "stage_expected_s",
     }  # fmt: skip
+    for k in ("started_at", "stage_started_at", "waited_ms", "audio_s", "progress_next", "stage_expected_s"):  # numbers and timestamps only: no text
+        assert st[k] is None or isinstance(st[k], (int, float)) or st[k][:2] == "20", k
 
 
 # ---- 03-failure-policy Task 3: `counted` on the failed session, interview never counted ----------

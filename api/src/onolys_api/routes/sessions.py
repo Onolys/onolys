@@ -144,6 +144,18 @@ class SessionDetail(BaseModel):
     counted: bool | None = Field(
         None, description="Did the session end (cancelled or failed) having used a unit; null n/a"
     )
+    started_at: datetime | None = Field(
+        None, description="First entry to uploading (a re-run: its start); null before"
+    )
+    stage_started_at: datetime | None = Field(None, description="Entered the current state")
+    waited_ms: int = Field(0, description="Total milliseconds spent waiting for the user input")
+    audio_s: float | None = Field(None, description="Recording duration in seconds")
+    progress_next: int | None = Field(
+        None, description="Base percent of the next stage (99 on the last); null when none"
+    )
+    stage_expected_s: int | None = Field(
+        None, description="Typical seconds the current stage takes; null when untimed"
+    )
     free_run: bool = Field(
         default=False,
         description=(
@@ -393,6 +405,12 @@ def get_session(id: ResourceId, request: Request, user: User) -> SessionDetail:
         free_run=bool(s.interview_id),
         cancel=s.cancel,
         counted=st.counted if st.counted is not None else _counted(s),
+        started_at=st.started_at,
+        stage_started_at=st.stage_started_at,
+        waited_ms=st.waited_ms,
+        audio_s=st.audio_s,
+        progress_next=st.progress_next,
+        stage_expected_s=st.stage_expected_s,
         created_at=s.created_at,
         updated_at=s.updated_at,
         links=links,

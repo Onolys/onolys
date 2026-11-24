@@ -70,6 +70,19 @@
   "$id": "session-detail.schema.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "properties": {
+    "audio_s": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Recording duration in seconds",
+      "title": "Audio S"
+    },
     "cancel": {
       "anyOf": [
         {
@@ -180,6 +193,60 @@
       "title": "Progress",
       "type": "integer"
     },
+    "progress_next": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Base percent of the next stage (99 on the last); null when none",
+      "title": "Progress Next"
+    },
+    "stage_expected_s": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Typical seconds the current stage takes; null when untimed",
+      "title": "Stage Expected S"
+    },
+    "stage_started_at": {
+      "anyOf": [
+        {
+          "format": "date-time",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Entered the current state",
+      "title": "Stage Started At"
+    },
+    "started_at": {
+      "anyOf": [
+        {
+          "format": "date-time",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "First entry to uploading (a re-run: its start); null before",
+      "title": "Started At"
+    },
     "status": {
       "enum": [
         "created",
@@ -225,6 +292,12 @@
       "format": "date-time",
       "title": "Updated At",
       "type": "string"
+    },
+    "waited_ms": {
+      "default": 0,
+      "description": "Total milliseconds spent waiting for the user input",
+      "title": "Waited Ms",
+      "type": "integer"
     },
     "warnings": {
       "items": {

@@ -11,6 +11,15 @@ transaction (`start_first_run`, `start_run`) for the check-and-move to `running`
 from typing import Any, get_args
 
 from onolys_api.errors import ApiError
+from onolys_api.progress import (  # noqa: F401  (re-exported: the tables moved to `progress`)
+    MAX_PROGRESS,
+    RUN_START_PROGRESS,
+    STAGE_WEIGHTS,
+    STAGES,
+    STATE_PROGRESS,
+    entry_fields,
+    stage_fields,
+)
 from onolys_api.repo.base import Repo
 from onolys_api.repo.models import SessionError, SessionState, error_status_fields, utcnow
 
@@ -45,25 +54,13 @@ assert set(TRANSITIONS) == set(STATES) and all("deleting" in TRANSITIONS[s] for 
 
 FLAGS = ("transcript_ready", "speaker_confirmed", "rating_submitted", "has_rating")
 
-# R4 progress table
-STATE_PROGRESS: dict[str, int] = {
-    "created": 0,
-    "uploading": 5,
-    "validating": 10,
-    "transcribing": 20,
-    "awaiting_input": 40,
-    "running": 45,
-    "report_ready": 100,
-}
-RUN_START_PROGRESS = STATE_PROGRESS["running"]
-STAGE_WEIGHTS: dict[str, int] = {"code": 40, "tips": 8, "assemble": 3}
-STAGES = tuple(STAGE_WEIGHTS)  # 45 + 51 = 96: under the 99 cap
-
 # fields of session_status/{sid} (everything the web may read; no text)
 STATUS_FIELDS = frozenset(
     {
         "uid", "state", "step", "progress", "error_code", "error_kind", "retries_left", "counted",
         "latest_report_version", "updated_at", "expire_at",
+        "started_at", "stage_started_at", "waited_ms", "audio_s", "progress_next",
+        "stage_expected_s",
         *FLAGS,
     }
 )  # fmt: skip
@@ -144,9 +141,20 @@ def advance(
     if error is _KEEP and to is not None and to != "failed":
         error = None
     s_fields: dict[str, Any] = {"state": new_state}
-    if to is not None:
-        s_fields["stage_started_at"] = utcnow()  # the stale check keys off this, not updated_at
     st_fields: dict[str, Any] = {"state": new_state, "progress": progress}
+    new_step = session.step if step is _KEEP else step
+    if to is not None:
+        now = utcnow()
+        s_fields["stage_started_at"] = now  # the stale check keys off this, not updated_at
+        st_fields.update(
+            entry_fields(session.state, session.stage_started_at, status.model_dump(), to,
+                         new_step, now)
+        )  # fmt: skip
+    elif step is not _KEEP or stage_done is not None:
+        st_fields.update(stage_fields(new_state, new_step, status.audio_s))
+    if stage_done is not None and new_state == "running":
+        after = STAGES[STAGES.index(stage_done) + 1 :][:1]
+        st_fields.update(stage_fields("running", after[0] if after else STAGES[-1], None))
     if step is not _KEEP:
         s_fields["step"] = step
         st_fields["step"] = step

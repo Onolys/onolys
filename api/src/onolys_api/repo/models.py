@@ -220,6 +220,13 @@ class SessionStatusDoc(Doc):
     latest_report_version: int | None = None
     updated_at: datetime = Field(default_factory=utcnow)
     expire_at: datetime | None = None  # only an `upload_failed` stub: Firestore TTL deletes it
+    # 05-processing-screen R2: numbers and timestamps the processing screen interpolates
+    started_at: datetime | None = None  # first `uploading` (a re-run: its start)
+    stage_started_at: datetime | None = None  # entered the current state
+    waited_ms: int = 0  # total time spent in `awaiting_input`
+    audio_s: float | None = None  # recording duration
+    progress_next: int | None = None  # base % of the next stage (99 on the last)
+    stage_expected_s: int | None = None  # typical duration of the current stage
     transcript_ready: bool = False
     speaker_confirmed: bool = False
     rating_submitted: bool = False

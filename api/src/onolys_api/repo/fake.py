@@ -8,6 +8,7 @@ from typing import Any, Literal
 from onolys_engine_core.transcript import Transcript
 
 from onolys_api import logs
+from onolys_api.progress import entry_fields
 from onolys_api.repo import large
 from onolys_api.repo.base import (
     CancelOutcome,
@@ -636,7 +637,8 @@ class FakeRepo:
             status = self._get(f"session_status/{sid}") or {}
             self._put(
                 f"session_status/{sid}",
-                {**status, "state": "cancelled", "counted": charge.counted, "updated_at": now},
+                {**status, "state": "cancelled", "counted": charge.counted, "updated_at": now,
+                 "stage_started_at": now, "progress_next": None, "stage_expected_s": None},
             )
             self._record_status(uid, sid)
             logs.emit("session_cancelled", from_state=state, counted=charge.counted, run_id=run_id)
@@ -696,7 +698,9 @@ class FakeRepo:
             self._put(
                 f"session_status/{sid}",
                 {**status, "state": "running", "step": None, "error_code": None,
-                 "progress": max(status.get("progress", 0), start_progress), "updated_at": now},
+                 "progress": max(status.get("progress", 0), start_progress), "updated_at": now,
+                 **entry_fields(sess["state"], sess.get("stage_started_at"), status, "running",
+                                None, now)},
             )  # fmt: skip
             self._record_status(uid, sid)
             return "started"
@@ -766,7 +770,9 @@ class FakeRepo:
             self._put(
                 f"session_status/{sid}",
                 {**status, "state": "running", "step": None, **error_status_fields(None, 0),
-                 "progress": progress, "updated_at": now},
+                 "progress": progress, "updated_at": now,
+                 **entry_fields(sess["state"], sess.get("stage_started_at"), status, "running",
+                                None, now)},
             )  # fmt: skip
             self._record_status(uid, sid)
             return "started"
@@ -793,7 +799,9 @@ class FakeRepo:
                 f"session_status/{sid}",
                 {**status, "state": to, "step": step, **error_status_fields(None, 0),
                  "progress": max(status.get("progress", 0), progress), "uid": uid,
-                 "updated_at": now},
+                 "updated_at": now,
+                 **entry_fields(sess["state"], sess.get("stage_started_at"), status, to, step,
+                                now)},
             )  # fmt: skip
             self._record_status(uid, sid)
             return True

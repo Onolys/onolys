@@ -156,6 +156,12 @@ def test_status_doc_holds_no_phi_fields(repo):
         "speaker_confirmed",
         "rating_submitted",
         "has_rating",
+        "started_at",
+        "stage_started_at",
+        "waited_ms",
+        "audio_s",
+        "progress_next",
+        "stage_expected_s",
     }
 
 

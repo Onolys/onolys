@@ -293,6 +293,9 @@ def make_validate_handler(
         if short[1] and short[0] not in session.warnings:
             ctx.repo.update_session(uid, sid, {"warnings": [*session.warnings, short[0]]})
         if session.state == "validating":
+            ctx.repo.update_session(  # before `advance`: the transcription estimate scales with it
+                uid, sid, {}, status={"audio_s": round(seconds, 1)}
+            )
             advance(ctx.repo, uid, sid, to="transcribing", step="transcribe")
         ctx.enqueue(TaskPayload(kind="transcribe", uid=uid, sid=sid, retry=ctx.payload.retry))
 

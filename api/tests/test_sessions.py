@@ -16,6 +16,7 @@ B = {"Authorization": "Bearer test:bob"}
 STATUS_KEYS = {
     "uid", "state", "step", "progress", "error_code", "error_kind", "retries_left", "counted",
     "latest_report_version", "updated_at", "expire_at", "transcript_ready", "speaker_confirmed", "rating_submitted", "has_rating",
+    "started_at", "stage_started_at", "waited_ms", "audio_s", "progress_next", "stage_expected_s",
 }  # fmt: skip
 
 
@@ -334,3 +335,18 @@ async def test_old_client_without_client_object_still_works(client, repo):
     r = await create(client)
     assert r.status_code == 202
     assert repo.get_session("alice", r.json()["session"]["id"]).client.web_version is None
+
+
+async def test_get_session_returns_the_progress_fields(client, repo):
+    sid = (await create(client)).json()["session"]["id"]
+    m.advance(repo, "alice", sid, to="uploading")
+    for to in ("validating", "transcribing"):
+        m.advance(repo, "alice", sid, to=to)
+    repo.update_session("alice", sid, {}, status={"audio_s": 400.0})
+    m.advance(repo, "alice", sid, to="awaiting_input")
+    d = (await client.get(f"/v1/sessions/{sid}", headers=A)).json()
+    st = repo.get_status("alice", sid)
+    assert d["started_at"] and d["stage_started_at"]
+    assert (d["waited_ms"], d["audio_s"], d["progress_next"]) == (0, 400.0, 45)
+    assert d["stage_expected_s"] is None  # awaiting_input has no timed stage
+    assert d["started_at"].startswith(st.started_at.strftime("%Y-%m-%dT%H:%M:%S"))

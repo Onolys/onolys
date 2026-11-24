@@ -24,6 +24,7 @@ from onolys_engine_core.transcript import Transcript
 
 from onolys_api import logs
 from onolys_api.config import Settings
+from onolys_api.progress import entry_fields
 from onolys_api.repo import large
 from onolys_api.repo.base import (
     CancelOutcome,
@@ -820,7 +821,8 @@ class FirestoreRepo:
             )  # fmt: skip
             txn.set(
                 stref,
-                {"state": "cancelled", "counted": charge.counted, "uid": uid, "updated_at": now},
+                {"state": "cancelled", "counted": charge.counted, "uid": uid, "updated_at": now,
+                 "stage_started_at": now, "progress_next": None, "stage_expected_s": None},
                 merge=True,
             )
             done.update(
@@ -901,7 +903,9 @@ class FirestoreRepo:
             txn.set(
                 stref,
                 {"state": "running", "step": None, "error_code": None, "uid": uid,
-                 "progress": max(status.get("progress", 0), start_progress), "updated_at": now},
+                 "progress": max(status.get("progress", 0), start_progress), "updated_at": now,
+                 **entry_fields(sess["state"], sess.get("stage_started_at"), status, "running",
+                                None, now)},
                 merge=True,
             )  # fmt: skip
             return "started"
@@ -997,7 +1001,9 @@ class FirestoreRepo:
             txn.set(
                 stref,
                 {"state": "running", "step": None, **error_status_fields(None, 0), "uid": uid,
-                 "progress": progress, "updated_at": fields["updated_at"]},
+                 "progress": progress, "updated_at": fields["updated_at"],
+                 **entry_fields(sess["state"], sess.get("stage_started_at"), status, "running",
+                                None, now_)},
                 merge=True,
             )  # fmt: skip
             return "started"
@@ -1029,7 +1035,9 @@ class FirestoreRepo:
             txn.set(
                 stref,
                 {"state": to, "step": step, **error_status_fields(None, 0), "uid": uid,
-                 "progress": max(status.get("progress", 0), progress), "updated_at": now},
+                 "progress": max(status.get("progress", 0), progress), "updated_at": now,
+                 **entry_fields(sess["state"], sess.get("stage_started_at"), status, to, step,
+                                now)},
                 merge=True,
             )  # fmt: skip
             return True
