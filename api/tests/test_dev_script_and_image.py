@@ -54,6 +54,7 @@ def test_dev_script_preflight_and_flags():
 
 
 @pytest.mark.integration
+@pytest.mark.nightly  # ~17s: boots the combined app and runs the quickstart; nightly.yml api-nightly
 @needs_tools
 def test_dev_script_checks_and_runs_combined_quickstart():
     for _ in range(2):  # free_port() can lose its port to another xdist worker: retry once

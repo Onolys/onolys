@@ -3,6 +3,7 @@
 This file only checks that each mapped test exists (as a function defined in the named file, not
 marked `live`) and that no AC is unmapped. The tests themselves run in the normal suite:
 `uv run --package onolys-api pytest -q -m "not live"` is the proof they pass.
+(Tests marked `nightly` run in nightly.yml's api-nightly job, not on PRs.)
 """
 
 import ast

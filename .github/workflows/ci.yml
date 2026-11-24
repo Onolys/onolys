@@ -214,7 +214,7 @@ jobs:
     needs: changes
     if: needs.changes.outputs.api == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 10
     env:
       COVERAGE_CORE: sysmon
       COVERAGE_FILE: cov-data/unit.cov
@@ -224,14 +224,15 @@ jobs:
         with:
           enable-cache: true
           cache-dependency-glob: uv.lock
-      - name: Install ffmpeg (validate step + integration test)
-        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
+      - name: Setup cached static ffmpeg (validate step + integration test)
+        uses: ./.github/actions/setup-ffmpeg
+        timeout-minutes: 2
       - run: uv sync --frozen --package onolys-api
       - run: uv run --no-sync --package onolys-api ruff check api
       - name: pytest without the emulator (xdist, coverage data)
         run: |
           mkdir -p cov-data
-          uv run --no-sync --package onolys-api pytest api -m "not live and not flaky and not firestore" \
+          uv run --no-sync --package onolys-api pytest api -m "not live and not flaky and not firestore and not nightly" \
             -n 2 --durations=25 --cov=api/src --cov-report=
       - name: OpenAPI and public contracts are up to date
         run: |
@@ -249,7 +250,7 @@ jobs:
     needs: changes
     if: needs.changes.outputs.api == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 10
     env:
       FIREBASE_TOOLS_VERSION: 15.37.0
       COVERAGE_CORE: sysmon
@@ -279,15 +280,16 @@ jobs:
         if: steps.fbcache.outputs.cache-hit != 'true'
         run: npm install --prefix ~/.firebase-tools firebase-tools@${{ env.FIREBASE_TOOLS_VERSION }}
       - run: echo "$HOME/.firebase-tools/node_modules/.bin" >> "$GITHUB_PATH"
-      - name: Install ffmpeg (some emulator-backed tests shell out to it)
-        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
+      - name: Setup cached static ffmpeg (some emulator-backed tests shell out to it)
+        uses: ./.github/actions/setup-ffmpeg
+        timeout-minutes: 2
       - run: uv sync --frozen --package onolys-api
       # Serial on purpose: the JVM emulator shares 2 vCPU, and xdist raises transaction-lock timeouts.
       - name: pytest with Firestore emulator (coverage data)
         run: |
           mkdir -p cov-data
           firebase emulators:exec --config api/firebase.json --only firestore --project demo-onolys \
-            'uv run --no-sync --package onolys-api pytest api -m "firestore and not live and not flaky" --durations=25 --cov=api/src --cov-report='
+            'uv run --no-sync --package onolys-api pytest api -m "firestore and not live and not flaky and not nightly" --durations=25 --cov=api/src --cov-report='
       - uses: actions/upload-artifact@v4
         with:
           name: api-coverage-emulator
@@ -556,7 +558,7 @@ jobs:
     needs: changes
     if: needs.changes.outputs.web == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 12
     defaults:
       run:
         working-directory: web
@@ -568,17 +570,21 @@ jobs:
           cache: npm
           cache-dependency-path: web/package-lock.json
       - run: npm ci
-      - name: Read Playwright version
+      - name: Read installed Playwright version
         id: pw
-        run: echo "version=$(node -p "require('./package.json').devDependencies['@playwright/test']")" >> "$GITHUB_OUTPUT"
+        run: echo "version=$(node -p "require('@playwright/test/package.json').version")" >> "$GITHUB_OUTPUT"
       - name: Cache Playwright browsers
         id: pwcache
         uses: actions/cache@v4
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ steps.pw.outputs.version }}
-      - name: Install Chromium and system deps
-        run: npx playwright install --with-deps chromium
+      # Cache miss only: browser download from the Playwright CDN (seconds). No --with-deps: that runs apt (6-8 min);
+      # the ubuntu runner image already ships the shared libs headless Chromium needs. A stall fails in 3 min.
+      - name: Download Chromium (cache miss only, no apt)
+        if: steps.pwcache.outputs.cache-hit != 'true'
+        timeout-minutes: 3
+        run: npx playwright install chromium
       - name: Playwright e2e (dev server project + CSP/visual/axe project on the built app under the prod CSP)
         run: npm run e2e -- --trace off
       - name: Upload Playwright results and light/dark screenshots
