@@ -321,7 +321,7 @@ async def test_reasoning_effort_low_becomes_gemini_thinking_config(model, monkey
     cfg = LLMConfig(llm_mode="live", routes={tier: shipped[tier]})
     c = LiteLLMClient(cfg, acompletion=litellm.acompletion)
     with pytest.raises(Exception):  # noqa: B017 - any failure after the stubbed POST is fine
-        await c.complete_json(req(tier=tier))
+        await c.complete_json(req(tier=tier, retry=False))  # one POST is enough; skips retry backoff
     body = json.loads(sent[0]) if isinstance(sent[0], (str, bytes)) else sent[0]
     thinking = body["generationConfig"]["thinkingConfig"]
     assert thinking["thinkingLevel"] == "low"
