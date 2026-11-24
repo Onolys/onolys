@@ -1,0 +1,58 @@
+dataset_id: phac-fr
+title: PHAC primary-care MI teaching scenarios (4 videos, French)
+license_note: 'Government of Canada terms (https://www.canada.ca/en/transparency/terms.html): non-commercial reuse is allowed with attribution; commercial redistribution needs written permission. Internal evaluation use only.'
+source_page: https://www.canada.ca/fr/sante-publique/services/maladies-chroniques/videos-aide-changement-comportement.html
+miti_version: null
+label_scheme: none
+source_media:
+- video
+- transcript
+transcript_origin: human
+language: fr
+labels_summary: No human labels (transcript only)
+source_format: phac_html
+source_files:
+- https://www.canada.ca/fr/sante-publique/services/maladies-chroniques/videos-aide-changement-comportement/entrevue-motivationnelle-alcool.html
+- https://www.canada.ca/fr/sante-publique/services/maladies-chroniques/videos-aide-changement-comportement/entrevue-motivationnelle-alimentation-malsaine.html
+- https://www.canada.ca/fr/sante-publique/services/maladies-chroniques/videos-aide-changement-comportement/entrevue-motivationnelle-inactivite-physique.html
+- https://www.canada.ca/fr/sante-publique/services/maladies-chroniques/videos-aide-changement-comportement/entrevue-motivationnelle-tabagisme.html
+overlaps_with:
+- dataset_id: phac-en
+  note: The same four scenario topics in English, but separately staged (different cast and script, e.g. the smoking patient is male in English and female in French); not a word-for-word translation.
+sessions:
+- session_id: alcohol
+  title: 'PHAC scenario: Alcohol use (fr)'
+  clinician_labels:
+  - MÉDECIN
+  code_header: null
+  change_goal: Reduce alcohol use
+  change_goal_source: curated
+  coded_span: null
+  notes: scripted teaching scenario (doctor and patient actors); owner review of change goal pending; video https://www.canada.ca/content/dam/phac-aspc/migration/phac-aspc/video/cd-mc/alcohol-fra.mp4
+- session_id: eating
+  title: 'PHAC scenario: Unhealthy eating (fr)'
+  clinician_labels:
+  - MÉDECIN
+  code_header: null
+  change_goal: Improve eating habits
+  change_goal_source: curated
+  coded_span: null
+  notes: scripted teaching scenario (doctor and patient actors); owner review of change goal pending; video https://www.canada.ca/content/dam/phac-aspc/migration/phac-aspc/video/cd-mc/eating-alimentation-fra.mp4
+- session_id: physical-inactivity
+  title: 'PHAC scenario: Physical inactivity (fr)'
+  clinician_labels:
+  - MÉDECIN
+  code_header: null
+  change_goal: Be more physically active
+  change_goal_source: curated
+  coded_span: null
+  notes: scripted teaching scenario (doctor and patient actors); owner review of change goal pending; video https://www.canada.ca/content/dam/phac-aspc/migration/phac-aspc/video/cd-mc/physi-fra.mp4
+- session_id: smoking
+  title: 'PHAC scenario: Smoking (fr)'
+  clinician_labels:
+  - MÉDECIN
+  code_header: null
+  change_goal: Cut back on or quit smoking
+  change_goal_source: curated
+  coded_span: null
+  notes: scripted teaching scenario (doctor and patient actors); owner review of change goal pending; video https://www.canada.ca/content/dam/phac-aspc/migration/phac-aspc/video/cd-mc/smoking-tabagisme-fra.mp4

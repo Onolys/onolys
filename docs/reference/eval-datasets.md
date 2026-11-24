@@ -130,6 +130,15 @@ Terms: unless noted, reuse terms are not separately confirmed and every dataset 
 - Overlaps: `phac-fr` (same four topics in French, separately staged).
 - Terms: Government of Canada terms (<https://www.canada.ca/en/transparency/terms.html>): non-commercial reuse is allowed with attribution; commercial redistribution needs written permission. Internal evaluation use only; no page text is committed.
 
+## phac-fr
+
+- Source: French index <https://www.canada.ca/fr/sante-publique/services/maladies-chroniques/videos-aide-changement-comportement.html>; pages `.../videos-aide-changement-comportement/entrevue-motivationnelle-<alcool|alimentation-malsaine|inactivite-physique|tabagisme>.html`; videos `...-fra.mp4` (same stems as English). Session ids match `phac-en` (`alcohol`, `eating`, `physical-inactivity`, `smoking`).
+- Size: 4 sessions: alcohol 56 turns, eating 18, physical-inactivity 15, smoking 36. Excluded paragraphs: alcohol 22, eating 18, physical-inactivity 17, smoking 21 (narrator `DR SELBY` / `DR VALLIS`, `Texte à l'écran`, stage directions, credit; the French alcohol page has an extra closing `(Fondu au noir.)`).
+- Roles: `MÉDECIN` clinician, `PATIENTE` client (printed labels; the French pages use the feminine form and `MÉDECIN :` has a space before the colon). Everything else as `phac-en`: no labels, empty gold, same manifest fields, same terms, `overlaps_with: phac-en`.
+- Not a translation of the English script: the cast and wording differ (for example the smoking patient is male in English and female in French), so do not pair sessions as parallel text.
+- Language: the manifest has a new optional dataset-level `language` (BCP-47, default `en`, so existing manifests are unchanged); `phac-fr` sets `fr` and the converter writes `transcript.language: "fr"`. The new-run picker shows `Language: fr` for non-English datasets only; `GET /v1/datasets` returns the field.
+- Engine French support: no change made. The MITI engine reads `transcript.language` (`engines/miti/src/onolys_miti/run.py`), passes it to the code, globals and tips prompts ("Transcript language: fr"; quotes stay in the transcript language, rationales in English) and adds the info warning `language_not_validated` for any non-English language. French input therefore runs but its quality is not validated; the eval backend uses the session language, then the request language, then `transcript.language`.
+
 ## Gated / not added
 
 | Dataset | Why not added | How to get it |

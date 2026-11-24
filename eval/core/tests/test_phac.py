@@ -115,7 +115,7 @@ def test_manifest_language_default_and_validation():
         DatasetManifest.model_validate({**base, "language": "French"})
 
 
-@pytest.mark.parametrize("ident,language", [("phac-en", "en")])
+@pytest.mark.parametrize("ident,language", [("phac-en", "en"), ("phac-fr", "fr")])
 def test_committed_manifests_are_valid(ident, language):
     from pathlib import Path
     manifest = load_manifest(Path(__file__).resolve().parents[2] / f"datasets/{ident}/manifest.yaml")
