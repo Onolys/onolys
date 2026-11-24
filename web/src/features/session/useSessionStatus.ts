@@ -5,7 +5,7 @@ import { unwrap } from "../../api/client";
 import type { components } from "../../api/schema";
 import { getStatusListener, type SessionStatusDoc } from "../../api/statusListener";
 import { useApiClient } from "../../auth/useApiClient";
-import { deriveProgress, isTimedState, type DerivedProgress } from "./progress";
+import { deriveProgress, isTimedState, isUploadState, type DerivedProgress } from "./progress";
 
 export type StatusView =
   | { phase: "loading" }
@@ -51,12 +51,13 @@ export const RESUBSCRIBE_DELAYS_MS = [1_000, 2_000, 4_000, 8_000, 16_000];
 export const FALLBACK_POLL_MS = 5_000;
 
 /**
- * Overall progress for a doc, re-derived once a second only while a timed state is active
+ * Overall progress for a doc, re-derived once a second only while Elapsed or the % can move (timed states, and uploading once started_at is set)
  * (05-processing-screen R3, R8). `uploadFraction` is the uploader's byte fraction, if this tab has one.
  */
 export function useProgress(doc: SessionStatusDoc | null, uploadFraction?: number | null): DerivedProgress | null {
   const [now, setNow] = useState(() => Date.now());
-  const timed = doc !== null && isTimedState(doc.state);
+  // Elapsed ticks in every state but awaiting_input and the finished/hidden ones (R3); the % only moves in timed states (deriveProgress).
+  const timed = doc !== null && (isTimedState(doc.state) || (isUploadState(doc.state) && doc.started_at != null));
   useEffect(() => {
     if (!timed) return;
     const first = setTimeout(() => setNow(Date.now()), 0); // catch up after a pause, not a minute-old `now`

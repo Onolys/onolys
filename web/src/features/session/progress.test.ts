@@ -66,13 +66,13 @@ describe("deriveProgress: timed stage", () => {
     expect(r.pct).toBeLessThanOrEqual(99);
   });
 
-  it("unknown audio_s and stage_expected_s use the default expected duration", () => {
+  it("unknown stage_expected_s uses the default expected duration", () => {
     const r = deriveProgress(doc({ audio_s: null, stage_expected_s: null }), T0 + DEFAULT_EXPECTED_S * 1000);
     expect(r.pct).toBe(Math.floor(20 + 19 * (1 - Math.exp(-1))));
   });
 
-  it("known audio_s without stage_expected_s uses clamp(20 + 0.2*audio_s, 30, 600)", () => {
-    const r = deriveProgress(doc({ audio_s: 400, stage_expected_s: null }), T0 + 100_000);
+  it("does not recompute the server's audio_s formula: audio_s without stage_expected_s uses the default", () => {
+    const r = deriveProgress(doc({ audio_s: 400, stage_expected_s: null }), T0 + DEFAULT_EXPECTED_S * 1000);
     expect(r.pct).toBe(Math.floor(20 + 19 * (1 - Math.exp(-1))));
   });
 

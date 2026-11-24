@@ -15,7 +15,7 @@ export interface DerivedProgress {
   hidden: boolean;
 }
 
-/** Expected seconds for a timed stage when the server sent neither `stage_expected_s` nor `audio_s`. */
+/** Expected seconds for a timed stage when the server sent no `stage_expected_s` (the server owns the formula, R6). */
 export const DEFAULT_EXPECTED_S = 120;
 
 /** States whose % moves with the clock (the page ticks once a second only while one is active). */
@@ -24,6 +24,11 @@ export function isTimedState(state: SessionStatusDoc["state"]): boolean {
 }
 
 const UPLOAD_STATES = new Set<SessionStatusDoc["state"]>(["created", "uploading", "upload_incomplete"]);
+
+/** States before validation: the % follows upload bytes, but Elapsed still runs. */
+export function isUploadState(state: SessionStatusDoc["state"]): boolean {
+  return UPLOAD_STATES.has(state);
+}
 const HIDDEN_STATES = new Set<SessionStatusDoc["state"]>(["failed", "cancelled", "deleting", "upload_failed"]);
 
 const ms = (iso: string | null | undefined): number | null => {
@@ -34,7 +39,6 @@ const ms = (iso: string | null | undefined): number | null => {
 
 function expectedSeconds(doc: SessionStatusDoc): number {
   if (doc.stage_expected_s != null && doc.stage_expected_s > 0) return doc.stage_expected_s;
-  if (doc.audio_s != null && doc.audio_s >= 0) return Math.min(600, Math.max(30, 20 + 0.2 * doc.audio_s));
   return DEFAULT_EXPECTED_S;
 }
 

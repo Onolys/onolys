@@ -156,7 +156,7 @@ interface SessionRec {
   /** Set once cancelled (the API's `cancel`). */
   cancel: S["SessionCancel"] | null;
   /** Progress timing (05-processing-screen R2): when the state was entered, first upload, ms spent awaiting input. */
-  timing: { state: string; entered: number; started_at: string | null; waited_ms: number; audio_s: number | null };
+  timing: { state: string; step: string | null; entered: number; started_at: string | null; waited_ms: number; audio_s: number | null };
   finals: Rating[];
   draft: { card: RatingCard; updated_at: string; seq: number } | null;
   runs: RunRec[];
@@ -255,7 +255,13 @@ export class MockBackend {
   /** Stamp the timing fields when the state changed since the last emit (mirrors api `timing_fields`). */
   private stamp(s: SessionRec): void {
     const tm = s.timing;
-    if (tm.state === s.state) return;
+    if (tm.state === s.state) {
+      if (s.state === "running" && tm.step !== s.step) {
+        tm.step = s.step; // each run stage restarts its own clock (api run.py progress_cb)
+        tm.entered = this.now().getTime();
+      }
+      return;
+    }
     const now = this.now();
     if (tm.state === "awaiting_input") tm.waited_ms += Math.max(0, now.getTime() - tm.entered);
     if (s.state === "uploading" && !tm.started_at) tm.started_at = now.toISOString();
@@ -265,6 +271,7 @@ export class MockBackend {
     }
     if (s.state === "transcribing") tm.audio_s = MOCK_AUDIO_S; // set by the validate step in the API
     tm.state = s.state;
+    tm.step = s.step;
     tm.entered = now.getTime();
   }
 
@@ -490,7 +497,7 @@ export class MockBackend {
       uploadId: null,
       sttSubmitted: false,
       cancel: null,
-      timing: { state: "created", entered: this.now().getTime(), started_at: null, waited_ms: 0, audio_s: null },
+      timing: { state: "created", step: null, entered: this.now().getTime(), started_at: null, waited_ms: 0, audio_s: null },
       uploadType: null,
       finals: [],
       draft: null,

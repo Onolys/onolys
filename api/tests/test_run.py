@@ -7,6 +7,7 @@ import os
 import time
 import uuid
 from dataclasses import replace
+from datetime import UTC, datetime
 
 import httpx
 import pytest
@@ -343,6 +344,35 @@ async def test_retry_within_the_task_refunds_once_never_twice(env):
     for _ in range(2):  # a redelivered release is a no-op
         release_once(env.repo, env.uid, sid, run.run_id, True, run.cap_date)
     assert env.counters() == (0, 0)
+
+
+async def test_each_run_stage_resets_stage_started_at(env, monkeypatch):
+    """Web interpolates from `stage_started_at`: tips must start its own clock, not count from run start."""
+    from onolys_api.jobs import run as run_mod
+    from onolys_api.progress import progress_next
+
+    clock = [time.time()]
+    monkeypatch.setattr(run_mod, "utcnow", lambda: datetime.fromtimestamp(clock[0], UTC))
+    seen = {}
+
+    class Timed(FakeEvaluation):
+        async def run(self, ctx, transcript, speaker_map, params, progress_cb=None):
+            def cb(stage, status):
+                clock[0] += 50
+                progress_cb(stage, status)
+                if status == "started":
+                    seen[stage] = env.repo.get_status(env.uid, sid)
+
+            return await super().run(ctx, transcript, speaker_map, params, cb)
+
+    swap_eval(env, Timed())
+    sid = await env.start()
+    env.drain()
+    code, tips = seen["code"], seen["tips"]
+    assert tips.stage_started_at > code.stage_started_at
+    # pct from the tips clock (t=0) is the tips base, not ~92 as with the run-start clock
+    assert tips.progress == 85 and progress_next("running", "tips") == 93
+    assert (tips.stage_started_at - code.stage_started_at).total_seconds() >= 50
 
 
 class Capture(FakeEvaluation):

@@ -124,4 +124,13 @@ describe("useProgress", () => {
     act(() => void vi.advanceTimersByTime(10 * 60_000));
     expect(timed.result.current).toEqual(frozen);
   });
+
+  it("Elapsed advances during uploading (once started_at is set) while the % stays on the byte fraction", () => {
+    const d = docOf("uploading", { progress: 5, progress_next: 10, started_at: iso(NOW), stage_started_at: iso(NOW) });
+    const up = renderHook(() => useProgress(d, 0));
+    expect(up.result.current!.elapsedMs).toBe(0);
+    act(() => void vi.advanceTimersByTime(5_000));
+    expect(up.result.current!.elapsedMs).toBe(5_000);
+    expect(up.result.current!.pct).toBe(5);
+  });
 });

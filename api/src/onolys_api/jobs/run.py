@@ -47,7 +47,7 @@ from onolys_api.jobs.worker import (
     TaskError,
 )
 from onolys_api.repo.base import NotFoundError
-from onolys_api.repo.models import ReportDoc
+from onolys_api.repo.models import ReportDoc, utcnow
 from onolys_api.storage.base import BlobStore
 
 ARTIFACTS = ("code", "tips")
@@ -151,7 +151,11 @@ def _evaluate(ctx, blobs, evaluation, run_doc, session) -> ReportDoc:
             if status == "started":
                 repo.update_session(
                     uid, sid, {"step": stage},
-                    status={"step": stage, **stage_fields("running", stage, None)},
+                    status={
+                        "step": stage,
+                        "stage_started_at": utcnow(),  # web interpolates from here
+                        **stage_fields("running", stage, None),
+                    },
                 )
             elif stage not in done:
                 done.add(stage)
@@ -162,6 +166,7 @@ def _evaluate(ctx, blobs, evaluation, run_doc, session) -> ReportDoc:
                     uid, sid, {},
                     status={
                         "progress": max(shown, min(MAX_PROGRESS, total)),
+                        "stage_started_at": utcnow(),
                         **stage_fields("running", after[0] if after else stage, None),
                     },
                 )

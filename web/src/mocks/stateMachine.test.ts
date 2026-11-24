@@ -53,6 +53,25 @@ beforeEach(() => {
   ctx = make();
 });
 
+describe("per-stage start time", () => {
+  it("each run stage restarts stage_started_at (so the web interpolates inside the stage)", () => {
+    let t = Date.parse("2026-11-24T10:00:00Z");
+    const emitter = createMemoryStatusEmitter();
+    const backend = new MockBackend({ emitter, now: () => new Date(t) });
+    const sid = started(backend);
+    backend.advance(sid);
+    backend.advance(sid);
+    backend.confirmSpeaker(U, sid, "spk_0");
+    backend.putRating(U, sid, { final: true, card: SCORED });
+    const codeStart = docOf(emitter, sid).stage_started_at;
+    t += 60_000;
+    backend.advance(sid); // -> tips
+    const tips = docOf(emitter, sid);
+    expect(tips.step).toBe("tips");
+    expect(Date.parse(tips.stage_started_at!) - Date.parse(codeStart!)).toBe(60_000);
+  });
+});
+
 describe("happy path walks every state", () => {
   it("created -> uploading -> validating -> transcribing -> awaiting_input -> running -> report_ready -> deleting", () => {
     const { backend, emitter } = ctx;
