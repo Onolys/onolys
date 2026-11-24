@@ -179,71 +179,97 @@ There is no limit on the number of combos in a run (the backend caps a run at 49
 - **Deep dive:** Human plus the top 3 combos by default; tick more to add.
 - **Line view:** lanes collapse to only-disagreeing chips beyond about 5 combos.
 
-## Storage: eval runs reuse prod runs
+## Storage and pipeline: one codebase, two deployments
 
-Status: proposal, not decided. Based on a code read of `eval/backend`, `api/` and `infra/` on this branch (2026-11-24). Owner direction: eval should use the same DB and storage as a real run and just mark the run `eval = true`, adding only what a prod run lacks.
+Status: proposal, not decided. Based on a code read of `eval/backend`, `api/` and `infra/` on this branch (2026-11-24). Owner direction (updated): eval is allowlisted users only, so it may have its own API endpoint and its own database. But it must use the same infra and the same code: same document shapes, same run pipeline, same storage layout. Reason: a change to the prod pipeline must not force a significant change to eval, or the reverse. Two copies of the same logic is a maintenance headache. This replaces the earlier "same database, synthetic uid, `eval = true`" recommendation (kept below as the alternative).
 
-**How eval stores data today.** Firestore database `staging` (the same database the staging app uses; `infra/main.tf:101`) holds `eval_uploads`, `eval_runs` and `eval_runs/{id}/units` (`eval/backend/.../repository.py:144-145,193`). The private bucket `onolys-eval-data-staging` holds datasets, `uploads/<id>/` and `runs/<run>/inputs/<session>/transcript.json|gold.json`, plus `runs/<run>/<unit>.json` (`runs.py:340-348`; `eval/backend/.../storage.py`). Each run copies a transcript and gold snapshot per session. Engines are called in process through the shared engine registry, not through the api/worker pipeline (`runs.py:717-783`). Work runs on its own Cloud Tasks queue (`infra/eval-services.tf:57-58`, 4 concurrent), with its own lease/retry in `execute_unit`. Identity is an allowlisted admin email (`created_by`, `runs.py:380`), with no per-user uid and no usage cap (`docs/reference/eval-site.md`).
+### Principle
 
-**How a prod run stores data.** `sessions/{sid}` (owner `uid`, state, step, language, `change_goal`, `coded_span`, `clinician_speaker`, `steps`) with subcollections `recordings`, `transcripts` (`current`), `runs/{run_id}`, `reports/{report_id = run_id}` and `ratings`; `session_status/{sid}` is the only client-readable doc (`firestore.rules`; `repo/models.py:180-356`). Blobs live under `{uid}/{sid}/...` and `{uid}/{sid}/runs/{run_id}/{code,tips}.json` (`jobs/run.py`). Upload staging `uploads/{uid}/{sid}/` expires after 1 day (`infra/modules/environment/main.tf:37-44`). Hard delete removes every object and doc for the session (`jobs/delete.py`). The run handler has its own lease/attempts (`claim_run`), `run_info` with usage, and a per-user day cap with `counted`/`released` flags (`repo/limits.py`, `models.py:348-353`). A run takes only an allowlisted `preset` name; there is no per-run model/tier/effort override (`routes/runs.py:62,179-181`, `adapters/real.py:145`).
+One shared code path. Eval is the same image and code run with eval config: its own endpoint, its own Firestore database (for example `eval`), its own bucket, its own Cloud Tasks queue, and allowlist auth. It is not a parallel implementation. Eval adds fields and an outer layer (grouping, gold, compare); it does not re-implement session, transcript, run or report handling.
 
-### Mapping: eval concept to prod equivalent
+### What this branch changed (the data model eval should build on)
 
-| Eval concept | Prod equivalent | Verdict |
+The run-input-lock work (`01-run-input-locks/PRD.md`) makes a run self-describing. Verified in the diff:
+
+- `RunDoc` pins `change_goal`, `clinician_speaker`, `language`, `transcript_sha256` as required fields (`api/src/onolys_api/repo/models.py:325-329`), alongside the existing `stt`, `coded_span`, `preset`, `n_runs`, `code_version` (`:330-338`).
+- `TranscriptDoc` has `sha256` and `language`, built only by `TranscriptDoc.build()` (`models.py:278-296`); `transcript_sha256()` is the one hash function (`models.py:267`).
+- The worker reads only `RunDoc` inputs, recomputes the transcript hash and fails with `internal_error` (log `reason=run_input_mismatch`) before any model call (`api/src/onolys_api/jobs/run.py:165-178`, `_input_mismatch` at `:159`).
+- Speaker is write-once (R1), goal locks after the first run starts (R2), per the PRD.
+- Eval side on the same branch: `runs.py` now keeps `saved_config` (`base_preset`, `resolved_combos`) and rejects a rerun whose combo snapshot changed (`eval/backend/.../runs.py:268-326`), and runs carry `RunMetadata` name/description (`runs.py:103-108`, `read_runs.py`).
+
+Key finding: eval's per-session snapshot already looks like a RunDoc, field for field. Its `input_ref.sessions[]` stores `transcript_sha256`, `change_goal`, `language`, `coded_span`, `speaker_map.subject` (`runs.py:191-246, 342`), which are the same pinned inputs as the new RunDoc fields. Its `_hash` (`runs.py:137`) is byte-for-byte the same canonical JSON sha256 as `transcript_sha256()`, written twice.
+
+### Mapping: eval concept to the prod shape it reuses
+
+| Eval concept | Prod shape reused on this branch | Verdict |
 |---|---|---|
-| Dataset session as input | `sessions` + `transcripts/current` | Reuse + field (`eval`, `dataset_id`, `dataset_session_id`) |
-| Transcript-only input, no audio | Prod accepts transcript.v1 JSON or label-prefixed text upload (`routes/transcript.py:99`) | Reuse as-is |
-| Audio upload, STT, speaker confirm | Same flow in prod (signed PUT, `recordings`, STT, speakers) | Reuse as-is |
-| Clinician speaker, change goal, language, coded_span | Session fields of the same names | Reuse as-is |
-| One unit = one engine run | `runs/{run_id}` doc with lease, attempts, `run_info`, artifacts | Reuse + field (`eval_run_id`, `combo_key`, `repeat`) |
-| Output / report | `reports/{run_id}` and `{uid}/{sid}/runs/{run_id}/` | Reuse as-is, if the eval engine emits the prod report schema |
-| Per-unit status, lease, retry | `claim_run`, `attempts`, task retries | Reuse as-is |
-| Cost / token usage | `run_info.usage`; `usage` docs are per user | Reuse + price book (cost estimate in eval) |
-| run_info / provenance | `run_info`, `code_version` | Reuse + fields (git SHA, resolved models, drift guard) |
-| Eval run grouping (sessions x combos x repeats) | None; prod has no multi-session group | Missing: keep an `eval_runs` doc, pointing at prod run ids |
-| Combo config (model/tier/effort route override) | Only `preset` names | Missing: allow a route override on a run, accepted only when `eval = true` |
-| Engines other than the prod engine (oneshot, miti_lean variants) | Worker runs only the configured engine | Missing: either keep running them in the eval backend, or add an engine selector to the worker |
-| Human gold labels (counts, globals, utterance_codes) | `ratings` are user ratings of a report, not gold | Missing: keep gold in the eval bucket as a read-only dataset reference; store only a ref and sha on the run |
-| Dataset manifest and files | None | Missing: stays eval-only |
-| Comparison aggregation (`build_compare`, leaderboard) | None | Missing: stays eval-only, reads prod run docs |
-| Owner identity | `uid` of a real user | Reuse + decision: one synthetic uid per eval user (see below) |
-| Usage caps | Per-uid day cap (`EVAL_CAP_DAY`, in prod this counts report runs) | Reuse + field: `counted = false` for eval runs; the field already exists for the exempt first run |
-| Prod vs staging | One env per database | Reuse: eval stays in staging first; prod only after the risks below are settled |
-| Retention | Delete removes everything; `uploads/` 1 day | Reuse + decision: eval data kept until its eval run is deleted |
-| Listing / metrics that must exclude eval | Session list and usage are filtered by `uid` | Reuse + field: `eval: true`, then filter in alerts and billing metrics |
+| Dataset session / upload as input | `SessionDoc` (`models.py:180`) + `TranscriptDoc` via `TranscriptDoc.build` (`:278`) | Reuse; eval fields `dataset_id`, `dataset_session_id`. One session per dataset session, created once and shared by many runs |
+| Transcript hash (`input_ref...transcript_sha256`, `_hash`) | `transcript_sha256()` (`models.py:267`), stored as `TranscriptDoc.sha256` and `RunDoc.transcript_sha256` | Reuse; delete eval's `_hash` for transcripts. Eval's integrity check (`runs.py:200`) becomes the worker's check (`jobs/run.py:165-178`) |
+| `speaker_map.subject`, `language`, `change_goal`, `coded_span` per source | `RunDoc.clinician_speaker`, `language`, `change_goal`, `coded_span` (`models.py:326-330`) | Reuse as-is. Eval's `inferred_clinician_speaker` is also what the prod transcript route uses (`routes/transcript.py:174`); keep that call in one place |
+| One unit (session x combo x repeat) | `RunDoc` (`models.py:325`): lease, attempts, `run_info`, artifacts | Reuse; eval units are prod-shaped RunDocs plus `eval_run_id`, `combo_key`, `repeat`, route override |
+| Unit status / lease / retry (`execute_unit` loop, `MAX_ATTEMPTS`) | `claim_run` (`repo/firestore.py:767`), run handler `jobs/run.py` | Reuse; delete eval's own lease/retry |
+| Unit output | `ReportDoc` (`models.py:356`) + `{uid}/{sid}/runs/{run_id}/{code,tips}.json` | Reuse; eval reads the saved report for compare |
+| Engine call | `evaluate_validated` -> `run_validated` (`adapters/validated.py:35`, `adapters/real.py:159`) | Reuse; eval calls `run_validated` directly today (`runs.py:782`) |
+| Provenance (`engine_git_sha`, `engine_versions`, resolved combos, drift guard) | `RunDoc.code_version`, `run_info` | Reuse + extra fields: resolved route snapshot on the run; drift check stays as an eval rule |
+| Combo route override (model/tier/effort) | Only `preset` names today (`adapters/real.py:145`) | Extra field `route_override` on the run, accepted only when the deployment is eval |
+| Engines other than prod (oneshot, miti_lean configs) | Worker runs only `settings.prod_engine` (`adapters/real.py:144`) | Extra field `engine` on the run, allowed only in eval deployment (open question 1) |
+| Cost / usage | `run_info.usage` | Reuse; price book and cost estimate are eval-only |
+| Per-user usage cap | `counted`, `released`, `cap_date` on `RunDoc` | Eval deployment: caps off (or `counted = false`) |
+| Eval run grouping (`eval_runs`: sessions x combos x repeats, name, description, base preset) | None (prod has no multi-session group) | Eval-only doc; its units are references to RunDocs |
+| Human gold labels, human "unit" | None (`ratings` are user ratings, not gold) | Eval-only; read-only dataset files, referenced by dataset id and sha |
+| Datasets, uploads manifest | None | Eval-only |
+| Compare aggregation, leaderboard, UI | None | Eval-only; reads RunDocs and ReportDocs |
+| Owner identity | `uid` | Allowlisted eval user email mapped to a `uid` in the eval database; no synthetic uid needed because the whole database is eval |
 
-### Genuinely missing (keep or add)
+### Duplication to remove today
 
-1. The eval run grouping doc (`eval_runs`), with units as references `{session_id, run_id, combo_key, repeat}`.
-2. A per-run route/combo override on the prod run path, rejected unless `eval = true`.
-3. Gold labels and dataset manifests (eval bucket, read-only, referenced by dataset id and sha).
-4. Comparison aggregation, price book and the compare UI.
-5. Engines other than the prod engine, if they must be compared (open question 2).
+Eval code that re-implements prod logic (all in `eval/backend/src/onolys_eval_backend/` unless noted):
+
+1. Input snapshot and validation: `_inputs` / `_validate_sources` (`runs.py:191-246`) re-do transcript validation, speaker resolution, span check, language and goal resolution that prod does in `routes/transcript.py` and the run start txns. Replace with creating prod sessions/transcripts and starting prod runs.
+2. Transcript hashing: `_hash` (`runs.py:137`) duplicates `transcript_sha256()`.
+3. Unit execution: `execute_unit` (`runs.py:622-790`) re-implements claim/lease/retry/progress and calls `run_validated` itself, instead of the api run handler (`jobs/run.py`) and `claim_run`.
+4. Per-unit store: `eval_runs/{id}/units` (`repository.py`) is a second run-document format instead of `RunDoc`.
+5. Output store: `runs/<run>/<unit>.json` and per-run copies of `inputs/<session>/transcript.json` (`runs.py:340-348`, `storage.py`) instead of the shared `{uid}/{sid}/...` layout and `ReportDoc`.
+6. Queue and handler wiring: own Cloud Tasks queue and `queue.py` dispatch, instead of the shared run task handler.
+7. Rerun/retry rules: `saved_config` and snapshot-equality checks (`runs.py:268-326`) grew this branch to mimic what a pinned RunDoc gives for free.
+
+Each time the prod run input changes (as on this branch: four new pinned fields), items 1 to 3 would need the same edit in eval. That is the headache the owner described.
+
+### What genuinely stays eval-only
+
+- Eval run grouping doc (`eval_runs`): name, description, sessions x combos x repeats, base preset, status roll-up, pointing at RunDoc ids.
+- Human gold labels and the human "engine" (gold is a read-only reference, not a run).
+- Datasets, upload manifests, gold validation.
+- Compare aggregation, leaderboard, heatmap, line view, and the compare UI.
+- Per-run model/tier/effort override and non-prod engine selection, as fields on the run, honoured only when the deployment is eval (config flag on the shared code, for example `EVAL_MODE=true`; prod rejects the fields).
+- Price book and cost estimate; allowlist auth.
+
+### Infra: same environment module
+
+Today eval is hand-written in `infra/eval-services.tf` and `infra/eval.tf`: its own service account, Cloud Tasks queue, Cloud Run service, bucket and IAM, bound to the `staging` database (`eval-services.tf:92-100`). Proposal: instantiate the same `infra/modules/environment` (as `module "staging"` and `module "prod"` do in `infra/main.tf:95,129`) a third time as `module "eval"` with `env = "eval"`, `database_id = "eval"`, so it gets its own database, bucket (`onolys-audio-eval`), queue, service accounts and run handler from the same definitions. Eval-specific config goes in as variables (allowlist secret, `EVAL_MODE`, higher queue concurrency, no caps). `eval-services.tf` shrinks to what the module cannot express (the compare UI hosting site, if any). Datasets live in a separate read-only bucket (the current `onolys-eval-data-staging` role), not under session prefixes, so deleting a session never touches gold or datasets.
+
+### Alternative: same database, synthetic owner
+
+The earlier proposal: eval sessions and runs in the existing database under a synthetic eval uid, `eval = true` on runs, `counted = false`, eval filtered from lists, alerts and billing. Cheaper on infra, but it mixes research data with real client data, shares the prod queue (a 499-unit run can starve users; prod concurrency is `worker_concurrency x worker_max_instances`, `modules/environment/main.tf:63`), and adds an `eval` filter to every aggregate. The separate database avoids all of these and still shares all code, so it is preferred. Staging-only eval remains a fallback if a third environment is too heavy.
 
 ### Risks
 
-- **Leaking into user views.** Eval sessions must not show in user lists, usage, caps, alerts, billing or product metrics. A synthetic owner uid handles the user lists; `eval: true` must be added to every aggregate query and log metric.
-- **Load on the prod worker and queue.** Prod queue concurrency is `worker_concurrency x worker_max_instances` (`infra/modules/environment/main.tf:63`). A 499-unit eval would starve real users on the same queue. Safer: a separate eval queue (or throttled enqueue) that targets the same run handler.
-- **Rules exposure.** `session_status` is readable by its `uid`. A synthetic uid that nobody logs in as keeps eval statuses unreadable from the client; keep the rest deny-all.
-- **Dataset licensing and privacy.** Research datasets copied into prod Firestore and the prod bucket may violate their terms and mix with real client data. Safer: eval in staging only, or a separate prod bucket prefix with its own lifecycle and access.
-- **Deletion semantics.** Delete of a session removes its runs and reports. Deleting one run from an eval must not delete the shared dataset session used by other combos. Gold and dataset files must never be under the session prefix.
-- **Concurrent runs in one session.** One session with many runs works for retries today; many parallel runs on a shared session may conflict on session `state`/`latest_report_version`. Unverified. Fallback: one session per unit, sharing the same transcript content by reference.
-- **Different engines.** Eval calls engines directly with its own output shape and `scores`; the prod worker validates the prod report schema. A mismatch would force changes to report validation.
-- **Cap naming.** `EVAL_CAP_DAY` in prod is the report-run cap, not an eval-system cap; reuse needs `counted = false`, not a new cap.
-
-### Recommendation
-
-Reuse the prod session, recording, transcript, run and report documents and the `{uid}/{sid}/` bucket layout. Do not copy transcripts or gold per run: create the dataset session once and point many runs at it. Put eval runs under a synthetic eval owner uid with `eval: true`, `eval_run_id`, `combo_key`, `repeat` and `counted = false` on the run. Keep `eval_runs` (grouping), the dataset manifest and gold in eval-owned storage, and keep the compare aggregation and UI eval-only. Run eval against staging only until the open questions are settled. The safer variant of the owner's direction is therefore "same collections and layout, separate owner, separate queue, separate gold", not "same everything": putting research datasets and 499-unit batches on the real prod queue and bucket carries privacy and load risk.
+- Run handler concurrency: many runs on one shared session may conflict on session `state` / `latest_report_version`; unverified. Fallback: one session per unit sharing transcript content by reference.
+- Engine choice and route override widen the run API; they must be rejected outside eval mode, tested in both modes.
+- The prod report schema validation must accept every engine eval compares, or those engines stay out of the worker.
+- Eval deletes: removing one eval run must not delete a shared dataset session used by other combos.
+- Dataset licensing: datasets must not land in a database or bucket with real client data (another reason for a separate database).
+- Migration: existing `eval_runs` data in the `staging` database would need a one-off import or stay read-only legacy; no compat layer proposed.
 
 ### Open questions
 
-1. Should a prod run accept a route override (model/tier/effort) when `eval = true`, or should the eval backend keep calling engines in process and only write prod-shaped documents?
-2. Must eval compare engines other than the prod engine (oneshot and miti_lean variants)? If yes, those need an engine selector on the worker or stay in the eval backend.
-3. One session with many runs, or one session per unit?
-4. Synthetic owner: one shared eval uid, or one per eval user (for audit)?
-5. Is eval ever run on the prod database, and if so with which datasets (licensing)?
-6. Retention: should eval data be deleted with its eval run, or kept like today until manually removed?
-7. Does the human unit stay out of the run store (gold is a reference, not a run)? Proposed: yes.
+1. Engines other than the prod engine (oneshot, miti_lean configs): add an engine selector to the shared run handler (eval mode only), or keep a thin eval wrapper that still writes prod-shaped RunDocs?
+2. One session with many runs, or one session per unit?
+3. Eval database name and bucket naming; is a third Terraform environment acceptable on cost and ops?
+4. Do existing `staging` eval runs need migrating, or may they be dropped (owner has said no legacy handling for the lock work)?
+5. Human gold: does gold need a prod-shaped home (for example a `GoldDoc`) or stay as bucket files with a sha reference?
+6. Route override: a field on `RunDoc`, or a named eval-only preset resolved by the same preset code (smaller surface)?
+7. Retention: eval data deleted with its eval run, or kept until manual removal as today?
 
 ## Phased build order
 
