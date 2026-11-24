@@ -41,6 +41,8 @@ SUMMARY_FIELDS = (
     "engine_versions",
     "engine_git_sha",
     "resolved_presets",
+    "resolved_combos",
+    "base_preset",
 )
 _PACK = yaml.safe_load(files("onolys_miti").joinpath("data/pack.yaml").read_text())
 _LABELS = {item["id"]: item["label"] for item in [*_PACK["items"], *_PACK["summaries"]]}

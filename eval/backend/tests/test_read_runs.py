@@ -63,6 +63,17 @@ def detail(c, rid):
     return response.json()
 
 
+def test_combo_run_summary_exposes_resolved_combos_and_base_preset(services):
+    c = client(services=services)
+    rid = start(c).json()["run_id"]
+    saved = services.repository.get_run(rid)
+    assert saved["resolved_combos"] and saved["base_preset"]
+    summary = c.get("/v1/runs", headers=AUTH).json()["runs"][0]
+    assert summary["resolved_combos"] == saved["resolved_combos"]
+    assert summary["base_preset"] == saved["base_preset"]
+    assert detail(c, rid)["resolved_combos"] == saved["resolved_combos"]
+
+
 def test_compare_repeats_equal_core_unit_aggregate(services):
     c = client(services=services)
     rid = start(c, repeats=3).json()["run_id"]

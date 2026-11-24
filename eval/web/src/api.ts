@@ -36,6 +36,7 @@ export interface RunSummary extends Omit<RunInput, 'selection'> {
  usage: { input_tokens: number; output_tokens: number; cost_usd?: number | null; calls?: number };
  cost_usd_est: number | null; unpriced_units: number;
  engine_versions: Record<string, string>; engine_git_sha: Record<string, string> | string; resolved_presets: Record<string, unknown>;
+ resolved_combos?: Record<string, unknown>; base_preset?: string;
 }
 export interface RunUnit {
  unit_id: string; session_id: string; engine: string; preset?: string | null; repeat?: number | null;

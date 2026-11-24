@@ -10,7 +10,7 @@ function Usage({ run }: { run: RunSummary }) {
   return <p>{run.usage.input_tokens} input tokens · {run.usage.output_tokens} output tokens · {run.cost_usd_est == null ? '—' : `~$${run.cost_usd_est.toFixed(4)}`} estimate; STT excluded.{run.unpriced_units > 0 && ` ${run.unpriced_units} unpriced unit(s); estimate is incomplete.`}</p>;
 }
 function Provenance({ run }: { run: RunSummary }) {
-  return <details><summary>Saved configuration and versions</summary><pre>{JSON.stringify({ input: run.input, change_goal: run.change_goal, language: run.language, coded_span: run.coded_span, engines: run.engines, presets: run.presets, repeats: run.repeats, engine_versions: run.engine_versions, engine_git_sha: run.engine_git_sha, resolved_presets: run.resolved_presets }, null, 2)}</pre></details>;
+  return <details><summary>Saved configuration and versions</summary><pre>{JSON.stringify({ input: run.input, change_goal: run.change_goal, language: run.language, coded_span: run.coded_span, engines: run.engines, presets: run.presets, repeats: run.repeats, engine_versions: run.engine_versions, engine_git_sha: run.engine_git_sha, base_preset: run.base_preset, resolved_combos: run.resolved_combos, resolved_presets: run.resolved_presets }, null, 2)}</pre></details>;
 }
 const sortValue = (a: CompareAggregate, key: string): number | string | null => {
   if (key === 'label') return `${a.engine} · ${a.label}`;
