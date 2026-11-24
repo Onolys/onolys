@@ -41,8 +41,12 @@ STT and voice providers come from `config/{env}/stt_providers.yaml` and `voice_p
 | Variable | Default | Meaning |
 |---|---|---|
 | `MITI_MODEL_CHEAP`, `MITI_MODEL_MID`, `MITI_MODEL_STRONG` | from the routes file | LiteLLM model id for that route. Applied before a preset's overrides. |
+| `LLM_PROVIDER`, `LLM_MODEL` | unset | Both or neither: exact lowercase provider and tier id from `config/models.yaml`. Override concrete text routes after `MITI_MODEL_*`; presets apply last. The `oneshot` baseline is unchanged. |
+| `LLM_EFFORT` | from the routes file | Optional exact lowercase effort supported by every effective text tier in `config/models.yaml` (e.g. `low`, `medium`, `high`, `max` where supported). Overrides `extra_params.reasoning_effort` before presets. Can be used alone with the routes' effective models. Empty preserves route defaults; does not change token caps or `oneshot`. |
 | `MITI_LLM_RESPONSE_FORMAT` | from the routes file | `json_object` or `json_schema`, set on every full route. |
 | `MITI_LLM_RECORD` | unset | `1` wraps the live client and writes fixtures for replay. |
 | `MITI_LIVE_PRESET` | unset | Route preset for the live checks. |
 
 Routes used by the engine: `miti_code`, `miti_globals`, `tips`. Details: [engines/miti/README.md](../../engines/miti/README.md).
+
+Staging accepts these LLM settings as GitHub repository variables and passes them to both the API and worker. A predeployment check uses the runtime route loader and the checked-out model capabilities before cloud authentication, image publishing or any deployment. Invalid pairs, unsupported efforts, and values containing whitespace, newlines or env separators fail the build; only validated outputs reach Cloud Run. Production deployment does not consume these repository variables.

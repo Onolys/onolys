@@ -5,10 +5,12 @@ Engines ask for a route by name. Back-compat env overrides (applied to the base 
 before a preset's overrides): MITI_MODEL_CHEAP/MID/STRONG set that route's `litellm_id`;
 LLM_PROVIDER + LLM_MODEL (both or neither; validated against models.yaml) set the text routes'
 `litellm_id`, `api_key_env` and `caching_mode`, and win over MITI_MODEL_*;
+LLM_EFFORT overrides reasoning_effort on concrete text routes, validated for their models;
 MITI_LLM_RESPONSE_FORMAT sets `structured_output_mode` on every full route.
 """
 
 import os
+import re
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any, Literal
@@ -33,6 +35,7 @@ _TIER_ENV = {
 _FORMAT_ENV = "MITI_LLM_RESPONSE_FORMAT"
 PROVIDER_ENV = "LLM_PROVIDER"
 MODEL_ENV = "LLM_MODEL"
+EFFORT_ENV = "LLM_EFFORT"
 # Text routes overridden by LLM_PROVIDER/LLM_MODEL; `oneshot` (eval baseline) never is.
 _TEXT_ROUTES = ("cheap", "mid", "strong", "miti_code", "miti_globals", "tips")
 _FIELDS = {
@@ -94,8 +97,8 @@ def routes_path() -> Path:
 
 def _llm_override(env: dict[str, str], models_path: Path | None) -> dict[str, str] | None:
     """Validate LLM_PROVIDER/LLM_MODEL against models.yaml; None when neither is set."""
-    provider = (env.get(PROVIDER_ENV) or "").strip()
-    model = (env.get(MODEL_ENV) or "").strip()
+    provider = env.get(PROVIDER_ENV) or ""
+    model = env.get(MODEL_ENV) or ""
     if not provider and not model:
         return None
     if not provider or not model:
@@ -121,9 +124,32 @@ def _llm_override(env: dict[str, str], models_path: Path | None) -> dict[str, st
     raise ConfigError(f"{MODEL_ENV}={model!r} unknown for provider {provider!r}; expected {known}")
 
 
+def _apply_effort(raw: dict[str, dict], effort: str, entries: dict[str, Model]) -> None:
+    """Apply effort before presets, checking the actual model of each concrete text route."""
+    for name in _TEXT_ROUTES:
+        if name not in raw or "alias" in raw[name]:
+            continue
+        entry = raw[name]
+        provider, _, tier = entry.get("litellm_id", "").partition("/")
+        model = find_model(entries, provider, tier)
+        if model is None or effort not in model.tiers[tier].efforts:
+            allowed = model.tiers[tier].efforts if model else ()
+            raise ConfigError(
+                f"{EFFORT_ENV}={effort!r} unsupported for route {name!r} "
+                f"({provider}/{tier}); expected one of {allowed}"
+            )
+        entry["extra_params"] = {**entry.get("extra_params", {}), "reasoning_effort": effort}
+
+
 def _apply_env(
     raw: dict[str, dict], env: dict[str, str], models_path: Path | None = None
 ) -> dict[str, dict]:
+    # These values also cross the GitHub-output / Cloud Run env boundary. Exact tokens only;
+    # trimming could hide newlines or whitespace that changes the deployed value.
+    for key in (PROVIDER_ENV, MODEL_ENV, EFFORT_ENV):
+        if value := env.get(key):
+            if not re.fullmatch(r"[a-z0-9][a-z0-9._-]*", value):
+                raise ConfigError(f"{key} must be a lowercase configuration token")
     out = {k: dict(v) for k, v in raw.items()}
     for name, var in _TIER_ENV.items():
         if env.get(var) and name in out and "alias" not in out[name]:
@@ -134,6 +160,11 @@ def _apply_env(
         for name in _TEXT_ROUTES:
             if name in out and "alias" not in out[name]:
                 out[name].update(override)
+    if effort := env.get(EFFORT_ENV):
+        path = Path(env["MODELS_FILE"]) if env.get("MODELS_FILE") else models_path
+        if path is None or not path.is_file():
+            raise ConfigError(f"{EFFORT_ENV} needs a models file: set MODELS_FILE")
+        _apply_effort(out, effort, load_models(path))
     fmt = env.get(_FORMAT_ENV)
     if fmt:
         for entry in out.values():
