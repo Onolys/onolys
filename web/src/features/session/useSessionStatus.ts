@@ -1,10 +1,11 @@
 import { useQuery } from "@tanstack/react-query";
-import { useEffect, useMemo, useState, type RefObject } from "react";
+import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import { ApiError, describeLookupError, type ErrorDescription } from "../../api/errors";
 import { unwrap } from "../../api/client";
 import type { components } from "../../api/schema";
 import { getStatusListener, type SessionStatusDoc } from "../../api/statusListener";
 import { useApiClient } from "../../auth/useApiClient";
+import { deriveProgress, isTimedState, type DerivedProgress } from "./progress";
 
 export type StatusView =
   | { phase: "loading" }
@@ -28,7 +29,13 @@ function detailToDoc(d: Detail): SessionStatusDoc {
     progress: d.progress,
     error_code: d.error?.code ?? null,
     latest_report_version: d.latest_report_version ?? null,
-    updated_at: new Date().toISOString(),
+    updated_at: d.updated_at,
+    started_at: d.started_at ?? null,
+    stage_started_at: d.stage_started_at ?? null,
+    waited_ms: d.waited_ms,
+    audio_s: d.audio_s ?? null,
+    progress_next: d.progress_next ?? null,
+    stage_expected_s: d.stage_expected_s ?? null,
     ...d.flags,
   };
 }
@@ -43,6 +50,34 @@ export const RESUBSCRIBE_DELAYS_MS = [1_000, 2_000, 4_000, 8_000, 16_000];
 /** While the listener is down, poll the session detail this often. */
 export const FALLBACK_POLL_MS = 5_000;
 
+/**
+ * Overall progress for a doc, re-derived once a second only while a timed state is active
+ * (05-processing-screen R3, R8). `uploadFraction` is the uploader's byte fraction, if this tab has one.
+ */
+export function useProgress(doc: SessionStatusDoc | null, uploadFraction?: number | null): DerivedProgress | null {
+  const [now, setNow] = useState(() => Date.now());
+  const timed = doc !== null && isTimedState(doc.state);
+  useEffect(() => {
+    if (!timed) return;
+    const first = setTimeout(() => setNow(Date.now()), 0); // catch up after a pause, not a minute-old `now`
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => {
+      clearTimeout(first);
+      clearInterval(t);
+    };
+  }, [timed]);
+  return doc ? deriveProgress(doc, now, uploadFraction) : null;
+}
+
+type Floor = { state: SessionStatusDoc["state"]; progress: number };
+
+/** The doc with `progress` held at the highest value seen in its state (a late, lower doc cannot move the bar back). */
+function keepMax(floor: Floor | null, doc: SessionStatusDoc): [SessionStatusDoc, Floor] {
+  const progress = floor && floor.state === doc.state ? Math.max(floor.progress, doc.progress) : doc.progress;
+  const next = floor && floor.state === doc.state && floor.progress === progress ? floor : { state: doc.state, progress };
+  return [progress === doc.progress ? doc : { ...doc, progress }, next];
+}
+
 type Link = "up" | "retrying" | "exhausted";
 
 /**
@@ -55,6 +90,12 @@ export function useSessionStatus(id: string, quiet: RefObject<boolean>): StatusV
   const client = useApiClient();
   const [view, setView] = useState<StatusView>({ phase: "loading" });
   const [link, setLink] = useState<Link>("up");
+  // Highest server % seen in the current state (live and fallback share it): a late, lower doc cannot move the bar back.
+  const [floor, setFloor] = useState<Floor | null>(null);
+  const floorRef = useRef<Floor | null>(null); // same value for the listener callback, which cannot read state
+  useEffect(() => {
+    floorRef.current = floor;
+  }, [floor]);
 
   useEffect(() => {
     let done = false;
@@ -116,6 +157,10 @@ export function useSessionStatus(id: string, quiet: RefObject<boolean>): StatusV
           setLink("up");
           if (doc.state === "transcribing") armNudge(doc, gen);
           else stopNudge();
+          const [shown, nextFloor] = keepMax(floorRef.current, doc);
+          floorRef.current = nextFloor;
+          setFloor(nextFloor);
+          doc = shown;
           setView((prev) => ({
             phase: "live",
             doc,
@@ -124,7 +169,7 @@ export function useSessionStatus(id: string, quiet: RefObject<boolean>): StatusV
                 ? null
                 : prev.phase === "live" && prev.doc.state === "running" && prev.runStartedAt !== null
                   ? prev.runStartedAt
-                  : Date.parse(doc.updated_at) || Date.now(),
+                  : Date.parse(doc.started_at ?? "") || Date.parse(doc.updated_at) || Date.now(),
           }));
         },
         () => {
@@ -155,7 +200,14 @@ export function useSessionStatus(id: string, quiet: RefObject<boolean>): StatusV
     queryFn: async () => unwrap(await client.GET("/sessions/{id}", { params: { path: { id } } })),
   });
 
-  const fallbackDoc = useMemo(() => (poll.data ? detailToDoc(poll.data) : null), [poll.data]);
+  const [fallbackDoc, fallbackFloor] = useMemo(
+    () => (poll.data ? keepMax(floor, detailToDoc(poll.data)) : [null, floor]),
+    [poll.data, floor],
+  );
+  if (fallbackFloor !== floor) {
+    // adjust state while rendering: the fallback doc raised the floor
+    setFloor(fallbackFloor);
+  }
 
   if (link === "up") return view;
   // 404 / 4xx (unknown or someone else's session) will not heal by polling.
