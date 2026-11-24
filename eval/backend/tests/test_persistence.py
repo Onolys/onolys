@@ -176,3 +176,79 @@ def test_firestore_adapter_transaction_reads_both_before_writing(monkeypatch):
     repo.create_run('r', {'status': 'queued'}, {'u': {'status': 'queued'}})
     assert client.batch.return_value.create.call_count == 2
     client.batch.return_value.commit.assert_called_once_with()
+
+
+def test_attempt_output_paths_keep_reclaimed_results_independent(monkeypatch):
+    from onolys_eval_backend import storage
+
+    monkeypatch.setattr(storage, "INLINE_OUTPUT_LIMIT", 1)
+    bucket = InMemoryBucket()
+    current = store_output(bucket, "run", "unit", {"result": "current"}, attempt="new")
+    store_output(bucket, "run", "unit", {"result": "stale"}, attempt="old")
+    assert load_output(bucket, current) == {"result": "current"}
+
+
+def test_named_queue_task_deduplicates_accepted_retry():
+    from types import SimpleNamespace
+
+    from google.api_core.exceptions import AlreadyExists
+    from test_app import ENV
+
+    from onolys_eval_backend.config import EvalConfig
+    from onolys_eval_backend.queue import CloudTasksQueue
+
+    calls = []
+
+    def create_task(**kwargs):
+        calls.append(kwargs)
+        raise AlreadyExists("task already accepted")
+
+    queue = CloudTasksQueue(EvalConfig.from_env(ENV), SimpleNamespace(create_task=create_task))
+    queue.enqueue("transcribe", {"upload_id": "saved"}, task_id="upload-saved")
+    assert calls[0]["task"]["name"].endswith("/tasks/upload-saved")
+    with pytest.raises(AlreadyExists):
+        queue.enqueue("transcribe", {"upload_id": "saved"})
+
+
+@pytest.mark.live
+def test_firestore_pagination_survives_deleted_cursor_and_fences_completion():
+    import os
+    from uuid import uuid4
+
+    from google.cloud import firestore
+
+    from onolys_eval_backend.repository import FirestoreEvalRepository
+    from onolys_eval_backend.runs import finish_unit
+
+    if not os.environ.get("FIRESTORE_EMULATOR_HOST"):
+        pytest.skip("Firestore emulator required")
+    client = firestore.Client(project="demo-test")
+    repo = FirestoreEvalRepository(client)
+    repo.runs = client.collection(f"eval_t13_{uuid4().hex}")
+    try:
+        upload_id = uuid4().hex
+        repo.create_upload(upload_id, {"status": "awaiting_upload"})
+        assert repo.transition_upload(upload_id, "awaiting_upload", {"status": "transcribing"})
+        assert not repo.transition_upload(upload_id, "awaiting_upload", {"status": "failed"})
+        assert repo.get_upload(upload_id)["status"] == "transcribing"
+        repo.uploads.document(upload_id).delete()
+        for rid in ("a", "b", "c"):
+            repo.create_run(rid, {"created_at": "2026-01-01", "completed_units": 0,
+                                 "total_units": 1, "done_units": 0, "failed_units": 0,
+                                 "cancelled_units": 0, "usage": {}, "cost_usd_est": 0},
+                            {"u": {"status": "running", "lease_owner": "new"}})
+        page, more = repo.list_runs_page(1)
+        assert list(page) == ["c"] and more
+        repo.runs.document("c").delete()
+        page, more = repo.list_runs_page(1, ("2026-01-01", "c"))
+        assert list(page) == ["b"] and more
+        assert not finish_unit(repo, "a", "u", {"status": "done"}, owner="old")
+        assert finish_unit(repo, "a", "u", {"status": "done"}, owner="new")
+        assert not finish_unit(repo, "a", "u", {"status": "done"}, owner="new")
+        assert repo.get_run("a")["completed_units"] == 1
+    finally:
+        for doc in repo.runs.stream():
+            for unit in doc.reference.collection("units").stream():
+                unit.reference.delete()
+            doc.reference.delete()
+        client.close()

@@ -20,9 +20,13 @@ class EvalRepository(Protocol):
     def create_upload(self, upload_id: str, data: Record) -> None: ...
     def get_upload(self, upload_id: str) -> Record | None: ...
     def update_upload(self, upload_id: str, updates: Record) -> None: ...
+    def transition_upload(self, upload_id: str, expected: str, updates: Record) -> bool: ...
     def create_run(self, run_id: str, data: Record, units: Mapping[str, Record]) -> None: ...
     def get_run(self, run_id: str) -> Record | None: ...
     def list_runs(self, limit: int = 100) -> dict[str, Record]: ...
+    def list_runs_page(
+        self, limit: int = 100, after: tuple[str, str] | None = None
+    ) -> tuple[dict[str, Record], bool]: ...
     def get_unit(self, run_id: str, unit_id: str) -> Record | None: ...
     def list_units(self, run_id: str) -> dict[str, Record]: ...
     def update_run(self, run_id: str, updates: Record) -> None: ...
@@ -54,6 +58,14 @@ class InMemoryEvalRepository:
         with self._lock:
             self._uploads[upload_id].update(deepcopy(updates))
 
+    def transition_upload(self, upload_id, expected, updates):
+        with self._lock:
+            saved = self._uploads.get(upload_id)
+            if saved is None or saved['status'] != expected:
+                return False
+            saved.update(deepcopy(updates))
+            return True
+
     def create_run(self, run_id, data, units):
         with self._lock:
             if run_id in self._runs:
@@ -72,6 +84,17 @@ class InMemoryEvalRepository:
             return deepcopy(dict(sorted(self._runs.items(),
                                         key=lambda item: item[1]['created_at'],
                                         reverse=True)[:limit]))
+
+    def list_runs_page(self, limit=100, after=None):
+        """Newest first by (created_at, id). `after` is the last (created_at, id) seen."""
+        if limit < 1:
+            raise ValueError('limit must be positive')
+        with self._lock:
+            rows = sorted(((r['created_at'], rid) for rid, r in self._runs.items()), reverse=True)
+            if after is not None:
+                rows = [row for row in rows if row < tuple(after)]
+            page = rows[:limit]
+            return {rid: deepcopy(self._runs[rid]) for _, rid in page}, len(rows) > limit
 
     def get_unit(self, run_id, unit_id):
         with self._lock:
@@ -137,6 +160,21 @@ class FirestoreEvalRepository:
     def update_upload(self, upload_id, updates):
         self._update(self.uploads.document(upload_id), updates)
 
+    def transition_upload(self, upload_id, expected, updates):
+        from google.cloud import firestore
+
+        ref = self.uploads.document(upload_id)
+
+        @firestore.transactional
+        def apply(transaction):
+            snapshot = ref.get(transaction=transaction)
+            if not snapshot.exists or snapshot.to_dict()['status'] != expected:
+                return False
+            transaction.update(ref, updates)
+            return True
+
+        return apply(self.client.transaction())
+
     def create_run(self, run_id, data, units):
         # One atomic commit avoids publishing a run with missing units.
         from google.api_core.exceptions import AlreadyExists
@@ -159,6 +197,19 @@ class FirestoreEvalRepository:
             raise ValueError('limit must be positive')
         query = self.runs.order_by('created_at', direction='DESCENDING').limit(limit)
         return {doc.id: doc.to_dict() for doc in query.stream()}
+
+    def list_runs_page(self, limit=100, after=None):
+        if limit < 1:
+            raise ValueError('limit must be positive')
+        query = (self.runs.order_by('created_at', direction='DESCENDING')
+                 .order_by('__name__', direction='DESCENDING'))
+        if after is not None:
+            # Value cursor remains stable even when the last document was deleted.
+            query = query.start_after({
+                'created_at': after[0], '__name__': self.runs.document(after[1]),
+            })
+        docs = list(query.limit(limit + 1).stream())
+        return {doc.id: doc.to_dict() for doc in docs[:limit]}, len(docs) > limit
 
     def _unit(self, run_id, unit_id):
         return self.runs.document(run_id).collection('units').document(unit_id)

@@ -2,6 +2,7 @@
 
 import json
 from copy import deepcopy
+from datetime import timedelta
 from threading import RLock
 from typing import Any, Protocol
 
@@ -14,6 +15,11 @@ class Bucket(Protocol):
     def list(self, prefix: str) -> list[str]: ...
     def read_json(self, path: str) -> Any: ...
     def write_json(self, path: str, data: Any) -> None: ...
+    def signed_upload_url(
+        self, path: str, content_type: str, *, expires_s: int, max_bytes: int
+    ) -> dict: ...
+    def size(self, path: str) -> int | None: ...
+    def read_head(self, path: str, n: int) -> bytes: ...
 
 
 def _encode(data: Any) -> bytes:
@@ -48,6 +54,38 @@ class GCSBucket(_JSONBucket):
     def list(self, prefix: str) -> list[str]:
         return sorted(blob.name for blob in self.bucket.list_blobs(prefix=prefix))
 
+    def signed_upload_url(self, path, content_type, *, expires_s, max_bytes):
+        """V4 signed PUT for a browser upload. Signs through IAM signBlob using the runtime
+        service account (needs roles/iam.serviceAccountTokenCreator on itself) and
+        requires the bucket CORS policy to allow PUT from the eval origin.
+        """
+        import google.auth
+        from google.auth.transport.requests import Request
+
+        credentials, _ = google.auth.default()
+        credentials.refresh(Request())
+        headers = {'x-goog-content-length-range': f'1,{max_bytes}'}
+        url = self.bucket.blob(path).generate_signed_url(
+            version='v4',
+            method='PUT',
+            expiration=timedelta(seconds=expires_s),
+            content_type=content_type,
+            headers=headers,
+            service_account_email=credentials.service_account_email,
+            access_token=credentials.token,
+        )
+        return {'url': url, 'method': 'PUT', 'headers': {'Content-Type': content_type, **headers}}
+
+    def size(self, path):
+        blob = self.bucket.get_blob(path)
+        return None if blob is None else blob.size
+
+    def read_head(self, path, n):
+        blob = self.bucket.get_blob(path)
+        if blob is None:
+            raise FileNotFoundError(path)
+        return blob.download_as_bytes(start=0, end=n - 1)
+
 
 class InMemoryBucket(_JSONBucket):
     def __init__(self):
@@ -68,13 +106,32 @@ class InMemoryBucket(_JSONBucket):
         with self._lock:
             return sorted(path for path in self._objects if path.startswith(prefix))
 
+    def signed_upload_url(self, path, content_type, *, expires_s, max_bytes):
+        headers = {'x-goog-content-length-range': f'1,{max_bytes}'}
+        return {
+            'url': f'memory://{path}',
+            'method': 'PUT',
+            'headers': {'Content-Type': content_type, **headers},
+        }
 
-def store_output(bucket: Bucket, run_id: str, unit_id: str, output: dict) -> dict:
+    def size(self, path):
+        with self._lock:
+            return len(self._objects[path]) if path in self._objects else None
+
+    def read_head(self, path, n):
+        return self.read_bytes(path)[:n]
+
+
+def store_output(
+    bucket: Bucket, run_id: str, unit_id: str, output: dict, *, attempt: str | None = None
+) -> dict:
     """Store JSON inline through 500 KB, spilling larger UTF-8 payloads to SP2 layout."""
     data = _encode(output)
     if len(data) <= INLINE_OUTPUT_LIMIT:
         return {'output': deepcopy(output), 'output_ref': None}
-    path = f'runs/{run_id}/{unit_id}.json'
+    # Attempts write separate objects: a superseded owner cannot overwrite the winner.
+    path = (f'runs/{run_id}/{unit_id}/{attempt}.json' if attempt
+            else f'runs/{run_id}/{unit_id}.json')
     bucket.write_bytes(path, data, content_type='application/json')
     return {'output': None, 'output_ref': path}
 

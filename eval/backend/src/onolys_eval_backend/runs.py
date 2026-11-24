@@ -12,7 +12,7 @@ import os
 import random
 import re
 from datetime import UTC, datetime
-from time import monotonic
+from time import monotonic, time
 from uuid import uuid4
 
 from fastapi import APIRouter, HTTPException, Request
@@ -55,6 +55,11 @@ ZERO_USAGE = {"input_tokens": 0, "output_tokens": 0, "calls": 0, "cost_usd": 0.0
 
 def now():
     return datetime.now(UTC).isoformat()
+
+
+def _epoch():
+    """Wall-clock seconds for lease arithmetic; tests replace this."""
+    return time()
 
 
 class InputRef(BaseModel):
@@ -118,6 +123,10 @@ class UnitTask(BaseModel):
     model_config = ConfigDict(extra="forbid")
     run_id: str = Field(pattern=r"^[A-Za-z0-9_-]+$")
     unit_id: str = Field(pattern=r"^[A-Za-z0-9_-]+$")
+
+
+class RunInputError(ValueError):
+    """A client-fixable input problem whose message is safe to show."""
 
 
 def _hash(data):
@@ -198,7 +207,7 @@ def _validate_sources(services, sources, body, engines):
                 gold = Gold.model_validate(services.bucket.read_json(source["gold_path"]))
             except FileNotFoundError:
                 if "human" in engines:
-                    raise ValueError("Human requires gold") from None
+                    raise RunInputError("Human requires gold.") from None
             if gold is not None:
                 if source.get("gold_sha256") and source["gold_sha256"] != _hash(
                     gold.model_dump(mode="json", by_alias=True)
@@ -210,7 +219,12 @@ def _validate_sources(services, sources, body, engines):
                 ):
                     raise ValueError("Gold identity mismatch")
         if "human" in engines and gold is None:
-            raise ValueError("Human requires gold")
+            raise RunInputError("Human requires gold.")
+        if any(e.startswith("oneshot") for e in engines) and not (
+            source.get("change_goal") or ""
+        ).strip():
+            # The one-shot schema requires a non-empty change_goal; fail now, not per unit.
+            raise RunInputError("A change goal is required for the one-shot engine.")
         resolved.append(
             {
                 **source,
@@ -224,6 +238,11 @@ def _validate_sources(services, sources, body, engines):
             }
         )
     return resolved
+
+
+def _has_gold(services, dataset_id, session_id):
+    path = f"datasets/{dataset_id}/{session_id}/gold.json"
+    return path in services.bucket.list(path)
 
 
 def _git_sha():
@@ -258,7 +277,12 @@ def create_run(services, config, body, created_by, *, registry=None, input_ref=N
         raise ValueError("Unknown engine")
     models = services.models
     engines = list(body.engines)
-    if body.input.dataset_id and "human" not in engines:
+    if (
+        body.input.dataset_id
+        and "human" not in engines
+        and all(_has_gold(services, body.input.dataset_id, sid) for sid in body.input.session_ids)
+    ):
+        # Gold is compared on read; sessions without gold simply run without a reference.
         engines.append("human")
     combos, _dropped = validate_selection(
         {m.id: {t.id: list(t.efforts) for t in m.tiers.values()} for m in models.values()},
@@ -376,19 +400,30 @@ def post_run(request: Request, body: RunRequest):
         raise
     except (SelectionError, RunTooLarge) as error:
         raise HTTPException(422, str(error)) from None
+    except RunInputError as error:
+        raise HTTPException(422, str(error)) from None
     except (ValueError, FileNotFoundError, InputError):
         raise HTTPException(422, "Invalid run selection or input.") from None
     except Exception:
         raise HTTPException(503, "Run creation unavailable.") from None
 
 
-def finish_unit(repository, rid, uid, result, *, expected=None):
-    """One transaction accounts a terminal unit and finalizes its parent once."""
+_ANY = object()
+
+
+def finish_unit(repository, rid, uid, result, *, expected=None, owner=_ANY):
+    """One transaction accounts a terminal unit and finalizes its parent once.
+
+    `owner` fences the write to one lease holder: a superseded attempt cannot account
+    a unit that another attempt reclaimed.
+    """
 
     finished_at = now()
 
     def mutate(run, unit):
         if unit["status"] in TERMINAL or (expected and unit["status"] not in expected):
+            return None
+        if owner is not _ANY and unit.get("lease_owner") != owner:
             return None
         status = result["status"]
         usage = result.get("run_info", {}).get("usage") or ZERO_USAGE
@@ -411,9 +446,14 @@ def finish_unit(repository, rid, uid, result, *, expected=None):
         }
         if updates["completed_units"] == run["total_units"]:
             done = updates["done_units"]
-            updates["status"] = (
-                "done" if done == run["total_units"] else "partial" if done else "failed"
-            )
+            if done == run["total_units"]:
+                updates["status"] = "done"
+            elif done:
+                updates["status"] = "partial"
+            elif updates["cancelled_units"] and not updates["failed_units"]:
+                updates["status"] = "cancelled"
+            else:
+                updates["status"] = "failed"
             updates["finished_at"] = finished_at
         return updates, {**result, "stage": result["status"], "finished_at": finished_at}
 
@@ -457,6 +497,9 @@ def _add_usage(a, b):
 
 
 UNIT_BUDGET_S = 840
+# A claim outlives the unit budget (retries, bucket writes); past it the owner is presumed dead.
+LEASE_S = UNIT_BUDGET_S + 120
+MAX_CLAIMS = 3
 MAX_ATTEMPTS = 3
 RETRY_DELAYS_S = (5, 20)
 MIN_RETRY_BUDGET_S = 120
@@ -551,41 +594,96 @@ async def execute_unit(services, rid, uid):
     repository = services.repository
     # Read immutable execution inputs before claiming: transient read failures must
     # leave queued work retryable. The transaction still checks live ownership/cancel.
-    run, unit = repository.get_run(rid), repository.get_unit(rid, uid)
+    run = await asyncio.to_thread(repository.get_run, rid)
+    unit = await asyncio.to_thread(repository.get_unit, rid, uid)
     started_at = now()
 
+    token = uuid4().hex
+    outcome = {}
+
     def claim(run, unit):
-        if unit["status"] != "queued" or run.get("cancel_requested"):
+        outcome.clear()
+        status, t = unit["status"], _epoch()
+        if status == "queued":
+            if run.get("cancel_requested"):
+                outcome["kind"] = "cancel_queued"
+                return None
+            claims = 0
+        elif status == "running":
+            expires = unit.get("lease_expires_at")
+            if expires is None:
+                # Units claimed before leases existed: derive expiry from the claim time.
+                try:
+                    expires = datetime.fromisoformat(unit["started_at"]).timestamp() + LEASE_S
+                except (KeyError, TypeError, ValueError):
+                    expires = 0
+            if expires > t:
+                outcome.update(kind="busy", retry_after=expires - t)
+                return None
+            claims = unit.get("claims", 1)
+            if run.get("cancel_requested"):
+                outcome.update(kind="expired_cancel", owner=unit.get("lease_owner"))
+                return None
+            if claims >= MAX_CLAIMS:
+                outcome.update(kind="expired_exhausted", owner=unit.get("lease_owner"))
+                return None
+        else:
+            outcome["kind"] = "terminal"
             return None
+        outcome["kind"] = "claimed"
         return {"status": "running"}, {
             "status": "running",
             "stage": "coding",
             "started_at": started_at,
+            "lease_owner": token,
+            "lease_expires_at": t + LEASE_S,
+            "claims": claims + 1,
         }
 
-    if not repository.transact_unit(rid, uid, claim):
-        # A cancel may race dispatch before its sweep reaches this unit.
-        run = repository.get_run(rid)
-        if run and run.get("cancel_requested"):
-            finish_unit(repository, rid, uid, {"status": "cancelled"}, expected={"queued"})
-        return
+    await asyncio.to_thread(repository.transact_unit, rid, uid, claim)
+    kind = outcome.get("kind")
+    if kind != "claimed":
+        if kind == "busy":
+            return {"busy": True, "retry_after": outcome["retry_after"]}
+        if kind == "cancel_queued":
+            # A cancel may race dispatch before its sweep reaches this unit.
+            await asyncio.to_thread(
+                finish_unit, repository, rid, uid, {"status": "cancelled"}, expected={"queued"}
+            )
+        elif kind in {"expired_cancel", "expired_exhausted"}:
+            result = (
+                {"status": "cancelled"}
+                if kind == "expired_cancel"
+                else {"status": "failed", "error": {"code": "lease_expired", "retryable": False}}
+            )
+            await asyncio.to_thread(
+                finish_unit,
+                repository,
+                rid,
+                uid,
+                result,
+                expected={"running"},
+                owner=outcome["owner"],
+            )
+        return None
     metrics = MetricsCollector()
     usage = None
     attempts = 0
     carried = None
+    progress_tasks = []
     try:
         source = next(
             s for s in run["input_ref"]["sessions"] if s["session_id"] == unit["session_id"]
         )
         if unit["engine"] == "human":
-            output = services.bucket.read_json(source["gold_path"])
+            output = await asyncio.to_thread(services.bucket.read_json, source["gold_path"])
             gold = Gold.model_validate(output)
             scores = gold_scores(gold)
             run_info = {"usage": dict(ZERO_USAGE)}
             cost, unpriced = 0.0, False
         else:
             transcript = validate_transcript_input(
-                services.bucket.read_json(source["transcript_path"])
+                await asyncio.to_thread(services.bucket.read_json, source["transcript_path"])
             )
             engine = services.engine(unit["engine"])
             if unit.get("combo"):
@@ -620,7 +718,16 @@ async def execute_unit(services, rid, uid):
                 params["config"] = unit["engine"].split(":", 1)[1]
 
             def progress(stage, status):
-                repository.update_unit(rid, uid, {"stage": str(stage)})
+                # Engine callbacks are synchronous. Schedule their blocking I/O and
+                # fence it too: delayed progress from an old attempt cannot win.
+                progress_tasks.append(asyncio.create_task(asyncio.to_thread(
+                    repository.transact_unit, rid, uid,
+                    lambda run, current: (
+                        ({}, {"stage": str(stage)})
+                        if current.get("lease_owner") == token
+                        and current["status"] == "running" else None
+                    ),
+                )))
 
             factory = getattr(services, "llm_factory", None)
             sleep = getattr(services, "sleep", None) or asyncio.sleep
@@ -654,7 +761,9 @@ async def execute_unit(services, rid, uid):
                         or remaining < MIN_RETRY_BUDGET_S
                         or not is_retryable(exc)
                         # A cancel during the attempt ends the unit now; no new provider spend.
-                        or (repository.get_run(rid) or {}).get("cancel_requested")
+                        or ((await asyncio.to_thread(repository.get_run, rid)) or {}).get(
+                            "cancel_requested"
+                        )
                     ):
                         raise
                     # Failed attempt's spend is carried into the single finish_unit.
@@ -679,7 +788,9 @@ async def execute_unit(services, rid, uid):
             run_info["usage"] = usage.model_dump(mode="json")
             cost, unpriced = _cost(services, run, unit, usage, metrics)
         saved = {
-            **store_output(services.bucket, rid, uid, output),
+            **await asyncio.to_thread(
+                store_output, services.bucket, rid, uid, output, attempt=token
+            ),
             "status": "done",
             "attempts": attempts,
             "scores": scores.model_dump(mode="json"),
@@ -687,6 +798,17 @@ async def execute_unit(services, rid, uid):
             "cost_usd_est": cost,
             "unpriced": unpriced,
         }
+    except asyncio.CancelledError:
+        # Interrupted (shutdown/disconnect): free the lease so a redelivery reclaims now.
+        await asyncio.to_thread(
+            repository.transact_unit,
+            rid,
+            uid,
+            lambda run, unit: (
+                ({}, {"lease_expires_at": 0.0}) if unit.get("lease_owner") == token else None
+            ),
+        )
+        raise
     except Exception as exc:
         usage = (
             _add_usage(carried, exc.usage)
@@ -710,10 +832,28 @@ async def execute_unit(services, rid, uid):
             "cost_usd_est": cost,
             "unpriced": unpriced,
         }
-    finish_unit(repository, rid, uid, saved, expected={"running"})
+    if progress_tasks:
+        # Progress is best effort; its storage errors must not strand completed work.
+        await asyncio.gather(*progress_tasks, return_exceptions=True)
+    accounted = await asyncio.to_thread(
+        finish_unit, repository, rid, uid, saved, expected={"running"}, owner=token
+    )
+    if not accounted:
+        logger.warning("unit result discarded: lease lost", extra={"run_id": rid, "unit_id": uid})
 
 
 @router.post("/internal/tasks/unit")
 async def unit_task(request: Request, body: UnitTask):
-    await execute_unit(request.app.state.services, body.run_id, body.unit_id)
+    services = request.app.state.services
+    result = await execute_unit(services, body.run_id, body.unit_id)
+    if result and result.get("busy"):
+        # Another attempt holds an unexpired lease. Re-deliver after it can expire so a
+        # dead owner is reclaimed instead of the unit staying stranded.
+        await asyncio.to_thread(
+            services.queue.enqueue,
+            "unit",
+            {"run_id": body.run_id, "unit_id": body.unit_id},
+            delay_seconds=max(1, int(result["retry_after"]) + 5),
+        )
+        return {"status": "deferred"}
     return {"status": "ok"}
