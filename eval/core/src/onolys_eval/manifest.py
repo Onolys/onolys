@@ -17,6 +17,8 @@ class PDFLayout(Contract):
     notes_x: float | None = None
     header_bottom: float | None = None
     footer_height: float | None = None
+    # Misprinted utterance-number tokens in the number column, e.g. {"Q": 2}.
+    number_aliases: dict[str, int] | None = None
 
 
 SourceMedia = Literal["audio", "video", "transcript"]

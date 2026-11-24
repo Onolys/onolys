@@ -284,3 +284,19 @@ def test_manifest_requires_explicit_miti_version_key():
     del data["miti_version"]
     with pytest.raises(ValidationError):
         DatasetManifest.model_validate(data)
+
+
+def test_committed_casaa_practice_manifest_and_overrides():
+    from onolys_eval.convert import Overrides
+    import yaml
+    base = ROOT / "datasets/casaa-miti-practice"
+    m = load_manifest(base / "manifest.yaml")
+    assert len(m.sessions) == 12 and m.miti_version == "4.0" and "MITI 4" in m.label_scheme
+    assert m.source_media == ["audio", "transcript"] and m.transcript_origin == "human"
+    emmy = next(s for s in m.sessions if s.session_id == "emmys-first-encounter")
+    assert emmy.source_media == ["video", "transcript"]
+    assert all(s.audio_url is None and s.clinician_labels == ["P"] for s in m.sessions)
+    ids = {s.session_id for s in m.sessions}
+    for path in (base / "overrides").glob("*.yaml"):
+        assert path.stem in ids
+        Overrides.model_validate(yaml.safe_load(path.read_text()))

@@ -27,7 +27,8 @@ _LABELS = {
     "EMPHASIZE": "emphasize_autonomy", "CONFRONT": "confront",
     "NC": None, "NOT CODED": None,
 }
-_GLOBAL_LABELS = {"CCT": "cct", "SST": "sst", "PAR": "partnership",
+_GLOBAL_LABELS = {"CCT": "cct", "SST": "sst", "CULTIVATING": "cct", "SOFTENING": "sst",
+                  "PAR": "partnership",
                   "PART": "partnership", "PARTNERSHIP": "partnership",
                   "EMP": "empathy", "EMPATHY": "empathy"}
 _LABEL_PATTERN = re.compile(
@@ -133,12 +134,12 @@ def parse_pages(pages, *, code_header="Code", layout=None) -> ParsedDocument:
             text = " ".join(w["text"] for w in line)
             if line in header_lines:
                 continue
-            if re.fullmatch(r"Global (?:ratings|measures)(?: \(\d+\))?", text, re.IGNORECASE):
+            if re.fullmatch(r"Global (?:ratings?|measures)(?: \(\d+\))?:?", text, re.IGNORECASE):
                 ended = True
                 continue
             # Ratings/totals are outside the table and may share one physical line.
             ratings = list(re.finditer(
-                r"\b(CCT|SST|PAR|PART|PARTNERSHIP|EMP|EMPATHY)\s*[:=]?\s*(-?\d+)\b",
+                r"\b(CCT|SST|CULTIVATING|SOFTENING|PAR|PART|PARTNERSHIP|EMP|EMPATHY)\s*[:=]?\s*(-?\d+)\b",
                 text, re.IGNORECASE))
             if ratings:
                 ended = True
@@ -154,12 +155,15 @@ def parse_pages(pages, *, code_header="Code", layout=None) -> ParsedDocument:
                     continue
             if ended:
                 continue
+            aliases = layout.get("number_aliases") or {}
             number_words = [w for w in line if abs(w["x0"]-columns["number_x"]) < 8
-                            and re.fullmatch(r"\d+", w["text"])]
+                            and (re.fullmatch(r"\d+", w["text"]) or w["text"] in aliases)]
             if number_words:
                 speaker = [w["text"].strip(":") for w in line
                            if columns["speaker_x"]-5 <= w["x0"] < columns["text_x"]-5]
-                current = ParsedRow(int(number_words[0]["text"]), " ".join(speaker))
+                printed = number_words[0]["text"]
+                current = ParsedRow(aliases.get(printed, int(printed) if printed.isdigit() else 0),
+                                    " ".join(speaker))
                 result.rows.append(current)
             if current is None:
                 continue
@@ -207,6 +211,9 @@ class Overrides(Contract):
     utterance_codes: list[CodeOverride] = Field(default_factory=list)
     globals: dict[GlobalId, Annotated[int, Field(ge=1, le=5)]] = Field(default_factory=dict)
     reviewed_utterance_ids: list[Nonempty] = Field(default_factory=list)
+    # Use the uncoded transcript's text for these turns (e.g. the coded PDF has inline
+    # code annotations or segment markers); speaker must still agree.
+    uncoded_text_turn_ids: list[Nonempty] = Field(default_factory=list)
 
 
 def _normalized(text):
@@ -237,7 +244,8 @@ def build_session(manifest: DatasetManifest, session: SessionManifest,
     coded, uncoded = documents["coded"], documents["uncoded"]
     ids = [f"t{r.number}" for r in coded.rows]
     code_overrides = {r.turn_id: r.codes for r in correction.utterance_codes}
-    referenced = set(code_overrides) | set(correction.reviewed_utterance_ids)
+    referenced = (set(code_overrides) | set(correction.reviewed_utterance_ids)
+                  | set(correction.uncoded_text_turn_ids))
     if referenced - set(ids):
         raise ValueError(f"Unknown override utterance IDs: {sorted(referenced-set(ids))}")
     if len(code_overrides) != len(correction.utterance_codes):
@@ -260,10 +268,15 @@ def build_session(manifest: DatasetManifest, session: SessionManifest,
         elif not 1 <= globals_[key] <= 5:
             warnings.append(f"globals-out-of-range: {key}={globals_[key]}")
     other = {f"t{r.number}": r for r in uncoded.rows}
+    if set(correction.uncoded_text_turn_ids) - set(other):
+        raise ValueError(
+            f"Unknown override utterance IDs: {sorted(set(correction.uncoded_text_turn_ids)-set(other))}")
     turns, utterance_codes = [], []
     counts = Counter(dict.fromkeys(COUNT_IDS, 0))
     for index, row in enumerate(coded.rows):
         turn_id = f"t{row.number}"
+        if turn_id in correction.uncoded_text_turn_ids:
+            row = replace(row, text=other[turn_id].text)
         if not row.text.strip():
             warnings.append(f"empty-row: {turn_id}")
         if row.unknown_codes and turn_id not in code_overrides:

@@ -306,3 +306,36 @@ def test_global_heading_footnote_does_not_enter_last_utterance():
 
 def test_unrecognized_parenthetical_annotation_stays_a_warning():
     assert convert.parse_codes('Q (Mystery)') == (['question'],['(MYSTERY)'])
+
+
+def test_global_rating_singular_and_long_global_names():
+    data=words([(100,[(70,'1'),(100,'C'),(125,'Synthetic')]),
+                (140,[(70,'Global'),(110,'Rating:')]),
+                (170,[(70,'CULTIVATING: 3')]), (190,[(70,'SOFTENING: 2')]),
+                (210,[(70,'PARTNERSHIP: 5')]), (230,[(70,'EMPATHY: 4')])])
+    doc=convert.parse_pages([(data,792)])
+    assert doc.rows[0].text == 'Synthetic'
+    assert doc.globals == {'cct': 3, 'sst': 2, 'partnership': 5, 'empathy': 4}
+
+
+def test_misprinted_number_alias_starts_a_row():
+    data=words([(100,[(70,'1'),(100,'P'),(125,'First')]),
+                (130,[(70,'Q'),(100,'C'),(125,'Second')]),
+                (160,[(70,'3'),(100,'P'),(125,'Third')])])
+    doc=convert.parse_pages([(data,792)], layout={'number_aliases': {'Q': 2}})
+    assert [(r.number, r.text) for r in doc.rows] == [(1,'First'),(2,'Second'),(3,'Third')]
+    without=convert.parse_pages([(data,792)])
+    assert [r.number for r in without.rows] == [1, 3]
+
+
+def test_uncoded_text_override_replaces_annotated_coded_text():
+    coded = convert.parse_pages([(page(text="Synthetic speech (GI)"), 792)], code_header="Code")
+    uncoded = convert.parse_pages([(page(text="Synthetic speech"), 792)], code_header="Code")
+    _, _, warnings = make_result(coded, uncoded)
+    assert any(w.startswith("text-mismatch:") for w in warnings)
+    transcript, gold, warnings = make_result(
+        coded, uncoded, {"uncoded_text_turn_ids": ["t1"]})
+    assert warnings == []
+    assert transcript["turns"][0]["text"] == "Synthetic speech continues"
+    with pytest.raises(ValueError, match="Unknown override"):
+        make_result(coded, uncoded, {"uncoded_text_turn_ids": ["t9"]})
