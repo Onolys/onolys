@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import { ApiError, describeLookupError, type ErrorDescription } from "../../api/errors";
 import { unwrap } from "../../api/client";
 import type { components } from "../../api/schema";
-import { getStatusListener, type SessionStatusDoc } from "../../api/statusListener";
+import { getStatusListener, normalizeStatusDoc, type SessionStatusDoc } from "../../api/statusListener";
 import { useApiClient } from "../../auth/useApiClient";
 import { deriveProgress, isTimedState, isUploadState, type DerivedProgress } from "./progress";
 
@@ -21,26 +21,26 @@ export type StatusView =
 
 type Detail = components["schemas"]["SessionDetail"];
 
-function detailToDoc(d: Detail): SessionStatusDoc {
-  return {
+export function detailToDoc(d: Detail): SessionStatusDoc {
+  return normalizeStatusDoc({
+    ...d.flags,
     uid: "",
     state: d.status,
-    step: d.step ?? null,
+    step: d.step,
     progress: d.progress,
-    error_code: d.error?.code ?? null,
-    error_kind: d.error_kind ?? null,
-    retries_left: d.retries_left ?? null,
-    counted: d.counted ?? null,
-    latest_report_version: d.latest_report_version ?? null,
+    error_code: d.error?.code,
+    error_kind: d.error_kind,
+    retries_left: d.retries_left,
+    counted: d.counted,
+    latest_report_version: d.latest_report_version,
     updated_at: d.updated_at,
-    started_at: d.started_at ?? null,
-    stage_started_at: d.stage_started_at ?? null,
+    started_at: d.started_at,
+    stage_started_at: d.stage_started_at,
     waited_ms: d.waited_ms,
-    audio_s: d.audio_s ?? null,
-    progress_next: d.progress_next ?? null,
-    stage_expected_s: d.stage_expected_s ?? null,
-    ...d.flags,
-  };
+    audio_s: d.audio_s,
+    progress_next: d.progress_next,
+    stage_expected_s: d.stage_expected_s,
+  });
 }
 
 /** A session stuck in `transcribing` this long gets a `GET /sessions/{id}`, which makes the API settle it. */
