@@ -32,7 +32,7 @@ from onolys_engine_core.transcript_input import (
 from onolys_engine_core.validated_run import OutputInvalid, run_validated
 from onolys_eval.adapters import miti_lean_scores, oneshot_scores
 from onolys_eval.gold import Gold
-from onolys_eval.metrics import Scores
+from onolys_eval.metrics import gold_scores
 from pydantic import BaseModel, ConfigDict, Field, StrictInt, model_validator
 
 from onolys_eval_backend.catalog import _IDENTIFIER, read_dataset
@@ -580,7 +580,7 @@ async def execute_unit(services, rid, uid):
         if unit["engine"] == "human":
             output = services.bucket.read_json(source["gold_path"])
             gold = Gold.model_validate(output)
-            scores = Scores(counts=gold.counts, globals=gold.globals)
+            scores = gold_scores(gold)
             run_info = {"usage": dict(ZERO_USAGE)}
             cost, unpriced = 0.0, False
         else:

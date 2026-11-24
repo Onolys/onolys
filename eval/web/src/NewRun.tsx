@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { sourceLine, originalMedia } from './sourceMedia';
 import type { CodedSpan, Dataset, DatasetMetadata, EvalApi, Mode, Options, RunInput, RunSummary, Selection, Upload } from './api';
 import { MAX_UNITS, countText, effortsFor, modelMap, planCount, skippedText, tiersFor, tooLargeMessage, validateSelection, comboKey } from './matrix';
 
@@ -10,6 +11,8 @@ const hasGold = (session: { has_gold?: boolean }) => session.has_gold !== false;
 const MAX_GOAL = 4000; // RunRequest.change_goal limit
 const toggle = (values: string[], value: string) => values.includes(value) ? values.filter(v => v !== value) : [...values, value];
 
+const DEFAULT_SESSIONS = 50;
+
 export function NewRun({ api, onRunCreated, initialRun }: { api: EvalApi; onRunCreated: (id: string) => void; initialRun?: RunSummary }) {
   const rerunSourceID = initialRun?.run_id;
   const [mode, setMode] = useState<Mode>(initialRun && 'upload_id' in initialRun.input ? 'upload' : 'dataset');
@@ -18,7 +21,7 @@ export function NewRun({ api, onRunCreated, initialRun }: { api: EvalApi; onRunC
   const [datasets, setDatasets] = useState<DatasetMetadata[]>([]);
   const [datasetId, setDatasetId] = useState('');
   const [dataset, setDataset] = useState<Dataset>();
-  const [sessionIds, setSessionIds] = useState<string[]>([]);
+  const [sessionLimit, setSessionLimit] = useState(0);
   const [engines, setEngines] = useState<string[]>([]);
   const [selection, setSelection] = useState<Selection>(emptySelection);
   const [repeats, setRepeats] = useState<1 | 3>(initialRun?.repeats ?? 1);
@@ -70,7 +73,7 @@ export function NewRun({ api, onRunCreated, initialRun }: { api: EvalApi; onRunC
     let active = true;
     api.dataset(datasetId).then(result => {
       if (!active) return;
-      setDataset(result); setSessionIds(result.sessions.filter(hasGold).map(s => s.session_id));
+      setDataset(result); setSessionLimit(Math.min(DEFAULT_SESSIONS, result.sessions.filter(hasGold).length));
     }).catch(e => { if (active) { setErrorKind('load'); setError(message(e)); } });
     return () => { active = false; };
   }, [api, datasetId, mode, loadAttempt, rerunSourceID]);
@@ -104,8 +107,12 @@ export function NewRun({ api, onRunCreated, initialRun }: { api: EvalApi; onRunC
   const changeMode = (next: Mode) => {
     if (mode === next) return;
     setMode(next); setOptions(undefined); setOptionsLoading(true); setEngines([]); setSelection(emptySelection); setError('');
-    setDataset(undefined); setSessionIds([]);
+    setDataset(undefined); setSessionLimit(0);
   };
+  const datasetReady = !!dataset && dataset.dataset_id === datasetId;
+  const eligibleSessions = datasetReady ? dataset.sessions.filter(hasGold) : [];
+  const totalSessions = eligibleSessions.length;
+  const sessionIds = datasetReady ? eligibleSessions.slice(0, sessionLimit).map(s => s.session_id) : [];
   const startNumber = Number(spanStart), endNumber = Number(spanEnd);
   const spanValid = !overrideSpan || (spanStart !== '' && spanEnd !== '' && Number.isInteger(startNumber) && Number.isInteger(endNumber) && startNumber >= 0 && endNumber > startNumber);
   const codedSpan: CodedSpan | undefined = !overrideSpan || !spanValid ? undefined : spanUnit === 'turns' ? { start_turn: startNumber, end_turn: endNumber } : { start_ms: startNumber, end_ms: endNumber };
@@ -132,7 +139,7 @@ export function NewRun({ api, onRunCreated, initialRun }: { api: EvalApi; onRunC
   const toggleTier = (id: string) => setSelection(cur => cur.tiers.includes(id) ? pruneEfforts({ ...cur, tiers: cur.tiers.filter(t => t !== id) }) : { ...cur, tiers: [...cur.tiers, id] });
   const toggleEffort = (id: string) => setSelection(cur => ({ ...cur, efforts: toggle(cur.efforts, id) }));
   const canPrepare = !!file && !!goal.trim() && !!language.trim() && spanValid && !busy && !upload;
-  const canStart = !busy && !optionsLoading && unitCount > 0 && !tooLarge && finalEngines.length > 0 && validation.error === undefined && (!!rerunSourceID || (mode === 'dataset' ? !!dataset && dataset.dataset_id === datasetId && sessionIds.length > 0 : upload?.status === 'ready' && !!goal.trim() && !!language.trim() && spanValid));
+  const canStart = !busy && !optionsLoading && unitCount > 0 && !tooLarge && finalEngines.length > 0 && validation.error === undefined && (!!rerunSourceID || (mode === 'dataset' ? datasetReady && sessionIds.length > 0 : upload?.status === 'ready' && !!goal.trim() && !!language.trim() && spanValid));
 
   const mutate = async (operation: () => Promise<void>) => {
     if (inFlight.current) return;
@@ -170,8 +177,10 @@ export function NewRun({ api, onRunCreated, initialRun }: { api: EvalApi; onRunC
       {initialRun ? <fieldset><legend>Saved input</legend><p>Rerun of {rerunSourceID}. Original input and session configuration are preserved.</p><pre>{JSON.stringify({ input: initialRun.input, change_goal: initialRun.change_goal, language: initialRun.language, coded_span: initialRun.coded_span }, null, 2)}</pre></fieldset> : <fieldset disabled={busy}><legend>Input</legend>
         <div className="choice-row">{(['dataset', 'upload'] as const).map(value => <label key={value}><input type="radio" name="mode" checked={mode === value} onChange={() => changeMode(value)} />{value === 'dataset' ? 'Dataset' : 'Upload'}</label>)}</div>
         {mode === 'dataset' ? <>
-          <label>Choose dataset<select value={datasetId} onChange={event => { setDatasetId(event.target.value); setDataset(undefined); setSessionIds([]); setError(''); }}><option value="" disabled>Select a dataset</option>{datasets.map(d => <option key={d.dataset_id} value={d.dataset_id}>{d.title}</option>)}</select></label>
-          {dataset?.dataset_id === datasetId && <fieldset><legend>Sessions</legend>{dataset.sessions.map(s => <div key={s.session_id}><label><input type="checkbox" checked={sessionIds.includes(s.session_id)} disabled={!hasGold(s)} aria-describedby={hasGold(s) ? undefined : `nogold-${s.session_id}`} onChange={() => setSessionIds(ids => toggle(ids, s.session_id))} />{s.title}</label>{!hasGold(s) && <small id={`nogold-${s.session_id}`}> No gold file, so Human scores are missing and this session cannot be run.</small>}</div>)}{dataset.sessions.length > 0 && !dataset.sessions.some(hasGold) && <p role="status">None of this dataset's sessions has a gold file, so none can be run.</p>}</fieldset>}
+          <label>Choose dataset<select value={datasetId} onChange={event => { setDatasetId(event.target.value); setDataset(undefined); setSessionLimit(0); setError(''); }}><option value="" disabled>Select a dataset</option>{datasets.map(d => <option key={d.dataset_id} value={d.dataset_id}>{d.title} ({originalMedia(d.source_media)})</option>)}</select></label>
+          {datasets.find(d => d.dataset_id === datasetId) && <p className="dataset-source" data-testid="dataset-source">{sourceLine(datasets.find(d => d.dataset_id === datasetId)!)}</p>}
+          {datasetReady && totalSessions > 0 && <label className="session-limit">Sessions to run: {sessionLimit} of {totalSessions}<input type="range" min={1} max={totalSessions} step={1} value={sessionLimit} aria-valuetext={`${sessionLimit} of ${totalSessions} sessions`} onChange={event => setSessionLimit(Number(event.target.value))} /></label>}
+          {datasetReady && dataset!.sessions.length > totalSessions && <p role="status">{totalSessions === 0 ? "None of this dataset's sessions has a gold file, so none can be run." : `${dataset!.sessions.length - totalSessions} session(s) without a gold file are excluded, because Human scores would be missing.`}</p>}
         </> : <>
           <label>Session file<input type="file" accept=".mp3,.wav,.m4a,.webm,.ogg,.json,.txt" onChange={event => { invalidateUpload(); setFile(event.target.files?.[0]); }} /></label>
           <label>Gold file (optional)<input type="file" accept=".json,application/json" onChange={event => { invalidateUpload(); setGold(event.target.files?.[0]); }} /></label>

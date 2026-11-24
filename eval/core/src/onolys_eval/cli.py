@@ -35,6 +35,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parser.parse_args(argv)
     if args.command == "run":
         from .manifest import load_manifest
+        from .publicsets import resolve_sessions
         from .run import run_session
 
         if re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", args.dataset) is None:
@@ -43,7 +44,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             parser.error("runs must be at least 1")
         manifest_path = Path(__file__).resolve().parents[3] / "datasets" / args.dataset / "manifest.yaml"
         try:
-            asyncio.run(run_session(load_manifest(manifest_path), args.session_id,
+            asyncio.run(run_session(resolve_sessions(load_manifest(manifest_path)), args.session_id,
                                     preset=args.preset, n_runs=args.runs,
                                     source=args.source, json_out=args.json_out))
         except (OSError, ValueError) as error:

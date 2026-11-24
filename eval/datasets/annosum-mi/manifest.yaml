@@ -1,0 +1,1202 @@
+dataset_id: annosum-mi
+title: 'AnnoSUM-MI: AnnoMI sessions with expert MITI-style ratings (131 transcripts)'
+license_note: No licence file in repo; internal evaluation only; licence request sent to authors
+source_page: https://github.com/vsrana-ai/AnnoSUM-MI
+miti_version: null
+label_scheme: 'AnnoSUM-MI: AnnoMI question label and expert empathy rating (partial)'
+source_media:
+- video
+- transcript
+transcript_origin: human
+labels_summary: AnnoMI question label (main behaviour only) as 1 MITI count (question); expert empathy rating 1-5 as the empathy global; high/low quality; other ratings and all other counts not labeled
+source_format: annosum_csv
+source_files:
+- https://raw.githubusercontent.com/vsrana-ai/AnnoSUM-MI/main/Dataset/train_dataset_MI_sessions.csv
+- https://raw.githubusercontent.com/vsrana-ai/AnnoSUM-MI/main/Dataset/test_dataset_MI_sessions.csv
+- https://raw.githubusercontent.com/vsrana-ai/AnnoSUM-MI/main/Dataset/train_data_MI_annotated.csv
+- https://raw.githubusercontent.com/vsrana-ai/AnnoSUM-MI/main/Dataset/test_data_MI_annotated.csv
+overlaps_with:
+- dataset_id: annomi
+  note: 'Same sessions: session ids equal AnnoMI transcript ids (transcript-<id>) for 131 of AnnoMI''s 133 transcripts (AnnoMI 47 and 129 are absent). Utterance ids and speakers match; 235 of 9,648 utterances carry small text edits (leading dashes dropped, minor punctuation or case changes, one blank utterance).'
+sessions:
+- session_id: transcript-0
+  title: AnnoSUM-MI session 0
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: Behavior change discussed in the session (not recorded in the test split)
+  change_goal_source: curated
+  coded_span: null
+  notes: mi_quality high; 54 utterances; test split; empathy rating 4
+- session_id: transcript-1
+  title: AnnoSUM-MI session 1
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: Behavior change discussed in the session (not recorded in the test split)
+  change_goal_source: curated
+  coded_span: null
+  notes: mi_quality high; 37 utterances; test split; empathy rating 4
+- session_id: transcript-2
+  title: AnnoSUM-MI session 2
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: Behavior change discussed in the session (not recorded in the test split)
+  change_goal_source: curated
+  coded_span: null
+  notes: mi_quality high; 36 utterances; test split; empathy rating 4
+- session_id: transcript-3
+  title: AnnoSUM-MI session 3
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: diet and weight loss management
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; 15 utterances (1 blank skipped); train split; empathy rating 3
+- session_id: transcript-4
+  title: AnnoSUM-MI session 4
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: managing life
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; 59 utterances; train split; empathy rating 4
+- session_id: transcript-5
+  title: AnnoSUM-MI session 5
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: Behavior change discussed in the session (not recorded in the test split)
+  change_goal_source: curated
+  coded_span: null
+  notes: mi_quality high; 203 utterances; test split; empathy rating 4
+- session_id: transcript-6
+  title: AnnoSUM-MI session 6
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: asthma management
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; 53 utterances; train split; empathy rating 4
+- session_id: transcript-7
+  title: AnnoSUM-MI session 7
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: reducing alcohol consumption
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; 66 utterances; train split; empathy rating 4
+- session_id: transcript-8
+  title: AnnoSUM-MI session 8
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: smoking cessation
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; 30 utterances; train split; empathy rating 4
+- session_id: transcript-9
+  title: AnnoSUM-MI session 9
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: Behavior change discussed in the session (not recorded in the test split)
+  change_goal_source: curated
+  coded_span: null
+  notes: mi_quality low; 27 utterances; test split; empathy rating 3
+- session_id: transcript-10
+  title: AnnoSUM-MI session 10
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: diabetes management
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality low; 12 utterances; train split; empathy rating 1
+- session_id: transcript-11
+  title: AnnoSUM-MI session 11
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: reducing recidivism
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; 15 utterances; train split; empathy rating 2
+- session_id: transcript-12
+  title: AnnoSUM-MI session 12
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: smoking cessation
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; 52 utterances; train split; empathy rating 4
+- session_id: transcript-13
+  title: AnnoSUM-MI session 13
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: adhering to medical procedure
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; 14 utterances; train split; empathy rating 4
+- session_id: transcript-14
+  title: AnnoSUM-MI session 14
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: diet and weight loss management
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; 49 utterances; train split; empathy rating 4
+- session_id: transcript-15
+  title: AnnoSUM-MI session 15
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: Behavior change discussed in the session (not recorded in the test split)
+  change_goal_source: curated
+  coded_span: null
+  notes: mi_quality low; 21 utterances; test split; empathy rating 3
+- session_id: transcript-16
+  title: AnnoSUM-MI session 16
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: reducing alcohol consumption
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; 24 utterances; train split; empathy rating 4
+- session_id: transcript-17
+  title: AnnoSUM-MI session 17
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: Behavior change discussed in the session (not recorded in the test split)
+  change_goal_source: curated
+  coded_span: null
+  notes: mi_quality low; 30 utterances; test split; empathy rating 3
+- session_id: transcript-18
+  title: AnnoSUM-MI session 18
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: Behavior change discussed in the session (not recorded in the test split)
+  change_goal_source: curated
+  coded_span: null
+  notes: mi_quality high; 115 utterances; test split; empathy rating 5
+- session_id: transcript-19
+  title: AnnoSUM-MI session 19
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: reducing recidivism
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; 17 utterances; train split; empathy rating 4
+- session_id: transcript-20
+  title: AnnoSUM-MI session 20
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: smoking cessation
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; 47 utterances; train split; empathy rating 4
+- session_id: transcript-21
+  title: AnnoSUM-MI session 21
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: reducing alcohol consumption
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; 248 utterances; train split; empathy rating 5
+- session_id: transcript-22
+  title: AnnoSUM-MI session 22
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: adhering to family values
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; 133 utterances; train split; empathy rating 4
+- session_id: transcript-23
+  title: AnnoSUM-MI session 23
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: managing life
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; 79 utterances; train split; empathy rating 5
+- session_id: transcript-24
+  title: AnnoSUM-MI session 24
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: smoking cessation
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; 22 utterances; train split; empathy rating 4
+- session_id: transcript-25
+  title: AnnoSUM-MI session 25
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: diet and weight loss management
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; 34 utterances; train split; empathy rating 4
+- session_id: transcript-26
+  title: AnnoSUM-MI session 26
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: compliance with rules
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; 13 utterances; train split; empathy rating 4
+- session_id: transcript-27
+  title: AnnoSUM-MI session 27
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: asthma management
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality low; 23 utterances; train split; empathy rating 2
+- session_id: transcript-28
+  title: AnnoSUM-MI session 28
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: smoking cessation
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; 123 utterances; train split; empathy rating 3
+- session_id: transcript-29
+  title: AnnoSUM-MI session 29
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: Behavior change discussed in the session (not recorded in the test split)
+  change_goal_source: curated
+  coded_span: null
+  notes: mi_quality high; 38 utterances; test split; empathy rating 4
+- session_id: transcript-30
+  title: AnnoSUM-MI session 30
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: Behavior change discussed in the session (not recorded in the test split)
+  change_goal_source: curated
+  coded_span: null
+  notes: mi_quality high; 29 utterances; test split; empathy rating 3
+- session_id: transcript-31
+  title: AnnoSUM-MI session 31
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: Behavior change discussed in the session (not recorded in the test split)
+  change_goal_source: curated
+  coded_span: null
+  notes: mi_quality high; 55 utterances; test split; empathy rating 4
+- session_id: transcript-32
+  title: AnnoSUM-MI session 32
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: compliance with rules
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality low; 12 utterances; train split; empathy rating 2
+- session_id: transcript-33
+  title: AnnoSUM-MI session 33
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: smoking cessation
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; 78 utterances; train split; empathy rating 4
+- session_id: transcript-34
+  title: AnnoSUM-MI session 34
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: reducing alcohol consumption
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; 117 utterances; train split; empathy rating 4
+- session_id: transcript-35
+  title: AnnoSUM-MI session 35
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: diet and weight loss management
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; 35 utterances; train split; empathy rating 3
+- session_id: transcript-36
+  title: AnnoSUM-MI session 36
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: changing approach to disease
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; 315 utterances; train split; empathy rating 5
+- session_id: transcript-37
+  title: AnnoSUM-MI session 37
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: Behavior change discussed in the session (not recorded in the test split)
+  change_goal_source: curated
+  coded_span: null
+  notes: mi_quality high; 41 utterances; test split; empathy rating 4
+- session_id: transcript-38
+  title: AnnoSUM-MI session 38
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: reducing alcohol consumption
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; 95 utterances; train split; empathy rating 5
+- session_id: transcript-39
+  title: AnnoSUM-MI session 39
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: Behavior change discussed in the session (not recorded in the test split)
+  change_goal_source: curated
+  coded_span: null
+  notes: mi_quality high; 73 utterances; test split; empathy rating 4
+- session_id: transcript-40
+  title: AnnoSUM-MI session 40
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: reducing drug use
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; 20 utterances; train split; empathy rating 5
+- session_id: transcript-41
+  title: AnnoSUM-MI session 41
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: unidentifiable
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; 85 utterances; train split; empathy rating 5
+- session_id: transcript-42
+  title: AnnoSUM-MI session 42
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: diet and weight loss management
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; 15 utterances; train split; empathy rating 4
+- session_id: transcript-43
+  title: AnnoSUM-MI session 43
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: motivated towards adopting better life style
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; 50 utterances; train split; empathy rating 5
+- session_id: transcript-44
+  title: AnnoSUM-MI session 44
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: reducing alcohol consumption
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality low; 173 utterances; train split; empathy rating 2
+- session_id: transcript-45
+  title: AnnoSUM-MI session 45
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: compliance with rules
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; 52 utterances; train split; empathy rating 3
+- session_id: transcript-46
+  title: AnnoSUM-MI session 46
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: reducing alcohol consumption
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; 60 utterances; train split; empathy rating 5
+- session_id: transcript-48
+  title: AnnoSUM-MI session 48
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: Behavior change discussed in the session (not recorded in the test split)
+  change_goal_source: curated
+  coded_span: null
+  notes: mi_quality high; 28 utterances; test split; empathy rating 4
+- session_id: transcript-49
+  title: AnnoSUM-MI session 49
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: reducing gambling
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; 182 utterances; train split; empathy rating 4
+- session_id: transcript-50
+  title: AnnoSUM-MI session 50
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: motivated towards adopting better life style
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; 51 utterances; train split; empathy rating 3
+- session_id: transcript-51
+  title: AnnoSUM-MI session 51
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: adhering to medical procedure
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; 16 utterances; train split; empathy rating 5
+- session_id: transcript-52
+  title: AnnoSUM-MI session 52
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: Behavior change discussed in the session (not recorded in the test split)
+  change_goal_source: curated
+  coded_span: null
+  notes: mi_quality high; 29 utterances; test split; empathy rating 4
+- session_id: transcript-53
+  title: AnnoSUM-MI session 53
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: reducing alcohol consumption
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality low; 108 utterances; train split; empathy rating 3
+- session_id: transcript-54
+  title: AnnoSUM-MI session 54
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: managing life
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; 41 utterances; train split; empathy rating 5
+- session_id: transcript-55
+  title: AnnoSUM-MI session 55
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: Behavior change discussed in the session (not recorded in the test split)
+  change_goal_source: curated
+  coded_span: null
+  notes: mi_quality high; 65 utterances; test split; empathy rating 4
+- session_id: transcript-56
+  title: AnnoSUM-MI session 56
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: managing life
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; 175 utterances; train split; empathy rating 5
+- session_id: transcript-57
+  title: AnnoSUM-MI session 57
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: adhering to medical procedure
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality low; 19 utterances; train split; empathy rating 1
+- session_id: transcript-58
+  title: AnnoSUM-MI session 58
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: Behavior change discussed in the session (not recorded in the test split)
+  change_goal_source: curated
+  coded_span: null
+  notes: mi_quality high; 101 utterances; test split; empathy rating 3
+- session_id: transcript-59
+  title: AnnoSUM-MI session 59
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: Behavior change discussed in the session (not recorded in the test split)
+  change_goal_source: curated
+  coded_span: null
+  notes: mi_quality low; 6 utterances; test split; empathy rating 1
+- session_id: transcript-60
+  title: AnnoSUM-MI session 60
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: Behavior change discussed in the session (not recorded in the test split)
+  change_goal_source: curated
+  coded_span: null
+  notes: mi_quality high; 95 utterances; test split; empathy rating 4
+- session_id: transcript-61
+  title: AnnoSUM-MI session 61
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: adhering to medical procedure
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; 126 utterances; train split; empathy rating 4
+- session_id: transcript-62
+  title: AnnoSUM-MI session 62
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: motivated towards adopting better life style
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; 46 utterances; train split; empathy rating 4
+- session_id: transcript-63
+  title: AnnoSUM-MI session 63
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: reducing drug use
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; 60 utterances; train split; empathy rating 4
+- session_id: transcript-64
+  title: AnnoSUM-MI session 64
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: reducing drug use
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; 262 utterances; train split; empathy rating 5
+- session_id: transcript-65
+  title: AnnoSUM-MI session 65
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: smoking cessation
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; 35 utterances; train split; empathy rating 5
+- session_id: transcript-66
+  title: AnnoSUM-MI session 66
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: diabetes management
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; 31 utterances; train split; empathy rating 5
+- session_id: transcript-67
+  title: AnnoSUM-MI session 67
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: smoking cessation
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; 47 utterances; train split; empathy rating 5
+- session_id: transcript-68
+  title: AnnoSUM-MI session 68
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: reducing alcohol consumption
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; 204 utterances; train split; empathy rating 5
+- session_id: transcript-69
+  title: AnnoSUM-MI session 69
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: adhering to medical procedure
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality low; 7 utterances; train split; empathy rating 2
+- session_id: transcript-70
+  title: AnnoSUM-MI session 70
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: adhering to medical procedure
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; 12 utterances; train split; empathy rating 4
+- session_id: transcript-71
+  title: AnnoSUM-MI session 71
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: reducing recidivism
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; 169 utterances; train split; empathy rating 4
+- session_id: transcript-72
+  title: AnnoSUM-MI session 72
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: reducing alcohol consumption
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality low; 31 utterances; train split; empathy rating 2
+- session_id: transcript-73
+  title: AnnoSUM-MI session 73
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: reducing drug use
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; 26 utterances; train split; empathy rating 4
+- session_id: transcript-74
+  title: AnnoSUM-MI session 74
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: Behavior change discussed in the session (not recorded in the test split)
+  change_goal_source: curated
+  coded_span: null
+  notes: mi_quality low; 38 utterances; test split; empathy rating 2
+- session_id: transcript-76
+  title: AnnoSUM-MI session 76
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: unidentifiable
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; 68 utterances; train split; empathy rating 4
+- session_id: transcript-77
+  title: AnnoSUM-MI session 77
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: Behavior change discussed in the session (not recorded in the test split)
+  change_goal_source: curated
+  coded_span: null
+  notes: mi_quality high; 43 utterances; test split; empathy rating 4
+- session_id: transcript-78
+  title: AnnoSUM-MI session 78
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: asthma management
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; 75 utterances; train split; empathy rating 4
+- session_id: transcript-79
+  title: AnnoSUM-MI session 79
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: managing life
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; 11 utterances; train split; empathy rating 5
+- session_id: transcript-80
+  title: AnnoSUM-MI session 80
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: smoking cessation
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; 64 utterances; train split; empathy rating 5
+- session_id: transcript-81
+  title: AnnoSUM-MI session 81
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: adhering to medical procedure
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; 21 utterances; train split; empathy rating 4
+- session_id: transcript-82
+  title: AnnoSUM-MI session 82
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: reducing alcohol consumption
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; 37 utterances; train split; empathy rating 4
+- session_id: transcript-83
+  title: AnnoSUM-MI session 83
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: adhering to medical procedure
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; 128 utterances; train split; empathy rating 5
+- session_id: transcript-84
+  title: AnnoSUM-MI session 84
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: Behavior change discussed in the session (not recorded in the test split)
+  change_goal_source: curated
+  coded_span: null
+  notes: mi_quality high; 235 utterances; test split; empathy rating 4
+- session_id: transcript-85
+  title: AnnoSUM-MI session 85
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: Behavior change discussed in the session (not recorded in the test split)
+  change_goal_source: curated
+  coded_span: null
+  notes: mi_quality high; 131 utterances; test split; empathy rating 3
+- session_id: transcript-86
+  title: AnnoSUM-MI session 86
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: reducing drug use
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; 41 utterances; train split; empathy rating 5
+- session_id: transcript-87
+  title: AnnoSUM-MI session 87
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: reducing alcohol consumption
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; 26 utterances; train split; empathy rating 5
+- session_id: transcript-88
+  title: AnnoSUM-MI session 88
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: compliance with rules
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; 69 utterances; train split; empathy rating 5
+- session_id: transcript-89
+  title: AnnoSUM-MI session 89
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: Behavior change discussed in the session (not recorded in the test split)
+  change_goal_source: curated
+  coded_span: null
+  notes: mi_quality high; 45 utterances; test split; empathy rating 4
+- session_id: transcript-90
+  title: AnnoSUM-MI session 90
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: reducing alcohol consumption
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality low; 26 utterances; train split; empathy rating 2
+- session_id: transcript-91
+  title: AnnoSUM-MI session 91
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: smoking cessation
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; 79 utterances; train split; empathy rating 3
+- session_id: transcript-92
+  title: AnnoSUM-MI session 92
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: Behavior change discussed in the session (not recorded in the test split)
+  change_goal_source: curated
+  coded_span: null
+  notes: mi_quality low; 13 utterances; test split; empathy rating 2
+- session_id: transcript-93
+  title: AnnoSUM-MI session 93
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: managing life
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; 25 utterances; train split; empathy rating 5
+- session_id: transcript-94
+  title: AnnoSUM-MI session 94
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: motivated towards adopting better life style
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; 62 utterances; train split; empathy rating 5
+- session_id: transcript-95
+  title: AnnoSUM-MI session 95
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: motivated towards adopting better life style
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; 36 utterances; train split; empathy rating 5
+- session_id: transcript-96
+  title: AnnoSUM-MI session 96
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: reducing alcohol consumption
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; 92 utterances; train split; empathy rating 4
+- session_id: transcript-97
+  title: AnnoSUM-MI session 97
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: diet and weight loss management
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; 108 utterances; train split; empathy rating 4
+- session_id: transcript-98
+  title: AnnoSUM-MI session 98
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: compliance with rules
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; 394 utterances; train split; empathy rating 4
+- session_id: transcript-99
+  title: AnnoSUM-MI session 99
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: reducing alcohol consumption
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; 33 utterances; train split; empathy rating 5
+- session_id: transcript-100
+  title: AnnoSUM-MI session 100
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: reducing recidivism
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; 283 utterances; train split; empathy rating 5
+- session_id: transcript-101
+  title: AnnoSUM-MI session 101
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: Behavior change discussed in the session (not recorded in the test split)
+  change_goal_source: curated
+  coded_span: null
+  notes: mi_quality high; 64 utterances; test split; empathy rating 4
+- session_id: transcript-102
+  title: AnnoSUM-MI session 102
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: managing life
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality low; 19 utterances; train split; empathy rating 1
+- session_id: transcript-103
+  title: AnnoSUM-MI session 103
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: Behavior change discussed in the session (not recorded in the test split)
+  change_goal_source: curated
+  coded_span: null
+  notes: mi_quality high; 17 utterances; test split; empathy rating 4
+- session_id: transcript-104
+  title: AnnoSUM-MI session 104
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: reducing alcohol consumption
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; 55 utterances; train split; empathy rating 4
+- session_id: transcript-105
+  title: AnnoSUM-MI session 105
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: diet and weight loss management
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; 50 utterances; train split; empathy rating 5
+- session_id: transcript-106
+  title: AnnoSUM-MI session 106
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: smoking cessation
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality low; 23 utterances; train split; empathy rating 2
+- session_id: transcript-107
+  title: AnnoSUM-MI session 107
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: Behavior change discussed in the session (not recorded in the test split)
+  change_goal_source: curated
+  coded_span: null
+  notes: mi_quality high; 18 utterances; test split; empathy rating 4
+- session_id: transcript-108
+  title: AnnoSUM-MI session 108
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: managing life
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; 57 utterances; train split; empathy rating 5
+- session_id: transcript-109
+  title: AnnoSUM-MI session 109
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: smoking cessation
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; 46 utterances; train split; empathy rating 5
+- session_id: transcript-110
+  title: AnnoSUM-MI session 110
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: Behavior change discussed in the session (not recorded in the test split)
+  change_goal_source: curated
+  coded_span: null
+  notes: mi_quality high; 101 utterances; test split; empathy rating 4
+- session_id: transcript-111
+  title: AnnoSUM-MI session 111
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: reducing drug use
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; 59 utterances; train split; empathy rating 5
+- session_id: transcript-112
+  title: AnnoSUM-MI session 112
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: reducing alcohol consumption
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; 65 utterances; train split; empathy rating 5
+- session_id: transcript-113
+  title: AnnoSUM-MI session 113
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: smoking cessation
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; 50 utterances; train split; empathy rating 5
+- session_id: transcript-114
+  title: AnnoSUM-MI session 114
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: reducing alcohol consumption
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; 24 utterances; train split; empathy rating 5
+- session_id: transcript-115
+  title: AnnoSUM-MI session 115
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: smoking cessation
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality low; 47 utterances; train split; empathy rating 4
+- session_id: transcript-116
+  title: AnnoSUM-MI session 116
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: addressing bullying
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; 167 utterances; train split; empathy rating 5
+- session_id: transcript-117
+  title: AnnoSUM-MI session 117
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: reducing alcohol consumption
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; 93 utterances; train split; empathy rating 4
+- session_id: transcript-118
+  title: AnnoSUM-MI session 118
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: Behavior change discussed in the session (not recorded in the test split)
+  change_goal_source: curated
+  coded_span: null
+  notes: mi_quality low; 21 utterances; test split; empathy rating 2
+- session_id: transcript-119
+  title: AnnoSUM-MI session 119
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: managing life
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; 86 utterances; train split; empathy rating 5
+- session_id: transcript-120
+  title: AnnoSUM-MI session 120
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: diet and weight loss management
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; 31 utterances; train split; empathy rating 5
+- session_id: transcript-121
+  title: AnnoSUM-MI session 121
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: diabetes management
+  change_goal_source: header
+  coded_span:
+    start_turn: 0
+    end_turn: 470
+  notes: mi_quality high; 598 utterances; train split; empathy rating 5; coded_span limits the coded text to the 6000-word engine cap
+- session_id: transcript-122
+  title: AnnoSUM-MI session 122
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: unidentifiable
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; 26 utterances; train split; empathy rating 4
+- session_id: transcript-123
+  title: AnnoSUM-MI session 123
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: smoking cessation
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality low; 27 utterances; train split; empathy rating 3
+- session_id: transcript-124
+  title: AnnoSUM-MI session 124
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: Behavior change discussed in the session (not recorded in the test split)
+  change_goal_source: curated
+  coded_span: null
+  notes: mi_quality high; 55 utterances; test split; empathy rating 4
+- session_id: transcript-125
+  title: AnnoSUM-MI session 125
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: unidentifiable
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; 7 utterances; train split; empathy rating 5
+- session_id: transcript-126
+  title: AnnoSUM-MI session 126
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: adhering to medical procedure
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality low; 64 utterances; train split; empathy rating 4
+- session_id: transcript-127
+  title: AnnoSUM-MI session 127
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: Behavior change discussed in the session (not recorded in the test split)
+  change_goal_source: curated
+  coded_span: null
+  notes: mi_quality high; 60 utterances; test split; empathy rating 5
+- session_id: transcript-128
+  title: AnnoSUM-MI session 128
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: Behavior change discussed in the session (not recorded in the test split)
+  change_goal_source: curated
+  coded_span: null
+  notes: mi_quality high; 34 utterances; test split; empathy rating 5
+- session_id: transcript-130
+  title: AnnoSUM-MI session 130
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: Behavior change discussed in the session (not recorded in the test split)
+  change_goal_source: curated
+  coded_span: null
+  notes: mi_quality low; 22 utterances; test split; empathy rating 2
+- session_id: transcript-131
+  title: AnnoSUM-MI session 131
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: smoking cessation
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality low; 91 utterances; train split; empathy rating 3
+- session_id: transcript-132
+  title: AnnoSUM-MI session 132
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: diabetes management
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; 40 utterances; train split; empathy rating 4
+- session_id: transcript-133
+  title: AnnoSUM-MI session 133
+  clinician_labels:
+  - therapist
+  code_header: null
+  change_goal: reducing recidivism
+  change_goal_source: header
+  coded_span: null
+  notes: mi_quality high; 381 utterances; train split; empathy rating 5

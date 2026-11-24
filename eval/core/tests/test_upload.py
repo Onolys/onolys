@@ -111,3 +111,25 @@ def test_adc_client_uses_staging_project_when_adc_has_no_default_project(tmp_pat
     monkeypatch.setattr(storage, 'Client', make_client)
     assert upload_dataset(manifest, tmp_path) == 5
     assert projects == ['onolys']
+
+
+def test_upload_publishes_the_derived_session_list(tmp_path):
+    from onolys_eval.manifest import DatasetManifest
+    from onolys_eval import welivita
+    from test_welivita import CC, _csv_text, dialogue
+    raw = tmp_path / 'ds' / 'raw'
+    raw.mkdir(parents=True)
+    (raw / 'MI Dataset.csv').write_text(_csv_text(dialogue(CC)), encoding='utf-8')
+    (raw / 'fetch.json').write_text(json.dumps({'dataset_id': 'ds', 'files': {'MI Dataset.csv': {
+        'url': 'https://example.org/MI%20Dataset.csv', 'sha256': 'e' * 64,
+        'retrieved_at': '2026-11-24T00:00:00+00:00'}}}))
+    manifest = DatasetManifest.model_validate({
+        'dataset_id': 'ds', 'title': 't', 'license_note': 'l', 'source_page': 'https://example.org',
+        'miti_version': None, 'source_media': ['transcript'], 'source_format': 'welivita_csv',
+        'source_files': ['https://example.org/MI%20Dataset.csv'], 'sessions_from_source': True})
+    assert welivita.convert_welivita_dataset(manifest, tmp_path, None)[0] == 0
+    client = FakeClient()
+    assert upload_dataset(manifest, tmp_path, client=client) == 3
+    listed = json.loads(client.objects['datasets/ds/manifest.json'][0])
+    assert [s['session_id'] for s in listed['sessions']] == ['counsel-chat-7']
+    assert 'sessions_from_source' not in listed

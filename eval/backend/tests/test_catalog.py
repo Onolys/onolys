@@ -21,6 +21,8 @@ def manifest():
     return {
         "dataset_id": "synthetic", "title": "Synthetic", "license_note": "Test only",
         "source_page": "https://example.org", "miti_version": "4.2.1",
+        "source_media": ["video", "transcript"], "transcript_origin": "human",
+        "labels_summary": "MITI counts", "overlaps_with": [{"dataset_id": "other", "note": "Shared"}],
         "sessions": [{"session_id": "one", "title": "One",
                       "coded_url": "https://example.org/coded.pdf",
                       "uncoded_url": "https://example.org/uncoded.pdf",
@@ -156,10 +158,14 @@ def test_dataset_list_detail_and_gold_presence(services):
     response = c.get("/v1/datasets", headers=AUTH)
     assert response.status_code == 200
     expected = {k: v for k, v in source.items() if k != "sessions"}
-    assert response.json() == {"datasets": [{**expected, "session_count": 1}]}
+    assert response.json() == {"datasets": [{"label_scheme": None, "language": "en", **expected, "session_count": 1}]}
+    row = response.json()["datasets"][0]
+    assert row["source_media"] == ["video", "transcript"] and row["transcript_origin"] == "human"
+    assert row["labels_summary"] == "MITI counts" and row["miti_version"] == "4.2.1"
     detail = c.get("/v1/datasets/synthetic", headers=AUTH)
     assert detail.status_code == 200
     result = detail.json()
+    assert result["source_media"] == ["video", "transcript"]
     assert result["dataset_id"] == "synthetic"
     session = result["sessions"][0]
     assert session["session_id"] == "one" and session["has_gold"] is True
@@ -292,3 +298,58 @@ def test_options_storage_failure_and_unavailable_production_choices_are_safe(ser
         response = client(services, **env).get("/v1/options", headers=AUTH)
         assert response.status_code == 503
         assert response.json() == {"detail": "Engine options unavailable."}
+
+
+def test_catalog_lists_wider_label_schemes(services):
+    for dataset_id, version, scheme in (
+        ("miti-four", "4.0", "MITI 4.0 (questions/reflections only)"),
+        ("not-miti", None, "MISC 2.5 mapped to MITI"),
+    ):
+        data = {**manifest(), "dataset_id": dataset_id, "miti_version": version,
+                "label_scheme": scheme}
+        services.bucket.write_json(f"datasets/{dataset_id}/manifest.json", data)
+    rows = {r["dataset_id"]: r for r in client(services).get("/v1/datasets", headers=AUTH).json()["datasets"]}
+    assert rows["miti-four"]["miti_version"] == "4.0"
+    assert rows["not-miti"]["miti_version"] is None
+    assert rows["not-miti"]["label_scheme"] == "MISC 2.5 mapped to MITI"
+
+
+def test_catalog_lists_committed_public_datasets(services):
+    from pathlib import Path
+
+    from onolys_eval.manifest import load_manifest
+    root = Path(__file__).resolve().parents[2] / "datasets"
+    for ident in ("casaa-miti-practice", "mi-tags-sample", "annomi", "hlqc", "automisc-human", "welivita-mi", "phac-en", "phac-fr"):
+        manifest = load_manifest(root / ident / "manifest.yaml")
+        data = manifest.model_dump(mode="json")
+        if manifest.sessions_from_source:
+            # The committed YAML omits sessions; the bucket manifest.json lists all of them.
+            data["sessions"] = [{
+                "session_id": f"counsel-chat-{n}", "title": f"CounselChat thread {n}",
+                "clinician_labels": ["helper"], "code_header": None, "change_goal": "x",
+                "change_goal_source": "curated", "coded_span": None, "notes": ""}
+                for n in range(2000)]
+        services.bucket.write_json(f"datasets/{ident}/manifest.json", data)
+    c = client(services)
+    rows = {r["dataset_id"]: r for r in c.get("/v1/datasets", headers=AUTH).json()["datasets"]}
+    assert rows["casaa-miti-practice"]["session_count"] == 12
+    assert rows["casaa-miti-practice"]["miti_version"] == "4.0"
+    assert rows["mi-tags-sample"]["session_count"] == 2 and rows["mi-tags-sample"]["miti_version"] == "4.2"
+    assert "Structure Statement" in rows["mi-tags-sample"]["label_scheme"]
+    detail = c.get("/v1/datasets/mi-tags-sample", headers=AUTH)
+    assert detail.status_code == 200 and detail.json()["sessions"][0]["session_id"] == "type-1-diabetes-counseling"
+    assert rows["annomi"]["session_count"] == 133 and rows["annomi"]["miti_version"] is None
+    assert rows["annomi"]["source_media"] == ["video", "transcript"]
+    assert rows["annomi"]["label_scheme"] == "AnnoMI codes mapped to MITI counts (partial)"
+    assert rows["hlqc"]["session_count"] == 258 and rows["hlqc"]["transcript_origin"] == "auto_captions"
+    assert rows["hlqc"]["label_scheme"] == "Session quality label (high/low) only"
+    assert rows["automisc-human"]["session_count"] == 20 and rows["automisc-human"]["miti_version"] is None
+    assert rows["automisc-human"]["label_scheme"] == "MISC 2.5 (human) mapped to MITI counts"
+    assert rows["welivita-mi"]["session_count"] == 2000 and rows["welivita-mi"]["transcript_origin"] == "human"
+    assert rows["welivita-mi"]["source_media"] == ["transcript"] and "CC BY-NC-SA" in rows["welivita-mi"]["license_note"]
+    assert rows["phac-en"]["session_count"] == 4 and rows["phac-en"]["miti_version"] is None
+    assert rows["phac-en"]["label_scheme"] == "none" and rows["phac-en"]["source_media"] == ["video", "transcript"]
+    assert rows["phac-en"]["labels_summary"] == "No human labels (transcript only)"
+    assert rows["phac-en"]["language"] == "en" and "Government of Canada" in rows["phac-en"]["license_note"]
+    assert rows["phac-fr"]["session_count"] == 4 and rows["phac-fr"]["language"] == "fr"
+    assert rows["phac-fr"]["overlaps_with"][0]["dataset_id"] == "phac-en"

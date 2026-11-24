@@ -57,19 +57,21 @@ export function CompareView({ compare }: { compare: Compare }) {
   const session = compare.sessions.find(s => s.session_id === sessionId) ?? compare.sessions[0];
   if (!session) return <p>Comparison will appear when units are available.</p>;
   const showSummary = compare.has_human && tab === 'summary';
+  const showQuality = compare.sessions.some(s => s.quality_label != null);
   return <section><h2>Compare</h2>
     {compare.has_human && <div role="tablist" aria-label="Results view"><button type="button" role="tab" aria-selected={!showSummary} onClick={() => setTab('compare')}>Compare</button><button type="button" role="tab" aria-selected={showSummary} onClick={() => setTab('summary')}>Summary</button></div>}
     {showSummary ? <SummaryView compare={compare} /> : <>
     <label>Session<select value={session.session_id} onChange={event => setSessionId(event.target.value)}>{compare.sessions.map(s => <option key={s.session_id} value={s.session_id}>{s.session_id}</option>)}</select></label>
     <div className="table-scroll"><table className="matrix"><caption>Successful unit means and min–max ranges; n counts defined values.{compare.has_human && ' Beneath each value: signed diff vs Human and session MAE over successful units.'} Failed units are excluded from values{compare.has_human ? ' and MAE' : ''}.</caption>
-      <thead><tr><th scope="col">Engine / combo</th>{compare.metrics.map(m => <th scope="col" key={m.id}>{m.label}</th>)}</tr></thead>
+      <thead><tr><th scope="col">Engine / combo</th>{compare.metrics.map(m => <th scope="col" key={m.id}>{m.label}</th>)}{showQuality && <th scope="col">Quality label</th>}</tr></thead>
       <tbody>
-        {compare.has_human && <tr><th scope="row">Human</th>{compare.metrics.map(m => <td key={m.id}>{session.human?.[m.id] == null ? '—, n=0' : `${number(session.human[m.id], m.id)}, n=1`}</td>)}</tr>}
+        {compare.has_human && <tr><th scope="row">Human</th>{compare.metrics.map(m => <td key={m.id}>{session.human?.[m.id] == null ? '—, n=0' : `${number(session.human[m.id], m.id)}, n=1`}</td>)}{showQuality && <td>{session.quality_label ?? '—'}</td>}</tr>}
         {session.cells.map(cell => <tr key={`${cell.engine}/${cell.combo_key}`}><th scope="row">{cell.engine} · {cell.label}{cell.failed > 0 && <span role="status" className="failed"> {cell.failed} failed{cell.error_code ? ` (${cell.error_code})` : ''}</span>}</th>
           {compare.metrics.map(m => { const value = cell.values[m.id]; const err = cell.error?.[m.id];
             return <td key={m.id}>{value?.mean == null ? `—, n=${value?.n ?? 0}` : `${number(value.mean, m.id)} (${number(value.min, m.id)}–${number(value.max, m.id)}), n=${value.n}`}
               {compare.has_human && cell.diff && <small className="sub"> diff {number(cell.diff[m.id], m.id)}</small>}
               {compare.has_human && err && <small className="sub"> MAE {number(err.mae, m.id)}</small>}</td>; })}
+          {showQuality && <td>{session.quality_label ?? '—'}</td>}
         </tr>)}
       </tbody></table></div></>}
     {compare.notes.map((note, index) => <p key={index}>{note}</p>)}

@@ -170,3 +170,11 @@ it('history formats the run date for the locale instead of showing raw ISO', asy
   expect(await screen.findByText(new Date('2026-11-23T10:00:00Z').toLocaleString())).toBeTruthy();
   expect(screen.queryByText('2026-11-23T10:00:00Z')).toBeNull();
 });
+it('renders — for unlabeled human values and shows quality label column only when present', () => {
+ const partial = comparison(); partial.sessions[0].human = { ...partial.sessions[0].human!, giving_information: null, empathy: null };
+ const view = render(<CompareView compare={partial} />);
+ expect(screen.queryByText('Quality label')).toBeNull();
+ const human = screen.getAllByRole('row')[1].querySelectorAll('td'); expect(human[ids.indexOf('giving_information')].textContent).toBe('—, n=0'); expect(human[ids.indexOf('empathy')].textContent).toBe('—, n=0');
+ partial.sessions[0].quality_label = 'high'; view.rerender(<CompareView compare={partial} />);
+ expect(screen.getByRole('columnheader', { name: 'Quality label' })).toBeTruthy(); expect(screen.getAllByText('high').length).toBeGreaterThan(0);
+});

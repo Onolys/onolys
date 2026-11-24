@@ -11,7 +11,16 @@ from pydantic import Field
 
 from ._contracts import Contract
 from ._formulas import SUMMARY_FORMULAS, compute_summaries
-from .gold import COUNT_IDS, GLOBAL_IDS, CountId, Globals, Number
+from .gold import (
+    COUNT_IDS,
+    GLOBAL_IDS,
+    CountId,
+    GlobalId,
+    Globals,
+    Gold,
+    Number,
+    QualityLabel,
+)
 
 # Gold counts remain strict integers; lean multi-run reports expose count means.
 ScoreCount = Annotated[int | float, Field(ge=0, allow_inf_nan=False)]
@@ -30,6 +39,25 @@ class Scores(Contract):
     summaries: dict[str, Number | None] = Field(default_factory=dict)
 
 
+class PartialScores(Contract):
+    """Possibly partial human labels; missing or null entries are "not labeled".
+
+    Gold counts/globals may omit keys or hold nulls; those fields are skipped in
+    comparisons and aggregates rather than treated as zero.
+    """
+
+    counts: dict[CountId, ScoreCount | None] = Field(default_factory=dict)
+    globals: dict[GlobalId, Annotated[int, Field(ge=1, le=5)] | None] | None = None
+    summaries: dict[str, Number | None] = Field(default_factory=dict)  # ignored; recomputed
+    quality_label: QualityLabel | None = None
+
+
+def gold_scores(gold: Gold) -> PartialScores:
+    """Project a gold file to its comparable (possibly partial) labels."""
+    return PartialScores(counts=dict(gold.counts), globals=gold.globals,
+                         quality_label=gold.quality_label)
+
+
 class Difference(TypedDict):
     gold: float | int | None
     ours: float | int | None
@@ -39,6 +67,7 @@ class Difference(TypedDict):
 
 class SessionComparison(TypedDict):
     schema: Literal["compare.v1"]
+    quality_label: QualityLabel | None
     counts: dict[str, Difference]
     globals: dict[str, Difference]
     summaries: dict[str, Difference]
@@ -72,21 +101,33 @@ def _differences(gold: Mapping[str, float | int | None],
                  ours: Mapping[str, float | int | None]) -> dict[str, Difference]:
     rows = {}
     for key, reference in gold.items():
-        value = ours[key]
+        value = ours.get(key)
         diff = None if reference is None or value is None else value - reference
         rows[key] = Difference(gold=reference, ours=value, diff=diff,
                                abs_diff=None if diff is None else abs(diff))
     return rows
 
 
-def compare(gold: Scores, ours: Scores) -> SessionComparison:
-    """Compare two adapters' values, recomputing all summaries with the same pack."""
+def _complete(values: Mapping[str, float | int | None] | None,
+              ids: tuple[str, ...]) -> dict[str, float | int | None]:
+    return {key: (values or {}).get(key) for key in ids}
+
+
+def compare(gold: Scores | PartialScores, ours: Scores | PartialScores) -> SessionComparison:
+    """Compare two adapters' values, recomputing all summaries with the same pack.
+
+    Only fields present (non-null) on both sides yield a difference; others keep
+    their value(s) but a null diff, so they drop out of every aggregate.
+    """
+    gold_counts, gold_globals = _complete(gold.counts, COUNT_IDS), _complete(gold.globals, GLOBAL_IDS)
+    our_counts, our_globals = _complete(ours.counts, COUNT_IDS), _complete(ours.globals, GLOBAL_IDS)
     return SessionComparison(
         schema="compare.v1",
-        counts=_differences(gold.counts, ours.counts),
-        globals=_differences(gold.globals, ours.globals),
-        summaries=_differences(compute_summaries(gold.counts, gold.globals),
-                               compute_summaries(ours.counts, ours.globals)),
+        quality_label=getattr(gold, "quality_label", None),
+        counts=_differences(gold_counts, our_counts),
+        globals=_differences(gold_globals, our_globals),
+        summaries=_differences(compute_summaries(gold_counts, gold_globals),
+                               compute_summaries(our_counts, our_globals)),
         notes=[
             ("Gold uses one consensus coder; measured agreement is limited by this reference "
              "and does not establish inter-rater reliability or official MITI validation."),

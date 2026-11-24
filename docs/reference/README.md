@@ -15,3 +15,4 @@ What exactly is supported? Precise, lookup-oriented facts.
 - [infra.md](infra.md): GCP resources, env vars, Terraform outputs, DNS records, GitHub settings, provider how-to, failure runbook, rollback.
 
 - [eval-site.md](eval-site.md): staging evaluation usage, authenticated API, storage, costs and method limits.
+- [eval-datasets.md](eval-datasets.md): evaluation datasets (sources, label schemes, mapping rules, gaps, overlaps, terms) and public datasets not added.

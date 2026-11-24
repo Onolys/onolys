@@ -4,30 +4,51 @@
       "additionalProperties": false,
       "properties": {
         "coded_url": {
-          "pattern": "^https?://[^\\s/]+(?:/[^\\s]*)?$",
-          "title": "Coded Url",
-          "type": "string"
+          "anyOf": [
+            {
+              "pattern": "^https?://[^\\s/]+(?:/[^\\s]*)?$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Coded Url"
         },
         "uncoded_url": {
-          "pattern": "^https?://[^\\s/]+(?:/[^\\s]*)?$",
-          "title": "Uncoded Url",
-          "type": "string"
+          "anyOf": [
+            {
+              "pattern": "^https?://[^\\s/]+(?:/[^\\s]*)?$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Uncoded Url"
         },
         "retrieved_at": {
           "title": "Retrieved At",
           "type": "string"
         },
         "sha256": {
-          "pattern": "^[a-f0-9]{64}$",
-          "title": "Sha256",
-          "type": "string"
+          "anyOf": [
+            {
+              "pattern": "^[a-f0-9]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Sha256"
         }
       },
       "required": [
-        "coded_url",
-        "uncoded_url",
-        "retrieved_at",
-        "sha256"
+        "retrieved_at"
       ],
       "title": "GoldSource",
       "type": "object"
@@ -60,14 +81,31 @@
     },
     "Summaries": {
       "additionalProperties": false,
+      "description": "Pack summaries; null when undefined or when an input is not labeled.",
       "properties": {
         "technical": {
-          "title": "Technical",
-          "type": "number"
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Technical"
         },
         "relational": {
-          "title": "Relational",
-          "type": "number"
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Relational"
         },
         "pct_cr": {
           "anyOf": [
@@ -78,6 +116,7 @@
               "type": "null"
             }
           ],
+          "default": null,
           "title": "Pct Cr"
         },
         "reflection_question_ratio": {
@@ -89,25 +128,34 @@
               "type": "null"
             }
           ],
+          "default": null,
           "title": "Reflection Question Ratio"
         },
         "total_mia": {
-          "title": "Total Mia",
-          "type": "number"
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Total Mia"
         },
         "total_mina": {
-          "title": "Total Mina",
-          "type": "number"
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Total Mina"
         }
       },
-      "required": [
-        "technical",
-        "relational",
-        "pct_cr",
-        "reflection_question_ratio",
-        "total_mia",
-        "total_mina"
-      ],
       "title": "Summaries",
       "type": "object"
     },
@@ -238,11 +286,17 @@
     },
     "counts": {
       "additionalProperties": {
-        "minimum": 0,
-        "type": "integer"
+        "anyOf": [
+          {
+            "minimum": 0,
+            "type": "integer"
+          },
+          {
+            "type": "null"
+          }
+        ]
       },
       "maxProperties": 10,
-      "minProperties": 10,
       "propertyNames": {
         "enum": [
           "gi",
@@ -261,26 +315,48 @@
       "type": "object"
     },
     "globals": {
-      "additionalProperties": {
-        "maximum": 5,
-        "minimum": 1,
-        "type": "integer"
-      },
-      "maxProperties": 4,
-      "minProperties": 4,
-      "propertyNames": {
-        "enum": [
-          "cct",
-          "sst",
-          "partnership",
-          "empathy"
-        ]
-      },
-      "title": "Globals",
-      "type": "object"
+      "anyOf": [
+        {
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "maximum": 5,
+                "minimum": 1,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "maxProperties": 4,
+          "propertyNames": {
+            "enum": [
+              "cct",
+              "sst",
+              "partnership",
+              "empathy"
+            ]
+          },
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Globals"
     },
     "summaries": {
-      "$ref": "#/$defs/Summaries"
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Summaries"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
     },
     "utterance_codes": {
       "anyOf": [
@@ -299,6 +375,46 @@
     },
     "parse": {
       "$ref": "#/$defs/ParseInfo"
+    },
+    "quality_label": {
+      "anyOf": [
+        {
+          "enum": [
+            "high",
+            "low"
+          ],
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Quality Label"
+    },
+    "label_source": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Label Source"
+    },
+    "label_scheme": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Label Scheme"
     }
   },
   "required": [
@@ -307,9 +423,6 @@
     "session_id",
     "source",
     "coded_span",
-    "counts",
-    "globals",
-    "summaries",
     "parse"
   ],
   "title": "Gold",

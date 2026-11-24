@@ -15,7 +15,7 @@ from .adapters import miti_lean_scores
 from .fetch import default_cache, require_external_path
 from .gold import Gold
 from .manifest import DatasetManifest
-from .metrics import Scores, compare
+from .metrics import compare, gold_scores
 from .upload import BUCKET
 
 # Cache reads/writes are already included in input_tokens; price them separately.
@@ -106,9 +106,12 @@ def _table(comparison, metadata) -> str:
             label = key + (' (global)' if group == 'globals' else '')
             lines.append(f"{label:27} {_number(row['gold']):>8} {_number(row['ours']):>8} "
                          f"{_number(row['diff']):>8}")
-    mae = sum(row['abs_diff'] for row in comparison['counts'].values()) / len(comparison['counts'])
-    within = sum(row['abs_diff'] <= 1 for row in comparison['globals'].values())
-    lines.append(f'count MAE {_number(mae)} | globals within 1: {within}/4')
+    count_diffs = [r['abs_diff'] for r in comparison['counts'].values() if r['abs_diff'] is not None]
+    global_diffs = [r['abs_diff'] for r in comparison['globals'].values() if r['abs_diff'] is not None]
+    mae = sum(count_diffs) / len(count_diffs) if count_diffs else None
+    within = sum(diff <= 1 for diff in global_diffs)
+    lines.append(f'count MAE {_number(mae)} (n={len(count_diffs)}) | '
+                 f'globals within 1: {within}/{len(global_diffs)}')
     lines.extend('Note: ' + note for note in comparison['notes'])
     return '\n'.join(lines)
 
@@ -139,7 +142,7 @@ async def run_session(
         'n_runs': n_runs, 'preset': preset,
         'coded_span': session.coded_span.model_dump() if session.coded_span else None,
     })
-    comparison = compare(Scores(counts=gold.counts, globals=gold.globals),
+    comparison = compare(gold_scores(gold),
                          miti_lean_scores(result.report))
     costs = [_record_cost(record) for record in metrics.records]
     metadata = {

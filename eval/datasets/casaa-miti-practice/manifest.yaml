@@ -1,0 +1,138 @@
+# Metadata verified against the CASAA MITI page and PDFs on 2026-11-24 (all URLs resolve).
+# Source PDFs and extracted text stay in the private, external cache.
+# Coded PDFs are headed "MITI 4" / "Miti 4 Coding Training Series" with no minor version printed,
+# so miti_version is "4.0" with an explicit label_scheme; owner to confirm.
+dataset_id: casaa-miti-practice
+title: CASAA MITI 4 coding-training practice sessions (role-plays)
+license_note: Internal use only; public CASAA training materials, reuse terms not separately confirmed.
+source_page: https://casaa.unm.edu/tools/miti.html
+miti_version: "4.0"
+label_scheme: "MITI 4 (minor version not stated in PDFs)"
+# CASAA offers mp3 audio for 11 sessions and a YouTube video for Emmy; we store transcript.v1 only.
+source_media: [audio, transcript]
+transcript_origin: human
+labels_summary: "MITI 4 behavior counts + 4 global ratings from CASAA-coded transcripts (role-play, not real clients)"
+sessions:
+  - session_id: manuel-1
+    pdf_layout: {notes_x: 470}
+    title: "CASAA MITI 4 Coding Training Series - Manuel #1"
+    uncoded_url: https://casaa.unm.edu/assets/docs/session11.pdf
+    coded_url: https://casaa.unm.edu/assets/docs/session1miti.pdf
+    clinician_labels: [P]
+    code_header: "Final Code"
+    change_goal: "Reduce drinking"
+    change_goal_source: curated
+    coded_span: null
+    notes: "Goal curated from the transcript; owner review pending. Audio (not stored): https://casaa.unm.edu/assets/files/session1-1.mp3."
+  - session_id: manuel-2
+    title: "CASAA MITI 4 Coding Training Series - Manuel #2"
+    uncoded_url: https://casaa.unm.edu/assets/docs/session21.pdf
+    coded_url: https://casaa.unm.edu/assets/docs/session2miti.pdf
+    clinician_labels: [P]
+    code_header: "Final"
+    change_goal: "Reduce marijuana use"
+    change_goal_source: curated
+    coded_span: null
+    notes: "Goal curated from the transcript; owner review pending. Audio (not stored): https://casaa.unm.edu/assets/files/session2-1.mp3."
+  - session_id: manuel-3
+    title: "CASAA MITI 4 Coding Training Series - Manuel #3"
+    uncoded_url: https://casaa.unm.edu/assets/docs/session31.pdf
+    coded_url: https://casaa.unm.edu/assets/docs/session3miti.pdf
+    clinician_labels: [P]
+    code_header: "Final"
+    change_goal: "Diet and exercise changes"
+    change_goal_source: curated
+    coded_span: null
+    notes: "Goal curated from the transcript; owner review pending. Audio (not stored): https://casaa.unm.edu/assets/files/session3-1.mp3."
+  - session_id: manuel-4
+    title: "CASAA MITI 4 Coding Training Series - Manuel #4"
+    uncoded_url: https://casaa.unm.edu/assets/docs/session41.pdf
+    coded_url: https://casaa.unm.edu/assets/docs/session4miti.pdf
+    clinician_labels: [P]
+    code_header: "Final"
+    change_goal: "Quit smoking"
+    change_goal_source: curated
+    coded_span: null
+    notes: "Goal curated from the transcript; owner review pending. Audio (not stored): https://casaa.unm.edu/assets/files/session4-1.mp3."
+  - session_id: manuel-5
+    title: "CASAA MITI 4 Coding Training Series - Manuel #5"
+    uncoded_url: https://casaa.unm.edu/assets/docs/session51.pdf
+    coded_url: https://casaa.unm.edu/assets/docs/session5miti.pdf
+    clinician_labels: [P]
+    code_header: "Final"
+    change_goal: "Reduce drinking and avoid further DWIs"
+    change_goal_source: curated
+    coded_span: null
+    notes: "Goal curated from the transcript; owner review pending. Audio (not stored): https://casaa.unm.edu/assets/files/session5-1.mp3."
+  - session_id: have-you-ever-been-a-smoker
+    title: "Have you ever been a smoker?"
+    uncoded_url: https://casaa.unm.edu/assets/docs/have-you-ever-been-a-smoker-uncoded-transcript.pdf
+    coded_url: https://casaa.unm.edu/assets/docs/have-you-ever-been-a-smoker-coded-transcript.pdf
+    clinician_labels: [P]
+    code_header: "Code"
+    change_goal: "Quit smoking"
+    change_goal_source: curated
+    coded_span: null
+    notes: "Goal curated from the transcript; owner review pending. Audio (not stored): https://casaa.unm.edu/assets/files/have-you-ever-been-a-smoker.mp3."
+  - session_id: hawaii-every-month
+    title: "Hawaii every month?"
+    uncoded_url: https://casaa.unm.edu/assets/docs/hawaii-every-month-uncoded-transcript.pdf
+    coded_url: https://casaa.unm.edu/assets/docs/hawaii-every-month-coded-transcript.pdf
+    clinician_labels: [P]
+    code_header: "Code"
+    change_goal: "Lifestyle changes for silent reflux (diet, weight)"
+    change_goal_source: curated
+    coded_span: null
+    notes: "Goal curated from the transcript; owner review pending. Audio (not stored): https://casaa.unm.edu/assets/files/hawaii-every-month.mp3."
+  - session_id: i-guess-i-dont-have-a-choice
+    title: "I guess I don't have a choice"
+    uncoded_url: https://casaa.unm.edu/assets/docs/i-guess-i-dont-have-a-choice-uncoded-transcript.pdf
+    coded_url: https://casaa.unm.edu/assets/docs/i-guess-i-dont-have-a-choice-coded-transcript.pdf
+    clinician_labels: [P]
+    code_header: "Code"
+    change_goal: "Substance use after a failed workplace drug test"
+    change_goal_source: curated
+    coded_span: null
+    notes: "Goal curated from the transcript; owner review pending. Audio (not stored): https://casaa.unm.edu/assets/files/i-guess-i-dont-have-a-choice.mp3."
+  - session_id: maybe-hell-take-my-kids
+    title: "Maybe he'll take my kids"
+    uncoded_url: https://casaa.unm.edu/assets/docs/maybe-hell-take-my-kids-uncoded-transcript.pdf
+    coded_url: https://casaa.unm.edu/assets/docs/maybe-hell-take-my-kids-coded-transcript.pdf
+    clinician_labels: [P]
+    code_header: "Code"
+    change_goal: "Reduce drinking"
+    change_goal_source: curated
+    coded_span: null
+    notes: "Goal curated from the transcript; owner review pending. Audio (not stored): https://casaa.unm.edu/assets/files/maybe-hell-take-my-kids.mp3."
+  - session_id: should-i-really-be-honest
+    pdf_layout: {number_aliases: {"Q": 2}}
+    title: "Should I really be honest?"
+    uncoded_url: https://casaa.unm.edu/assets/docs/should-i-really-be-honest-uncoded-transcript.pdf
+    coded_url: https://casaa.unm.edu/assets/docs/should-i-really-be-honest-coded-transcript.pdf
+    clinician_labels: [P]
+    code_header: "Code"
+    change_goal: "Substance use after a failed workplace drug test"
+    change_goal_source: curated
+    coded_span: null
+    notes: "Goal curated from the transcript; owner review pending. Audio (not stored): https://casaa.unm.edu/assets/files/should-i-really-be-honest.mp3."
+  - session_id: now-i-only-wear-yoga-pants
+    title: "Now I only wear yoga pants"
+    uncoded_url: https://casaa.unm.edu/assets/docs/now-i-only-wear-yoga-pants-uncoded-transcript.pdf
+    coded_url: https://casaa.unm.edu/assets/docs/now-i-only-wear-yoga-pants-coded-transcript.pdf
+    clinician_labels: [P]
+    code_header: "Code"
+    change_goal: "Lifestyle changes for silent reflux (diet, weight)"
+    change_goal_source: curated
+    coded_span: null
+    notes: "Goal curated from the transcript; owner review pending. Audio (not stored): https://casaa.unm.edu/assets/files/now-i-only-wear-yoga-pants.mp3."
+  - session_id: emmys-first-encounter
+    title: "Emmy's First Encounter with an IPV Counselor"
+    uncoded_url: https://casaa.unm.edu/assets/docs/emmys-first-encounter-uncoded-transcript.pdf
+    coded_url: https://casaa.unm.edu/assets/docs/emmys-first-encounter-coded-transcript.pdf
+    source_media: [video, transcript]
+    clinician_labels: [P]
+    code_header: "Code"
+    change_goal: "Decide what, if anything, to change about an abusive relationship"
+    change_goal_source: curated
+    coded_span: null
+    notes: "Goal curated from the transcript; owner review pending. Coded PDF marks repeats as SAME; resolved as the last code of the preceding provider utterance (t99 is ambiguous). Original media is a YouTube video (not stored): https://www.youtube.com/watch?v=P3JUXQ4kkHs."

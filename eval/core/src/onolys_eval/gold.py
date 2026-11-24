@@ -3,7 +3,14 @@ from datetime import datetime
 from pathlib import Path
 from typing import Annotated, Literal
 
-from pydantic import Field, StringConstraints, field_validator, model_validator
+from pydantic import (
+    Field,
+    SerializerFunctionWrapHandler,
+    StringConstraints,
+    field_validator,
+    model_serializer,
+    model_validator,
+)
 
 from ._contracts import (
     CodedSpan,
@@ -25,24 +32,31 @@ GLOBAL_IDS = tuple(GlobalId.__args__)
 Counts = Annotated[dict[CountId, NonnegativeInt], Field(min_length=10, max_length=10)]
 Globals = Annotated[dict[GlobalId, Annotated[int, Field(ge=1, le=5)]],
                     Field(min_length=4, max_length=4)]
+# Partial human labels: a missing or null entry means "not labeled", never zero.
+PartialCounts = Annotated[dict[CountId, NonnegativeInt | None], Field(max_length=10)]
+PartialGlobals = Annotated[
+    dict[GlobalId, Annotated[int, Field(ge=1, le=5)] | None], Field(max_length=4)]
 Number = Annotated[float, Field(allow_inf_nan=False)]
+QualityLabel = Literal["high", "low"]
 
 
 class Summaries(Contract):
-    technical: Number
-    relational: Number
-    pct_cr: Number | None
-    reflection_question_ratio: Number | None
-    total_mia: Number
-    total_mina: Number
+    """Pack summaries; null when undefined or when an input is not labeled."""
+    technical: Number | None = None
+    relational: Number | None = None
+    pct_cr: Number | None = None
+    reflection_question_ratio: Number | None = None
+    total_mia: Number | None = None
+    total_mina: Number | None = None
 
 
 class GoldSource(Contract):
-    coded_url: HttpURL
-    uncoded_url: HttpURL
+    # Optional for datasets without coded/uncoded PDFs (e.g. public annotated corpora).
+    coded_url: HttpURL | None = None
+    uncoded_url: HttpURL | None = None
     retrieved_at: str
-    # Hash of the coded PDF: the source of truth for the parsed reference.
-    sha256: Annotated[str, StringConstraints(pattern=r"^[a-f0-9]{64}$")]
+    # Hash of the coded source file: the source of truth for the parsed reference.
+    sha256: Annotated[str, StringConstraints(pattern=r"^[a-f0-9]{64}$")] | None = None
 
     @field_validator("retrieved_at")
     @classmethod
@@ -70,16 +84,32 @@ class Gold(Contract):
     session_id: Identifier
     source: GoldSource
     coded_span: CodedSpan
-    counts: Counts
-    globals: Globals
-    summaries: Summaries
+    counts: PartialCounts = Field(default_factory=dict)
+    globals: PartialGlobals | None = None
+    summaries: Summaries | None = None
     utterance_codes: list[UtteranceCodes] | None = None
     parse: ParseInfo
+    quality_label: QualityLabel | None = None
+    label_source: str | None = None
+    label_scheme: str | None = None
+
+    @model_serializer(mode="wrap")
+    def _omit_unset_label_metadata(self, handler: SerializerFunctionWrapHandler):
+        # Keep full-gold dumps (and their hashes) identical to pre-partial files.
+        data = handler(self)
+        for key in ("quality_label", "label_source", "label_scheme"):
+            if data.get(key) is None:
+                data.pop(key, None)
+        return data
 
     @model_validator(mode="after")
     def summaries_match_scores(self):
-        if self.summaries.model_dump() != compute_summaries(self.counts, self.globals):
-            raise ValueError("summaries must equal the engine pack formulas for counts/globals")
+        if self.summaries is not None:
+            present_counts = {k: v for k, v in self.counts.items() if v is not None}
+            present_globals = {k: v for k, v in (self.globals or {}).items() if v is not None}
+            if self.summaries.model_dump() != compute_summaries(present_counts, present_globals):
+                raise ValueError(
+                    "summaries must equal the engine pack formulas for the labeled counts/globals")
         if self.utterance_codes is not None:
             ids = [row.turn_id for row in self.utterance_codes]
             if len(ids) != len(set(ids)):

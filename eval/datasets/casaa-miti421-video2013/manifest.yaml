@@ -5,6 +5,11 @@ title: CASAA 2013 Helping People Change video series — MITI 4.2.1
 license_note: Internal use only; reuse terms confirmed OK by owner (D5).
 source_page: https://casaa.unm.edu/tools/miti.html
 miti_version: 4.2.1
+# Verified 2026-11-24: the CASAA page links only ordering info (video via changecompanies.net)
+# plus uncoded/coded transcript PDFs; no audio/mp3 links for this series.
+source_media: [video, transcript]
+transcript_origin: human
+labels_summary: "MITI 4.2.1 behavior counts + 4 global ratings (coded PDFs)"
 sessions:
   - session_id: confirmed-smoker
     pdf_layout: {number_x: 36.2, speaker_x: 65.3, text_x: 90.2, code_x: 513.6, header_bottom: 0}

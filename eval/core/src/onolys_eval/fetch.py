@@ -12,7 +12,8 @@ import subprocess
 import tempfile
 from datetime import UTC, datetime
 from pathlib import Path
-from urllib.request import urlopen
+from urllib.parse import unquote
+from urllib.request import Request, urlopen
 
 from .manifest import DatasetManifest
 
@@ -50,7 +51,9 @@ def _download(url: str, destination: Path) -> None:
             dir=destination.parent, prefix=f".{destination.name}.", suffix=".part", delete=False,
         ) as output:
             temporary = Path(output.name)
-            with urlopen(url, timeout=60) as response:
+            # canada.ca stalls the default Python-urllib agent; a plain named client works everywhere.
+            request = Request(url, headers={"User-Agent": "curl/8.5"})
+            with urlopen(request, timeout=60) as response:
                 headers = getattr(response, "headers", {})
                 expected_length = headers.get("Content-Length")
                 length = 0
@@ -100,6 +103,10 @@ def fetch_dataset(manifest: DatasetManifest, cache: str | Path | None = None) ->
                 target = raw / session.session_id / filename
                 require_external_path(target)
                 assets.append((target, url))
+    for url in manifest.source_files:
+        target = raw / unquote(url.rstrip("/").rsplit("/", 1)[-1])
+        require_external_path(target)
+        assets.append((target, url))
     require_external_path(metadata_path)
     raw.mkdir(parents=True, exist_ok=True)
     metadata = (

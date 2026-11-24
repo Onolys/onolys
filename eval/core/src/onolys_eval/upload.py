@@ -1,10 +1,12 @@
 """Publish converted reference datasets to the private staging bucket via ADC."""
 import json
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from .fetch import default_cache, require_external_path
 from .gold import load_gold
 from .manifest import DatasetManifest
+from .publicsets import resolve_sessions
 
 BUCKET = "onolys-eval-data-staging"
 
@@ -18,6 +20,7 @@ def upload_dataset(
     A supplied storage client is useful for callers with an existing ADC client.
     """
     cache_path = require_external_path(Path(cache) if cache is not None else default_cache())
+    manifest = resolve_sessions(manifest, cache_path)
     dataset_path = cache_path / manifest.dataset_id
     prefix = f"datasets/{manifest.dataset_id}/"
     assets = []
@@ -31,7 +34,8 @@ def upload_dataset(
             raise ValueError(f"Unresolved conversion warnings: {session.session_id}; run convert first")
         for filename, content_type in (
             ("transcript.json", "application/json"), ("gold.json", "application/json"),
-            ("raw/coded.pdf", "application/pdf"), ("raw/uncoded.pdf", "application/pdf"),
+            *([("raw/coded.pdf", "application/pdf"), ("raw/uncoded.pdf", "application/pdf")]
+              if manifest.source_format == "pdf" else []),
             *([("raw/audio.mp3", "audio/mpeg")] if session.audio_url else []),
         ):
             path = (
@@ -47,8 +51,14 @@ def upload_dataset(
 
         client = storage.Client(project="onolys")
     bucket = client.bucket(BUCKET)
-    for name, path, content_type in assets:
+
+    def put(asset):
+        name, path, content_type = asset
         bucket.blob(name).upload_from_filename(str(path), content_type=content_type)
+
+    # Thousand-session datasets: upload objects concurrently; the listing manifest stays last.
+    with ThreadPoolExecutor(max_workers=16) as pool:
+        list(pool.map(put, assets))
     bucket.blob(prefix + "manifest.json").upload_from_string(
         json.dumps(manifest.model_dump(mode="json"), indent=2) + "\n",
         content_type="application/json",
