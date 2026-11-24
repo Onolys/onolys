@@ -8,6 +8,9 @@ You implement ONE task (listed in your prompt). Only that task — no other find
 - Bash may need `dangerouslyDisableSandbox: true` (sandbox fails with a seccomp error here).
 - Disk is tight (~1.2 GB). No `uv sync`, no `npm install`. Python: use `/tmp/iaudit-review-venv/bin/python -m pytest ...` (editable install of THIS worktree). Node: existing `web/node_modules`, `frontend/node_modules`, `eval/web/node_modules`. Python packages must be tested in separate pytest processes per package (helper module names collide). Use ports 19000-19999 for anything that listens.
 
+## Firestore emulator (api Firestore-repo changes MUST be verified on it)
+Java + jar exist: `java -jar ~/.cache/firebase/emulators/cloud-firestore-emulator-v1.22.0.jar --host=127.0.0.1 --port=<19xxx>` (start in background in the SAME bash command as the tests, or as a background process you kill afterwards). Then `FIRESTORE_EMULATOR_HOST=127.0.0.1:<port> GOOGLE_CLOUD_PROJECT=demo-test /tmp/iaudit-review-venv/bin/python -m pytest api/tests/<file> -m firestore -q -p no:xdist` (check api/tests conftest for the exact env names / project id it expects). Run only the firestore tests relevant to your change. Kill the emulator when done.
+
 ## Inputs
 - Findings: `docs/agent_files/review-main-audit-20261124/FINDINGS.md` (merged; IDs like H-1, M-3, LM-5, and raw IDs A*/B*/C*/D*). Raw detail: `docs/agent_files/review-main-audit-20261124/findings-*.md`. Codex detail (incl. proposed fixes + test ideas): `docs/agent_files/review-whole-project-main-20261124-20261124-0529/review-2026-11-24-0529.md`.
 - Re-read the actual code before changing it — findings cite lines at commit 6ffbf63 and earlier tasks on this branch may have moved them. If a finding turns out wrong, don't "fix" it; report it.
