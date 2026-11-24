@@ -14,10 +14,10 @@ Source of truth: docs/agent_files/feat-session-ux-logging-claude-email-20261123-
 | 4 | Contract regen, mocks, status-doc note | 3 | done |
 | 5 | Web: timeline steps and hint | 4 | done |
 | 6 | Web: progress.ts and useSessionStatus | 4 | done |
-| 7 | Bump @onolys/ui to the new tag | 2 (+ owner step: tag) | todo |
-| 8 | Web: SessionPage steps, bar, hint, cancel slot | 5, 6, 7 | todo |
-| 9 | Docs: user-rating concept and hint consistency | 8 | todo |
-| 10 | Visual e2e shots and mock state-machine alignment | 8 | todo |
+| 7 | Bump @onolys/ui to the new tag | 2 (+ owner step: tag) | done |
+| 8 | Web: SessionPage steps, bar, hint, cancel slot | 5, 6, 7 | done |
+| 9 | Docs: user-rating concept and hint consistency | 8 | done |
+| 10 | Visual e2e shots and mock state-machine alignment | 8 | done |
 
 ## Task 1 — onolys-ui: Spinner and Progress components
 What it is / what it means: The two library components the processing screen needs, built in the UI library, not inline. Traces to R4, R8, Cross-repo dependency, AC10.
