@@ -25,7 +25,7 @@ it('a repeated 401 signs out after exactly one token refresh', async () => {
   expect(provider.getIdToken).toHaveBeenLastCalledWith(true);
 });
 it('loads New run only after an allowed /me response', async () => {
-  const baseFetch = vi.fn(async (input: RequestInfo | URL) => new Response(JSON.stringify(String(input).endsWith('/me') ? {} : String(input).includes('/options') ? { engines: [], presets: [], defaults: { dataset: { engines: [], presets: [] }, upload: { engines: [], presets: [] } } } : { datasets: [] })));
+  const baseFetch = vi.fn(async (input: RequestInfo | URL) => new Response(JSON.stringify(String(input).endsWith('/me') ? {} : String(input).includes('/options') ? { engines: [], models: [], defaults: { dataset: { engines: [], selection: { models: [], tiers: [], efforts: [] }, label: '' }, upload: { engines: [], selection: { models: [], tiers: [], efforts: [] }, label: '' } } } : { datasets: [] })));
   render(<Root session={createAuthSession(createFakeProvider({ email: 'a@example.com' }))} baseFetch={baseFetch} />);
   expect(await screen.findByRole('heading', { name: 'New run' })).toBeTruthy();
   await waitFor(() => expect(baseFetch.mock.calls.length).toBe(3));

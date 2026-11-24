@@ -1,9 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
-import type { CodedSpan, Dataset, DatasetMetadata, EvalApi, Mode, Options, RunInput, RunSummary, Upload } from './api';
+import type { CodedSpan, Dataset, DatasetMetadata, EvalApi, Mode, Options, RunInput, RunSummary, Selection, Upload } from './api';
+import { MAX_UNITS, countText, effortsFor, modelMap, planCount, skippedText, tiersFor, tooLargeMessage, validateSelection, comboKey } from './matrix';
 
-export function plannedUnits(sessions: number, engines: string[], presets: string[], repeats: number): number {
-  return sessions * ((engines.includes('human') ? 1 : 0) + engines.filter(e => e !== 'human').length * presets.length * repeats);
-}
+const emptySelection: Selection = { models: [], tiers: [], efforts: [] };
 const message = (error: unknown) => error instanceof Error ? error.message : 'Something went wrong. Please try again.';
 const toggle = (values: string[], value: string) => values.includes(value) ? values.filter(v => v !== value) : [...values, value];
 
@@ -17,7 +16,7 @@ export function NewRun({ api, onRunCreated, initialRun }: { api: EvalApi; onRunC
   const [dataset, setDataset] = useState<Dataset>();
   const [sessionIds, setSessionIds] = useState<string[]>([]);
   const [engines, setEngines] = useState<string[]>([]);
-  const [presets, setPresets] = useState<string[]>([]);
+  const [selection, setSelection] = useState<Selection>(emptySelection);
   const [repeats, setRepeats] = useState<1 | 3>(initialRun?.repeats ?? 1);
   const [file, setFile] = useState<File>();
   const [gold, setGold] = useState<File>();
@@ -44,9 +43,9 @@ export function NewRun({ api, onRunCreated, initialRun }: { api: EvalApi; onRunC
       if (!active) return;
       setOptions(result);
       setEngines((initialRun?.engines ?? result.defaults[mode].engines).filter(id => result.engines.some(e => e.id === id)));
-      setPresets((initialRun?.presets ?? result.defaults[mode].presets).filter(name => result.presets.some(p => p.name === name)));
+      setSelection(initialRun ? (initialRun.legacy_selection || !initialRun.selection ? emptySelection : initialRun.selection) : result.defaults[mode].selection);
       setOptionsLoading(false);
-    }).catch(e => { if (active) { setError(message(e)); setOptions(undefined); setEngines([]); setPresets([]); setOptionsLoading(false); } });
+    }).catch(e => { if (active) { setError(message(e)); setOptions(undefined); setEngines([]); setSelection(emptySelection); setOptionsLoading(false); } });
     return () => { active = false; };
   }, [api, mode, uploadId, loadAttempt, initialRun]);
 
@@ -95,7 +94,7 @@ export function NewRun({ api, onRunCreated, initialRun }: { api: EvalApi; onRunC
   };
   const changeMode = (next: Mode) => {
     if (mode === next) return;
-    setMode(next); setOptions(undefined); setOptionsLoading(true); setEngines([]); setPresets([]); setError('');
+    setMode(next); setOptions(undefined); setOptionsLoading(true); setEngines([]); setSelection(emptySelection); setError('');
     setDataset(undefined); setSessionIds([]);
   };
   const startNumber = Number(spanStart), endNumber = Number(spanEnd);
@@ -104,9 +103,27 @@ export function NewRun({ api, onRunCreated, initialRun }: { api: EvalApi; onRunC
   const visibleEngines = (options?.engines ?? []).filter(e => e.id !== 'human' || mode === 'dataset' || upload?.has_gold || !!rerunSourceID);
   const selectedEngines = engines.filter(id => visibleEngines.some(e => e.id === id));
   const sessionCount = initialRun ? ('session_ids' in initialRun.input ? initialRun.input.session_ids.length : 1) : mode === 'dataset' ? sessionIds.length : 1;
-  const unitCount = plannedUnits(sessionCount, selectedEngines, presets, repeats);
+  const humanLocked = initialRun ? 'dataset_id' in initialRun.input : mode === 'dataset';
+  const finalEngines = humanLocked && visibleEngines.some(e => e.id === 'human') ? ['human', ...selectedEngines.filter(id => id !== 'human')] : selectedEngines;
+  const needsCombos = finalEngines.some(e => e !== 'human');
+  const validation = validateSelection(modelMap(options?.models ?? []), selection, needsCombos);
+  const combos = validation.error === undefined ? validation.combos : [];
+  const dropped = validation.error === undefined ? validation.dropped : [];
+  const plan = planCount(sessionCount, finalEngines, combos.length, repeats);
+  const unitCount = plan.units;
+  const tooLarge = unitCount > MAX_UNITS;
+  const tiers = tiersFor(options?.models ?? [], selection.models);
+  const efforts = effortsFor(options?.models ?? [], selection.tiers);
+  const pruneEfforts = (next: Selection): Selection => ({ ...next, efforts: next.efforts.filter(e => effortsFor(options?.models ?? [], next.tiers).includes(e)) });
+  const toggleModel = (id: string) => setSelection(cur => {
+    if (!cur.models.includes(id)) return { ...cur, models: [...cur.models, id] };
+    const own = new Set((options?.models ?? []).find(m => m.id === id)?.tiers.map(t => t.id));
+    return pruneEfforts({ ...cur, models: cur.models.filter(m => m !== id), tiers: cur.tiers.filter(t => !own.has(t)) });
+  });
+  const toggleTier = (id: string) => setSelection(cur => cur.tiers.includes(id) ? pruneEfforts({ ...cur, tiers: cur.tiers.filter(t => t !== id) }) : { ...cur, tiers: [...cur.tiers, id] });
+  const toggleEffort = (id: string) => setSelection(cur => ({ ...cur, efforts: toggle(cur.efforts, id) }));
   const canPrepare = !!file && !!goal.trim() && !!language.trim() && spanValid && !busy && !upload;
-  const canStart = !busy && !optionsLoading && unitCount > 0 && selectedEngines.length > 0 && (selectedEngines.every(e => e === 'human') || presets.length > 0) && (!!rerunSourceID || (mode === 'dataset' ? !!dataset && dataset.dataset_id === datasetId && sessionIds.length > 0 : upload?.status === 'ready' && !!goal.trim() && !!language.trim() && spanValid));
+  const canStart = !busy && !optionsLoading && unitCount > 0 && !tooLarge && finalEngines.length > 0 && validation.error === undefined && (!!rerunSourceID || (mode === 'dataset' ? !!dataset && dataset.dataset_id === datasetId && sessionIds.length > 0 : upload?.status === 'ready' && !!goal.trim() && !!language.trim() && spanValid));
 
   const mutate = async (operation: () => Promise<void>) => {
     if (inFlight.current) return;
@@ -124,12 +141,12 @@ export function NewRun({ api, onRunCreated, initialRun }: { api: EvalApi; onRunC
   const startRun = () => {
     if (!canStart) return;
     if (rerunSourceID) {
-      void mutate(async () => { const run = await api.rerun(rerunSourceID, { engines: selectedEngines, presets, repeats }); onRunCreated(run.run_id); });
+      void mutate(async () => { const run = await api.rerun(rerunSourceID, { engines: finalEngines, selection, repeats }); onRunCreated(run.run_id); });
       return;
     }
     const input: RunInput = {
       input: mode === 'dataset' ? { dataset_id: datasetId, session_ids: sessionIds } : { upload_id: upload!.upload_id },
-      engines: selectedEngines, presets, repeats,
+      engines: finalEngines, selection, repeats,
       ...(mode === 'upload' ? { change_goal: goal.trim(), language: language.trim(), ...(codedSpan ? { coded_span: codedSpan } : {}) } : {}),
     };
     void mutate(async () => { const run = await api.start(input); onRunCreated(run.run_id); });
@@ -170,11 +187,16 @@ export function NewRun({ api, onRunCreated, initialRun }: { api: EvalApi; onRunC
           </fieldset>}
         </>}
       </fieldset>}
-      <fieldset disabled={busy || optionsLoading}><legend>Engines</legend>{optionsLoading && <p role="status">Loading choices…</p>}{visibleEngines.map(e => <label key={e.id}><input type="checkbox" checked={selectedEngines.includes(e.id)} onChange={() => setEngines(ids => toggle(ids, e.id))} />{e.label}{e.prod ? ' (prod)' : ''}</label>)}</fieldset>
-      <fieldset disabled={busy || optionsLoading}><legend>Presets</legend>{options?.presets.map(p => <label key={p.name}><input type="checkbox" checked={presets.includes(p.name)} onChange={() => setPresets(names => toggle(names, p.name))} />{p.name}{p.prod ? ' (prod)' : ''}</label>)}</fieldset>
+      <fieldset disabled={busy || optionsLoading}><legend>Engines</legend>{optionsLoading && <p role="status">Loading choices…</p>}{visibleEngines.map(e => <label key={e.id}><input type="checkbox" checked={finalEngines.includes(e.id)} disabled={humanLocked && e.id === 'human'} onChange={() => setEngines(ids => toggle(ids, e.id))} />{e.label}</label>)}</fieldset>
+      {initialRun?.legacy_selection && <p role="status">This older run chose models by preset, which can no longer be recreated. Pick a model, tier and effort below; saved input and engines are kept.</p>}
+      <fieldset disabled={busy || optionsLoading}><legend>Models</legend>{options?.models.map(m => <label key={m.id}><input type="checkbox" checked={selection.models.includes(m.id)} onChange={() => toggleModel(m.id)} />{m.label}</label>)}</fieldset>
+      <fieldset disabled={busy || optionsLoading}><legend>Tiers</legend>{tiers.map(t => <label key={t.id}><input type="checkbox" checked={selection.tiers.includes(t.id)} onChange={() => toggleTier(t.id)} />{t.id}</label>)}</fieldset>
+      <fieldset disabled={busy || optionsLoading}><legend>Efforts</legend>{efforts.map(e => <label key={e}><input type="checkbox" checked={selection.efforts.includes(e)} onChange={() => toggleEffort(e)} />{e}</label>)}</fieldset>
       <label>Runs per cell<select disabled={busy} value={repeats} onChange={event => setRepeats(Number(event.target.value) as 1 | 3)}><option value="1">1</option><option value="3">3</option></select></label>
-      <p>Human scores use one unit per session.</p>
-      <p className="planned" aria-live="polite">{unitCount} planned units</p>
+      <p className="planned" aria-live="polite">{countText(plan)}</p>
+      {combos.length > 0 && <details><summary>Combos ({combos.length})</summary><ul>{combos.map(c => <li key={comboKey(c)}>{comboKey(c)}</li>)}</ul></details>}
+      {dropped.length > 0 && <ul aria-label="Skipped combos">{skippedText(dropped).map(t => <li key={t}>{t}</li>)}</ul>}
+      {tooLarge ? <p role="status">{tooLargeMessage(unitCount)}</p> : validation.error !== undefined && !(selection.models.length === 0 && selection.tiers.length === 0 && selection.efforts.length === 0 && !needsCombos) && <p role="status">{validation.error}</p>}
       <button type="submit" disabled={!canStart}>{busy && upload?.status === 'ready' ? 'Working…' : 'Start run'}</button>
     </form>
   </section>;
