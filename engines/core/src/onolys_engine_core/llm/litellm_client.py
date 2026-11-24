@@ -86,9 +86,17 @@ def _status(exc: BaseException) -> int | None:
     return code if isinstance(code, int) else None
 
 
+# LiteLLM appends the request messages after these markers (anthropic/vertex transformation).
+_ECHO_MARKERS = ("Received Messages=", "Invalid Message passed in")
+
+
 def _safe_provider_message(exc: BaseException, req: LLMRequest, route: Route) -> str:
     """Keep short provider diagnostics while removing credentials and request text."""
     message = str(exc)
+    for marker in _ECHO_MARKERS:  # drop echoed request content before anything else
+        cut = message.find(marker)
+        if cut != -1:
+            message = message[:cut] + "[REQUEST ECHO REMOVED]"
     sensitive = [req.system, req.user, req.cache_prefix, *(req.cache_prefixes or [])]
     sensitive.extend(
         value for name, value in os.environ.items()
@@ -96,7 +104,8 @@ def _safe_provider_message(exc: BaseException, req: LLMRequest, route: Route) ->
             part in name.upper() for part in ("KEY", "TOKEN", "SECRET", "PASSWORD", "CREDENTIAL")
         ))
     )
-    for value in sorted((s for s in sensitive if s), key=len, reverse=True):
+    forms = {f for s in sensitive if s for f in (s, repr(s)[1:-1], json.dumps(s)[1:-1])}
+    for value in sorted(forms, key=len, reverse=True):
         message = message.replace(value, "[REDACTED]")
     message = re.sub(r"(?i)\bBearer\s+[^\s,'\"}]+", "Bearer [REDACTED]", message)
     message = re.sub(

@@ -90,3 +90,30 @@ async def test_probe_suppresses_debug_and_prints_safe_error(tmp_path, monkeypatc
     assert "secret-api-key" not in caplog.text
     assert "secret-api-key" not in output.out + output.err
     assert "RuntimeError" in output.out and "API failed" in output.out
+
+
+async def test_provider_warning_drops_echoed_message_transcript(caplog, monkeypatch):
+    secret = "private-provider-credential"
+    monkeypatch.setenv("ANTHROPIC_API_KEY", secret)
+    transcript = "Therapist: tell me more\nClient: I take sertraline for my anxiety"
+    request = LLMRequest(tier="mid", system="sys prompt", user=transcript, response_schema={})
+    messages = [{"role": "user", "content": [{"type": "text", "text": transcript}]}]
+    error = RuntimeError(f"invalid_request key={secret}\nReceived Messages={messages}")
+    error.status_code = 400
+    other = RuntimeError(f"bad shape Invalid Message passed in - {messages[0]}. File an issue")
+    other.status_code = 400
+
+    route = Route(litellm_id="anthropic/claude-sonnet-5-5", api_key_env="ANTHROPIC_API_KEY", max_retries=0)
+    for exc in (error, other):
+        async def fail(**kwargs):
+            raise exc
+
+        caplog.clear()
+        client = LiteLLMClient(LLMConfig(llm_mode="live", routes={"mid": route}), acompletion=fail)
+        with caplog.at_level(logging.WARNING, logger="miti"), pytest.raises(LLMUnavailable):
+            await client.complete_json(request)
+        text = "\n".join(r.getMessage() for r in caplog.records)
+        for leak in ("sertraline", "Therapist", "tell me more", secret, repr(transcript), "Received Messages", "Invalid Message passed in"):
+            assert leak not in text
+        assert "invalid_request" in text or "bad shape" in text
+        assert len(json.loads(text.split("message=", 1)[1])) <= 300
