@@ -111,3 +111,72 @@ it('restarts expired signed PUT attempts without sending storage failures throug
   await expect(api.upload(input)).rejects.toThrow('permission expired'); await expect(api.upload(input)).rejects.toThrow('permission expired');
   expect(auth.mock.calls.map(c => c[0])).toEqual(['/v1/uploads/audio', '/v1/uploads/audio']);
 });
+
+describe('small recording rollout compatibility', () => {
+  const target = { upload_id: 'direct', upload: { url: 'https://storage.googleapis.com/b/o', method: 'PUT', headers: {} } };
+  const smallInput = (size = 25 * 1024 * 1024) => {
+    const file = new File(['audio'], 'session.mp3', { type: 'audio/mpeg' });
+    Object.defineProperty(file, 'size', { value: size });
+    return { file, change_goal: 'Goal', language: 'en', coded_span: { start_turn: 0, end_turn: 5 } };
+  };
+  it.each([500, 503])('uses authenticated multipart when signed start fails with %i', async status => {
+    const auth = vi.fn<typeof fetch>().mockResolvedValueOnce(new Response('{}', { status })).mockResolvedValueOnce(new Response('{"status":"transcribing"}'));
+    const raw = vi.fn<typeof fetch>(); const gold = new File(['{}'], 'gold.json');
+    Object.defineProperty(gold, 'text', { value: async () => '{}' });
+    const input = { ...smallInput(), gold };
+    await expect(createEvalApi('', auth, raw).upload(input)).resolves.toMatchObject({ status: 'transcribing' });
+    expect(auth.mock.calls.map(c => c[0])).toEqual(['/v1/uploads/audio', '/v1/uploads']);
+    const init = auth.mock.calls[1][1]; expect(init?.headers).toBeUndefined();
+    const body = init?.body; expect(body).toBeInstanceOf(FormData);
+    expect((body as FormData).get('file')).toBe(input.file);
+    expect((body as FormData).get('gold')).toBe(gold);
+    expect((body as FormData).get('change_goal')).toBe('Goal');
+    expect((body as FormData).get('coded_span')).toBe(JSON.stringify(input.coded_span));
+    expect(raw).not.toHaveBeenCalled();
+  });
+  it('uses multipart on initial storage connectivity failure without completing the direct upload', async () => {
+    const auth = vi.fn<typeof fetch>().mockResolvedValueOnce(new Response(JSON.stringify(target))).mockResolvedValueOnce(new Response('{"status":"transcribing"}'));
+    const raw = vi.fn<typeof fetch>().mockRejectedValue(new TypeError('CORS'));
+    await expect(createEvalApi('', auth, raw).upload(smallInput())).resolves.toMatchObject({ status: 'transcribing' });
+    expect(auth.mock.calls.map(c => c[0])).toEqual(['/v1/uploads/audio', '/v1/uploads']);
+  });
+  it('discards the pending direct attempt before a failed multipart fallback is retried', async () => {
+    const auth = vi.fn<typeof fetch>()
+      .mockResolvedValueOnce(new Response(JSON.stringify(target)))
+      .mockResolvedValueOnce(new Response('{}', { status: 503 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(target)))
+      .mockResolvedValueOnce(new Response('{"status":"transcribing"}'));
+    const raw = vi.fn<typeof fetch>().mockRejectedValueOnce(new TypeError('CORS')).mockResolvedValueOnce(new Response(null));
+    const api = createEvalApi('', auth, raw); const input = smallInput();
+    await expect(api.upload(input)).rejects.toMatchObject({ status: 503 });
+    await expect(api.upload(input)).resolves.toMatchObject({ status: 'transcribing' });
+    expect(auth.mock.calls.map(c => c[0])).toEqual(['/v1/uploads/audio', '/v1/uploads', '/v1/uploads/audio', '/v1/uploads/direct/complete']);
+  });
+  it.each([401, 403, 404, 409, 422])('does not bypass signed-start rejection %i', async status => {
+    const auth = vi.fn<typeof fetch>().mockResolvedValue(new Response('{}', { status }));
+    await expect(createEvalApi('', auth).upload(smallInput())).rejects.toMatchObject({ status });
+    expect(auth).toHaveBeenCalledTimes(1);
+  });
+  it('does not use multipart for recordings above the legacy 25 MiB limit', async () => {
+    const auth = vi.fn<typeof fetch>().mockResolvedValue(new Response('{}', { status: 503 }));
+    await expect(createEvalApi('', auth).upload(smallInput(25 * 1024 * 1024 + 1))).rejects.toMatchObject({ status: 503 });
+    expect(auth).toHaveBeenCalledTimes(1);
+  });
+  it.each([403, 500])('does not replace a storage HTTP %i response with multipart', async status => {
+    const auth = vi.fn<typeof fetch>().mockResolvedValueOnce(new Response(JSON.stringify(target)));
+    const raw = vi.fn<typeof fetch>().mockResolvedValue(new Response(null, { status }));
+    await expect(createEvalApi('', auth, raw).upload(smallInput())).rejects.toThrow();
+    expect(auth).toHaveBeenCalledTimes(1);
+  });
+  it('does not use multipart when the authenticated start request cannot connect', async () => {
+    const auth = vi.fn<typeof fetch>().mockRejectedValue(new TypeError('network'));
+    await expect(createEvalApi('', auth).upload(smallInput())).rejects.toThrow('network');
+    expect(auth).toHaveBeenCalledTimes(1);
+  });
+  it('completes a small write-once conflict without creating a multipart upload', async () => {
+    const auth = vi.fn<typeof fetch>().mockResolvedValueOnce(new Response(JSON.stringify(target))).mockResolvedValueOnce(new Response('{"status":"transcribing"}'));
+    const raw = vi.fn<typeof fetch>().mockResolvedValue(new Response(null, { status: 412 }));
+    await createEvalApi('', auth, raw).upload(smallInput());
+    expect(auth.mock.calls.map(c => c[0])).toEqual(['/v1/uploads/audio', '/v1/uploads/direct/complete']);
+  });
+});
