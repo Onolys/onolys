@@ -243,6 +243,29 @@ async def test_a_submitted_rating_is_final_a_second_final_is_refused(env):
     assert r.status_code == 202
 
 
+@pytest.mark.firestore_smoke
+@pytest.mark.parametrize("state", ["running", "failed"])
+async def test_first_run_locks_final_rating_but_drafts_stay_open(env, state, hook_calls):
+    c, h, repo, uid, sid = env
+    repo.update_session(
+        uid, sid, {"state": state, "first_run_id": "run-first", "change_goal": "original"},
+        status={"state": state},
+    )
+    # Reject before validating the card, as well as for a valid new goal.
+    for goal in ("replacement", ""):
+        r = await put(c, h, sid, {"final": True, "card": card(change_goal=goal)})
+        assert r.status_code == 409 and r.json()["details"][0]["code"] == "rating_final", r.text
+    assert repo.latest_rating(uid, sid) is None
+    session = repo.get_session(uid, sid)
+    assert session.change_goal == "original" and session.rating_submitted is False
+    assert repo.get_status(uid, sid).rating_submitted is False
+    assert hook_calls == []
+    draft = card(change_goal="draft goal")
+    assert (await put(c, h, sid, {"final": False, "card": draft})).status_code == 202
+    assert repo.get_rating_draft(uid, sid).card == draft
+    assert repo.get_session(uid, sid).change_goal == "original"
+
+
 async def test_get_empty(env):
     c, h, *_, sid = env
     g = await c.get(f"/v1/sessions/{sid}/rating", headers=h)
@@ -471,3 +494,32 @@ async def test_two_racing_final_ratings_the_second_conflicts_and_adds_no_revisio
     r = await c.put(f"/v1/sessions/{sid}/rating", json={"final": True, "card": card()}, headers=h)
     assert r.status_code == 409 and r.json()["details"][0]["code"] == "rating_final", r.text
     assert repo.latest_rating(uid, sid).id == rid  # no second revision
+
+
+@pytest.mark.firestore_smoke
+async def test_first_run_started_after_route_read_blocks_final_in_transaction(env, hook_calls):
+    """The run commits after the early session read, before the rating transaction."""
+    c, h, repo, uid, sid = env
+    repo.update_session(uid, sid, {"change_goal": "original"})
+    orig_list = repo.list_reports
+    fired = []
+
+    def list_then_start(u, s):
+        reports = orig_list(u, s)
+        if not fired:
+            fired.append(1)
+            repo.update_session(
+                u, s, {"state": "running", "first_run_id": "run-first"},
+                status={"state": "running"},
+            )
+        return reports
+
+    repo.list_reports = list_then_start
+    r = await put(c, h, sid, {"final": True, "card": card(change_goal="replacement")})
+    assert fired == [1]
+    assert r.status_code == 409 and r.json()["details"][0]["code"] == "rating_final", r.text
+    session = repo.get_session(uid, sid)
+    assert session.first_run_id == "run-first" and session.change_goal == "original"
+    assert session.rating_submitted is False and session.has_rating is False
+    assert repo.get_status(uid, sid).rating_submitted is False
+    assert repo.latest_rating(uid, sid) is None and hook_calls == []

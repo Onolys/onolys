@@ -1,10 +1,11 @@
 """`/v1/sessions/{id}/rating`: the in-app rating card (R2, D15). Firestore only, no parsing.
 
 `final=false` overwrites the single draft doc (size limits only; never gates or starts a run).
-`final=true` is refused (409 `rating_final`) once a rating was submitted or a report exists;
-otherwise it validates the card and writes a new revision `ratings/{rating_id}`, copies
-`change_goal` to the session, sets `rating_submitted`/`has_rating`, mirrors them to
-`session_status` and calls the first-run hook. Allowed in every state but `deleting` (404).
+`final=true` is refused (409 `rating_final`) once a run started, a rating was submitted
+or a report exists; otherwise it validates the card and writes a new revision
+`ratings/{rating_id}`, copies `change_goal` to the session, sets
+`rating_submitted`/`has_rating`, mirrors them to `session_status` and calls the first-run
+hook. Allowed in every state but `deleting` (404).
 """
 
 from datetime import UTC, datetime
@@ -117,8 +118,12 @@ def put_rating(id: ResourceId, body: RatingRequest, request: Request, user: User
         repo.put_rating_draft(uid, id, RatingDraftDoc(card=body.card, updated_at=now))
         return RatingSaved(final=False, updated_at=now)
 
-    if session.rating_submitted or has_final_report(repo, uid, id, session.state):
-        raise rating_final()  # FX45: once submitted (or a report exists) the rating is final
+    if (
+        session.first_run_id
+        or session.rating_submitted
+        or has_final_report(repo, uid, id, session.state)
+    ):
+        raise rating_final()  # The goal is locked when the first run starts.
     if issues := validate_rating(body.card, final=True):
         raise _invalid(issues)
     no_rating = body.no_rating or not has_content(body.card)
@@ -132,7 +137,12 @@ def put_rating(id: ResourceId, body: RatingRequest, request: Request, user: User
     )
 
     def _not_final(s) -> None:  # in the transaction: the loser of two racing submits gets 409
-        if s.rating_submitted or s.state == "report_ready" or s.latest_report_version:
+        if (
+            s.first_run_id
+            or s.rating_submitted
+            or s.state == "report_ready"
+            or s.latest_report_version
+        ):
             raise rating_final()
 
     # ONE transaction (LM-2): the final-check, the revision and the flags commit together.
