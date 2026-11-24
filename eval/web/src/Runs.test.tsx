@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
 import { CompareView, History, RunView, SummaryView } from './Runs';
 import { createEvalApi, type Compare, type RunDetail, type RunSummary } from './api';
@@ -131,7 +131,7 @@ it('history opens a shared config modal and rerun only prefills the saved run', 
  await screen.findByText('Copied.');
  expect(JSON.parse(copy.mock.calls[0][0]).engine_git_sha).toEqual({ miti: 'abc123' });
  fireEvent.keyDown(dialog, { key: 'Escape' });
- await act(async () => {});
+ await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Actions for saved' })));
  fireEvent.keyDown(screen.getByRole('button', { name: 'Actions for saved' }), { key: 'Enter' });
  fireEvent.click(await screen.findByRole('menuitem', { name: 'Rerun' }));
  expect(onRerun).toHaveBeenCalledWith(run);
@@ -295,4 +295,49 @@ it('config omits private run references and offers manual copying on clipboard f
  expect(document.querySelector('script')).toBeNull();
  fireEvent.click(within(dialog).getByRole('button', { name: 'Copy' }));
  await screen.findByText('Could not copy. Select the JSON to copy it manually.');
+});
+
+it.each(['Escape', 'Close'])('restores focus to detail Config after %s dismissal', async dismissal => {
+ render(<RunView api={{ ...createEvalApi('', vi.fn()), run: vi.fn().mockResolvedValue(detail()) }} runId="r1" onRerun={vi.fn()} />);
+ const trigger = await screen.findByRole('button', { name: 'Config' });
+ trigger.focus(); fireEvent.click(trigger);
+ const dialog = await screen.findByRole('dialog');
+ await waitFor(() => expect(dialog.contains(document.activeElement)).toBe(true));
+ if (dismissal === 'Escape') fireEvent.keyDown(document.activeElement!, { key: 'Escape' });
+ else fireEvent.click(within(dialog).getByRole('button', { name: 'Close' }));
+ await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+ await waitFor(() => expect(document.activeElement).toBe(trigger));
+});
+it.each(['Escape', 'Close'])('opens Config by keyboard without losing dialog focus and returns to row actions after %s', async dismissal => {
+ render(<History api={{ ...createEvalApi('', vi.fn()), runs: vi.fn().mockResolvedValue({ runs: [summary()] }) }} onOpen={vi.fn()} onRerun={vi.fn()} />);
+ const trigger = await screen.findByRole('button', { name: 'Actions for saved' });
+ trigger.focus(); fireEvent.keyDown(trigger, { key: 'Enter' });
+ const config = await screen.findByRole('menuitem', { name: 'Config' });
+ config.focus(); fireEvent.keyDown(config, { key: 'Enter' });
+ const dialog = await screen.findByRole('dialog');
+ await act(async () => { await new Promise(resolve => setTimeout(resolve, 20)); });
+ expect(dialog.contains(document.activeElement)).toBe(true);
+ if (dismissal === 'Escape') fireEvent.keyDown(document.activeElement!, { key: 'Escape' });
+ else fireEvent.click(within(dialog).getByRole('button', { name: 'Close' }));
+ await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+ await waitFor(() => expect(document.activeElement).toBe(trigger));
+});
+it('filters by the same local calendar date shown for a run near midnight', async () => {
+ // Run this test in America/Los_Angeles too: local late evening is the next UTC day.
+ const created_at = new Date(2026, 10, 23, 23, 30).toISOString();
+ render(<History api={{ ...createEvalApi('', vi.fn()), runs: vi.fn().mockResolvedValue({ runs: [{ ...summary(), created_at }] }) }} onOpen={vi.fn()} onRerun={vi.fn()} />);
+ await screen.findByText(new Date(created_at).toLocaleString());
+ fireEvent.change(screen.getByLabelText('Date from'), { target: { value: '2026-11-23' } });
+ fireEvent.change(screen.getByLabelText('Date to'), { target: { value: '2026-11-23' } });
+ expect(screen.getByRole('link', { name: 'saved' })).toBeTruthy();
+ fireEvent.change(screen.getByLabelText('Date from'), { target: { value: '2026-11-24' } });
+ expect(screen.queryByRole('link', { name: 'saved' })).toBeNull();
+});
+it('labels a Human unit as Once while model attempts use the configured repeat count', async () => {
+ const run = detail(); run.units.push({ unit_id: 'human', session_id: 's1', engine: 'human', repeat: 0, status: 'done' });
+ render(<RunView api={{ ...createEvalApi('', vi.fn()), run: vi.fn().mockResolvedValue(run) }} runId="r1" onRerun={vi.fn()} />);
+ await screen.findByRole('button', { name: 'View JSON human' });
+ const row = screen.getByRole('button', { name: 'View JSON human' }).closest('tr')!;
+ expect(within(row).getByRole('cell', { name: 'Once' })).toBeTruthy();
+ expect(screen.getByRole('table', { name: /Each unit/ }).textContent).toContain('3 / 3');
 });

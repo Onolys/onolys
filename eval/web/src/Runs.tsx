@@ -10,15 +10,23 @@ const terminal = (status: string) => !['queued', 'running'].includes(status);
 const number = (value: number | null | undefined, metric = '') => value == null ? '—' : metric === 'pct_cr' ? `${Number((value * 100).toFixed(2))}%` : String(Number(value.toFixed(3)));
 const statusLabel = (run: RunSummary, cancelRequested = false) => cancelRequested && !terminal(run.status) ? 'cancelling' : run.status;
 const dateText = (iso: string) => { const date = new Date(iso); return Number.isNaN(date.getTime()) ? iso : date.toLocaleString(); };
+const localDate = (iso: string) => {
+  const date = new Date(iso);
+  return Number.isNaN(date.getTime()) ? '' : `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+};
 const POLL_MS = 3000, MAX_POLL_MS = 30000;
 const inputName = (run: RunSummary) => 'dataset_id' in run.input ? run.input.dataset_id : run.input.upload_id;
 
 function Usage({ run }: { run: RunSummary }) {
   return <p>{run.usage.input_tokens} input tokens · {run.usage.output_tokens} output tokens · {run.cost_usd_est == null ? '—' : `~$${run.cost_usd_est.toFixed(4)}`} estimate; STT excluded.{run.unpriced_units > 0 && ` ${run.unpriced_units} unpriced unit(s); estimate is incomplete.`}</p>;
 }
-function RunActions({ run, onRerun, onConfig }: { run: RunSummary; onRerun: (run: RunSummary) => void; onConfig: (run: RunSummary) => void }) {
-  return <DropdownMenu><DropdownMenuTrigger asChild><Button variant="ghost" size="icon" aria-label={`Actions for ${run.name || inputName(run)}`}>⋮</Button></DropdownMenuTrigger>
-    <DropdownMenuContent align="end"><DropdownMenuItem onSelect={() => onRerun(run)}>Rerun</DropdownMenuItem><DropdownMenuItem onSelect={() => onConfig(run)}>Config</DropdownMenuItem></DropdownMenuContent>
+function RunActions({ run, onRerun, onConfig }: { run: RunSummary; onRerun: (run: RunSummary) => void; onConfig: (run: RunSummary, trigger: HTMLElement | null) => void }) {
+  const trigger = useRef<HTMLButtonElement>(null);
+  const openingConfig = useRef(false);
+  return <DropdownMenu><DropdownMenuTrigger asChild><Button ref={trigger} variant="ghost" size="icon" aria-label={`Actions for ${run.name || inputName(run)}`}>⋮</Button></DropdownMenuTrigger>
+    <DropdownMenuContent align="end" onCloseAutoFocus={event => {
+      if (openingConfig.current) { event.preventDefault(); openingConfig.current = false; }
+    }}><DropdownMenuItem onSelect={() => onRerun(run)}>Rerun</DropdownMenuItem><DropdownMenuItem onSelect={() => { openingConfig.current = true; onConfig(run, trigger.current); }}>Config</DropdownMenuItem></DropdownMenuContent>
   </DropdownMenu>;
 }
 const historyColumns = ['Date', 'Dataset', 'Status', 'Engines', 'Models', 'Tiers', 'Efforts'] as const;
@@ -132,6 +140,7 @@ export function RunView({ api, runId, onRerun }: { api: EvalApi; runId: string; 
   const [cancelling, setCancelling] = useState(false);
   const [missing, setMissing] = useState(false);
   const [configuration, setConfiguration] = useState<RunSummary | null>(null);
+  const configTrigger = useRef<HTMLElement | null>(null);
   const stop = useRef<() => void>(() => {});
   useEffect(() => {
     const controller = new AbortController();
@@ -170,18 +179,18 @@ export function RunView({ api, runId, onRerun }: { api: EvalApi; runId: string; 
       <p role="status">{statusLabel(run, cancelRequested)} · {run.completed_units}/{run.total_units} units complete · {run.failed_units} failed · {run.cancelled_units} cancelled</p>
       {!terminal(run.status) && <button disabled={cancelRequested} onClick={() => void cancel()}>{cancelRequested ? 'Cancelling…' : 'Cancel run'}</button>}
       <button onClick={() => onRerun(run)}>Rerun with different engines/presets</button>
-      <Button variant="outline" onClick={() => setConfiguration(run)}>Config</Button>
+      <Button variant="outline" onClick={event => { configTrigger.current = event.currentTarget; setConfiguration(run); }}>Config</Button>
       {run.description && <p>{run.description}</p>}<Usage run={run} />
       <div className="unit-section-heading"><h2>Unit progress</h2><span>{run.completed_units}/{run.total_units} complete · {run.repeats} {run.repeats === 1 ? 'attempt' : 'attempts'} per cell</span></div>
-      <div className="unit-table-scroll" role="region" aria-label="Unit progress"><table className="units-table"><caption>Each unit is one session × engine × model/tier/effort × attempt. Repeated attempts run the same settings independently.</caption>
+      <div className="unit-table-scroll" role="region" aria-label="Unit progress"><table className="units-table"><caption>Each unit is one session × engine × model/tier/effort × attempt. Repeated model attempts run the same settings independently. Human reference is included once per session.</caption>
         <thead><tr>{['Session', 'Engine', 'Model', 'Tier', 'Effort', 'Attempt', 'Status', 'Stage', 'Output / error'].map(label => <th scope="col" key={label}>{label}</th>)}</tr></thead>
         <tbody>{run.units.map(unit => { const combo = unit.combo ?? comboFields(run, unit.combo_key ?? unit.preset); return <tr key={unit.unit_id}>
           <td data-label="Session">{unit.session_id}</td><td data-label="Engine">{unit.engine}</td><td data-label="Model">{combo.model || '—'}</td><td data-label="Tier">{combo.tier || '—'}</td><td data-label="Effort">{combo.effort || '—'}</td>
-          <td data-label="Attempt">{unit.repeat == null ? '—' : `${unit.repeat + 1} / ${run.repeats}`}</td><td data-label="Status">{unit.status}</td><td data-label="Stage">{unit.stage || '—'}</td>
+          <td data-label="Attempt">{unit.engine === 'human' ? 'Once' : unit.repeat == null ? '—' : `${unit.repeat + 1} / ${run.repeats}`}</td><td data-label="Status">{unit.status}</td><td data-label="Stage">{unit.stage || '—'}</td>
           <td data-label="Output / error">{unit.error && <p role="alert">{typeof unit.error === 'string' ? unit.error : `${unit.error.code}${unit.error.message ? `: ${unit.error.message}` : ''}`}</p>}{unit.status === 'done' ? <UnitOutput api={api} runId={runId} unit={unit} /> : !unit.error && '—'}</td>
         </tr>; })}</tbody></table></div>
       <CompareView compare={run.compare} />
-    </>}<RunConfigDialog run={configuration} onClose={() => setConfiguration(null)} />
+    </>}<RunConfigDialog returnFocus={configTrigger} run={configuration} onClose={() => setConfiguration(null)} />
   </section>;
 }
 export function History({ api, onOpen, onRerun }: { api: EvalApi; onOpen: (id: string) => void; onRerun: (run: RunSummary) => void }) {
@@ -197,6 +206,7 @@ export function History({ api, onOpen, onRerun }: { api: EvalApi; onOpen: (id: s
   const [from, setFrom] = useState(''), [to, setTo] = useState('');
   const [sort, setSort] = useState<{ column: HistoryColumn; dir: 'ascending' | 'descending' } | null>(null);
   const [configuration, setConfiguration] = useState<RunSummary | null>(null);
+  const configTrigger = useRef<HTMLElement | null>(null);
   const filterId = useId();
   const exhaustive = Boolean(query.trim() || from || to || sort || Object.values(filters).some(Boolean));
   if (source !== api) {
@@ -220,7 +230,7 @@ export function History({ api, onOpen, onRerun }: { api: EvalApi; onOpen: (id: s
     }
   }, [exhaustive, nextCursor, loading, error]);
   const visible = (runs ?? []).filter(run => {
-    const date = run.created_at.slice(0, 10);
+    const date = localDate(run.created_at);
     if ((from && date < from) || (to && date > to)) return false;
     if (historyColumns.some(column => filters[column] && !columnValue(run, column).toLocaleLowerCase().includes(filters[column]!.toLocaleLowerCase()))) return false;
     const haystack = `${JSON.stringify(savedConfiguration(run))} ${historyColumns.map(column => columnValue(run, column)).join(' ')}`;
@@ -243,11 +253,11 @@ export function History({ api, onOpen, onRerun }: { api: EvalApi; onOpen: (id: s
         <tbody>{visible.map(run => <tr key={run.run_id}>{historyColumns.map(column => <td key={column} data-label={column}>{column === 'Dataset' ? <a href={`?run=${encodeURIComponent(run.run_id)}`} onClick={event => {
           if (event.button === 0 && !event.ctrlKey && !event.metaKey && !event.shiftKey && !event.altKey) { event.preventDefault(); onOpen(run.run_id); }
         }}>{inputName(run)}</a> : column === 'Date' ? <time dateTime={run.created_at}>{dateText(run.created_at)}</time> : column === 'Status' ? <Badge variant="outline" className="max-w-full whitespace-normal">{columnValue(run, column)}</Badge> : columnValue(run, column)}</td>)}
-          <td className="history-actions" data-label="Actions"><RunActions run={run} onRerun={onRerun} onConfig={setConfiguration} /></td></tr>)}</tbody>
+          <td className="history-actions" data-label="Actions"><RunActions run={run} onRerun={onRerun} onConfig={(saved, trigger) => { configTrigger.current = trigger; setConfiguration(saved); }} /></td></tr>)}</tbody>
       </table>{visible.length === 0 && <p>No runs match these filters.</p>}</>}
     {loading && <p role="status">{exhaustive ? 'Loading full history for search, filters and sorting…' : 'Loading history…'}</p>}
     {nextCursor && !error && <Button disabled={loading} onClick={() => { setLoading(true); setCursor(nextCursor); }}>Load more</Button>}
     {exhaustive && !loading && !nextCursor && !error && <p role="status">All {runs?.length ?? 0} saved runs searched.</p>}
-    <RunConfigDialog run={configuration} onClose={() => setConfiguration(null)} />
+    <RunConfigDialog returnFocus={configTrigger} run={configuration} onClose={() => setConfiguration(null)} />
   </section>;
 }

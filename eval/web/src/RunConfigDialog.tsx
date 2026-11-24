@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type RefObject } from 'react';
 import { Button, Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@onolys/ui';
 import type { RunSummary } from './api';
 
@@ -14,11 +14,11 @@ export function savedConfiguration(run: RunSummary) {
     resolved_combos: run.resolved_combos, resolved_presets: run.resolved_presets,
   };
 }
-export function RunConfigDialog({ run, onClose }: { run: RunSummary | null; onClose: () => void }) {
+export function RunConfigDialog({ run, onClose, returnFocus }: { run: RunSummary | null; onClose: () => void; returnFocus: RefObject<HTMLElement | null> }) {
   const [status, setStatus] = useState('');
   const json = run ? JSON.stringify(savedConfiguration(run), null, 2) : '';
   return <Dialog open={run !== null} onOpenChange={open => { if (!open) { setStatus(''); onClose(); } }}>
-    <DialogContent className="eval-config-dialog flex w-[90vw] max-w-[52rem] flex-col sm:max-w-[52rem]">
+    <DialogContent onCloseAutoFocus={event => { event.preventDefault(); returnFocus.current?.focus(); }} className="eval-config-dialog flex w-[90vw] max-w-[52rem] flex-col sm:max-w-[52rem]">
       <DialogHeader><DialogTitle>Saved configuration and versions</DialogTitle><DialogDescription>Configuration and provenance saved with this run.</DialogDescription></DialogHeader>
       <div className="eval-config-json" role="textbox" aria-readonly="true" aria-multiline="true" tabIndex={0} aria-label="Saved configuration JSON"><pre>{json}</pre></div>
       <DialogFooter><span role="status">{status}</span><Button onClick={() => {
