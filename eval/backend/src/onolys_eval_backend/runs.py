@@ -124,7 +124,7 @@ def _hash(data):
     ).hexdigest()
 
 
-def _inputs(services, body):
+def _inputs(services, body, engines):
     """Read and validate everything before publishing any run or bucket object."""
     ref = body.input
     if ref.dataset_id:
@@ -169,10 +169,10 @@ def _inputs(services, body):
                 },
             }
         ]
-    return _validate_sources(services, sources, body)
+    return _validate_sources(services, sources, body, engines)
 
 
-def _validate_sources(services, sources, body):
+def _validate_sources(services, sources, body, engines):
     """Also accepts trusted server-saved snapshots for a later rerun endpoint."""
     ref = body.input
     expected_ids = ref.session_ids if ref.dataset_id else [ref.upload_id]
@@ -195,7 +195,7 @@ def _validate_sources(services, sources, body):
             try:
                 gold = Gold.model_validate(services.bucket.read_json(source["gold_path"]))
             except FileNotFoundError:
-                if "human" in body.engines:
+                if "human" in engines:
                     raise ValueError("Human requires gold") from None
             if gold is not None:
                 if source.get("gold_sha256") and source["gold_sha256"] != _hash(
@@ -207,7 +207,7 @@ def _validate_sources(services, sources, body):
                     gold.dataset_id != ref.dataset_id or gold.session_id != source["session_id"]
                 ):
                     raise ValueError("Gold identity mismatch")
-        if "human" in body.engines and gold is None:
+        if "human" in engines and gold is None:
             raise ValueError("Human requires gold")
         resolved.append(
             {
@@ -274,9 +274,9 @@ def create_run(services, config, body, created_by, *, registry=None, input_ref=N
         for c in combos
     }
     sources = (
-        _validate_sources(services, input_ref["sessions"], body)
+        _validate_sources(services, input_ref["sessions"], body, engines)
         if input_ref is not None
-        else _inputs(services, body)
+        else _inputs(services, body, engines)
     )
     rid = uuid4().hex
     saved_sources, units = [], {}

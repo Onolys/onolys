@@ -767,6 +767,17 @@ def test_dataset_full_session_null_span_creates_and_executes_human_unit(services
     assert services.repository.get_unit(rid, uid)["scores"]["counts"] == gold()["counts"]
 
 
+def test_dataset_session_without_gold_is_422_without_orphans(services):
+    # Human is auto-added for datasets, so a missing gold must be rejected cleanly (no
+    # TypeError/503) even when the body omits `human`.
+    services.bucket._objects.pop("datasets/synthetic/one/gold.json")
+    before = services.bucket.list("")
+    response = start(client(services=services), engines=["miti"])
+    assert response.status_code == 422, response.text
+    assert services.repository.list_runs() == {} and services.queue.tasks == []
+    assert services.bucket.list("") == before
+
+
 def test_combo_unit_executes_on_combo_routes(services):
     engine = services.fake_engine = FakeEngine()
     seen = []
