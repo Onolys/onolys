@@ -66,4 +66,37 @@ describe("Shell", () => {
     await waitFor(() => expect(screen.getByText("Nothing here yet.")).toBeTruthy());
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
+
+  it("200 HTML from /v1/me (SPA rewrite): not the empty page, shows an unexpected-response retry", async () => {
+    fetchMock.mockResolvedValue(new Response("<!doctype html><html></html>", { status: 200, headers: { "content-type": "text/html" } }));
+    render(<Root session={signedIn()} />);
+    expect(await screen.findByRole("alert")).toBeTruthy();
+    expect(screen.getByText(/unexpected response/i)).toBeTruthy();
+    expect(screen.queryByText("Nothing here yet.")).toBeNull();
+    expect(screen.getByRole("button", { name: "Retry" })).toBeTruthy();
+  });
+
+  it("404 from /v1/me: not the empty page", async () => {
+    fetchMock.mockResolvedValue(json(404, { detail: "Not Found" }));
+    render(<Root session={signedIn()} />);
+    expect(await screen.findByRole("alert")).toBeTruthy();
+    expect(screen.queryByText("Nothing here yet.")).toBeNull();
+  });
+
+  it("429 from /v1/me: says to wait, not the empty page, and Retry recovers", async () => {
+    fetchMock.mockResolvedValueOnce(json(429, { detail: "slow down" })).mockResolvedValue(json(200, { status: "ok" }));
+    render(<Root session={signedIn()} />);
+    expect(await screen.findByText(/too many requests/i)).toBeTruthy();
+    expect(screen.queryByText("Nothing here yet.")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+    await waitFor(() => expect(screen.getByText("Nothing here yet.")).toBeTruthy());
+  });
+
+  it("auth required but VITE_ADMIN_API_URL unset: config error, no request", async () => {
+    vi.stubEnv("VITE_ADMIN_API_URL", "");
+    render(<Root session={signedIn()} />);
+    expect(await screen.findByText(/VITE_ADMIN_API_URL/)).toBeTruthy();
+    expect(screen.queryByText("Nothing here yet.")).toBeNull();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
 });

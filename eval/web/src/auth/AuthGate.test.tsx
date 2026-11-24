@@ -75,7 +75,7 @@ describe("AuthGate", () => {
     await screen.findByText("the app");
     const base = vi.fn(async () => new Response("{}", { status: 403 }));
     await session.createFetch(base as unknown as typeof fetch)("https://x", {});
-    expect(await screen.findByText(/not on the admin list/i)).toBeTruthy();
+    expect(await screen.findByText(/not allowed to use this app, or its email is not verified/i)).toBeTruthy();
     expect(screen.queryByText("the app")).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Sign out" }));
     await waitFor(() => expect(screen.getByRole("button", { name: "Sign in" })).toBeTruthy());

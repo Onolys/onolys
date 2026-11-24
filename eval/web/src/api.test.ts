@@ -24,6 +24,26 @@ describe('eval API', () => {
   });
 });
 
+describe('eval API errors (FastAPI shapes)', () => {
+  const failing = (status: number, body: unknown) => createEvalApi('', vi.fn().mockResolvedValue(new Response(JSON.stringify(body), { status })));
+  it('reads a string detail', async () => {
+    await expect(failing(422, { detail: 'Human requires gold' }).datasets()).rejects.toThrow('Human requires gold');
+  });
+  it('reads a {code, message} detail object', async () => {
+    await expect(failing(400, { detail: { code: 'bad_file', message: 'Unsupported audio type' } }).datasets()).rejects.toThrow('Unsupported audio type');
+  });
+  it('maps a list detail (422) to a fixed message that never echoes request input', async () => {
+    const body = { detail: [{ type: 'string_too_long', loc: ['body', 'change_goal'], msg: 'String should have at most 4000 characters', input: 'SECRET-GOAL-TEXT' }] };
+    const error = await failing(422, body).datasets().then(() => new Error('resolved'), (e: unknown) => e as Error);
+    expect(error).toBeInstanceOf(Error);
+    expect(error.message).toBe('Some values were not accepted. Check the form and try again.');
+    expect(error.message).not.toContain('SECRET-GOAL-TEXT');
+  });
+  it('falls back to a generic message with the status', async () => {
+    await expect(failing(502, { other: 1 }).datasets()).rejects.toThrow('Request failed (502). Please try again.');
+  });
+});
+
 it('uses encoded saved-run, cancel, output and rerun endpoints with abort signals', async () => {
   const fetcher = vi.fn<typeof fetch>(async () => new Response('{}'));
   const api = createEvalApi('', fetcher); const signal = new AbortController().signal;

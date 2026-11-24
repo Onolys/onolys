@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import fixture from '../../fixtures/selection_cases.json';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { NewRun } from './NewRun';
@@ -216,4 +216,63 @@ describe('new run', () => {
     await waitFor(() => expect(onRunCreated).toHaveBeenCalledOnce());
   });
 
+  it('flags dataset sessions without gold, leaves them unselected and starts with the rest', async () => {
+    const api = makeApi(); const onRunCreated = vi.fn();
+    api.dataset.mockResolvedValue({ dataset_id: 'sample', title: 'Sample dataset', sessions: [{ session_id: 's1', title: 'First session', has_gold: true }, { session_id: 's2', title: 'Second session', has_gold: false }] });
+    render(<NewRun api={api} onRunCreated={onRunCreated} />);
+    await screen.findByLabelText('First session');
+    const second = screen.getByLabelText('Second session') as HTMLInputElement;
+    expect(second.disabled).toBe(true); expect(second.checked).toBe(false);
+    expect(screen.getByText(/no gold file/i)).toBeTruthy();
+    await waitFor(() => expect(start().disabled).toBe(false));
+    fireEvent.click(start());
+    await waitFor(() => expect(api.start).toHaveBeenCalledWith(expect.objectContaining({ input: { dataset_id: 'sample', session_ids: ['s1'] } })));
+  });
+  it('blocks Start when no dataset session has gold', async () => {
+    const api = makeApi();
+    api.dataset.mockResolvedValue({ dataset_id: 'sample', title: 'Sample dataset', sessions: [{ session_id: 's1', title: 'First session', has_gold: false }] });
+    render(<NewRun api={api} onRunCreated={vi.fn()} />);
+    await screen.findByLabelText('First session');
+    expect(start().disabled).toBe(true);
+  });
+  it('limits the change goal to 4000 characters with a counter', async () => {
+    await uploadMode();
+    const goalInput = screen.getByLabelText('Change goal') as HTMLInputElement;
+    expect(goalInput.maxLength).toBe(4000);
+    expect(screen.getByText('14 / 4000')).toBeTruthy();
+  });
+  it('offers only server-allowed audio types for the session file', async () => {
+    await uploadMode();
+    const accept = (screen.getByLabelText('Session file') as HTMLInputElement).accept;
+    expect(accept).toContain('.mp3'); expect(accept).toContain('.ogg'); expect(accept).not.toContain('audio/*');
+  });
+  it('shows Retry (not Reload choices) for a failed prepare and retries the action', async () => {
+    const { api } = await uploadMode(); chooseFile();
+    api.upload.mockRejectedValueOnce(new Error('Upload too large'));
+    fireEvent.click(screen.getByRole('button', { name: 'Prepare upload' }));
+    expect(await screen.findByText('Upload too large')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Reload choices' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    await waitFor(() => expect(api.upload).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(start().disabled).toBe(false));
+  });
+  it('keeps polling transcription with backoff after a failed status check and shows a non-blocking error', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const { api } = await uploadMode(); chooseFile('Session file', 'recording.wav');
+    api.upload.mockResolvedValueOnce({ upload_id: 'plain', status: 'transcribing', has_gold: false, speakers: [] });
+    api.getUpload.mockRejectedValueOnce(new Error('net down')).mockRejectedValueOnce(new Error('net down'))
+      .mockResolvedValueOnce({ upload_id: 'plain', status: 'awaiting_speakers', has_gold: false, speakers: [{ speaker: 'Detected', samples: ['Sample'] }] } as Upload);
+    fireEvent.click(screen.getByRole('button', { name: 'Prepare upload' }));
+    await screen.findByText('Transcribing recording…');
+    const advance = (ms: number) => act(async () => { await vi.advanceTimersByTimeAsync(ms); });
+    await advance(3000); expect(api.getUpload).toHaveBeenCalledTimes(1);
+    expect(screen.getByText(/Could not check transcription status/)).toBeTruthy();
+    expect(screen.getByText('Transcribing recording…')).toBeTruthy();
+    await advance(3000); expect(api.getUpload).toHaveBeenCalledTimes(1);
+    await advance(3100); expect(api.getUpload).toHaveBeenCalledTimes(2);
+    await advance(6000); expect(api.getUpload).toHaveBeenCalledTimes(2);
+    await advance(6100); expect(api.getUpload).toHaveBeenCalledTimes(3);
+    expect(await screen.findByLabelText('Detected')).toBeTruthy();
+    expect(screen.queryByText(/Could not check transcription status/)).toBeNull();
+  });
 });

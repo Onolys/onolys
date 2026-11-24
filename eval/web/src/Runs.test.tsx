@@ -124,3 +124,49 @@ it.each(['done', 'partial', 'failed', 'cancelled'] as const)('does not poll term
 it('aborts in-flight progress requests on unmount and never schedules another poll', async()=>{
  vi.useFakeTimers(); let resolve!: (value:RunDetail)=>void; const api={...createEvalApi('',vi.fn()),run:vi.fn().mockImplementation(()=>new Promise<RunDetail>(r=>{resolve=r}))}; const view=render(<RunView api={api} runId="r1" onRerun={vi.fn()}/>); const signal=api.run.mock.calls[0][1] as AbortSignal; view.unmount(); expect(signal.aborted).toBe(true); await act(async()=>{resolve(detail('running')); await vi.advanceTimersByTimeAsync(9000)}); expect(api.run).toHaveBeenCalledTimes(1);
 });
+
+it('keeps polling with backoff after a failed status poll and shows a non-blocking error', async () => {
+  vi.useFakeTimers();
+  const api = { ...createEvalApi('', vi.fn()), run: vi.fn().mockRejectedValueOnce(new Error('net down')).mockRejectedValueOnce(new Error('net down')).mockResolvedValueOnce(detail('running')).mockResolvedValue(detail()) };
+  render(<RunView api={api} runId="r1" onRerun={vi.fn()} />);
+  await act(async () => {});
+  expect(api.run).toHaveBeenCalledTimes(1);
+  expect(screen.getByText(/net down/)).toBeTruthy();
+  await act(async () => { await vi.advanceTimersByTimeAsync(3000); });
+  expect(api.run).toHaveBeenCalledTimes(2);
+  await act(async () => { await vi.advanceTimersByTimeAsync(3000); });
+  expect(api.run).toHaveBeenCalledTimes(2);
+  await act(async () => { await vi.advanceTimersByTimeAsync(3000); });
+  expect(api.run).toHaveBeenCalledTimes(3);
+  expect(screen.queryByText(/net down/)).toBeNull();
+  expect(screen.getByRole('button', { name: 'Cancel run' })).toBeTruthy();
+  await act(async () => { await vi.advanceTimersByTimeAsync(3000); });
+  expect(api.run).toHaveBeenCalledTimes(4);
+  expect(screen.queryByRole('button', { name: 'Cancel run' })).toBeNull();
+});
+it('shows Cancelling… and hides Cancel when the run summary says cancel_requested', async () => {
+  vi.useFakeTimers();
+  const api = { ...createEvalApi('', vi.fn()), run: vi.fn().mockResolvedValue({ ...detail('running'), cancel_requested: true }) };
+  render(<RunView api={api} runId="r1" onRerun={vi.fn()} />);
+  await act(async () => {});
+  expect(screen.queryByRole('button', { name: 'Cancel run' })).toBeNull();
+  expect((screen.getByRole('button', { name: 'Cancelling…' }) as HTMLButtonElement).disabled).toBe(true);
+  expect(screen.getByText(/^cancelling · /)).toBeTruthy();
+});
+it('history says it is limited to the latest 100 runs only when 100 are returned', async () => {
+  const many = Array.from({ length: 100 }, (_, i) => ({ ...summary(), run_id: `r${i}` }));
+  const api = { ...createEvalApi('', vi.fn()), runs: vi.fn().mockResolvedValue({ runs: many }) };
+  const view = render(<History api={api} onOpen={vi.fn()} onRerun={vi.fn()} />);
+  expect(await screen.findByText(/Showing the latest 100 runs/)).toBeTruthy();
+  view.unmount();
+  const few = { ...createEvalApi('', vi.fn()), runs: vi.fn().mockResolvedValue({ runs: many.slice(0, 3) }) };
+  render(<History api={few} onOpen={vi.fn()} onRerun={vi.fn()} />);
+  await screen.findAllByText('saved');
+  expect(screen.queryByText(/Showing the latest/)).toBeNull();
+});
+it('history formats the run date for the locale instead of showing raw ISO', async () => {
+  const api = { ...createEvalApi('', vi.fn()), runs: vi.fn().mockResolvedValue({ runs: [summary()] }) };
+  render(<History api={api} onOpen={vi.fn()} onRerun={vi.fn()} />);
+  expect(await screen.findByText(new Date('2026-11-23T10:00:00Z').toLocaleString())).toBeTruthy();
+  expect(screen.queryByText('2026-11-23T10:00:00Z')).toBeNull();
+});

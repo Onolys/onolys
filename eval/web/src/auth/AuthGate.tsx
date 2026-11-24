@@ -45,7 +45,7 @@ export function AuthGate({ session, children }: { session: AuthSession; children
     return (
       <div className="app-message" role="alert">
         <h2>Not allowed</h2>
-        <p>This account is not on the admin list.</p>
+        <p>This account is not allowed to use this app, or its email is not verified.</p>
         <button type="button" onClick={() => void session.signOut()}>Sign out</button>
       </div>
     );

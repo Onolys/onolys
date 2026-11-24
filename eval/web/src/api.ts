@@ -31,7 +31,7 @@ export interface RunInput {
 export type RunStatus = 'queued' | 'running' | 'done' | 'partial' | 'failed' | 'cancelled';
 export interface RunSummary extends Omit<RunInput, 'selection'> {
  selection: Selection | null; combos: Combo[] | null; legacy_selection: boolean; combo_keys: string[]; combo_labels: Record<string, string>; presets?: string[];
- run_id: string; status: RunStatus; created_at: string;
+ run_id: string; status: RunStatus; created_at: string; cancel_requested?: boolean;
  total_units: number; completed_units: number; done_units: number; failed_units: number; cancelled_units: number;
  usage: { input_tokens: number; output_tokens: number; cost_usd?: number | null; calls?: number };
  cost_usd_est: number | null; unpriced_units: number;
@@ -80,12 +80,22 @@ export interface EvalApi {
   speakers(id: string, speaker: string): Promise<Upload>;
   start(input: RunInput): Promise<{ run_id: string; status: string }>;
 }
+const text = (value: unknown) => typeof value === 'string' && value.trim() ? value : undefined;
+/** Message from an error body: `{error:{message}}`, FastAPI `{detail: str}` or `{detail:{message}}`; a list `detail` (422) maps to a fixed text because it echoes request input. */
+export function errorText(body: unknown, status: number): string {
+  const b = (body && typeof body === 'object' ? body : {}) as { error?: { message?: unknown }; detail?: unknown };
+  const detail = b.detail;
+  const message = text(b.error?.message) ?? text(detail) ?? (detail && typeof detail === 'object' && !Array.isArray(detail) ? text((detail as { message?: unknown }).message) : undefined);
+  if (message) return message;
+  if (Array.isArray(detail)) return 'Some values were not accepted. Check the form and try again.';
+  return `Request failed (${status}). Please try again.`;
+}
 export function createEvalApi(base: string, fetcher: typeof fetch): EvalApi {
   const request = async <T>(path: string, init?: RequestInit): Promise<T> => {
     const response = await fetcher(`${base.replace(/\/$/, '')}/v1${path}`, init);
     if (!response.ok) {
       const body = await response.json().catch(() => null);
-      throw new Error(body?.error?.message || `Request failed (${response.status}). Please try again.`);
+      throw new Error(errorText(body, response.status));
     }
     return response.json() as Promise<T>;
   };

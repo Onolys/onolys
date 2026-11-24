@@ -4,6 +4,10 @@ import { MAX_UNITS, countText, effortsFor, modelMap, planCount, skippedText, tie
 
 const emptySelection: Selection = { models: [], tiers: [], efforts: [] };
 const message = (error: unknown) => error instanceof Error ? error.message : 'Something went wrong. Please try again.';
+const POLL_MS = 3000, MAX_POLL_MS = 30000;
+/** A dataset run always scores against Human, so a session without gold.json cannot be run. Unknown (older server) counts as ok. */
+const hasGold = (session: { has_gold?: boolean }) => session.has_gold !== false;
+const MAX_GOAL = 4000; // RunRequest.change_goal limit
 const toggle = (values: string[], value: string) => values.includes(value) ? values.filter(v => v !== value) : [...values, value];
 
 export function NewRun({ api, onRunCreated, initialRun }: { api: EvalApi; onRunCreated: (id: string) => void; initialRun?: RunSummary }) {
@@ -32,8 +36,9 @@ export function NewRun({ api, onRunCreated, initialRun }: { api: EvalApi; onRunC
   const inFlight = useRef(false);
   const [error, setError] = useState('');
   const [loadAttempt, setLoadAttempt] = useState(0);
-  const [pollAttempt, setPollAttempt] = useState(0);
-  const [pollFailed, setPollFailed] = useState(false);
+  const [errorKind, setErrorKind] = useState<'load' | 'action'>('load');
+  const [pollError, setPollError] = useState('');
+  const lastAction = useRef<(() => Promise<void>) | undefined>(undefined);
   const uploadId = upload?.upload_id ?? (initialRun && 'upload_id' in initialRun.input ? initialRun.input.upload_id : undefined);
   const uploadStatus = upload?.status;
 
@@ -45,7 +50,7 @@ export function NewRun({ api, onRunCreated, initialRun }: { api: EvalApi; onRunC
       setEngines((initialRun?.engines ?? result.defaults[mode].engines).filter(id => result.engines.some(e => e.id === id)));
       setSelection(initialRun ? (initialRun.legacy_selection || !initialRun.selection ? emptySelection : initialRun.selection) : result.defaults[mode].selection);
       setOptionsLoading(false);
-    }).catch(e => { if (active) { setError(message(e)); setOptions(undefined); setEngines([]); setSelection(emptySelection); setOptionsLoading(false); } });
+    }).catch(e => { if (active) { setErrorKind('load'); setError(message(e)); setOptions(undefined); setEngines([]); setSelection(emptySelection); setOptionsLoading(false); } });
     return () => { active = false; };
   }, [api, mode, uploadId, loadAttempt, initialRun]);
 
@@ -56,7 +61,7 @@ export function NewRun({ api, onRunCreated, initialRun }: { api: EvalApi; onRunC
       if (!active) return;
       setDatasets(result.datasets);
       setDatasetId(current => result.datasets.some(d => d.dataset_id === current) ? current : (result.datasets[0]?.dataset_id ?? ''));
-    }).catch(e => { if (active) setError(message(e)); });
+    }).catch(e => { if (active) { setErrorKind('load'); setError(message(e)); } });
     return () => { active = false; };
   }, [api, loadAttempt, rerunSourceID]);
 
@@ -65,8 +70,8 @@ export function NewRun({ api, onRunCreated, initialRun }: { api: EvalApi; onRunC
     let active = true;
     api.dataset(datasetId).then(result => {
       if (!active) return;
-      setDataset(result); setSessionIds(result.sessions.map(s => s.session_id));
-    }).catch(e => { if (active) setError(message(e)); });
+      setDataset(result); setSessionIds(result.sessions.filter(hasGold).map(s => s.session_id));
+    }).catch(e => { if (active) { setErrorKind('load'); setError(message(e)); } });
     return () => { active = false; };
   }, [api, datasetId, mode, loadAttempt, rerunSourceID]);
 
@@ -74,23 +79,27 @@ export function NewRun({ api, onRunCreated, initialRun }: { api: EvalApi; onRunC
     if (!uploadId || uploadStatus !== 'transcribing' || mode !== 'upload') return;
     const controller = new AbortController();
     let timer: ReturnType<typeof setTimeout>;
+    let failures = 0;
     const poll = async () => {
       try {
         const result = await api.getUpload(uploadId, controller.signal);
         if (controller.signal.aborted) return;
+        failures = 0; setPollError('');
         setUpload(result);
-        if (result.status === 'transcribing') timer = setTimeout(() => void poll(), 3000);
+        if (result.status === 'transcribing') timer = setTimeout(() => void poll(), POLL_MS);
       } catch (e) {
-        if (!controller.signal.aborted) { setError(message(e)); setPollFailed(true); }
+        if (controller.signal.aborted) return;
+        failures += 1; setPollError(message(e));
+        timer = setTimeout(() => void poll(), Math.min(POLL_MS * 2 ** failures, MAX_POLL_MS));
       }
     };
-    timer = setTimeout(() => void poll(), 3000);
-    return () => { clearTimeout(timer); controller.abort(); };
-  }, [api, uploadId, uploadStatus, mode, pollAttempt]);
+    timer = setTimeout(() => void poll(), POLL_MS);
+    return () => { clearTimeout(timer); controller.abort(); setPollError(''); };
+  }, [api, uploadId, uploadStatus, mode]);
 
   const invalidateUpload = () => {
     if (upload) setOptionsLoading(true);
-    setUpload(undefined); setClinician(''); setPollFailed(false); setError('');
+    setUpload(undefined); setClinician(''); setPollError(''); setError('');
   };
   const changeMode = (next: Mode) => {
     if (mode === next) return;
@@ -127,8 +136,8 @@ export function NewRun({ api, onRunCreated, initialRun }: { api: EvalApi; onRunC
 
   const mutate = async (operation: () => Promise<void>) => {
     if (inFlight.current) return;
-    inFlight.current = true; setBusy(true); setError('');
-    try { await operation(); } catch (e) { setError(message(e)); }
+    inFlight.current = true; setBusy(true); setError(''); lastAction.current = operation;
+    try { await operation(); } catch (e) { setErrorKind('action'); setError(message(e)); }
     finally { inFlight.current = false; setBusy(false); }
   };
   const saveUpload = () => {
@@ -155,18 +164,18 @@ export function NewRun({ api, onRunCreated, initialRun }: { api: EvalApi; onRunC
   return <section>
     <h1>New run</h1>
     <p>Compare MITI 4.2.1 coding across engines and human scores.</p>
-    {error && <div role="alert"><p>{error}</p>{pollFailed ? <button type="button" onClick={() => { setError(''); setPollFailed(false); setPollAttempt(n => n + 1); }}>Retry transcription status</button> : <button type="button" disabled={busy} onClick={() => { setError(''); setOptionsLoading(true); setLoadAttempt(n => n + 1); }}>Reload choices</button>}</div>}
+    {error && <div role="alert"><p>{error}</p>{errorKind === 'action' ? <button type="button" disabled={busy} onClick={() => { const action = lastAction.current; if (action) void mutate(action); else setError(''); }}>Retry</button> : <button type="button" disabled={busy} onClick={() => { setError(''); setOptionsLoading(true); setLoadAttempt(n => n + 1); }}>Reload choices</button>}</div>}
     <form aria-busy={busy} onSubmit={event => { event.preventDefault(); startRun(); }}>
       {busy && <p role="status">Working…</p>}
       {initialRun ? <fieldset><legend>Saved input</legend><p>Rerun of {rerunSourceID}. Original input and session configuration are preserved.</p><pre>{JSON.stringify({ input: initialRun.input, change_goal: initialRun.change_goal, language: initialRun.language, coded_span: initialRun.coded_span }, null, 2)}</pre></fieldset> : <fieldset disabled={busy}><legend>Input</legend>
         <div className="choice-row">{(['dataset', 'upload'] as const).map(value => <label key={value}><input type="radio" name="mode" checked={mode === value} onChange={() => changeMode(value)} />{value === 'dataset' ? 'Dataset' : 'Upload'}</label>)}</div>
         {mode === 'dataset' ? <>
           <label>Choose dataset<select value={datasetId} onChange={event => { setDatasetId(event.target.value); setDataset(undefined); setSessionIds([]); setError(''); }}><option value="" disabled>Select a dataset</option>{datasets.map(d => <option key={d.dataset_id} value={d.dataset_id}>{d.title}</option>)}</select></label>
-          {dataset?.dataset_id === datasetId && <fieldset><legend>Sessions</legend>{dataset.sessions.map(s => <label key={s.session_id}><input type="checkbox" checked={sessionIds.includes(s.session_id)} onChange={() => setSessionIds(ids => toggle(ids, s.session_id))} />{s.title}</label>)}</fieldset>}
+          {dataset?.dataset_id === datasetId && <fieldset><legend>Sessions</legend>{dataset.sessions.map(s => <div key={s.session_id}><label><input type="checkbox" checked={sessionIds.includes(s.session_id)} disabled={!hasGold(s)} aria-describedby={hasGold(s) ? undefined : `nogold-${s.session_id}`} onChange={() => setSessionIds(ids => toggle(ids, s.session_id))} />{s.title}</label>{!hasGold(s) && <small id={`nogold-${s.session_id}`}> No gold file, so Human scores are missing and this session cannot be run.</small>}</div>)}{dataset.sessions.length > 0 && !dataset.sessions.some(hasGold) && <p role="status">None of this dataset's sessions has a gold file, so none can be run.</p>}</fieldset>}
         </> : <>
-          <label>Session file<input type="file" accept="audio/*,.json,.txt" onChange={event => { invalidateUpload(); setFile(event.target.files?.[0]); }} /></label>
+          <label>Session file<input type="file" accept=".mp3,.wav,.m4a,.webm,.ogg,.json,.txt" onChange={event => { invalidateUpload(); setFile(event.target.files?.[0]); }} /></label>
           <label>Gold file (optional)<input type="file" accept=".json,application/json" onChange={event => { invalidateUpload(); setGold(event.target.files?.[0]); }} /></label>
-          <label>Change goal<input value={goal} onChange={event => { invalidateUpload(); setGoal(event.target.value); }} /></label>
+          <label>Change goal<input value={goal} maxLength={MAX_GOAL} onChange={event => { invalidateUpload(); setGoal(event.target.value); }} /></label><small>{goal.length} / {MAX_GOAL}</small>
           <label>Language<input value={language} placeholder="e.g. en" onChange={event => { invalidateUpload(); setLanguage(event.target.value); }} /></label>
           <label><input type="checkbox" checked={overrideSpan} onChange={event => { invalidateUpload(); setOverrideSpan(event.target.checked); }} />Override coded portion</label>
           {overrideSpan && <fieldset><legend>Coded portion</legend><p>Start is included; end is excluded. Turn numbers start at zero.</p>
@@ -177,7 +186,7 @@ export function NewRun({ api, onRunCreated, initialRun }: { api: EvalApi; onRunC
           </fieldset>}
           {gold && overrideSpan && <p>Human scores keep the coded portion in the gold file if it differs from your chosen portion.</p>}
           <button type="button" disabled={!canPrepare} onClick={saveUpload}>{busy && !upload ? 'Preparing…' : 'Prepare upload'}</button>
-          {upload?.status === 'transcribing' && <p role="status">Transcribing recording…</p>}
+          {upload?.status === 'transcribing' && <p role="status">Transcribing recording…</p>}{pollError && <p role="status">Could not check transcription status ({pollError}). Still trying…</p>}
           {upload?.status === 'ready' && <p role="status">Upload ready: {file?.name}</p>}
           {upload?.status === 'failed' && <div role="alert"><p>{upload.error?.message || 'Could not prepare this recording. Please try again.'}</p><button type="button" onClick={invalidateUpload}>Try upload again</button></div>}
           {upload?.status === 'awaiting_speakers' && <fieldset><legend>Pick the clinician</legend>
