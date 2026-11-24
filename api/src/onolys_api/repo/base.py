@@ -104,6 +104,11 @@ class Repo(Protocol):
         self, uid: str, limit: int = 20, cursor: str | None = None
     ) -> Page[SessionDoc]: ...
     def delete_session(self, uid: str, sid: str) -> bool: ...
+    # R11: a validation file-check failure is an upload failure. Writes the data-free status stub
+    # (`state=upload_failed`, `error_code`, `expire_at` +7 days), then deletes the session doc and
+    # every subcollection (recordings, runs). NotFoundError if the session is not the caller's,
+    # is gone or is `deleting` (the Delete path owns it). Idempotent for a redelivered task.
+    def discard_failed_upload(self, uid: str, sid: str, code: str) -> None: ...
 
     # One transaction: if the session is still in `state` with `updated_at < before`, set it
     # `to` (default `failed`) with `error` (mirrored to session_status; `steps.<error.step>`

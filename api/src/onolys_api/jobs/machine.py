@@ -58,7 +58,7 @@ STAGES = tuple(STAGE_WEIGHTS)  # 45 + 51 = 96: under the 99 cap
 STATUS_FIELDS = frozenset(
     {
         "uid", "state", "step", "progress", "error_code", "error_kind", "retries_left", "counted",
-        "latest_report_version", "updated_at",
+        "latest_report_version", "updated_at", "expire_at",
         *FLAGS,
     }
 )  # fmt: skip

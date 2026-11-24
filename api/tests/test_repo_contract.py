@@ -151,6 +151,7 @@ def test_status_doc_holds_no_phi_fields(repo):
         "counted",
         "latest_report_version",
         "updated_at",
+        "expire_at",
         "transcript_ready",
         "speaker_confirmed",
         "rating_submitted",
@@ -988,3 +989,31 @@ def test_txn_does_not_retry_unrelated_value_error(repo):
     with pytest.raises(ValueError, match="bad input"):
         repo._retry_txn(boom)
     assert len(calls) == 1
+
+
+# ---- discard_failed_upload (03-failure-policy R11) ----
+
+
+def test_discard_failed_upload_leaves_only_a_data_free_stub(repo):
+    uid, sid = seed(repo)
+    now = datetime.now(UTC)
+    repo.add_recording(uid, sid, "original", RecordingDoc(gcs_uri="gs://b/x"))
+    repo.create_run(uid, sid, "run1", RunDoc(uid=uid, session_id=sid, run_id="run1", started=now))
+    repo.discard_failed_upload(uid, sid, "audio_too_long")
+    with pytest.raises(NotFoundError):
+        repo.get_session(uid, sid)
+    st = repo.get_status(uid, sid)
+    assert (st.state, st.error_code) == ("upload_failed", "audio_too_long")
+    assert abs((st.expire_at - st.updated_at) - timedelta(days=7)) < timedelta(seconds=5)
+    assert all("session_status" in p for p in session_paths(repo, sid))
+    page = repo.list_sessions(uid)
+    assert sid not in [s.id for s in page.items]
+    with pytest.raises(NotFoundError):  # a second discard has no session to act on
+        repo.discard_failed_upload(uid, sid, "audio_too_long")
+
+
+def test_discard_failed_upload_refuses_a_foreign_session(repo):
+    uid, sid = seed(repo)
+    with pytest.raises(NotFoundError):
+        repo.discard_failed_upload("someone-else", sid, "audio_unreadable")
+    assert repo.get_session(uid, sid)

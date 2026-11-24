@@ -87,19 +87,22 @@ KIND_BY_CODE: dict[str, Kind] = {
     TRANSCRIPTION: USER_FILE,
     "no_speech": USER_FILE,
     "speakers_not_separated": USER_FILE,
-    # file-check codes: still session failures until SP03 Task 6 turns them into upload failures;
-    # the file is at fault (the retired file-code set)
-    "audio_unreadable": USER_FILE,
-    "audio_too_large": USER_FILE,
-    "unsupported_audio": USER_FILE,
-    "audio_too_long": USER_FILE,
-    "interview_too_long": USER_FILE,
 }
+
+
+# Validate file-check codes (03-failure-policy R11): an UPLOAD failure, never a session failure,
+# so they are not in KIND_BY_CODE. They are kept here for old `failed` docs that carry one.
+UPLOAD_FAILURE_CODES = frozenset(
+    {"audio_unreadable", "audio_too_large", "unsupported_audio", "audio_too_long",
+     "interview_too_long"}
+)  # fmt: skip
 
 
 def kind_for_code(code: str | None) -> Kind:
     """The kind of a stored error code; an unknown or missing code is `permanent_internal`
     (03-failure-policy R6): never offer a retry that cannot help."""
+    if code in UPLOAD_FAILURE_CODES:
+        return USER_FILE  # an old failed doc: the file was at fault
     return KIND_BY_CODE.get(code or "", PERMANENT)
 
 

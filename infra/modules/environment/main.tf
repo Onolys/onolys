@@ -161,6 +161,17 @@ resource "google_firestore_field" "email_rate_ttl" {
   ttl_config {}
 }
 
+# Status stubs of discarded uploads (api/src/onolys_api/jobs/validate.py, upload_failed) expire
+# 7 days after the failure via Firestore TTL on `expire_at`; other status docs never set it.
+resource "google_firestore_field" "session_status_ttl" {
+  project    = var.project
+  database   = google_firestore_database.db.name
+  collection = "session_status"
+  field      = "expire_at"
+
+  ttl_config {}
+}
+
 resource "google_project_iam_member" "worker_speech_client" {
   project = var.project
   role    = "roles/speech.client"

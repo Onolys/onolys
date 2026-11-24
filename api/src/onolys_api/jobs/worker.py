@@ -46,6 +46,10 @@ class PermanentError(TaskError):
     """Record `failed` with this public error code; Cloud Tasks gets 2xx."""
 
 
+class UploadFailedError(PermanentError):
+    """The handler already discarded the upload (R11): log it, record no `failed` session."""
+
+
 class RetryableError(TaskError):
     """upstream_unavailable, timeout, 429: 5xx while an attempt is left."""
 
@@ -222,15 +226,19 @@ class TaskRunner:
                 request_id=p.request_id,
             )  # fmt: skip
             return TaskResult(503, "retry")
-        self._fail(spec, p, e.code, exc_class)
+        self._fail(spec, p, e.code, exc_class, bookkeeping=not isinstance(e, UploadFailedError))
         return TaskResult(200, "failed")
 
-    def _fail(self, spec: HandlerSpec, p: TaskPayload, code: str, exc_class: str) -> None:
+    def _fail(
+        self, spec: HandlerSpec, p: TaskPayload, code: str, exc_class: str, bookkeeping: bool = True
+    ) -> None:
         logs.failed(
             "run_failed" if spec.scope == "run" else "step_failed", session_id=p.sid,
             run_id=p.run_id, step=spec.step or "run", error_code=code, exc_class=exc_class,
             request_id=p.request_id,
         )  # fmt: skip
+        if not bookkeeping:  # the session is gone (an upload failure): nothing to mark
+            return
         self._safe(self._record, spec, p, status="failed", ended=self.clock(), error=code)
         label = spec.step or "run"
         counted = None

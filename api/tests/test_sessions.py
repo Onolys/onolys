@@ -15,7 +15,7 @@ A = {"Authorization": "Bearer test:alice"}
 B = {"Authorization": "Bearer test:bob"}
 STATUS_KEYS = {
     "uid", "state", "step", "progress", "error_code", "error_kind", "retries_left", "counted",
-    "latest_report_version", "updated_at", "transcript_ready", "speaker_confirmed", "rating_submitted", "has_rating",
+    "latest_report_version", "updated_at", "expire_at", "transcript_ready", "speaker_confirmed", "rating_submitted", "has_rating",
 }  # fmt: skip
 
 

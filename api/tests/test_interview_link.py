@@ -6,6 +6,7 @@ from audio_helpers import MAGIC, A, StubTools
 
 from onolys_api.app import create_app
 from onolys_api.audio import ProbeResult
+from onolys_api.repo.base import NotFoundError
 from onolys_api.repo.fake import FakeRepo
 from onolys_api.repo.models import InterviewDoc
 
@@ -193,9 +194,9 @@ async def upload(settings, repo, blobs, seconds, iid=None):
 async def test_640s_interview_fails_interview_too_long(settings, repo, blobs):
     iid = interview(repo)
     sid = await upload(settings, repo, blobs, 640.0, iid)
-    s = repo.get_session("alice", sid)
-    assert s.state == "failed" and s.error.code == "interview_too_long"
-    assert s.error.step == "validate"
+    with pytest.raises(NotFoundError):  # an upload failure leaves no session (SP03 R11)
+        repo.get_session("alice", sid)
+    assert repo.get_status("alice", sid).error_code == "interview_too_long"
     assert blobs.list_keys(f"alice/{sid}/") == []
 
 

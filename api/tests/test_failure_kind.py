@@ -17,7 +17,7 @@ from test_start_run import READY
 from test_worker import SID, UID, payload, runner_with
 from test_worker import repo as worker_repo  # noqa: F401  (fixture)
 
-from onolys_api.adapters.error_map import KIND_BY_CODE, kind_for_code
+from onolys_api.adapters.error_map import KIND_BY_CODE, UPLOAD_FAILURE_CODES, kind_for_code
 from onolys_api.config import MAX_SESSION_RETRIES, Settings
 from onolys_api.jobs import machine as m
 from onolys_api.jobs.stale import settle_if_stale
@@ -38,8 +38,9 @@ def test_max_session_retries_default_is_3():
 
 
 @pytest.mark.parametrize("code", FILE_CHECK_CODES)
-def test_file_check_codes_are_user_file(code):  # what BAD_FILE_CODES said, now in the table
-    assert KIND_BY_CODE[code] == "user_file" and kind_for_code(code) == "user_file"
+def test_file_check_codes_are_upload_failures_not_session_kinds(code):
+    assert code not in KIND_BY_CODE and code in UPLOAD_FAILURE_CODES
+    assert kind_for_code(code) == "user_file"  # an old failed doc carrying it still derives
 
 
 def test_kind_for_code_unknown_or_missing_is_permanent_internal():

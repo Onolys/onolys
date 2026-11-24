@@ -4,8 +4,13 @@ Checks in order: object size, magic bytes, ffprobe (audio stream, no video, 1 s 
 STT provider's `max_audio_s`, 20 min for Chirp 3).
 A passing upload moves to `{uid}/{sid}/audio/original.{ext}`, is transcoded to
 `canonical.flac` (16 kHz mono), the staged object is deleted, the recording doc is written,
-and `transcribe` is enqueued. A failure removes every object of the session's audio and
-records the public code. Idempotent: a redelivery after the move resumes from the original.
+and `transcribe` is enqueued. A file-check failure (R11 of 03-failure-policy: `audio_unreadable`,
+`audio_too_large`, `unsupported_audio`, `audio_too_long`, `interview_too_long`) is an UPLOAD
+failure, the one case that deletes user data: `purge()` removes every object of the session's
+audio, `repo.discard_failed_upload` deletes the session doc and its subcollections and leaves a
+data-free status stub (state `upload_failed`, the public code, 7 days). Nothing was counted.
+Every other failure, here or in a later step, keeps the user's data (R8).
+Idempotent: a redelivery after the move resumes from the original.
 Logs carry codes only, never file names or content.
 """
 
@@ -34,7 +39,7 @@ from onolys_api.config import Settings
 from onolys_api.jobs.alive import ensure_alive as _ensure_alive
 from onolys_api.jobs.machine import advance
 from onolys_api.jobs.queue import TaskPayload
-from onolys_api.jobs.worker import Handler, PermanentError, TaskContext
+from onolys_api.jobs.worker import Handler, PermanentError, TaskContext, UploadFailedError
 from onolys_api.repo.base import NotFoundError
 from onolys_api.repo.models import ClientInfo, InterviewDoc, RecordingDoc
 from onolys_api.storage.base import MAX_UPLOAD_BYTES, BlobNotFoundError, BlobStore
@@ -118,6 +123,8 @@ def make_validate_handler(
     cfg = settings or Settings()
 
     def purge(uid: str, sid: str) -> None:
+        """Delete the staged and stored audio. ONLY for a file-check failure (R11), the single
+        exception to "failures never delete user data" (R8)."""
         blobs.delete_prefix(f"uploads/{uid}/{sid}/")
         blobs.delete_prefix(f"{uid}/{sid}/audio/")
 
@@ -125,8 +132,10 @@ def make_validate_handler(
         _ensure_alive(ctx.repo, blobs, ctx.uid, ctx.sid)
 
     def fail(ctx: TaskContext, code: str) -> PermanentError:
+        """A file-check failure: discard the upload (audio, session doc, subcollections)."""
         purge(ctx.uid, ctx.sid)
-        return PermanentError(code)
+        ctx.repo.discard_failed_upload(ctx.uid, ctx.sid, code)
+        return UploadFailedError(code)
 
     def find_source(ctx: TaskContext, upload_id: str | None) -> tuple[str, bool] | None:
         """(key, already_moved): an original left by an earlier attempt, else the staged object.

@@ -64,6 +64,7 @@ from onolys_api.repo.models import (
     error_status_fields,
     interview_refundable,
     retry_allowed,
+    upload_failed_stub,
     utcnow,
 )
 from onolys_api.storage.base import BlobStore
@@ -283,9 +284,7 @@ class FirestoreRepo:
                     raise
                 time.sleep(random.uniform(0.01, 0.15))
 
-    def confirm_speaker(
-        self, uid: str, sid: str, clinician: str, states: tuple[str, ...]
-    ) -> bool:
+    def confirm_speaker(self, uid: str, sid: str, clinician: str, states: tuple[str, ...]) -> bool:
         """Record the clinician only while the session is still in one of `states` (checked and
         written in one transaction, so a run starting concurrently cannot be overwritten)."""
         sref = self._top("sessions", sid)  # read inside the txn only: a plain read can abort
@@ -304,9 +303,7 @@ class FirestoreRepo:
                 sref,
                 {"clinician_speaker": clinician, "speaker_confirmed": True, "updated_at": now},
             )
-            txn.set(
-                stref, {"speaker_confirmed": True, "uid": uid, "updated_at": now}, merge=True
-            )
+            txn.set(stref, {"speaker_confirmed": True, "uid": uid, "updated_at": now}, merge=True)
             return True
 
         return self._contended(txn_fn, uid)
@@ -394,6 +391,14 @@ class FirestoreRepo:
         if stsnap is not None:
             stref.delete()
         return ssnap is not None or stsnap is not None
+
+    def discard_failed_upload(self, uid: str, sid: str, code: str) -> None:
+        sref, snap = self._owned_session(uid, sid)
+        if (snap.to_dict() or {}).get("state") == "deleting":
+            raise NotFoundError()
+        stub = upload_failed_stub(uid, code, utcnow())
+        self._top("session_status", sid).set(stub.to_store())  # overwrite: no leftover fields
+        self._client.recursive_delete(sref)  # doc + recordings, runs, ...
 
     # ---- recordings ----
 
@@ -840,8 +845,13 @@ class FirestoreRepo:
             latest = [s for s in newest.get(transaction=txn) if s.id != DRAFT_ID]
             # the free first run of an interview-linked session (SP11 R5), same as start_first_run
             first = (
-                (sref.collection("runs").document(sess["first_run_id"]).get(transaction=txn)
-                 .to_dict() or {})
+                (
+                    sref.collection("runs")
+                    .document(sess["first_run_id"])
+                    .get(transaction=txn)
+                    .to_dict()
+                    or {}
+                )
                 if sess.get("first_run_id")
                 else {}
             )

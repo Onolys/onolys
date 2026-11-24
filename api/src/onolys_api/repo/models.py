@@ -3,7 +3,7 @@
 `id` is the document id: filled on read, never written. Datetimes are tz-aware UTC.
 """
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any, Literal
 
 from onolys_engine_core.transcript import Transcript
@@ -23,6 +23,21 @@ SessionState = Literal[
     "deleting",
     "upload_incomplete",
 ]
+# Only the status doc has this state (R11): the session doc of a discarded upload is gone.
+StatusState = Literal[
+    "created",
+    "uploading",
+    "validating",
+    "transcribing",
+    "awaiting_input",
+    "running",
+    "report_ready",
+    "failed",
+    "deleting",
+    "upload_incomplete",
+    "upload_failed",
+]
+UPLOAD_FAILED_TTL = timedelta(days=7)
 InterviewState = Literal["created", "live", "ended", "abandoned", "uploaded"]
 RunStatus = Literal["pending", "running", "done", "failed"]
 StepStatus = Literal["pending", "running", "done", "failed"]
@@ -197,7 +212,7 @@ class SessionStatusDoc(Doc):
     """The only client-readable document: no transcript, rating, report text or PHI."""
 
     uid: str
-    state: SessionState = "created"
+    state: StatusState = "created"
     step: str | None = None
     progress: int = 0
     error_code: str | None = None
@@ -206,6 +221,7 @@ class SessionStatusDoc(Doc):
     counted: bool | None = None
     latest_report_version: int | None = None
     updated_at: datetime = Field(default_factory=utcnow)
+    expire_at: datetime | None = None  # only an `upload_failed` stub: Firestore TTL deletes it
     transcript_ready: bool = False
     speaker_confirmed: bool = False
     rating_submitted: bool = False
@@ -222,6 +238,14 @@ class SessionStatusDoc(Doc):
 
                 self.retries_left = MAX_SESSION_RETRIES
         return self
+
+
+def upload_failed_stub(uid: str, code: str, now: datetime) -> SessionStatusDoc:
+    """The data-free status doc left by a discarded upload (R11): reason only, gone in 7 days."""
+    return SessionStatusDoc(
+        uid=uid, state="upload_failed", error_code=code, updated_at=now,
+        expire_at=now + UPLOAD_FAILED_TTL,
+    )  # fmt: skip
 
 
 class RecordingDoc(Doc):

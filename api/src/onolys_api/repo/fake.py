@@ -55,6 +55,7 @@ from onolys_api.repo.models import (
     error_status_fields,
     interview_refundable,
     retry_allowed,
+    upload_failed_stub,
     utcnow,
 )
 from onolys_api.storage.base import BlobStore
@@ -208,9 +209,7 @@ class FakeRepo:
             self._put(f"session_status/{sid}", st)
             self._record_status(uid, sid)
 
-    def confirm_speaker(
-        self, uid: str, sid: str, clinician: str, states: tuple[str, ...]
-    ) -> bool:
+    def confirm_speaker(self, uid: str, sid: str, clinician: str, states: tuple[str, ...]) -> bool:
         with self._claim_lock:  # the fake's "transaction"
             doc = self._owned(f"sessions/{sid}", uid)
             if doc.get("state") not in states:
@@ -268,8 +267,10 @@ class FakeRepo:
             self._put(f"sessions/{sid}", sess)
             status = self._get(f"session_status/{sid}") or {}
             status.update(
-                state=to, **error_status_fields(error, sess.get("retry_count", 0)),
-                uid=uid, updated_at=now,
+                state=to,
+                **error_status_fields(error, sess.get("retry_count", 0)),
+                uid=uid,
+                updated_at=now,
             )
             self._put(f"session_status/{sid}", status)
             self._record_status(uid, sid)
@@ -285,6 +286,17 @@ class FakeRepo:
         if st is not None:
             del self._docs[f"session_status/{sid}"]
         return s is not None or st is not None
+
+    def discard_failed_upload(self, uid: str, sid: str, code: str) -> None:
+        with self._claim_lock:
+            doc = self._owned(f"sessions/{sid}", uid)
+            if doc.get("state") == "deleting":
+                raise NotFoundError()
+            self._put(f"session_status/{sid}", upload_failed_stub(uid, code, utcnow()).to_store())
+            self._record_status(uid, sid)
+            for p in [p for p in self._docs if p.startswith(f"sessions/{sid}/")]:
+                del self._docs[p]
+            del self._docs[f"sessions/{sid}"]
 
     # ---- recordings ----
 
