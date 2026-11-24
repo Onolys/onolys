@@ -11,6 +11,18 @@ from onolys_miti.stt import AudioRef, SttCompletion, SttParams, SttRun, Word
 DEFAULT_MAX_GAP_MS = 2000
 
 
+def _turn_end(words: list[Word]) -> int | None:
+    """Latest observed time in the turn; None when no word has a valid end."""
+    ends = [w.end_ms for w in words if w.end_ms is not None]
+    if not ends:
+        return None
+    return max(ends + [w.start_ms for w in words])
+
+
+def _last_seen(word: Word) -> int:
+    return max(word.start_ms, word.end_ms) if word.end_ms is not None else word.start_ms
+
+
 def words_to_turns(words: list[Word], max_gap_ms: int = DEFAULT_MAX_GAP_MS) -> list[Turn]:
     """Group words into turns: new turn on speaker change or a gap above `max_gap_ms`.
 
@@ -32,7 +44,7 @@ def words_to_turns(words: list[Word], max_gap_ms: int = DEFAULT_MAX_GAP_MS) -> l
                 speaker=speaker,
                 text=" ".join(w.text for w in cur),
                 start_ms=cur[0].start_ms,
-                end_ms=max(cur[0].start_ms, *(w.end_ms for w in cur)),
+                end_ms=_turn_end(cur),
             )
         )
         cur.clear()
@@ -43,12 +55,16 @@ def words_to_turns(words: list[Word], max_gap_ms: int = DEFAULT_MAX_GAP_MS) -> l
             labels.setdefault(w.speaker, f"S{len(labels) + 1}")
         if cur and (
             w.speaker != cur[-1].speaker
-            or w.start_ms - max(cur[-1].start_ms, cur[-1].end_ms) > max_gap_ms
+            or w.start_ms - _last_seen(cur[-1]) > max_gap_ms
         ):
             flush()
         cur.append(w)
     flush()
     return turns
+
+
+def _audio_ms(words: list[Word]) -> int | None:
+    return max((w.end_ms for w in words if w.end_ms is not None), default=None)
 
 
 class BaseSttAdapter(ABC):
@@ -93,14 +109,15 @@ class BaseSttAdapter(ABC):
             stt_model=run.model,
             language=run.language_detected or run.language_requested,
             speakers=len({w.speaker for w in words if w.speaker is not None}),
-            audio_ms=max((w.end_ms for w in words), default=None),
+            audio_ms=_audio_ms(words),
         )
         return SttCompletion(
             transcript=Transcript(
                 turns=turns,
+                # Undetected language stays unknown; never defaulted to English.
                 language=run.language_detected
-                or ("en" if run.language_requested == "auto" else run.language_requested),
-                duration_ms=max((w.end_ms for w in words), default=None),
+                or (None if run.language_requested == "auto" else run.language_requested),
+                duration_ms=_audio_ms(words),
             ),
             run=run,
         )

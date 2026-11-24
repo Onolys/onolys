@@ -29,7 +29,7 @@ class AudioRef(BaseModel):
 class Word(BaseModel):
     text: str
     start_ms: int
-    end_ms: int
+    end_ms: int | None  # None when the provider gave no valid end; never guessed
     speaker: str | None = None
 
 

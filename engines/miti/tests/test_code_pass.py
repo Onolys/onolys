@@ -309,3 +309,18 @@ async def test_complete_response_and_explicit_empty_list_valid(tmp_path, pack_da
 
     out = await run(FakeClient(handler), make_pack(tmp_path, pack_data), volleys(2))
     assert [i.volley_id for i in out.instances] == ["v1"]
+
+
+async def test_deadline_reaches_every_request(tmp_path, pack_data):
+    client = FakeClient(lambda req, n: good(req))
+    await run(client, make_pack(tmp_path, pack_data, {}), volleys(26), deadline=123.5)
+    assert len(client.requests) == 2
+    assert [r.deadline for r in client.requests] == [123.5, 123.5]
+
+
+async def test_output_format_says_all_ids_returned_and_empty_allowed(tmp_path, pack_data):
+    from onolys_miti.code_pass import _OUTPUT_FORMAT
+
+    text = " ".join(_OUTPUT_FORMAT.split())
+    assert "every volley id appears exactly once" in text
+    assert "empty" in text and "allowed" in text

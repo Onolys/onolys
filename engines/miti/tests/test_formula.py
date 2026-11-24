@@ -64,3 +64,18 @@ def test_label_lower_better_boundaries():
     assert label_for(7, ref) == "fair"
     assert label_for(10, ref) == "fair"
     assert label_for(10.1, ref) == "below_fair"
+
+
+def test_label_agrees_with_displayed_rounding():
+    ref = {"fair": 4.0, "good": 4.5}
+    assert label_for(3.96, ref) == "below_fair"  # raw comparison
+    assert label_for(3.96, ref, ndigits=1) == "fair"  # shown as 4.0
+    assert label_for(3.94, ref, ndigits=1) == "below_fair"
+    pct = {"fair": 0.4, "good": 0.5}
+    assert label_for(0.4951, pct, ndigits=2) == "good"  # shown as 50%
+
+
+def test_display_digits():
+    from onolys_miti.formula import display_digits
+
+    assert (display_digits("0.0"), display_digits("percent"), display_digits(None)) == (1, 2, None)

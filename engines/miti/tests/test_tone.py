@@ -78,7 +78,7 @@ def test_every_static_report_string_passes_the_lint(rules):
 
 def test_layout_loads_from_pack_yaml():
     cfg = load_report_config(miti.DATA_DIR / "report.yaml")
-    assert cfg.headline == "Onolys disagrees, here's why"
+    assert cfg.headline == "Onolys's reading of the session"
     assert [s.id for s in cfg.sections] == [s["id"] for s in miti.MITI.report["sections"]]
     assert cfg.max_instances_shown >= 1
     assert cfg.method.limits and cfg.method.citation

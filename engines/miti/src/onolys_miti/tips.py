@@ -158,6 +158,7 @@ def _build_request(
     language: str | None,
     run_index: int,
     retry: bool,
+    deadline: float | None = None,
 ) -> LLMRequest:
     system_md = (miti.MITI.data_dir / "prompts" / PROMPT_FILE).read_text(encoding="utf-8").strip()
     prefix = "\n\n".join([system_md, _items_block(), _OUTPUT_FORMAT])
@@ -174,6 +175,7 @@ def _build_request(
         max_tokens=int(
             miti.MITI.data.get("params", {}).get("tips_max_tokens", DEFAULT_TIPS_MAX_TOKENS)
         ),
+        deadline=deadline,
     )
 
 
@@ -246,6 +248,7 @@ async def generate_tips(
     *,
     run_index: int = 0,
     metrics: MetricsCollector | None = None,
+    deadline: float | None = None,
 ) -> tuple[TipsArtifact, list[Warning]]:
     """Tips for one evaluation. Never raises for model trouble: a failed call returns no tips
     and a `tips_failed` warning; fewer than three valid tips adds `fewer_tips`."""
@@ -264,7 +267,7 @@ async def generate_tips(
         for attempt in (1, 2):
             user = base if attempt == 1 else {**base, "violations": violations}
             req = _build_request(
-                user, miti_result.language, run_index, retry=attempt == 2
+                user, miti_result.language, run_index, retry=attempt == 2, deadline=deadline
             )
             try:
                 res = await client.complete_json(req, metrics)

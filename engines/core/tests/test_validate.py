@@ -79,3 +79,10 @@ def test_feedback_contains_fixed_instruction_and_sanitized_issues():
     assert issues[0].path in feedback and issues[0].message in feedback
     assert "PRIVATE_VALUE" not in feedback
     assert build_feedback([]) == SCHEMA_CONFORMANCE_INSTRUCTION
+
+
+def test_integral_float_is_not_an_integer():
+    schema = {"properties": {"n": {"type": "integer"}}}
+    assert validate_output({"n": 1}, schema) == []
+    assert validate_output({"n": 1.0}, schema) != []
+    assert validate_output({"n": True}, schema) != []

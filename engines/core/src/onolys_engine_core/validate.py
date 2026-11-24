@@ -7,7 +7,7 @@ messages and explicitly declared schema property names may cross this boundary.
 from dataclasses import dataclass
 from itertools import islice
 
-from jsonschema.validators import validator_for
+from jsonschema.validators import extend, validator_for
 
 MAX_ISSUES = 20
 MAX_ISSUE_LENGTH = 200
@@ -15,6 +15,17 @@ SCHEMA_CONFORMANCE_INSTRUCTION = (
     "Your last answer did not match the schema. Return the complete JSON object; "
     "every required field present, no extra fields, exact enum values"
 )
+
+
+def _strict_integer(_checker, instance) -> bool:
+    # jsonschema treats 1.0 as an integer; the strict models downstream do not. Agree with them.
+    return isinstance(instance, int) and not isinstance(instance, bool)
+
+
+def _validator(schema: dict):
+    base = validator_for(schema)
+    checker = base.TYPE_CHECKER.redefine("integer", _strict_integer)
+    return extend(base, type_checker=checker)(schema)
 
 
 @dataclass(frozen=True)
@@ -80,7 +91,7 @@ def validate_output(output: dict, schema: dict) -> list[ValidationIssue]:
     schema-declared property names remain useful for locating the problem.
     """
     known_names = _property_names(schema)
-    errors = validator_for(schema)(schema).iter_errors(output)
+    errors = _validator(schema).iter_errors(output)
     issues = []
     for error in islice(errors, MAX_ISSUES):
         parts = ["$"]

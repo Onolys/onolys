@@ -75,7 +75,16 @@ async def run_validated(
     usages = []
     try:
         for attempt in range(1, 3 if engine.accepts_feedback else 2):
-            result = await engine.run(ctx, transcript, params, progress_cb)
+            try:
+                result = await engine.run(ctx, transcript, params, progress_cb)
+            except Exception as exc:
+                # A later attempt failing must not lose the spend of the completed ones.
+                if usages and getattr(exc, "usage", None) is None:
+                    try:
+                        exc.usage = _sum_usage(usages)  # type: ignore[attr-defined]
+                    except AttributeError:
+                        pass
+                raise
             usages.append(result.run_info.usage)
             issues = validate_output(result.output, engine.output_schema())
             usage = _sum_usage(usages)

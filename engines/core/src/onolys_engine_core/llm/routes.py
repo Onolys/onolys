@@ -101,6 +101,11 @@ def _llm_override(env: dict[str, str], models_path: Path | None) -> dict[str, st
     if not provider or not model:
         raise ConfigError(f"{PROVIDER_ENV} and {MODEL_ENV} must be set together")
     path = Path(env["MODELS_FILE"]) if env.get("MODELS_FILE") else models_path
+    if path is None or not path.is_file():
+        # Packaged default routes have no models.yaml beside them; say what to set.
+        raise ConfigError(
+            f"{PROVIDER_ENV}/{MODEL_ENV} need a models file: set MODELS_FILE (looked for {path})"
+        )
     entries = load_models(path)
     providers = sorted({m.provider for m in entries.values()})
     owners = [m for m in entries.values() if m.provider == provider]

@@ -176,3 +176,10 @@ def test_response_model_requires_every_global():
     m = make_response_model(["g1", "g2"])
     with pytest.raises(ValidationError):
         m.model_validate({"globals": {"g1": g(3, [])}})
+
+
+def test_deadline_reaches_request(tmp_path, pack_data):
+    make_pack(tmp_path, pack_data)
+    c = FakeClient(lambda req, n: reply(req, {"g1": g(4, GOOD), "g2": g(4, GOOD)}))
+    asyncio.run(globals_pass(c, prepared(), {"change_goal": "walk more"}, deadline=42.0))
+    assert [r.deadline for r in c.requests] == [42.0]

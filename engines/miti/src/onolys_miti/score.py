@@ -15,7 +15,7 @@ from collections.abc import Callable, Iterable, Mapping, Sequence
 from typing import Any
 
 from onolys_miti import miti
-from onolys_miti.formula import evaluate, label_for
+from onolys_miti.formula import display_digits, evaluate, label_for
 from onolys_miti.result import Instance, Reference, ResultWarning, Summary
 
 
@@ -156,7 +156,9 @@ def compute_summaries(
         ref = s.get("reference")
         out[sid] = Summary(
             value=None if value is None else float(value),
-            label=label_for(None if value is None else float(value), ref),
+            label=label_for(
+                None if value is None else float(value), ref, display_digits(s.get("format"))
+            ),
             reference=Reference(fair=float(ref["fair"]), good=float(ref["good"])) if ref else None,
         )
     return out
