@@ -88,15 +88,9 @@ function SessionView({ id }: { id: string }) {
     onError: () => void queryClient.invalidateQueries({ queryKey: USAGE_KEY }),
   });
 
-  // Retry of a failed step (PRD R6). TODO(Task 10): the typed client lacks this path until schema.d.ts is regenerated.
+  // Retry of a failed step (PRD R6).
   const retry = useMutation({
-    mutationFn: async () => {
-      const post = client.POST as unknown as (
-        path: string,
-        init: { params: { path: { id: string } } },
-      ) => Promise<Parameters<typeof unwrap>[0]>;
-      return unwrap(await post("/sessions/{id}/retry", { params: { path: { id } } }));
-    },
+    mutationFn: async () => unwrap(await client.POST("/sessions/{id}/retry", { params: { path: { id } } })),
   });
 
   // A successful POST keeps the buttons locked until the status doc moves on (else a second POST races it).
@@ -152,8 +146,7 @@ function SessionView({ id }: { id: string }) {
     );
   }
 
-  // TODO(Task 10): `upload_failed` joins the generated state enum; until then compare as a string.
-  if (doc && (doc.state as string) === "upload_failed") {
+  if (doc && doc.state === "upload_failed") {
     return (
       <div className={PAGE}>
         <h1 className={H1}>Session</h1>

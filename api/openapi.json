@@ -1132,6 +1132,30 @@
         "title": "ResetRequest",
         "type": "object"
       },
+      "RetryStarted": {
+        "properties": {
+          "run_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The new run, when the failed step was `run`",
+            "title": "Run Id"
+          },
+          "session": {
+            "$ref": "#/components/schemas/SessionRef"
+          }
+        },
+        "required": [
+          "session"
+        ],
+        "title": "RetryStarted",
+        "type": "object"
+      },
       "RunList": {
         "properties": {
           "items": {
@@ -1994,6 +2018,50 @@
           "turns"
         ],
         "title": "TranscriptView",
+        "type": "object"
+      },
+      "UploadLimits": {
+        "properties": {
+          "extensions": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Extensions",
+            "type": "array"
+          },
+          "interview_max_duration_s": {
+            "title": "Interview Max Duration S",
+            "type": "number"
+          },
+          "max_bytes": {
+            "title": "Max Bytes",
+            "type": "integer"
+          },
+          "max_duration_s": {
+            "title": "Max Duration S",
+            "type": "number"
+          },
+          "mime_types": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Mime Types",
+            "type": "array"
+          },
+          "short_warning_s": {
+            "title": "Short Warning S",
+            "type": "number"
+          }
+        },
+        "required": [
+          "max_bytes",
+          "max_duration_s",
+          "interview_max_duration_s",
+          "short_warning_s",
+          "extensions",
+          "mime_types"
+        ],
+        "title": "UploadLimits",
         "type": "object"
       },
       "Usage": {
@@ -3938,6 +4006,98 @@
         ]
       }
     },
+    "/v1/sessions/{id}/retry": {
+      "post": {
+        "description": "Allowed only for a `failed` session whose error kind is `transient`, with retries left (`MAX_SESSION_RETRIES`, 3) and no final rating; otherwise 409 `invalid_state`. One transaction counts the retry and moves the state: `validate` re-enters `validating` (409 if the staged upload is gone), `transcribe` re-enters `transcribing` with a fresh step record, `run` starts a new run with the failed run's preset, n_runs and span, reserving a unit like a fresh start (429 `daily_cap_reached` or `concurrent_runs`; a refused retry is not counted).",
+        "operationId": "retrySession",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "pattern": "^[0-9a-f]{32}$",
+              "title": "Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RetryStarted"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "`unauthenticated`: missing, invalid or revoked credentials"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "`not_found`: no such resource for this user (never 403, so ids cannot be probed)"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "`invalid_parameters` (incl. a malformed id, cursor or body), `unsupported_audio`, `audio_too_large`, `rating_invalid`, `invalid_coded_span` or `session_too_long`"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "`daily_cap_reached` (daily run cap), `concurrent_runs` (a run is already in progress) or `rate_limited`"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "`internal_error`"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "summary": "Retry the step that failed (capped, one path for every step)",
+        "tags": [
+          "sessions"
+        ]
+      }
+    },
     "/v1/sessions/{id}/runs": {
       "get": {
         "operationId": "listRuns",
@@ -4029,7 +4189,7 @@
         ]
       },
       "post": {
-        "description": "Needs the transcript and the confirmed speaker; uses the stored final rating revision or runs as no-rating. `preset` changes LLM routes only (the transcript is reused). On Try again (a failed session) `preset` and `n_runs` are ignored: the failed run's values are reused. Counts against the daily cap: 429 `daily_cap_reached`; 429 `concurrent_runs` while another run is in progress. 409 `rating_final` once a report exists (the rating is final: no re-run, interview sessions included). 409 `invalid_state` while a run is in progress, before the inputs exist, or after a bad-file failure (upload a different file instead).",
+        "description": "Needs the transcript and the confirmed speaker; uses the stored final rating revision or runs as no-rating. `preset` changes LLM routes only (the transcript is reused). Counts against the daily cap: 429 `daily_cap_reached`; 429 `concurrent_runs` while another run is in progress. 409 `rating_final` once a report exists (the rating is final: no re-run, interview sessions included). 409 `invalid_state` while a run is in progress, before the inputs exist, or on a failed session (use `POST /sessions/{id}/retry`).",
         "operationId": "startRun",
         "parameters": [
           {
@@ -4150,7 +4310,7 @@
             "APIKeyHeader": []
           }
         ],
-        "summary": "Start a run by hand (Try again after a system failure, or the first run held back)",
+        "summary": "Start the first run by hand (held back by the cap)",
         "tags": [
           "runs"
         ]
@@ -4574,6 +4734,65 @@
         "summary": "Upload a transcript.v1 JSON or label-prefixed UTF-8 text file",
         "tags": [
           "transcript"
+        ]
+      }
+    },
+    "/v1/upload-limits": {
+      "get": {
+        "operationId": "getUploadLimits",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UploadLimits"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "`unauthenticated`: missing, invalid or revoked credentials"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "`daily_cap_reached` (daily run cap), `concurrent_runs` (a run is already in progress) or `rate_limited`"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "`internal_error`"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "summary": "Upload limits",
+        "tags": [
+          "upload"
         ]
       }
     },

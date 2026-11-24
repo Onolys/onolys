@@ -63,7 +63,7 @@ All names a line may carry (anything else is dropped; see `ALLOWED_FIELDS` and `
 
 ## `error_code` table
 
-The code in the failed line is what `to_public` (`api/src/onolys_api/adapters/error_map.py`) returns for the exception; the same code is on the session and its card. Fixed user text is `PUBLIC_MESSAGES[code]`. A test (`api/tests/test_logging_docs.py`) fails when a code of `PUBLIC_MESSAGES` is missing here, so update this table with the map.
+The code in the failed line is what `to_public` (`api/src/onolys_api/adapters/error_map.py`) returns for the exception; the same code is on the session and its card. Fixed user text is `PUBLIC_MESSAGES[code]`. A test (`api/tests/test_logging_docs.py`) fails when a code of `PUBLIC_MESSAGES` is missing here, so update this table with the map. The failure kind and the Try again button per code are in the [public API error table](public-api.md#engine-errors).
 
 | `error_code` | Meaning | Where raised | Retryable |
 |---|---|---|---|

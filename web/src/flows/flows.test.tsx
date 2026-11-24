@@ -167,16 +167,16 @@ describe("flow: one submit, no rating card (default)", () => {
     const u = user();
     const { router } = renderApp("/sessions", { user: USER });
     await h1("Sessions");
-    const sid = await uploadViaUi(u, router, "fail-code");
+    const sid = await uploadViaUi(u, router, "fail-transient");
     await confirmSpeakerViaUi(u, sid);
     await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Coding the session"));
     settle(sid);
     const card = await screen.findByRole("alert");
     expect(card).toHaveTextContent(`Reference: ${sid}`);
-    await u.click(within(card).getByRole("button", { name: "Try again" }));
+    await u.click(await within(card).findByRole("button", { name: "Retry" }, { timeout: 8000 })); // after the 5 s pacing
     await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Coding the session"));
     expect(mockBackend.listRuns(UID, sid)).toHaveLength(2);
-  });
+  }, 15_000);
 });
 
 describe("flow (rating on): sign-up, verify, upload, speaker + rating during transcription, report (AC2, AC9)", () => {
@@ -269,21 +269,21 @@ describe("flow (rating on): system failure, then Try again (AC6a)", () => {
     const u = user();
     const { router } = renderApp("/sessions", { user: USER });
     await h1("Sessions");
-    const sid = await uploadViaUi(u, router, "fail-code");
+    const sid = await uploadViaUi(u, router, "fail-transient");
     await confirmSpeakerViaUi(u, sid);
     await rateViaUi(u);
     await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Coding the session"));
     settle(sid); // code stage fails
     const card = await screen.findByRole("alert");
-    expect(card).toHaveTextContent(/something went wrong/i);
+    expect(card).toHaveTextContent(/service we depend on is busy/i);
     expect(card).toHaveTextContent(`Reference: ${sid}`);
-    await u.click(within(card).getByRole("button", { name: "Try again" }));
+    await u.click(await within(card).findByRole("button", { name: "Retry" }, { timeout: 8000 })); // after the 5 s pacing
     await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Coding the session"));
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
     const runs = mockBackend.listRuns(UID, sid);
     expect(runs).toHaveLength(2);
     expect(runs[1].rating_id).toBe(runs[0].rating_id); // the same submission
-  });
+  }, 15_000);
 });
 
 describe("flow (rating on): daily cap reached at auto-start, then Start (AC6a)", () => {

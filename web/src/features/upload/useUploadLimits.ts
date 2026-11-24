@@ -14,9 +14,7 @@ export function useUploadLimits(): UploadLimits | undefined {
     staleTime: STALE_MS,
     retry: false, // fail open: a missing answer just skips the client checks
     queryFn: async () => {
-      // TODO(Task 10): the typed client lacks this path until schema.d.ts is regenerated.
-      const get = client.GET as unknown as (path: string) => Promise<Parameters<typeof unwrap>[0]>;
-      return unwrap(await get("/upload-limits")) as unknown as UploadLimits;
+      return unwrap(await client.GET("/upload-limits"));
     },
   });
   return q.data;

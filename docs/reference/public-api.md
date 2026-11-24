@@ -112,21 +112,21 @@ Validation of interview audio: longer than `AI_MAX_SECONDS` + `AI_TOLERANCE_SECO
 
 ## Engine errors
 
-What a failed run or transcription turns into (`api/src/onolys_api/adapters/error_map.py`, `to_public(exc, attempt, stage) -> (code, retryable)`). Every failure is mapped to one existing public code above; the message is fixed text per code, never the exception message. Each mapped failure writes one worker log line with `status=failed`, `error_code` and `exc_class` (the runbook query finds it by `request_id`). `retry` is whether the worker makes another attempt (attempt limit 2).
+What a failed run or transcription turns into (`api/src/onolys_api/adapters/error_map.py`, `to_public(exc, attempt, stage) -> (code, retryable)`). Every failure is mapped to one existing public code above; the message is fixed text per code, never the exception message. Each mapped failure writes one worker log line with `status=failed`, `error_code` and `exc_class` (the runbook query finds it by `request_id`). `Worker retry` is whether the worker makes another attempt (attempt limit 2). `Kind` is the failure kind the status doc carries as `error_kind` (`KIND_BY_CODE` in `error_map.py`): `transient` offers a Try again button (`POST /v1/sessions/{id}/retry`, at most 3 retries, `retries_left` on the status doc); `user_file` asks for a different file or input; `permanent_internal` asks for a new session. An unknown code reads as `permanent_internal`. Codes in the same table are the ones the [logging error_code table](logging.md#error_code-table) lists; that table carries the retryable column for log lines.
 
-| Code | Raised by (engines) | Retry | What the user does |
-|---|---|---|---|
-| `invalid_coded_span` | Invalid or unavailable transcript range | No; choose a valid span (time ranges require timestamps) |
-| `session_too_long` | Coded portion exceeds 25 minutes or 6,000 words | No; supply a narrower `coded_span` |
-| `output_invalid` | Engine result does not match its output schema | no | Run again; no invalid report is stored |
-| `invalid_parameters` | `InputError`: MITI input checks (too long, no change goal, too few clinician or client turns), unknown preset | no | Fix the input (e.g. change who the clinician is) and run again |
-| `upstream_unavailable` | LLM unavailable, timeout, rate limited or bad output after the engine's own retries; a transient STT provider error on attempt 1 | yes | Run again |
-| `deadline_exceeded` | Internal run deadline passed, `TimeoutError` | yes | Run again |
-| `transcription_failed` | STT permanent error; a second transient STT error; no result within the poll limit | no | Upload a different file |
-| `no_speech` | Transcript with 0 turns or under 50 words | no | Upload a different file |
-| `speakers_not_separated` | Fewer than 2 usable speakers | no | Upload a different file |
-| `rate_limited` | Adapter error that already carries this code | yes | Try again shortly |
-| `internal_error` | any other exception, including engine `run_failed` errors (`CodePassFailed`, `GlobalsPassFailed`, `AllRunsFailed`) with no LLM cause and other `OnolysError`s such as `ConfigError`; an adapter code outside this table | no | Run again; the owner is alerted |
+| Code | Raised by (engines) | Worker retry | Kind | Retry button | What the user does |
+|---|---|---|---|---|---|
+| `invalid_coded_span` | Invalid or unavailable transcript range | no | `user_file` | No | Choose a valid span (time ranges require timestamps) |
+| `session_too_long` | Coded portion exceeds 25 minutes or 6,000 words | no | `user_file` | No | Supply a narrower `coded_span` |
+| `output_invalid` | Engine result does not match its output schema | no | `permanent_internal` | No | Start a new session; no invalid report is stored |
+| `invalid_parameters` | `InputError`: MITI input checks (too long, no change goal, too few clinician or client turns), unknown preset | no | `user_file` | No | Fix the input (e.g. change who the clinician is) and run again |
+| `upstream_unavailable` | LLM unavailable, timeout, rate limited or bad output after the engine's own retries; a transient STT provider error | yes | `transient` | Yes | Press Try again |
+| `deadline_exceeded` | Internal run deadline passed, `TimeoutError` | yes | `transient` | Yes | Press Try again |
+| `transcription_failed` | STT permanent error; a second transient STT error; no result within the poll limit | no | `user_file` | No | Upload a different file |
+| `no_speech` | Transcript with 0 turns or under 50 words | no | `user_file` | No | Upload a different file |
+| `speakers_not_separated` | Fewer than 2 usable speakers | no | `user_file` | No | Upload a different file |
+| `rate_limited` | Adapter error that already carries this code | yes | `transient` | Yes | Press Try again shortly |
+| `internal_error` | Any other exception, including engine `run_failed` errors (`CodePassFailed`, `GlobalsPassFailed`, `AllRunsFailed`) with no LLM cause and other `OnolysError`s such as `ConfigError`; an adapter code outside this table | no | `permanent_internal` | No | Start a new session; the owner is alerted |
 
 A run's `validation` detail carries the number of schema-validation attempts and up to ten `first_issues` entries (`path`, `message`). Issue text contains schema paths and fixed messages only, never output values. A failed `output_invalid` run retains this detail and available usage counters; its fixed public message is "The engine returned an answer that did not match its schema." Lean MITI fails after one invalid result. Provider `LLMBadOutput` keeps the `upstream_unavailable` mapping and task retry policy.
 

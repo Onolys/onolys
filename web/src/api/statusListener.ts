@@ -4,16 +4,18 @@
  * `onSnapshot` (a later task); mock mode uses the in-memory emitter below,
  * driven by the MSW state machine.
  */
+import type { FailureKind } from "./errors";
 import type { SessionState } from "./types";
 
 export interface SessionStatusDoc {
   uid: string;
-  state: SessionState;
+  /** `upload_failed` is a status-doc-only state (a bad upload leaves no session), so it is not in the OpenAPI enum. */
+  state: SessionState | "upload_failed";
   step: string | null;
   progress: number;
   error_code: string | null;
-  /** TODO(Task 10): regenerate from the OpenAPI schema. Absent on docs written before 03-failure-policy. */
-  error_kind?: "transient" | "permanent_internal" | "user_file" | null;
+  /** The status doc is a Firestore document, not an OpenAPI schema. Absent on docs written before 03-failure-policy. */
+  error_kind?: FailureKind | null;
   retries_left?: number | null;
   counted?: boolean | null;
   latest_report_version: number | null;

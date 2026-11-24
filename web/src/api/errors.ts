@@ -4,6 +4,7 @@
  * instance values (R8: no PHI in error messages).
  */
 import type { components } from "./schema";
+import type { SessionStatusDoc } from "./statusListener";
 
 export const GENERIC_MESSAGE = "Something went wrong. Please try again.";
 
@@ -67,13 +68,8 @@ export function messageForCode(code: string | undefined, ctx: MessageContext = {
 /** Failure kinds the server persists on the status doc (D2). */
 export type FailureKind = "transient" | "permanent_internal" | "user_file";
 
-/** The status-doc fields `failureView` reads. TODO(Task 10): derive from the regenerated schema. */
-export interface FailureDoc {
-  error_code?: string | null;
-  error_kind?: FailureKind | null;
-  retries_left?: number | null;
-  counted?: boolean | null;
-}
+/** The status-doc fields `failureView` reads, derived from `SessionStatusDoc`. */
+export type FailureDoc = Partial<Pick<SessionStatusDoc, "error_code" | "error_kind" | "retries_left" | "counted">>;
 
 export type FailureAction = "retry" | "new_session" | "upload_different";
 

@@ -49,7 +49,7 @@ beforeEach(() => {
 describe("happy path walks every state", () => {
   it("created -> uploading -> validating -> transcribing -> awaiting_input -> running -> report_ready -> deleting", () => {
     const { backend, emitter } = ctx;
-    const seen: SessionState[] = [];
+    const seen: (SessionState | "upload_failed")[] = [];
     const { session } = backend.createSession(U, {});
     const sid = session.id;
     emitter.subscribe(sid, (d) => d && seen.push(d.state), () => {});
@@ -124,11 +124,14 @@ describe("session_status mirror", () => {
     expect(docs).toHaveLength(1);
     expect(Object.keys(docs[0]).sort()).toEqual(
       [
+        "counted",
         "error_code",
+        "error_kind",
         "has_rating",
         "latest_report_version",
         "progress",
         "rating_submitted",
+        "retries_left",
         "speaker_confirmed",
         "state",
         "step",
@@ -579,6 +582,50 @@ describe("final ratings and report versions (FX45)", () => {
     const second = backend.listRuns(U, sid).at(-1)!;
     expect(second.run_id).not.toBe(first.run_id);
     expect([second.preset, second.n_runs]).toEqual([first.preset, first.n_runs]);
+  });
+
+  it("a transient failure carries kind + retries_left; retry moves it on and is capped at 3", () => {
+    const { backend, emitter } = ctx;
+    const sid = started(backend, "fail-transient");
+    backend.settle(sid);
+    backend.confirmSpeaker(U, sid, "spk_0");
+    backend.putRating(U, sid, { final: true, card: SCORED });
+    backend.settle(sid);
+    const docs: SessionStatusDoc[] = [];
+    emitter.subscribe(sid, (d) => d && docs.push(d), () => {});
+    expect(docs.at(-1)).toMatchObject({ error_code: "upstream_unavailable", error_kind: "transient", retries_left: 3 });
+    for (let left = 2; left >= 0; left--) {
+      backend.retrySession(U, sid);
+      backend.settle(sid);
+      expect(docs.at(-1)).toMatchObject({ error_kind: "transient", retries_left: left });
+    }
+    expectHttp(() => backend.retrySession(U, sid), 409, "invalid_state");
+  });
+
+  it("retry is 409 for a permanent or user_file failure; their docs carry the kind", () => {
+    const { backend, emitter } = ctx;
+    const sid = started(backend, "fail-code");
+    backend.settle(sid);
+    backend.confirmSpeaker(U, sid, "spk_0");
+    backend.putRating(U, sid, { final: true, card: SCORED });
+    backend.settle(sid);
+    expectHttp(() => backend.retrySession(U, sid), 409, "invalid_state");
+    const bad = started(backend, "fail-no_speech");
+    const docs: SessionStatusDoc[] = [];
+    emitter.subscribe(bad, (d) => d && docs.push(d), () => {});
+    backend.settle(bad);
+    expect(docs.at(-1)).toMatchObject({ error_kind: "user_file", counted: false });
+    expectHttp(() => backend.retrySession(U, bad), 409, "invalid_state");
+  });
+
+  it("fail-upload_failed leaves only an upload_failed status doc", () => {
+    const { backend, emitter } = ctx;
+    const sid = started(backend, "fail-upload_failed");
+    const docs: SessionStatusDoc[] = [];
+    emitter.subscribe(sid, (d) => d && docs.push(d), () => {});
+    backend.settle(sid);
+    expect(docs.at(-1)).toMatchObject({ state: "upload_failed", error_code: "audio_unreadable" });
+    expectHttp(() => backend.getSession(U, sid), 404, "not_found");
   });
 
   it("run records carry stt, preset, code_version and the rating snapshot", () => {
