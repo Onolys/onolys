@@ -646,6 +646,8 @@ async def execute_unit(services, rid, uid):
                         attempts >= MAX_ATTEMPTS
                         or remaining < MIN_RETRY_BUDGET_S
                         or not is_retryable(exc)
+                        # A cancel during the attempt ends the unit now; no new provider spend.
+                        or (repository.get_run(rid) or {}).get("cancel_requested")
                     ):
                         raise
                     # Failed attempt's spend is carried into the single finish_unit.

@@ -972,6 +972,26 @@ def test_permanent_errors_make_one_attempt(services, name):
     assert unit["error"]["retryable"] is False and sleeps == []
 
 
+def test_cancel_requested_during_attempt_stops_retrying(services):
+    from onolys_engine_core.llm.errors import LLMUnavailable
+
+    engine, sleeps = _scripted(services, [_Err.make(LLMUnavailable, http_status=503), None])
+    c, rid, uid = _one_unit(services)
+    scripted = engine.run
+
+    async def run_then_cancel(ctx, value, params, progress_cb=None):
+        services.repository.cancel_run(rid)  # cancel lands while the attempt is in flight
+        return await scripted(ctx, value, params, progress_cb)
+
+    engine.run = run_then_cancel
+    dispatch(c, rid, uid)
+    unit = services.repository.get_unit(rid, uid)
+    assert engine.n == 1 and sleeps == []
+    assert unit["status"] == "failed" and unit["attempts"] == 1
+    assert unit["error"] == {"code": "llm_unavailable", "retryable": True}
+    assert unit["run_info"]["usage"]["input_tokens"] == 7
+
+
 def test_drift_guard_is_not_retried(services, monkeypatch):
     engine, sleeps = _scripted(services, [None])
     c, rid, uid = _one_unit(services)
