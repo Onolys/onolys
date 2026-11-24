@@ -68,6 +68,34 @@ const STAGES: RunStage[] = ["code", "tips", "assemble"];
 /** Progress weights added as each stage finishes (SP02 STAGE_WEIGHTS: peaks at 96, then 100 when the report is ready). */
 const STAGE_WEIGHT: Record<RunStage, number> = { code: 40, tips: 8, assemble: 3 };
 const RUN_START_PROGRESS = 45;
+/** Mirrors api progress.py (the single server table): base % per state, the 99 cap, expected stage seconds. */
+const STATE_PROGRESS: Record<string, number> = {
+  created: 0, uploading: 5, validating: 10, transcribing: 20, awaiting_input: 40, running: 45, report_ready: 100,
+};
+const NEXT_STATE: Record<string, string> = {
+  created: "uploading", uploading: "validating", validating: "transcribing",
+  transcribing: "awaiting_input", awaiting_input: "running",
+};
+const MAX_PROGRESS = 99;
+const STAGE_EXPECTED_S: Record<string, number> = { uploading: 30, validating: 15, code: 120, tips: 40, assemble: 15 };
+/** Mock recording length (the mock has no real audio), so the transcription estimate is clamp(20 + 0.2 x 300, 30, 600) = 80. */
+const MOCK_AUDIO_S = 300;
+
+function stageExpectedS(state: string, step: string | null): number | null {
+  if (state === "transcribing") return Math.round(Math.min(600, Math.max(30, 20 + 0.2 * MOCK_AUDIO_S)));
+  if (state === "running") return STAGE_EXPECTED_S[step && step in STAGE_WEIGHT ? step : STAGES[0]];
+  return STAGE_EXPECTED_S[state] ?? null;
+}
+
+function progressNext(state: string, step: string | null): number | null {
+  if (state === "running") {
+    const stage = (step && step in STAGE_WEIGHT ? step : STAGES[0]) as RunStage;
+    if (stage === STAGES[STAGES.length - 1]) return MAX_PROGRESS;
+    return RUN_START_PROGRESS + STAGES.slice(0, STAGES.indexOf(stage) + 1).reduce((n, s) => n + STAGE_WEIGHT[s], 0);
+  }
+  const next = NEXT_STATE[state];
+  return next ? STATE_PROGRESS[next] : null;
+}
 
 const CANONICAL: Record<string, { ext: string; types: string[]; canonical: string }> = {
   mp3: { ext: "mp3", types: ["audio/mpeg", "audio/mp3"], canonical: "audio/mpeg" },
@@ -127,6 +155,8 @@ interface SessionRec {
   sttSubmitted: boolean;
   /** Set once cancelled (the API's `cancel`). */
   cancel: S["SessionCancel"] | null;
+  /** Progress timing (05-processing-screen R2): when the state was entered, first upload, ms spent awaiting input. */
+  timing: { state: string; entered: number; started_at: string | null; waited_ms: number; audio_s: number | null };
   finals: Rating[];
   draft: { card: RatingCard; updated_at: string; seq: number } | null;
   runs: RunRec[];
@@ -222,8 +252,25 @@ export class MockBackend {
     return s as SessionRec;
   }
 
+  /** Stamp the timing fields when the state changed since the last emit (mirrors api `timing_fields`). */
+  private stamp(s: SessionRec): void {
+    const tm = s.timing;
+    if (tm.state === s.state) return;
+    const now = this.now();
+    if (tm.state === "awaiting_input") tm.waited_ms += Math.max(0, now.getTime() - tm.entered);
+    if (s.state === "uploading" && !tm.started_at) tm.started_at = now.toISOString();
+    if (s.state === "running" && tm.state === "report_ready") {
+      tm.started_at = now.toISOString();
+      tm.waited_ms = 0;
+    }
+    if (s.state === "transcribing") tm.audio_s = MOCK_AUDIO_S; // set by the validate step in the API
+    tm.state = s.state;
+    tm.entered = now.getTime();
+  }
+
   private emit(s: SessionRec): void {
     s.updated_at = this.now().toISOString();
+    this.stamp(s);
     const doc: SessionStatusDoc = {
       uid: s.uid,
       state: s.state,
@@ -235,6 +282,12 @@ export class MockBackend {
       counted: s.state === "failed" ? this.failureCounted(s) : s.state === "cancelled" ? (s.cancel?.counted ?? false) : null,
       latest_report_version: s.reports.at(-1)?.version ?? null,
       updated_at: this.now().toISOString(),
+      started_at: s.timing.started_at,
+      stage_started_at: new Date(s.timing.entered).toISOString(),
+      waited_ms: s.timing.waited_ms,
+      progress_next: progressNext(s.state, s.step),
+      stage_expected_s: stageExpectedS(s.state, s.step),
+      ...(s.timing.audio_s != null ? { audio_s: s.timing.audio_s } : {}),
       ...s.flags,
     };
     this.emitter.emit(s.id, doc);
@@ -437,6 +490,7 @@ export class MockBackend {
       uploadId: null,
       sttSubmitted: false,
       cancel: null,
+      timing: { state: "created", entered: this.now().getTime(), started_at: null, waited_ms: 0, audio_s: null },
       uploadType: null,
       finals: [],
       draft: null,
@@ -493,6 +547,12 @@ export class MockBackend {
       interview_id: s.interview_id ?? null,
       free_run: Boolean(s.interview_id), // the mock has no void concept: interview_id alone
       links: { self: `/v1/sessions/${s.id}` },
+      started_at: s.timing.started_at,
+      stage_started_at: new Date(s.timing.entered).toISOString(),
+      waited_ms: s.timing.waited_ms,
+      audio_s: s.timing.audio_s,
+      progress_next: progressNext(s.state, s.step),
+      stage_expected_s: stageExpectedS(s.state, s.step),
     };
     if (s.error) detail.error = { ...s.error };
     if (s.cancel) {
@@ -921,7 +981,7 @@ export class MockBackend {
         this.fail(s, codeFail, "code");
         return true;
       }
-      s.progress += STAGE_WEIGHT[stage];
+      s.progress = Math.min(MAX_PROGRESS, s.progress + STAGE_WEIGHT[stage]);
       run.stageIdx += 1;
       if (run.stageIdx < STAGES.length) {
         run.stage = STAGES[run.stageIdx];
@@ -929,6 +989,7 @@ export class MockBackend {
       } else {
         run.status = "done";
         run.stage = null;
+        this.emit(s); // the last stage peaks at 96 (under the 99 cap) before the report is ready
         this.finishRun(s, run);
       }
       this.emit(s);

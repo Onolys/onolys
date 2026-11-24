@@ -30,6 +30,13 @@ function status(b: MockBackend, sid: string, uid = U) {
   return b.getSession(uid, sid);
 }
 
+function docOf(emitter: ReturnType<typeof createMemoryStatusEmitter>, sid: string): SessionStatusDoc {
+  let doc: SessionStatusDoc | null = null;
+  emitter.subscribe(sid, (d) => (doc = d), () => {})();
+  if (!doc) throw new Error("no status doc");
+  return doc;
+}
+
 function expectHttp(fn: () => unknown, status: number, code: string) {
   try {
     fn();
@@ -77,6 +84,11 @@ describe("happy path walks every state", () => {
     backend.putRating(U, sid, { final: true, card: SCORED });
     expect(status(backend, sid)).toMatchObject({ status: "running", progress: 45, step: "code" });
 
+    // progress and progress_next follow the server table (api progress.py): 45 + 40 + 8 + 3 = 96, last next is the 99 cap
+    expect(docOf(emitter, sid)).toMatchObject({ progress: 45, progress_next: 85, stage_expected_s: 120 });
+    const docs: SessionStatusDoc[] = [];
+    emitter.subscribe(sid, (d) => d && docs.push(d), () => {});
+    docs.length = 0;
     const progress: number[] = [];
     const steps: (string | null)[] = [];
     while (status(backend, sid).status === "running") {
@@ -86,6 +98,13 @@ describe("happy path walks every state", () => {
     }
     expect(progress).toEqual([85, 93, 100]);
     expect(steps).toEqual(["tips", "assemble", null]);
+    expect(docs.map((d) => [d.state, d.step, d.progress, d.progress_next])).toEqual([
+      ["running", "tips", 85, 93],
+      ["running", "assemble", 93, 99],
+      ["running", "assemble", 96, 99],
+      ["report_ready", null, 100, null],
+    ]);
+    expect(Math.max(...docs.filter((d) => d.state === "running").map((d) => d.progress_next ?? 0))).toBe(99);
     expect(status(backend, sid)).toMatchObject({
       status: "report_ready",
       latest_report_version: 1,
@@ -130,14 +149,19 @@ describe("session_status mirror", () => {
         "has_rating",
         "latest_report_version",
         "progress",
+        "progress_next",
         "rating_submitted",
         "retries_left",
         "speaker_confirmed",
+        "stage_expected_s",
+        "stage_started_at",
+        "started_at",
         "state",
         "step",
         "transcript_ready",
         "uid",
         "updated_at",
+        "waited_ms",
       ].sort(),
     );
     expect(JSON.stringify(docs[0])).not.toContain("My private title");

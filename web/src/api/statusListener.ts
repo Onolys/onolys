@@ -20,6 +20,19 @@ export interface SessionStatusDoc {
   counted?: boolean | null;
   latest_report_version: number | null;
   updated_at: string;
+  /** Progress fields (05-processing-screen R2): PHI-free numbers and ISO timestamps, absent on older docs. */
+  /** First entry to `uploading` (a re-run: its start); null before. */
+  started_at?: string | null;
+  /** When the current state was entered. */
+  stage_started_at?: string | null;
+  /** Total ms spent in `awaiting_input`. */
+  waited_ms?: number;
+  /** Recording duration in seconds, set once validated. */
+  audio_s?: number | null;
+  /** Base % of the next stage (99 on the last stage); null when there is none. */
+  progress_next?: number | null;
+  /** Typical seconds the current stage takes; null when untimed. */
+  stage_expected_s?: number | null;
   transcript_ready: boolean;
   speaker_confirmed: boolean;
   rating_submitted: boolean;
