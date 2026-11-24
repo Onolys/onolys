@@ -76,6 +76,7 @@ from onolys_api.repo.models import (
     upload_failed_stub,
     utcnow,
 )
+from onolys_api.repo.scans import ACTIVE_SCAN_PATH, active_cursor
 from onolys_api.storage.base import BlobStore
 
 DRAFT_ID = "draft"
@@ -566,8 +567,33 @@ class FirestoreRepo:
         return [_load(SessionDoc, snap) for snap in q.stream()]
 
     def list_uids_with_active_runs(self, limit: int) -> list[str]:
-        q = self._client.collection("users").where(filter=FieldFilter("active_runs", ">", 0))
-        return [snap.id for snap in q.limit(limit).stream()]
+        if limit <= 0:
+            return []
+        checkpoint = self._client.document(ACTIVE_SCAN_PATH)
+        # The single-field active_runs index includes the document name as its final tie-breaker.
+        # Storing both values works even if the previous candidate is deleted or repaired.
+        query = (self._client.collection("users")
+                 .where(filter=FieldFilter("active_runs", ">", 0))
+                 .order_by("active_runs").order_by("__name__").limit(limit))
+
+        @firestore.transactional
+        def txn_fn(txn) -> list[str]:
+            cursor = active_cursor(checkpoint.get(transaction=txn).to_dict() or {})
+            page_query = query
+            if cursor is not None:
+                count, uid = cursor
+                page_query = query.start_after({
+                    "active_runs": count, "__name__": self._top("users", uid),
+                })
+            page = list(page_query.stream(transaction=txn))
+            if not page and cursor is not None:
+                page = list(query.stream(transaction=txn))  # wrap after the last candidate
+            if page:
+                last = page[-1]
+                txn.set(checkpoint, {"active_runs": last.get("active_runs"), "uid": last.id})
+            return [snap.id for snap in page]
+
+        return self._contended(txn_fn, "_sweep_active_runs")
 
     def delete_session(self, uid: str, sid: str) -> bool:
         sref, ssnap = self._owned_session(uid, sid, missing_ok=True)

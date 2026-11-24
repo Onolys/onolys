@@ -177,7 +177,8 @@ class Repo(Protocol):
     def list_sessions_stuck(
         self, state: str, before: datetime, limit: int
     ) -> list[SessionDoc]: ...
-    # uids whose `users/{uid}.active_runs` is above 0 (candidates for `reconcile_active_runs`).
+    # Bounded, rotating uids whose active_runs is above 0. The persisted internal checkpoint
+    # advances across processes and wraps; positive counts and uid break candidate ties.
     def list_uids_with_active_runs(self, limit: int) -> list[str]: ...
 
     # children of a session

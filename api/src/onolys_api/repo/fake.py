@@ -67,6 +67,7 @@ from onolys_api.repo.models import (
     upload_failed_stub,
     utcnow,
 )
+from onolys_api.repo.scans import ACTIVE_SCAN_PATH, active_cursor
 from onolys_api.storage.base import BlobStore
 
 
@@ -404,11 +405,21 @@ class FakeRepo:
         ][:limit]
 
     def list_uids_with_active_runs(self, limit: int) -> list[str]:
-        return sorted(
-            p.removeprefix("users/")
-            for p, d in self._docs.items()
-            if p.count("/") == 1 and p.startswith("users/") and d.get("active_runs", 0) > 0
-        )[:limit]
+        if limit <= 0:
+            return []
+        with self._claim_lock:
+            candidates = sorted(
+                (d["active_runs"], p.removeprefix("users/"))
+                for p, d in self._docs.items()
+                if p.count("/") == 1 and p.startswith("users/") and d.get("active_runs", 0) > 0
+            )
+            cursor = active_cursor(self._get(ACTIVE_SCAN_PATH) or {})
+            after = [item for item in candidates if cursor is None or item > cursor]
+            page = (after or candidates)[:limit]
+            if page:
+                count, uid = page[-1]
+                self._put(ACTIVE_SCAN_PATH, {"active_runs": count, "uid": uid})
+            return [uid for _, uid in page]
 
     def delete_session(self, uid: str, sid: str) -> bool:
         s = self._owned(f"sessions/{sid}", uid, missing_ok=True)

@@ -12,8 +12,8 @@ b. resumes deletion of sessions stuck in `deleting` longer than `DELETING_GRACE_
    upload's tombstone (`discard_code`) is left to its own task;
 c. repairs leaked `active_runs` (`Repo.reconcile_active_runs`) for users that still hold slots.
 
-At most `batch` items per step per call, oldest first (a failed deletion goes to the back); a second
-call right after finds nothing to do. One item failing never stops the pass.
+At most `batch` items per step per call. Deletions are oldest first (failed/skipped items go to
+the back); active users rotate using a persisted cursor. One item failing never stops the pass.
 """
 
 import logging
@@ -75,6 +75,7 @@ def _resume_deletes(
     cutoff = now - timedelta(seconds=DELETING_GRACE_S)
     for s in repo.list_sessions_stuck("deleting", cutoff, batch):
         if s.discard_code:
+            _back_of_queue(repo, s, now)
             continue  # a failed upload's tombstone: the discard task owns its cleanup
         try:
             delete_session_data(repo, blobs, s.uid, s.id)
