@@ -23,7 +23,7 @@ variable "admin_enabled" {
 }
 
 variable "resend_secret_wired" {
-  description = "Per environment: wire RESEND_API_KEY on the api. Set staging true only after the owner seeds resend-api-key-staging; prod stays false (prod rollout deferred)."
+  description = "Per environment: wire auth-email settings and RESEND_API_KEY on the api and worker. Set staging true only after the owner seeds resend-api-key-staging; prod stays false (prod rollout deferred)."
   type        = map(bool)
   default = {
     staging = false

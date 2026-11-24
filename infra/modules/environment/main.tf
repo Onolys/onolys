@@ -182,6 +182,24 @@ resource "google_project_iam_member" "api_firebaseauth_admin" {
   member  = "serviceAccount:${google_service_account.api.email}"
 }
 
+# The worker only generates password-reset action links (accounts:sendOobCode);
+# it does not need Firebase user/config administration or service-account signing.
+resource "google_project_iam_custom_role" "worker_auth_email" {
+  count       = var.resend_secret_wired ? 1 : 0
+  project     = var.project
+  role_id     = "workerAuthEmail_${var.env}"
+  title       = "Worker auth email links (${var.env})"
+  description = "Generate Firebase password-reset action links for the email worker."
+  permissions = ["firebaseauth.users.sendEmail"]
+}
+
+resource "google_project_iam_member" "worker_auth_email" {
+  count   = var.resend_secret_wired ? 1 : 0
+  project = var.project
+  role    = google_project_iam_custom_role.worker_auth_email[0].name
+  member  = "serviceAccount:${google_service_account.worker.email}"
+}
+
 # Auth-email rate counters (api/src/onolys_api/email/rate.py) expire via Firestore TTL on `expires_at`.
 resource "google_firestore_field" "email_rate_ttl" {
   project    = var.project

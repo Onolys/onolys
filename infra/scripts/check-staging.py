@@ -66,11 +66,12 @@ def worker_env_problems(env):
             out.append(f"{key} missing")
         elif "valueSource" not in ref or "value" in ref:
             out.append(f"{key} is not a pure secret ref")
-    hm = byname.get("UID_HMAC_KEY")
-    if hm is not None and ("valueSource" not in hm or "value" in hm):
-        out.append("UID_HMAC_KEY is not a pure secret ref")
+    for key in ("UID_HMAC_KEY", "RESEND_API_KEY"):
+        ref = byname.get(key)
+        if ref is not None and ("valueSource" not in ref or "value" in ref):
+            out.append(f"{key} is not a pure secret ref")
     for n, e in byname.items():
-        if n not in (*LLM_KEYS, "UID_HMAC_KEY") and (n.endswith("_API_KEY") or n.startswith("STT_") or "valueSource" in e):
+        if n not in (*LLM_KEYS, "UID_HMAC_KEY", "RESEND_API_KEY") and (n.endswith("_API_KEY") or n.startswith("STT_") or "valueSource" in e):
             out.append(f"unexpected provider/secret env: {n}")
     return out
 
@@ -93,6 +94,11 @@ def project_iam_problems(policy, sas, env="staging"):
         if cond:
             if not _cond_scoped(cond, env):
                 out.append(f"{b['role']} for {who}: condition not {env}-scoped: {cond}")
+        elif (
+            b["role"] == f"projects/{PROJECT}/roles/workerAuthEmail_{env}"
+            and who == [f"serviceAccount:worker-{env}@{PROJECT}.iam.gserviceaccount.com"]
+        ):
+            pass  # shared Identity Platform pool; narrowly scoped custom action-link role
         elif b["role"] not in UNCONDITIONED_OK:
             out.append(f"{b['role']} for {who}: unconditioned project-level grant")
     return out
@@ -199,7 +205,7 @@ def main(argv=None):
         uris[svc] = d["uri"]
         if svc == "worker":
             rec("worker env refs", not worker_env_problems(d["template"]["containers"][0].get("env", [])),
-                "; ".join(worker_env_problems(d["template"]["containers"][0].get("env", []))) or "GEMINI_API_KEY, ANTHROPIC_API_KEY (+UID_HMAC_KEY) secret refs only")
+                "; ".join(worker_env_problems(d["template"]["containers"][0].get("env", []))) or "GEMINI_API_KEY, ANTHROPIC_API_KEY (+UID_HMAC_KEY, RESEND_API_KEY) secret refs only")
     s, _ = call("GET", uris["api"] + "/")
     rec("anonymous api", anon_api_ok(s), f"HTTP {s}")
     s, _ = call("GET", uris["worker"] + "/")
