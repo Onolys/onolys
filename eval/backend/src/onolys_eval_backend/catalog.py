@@ -64,7 +64,8 @@ class DatasetMetadata(BaseModel):
     title: str
     license_note: str
     source_page: str
-    miti_version: Literal["4.2.1"]
+    miti_version: Literal["4.2.1", "4.2", "4.0"] | None
+    label_scheme: str | None = None
     source_media: list[Literal["audio", "video", "transcript"]]
     transcript_origin: Literal["human", "auto_captions", "translated", "stt_ours"] | None = None
     labels_summary: str | None = None

@@ -10,4 +10,10 @@ describe('source media line', () => {
     expect(originalMedia(['transcript'])).toBe('Transcript only (no audio)');
     expect(sourceLine({ dataset_id: 'a', title: 'A', source_media: ['transcript'] })).toBe('Original: Transcript only (no audio)');
   });
+  it('shows label scheme, and "Not MITI-coded" when miti_version is null', () => {
+    expect(sourceLine({ dataset_id: 'a', title: 'A', source_media: ['video'], miti_version: '4.2', label_scheme: 'MITI 4.2' }))
+      .toBe('Original: Video · MITI 4.2 · Scheme: MITI 4.2');
+    expect(sourceLine({ dataset_id: 'a', title: 'A', source_media: ['transcript'], miti_version: null, label_scheme: 'MISC 2.5 mapped to MITI' }))
+      .toBe('Original: Transcript only (no audio) · Not MITI-coded · Scheme: MISC 2.5 mapped to MITI');
+  });
 });

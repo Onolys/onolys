@@ -19,6 +19,8 @@ export function sourceLine(d: DatasetMetadata): string {
   const parts = [`Original: ${originalMedia(d.source_media)}`];
   if (d.transcript_origin) parts.push(`Transcript: ${ORIGIN_LABEL[d.transcript_origin]}`);
   if (d.labels_summary) parts.push(`Labels: ${d.labels_summary}`);
-  if (d.miti_version) parts.push(`MITI ${d.miti_version}`);
+  if (d.miti_version === null) parts.push('Not MITI-coded');
+  else if (d.miti_version) parts.push(`MITI ${d.miti_version}`);
+  if (d.label_scheme) parts.push(`Scheme: ${d.label_scheme}`);
   return parts.join(' · ');
 }

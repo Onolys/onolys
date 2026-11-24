@@ -260,3 +260,27 @@ def test_committed_casaa_manifest_source_media():
     m = load_manifest(ROOT / "datasets/casaa-miti421-video2013/manifest.yaml")
     assert m.source_media == ["video", "transcript"] and m.transcript_origin == "human"
     assert "MITI 4.2.1" in m.labels_summary
+
+
+@pytest.mark.parametrize("version", ["4.2.1", "4.2", "4.0", None])
+def test_manifest_accepts_miti_versions_and_label_scheme(version):
+    data = manifest_data()
+    data.update(miti_version=version, label_scheme="MISC 2.5 mapped to MITI")
+    m = DatasetManifest.model_validate(data)
+    assert m.miti_version == version and m.label_scheme == "MISC 2.5 mapped to MITI"
+    assert DatasetManifest.model_validate(manifest_data()).label_scheme is None
+
+
+@pytest.mark.parametrize("bad", ["3.1", "4", "", 4.2])
+def test_manifest_rejects_unknown_miti_version(bad):
+    data = manifest_data()
+    data["miti_version"] = bad
+    with pytest.raises(ValidationError):
+        DatasetManifest.model_validate(data)
+
+
+def test_manifest_requires_explicit_miti_version_key():
+    data = manifest_data()
+    del data["miti_version"]
+    with pytest.raises(ValidationError):
+        DatasetManifest.model_validate(data)

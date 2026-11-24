@@ -13,7 +13,7 @@ export type SourceMedia = 'audio' | 'video' | 'transcript';
 export type TranscriptOrigin = 'human' | 'auto_captions' | 'translated' | 'stt_ours';
 export interface DatasetMetadata {
   dataset_id: string; title: string;
-  source_media?: SourceMedia[]; transcript_origin?: TranscriptOrigin; labels_summary?: string; miti_version?: string;
+  source_media?: SourceMedia[]; transcript_origin?: TranscriptOrigin; labels_summary?: string; miti_version?: string | null; label_scheme?: string;
 }
 export interface Dataset extends DatasetMetadata { sessions: { session_id: string; title: string; has_gold?: boolean; coded_span?: CodedSpan }[] }
 export interface Upload {

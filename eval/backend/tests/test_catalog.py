@@ -158,7 +158,7 @@ def test_dataset_list_detail_and_gold_presence(services):
     response = c.get("/v1/datasets", headers=AUTH)
     assert response.status_code == 200
     expected = {k: v for k, v in source.items() if k != "sessions"}
-    assert response.json() == {"datasets": [{**expected, "session_count": 1}]}
+    assert response.json() == {"datasets": [{"label_scheme": None, **expected, "session_count": 1}]}
     row = response.json()["datasets"][0]
     assert row["source_media"] == ["video", "transcript"] and row["transcript_origin"] == "human"
     assert row["labels_summary"] == "MITI counts" and row["miti_version"] == "4.2.1"
@@ -298,3 +298,17 @@ def test_options_storage_failure_and_unavailable_production_choices_are_safe(ser
         response = client(services, **env).get("/v1/options", headers=AUTH)
         assert response.status_code == 503
         assert response.json() == {"detail": "Engine options unavailable."}
+
+
+def test_catalog_lists_wider_label_schemes(services):
+    for dataset_id, version, scheme in (
+        ("miti-four", "4.0", "MITI 4.0 (questions/reflections only)"),
+        ("not-miti", None, "MISC 2.5 mapped to MITI"),
+    ):
+        data = {**manifest(), "dataset_id": dataset_id, "miti_version": version,
+                "label_scheme": scheme}
+        services.bucket.write_json(f"datasets/{dataset_id}/manifest.json", data)
+    rows = {r["dataset_id"]: r for r in client(services).get("/v1/datasets", headers=AUTH).json()["datasets"]}
+    assert rows["miti-four"]["miti_version"] == "4.0"
+    assert rows["not-miti"]["miti_version"] is None
+    assert rows["not-miti"]["label_scheme"] == "MISC 2.5 mapped to MITI"

@@ -66,7 +66,10 @@ class DatasetManifest(Contract):
     title: Nonempty
     license_note: Nonempty
     source_page: HttpURL
-    miti_version: Literal["4.2.1"]
+    # null = labels are not MITI-coded (e.g. MISC or AnnoMI codes mapped to MITI).
+    miti_version: Literal["4.2.1", "4.2", "4.0"] | None
+    # Human-readable label scheme, e.g. "MITI 4.2", "MISC 2.5 mapped to MITI", "none".
+    label_scheme: Nonempty | None = None
     # What the ORIGINAL source offers (we always store transcript.v1 regardless).
     source_media: list[SourceMedia] = Field(min_length=1)
     transcript_origin: TranscriptOrigin | None = None
