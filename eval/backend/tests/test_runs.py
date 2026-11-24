@@ -2,6 +2,7 @@
 
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
 from threading import Event
 from types import SimpleNamespace
 from unittest.mock import Mock
@@ -9,6 +10,7 @@ from unittest.mock import Mock
 import pytest
 from fastapi.testclient import TestClient
 from onolys_engine_core.engine import EngineResult, RunInfo, RunUsage
+from onolys_engine_core.llm.models import load_models
 from onolys_engine_core.llm.routes import Preset, RouteRegistry
 from onolys_engine_core.registry import EngineRegistry
 from onolys_miti.engine import MitiEngine
@@ -32,6 +34,7 @@ def services():
         bucket=InMemoryBucket(),
         queue=InMemoryTaskQueue(),
         registry=registry,
+        models=load_models(Path(__file__).parents[3] / "config" / "models.yaml"),
         routes=RouteRegistry(
             {"oneshot": {"litellm_id": "synthetic/model"}},
             {"configured-prod": Preset({}), "other": Preset({}), "test-hidden": Preset({})},
@@ -47,6 +50,10 @@ def services():
     return s
 
 
+SEL1 = {"models": ["claude"], "tiers": ["claude-sonnet-5-5"], "efforts": ["low"]}
+SEL2 = {"models": ["claude"], "tiers": ["claude-sonnet-5-5"], "efforts": ["low", "high"]}
+
+
 def start(c, **overrides):
     return c.post(
         "/v1/runs",
@@ -54,7 +61,7 @@ def start(c, **overrides):
         json={
             "input": {"dataset_id": "synthetic", "session_ids": ["one"]},
             "engines": ["human", "miti"],
-            "presets": ["configured-prod"],
+            "selection": SEL1,
             "repeats": 1,
             **overrides,
         },
@@ -97,7 +104,7 @@ def test_expansion_human_once_and_immutable_provenance(services):
     response = start(
         c,
         engines=["human", "miti", "oneshot:miti"],
-        presets=["configured-prod", "other"],
+        selection=SEL2,
         repeats=3,
     )
     assert response.status_code == 200, response.text
@@ -109,7 +116,7 @@ def test_expansion_human_once_and_immutable_provenance(services):
     assert all(t["kind"] == "unit" and t["payload"]["run_id"] == rid for t in services.queue.tasks)
     assert run["created_by"] == "alice@example.com"
     assert run["engine_versions"]["oneshot:miti"] and run["engine_git_sha"]
-    assert run["resolved_presets"]["other"] == {"oneshot": "synthetic/model"}
+    assert run["resolved_presets"]["configured-prod"] == {"oneshot": "synthetic/model"}
     saved = run["input_ref"]["sessions"][0]
     assert saved["coded_span"] == {"start_turn": 0, "end_turn": 2}
     assert saved["change_goal"] == "Test goal" and saved["transcript_sha256"]
@@ -120,7 +127,8 @@ def test_expansion_human_once_and_immutable_provenance(services):
     "overrides",
     [
         {"engines": ["unknown"]},
-        {"presets": ["test-hidden"]},
+        {"selection": {"models": ["claude"], "tiers": ["claude-sonnet-5-5"], "efforts": ["xhigh"]}},
+        {"presets": ["configured-prod"]},
         {"repeats": 2},
         {"input": {"dataset_id": "synthetic", "session_ids": ["missing"]}},
         {"coded_span": {"start_turn": 0, "end_turn": 1}},
@@ -158,7 +166,7 @@ def test_shared_wrapper_attempts_and_billable_failures(services, invalid, feedba
     engine = services.fake_engine = FakeEngine(invalid=invalid)
     engine.accepts_feedback = feedback
     c = client(services=services)
-    rid = start(c, engines=["oneshot:miti"]).json()["run_id"]
+    rid = start_ai(services, c, engines=["oneshot:miti"]).json()["run_id"]
     uid = next(iter(services.repository.list_units(rid)))
     assert dispatch(c, rid, uid).status_code == 200
     assert dispatch(c, rid, uid).status_code == 200
@@ -250,7 +258,7 @@ def test_execution_config_drift_fails_before_provider_work(services, monkeypatch
     engine = services.fake_engine = FakeEngine()
     monkeypatch.setenv("GIT_SHA", "before-deployment")
     c = client(services=services)
-    rid = start(c, engines=["oneshot:miti"]).json()["run_id"]
+    rid = start_ai(services, c, engines=["oneshot:miti"]).json()["run_id"]
     uid = next(iter(services.repository.list_units(rid)))
     factory = services.llm_factory = Mock(wraps=services.llm_factory)
     if changed == "sha":
@@ -283,7 +291,7 @@ def test_rerun_uses_current_execution_snapshot_and_matching_config_runs(services
     monkeypatch.setattr(services.registry.get("oneshot"), "version", engine.version)
     response = c.post(
         f"/v1/runs/{rid}/rerun", headers=AUTH,
-        json={"engines": ["oneshot:miti"], "presets": ["configured-prod"], "repeats": 1},
+        json={"engines": ["oneshot:miti"], "selection": SEL1, "repeats": 1},
     )
     assert response.status_code == 200, response.text
     rerun_id = response.json()["run_id"]
@@ -328,6 +336,12 @@ def test_queue_partial_failure_finishes_unqueued_units(services):
         assert dispatch(c, **task["payload"]).status_code == 200
     run = services.repository.get_run(rid)
     assert run["status"] == "partial" and run["completed_units"] == 2
+
+
+def start_ai(services, c, **overrides):
+    """AI-only run: an upload without gold, since dataset runs always add human."""
+    saved_upload(services)
+    return start(c, input={"upload_id": "saved"}, **overrides)
 
 
 def saved_upload(services, *, ready=True, has_gold=False):
@@ -501,7 +515,7 @@ def test_real_oneshot_with_fake_llm_and_real_lean_invalid_wrapper(services, monk
 
     monkeypatch.setattr(MitiEngine, "run", invalid_lean)
     c = client(services=services)
-    rid = start(c, engines=["miti", "oneshot:miti"]).json()["run_id"]
+    rid = start_ai(services, c, engines=["miti", "oneshot:miti"]).json()["run_id"]
     for uid in services.repository.list_units(rid):
         assert dispatch(c, rid, uid).status_code == 200
     assert len(lean_calls) == 1 and len(calls) == 2
@@ -586,7 +600,7 @@ def test_eight_session_defaults_and_two_session_matrix(services):
         c,
         input={"dataset_id": "synthetic", "session_ids": ids[:2]},
         engines=["human", "miti", "oneshot:miti"],
-        presets=["configured-prod", "other"],
+        selection=SEL2,
         repeats=3,
     ).json()["run_id"]
     assert services.repository.get_run(rid)["total_units"] == 26
@@ -599,7 +613,7 @@ def test_concurrent_terminal_accounting_once_and_last_unit_status(services):
     rid = start(
         c,
         engines=["human", "miti", "oneshot:miti"],
-        presets=["configured-prod", "other"],
+        selection=SEL2,
         repeats=3,
     ).json()["run_id"]
     uids = list(services.repository.list_units(rid))
@@ -623,12 +637,12 @@ def test_firestore_batch_capacity_checked_before_writes(services):
         {
             "input": {"dataset_id": "synthetic", "session_ids": [f"s-{i}" for i in range(500)]},
             "engines": ["human"],
-            "presets": [],
+            "selection": {},
             "repeats": 1,
         }
     )
     before = services.bucket.list("")
-    with pytest.raises(ValueError, match="batch capacity"):
+    with pytest.raises(ValueError, match="maximum is 499"):
         create_run(services, EvalConfig.from_env(ENV), body, "alice@example.com")
     assert services.repository.list_runs() == {} and services.bucket.list("") == before
 
@@ -691,7 +705,7 @@ def test_price_metadata_failure_cannot_strand_billable_unit(services):
 
     engine.run = unpriced
     c = client(services=services)
-    rid = start(c, engines=["oneshot:miti"]).json()["run_id"]
+    rid = start_ai(services, c, engines=["oneshot:miti"]).json()["run_id"]
     uid = next(iter(services.repository.list_units(rid)))
     assert dispatch(c, rid, uid).status_code == 200
     run = services.repository.get_run(rid)
@@ -714,7 +728,7 @@ def test_internal_creation_helper_can_reuse_immutable_saved_input(services):
         {
             "input": {"dataset_id": "synthetic", "session_ids": ["one"]},
             "engines": ["oneshot:miti"],
-            "presets": ["other"],
+            "selection": SEL1,
             "repeats": 3,
         }
     )
@@ -725,7 +739,7 @@ def test_internal_creation_helper_can_reuse_immutable_saved_input(services):
     assert saved["transcript_sha256"] == snapshot["sessions"][0]["transcript_sha256"]
     assert saved["change_goal"] == snapshot["sessions"][0]["change_goal"]
     assert saved["coded_span"] == snapshot["sessions"][0]["coded_span"]
-    assert status == "queued" and services.repository.get_run(rid)["total_units"] == 3
+    assert status == "queued" and services.repository.get_run(rid)["total_units"] == 4
 
 
 def test_dataset_full_session_null_span_creates_and_executes_human_unit(services):
@@ -733,7 +747,7 @@ def test_dataset_full_session_null_span_creates_and_executes_human_unit(services
     source["sessions"][0]["coded_span"] = None
     services.bucket.write_json("datasets/synthetic/manifest.json", source)
     c = client(services=services)
-    response = start(c, engines=["human"], presets=[])
+    response = start(c, engines=["human"], selection={})
     assert response.status_code == 200, response.text
     rid = response.json()["run_id"]
     saved = services.repository.get_run(rid)["input_ref"]["sessions"][0]

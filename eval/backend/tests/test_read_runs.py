@@ -5,7 +5,7 @@ from copy import deepcopy
 import pytest
 from onolys_eval.metrics import Scores, aggregate, compare
 from test_app import AUTH, client
-from test_runs import saved_upload, start
+from test_runs import saved_upload, start, start_ai
 from test_uploads import gold
 
 from onolys_eval_backend.storage import INLINE_OUTPUT_LIMIT, store_output
@@ -101,7 +101,7 @@ def test_multiple_sessions_and_repeats_aggregate_not_cell_means(services):
 
 def test_no_human_even_with_saved_gold_has_no_diffs_or_errors(services):
     c = client(services=services)
-    rid = start(c, engines=["miti"], repeats=3).json()["run_id"]
+    rid = start_ai(services, c, engines=["miti"], repeats=3).json()["run_id"]
     finish(services, rid, [scores(question=0, sr=0, cr=0), None, None])
     result = detail(c, rid)["compare"]
     assert result["has_human"] is False and result["aggregates"] == []
@@ -189,7 +189,7 @@ def test_protected_inline_and_spilled_output_and_cross_run_rejection(services):
 
 def test_spilled_output_detail_omits_placeholder_and_private_reference(services):
     c = client(services=services)
-    rid = start(c, engines=["miti"]).json()["run_id"]
+    rid = start_ai(services, c, engines=["miti"]).json()["run_id"]
     uid = next(iter(finish(services, rid, [scores()])))
     output = {"synthetic": "x" * INLINE_OUTPUT_LIMIT}
     saved = store_output(services.bucket, rid, uid, output)
@@ -207,7 +207,7 @@ def test_spilled_output_detail_omits_placeholder_and_private_reference(services)
 @pytest.mark.parametrize("output", [None, False, 0, ""])
 def test_detail_preserves_inline_json_values(services, output):
     c = client(services=services)
-    rid = start(c, engines=["miti"]).json()["run_id"]
+    rid = start_ai(services, c, engines=["miti"]).json()["run_id"]
     uid = next(iter(finish(services, rid, [scores()])))
     services.repository.update_unit(rid, uid, {"output": output, "output_ref": None})
     public_unit = detail(c, rid)["units"][0]
@@ -217,7 +217,7 @@ def test_detail_preserves_inline_json_values(services, output):
 
 def test_detail_only_omits_null_output_for_valid_unit_reference(services):
     c = client(services=services)
-    rid = start(c, engines=["miti"]).json()["run_id"]
+    rid = start_ai(services, c, engines=["miti"]).json()["run_id"]
     uid = next(iter(finish(services, rid, [scores()])))
     services.repository.update_unit(
         rid, uid, {"output": None, "output_ref": "runs/another/private.json"},
@@ -241,7 +241,7 @@ def test_rerun_saved_upload_preserves_effective_inputs_and_rechecks_hashes(servi
     services.bucket.write_json("uploads/saved/transcript.json", {"overwritten": True})
     services.bucket.write_json("uploads/saved/gold.json", {"overwritten": True})
     services.repository.update_upload("saved", {"status": "failed", "change_goal": "changed"})
-    selection = {"engines": ["human", "oneshot:miti"], "presets": ["other"], "repeats": 3}
+    selection = {"engines": ["human", "oneshot:miti"], "selection": {"models": ["claude"], "tiers": ["claude-sonnet-5-5"], "efforts": ["low"]}, "repeats": 3}
     response = c.post(f"/v1/runs/{rid}/rerun", headers=AUTH, json=selection)
     assert response.status_code == 200, response.text
     new_id = response.json()["run_id"]
@@ -285,7 +285,7 @@ def test_rerun_dataset_snapshot_survives_deleted_sources_and_gold_hash_is_checke
     services.bucket.write_json("datasets/synthetic/manifest.json", {"overwritten": True})
     services.bucket.write_json("datasets/synthetic/one/transcript.json", {"overwritten": True})
     services.bucket.write_json("datasets/synthetic/one/gold.json", {"overwritten": True})
-    selection = {"engines": ["human", "miti"], "presets": ["other"], "repeats": 1}
+    selection = {"engines": ["human", "miti"], "selection": {"models": ["claude"], "tiers": ["claude-sonnet-5-5"], "efforts": ["low"]}, "repeats": 1}
     response = c.post(f"/v1/runs/{rid}/rerun", headers=AUTH, json=selection)
     assert response.status_code == 200, response.text
     new = services.repository.get_run(response.json()["run_id"])

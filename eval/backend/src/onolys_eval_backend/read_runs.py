@@ -11,7 +11,8 @@ from onolys_eval.gold import COUNT_IDS, GLOBAL_IDS
 from onolys_eval.metrics import Scores, aggregate, compare
 from pydantic import BaseModel, ConfigDict, Field, StrictInt
 
-from onolys_eval_backend.runs import RunRequest, create_run
+from onolys_eval_backend.matrix import RunTooLarge, SelectionError
+from onolys_eval_backend.runs import RunRequest, Selection, create_run
 from onolys_eval_backend.storage import load_output
 
 router = APIRouter()
@@ -225,7 +226,7 @@ def unit_output(request: Request, run_id: str, unit_id: str):
 class RerunRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     engines: list[str] = Field(min_length=1)
-    presets: list[str] = Field(default_factory=list)
+    selection: Selection = Field(default_factory=Selection)
     repeats: StrictInt = 1
 
 
@@ -249,9 +250,15 @@ def rerun(request: Request, run_id: str, body: RerunRequest):
             registry=getattr(services, "registry", None) or request.app.state.catalog.registry,
             input_ref=saved["input_ref"],
         )
-        return {"run_id": rid, "status": status}
+        return {
+            "run_id": rid,
+            "status": status,
+            "engines": services.repository.get_run(rid)["engines"],
+        }
     except HTTPException:
         raise
+    except (SelectionError, RunTooLarge) as error:
+        raise HTTPException(422, str(error)) from None
     except (ValueError, KeyError, FileNotFoundError, InputError):
         raise HTTPException(422, "Invalid run selection or saved input.") from None
     except Exception:

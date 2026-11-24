@@ -10,7 +10,6 @@ import json
 import os
 import re
 from datetime import UTC, datetime
-from itertools import product
 from time import monotonic
 from uuid import uuid4
 
@@ -20,9 +19,9 @@ from onolys_engine_core.engine import RunUsage
 from onolys_engine_core.errors import InputError
 from onolys_engine_core.llm.config import LLMConfig
 from onolys_engine_core.llm.litellm_client import LiteLLMClient
+from onolys_engine_core.llm.models import load_models, models_path
 from onolys_engine_core.llm.routes import resolve_preset
 from onolys_engine_core.llm.types import MetricsCollector
-from onolys_engine_core.presets import list_presets
 from onolys_engine_core.transcript_input import (
     inferred_clinician_speaker,
     validate_transcript_input,
@@ -35,6 +34,7 @@ from pydantic import BaseModel, ConfigDict, Field, StrictInt, model_validator
 
 from onolys_eval_backend.catalog import _IDENTIFIER, read_dataset
 from onolys_eval_backend.costs import PriceBook
+from onolys_eval_backend.matrix import RunTooLarge, SelectionError, plan_units, validate_selection
 from onolys_eval_backend.storage import store_output
 from onolys_eval_backend.uploads import validate_gold, validate_span
 
@@ -72,24 +72,32 @@ class InputRef(BaseModel):
         return self
 
 
+class Selection(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    models: list[str] = Field(default_factory=list)
+    tiers: list[str] = Field(default_factory=list)
+    efforts: list[str] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def unique(self):
+        if any(len(set(v)) != len(v) for v in (self.models, self.tiers, self.efforts)):
+            raise ValueError("Invalid run selection")
+        return self
+
+
 class RunRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     input: InputRef
     engines: list[str] = Field(min_length=1)
-    presets: list[str] = Field(default_factory=list)
+    selection: Selection = Field(default_factory=Selection)
     repeats: StrictInt = 1
     change_goal: str | None = Field(default=None, min_length=1, max_length=4000)
     language: str | None = Field(default=None, min_length=1, max_length=64)
     coded_span: dict | None = None
 
     @model_validator(mode="after")
-    def selection(self):
-        if (
-            self.repeats not in (1, 3)
-            or len(set(self.engines)) != len(self.engines)
-            or len(set(self.presets)) != len(self.presets)
-            or (any(e != "human" for e in self.engines) and not self.presets)
-        ):
+    def check_selection(self):
+        if self.repeats not in (1, 3) or len(set(self.engines)) != len(self.engines):
             raise ValueError("Invalid run selection")
         if self.input.dataset_id and self.coded_span is not None:
             raise ValueError("Dataset spans come from the manifest")
@@ -238,33 +246,30 @@ def create_run(services, config, body, created_by, *, registry=None, input_ref=N
     }
     if any(e != "human" and e not in choices for e in body.engines):
         raise ValueError("Unknown engine")
-    presets = {
-        p.name: p.models
-        for p in list_presets(services.routes, config.default_preset)
-        if not p.name.startswith("test-")
-    }
-    if any(p not in presets for p in body.presets):
-        raise ValueError("Unknown preset")
-    count = (len(body.input.session_ids) if body.input.dataset_id else 1) * (
-        int("human" in body.engines)
-        + sum(e != "human" for e in body.engines) * len(body.presets) * body.repeats
+    models = getattr(services, "models", None) or load_models(
+        models_path(os.environ, config.routes_file)
     )
-    if count > 499:
-        raise ValueError("Run exceeds atomic Firestore batch capacity")
+    engines = list(body.engines)
+    if body.input.dataset_id and "human" not in engines:
+        engines.append("human")
+    combos, _dropped = validate_selection(
+        {m.id: {t.id: list(t.efforts) for t in m.tiers.values()} for m in models.values()},
+        body.selection.model_dump(),
+        any(e != "human" for e in engines),
+    )
+    session_ids = body.input.session_ids if body.input.dataset_id else [body.input.upload_id]
+    # Pure and IO-free: oversized runs are rejected before anything is read or written.
+    plan = plan_units([{"session_id": sid} for sid in session_ids], engines, combos, body.repeats)
+    # Transitional until unit execution moves to combo routes (Task 4).
+    bridge = config.default_preset
+    bridge_models = {
+        name: route.litellm_id for name, route in resolve_preset(bridge, services.routes)[0].items()
+    }
     sources = (
         _validate_sources(services, input_ref["sessions"], body)
         if input_ref is not None
         else _inputs(services, body)
     )
-    if (
-        len(sources)
-        * (
-            int("human" in body.engines)
-            + sum(e != "human" for e in body.engines) * len(body.presets) * body.repeats
-        )
-        > 499
-    ):
-        raise ValueError("Run exceeds atomic Firestore batch capacity")
     rid = uuid4().hex
     saved_sources, units = [], {}
     for source in sources:
@@ -281,28 +286,31 @@ def create_run(services, config, body, created_by, *, registry=None, input_ref=N
         if gold:
             services.bucket.write_json(saved["gold_path"], gold)
         saved_sources.append(saved)
-        for engine in body.engines:
-            axes = [(None, 0)] if engine == "human" else product(body.presets, range(body.repeats))
-            for preset, repeat in axes:
-                uid = f"u{len(units):04d}"
-                span = gold["coded_span"] if engine == "human" else source["coded_span"]
-                units[uid] = {
-                    "session_id": sid,
-                    "engine": engine,
-                    "preset": preset,
-                    "repeat": repeat,
-                    "status": "queued",
-                    "stage": "queued",
-                    "coded_span": span,
-                    "warnings": ["human_span_differs"]
-                    if engine == "human" and span != source["coded_span"]
-                    else [],
-                }
+        for planned in (p for p in plan if p["session_id"] == sid):
+            engine = planned["engine"]
+            uid = f"u{len(units):04d}"
+            span = gold["coded_span"] if engine == "human" else source["coded_span"]
+            units[uid] = {
+                "session_id": sid,
+                "engine": engine,
+                "preset": None if engine == "human" else bridge,
+                "combo": planned["combo"],
+                "combo_key": planned["combo_key"],
+                "repeat": planned["repeat"],
+                "status": "queued",
+                "stage": "queued",
+                "coded_span": span,
+                "warnings": ["human_span_differs"]
+                if engine == "human" and span != source["coded_span"]
+                else [],
+            }
     run = {
         "input": body.input.model_dump(exclude_none=True),
         "input_ref": {"sessions": saved_sources},
-        "engines": body.engines,
-        "presets": body.presets,
+        "engines": engines,
+        "selection": body.selection.model_dump(),
+        "combos": combos,
+        "presets": [bridge] if combos else [],
         "repeats": body.repeats,
         "change_goal": body.change_goal,
         "language": body.language,
@@ -320,8 +328,8 @@ def create_run(services, config, body, created_by, *, registry=None, input_ref=N
         "cost_usd_est": 0.0,
         "unpriced_units": 0,
         "engine_git_sha": _git_sha(),
-        "engine_versions": {e: choices[e].version for e in body.engines if e != "human"},
-        "resolved_presets": {p: presets[p] for p in body.presets},
+        "engine_versions": {e: choices[e].version for e in engines if e != "human"},
+        "resolved_presets": {bridge: bridge_models} if combos else {},
     }
     services.repository.create_run(rid, run, units)
     for uid in units:
@@ -351,9 +359,15 @@ def post_run(request: Request, body: RunRequest):
             request.state.admin_claims["email"].strip().lower(),
             registry=getattr(services, "registry", None) or request.app.state.catalog.registry,
         )
-        return {"run_id": rid, "status": status}
+        return {
+            "run_id": rid,
+            "status": status,
+            "engines": services.repository.get_run(rid)["engines"],
+        }
     except HTTPException:
         raise
+    except (SelectionError, RunTooLarge) as error:
+        raise HTTPException(422, str(error)) from None
     except (ValueError, FileNotFoundError, InputError):
         raise HTTPException(422, "Invalid run selection or input.") from None
     except Exception:
