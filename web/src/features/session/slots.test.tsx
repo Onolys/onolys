@@ -80,3 +80,22 @@ describe("rating card slot: locked inputs", () => {
     expect(screen.getByRole("button", { name: "Submit rating" })).toBeEnabled();
   });
 });
+
+describe.each([undefined, "false"])("rating-disabled slot: locked change goal (flag %s)", (flag) => {
+  it.each(["running", "failed", "report_ready", "deleting"] as const)("hides the goal fallback in %s", (state) => {
+    vi.stubEnv("VITE_RATING_ENABLED", flag);
+    const sid = awaiting();
+    renderPage(<RatingCardSlot sessionId={sid} doc={failed({ state })} />, "/x", { user: USER });
+    expect(document.querySelector('[data-slot="rating-fallback"]')).toBeNull();
+    expect(screen.queryByLabelText("Change goal")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Continue" })).not.toBeInTheDocument();
+  });
+
+  it("keeps the unsubmitted awaiting-input goal editable", async () => {
+    vi.stubEnv("VITE_RATING_ENABLED", flag);
+    const sid = awaiting();
+    renderPage(<RatingCardSlot sessionId={sid} doc={failed({ state: "awaiting_input" })} />, "/x", { user: USER });
+    expect(await screen.findByLabelText("Change goal")).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Continue" })).toBeEnabled();
+  });
+});

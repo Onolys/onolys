@@ -19,7 +19,7 @@ export function RatingCardSlot({ sessionId, doc, readOnly = false }: SlotProps &
   const locked = readOnly || doc.rating_submitted || doc.state === "running" || doc.state === "failed" || doc.state === "report_ready";
   if (!ratingEnabled()) {
     // Flag off (PRD R2/R3): no card; only an unsubmitted, live session gets the goal-only fallback.
-    if (doc.rating_submitted || doc.state === "deleting") return null;
+    if (locked || doc.state === "deleting") return null;
     return (
       <div data-slot="rating-fallback" data-session={sessionId}>
         <SetupFallback sessionId={sessionId} />
