@@ -118,6 +118,7 @@ class CancelCharge(NamedTuple):
 
 
 _CANCEL_EARLY = frozenset({"created", "uploading", "upload_incomplete", "validating"})
+CANCELLABLE_STATES = _CANCEL_EARLY | {"transcribing", "awaiting_input", "running"}
 
 
 def decide_cancel(
@@ -127,7 +128,7 @@ def decide_cancel(
     database. `run_counted` is the reserved run's `counted` (None: no run reserved).
     Interview-linked sessions (same exempt predicate as `start_first_run`) cost 0 everywhere.
     `running` adds 0 (the run's slot was charged at start) and reports the run's `counted`."""
-    if state not in _CANCEL_EARLY | {"transcribing", "awaiting_input", "running"}:
+    if state not in CANCELLABLE_STATES:
         raise ValueError(f"state {state!r} cannot be cancelled")
     if interview_id:
         return CancelCharge(0, False)

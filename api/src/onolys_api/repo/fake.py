@@ -9,6 +9,7 @@ from onolys_engine_core.transcript import Transcript
 
 from onolys_api.repo import large
 from onolys_api.repo.base import (
+    CancelOutcome,
     Claim,
     ConflictError,
     InterviewLinkOutcome,
@@ -25,12 +26,14 @@ from onolys_api.repo.firestore import (
     _idem_id,
 )
 from onolys_api.repo.limits import (
+    CANCELLABLE_STATES,
     HELD_ERROR_CODE,
     KIND_FIELD,
     START_OUTCOME,
     Kind,
     LimitDefaults,
     ReserveUsageOutcome,
+    decide_cancel,
     decide_reserve,
     decide_start,
 )
@@ -562,6 +565,21 @@ class FakeRepo:
                 if doc and doc.get(field, 0) > 0:
                     self._put(path, {**doc, field: max(0, doc[field] - units)})
 
+    def _release_run_locked(
+        self, uid: str, path: str, d: dict[str, Any], refund: bool, date: str | None
+    ) -> bool:
+        """The in-transaction release (caller holds `_claim_lock`): shared by `release_run_slot`
+        and `cancel_session`."""
+        if d.get("released"):
+            return False
+        date = d.get("cap_date") or date
+        counted = d.get("counted", True)
+        refunded = bool(date) and refund and counted
+        self._put(path, {**d, "released": True, "unit_kept": counted and not refunded})
+        if date:
+            self.release_usage(uid, "eval", date, refunded, d.get("units", 1))
+        return True
+
     def release_run_slot(
         self, uid: str, sid: str, run_id: str, refund: bool, date: str | None
     ) -> bool:
@@ -571,15 +589,56 @@ class FakeRepo:
             d = self._get(path)
             if d is None:
                 raise NotFoundError()
-            if d.get("released"):
-                return False
-            date = d.get("cap_date") or date
-            counted = d.get("counted", True)
-            refunded = bool(date) and refund and counted
-            self._put(path, {**d, "released": True, "unit_kept": counted and not refunded})
-            if date:
-                self.release_usage(uid, "eval", date, refunded, d.get("units", 1))
-            return True
+            return self._release_run_locked(uid, path, d, refund, date)
+
+    def cancel_session(
+        self, uid: str, sid: str, date: str, defaults: LimitDefaults
+    ) -> CancelOutcome:
+        with self._claim_lock:  # the fake's "transaction"
+            sess = self._owned(f"sessions/{sid}", uid)
+            assert sess is not None
+            state = sess.get("state")
+            if state == "deleting":
+                raise NotFoundError()
+            if state == "cancelled":
+                return ("cancelled", bool((sess.get("cancel") or {}).get("counted")))
+            if state not in CANCELLABLE_STATES:
+                return ("invalid",)
+            now = utcnow()
+            run_id, run = None, None
+            if state == "running":
+                for rid, rd in self._children(sid, "runs"):
+                    if not rd.get("released"):
+                        run_id, run = rid, rd
+                        break
+            op = ((sess.get("steps") or {}).get("transcribe") or {}).get("stt_operation")
+            charge = decide_cancel(
+                state, bool(op), run.get("counted", True) if run else None,
+                sess.get("interview_id"),
+            )  # fmt: skip
+            if run is not None and run_id is not None:
+                path = f"sessions/{sid}/runs/{run_id}"
+                if run.get("status") != "done":
+                    run = {**run, "status": "failed", "error": "cancelled", "ended": now}
+                    self._put(path, run)
+                self._release_run_locked(uid, path, run, False, date)
+            if charge.units:
+                usage = self._get(f"usage/{uid}_{date}") or {"uid": uid, "date": date, "runs": 0}
+                self._put(
+                    f"usage/{uid}_{date}", {**usage, "runs": usage.get("runs", 0) + charge.units}
+                )
+            self._put(
+                f"sessions/{sid}",
+                {**sess, "state": "cancelled", "updated_at": now, "stage_started_at": now,
+                 "cancel": {"counted": charge.counted, "units": charge.units, "at": now}},
+            )  # fmt: skip
+            status = self._get(f"session_status/{sid}") or {}
+            self._put(
+                f"session_status/{sid}",
+                {**status, "state": "cancelled", "counted": charge.counted, "updated_at": now},
+            )
+            self._record_status(uid, sid)
+            return ("cancelled", charge.counted)
 
     def get_usage_doc(self, uid: str, date: str) -> UsageDoc:
         day = self._get(f"usage/{uid}_{date}")

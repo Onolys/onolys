@@ -51,6 +51,8 @@ class Page[T]:
 
 
 StartOutcome = Literal["started", "not_ready", "already", "daily_cap", "concurrent"]
+# `cancel_session` result: ("cancelled", counted) | ("invalid",)
+CancelOutcome = tuple[Literal["cancelled"], bool] | tuple[Literal["invalid"]]
 InterviewLinkOutcome = Literal["linked", "not_ended", "already_linked", "refunded"]
 ClaimOutcome = Literal["claimed", "done", "failed", "busy"]
 
@@ -231,6 +233,16 @@ class Repo(Protocol):
     def retry_step(
         self, uid: str, sid: str, step: str, to: str, max_retries: int, progress: int
     ) -> bool: ...
+    # 04-cancel R3, ONE transaction over session + status + usage + user (+ the active run):
+    # `cancelled` -> ("cancelled", stored counted), nothing written; a state outside the seven
+    # cancellable ones -> ("invalid",); `deleting`/foreign/missing -> NotFoundError. In `running`
+    # the unreleased run is marked `failed` (`error="cancelled"`) and its slot released without
+    # refund (the same in-txn code as `release_run_slot`). Then `decide_cancel` charges
+    # `usage.runs` (also past the cap), and session `state/cancel` + status `state/counted` and
+    # `stage_started_at` are set. Nothing is deleted.
+    def cancel_session(
+        self, uid: str, sid: str, date: str, defaults: LimitDefaults
+    ) -> CancelOutcome: ...
     # interviews (SP10 R5): uid-scoped `interviews/{id}`; foreign or missing -> NotFoundError.
     def create_interview(self, uid: str, iid: str, doc: InterviewDoc) -> None: ...
     # ONE transaction (A9): refuse with "open_exists" when the caller has an interview in

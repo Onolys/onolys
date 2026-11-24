@@ -25,6 +25,7 @@ from onolys_engine_core.transcript import Transcript
 from onolys_api.config import Settings
 from onolys_api.repo import large
 from onolys_api.repo.base import (
+    CancelOutcome,
     Claim,
     ConflictError,
     InterviewLinkOutcome,
@@ -34,12 +35,14 @@ from onolys_api.repo.base import (
     decide_claim,
 )
 from onolys_api.repo.limits import (
+    CANCELLABLE_STATES,
     HELD_ERROR_CODE,
     KIND_FIELD,
     START_OUTCOME,
     Kind,
     LimitDefaults,
     ReserveUsageOutcome,
+    decide_cancel,
     decide_reserve,
     decide_start,
 )
@@ -704,6 +707,27 @@ class FirestoreRepo:
 
         self._contended(txn_fn, uid)
 
+    @staticmethod
+    def _release_run_in_txn(
+        txn, run_ref, run: dict, user_ref, user: dict, day_ref, day: dict, refund: bool
+    ) -> bool:
+        """The in-transaction release (all reads already done): shared by `release_run_slot` and
+        `cancel_session`. `day_ref` is None when the run has no cap day to touch."""
+        if run.get("released"):
+            return False
+        counted = run.get("counted", True)
+        refunded = day_ref is not None and refund and counted
+        txn.update(run_ref, {"released": True, "unit_kept": counted and not refunded})
+        if day_ref is not None:
+            if user.get("active_runs", 0) > 0:
+                txn.set(user_ref, {"active_runs": user["active_runs"] - 1}, merge=True)
+            if refunded:
+                field = KIND_FIELD["eval"]
+                if day.get(field, 0) > 0:
+                    units = run.get("units", 1)
+                    txn.set(day_ref, {field: max(0, day[field] - units)}, merge=True)
+        return True
+
     def release_run_slot(
         self, uid: str, sid: str, run_id: str, refund: bool, date: str | None
     ) -> bool:
@@ -722,22 +746,85 @@ class FirestoreRepo:
             user = user_ref.get(transaction=txn).to_dict() or {}
             day_ref = self._top("usage", f"{uid}_{day_key}") if day_key else None
             day = (day_ref.get(transaction=txn).to_dict() or {}) if day_ref else {}
-            counted = run.get("counted", True)
-            refunded = bool(day_key) and refund and counted
-            txn.update(run_ref, {"released": True, "unit_kept": counted and not refunded})
-            if day_key:
-                if user.get("active_runs", 0) > 0:
-                    txn.set(user_ref, {"active_runs": user["active_runs"] - 1}, merge=True)
-                if refund and run.get("counted", True):
-                    field = KIND_FIELD["eval"]
-                    units = run.get("units", 1)
-                    if day.get(field, 0) > 0:
-                        txn.set(day_ref, {field: max(0, day[field] - units)}, merge=True)
-            return True
+            return self._release_run_in_txn(txn, run_ref, run, user_ref, user, day_ref, day, refund)
 
         try:
             return self._contended(txn_fn, uid)
         except GoogleNotFound:  # the run's session was deleted under it
+            raise NotFoundError() from None
+
+    def cancel_session(
+        self, uid: str, sid: str, date: str, defaults: LimitDefaults
+    ) -> CancelOutcome:
+        sref = self._session_ref(uid, sid)
+        stref = self._top("session_status", sid)
+        usage_ref = self._top("usage", f"{uid}_{date}")
+        user_ref = self._top("users", uid)
+
+        @firestore.transactional
+        def txn_fn(txn) -> CancelOutcome:
+            snap = sref.get(transaction=txn)
+            sess = snap.to_dict() or {}
+            if not snap.exists or sess.get("uid") != uid:
+                raise NotFoundError()
+            state = sess.get("state")
+            if state == "deleting":
+                raise NotFoundError()
+            if state == "cancelled":
+                return ("cancelled", bool((sess.get("cancel") or {}).get("counted")))
+            if state not in CANCELLABLE_STATES:
+                return ("invalid",)
+            # all reads before any write
+            usage = usage_ref.get(transaction=txn).to_dict() or {}
+            user = user_ref.get(transaction=txn).to_dict() or {}
+            run_ref, run = None, None
+            if state == "running":
+                for rs in sref.collection("runs").stream(transaction=txn):
+                    rd = rs.to_dict() or {}
+                    if not rd.get("released"):
+                        run_ref, run = rs.reference, rd
+                        break
+            run_day = (run.get("cap_date") or date) if run else None
+            run_day_ref = self._top("usage", f"{uid}_{run_day}") if run_day else None
+            run_day_doc = {}
+            if run_day_ref is not None:
+                run_day_doc = (
+                    usage if run_day == date
+                    else (run_day_ref.get(transaction=txn).to_dict() or {})
+                )  # fmt: skip
+            op = ((sess.get("steps") or {}).get("transcribe") or {}).get("stt_operation")
+            charge = decide_cancel(
+                state, bool(op), run.get("counted", True) if run else None,
+                sess.get("interview_id"),
+            )  # fmt: skip
+            now = utcnow()
+            if run is not None and run_ref is not None:
+                if run.get("status") != "done":
+                    txn.update(run_ref, {"status": "failed", "error": "cancelled", "ended": now})
+                self._release_run_in_txn(
+                    txn, run_ref, run, user_ref, user, run_day_ref, run_day_doc, False
+                )
+            if charge.units:
+                txn.set(
+                    usage_ref,
+                    {"uid": uid, "date": date, "runs": usage.get("runs", 0) + charge.units},
+                    merge=True,
+                )
+            txn.update(
+                sref,
+                {"state": "cancelled", "updated_at": now, "stage_started_at": now,
+                 "cancel": {"counted": charge.counted, "units": charge.units, "at": now}},
+            )  # fmt: skip
+            txn.set(
+                stref,
+                {"state": "cancelled", "counted": charge.counted, "uid": uid, "updated_at": now},
+                merge=True,
+            )
+            return ("cancelled", charge.counted)
+
+        try:
+            return self._contended(txn_fn, uid)
+        except GoogleNotFound:
             raise NotFoundError() from None
 
     def get_usage_doc(self, uid: str, date: str) -> UsageDoc:
