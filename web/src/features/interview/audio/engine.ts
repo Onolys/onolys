@@ -30,6 +30,7 @@ export function createAudioEngine(opts: { onCaptureFrame: (frame: ArrayBuffer) =
   let playNode: AudioWorkletNode | undefined;
   let mimeType = "";
   const chunks: Blob[] = [];
+  let closed = false;
 
   return {
     get mimeType() {
@@ -42,6 +43,11 @@ export function createAudioEngine(opts: { onCaptureFrame: (frame: ArrayBuffer) =
       stream = await navigator.mediaDevices.getUserMedia({
         audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1 },
       });
+      if (closed) {
+        // close() ran while the mic prompt was open: release what just arrived.
+        stream.getTracks().forEach((t) => t.stop());
+        throw new Error("audio engine closed");
+      }
       await ctx.resume();
       await ctx.audioWorklet.addModule(captureUrl);
       await ctx.audioWorklet.addModule(playbackUrl);
@@ -95,8 +101,10 @@ export function createAudioEngine(opts: { onCaptureFrame: (frame: ArrayBuffer) =
       });
     },
     close() {
+      if (closed) return;
+      closed = true;
       stream?.getTracks().forEach((t) => t.stop());
-      void ctx?.close();
+      ctx?.close().catch(() => undefined);
       playNode = undefined;
     },
   };

@@ -96,3 +96,61 @@ describe("live controller reconnect", () => {
     expect(c.getState().phase).toBe("reconnecting");
   });
 });
+
+describe("live controller token failure", () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  const make = (getToken: () => Promise<string | null>) => {
+    const socks: (Sock & { closed?: number })[] = [];
+    const engine = { playPcm24k: vi.fn(), flush: vi.fn(), pauseRecording: vi.fn(), resumeRecording: vi.fn() };
+    const c = createLiveController({
+      url: "ws://x",
+      getToken,
+      engine,
+      createSocket: () => {
+        const s = new Sock() as Sock & { closed?: number };
+        s.close = () => {
+          s.closed = (s.closed ?? 0) + 1;
+        };
+        socks.push(s);
+        return s;
+      },
+      reconnectWindowMs: 3000,
+      retryDelayMs: 1000,
+    });
+    c.start();
+    return { c, socks, engine };
+  };
+
+  it("a rejected getToken is handled: socket closed, reconnect policy applies, ends in an error", async () => {
+    const unhandled = vi.fn();
+    process.on("unhandledRejection", unhandled);
+    const { c, socks } = make(() => Promise.reject(new Error("token")));
+    socks[0].open();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(socks[0].closed).toBe(1);
+    expect(c.getState().phase).toBe("reconnecting");
+    for (let i = 1; i < 6 && c.getState().phase === "reconnecting"; i++) {
+      await vi.advanceTimersByTimeAsync(1000);
+      socks[i]?.open();
+      await vi.advanceTimersByTimeAsync(0);
+    }
+    expect(c.getState().phase).toBe("error");
+    expect(c.getState().errorCode).toBe("connection_lost");
+    await vi.advanceTimersByTimeAsync(0);
+    process.off("unhandledRejection", unhandled);
+    expect(unhandled).not.toHaveBeenCalled();
+  });
+
+  it("dispose wins over a late token rejection", async () => {
+    let rej!: (e: Error) => void;
+    const { c, socks } = make(() => new Promise<string | null>((_, r) => (rej = r)));
+    socks[0].open();
+    c.dispose();
+    rej(new Error("late"));
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(socks).toHaveLength(1);
+    expect(c.getState().phase).toBe("connecting");
+  });
+});

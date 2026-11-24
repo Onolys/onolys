@@ -104,15 +104,28 @@ export function createLiveController(opts: ControllerOptions): LiveController {
     const s = makeSocket(opts.url);
     socket = s;
     s.onopen = () => {
-      void opts.getToken().then((token) => {
-        if (socket !== s || disposed) return;
-        if (!token) {
-          s.close(1000);
-          terminal("error", "signed_out");
-          return;
-        }
-        s.send(JSON.stringify({ type: "auth", id_token: token }));
-      });
+      void opts.getToken().then(
+        (token) => {
+          if (socket !== s || disposed) return;
+          if (!token) {
+            s.close(1000);
+            terminal("error", "signed_out");
+            return;
+          }
+          s.send(JSON.stringify({ type: "auth", id_token: token }));
+        },
+        () => {
+          // No token (offline, refresh failed): treat like a dropped connection, so the reconnect window bounds it.
+          if (socket !== s || disposed) return;
+          socket = undefined; // its close event is ignored
+          try {
+            s.close(1000);
+          } catch {
+            /* already closed */
+          }
+          dropped();
+        },
+      );
     };
     s.onmessage = (ev) => {
       if (socket !== s) return;
@@ -163,14 +176,19 @@ export function createLiveController(opts: ControllerOptions): LiveController {
         const known: Record<number, string> = { 4401: "signed_out", 4404: "not_found", 4409: "not_live" };
         return terminal("error", known[code] ?? "relay_error");
       }
-      // dropped: retry the same URL; the recorder pauses (connected time only)
-      const now = Date.now();
-      firstDropAt ??= now;
-      if (now - firstDropAt >= windowMs) return terminal("error", "connection_lost");
-      opts.engine.pauseRecording();
-      set({ phase: "reconnecting" });
-      retryTimer = setTimeout(connect, retryMs);
+      dropped();
     };
+  };
+
+  // dropped: retry the same URL; the recorder pauses (connected time only)
+  const dropped = () => {
+    authed = false;
+    const now = Date.now();
+    firstDropAt ??= now;
+    if (now - firstDropAt >= windowMs) return terminal("error", "connection_lost");
+    opts.engine.pauseRecording();
+    set({ phase: "reconnecting" });
+    retryTimer = setTimeout(connect, retryMs);
   };
 
   return {

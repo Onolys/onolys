@@ -111,4 +111,45 @@ describe("createAudioEngine (mocked browser)", () => {
     e.close();
     expect(track.stop).toHaveBeenCalled();
   });
+
+  it("close() is idempotent: a second close does not close the context again or reject", async () => {
+    const ctxClose = vi.fn(async () => {
+      if (ctxClose.mock.calls.length > 1) throw new Error("Cannot close a closed AudioContext");
+    });
+    class FakeCtx {
+      destination = {};
+      audioWorklet = { addModule: vi.fn(async () => {}) };
+      resume = vi.fn(async () => {});
+      close = ctxClose;
+      createMediaStreamDestination = () => ({ stream: {} });
+      createMediaStreamSource = () => ({ connect: vi.fn((n) => n) });
+      createGain = () => ({ connect: vi.fn((n) => n), gain: { value: 1 } });
+    }
+    class FakeNode {
+      port = { postMessage: vi.fn(), onmessage: null as unknown };
+      connect = vi.fn((n) => n);
+    }
+    class FakeRecorder {
+      static isTypeSupported = () => false;
+      mimeType = "";
+      state = "recording";
+      start = vi.fn();
+    }
+    vi.stubGlobal("AudioWorkletNode", FakeNode);
+    vi.stubGlobal("MediaRecorder", FakeRecorder);
+    window.AudioContext = FakeCtx as never;
+    const track = { stop: vi.fn() };
+    Object.defineProperty(navigator, "mediaDevices", { value: { getUserMedia: vi.fn(async () => ({ getTracks: () => [track] })) }, configurable: true });
+    const unhandled = vi.fn();
+    process.on("unhandledRejection", unhandled);
+    const { createAudioEngine } = await import("./engine");
+    const e = createAudioEngine({ onCaptureFrame: () => {} });
+    await e.start();
+    e.close();
+    expect(() => e.close()).not.toThrow();
+    await new Promise((r) => setTimeout(r, 10));
+    process.off("unhandledRejection", unhandled);
+    expect(ctxClose).toHaveBeenCalledTimes(1);
+    expect(unhandled).not.toHaveBeenCalled();
+  });
 });

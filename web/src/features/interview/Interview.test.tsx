@@ -26,6 +26,7 @@ class FakeEngine {
     engines.push(this);
   }
   async start() {
+    if (micGate) await micGate;
     if (slowMic) await new Promise((r) => setTimeout(r, 50));
     if (denyMic) throw new Error("denied");
     this.started = true;
@@ -52,6 +53,7 @@ class FakeEngine {
 }
 let denyMic = false;
 let slowMic = false;
+let micGate: Promise<void> | null = null;
 vi.mock("./audio/engine", () => ({ createAudioEngine: (o: { onCaptureFrame: (f: ArrayBuffer) => void }) => new FakeEngine(o) }));
 
 class FetchXhr {
@@ -90,6 +92,7 @@ const main = () => within(screen.getByRole("main"));
 beforeEach(() => {
   denyMic = false;
   slowMic = false;
+  micGate = null;
   engines.length = 0;
   vi.stubEnv("VITE_USE_MOCKS", "true"); // createRelaySocket -> the fake relay
   vi.stubGlobal("XMLHttpRequest", FetchXhr);
@@ -567,5 +570,61 @@ describe("leaving ends the interview (D6)", () => {
     await startLive(u, router);
     act(() => lastFakeRelay()!.close(1000));
     expect(await main().findByText(/interview has ended/i)).toBeInTheDocument();
+  });
+
+  it("auto-end failure sends exactly one request, then a manual retry succeeds", async () => {
+    let ends = 0;
+    let fail = true;
+    server.use(
+      http.post("*/v1/interviews/:id/end", () => {
+        ends++;
+        if (fail) return HttpResponse.json({ error: { code: "internal", message: "x", request_id: "r" } }, { status: 500 });
+        return undefined;
+      }),
+    );
+    const u = userEvent.setup();
+    const { router } = renderApp("/interviews/new", { user: USER });
+    await startLive(u, router);
+    act(() => lastFakeRelay()!.advance(480));
+    act(() => lastFakeRelay()!.advance(120)); // time_up -> auto-end
+    await waitFor(() => expect(ends).toBeGreaterThanOrEqual(1));
+    const retry = await main().findByRole("button", { name: "Try again" });
+    await new Promise((r) => setTimeout(r, 300)); // a loop would keep POSTing
+    expect(ends).toBe(1);
+    expect(engines[0]!.stopped).toBe(1);
+    fail = false;
+    await u.click(retry);
+    await waitFor(() => expect(here(router)).toMatch(/^\/sessions\/(?!new)[^/]+$/));
+    expect(ends).toBe(2);
+    expect(engines[0]!.stopped).toBe(1); // cached recording blob reused
+  });
+
+  it("navigating away while the mic starts closes the engine and never starts the controller", async () => {
+    let release!: () => void;
+    micGate = new Promise<void>((r) => (release = r));
+    const u = userEvent.setup();
+    const { router } = renderApp("/interviews/new", { user: USER });
+    await u.click(await main().findByRole("radio", { name: /Reluctant patient/ }));
+    await u.click(main().getByRole("button", { name: "Start interview" }));
+    await waitFor(() => expect(here(router)).toMatch(/^\/interviews\/iv_/));
+    await u.click(await main().findByRole("button", { name: "Start talking" }));
+    await waitFor(() => expect(engines).toHaveLength(1));
+    await act(() => router.navigate("/sessions"));
+    expect(engines[0]!.closed).toBe(true);
+    await act(async () => {
+      release();
+      await new Promise((r) => setTimeout(r, 20));
+    });
+    expect(engines[0]!.closed).toBe(true);
+    expect(lastFakeRelay()).toBeUndefined();
+  });
+
+  it("tells the user the recording is paused while reconnecting", async () => {
+    const u = userEvent.setup();
+    const { router } = renderApp("/interviews/new", { user: USER });
+    await startLive(u, router);
+    act(() => lastFakeRelay()!.drop());
+    expect(await main().findByText(/recording is paused/i)).toBeInTheDocument();
+    expect(main().queryByText(/recording continues/i)).toBeNull();
   });
 });
