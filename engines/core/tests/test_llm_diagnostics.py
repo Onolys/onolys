@@ -20,6 +20,30 @@ from onolys_engine_core.llm.routes import Route
 pytestmark = pytest.mark.unit
 
 
+@pytest.fixture(autouse=True)
+def _restore_logger_state():
+    """probe_llm.run_probe sets `disabled=True` on every LiteLLM* logger (fine for a one-shot
+    script, a leak between tests). Restore each logger's state and the global disable level."""
+    manager = logging.root.manager
+    saved = {
+        name: (lg.disabled, lg.level, list(lg.handlers), lg.propagate)
+        for name, lg in list(manager.loggerDict.items())
+        if isinstance(lg, logging.Logger)
+    }
+    root_saved = (logging.root.level, list(logging.root.handlers), manager.disable)
+    yield
+    for name, lg in list(manager.loggerDict.items()):
+        if not isinstance(lg, logging.Logger):
+            continue
+        # loggers first created during the test (e.g. LiteLLM* on import) default to enabled
+        disabled, level, handlers, propagate = saved.get(name, (False, 0, [], True))
+        lg.disabled, lg.level, lg.propagate = disabled, level, propagate
+        lg.handlers[:] = handlers
+    logging.root.level = root_saved[0]
+    logging.root.handlers[:] = root_saved[1]
+    logging.disable(root_saved[2])
+
+
 async def test_provider_warning_redacts_credentials_prompts_and_caps_message(caplog, monkeypatch):
     secret = "private-provider-credential"
     monkeypatch.setenv("ANTHROPIC_API_KEY", secret)
