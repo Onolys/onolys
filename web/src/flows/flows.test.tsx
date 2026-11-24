@@ -324,37 +324,21 @@ describe("flow: delete a session (AC2)", () => {
   });
 });
 
-describe("flow: API key is shown once (AC7)", () => {
-  it("secret visible in the modal only; gone after Done and after leaving and coming back; not stored or logged", async () => {
+describe("flow: settings from the account menu", () => {
+  it("opens usage and account information without API tools, then returns to sessions", async () => {
     const u = user();
-    const spies = (["log", "info", "warn", "error", "debug"] as const).map((m) => vi.spyOn(console, m).mockImplementation(() => {}));
-    try {
-      renderApp("/sessions", { user: USER });
-      await h1("Sessions");
-      await u.click(screen.getByRole("button", { name: "Account menu" }));
-      await u.click(screen.getByRole("menuitem", { name: "Settings" }));
-      await h1("Settings");
-      await u.click(await screen.findByRole("button", { name: "Create API key" }));
-      const dialog = await screen.findByRole("dialog");
-      const secret = (await within(dialog).findByTestId("api-secret")).textContent ?? "";
-      expect(secret).toMatch(/^onolys_[A-Za-z0-9]+_[A-Za-z0-9]+$/);
-      await u.click(within(dialog).getByRole("checkbox", { name: /i've stored it/i }));
-      await u.click(within(dialog).getByRole("button", { name: "Done" }));
-      expect(screen.queryByRole("dialog")).toBeNull();
-      expect(document.body.textContent).not.toContain(secret);
-
-      await u.click(nav("Sessions"));
-      await h1("Sessions");
-      await u.click(screen.getByRole("button", { name: "Account menu" }));
-      await u.click(screen.getByRole("menuitem", { name: "Settings" }));
-      await h1("Settings");
-      expect(await screen.findByText(/active/i)).toBeInTheDocument();
-      expect(document.body.textContent).not.toContain(secret);
-      expect(JSON.stringify({ l: { ...localStorage }, s: { ...sessionStorage } })).not.toContain(secret);
-      expect(JSON.stringify(spies.flatMap((s) => s.mock.calls))).not.toContain(secret);
-    } finally {
-      spies.forEach((s) => s.mockRestore());
-    }
+    renderApp("/sessions", { user: USER });
+    await h1("Sessions");
+    await u.click(screen.getByRole("button", { name: "Account menu" }));
+    await u.click(screen.getByRole("menuitem", { name: "Settings" }));
+    await h1("Settings");
+    const main = within(screen.getByRole("main"));
+    expect(await main.findByText("20 of 20 left today")).toBeInTheDocument();
+    expect(main.getByText(/account removal/i)).toBeInTheDocument();
+    expect(main.queryByRole("button", { name: /API key|Sign out/i })).toBeNull();
+    expect(main.queryByRole("link", { name: "API docs" })).toBeNull();
+    await u.click(nav("Sessions"));
+    await h1("Sessions");
   });
 });
 

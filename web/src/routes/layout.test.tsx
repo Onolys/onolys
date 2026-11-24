@@ -192,14 +192,6 @@ describe("header nav by auth phase (D1)", () => {
     expect(here(router)).toBe("/login");
   });
 
-  it("sign-out from the Settings button lands on plain /login", async () => {
-    const { router } = renderApp("/settings", { user: { email: "a@clinic.org", verified: true } });
-    await h1("Settings");
-    await userEvent.click(within(screen.getByRole("main")).getByRole("button", { name: "Sign out" }));
-    await h1("Log in");
-    expect(here(router)).toBe("/login");
-  });
-
   it("a failing sign-out shows an error, stays signed in and keeps the cache", async () => {
     const service = createFakeAuthService();
     vi.spyOn(service, "signOut").mockRejectedValue(new Error("network"));

@@ -60,7 +60,9 @@ describe("footer", () => {
     const links = within(within(footer).getByRole("navigation", { name: "Footer" })).getAllByRole("link");
     expect(links.map((a) => a.textContent)).toEqual(["Privacy", "Terms", "Contact", "Sample report"]);
     expect(within(footer).getAllByRole("link")).toHaveLength(4);
-    expect(within(footer).getByText(`© ${new Date().getFullYear()} Onolys`)).toBeInTheDocument();
+    const copyright = within(footer).getByText(`© ${new Date().getFullYear()} Onolys`);
+    expect(copyright.parentElement).toBe(within(footer).getByRole("navigation", { name: "Footer" }));
+    expect(within(footer).getByRole("button", { name: /Theme:/ })).toBeInTheDocument();
     expect(within(footer).getByText("Not official MITI coding")).toBeInTheDocument();
     expect(within(footer).getByText("Use it to practice and prepare")).toBeInTheDocument();
     expect(within(footer).getByText("Role-play or de-identified transcripts only")).toBeInTheDocument();

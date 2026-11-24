@@ -290,9 +290,13 @@ export const drinkingSampleReport: Report = {
       "Moyers, T. B., Manuel, J. K., & Ernst, D. (2014). Motivational Interviewing Treatment Integrity Coding Manual 4.2.1.",
   },
   aggregates: { globals_compared: 0, avg_abs_global_difference: null, within_one_share: null, counts_flagged: null },
-  warnings: [],
+  warnings: [{ code: "short_session" }, { code: "reflection_before_client_speech" }],
   run_info: {
-    evaluation: { engine: "evaluation", code_version: "mock" },
-    miti: { engine: "miti", code_version: "mock", span: null },
+    evaluation: { engine: "miti", code_version: "mock" },
+    miti: {
+      engine: "miti",
+      code_version: "mock",
+      span: { mode: "whole", duration_s: 485, seed: "sample" },
+    },
   },
 };

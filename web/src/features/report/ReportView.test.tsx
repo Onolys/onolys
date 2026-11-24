@@ -153,7 +153,7 @@ describe("ReportView", () => {
   });
 
   it("hides Feedback when there are no tips, but shows a warning notice", () => {
-    const none = { ...drinkingSampleReport, tips: [] };
+    const none = { ...drinkingSampleReport, tips: [], warnings: [] };
     const { unmount } = view({ report: none });
     expect(screen.queryByRole("heading", { name: /Feedback/ })).toBeNull();
     unmount();
@@ -282,8 +282,11 @@ describe("ReportView follow-ups (C14, C15, warnings)", () => {
     expect(notes[0]!.textContent).toBe("Some parts of this report had a processing note.");
   });
 
-  it("the sample and mock fixtures still render with no warning notes", async () => {
+  it("shows each applicable sample warning once", async () => {
     view();
-    expect(screen.queryAllByRole("note")).toHaveLength(0);
+    expect(screen.getAllByRole("note").map((n) => n.textContent)).toEqual([
+      "This session is shorter than 10 minutes, so global ratings may be harder to judge.",
+      "The practitioner speaks first in this excerpt. Opening reflections have no earlier client speech here to refer to.",
+    ]);
   });
 });

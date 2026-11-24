@@ -65,6 +65,8 @@ const TBL = "rounded-md border border-border";
 const CELL = "whitespace-normal align-top";
 const LABEL = "block text-[0.6875rem] font-semibold uppercase tracking-widest text-muted-foreground";
 const WARNING_TEXT: Record<string, string> = {
+  short_session: "This session is shorter than 10 minutes, so global ratings may be harder to judge.",
+  reflection_before_client_speech: "The practitioner speaks first in this excerpt. Opening reflections have no earlier client speech here to refer to.",
   fewer_tips: "We could only find a few tips this time.",
   tips_failed: "We couldn't write tips this time.",
   // Per-run engine codes (they can repeat per item; the notes below show each message once).

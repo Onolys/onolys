@@ -53,7 +53,7 @@ describe("sessions page: list", () => {
     }
   });
 
-  it("links in-flight and failed rows to the session and Report vN straight to the report", async () => {
+  it("links completed titles straight to the report with one link per row", async () => {
     server.use(
       http.get("*/v1/sessions", () =>
         HttpResponse.json({
@@ -71,8 +71,12 @@ describe("sessions page: list", () => {
     expect(main().getByRole("link", { name: "Session bad1" })).toHaveAttribute("href", "/sessions/bad1");
     expect(within(rowOf("Session run1")).queryByRole("link", { name: /Report v/ })).toBeNull();
     expect(main().getByRole("link", { name: "Session ok1" })).toHaveAttribute("href", "/sessions/ok1/reports/3");
-    const rep = within(rowOf("Session ok1")).getByRole("link", { name: "Report v3" });
-    expect(rep).toHaveAttribute("href", "/sessions/ok1/reports/3");
+    const completedRow = rowOf("Session ok1");
+    expect(within(completedRow).getAllByRole("link")).toHaveLength(1);
+    expect(within(completedRow).queryByRole("link", { name: /Report v/ })).toBeNull();
+    expect(completedRow.lastElementChild?.tagName).toBe("TIME");
+    expect(completedRow.lastElementChild).toHaveAttribute("dateTime", "2026-11-18T10:00:00.000Z");
+    const rep = within(completedRow).getByRole("link", { name: "Session ok1" });
     await user.click(rep);
     expect(here(router)).toBe("/sessions/ok1/reports/3");
   });
