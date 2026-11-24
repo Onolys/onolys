@@ -6,9 +6,9 @@ import httpx
 import pytest
 from audio_helpers import MAGIC, A, StubTools
 
-from onolys_api.jobs import caps
 from onolys_api.app import create_app
 from onolys_api.audio import ProbeResult
+from onolys_api.jobs import caps
 from onolys_api.repo.base import NotFoundError
 from onolys_api.repo.fake import FakeRepo
 from onolys_api.repo.models import InterviewDoc

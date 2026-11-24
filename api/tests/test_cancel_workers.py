@@ -18,7 +18,13 @@ from onolys_api.jobs import caps
 from onolys_api.jobs.alive import ensure_active
 from onolys_api.jobs.queue import InMemoryQueue, TaskPayload
 from onolys_api.jobs.stale import settle_if_stale
-from onolys_api.jobs.worker import Cancelled, HandlerSpec, PermanentError, RetryableError, TaskRunner
+from onolys_api.jobs.worker import (
+    Cancelled,
+    HandlerSpec,
+    PermanentError,
+    RetryableError,
+    TaskRunner,
+)
 from onolys_api.repo.base import NotFoundError
 from onolys_api.repo.fake import FakeRepo
 from onolys_api.repo.limits import LimitDefaults

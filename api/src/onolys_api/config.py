@@ -104,7 +104,8 @@ class Settings:
     ai_warn_seconds: int = 480  # client warns the user at this elapsed time
     ai_min_seconds: int = 300  # shortest recording worth sending to the audit
     ai_tolerance_seconds: int = 30  # only the interview ceiling: AI_MAX_SECONDS + this
-    ai_mismatch_min_seconds: int = 60  # relay/upload mismatch: tolerated up to max(this, pct of relay)
+    # relay/upload mismatch: tolerated up to max(this, pct of relay)
+    ai_mismatch_min_seconds: int = 60
     ai_mismatch_pct: int = 15
     ai_abandon_count_seconds: int = 30  # ended/abandoned under this: the usage unit is refunded
     ai_refunds_per_day: int = 3  # at most this many such refunds per user per UTC day (A9)

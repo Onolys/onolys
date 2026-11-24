@@ -24,8 +24,8 @@ from onolys_engine_core.errors import (
 )
 from onolys_engine_core.llm.errors import (
     FixtureMiss,
-    LLMError,
     LLMBadOutput,
+    LLMError,
     LLMRateLimited,
     LLMTimeout,
     LLMUnavailable,
@@ -228,7 +228,7 @@ def test_output_invalid_has_a_fixed_public_message_and_never_retries():
     from onolys_engine_core.validate import ValidationIssue
     from onolys_engine_core.validated_run import OutputInvalid
 
-    from onolys_api.adapters.error_map import KIND_BY_CODE, PUBLIC_MESSAGES, classify, to_public
+    from onolys_api.adapters.error_map import PUBLIC_MESSAGES, to_public
     from onolys_api.errors import ERROR_CODES
 
     failure = OutputInvalid(1, [ValidationIssue(path="/field", message="invalid type")])

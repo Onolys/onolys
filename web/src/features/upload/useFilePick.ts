@@ -1,5 +1,5 @@
 /** Shared file pick with source-specific advisory pre-checks. */
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useUploadLimits } from "./useUploadLimits";
 import { checkFile, checkTranscript, readDuration, type PrecheckResult } from "./precheck";
 
@@ -22,7 +22,9 @@ export function useFilePick(kind: "audio" | "transcript" = "audio"): FilePick {
   // Served limits (R10). Read at pick time through a ref; unloaded = the checks skip (server decides).
   const limits = useUploadLimits();
   const limitsRef = useRef(limits);
-  limitsRef.current = limits;
+  useEffect(() => {
+    limitsRef.current = limits;
+  }, [limits]);
 
   const pick = useCallback(async (f: File | undefined) => {
     latest.current = f;

@@ -4,10 +4,10 @@
 `classify(exc, stage) -> Failure(code, kind)`; `to_public(exc, attempt=1, stage="run") ->
 (code, retryable)` is a thin wrapper (retryable == kind is transient). Kinds: `transient` (a blip),
 `permanent_internal` (our fault), `user_file` (the input's fault). Reads only structured fields
-(`LLMError.http_status`/`error_type`, via `is_transient`), never exception or `provider_error` text. Codes are existing public codes
-(`onolys_api.errors.ERROR_CODES`); the user-facing text is `PUBLIC_MESSAGES[code]`, fixed text,
-never the exception message. Engine failures (`AllRunsFailed`, `CodePassFailed`,
-`GlobalsPassFailed`) are matched by the `code` attribute they inherit from `OnolysError`.
+(`LLMError.http_status`/`error_type`, via `is_transient`), never exception or `provider_error`
+text. Codes are existing public codes (`onolys_api.errors.ERROR_CODES`); the user-facing text is
+`PUBLIC_MESSAGES[code]`, fixed text, never the exception message. Engine failures
+(`AllRunsFailed`, `CodePassFailed`, `GlobalsPassFailed`) are matched by the `code` attribute they inherit from `OnolysError`.
 `stage="stt"` is the transcription path; a transient provider error stays `upstream_unavailable`
 on every attempt (D6: the file is not at fault).
 """

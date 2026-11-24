@@ -66,12 +66,12 @@ def test_status_fields_lists_the_new_fields():
 # ---- write sites ----
 
 
-def _fail_via_worker(repo, exc):
+def _fail_via_worker(fake_repo, exc):
     def fn(ctx):
         raise exc
 
-    runner_with(repo, fn).handle(payload(), retry_count=1)
-    return repo.get_session(UID, SID), repo.get_status(UID, SID)
+    runner_with(fake_repo, fn).handle(payload(), retry_count=1)
+    return fake_repo.get_session(UID, SID), fake_repo.get_status(UID, SID)
 
 
 @pytest.mark.parametrize(

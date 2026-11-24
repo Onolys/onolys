@@ -124,7 +124,8 @@ def make_validate_handler(
 ) -> Handler:
     """`max_audio_s(provider, model)` gives the longest accepted audio for the session's STT.
     `settings` carries the AI interview bounds (`AI_MAX_SECONDS` + `AI_TOLERANCE_SECONDS`
-    longest, `AI_MIN_SECONDS` shortest before a warning, `AI_MISMATCH_*` relay-match tolerance) used when the session has `interview_id`.
+    longest, `AI_MIN_SECONDS` shortest before a warning, `AI_MISMATCH_*` relay-match tolerance)
+    used when the session has `interview_id`.
     """
     cfg = settings or Settings()
 
