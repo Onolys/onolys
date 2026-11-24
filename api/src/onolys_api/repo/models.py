@@ -138,6 +138,18 @@ def error_status_fields(error: "SessionError | None", retry_count: int) -> dict[
             "counted": error.counted}  # fmt: skip
 
 
+def retry_allowed(sess: dict[str, Any], max_retries: int, step: str | None = None) -> bool:
+    """The one retry rule (R4) on a stored session dict, for the repo transactions: `failed`, a
+    `transient` error (derived from the code on old docs), room under the cap, and the failed
+    `step` when the caller names one."""
+    if sess.get("state") != "failed" or not sess.get("error"):
+        return False
+    err = SessionError.model_validate(sess["error"])
+    if err.kind != "transient" or sess.get("retry_count", 0) >= max_retries:
+        return False
+    return step is None or err.step == step
+
+
 class SessionError(BaseModel):
     code: str
     step: str | None = None

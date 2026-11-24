@@ -259,11 +259,14 @@ async def test_try_again_after_a_failure_reuses_transcript_and_stored_rating(env
 
     swap_eval(env, Ok())
     (first,) = env.repo.list_runs(env.uid, sid)
-    # Try again re-runs the SAME submission: client-supplied preset / n_runs are ignored
-    r = await env.c.post(
-        f"/v1/sessions/{sid}/runs", json={"preset": "fast", "n_runs": 3}, headers=env.h
+    # the stub's `[fail:code]` is a permanent failure (no retry): make it the transient kind
+    env.repo.update_session(
+        env.uid, sid, {"error": {"code": "upstream_unavailable", "step": "run"}}
     )
+    # the retry re-runs the SAME submission (the failed run's preset / n_runs), one capped path
+    r = await env.c.post(f"/v1/sessions/{sid}/retry", headers=env.h)
     assert r.status_code == 202
+    assert env.repo.get_session(env.uid, sid).retry_count == 1
     assert env.counters() == (1, first.n_runs)  # the retry takes a fresh unit
     assert env.repo.get_status(env.uid, sid).progress == 45  # a retry restarts at 45
     env.drain()

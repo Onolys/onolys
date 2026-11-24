@@ -272,6 +272,6 @@ def make_validate_handler(
             ctx.repo.update_session(uid, sid, {"warnings": [*session.warnings, short[0]]})
         if session.state == "validating":
             advance(ctx.repo, uid, sid, to="transcribing", step="transcribe")
-        ctx.enqueue(TaskPayload(kind="transcribe", uid=uid, sid=sid))
+        ctx.enqueue(TaskPayload(kind="transcribe", uid=uid, sid=sid, retry=ctx.payload.retry))
 
     return validate

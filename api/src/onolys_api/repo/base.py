@@ -207,13 +207,25 @@ class Repo(Protocol):
     # counted unless free: an interview session's free run, or Try again after a failed free
     # run), sets `first_run_id` if absent, `state=running`, the status mirror
     # (progress `start_progress`, or the max with it when entering from `awaiting_input`) and
-    # clears the error. Exactly one of two racing callers (two manual starts, or a manual start
+    # clears the error. With `retry_max` (R4 retry of a failed run) the start is a retry: only
+    # `retry_allowed(session, retry_max, "run")` passes (else "not_ready"), and it also bumps
+    # `retry_count` in the same transaction; a cap/concurrent refusal bumps nothing.
+    # Exactly one of two racing callers (two manual starts, or a manual start
     # and the first-run gate) wins; the loser reserved nothing, so there is nothing to release.
     def start_run(
         self, uid: str, sid: str, run_id: str, date: str, defaults: LimitDefaults, max_active: int,
         code_version: str, start_progress: int, allowed_states: tuple[str, ...],
         n_runs: int | None, preset: str | None, coded_span: dict | None = None,
+        retry_max: int | None = None,
     ) -> StartOutcome: ...  # fmt: skip
+    # R4 retry of a validate/transcribe failure, ONE transaction: if `retry_allowed(session,
+    # max_retries, step)` (failed, transient, under the cap, failed at `step`), set `state=to`,
+    # `retry_count`+1, clear the error, reset `steps.{step}` to a fresh record, restamp
+    # `stage_started_at`, mirror the status (progress max'd with `progress`) and return True;
+    # otherwise write nothing and return False.
+    def retry_step(
+        self, uid: str, sid: str, step: str, to: str, max_retries: int, progress: int
+    ) -> bool: ...
     # interviews (SP10 R5): uid-scoped `interviews/{id}`; foreign or missing -> NotFoundError.
     def create_interview(self, uid: str, iid: str, doc: InterviewDoc) -> None: ...
     # ONE transaction (A9): refuse with "open_exists" when the caller has an interview in

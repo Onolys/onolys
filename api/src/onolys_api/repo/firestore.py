@@ -57,11 +57,13 @@ from onolys_api.repo.models import (
     SessionDoc,
     SessionError,
     SessionStatusDoc,
+    StepRecord,
     TranscriptDoc,
     UsageDoc,
     UserDoc,
     error_status_fields,
     interview_refundable,
+    retry_allowed,
     utcnow,
 )
 from onolys_api.storage.base import BlobStore
@@ -808,6 +810,7 @@ class FirestoreRepo:
         self, uid: str, sid: str, run_id: str, date: str, defaults: LimitDefaults, max_active: int,
         code_version: str, start_progress: int, allowed_states: tuple[str, ...],
         n_runs: int | None, preset: str | None, coded_span: dict | None = None,
+        retry_max: int | None = None,
     ) -> StartOutcome:  # fmt: skip
         sref = self._session_ref(uid, sid)
         stref = self._top("session_status", sid)
@@ -828,6 +831,8 @@ class FirestoreRepo:
                 and sess.get("speaker_confirmed")
                 and sess.get("clinician_speaker")
             ):
+                return "not_ready"
+            if retry_max is not None and not retry_allowed(sess, retry_max, "run"):
                 return "not_ready"
             status = stref.get(transaction=txn).to_dict() or {}
             user = user_ref.get(transaction=txn).to_dict() or {}
@@ -871,6 +876,8 @@ class FirestoreRepo:
             }
             if not sess.get("first_run_id"):
                 fields["first_run_id"] = run_id
+            if retry_max is not None:
+                fields["retry_count"] = sess.get("retry_count", 0) + 1
             txn.create(run_ref, run.to_store())
             if not exempt:
                 txn.set(
@@ -882,11 +889,43 @@ class FirestoreRepo:
             txn.update(sref, fields)
             txn.set(
                 stref,
-                {"state": "running", "step": None, "error_code": None, "uid": uid,
+                {"state": "running", "step": None, **error_status_fields(None, 0), "uid": uid,
                  "progress": progress, "updated_at": fields["updated_at"]},
                 merge=True,
             )  # fmt: skip
             return "started"
+
+        return self._contended(txn_fn, uid)
+
+    def retry_step(
+        self, uid: str, sid: str, step: str, to: str, max_retries: int, progress: int
+    ) -> bool:
+        sref, _ = self._owned_session(uid, sid)
+        stref = self._top("session_status", sid)
+
+        @firestore.transactional
+        def txn_fn(txn) -> bool:
+            snap = sref.get(transaction=txn)
+            sess = snap.to_dict() or {}
+            if not snap.exists or sess.get("uid") != uid:
+                raise NotFoundError()
+            if not retry_allowed(sess, max_retries, step):
+                return False
+            status = stref.get(transaction=txn).to_dict() or {}
+            now = utcnow()
+            txn.update(sref, {
+                "state": to, "step": step, "error": None,
+                f"steps.{step}": StepRecord().model_dump(),
+                "retry_count": sess.get("retry_count", 0) + 1,
+                "updated_at": now, "stage_started_at": now,
+            })  # fmt: skip
+            txn.set(
+                stref,
+                {"state": to, "step": step, **error_status_fields(None, 0), "uid": uid,
+                 "progress": max(status.get("progress", 0), progress), "updated_at": now},
+                merge=True,
+            )  # fmt: skip
+            return True
 
         return self._contended(txn_fn, uid)
 

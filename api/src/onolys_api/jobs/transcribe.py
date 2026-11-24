@@ -135,7 +135,9 @@ def stt_cap_s(audio_s: float | None, settings: Settings | None = None) -> float:
 
 
 def _poll_payload(ctx: TaskContext, n: int) -> TaskPayload:
-    return TaskPayload(kind="transcribe-poll", uid=ctx.uid, sid=ctx.sid, n=n)
+    return TaskPayload(
+        kind="transcribe-poll", uid=ctx.uid, sid=ctx.sid, n=n, retry=ctx.payload.retry
+    )
 
 
 def make_transcribe_handler(

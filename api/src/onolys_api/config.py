@@ -67,7 +67,8 @@ def _bool(e: Mapping[str, str], name: str, default: bool) -> bool:
     raise ConfigError(f"{name} must be true or false")
 
 
-MAX_SESSION_RETRIES = 3  # user-visible retries of a transient failure (03-failure-policy R4)
+# user-visible retries of a transient failure (03-failure-policy R4): the one source, no env
+MAX_SESSION_RETRIES = 3
 
 
 @dataclass(frozen=True)
@@ -85,7 +86,6 @@ class Settings:
     eval_cap_day: int = 10
     ai_cap_day: int = 5
     max_active_runs: int = 1
-    max_session_retries: int = MAX_SESSION_RETRIES
     tasks_queue: str = ""
     tasks_sa: str = ""
     worker_url: str = ""
@@ -154,7 +154,6 @@ class Settings:
             eval_cap_day=_int(e, "EVAL_CAP_DAY", cls.eval_cap_day),
             ai_cap_day=_int(e, "AI_CAP_DAY", cls.ai_cap_day),
             max_active_runs=max_active,
-            max_session_retries=_int(e, "MAX_SESSION_RETRIES", MAX_SESSION_RETRIES),
             tasks_queue=e.get("TASKS_QUEUE", ""),
             tasks_sa=e.get("TASKS_SA", ""),
             worker_url=e.get("WORKER_URL", ""),
@@ -213,8 +212,6 @@ class Settings:
                 raise ConfigError(f"{kind}_CAP_DAY must be >= 0")
         if self.max_active_runs < 0:
             raise ConfigError("MAX_ACTIVE_RUNS must be >= 0")
-        if self.max_session_retries < 0:
-            raise ConfigError("MAX_SESSION_RETRIES must be >= 0")
         if self.stt_cap_factor <= 0 or self.stt_cap_min_s <= 0:
             raise ConfigError("STT_CAP_FACTOR and STT_CAP_MIN_S must be > 0")
         if self.stt_time_limit_s < self.stt_cap_min_s:

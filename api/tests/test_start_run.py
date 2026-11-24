@@ -45,10 +45,15 @@ def _widen(r):
         r.__class__ = SlowReadRepo
 
 
-def _post(app, h, sid, barrier):
+def _post(app, h, sid, barrier, path="runs"):
     with TestClient(app) as c:
         barrier.wait()
-        return c.post(f"/v1/sessions/{sid}/runs", json={}, headers=h)
+        return c.post(f"/v1/sessions/{sid}/{path}", json={}, headers=h)
+
+
+def _fail_run_step(repo_, uid, sid):
+    """A transient failure of the run step: the only thing `POST /retry` re-enters as a run."""
+    repo_.update_session(uid, sid, {"error": {"code": "upstream_unavailable", "step": "run"}})
 
 
 @pytest.mark.parametrize("state", ["awaiting_input", "failed"])
@@ -59,9 +64,13 @@ def test_two_concurrent_manual_starts_exactly_one_wins(repo, state):  # noqa: F8
     uid = f"u{uuid.uuid4().hex[:10]}"
     h = {"Authorization": f"Bearer test:{uid}"}
     sid = new_session(repo, uid, state=state, ready=True, **READY)
+    path = "runs"
+    if state == "failed":  # a failed session is re-run through the one retry path (03-failure R4)
+        _fail_run_step(repo, uid, sid)
+        path = "retry"
     barrier = threading.Barrier(2)
     with ThreadPoolExecutor(2) as ex:
-        rs = [f.result() for f in [ex.submit(_post, app, h, sid, barrier) for _ in range(2)]]
+        rs = [f.result() for f in [ex.submit(_post, app, h, sid, barrier, path) for _ in range(2)]]
     assert sorted(r.status_code for r in rs) == [202, 409], [r.text for r in rs]
     loser = next(r for r in rs if r.status_code == 409)
     assert loser.json()["details"][0]["code"] == "invalid_state"
@@ -122,16 +131,21 @@ def test_refused_start_reserves_nothing(repo):  # noqa: F811
     app = make_client(repo, mk_settings(max_active_runs=2, eval_cap_day=0), queue)
     uid = f"u{uuid.uuid4().hex[:10]}"
     h = {"Authorization": f"Bearer test:{uid}"}
-    sid = new_session(repo, uid, state="failed", ready=True, **READY)
+    sid = new_session(repo, uid, state="awaiting_input", ready=True, **READY)
     with TestClient(app) as c:
         r = c.post(f"/v1/sessions/{sid}/runs", json={}, headers=h)
     assert r.status_code == 429 and r.json()["details"][0]["code"] == "daily_cap_reached"
-    assert repo.get_session(uid, sid).state == "failed"
+    assert repo.get_session(uid, sid).state == "awaiting_input"
     assert repo.list_runs(uid, sid) == []
     assert user_counters(repo, uid, caps.utc_date()) == (0, 0)
 
 
 # ---- the free first run of an interview-linked session also works through POST /runs (SP11 AC6)
+
+
+def _post_retry(app, uid, sid):
+    with TestClient(app) as c:
+        return c.post(f"/v1/sessions/{sid}/retry", headers={"Authorization": f"Bearer test:{uid}"})
 
 
 def _post_run(app, uid, sid):
@@ -214,8 +228,10 @@ def test_try_again_after_a_system_failure_reuses_the_stored_rating(repo):  # noq
     uid = f"u{uuid.uuid4().hex[:10]}"
     sid = _linked_ready(repo, uid)
     rid = rate(repo, uid, sid)
-    repo.update_session(uid, sid, {"state": "failed", "error": {"code": "upstream_unavailable"}})
-    r = _post_run(make_client(repo, mk_settings(), RecordingQueue()), uid, sid)
+    repo.update_session(
+        uid, sid, {"state": "failed", "error": {"code": "upstream_unavailable", "step": "run"}}
+    )
+    r = _post_retry(make_client(repo, mk_settings(), RecordingQueue()), uid, sid)
     assert r.status_code == 202, r.text
     assert repo.get_run(uid, sid, r.json()["run_id"]).rating_id == rid
 
@@ -304,7 +320,9 @@ def _fail_system(repo_, uid, sid, run_id):
 
     repo_.update_run(uid, sid, run_id, {"status": "failed", "error": "upstream_unavailable"})
     release_once(repo_, uid, sid, run_id, True, caps.utc_date())  # refund: free run, nothing given
-    repo_.update_session(uid, sid, {"state": "failed", "error": {"code": "upstream_unavailable"}})
+    repo_.update_session(
+        uid, sid, {"state": "failed", "error": {"code": "upstream_unavailable", "step": "run"}}
+    )
 
 
 def test_try_again_after_failed_free_interview_run_is_free_even_at_eval_cap(repo):  # noqa: F811
@@ -318,7 +336,7 @@ def test_try_again_after_failed_free_interview_run_is_free_even_at_eval_cap(repo
     _fail_system(repo, uid, sid, first.run_id)
     assert user_counters(repo, uid, date) == (0, 0)
     queue = RecordingQueue()
-    r = _post_run(make_client(repo, cap1, queue), uid, sid)
+    r = _post_retry(make_client(repo, cap1, queue), uid, sid)
     assert r.status_code == 202, r.text
     second = repo.get_run(uid, sid, r.json()["run_id"])
     assert second.counted is False and second.n_runs == 2  # same submission, still free

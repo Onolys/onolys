@@ -10,12 +10,20 @@ from fastapi import APIRouter, Depends, Header, Query, Request, Response
 from onolys_miti.result import CodedSpan
 from pydantic import BaseModel, Field, field_validator
 
-from onolys_api import logs
+from onolys_api import config, logs
+from onolys_api.adapters.error_map import kind_for_code
+from onolys_api.audio import CANONICAL_TYPES, original_key, staging_key
 from onolys_api.auth.deps import AuthUser, current_user
 from onolys_api.client_info import client_info
 from onolys_api.errors import ApiError, ErrorResponse
 from onolys_api.jobs.delete import delete_session_data
-from onolys_api.jobs.machine import advance
+from onolys_api.jobs.machine import (
+    STATE_PROGRESS,
+    advance,
+    check_transition,
+    has_final_report,
+    invalid_state,
+)
 from onolys_api.jobs.queue import TaskPayload
 from onolys_api.jobs.stale import settle_if_stale
 from onolys_api.languages import is_supported_language
@@ -26,10 +34,13 @@ from onolys_api.repo.models import (
     IdempotencyDoc,
     RatingDraftDoc,
     SessionDoc,
+    SessionError,
     SessionState,
     SessionStatusDoc,
+    retry_allowed,
 )
 from onolys_api.routes.ids import ResourceId
+from onolys_api.routes.runs import RunRequest, begin_run
 
 IDEMPOTENCY_TTL = timedelta(hours=24)
 MAX_KEY_LEN = 200
@@ -365,6 +376,81 @@ def get_session(id: ResourceId, request: Request, user: User) -> SessionDetail:
         updated_at=s.updated_at,
         links=links,
     )
+
+
+class RetryStarted(BaseModel):
+    session: SessionRef
+    run_id: str | None = Field(None, description="The new run, when the failed step was `run`")
+
+
+# the step that failed -> the state it re-enters (`run` goes through `begin_run`)
+RETRY_STATE = {"validate": "validating", "transcribe": "transcribing"}
+
+
+@router.post(
+    "/{id}/retry",
+    operation_id="retrySession",
+    status_code=202,
+    response_model=RetryStarted,
+    summary="Retry the step that failed (capped, one path for every step)",
+    description=(
+        "Allowed only for a `failed` session whose error kind is `transient`, with retries "
+        "left (`MAX_SESSION_RETRIES`, 3) and no final rating; otherwise 409 `invalid_state`. "
+        "One transaction counts the retry and moves the state: `validate` re-enters "
+        "`validating` (409 if the staged upload is gone), `transcribe` re-enters "
+        "`transcribing` with a fresh step record, `run` starts a new run with the failed run's "
+        "preset, n_runs and span, reserving a unit like a fresh start (429 `daily_cap_reached` "
+        "or `concurrent_runs`; a refused retry is not counted)."
+    ),
+)
+def retry_session(id: ResourceId, request: Request, user: User) -> RetryStarted:
+    repo, blobs, uid = request.app.state.repo, request.app.state.blobs, user.uid
+    rid = getattr(request.state, "request_id", None)
+    s = repo.get_session(uid, id)
+    if s.state == "deleting":
+        raise NotFoundError()
+    cap = config.MAX_SESSION_RETRIES  # the same constant `retries_left` reads
+    step = s.error.step if s.error else None
+    if (
+        step not in ("run", *RETRY_STATE)
+        or not retry_allowed(s.model_dump(), cap, step)
+        or has_final_report(repo, uid, id, s.state)
+    ):
+        raise invalid_state()
+    if step == "run":
+        started = begin_run(request, user, id, RunRequest(), retry_max=cap)
+        return RetryStarted(session=SessionRef(id=id, status="running"), run_id=started.run_id)
+    to = RETRY_STATE[step]
+    check_transition(s.state, to)
+    if step == "validate" and not _upload_still_there(blobs, uid, id, s):
+        raise invalid_state()
+    if not repo.retry_step(uid, id, step, to, cap, STATE_PROGRESS[to]):
+        raise invalid_state()  # lost a race: another retry won, or the session moved on
+    retries = s.retry_count + 1
+    try:
+        queue = getattr(request.app.state, "queue", None)
+        if queue is None:
+            raise RuntimeError("no queue")
+        queue.enqueue(TaskPayload(kind=step, uid=uid, sid=id, request_id=rid, retry=retries))  # type: ignore[arg-type]
+    except Exception as e:
+        logs.failed("step_failed", session_id=id, step=step, error_code="upstream_unavailable",
+                    exc_class=type(e).__name__, request_id=rid)  # fmt: skip
+        advance(
+            repo, uid, id, to="failed", step=step,
+            error=SessionError(
+                code="upstream_unavailable", step=step, kind=kind_for_code("upstream_unavailable")
+            ),
+        )  # fmt: skip
+        raise ApiError.of(503, "upstream_unavailable", "Could not start the retry.") from None
+    return RetryStarted(session=SessionRef(id=id, status=to))  # type: ignore[arg-type]
+
+
+def _upload_still_there(blobs, uid: str, sid: str, s: SessionDoc) -> bool:
+    """`validate` reads the staged copy (or an original an earlier attempt already moved); the
+    bucket deletes staged objects after a day (R8)."""
+    if any(blobs.exists(original_key(uid, sid, fmt)) for fmt in CANONICAL_TYPES):
+        return True
+    return s.upload is not None and blobs.exists(staging_key(uid, sid, s.upload.upload_id))
 
 
 @router.delete(

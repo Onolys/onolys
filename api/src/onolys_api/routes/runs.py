@@ -1,9 +1,10 @@
 """Runs and reports (PRD R2, R4, D12, D18).
 
-`POST /sessions/{id}/runs` starts a run by hand: "Try again" after a system failure (same
-transcript, stored final rating, current speaker choice) or the first run when auto-start was
-held back by the cap. A rating is final once its report is ready (FX45): 409 `rating_final`.
-It reserves a cap slot (429 `daily_cap_reached`), creates the run, moves the
+`POST /sessions/{id}/runs` starts a run by hand: the first run when auto-start was held back by
+the cap (same transcript, stored final rating, current speaker choice). A failed session is not
+re-run here: `POST /sessions/{id}/retry` is the one capped retry path (03-failure-policy R4), and
+re-enters the run through `begin_run` below. A rating is final once its report is ready (FX45):
+409 `rating_final`. It reserves a cap slot (429 `daily_cap_reached`), creates the run, moves the
 session to `running` (clears the cap error) and enqueues the `run` task; the worker does the rest.
 `preset` changes LLM routes only: the transcript and its STT are reused.
 """
@@ -48,9 +49,9 @@ ERRORS = {"default": {"model": ErrorResponse, "description": "Error"}}
 router = APIRouter(prefix="/sessions/{id}", tags=["runs"], responses=ERRORS)
 runs_router = APIRouter(tags=["runs"], responses=ERRORS)
 User = Annotated[AuthUser, Depends(current_user)]
-# FX45: no `report_ready` (the rating is final once its report is ready); a `failed` session may
-# only be retried after a system failure, never after a bad-file code.
-RERUN_STATES = ("awaiting_input", "failed")
+# FX45: no `report_ready` (the rating is final once its report is ready); a `failed` session is
+# re-run only through `POST /sessions/{id}/retry` (one path, one counter).
+RERUN_STATES = ("awaiting_input",)
 
 
 class RunRequest(BaseModel):
@@ -130,38 +131,44 @@ def _open_session(request: Request, user: AuthUser, id: str) -> SessionDoc:
     operation_id="startRun",
     status_code=202,
     response_model=RunStarted,
-    summary="Start a run by hand (Try again after a system failure, or the first run held back)",
+    summary="Start the first run by hand (held back by the cap)",
     description=(
         "Needs the transcript and the confirmed speaker; uses the stored final rating revision "
         "or runs as no-rating. `preset` changes LLM routes only (the transcript is reused). "
-        "On Try again (a failed session) `preset` and `n_runs` are ignored: the failed run's "
-        "values are reused. "
         "Counts against the daily cap: 429 `daily_cap_reached`; 429 `concurrent_runs` while "
         "another run is in progress. 409 `rating_final` once a report exists (the rating is "
         "final: no re-run, interview sessions included). 409 `invalid_state` while a run "
-        "is in progress, before the inputs exist, or after a bad-file failure (upload a "
-        "different file instead)."
+        "is in progress, before the inputs exist, or on a failed session (use "
+        "`POST /sessions/{id}/retry`)."
     ),
 )
 def start_run(
     id: ResourceId, request: Request, user: User, body: RunRequest | None = None
 ) -> RunStarted:
-    body = body or RunRequest()
+    return begin_run(request, user, id, body or RunRequest(), retry_max=None)
+
+
+def begin_run(
+    request: Request, user: AuthUser, id: str, body: RunRequest, retry_max: int | None
+) -> RunStarted:
+    """Start a run: `POST /runs` (`retry_max=None`) or the run branch of `POST /sessions/{id}/retry`
+    (`retry_max` = the cap). A retry re-runs the SAME submission (the failed run's preset, n_runs
+    and span) as a new run id; it reserves a unit like a fresh start (429 at a cap), and the repo
+    transaction counts the retry only when the run starts."""
     app = request.app
     repo, uid = app.state.repo, user.uid
     s = _open_session(request, user, id)
+    retry = retry_max is not None
     if has_final_report(repo, uid, id, s.state):
         raise rating_final()
-    if s.state == "failed" and s.error is not None and s.error.kind == "user_file":
-        raise invalid_state()
-    if s.state not in RERUN_STATES or not (
+    allowed = ("failed",) if retry else RERUN_STATES
+    if s.state not in allowed or not (
         s.transcript_ready and s.speaker_confirmed and s.clinician_speaker
     ):
         raise invalid_state()
     preset, n_runs = s.preset, body.n_runs
     span = s.coded_span
-    if s.state == "failed":
-        # Try again re-runs the SAME submission: the client's `preset`/`n_runs` are ignored
+    if retry:
         prior = repo.list_runs(uid, id)
         if prior:
             preset, n_runs = prior[-1].preset, prior[-1].n_runs
@@ -184,8 +191,8 @@ def start_run(
     # The loser of a race gets 409 and holds no slot.
     outcome = repo.start_run(
         uid, id, run_id, date, LimitDefaults.from_settings(settings), settings.max_active_runs,
-        settings.git_sha, RUN_START_PROGRESS, RERUN_STATES, n_runs, preset,
-        coded_span=span.model_dump(exclude_none=True) if span else None,
+        settings.git_sha, RUN_START_PROGRESS, allowed, n_runs, preset,
+        coded_span=span.model_dump(exclude_none=True) if span else None, retry_max=retry_max,
     )  # fmt: skip
     if outcome == "not_ready":
         raise invalid_state()

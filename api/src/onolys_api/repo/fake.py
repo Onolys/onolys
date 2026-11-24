@@ -48,11 +48,13 @@ from onolys_api.repo.models import (
     SessionDoc,
     SessionError,
     SessionStatusDoc,
+    StepRecord,
     TranscriptDoc,
     UsageDoc,
     UserDoc,
     error_status_fields,
     interview_refundable,
+    retry_allowed,
     utcnow,
 )
 from onolys_api.storage.base import BlobStore
@@ -630,6 +632,7 @@ class FakeRepo:
         self, uid: str, sid: str, run_id: str, date: str, defaults: LimitDefaults, max_active: int,
         code_version: str, start_progress: int, allowed_states: tuple[str, ...],
         n_runs: int | None, preset: str | None, coded_span: dict | None = None,
+        retry_max: int | None = None,
     ) -> StartOutcome:  # fmt: skip
         with self._claim_lock:  # the fake's "transaction"
             sess = self._owned(f"sessions/{sid}", uid)
@@ -639,6 +642,8 @@ class FakeRepo:
                 and sess.get("speaker_confirmed")
                 and sess.get("clinician_speaker")
             ):
+                return "not_ready"
+            if retry_max is not None and not retry_allowed(sess, retry_max, "run"):
                 return "not_ready"
             status = self._get(f"session_status/{sid}") or {}
             user = self._get(f"users/{uid}") or {}
@@ -682,15 +687,43 @@ class FakeRepo:
             self._put(
                 f"sessions/{sid}",
                 {**sess, "first_run_id": sess.get("first_run_id") or run_id, "state": "running",
-                 "step": None, "error": None, "updated_at": now, "stage_started_at": now},
+                 "step": None, "error": None, "updated_at": now, "stage_started_at": now,
+                 "retry_count": sess.get("retry_count", 0) + (retry_max is not None)},
             )  # fmt: skip
             self._put(
                 f"session_status/{sid}",
-                {**status, "state": "running", "step": None, "error_code": None,
+                {**status, "state": "running", "step": None, **error_status_fields(None, 0),
                  "progress": progress, "updated_at": now},
             )  # fmt: skip
             self._record_status(uid, sid)
             return "started"
+
+    def retry_step(
+        self, uid: str, sid: str, step: str, to: str, max_retries: int, progress: int
+    ) -> bool:
+        with self._claim_lock:  # the fake's "transaction"
+            sess = self._owned(f"sessions/{sid}", uid)
+            assert sess is not None
+            if not retry_allowed(sess, max_retries, step):
+                return False
+            now = utcnow()
+            status = self._get(f"session_status/{sid}") or {}
+            steps = dict(sess.get("steps") or {})
+            steps[step] = StepRecord().model_dump()
+            self._put(
+                f"sessions/{sid}",
+                {**sess, "state": to, "step": step, "error": None, "steps": steps,
+                 "retry_count": sess.get("retry_count", 0) + 1, "updated_at": now,
+                 "stage_started_at": now},
+            )  # fmt: skip
+            self._put(
+                f"session_status/{sid}",
+                {**status, "state": to, "step": step, **error_status_fields(None, 0),
+                 "progress": max(status.get("progress", 0), progress), "uid": uid,
+                 "updated_at": now},
+            )  # fmt: skip
+            self._record_status(uid, sid)
+            return True
 
     # ---- interviews ----
 

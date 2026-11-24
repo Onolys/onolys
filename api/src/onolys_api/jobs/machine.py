@@ -32,7 +32,8 @@ TRANSITIONS: dict[str, frozenset[str]] = {
     "awaiting_input": frozenset({"running", "deleting"}),
     "running": frozenset({"report_ready", "failed", "deleting"}),
     "report_ready": frozenset({"running", "deleting"}),  # re-run
-    "failed": frozenset({"running", "deleting"}),  # re-run
+    # one retry path (R4): re-enter the step that failed (`POST /sessions/{id}/retry`)
+    "failed": frozenset({"running", "validating", "transcribing", "deleting"}),
     "deleting": frozenset(),
 }
 assert set(TRANSITIONS) == set(STATES) and all("deleting" in TRANSITIONS[s] for s in _NOT_DELETING)

@@ -34,8 +34,7 @@ FILE_CHECK_CODES = (
 
 def test_max_session_retries_default_is_3():
     assert MAX_SESSION_RETRIES == 3
-    assert Settings().max_session_retries == 3
-    assert Settings.from_env({"ENV": "test", "MAX_SESSION_RETRIES": "5"}).max_session_retries == 5
+    assert not hasattr(Settings(), "max_session_retries")  # one source: the constant, not an env
 
 
 @pytest.mark.parametrize("code", FILE_CHECK_CODES)
