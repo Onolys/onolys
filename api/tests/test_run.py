@@ -42,6 +42,25 @@ def spy(repo):
         orig(uid, sid, fields, status=status)
 
     repo.update_session = update_session
+
+    orig_publish = repo.publish_report
+
+    def publish_report(uid, sid, run_id, doc, run_fields, plan_for, date):
+        # Firestore writes the final status inside its transaction, not via update_session.
+        def record(version):
+            plan = plan_for(version)
+
+            def wrapped(s, st):
+                result = plan(s, st)
+                if result and result[1] and "progress" in result[1]:
+                    repo.progress.append(result[1]["progress"])
+                return result
+
+            return wrapped
+
+        return orig_publish(uid, sid, run_id, doc, run_fields, record, date)
+
+    repo.publish_report = publish_report
     return repo
 
 
