@@ -68,7 +68,9 @@ async def rich_session(env: Env, title: str = "SENTINEL-TITLE") -> str:
     sid = await env.finished("[fail:code]")  # first run fails; "Try again" makes the second
     env.repo.update_session(env.uid, sid, {"title": title})
     swap_eval(env, BigEval())
-    r = await env.c.post(f"/v1/sessions/{sid}/runs", json={}, headers=env.h)
+    # the stub's `[fail:code]` is permanent (not retryable): make it the transient kind first
+    env.repo.update_session(env.uid, sid, {"error": {"code": "upstream_unavailable", "step": "run"}})
+    r = await env.c.post(f"/v1/sessions/{sid}/retry", headers=env.h)  # 03 Task 4: the only retry path
     assert r.status_code == 202
     env.drain()
     # a second, >500 KB transcript so the transcript object path is populated too
