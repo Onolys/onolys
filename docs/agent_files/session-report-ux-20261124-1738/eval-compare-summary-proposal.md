@@ -160,7 +160,7 @@ Line text, speakers and any timestamps come only from the saved input. Nothing i
 | Avg miss and within +-1 per combo | `aggregates` rows (only when the human engine is selected): MAE, bias, within_1, usage, cost, failed. Backend counts per successful repeat | Session-balanced aggregation per combo vs human; common cohort across combos; "which combo wins" flags per row |
 | Heatmap (code x combo) | Underlying per-metric errors are in `aggregates[].metrics` | Reshape to row-per-metric with winner and grey-out rules |
 | Verdict line | None | Generate from leaderboard and heatmap values |
-| Time per combo | Not saved (token usage and estimated cost only) | Measured elapsed time per unit before the Time column can exist; until then omit it |
+| Time per combo | Per unit `started_at` (set at claim) and `finished_at` (set on completion) in `runs.py` | Time = `finished_at` - `started_at` per unit, averaged per combo. Caveat: `started_at` resets if a unit is re-claimed after a lease expiry, so time can be understated for retried units |
 | Human line labels | Gold `utterance_codes` (turn_id, codes), present for AnnoMI, AnnoSUM, MiTags, MIDAS, AutoMISC; absent for HLQC, PHAC | Safe projection of saved gold to the web |
 | Combo line codes and rationale | MITI report instances carry `turn_id`, `quote`, `id` (code) and `rationale`; read via the saved output endpoint, not in `build_compare` | Aggregate instances per turn and combo; return compactly |
 | Precision/recall/F1, confusion matrix | None | New server calculation using the alignment policy below |
@@ -181,7 +181,7 @@ Line text, speakers and any timestamps come only from the saved input. Nothing i
 - Should the overview default to "all 4 combos selected" or require choosing combos first? Default proposed: all combos in the run up to 4, with a picker beyond that.
 - What is the minimum number of paired sessions before a heatmap cell is colored (proposed 5)?
 - Should "Count error" sum all 10 codes equally, or let the owner weight codes that matter for prod? Proposed: equal, with per-code rows visible.
-- Should elapsed time be instrumented now so the Time column can ship, or omitted for the first release?
+- Time understates retried units (`started_at` resets on re-claim after lease expiry). Accept with a footnote, or exclude retried units from the Time average?
 - How should the roll-up group rationale snippets: by code only (simple) or by similarity (useful, more work)?
 - Do we show AnnoMI-derived R:Q and %CR (computed from the four mapped counts) in the heatmap, marked "derived", or hide them? Proposed: show, marked.
 - Datasets where the human has line labels but the combo's engine does not (or reverse): confirm "no line-level output" is acceptable wording.
