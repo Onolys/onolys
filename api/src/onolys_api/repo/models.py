@@ -9,7 +9,7 @@ from typing import Any, Literal
 from onolys_engine_core.transcript import Transcript
 from onolys_miti.result import CodedSpan
 from onolys_miti.stt import SttRun
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 SessionState = Literal[
     "created",
@@ -37,6 +37,36 @@ class Doc(BaseModel):
 
     def to_store(self) -> dict[str, Any]:
         return self.model_dump(mode="python", exclude={"id"})
+
+
+_CONTROL = dict.fromkeys([*range(32), 127])  # str.translate table: drop control characters
+CLIENT_CAPS = {"web_version": 64, "user_agent": 200, "recorder_mime": 100, "audio_engine": 100}
+
+
+class ClientInfo(BaseModel):
+    """What produced a session or interview (02-logging R13). Client-reported, so every field is
+    optional and sanitized, never rejected: non-strings become absent, control characters are
+    stripped, and values are cut to a cap. Unknown keys are ignored."""
+
+    web_version: str | None = Field(None, description="Web build id (git SHA, or `dev`)")
+    user_agent: str | None = Field(None, description="Browser User-Agent, trimmed to 200 chars")
+    recorder_mime: str | None = Field(None, description="MediaRecorder container the web chose")
+    audio_engine: str | None = Field(None, description="Web audio engine name and version")
+
+    @field_validator("web_version", "user_agent", "recorder_mime", "audio_engine", mode="before")
+    @classmethod
+    def _clean(cls, v: Any, info: Any) -> str | None:
+        if not isinstance(v, str):
+            return None
+        out = v.translate(_CONTROL).strip()[: CLIENT_CAPS[info.field_name]]
+        return out or None
+
+
+class RelayInfo(BaseModel):
+    """Which voice relay build served an interview; written by the relay at connect (R13)."""
+
+    relay_version: str | None = None  # GIT_SHA
+    relay_revision: str | None = None  # K_REVISION
 
 
 class BlobPointer(BaseModel):
@@ -107,6 +137,7 @@ class SessionDoc(Doc):
     rating_submitted: bool = False
     has_rating: bool = False
     first_run_id: str | None = None
+    client: ClientInfo = Field(default_factory=ClientInfo)  # web build / browser that created it
     interview_id: str | None = None  # set by the AI interview (SP10): its first run is free (SP11)
     # set by `validate`: the upload is not the audio the interview's relay recorded, so the free
     # first run is void (A10); an unset flag on an interview session means the free run stands
@@ -258,6 +289,8 @@ class InterviewDoc(Doc):
     conn_id: str | None = None  # connection lease: the newest relay connection owns the interview
     refunded: bool = False  # set with the settle transition: a refunded interview never links
     connects: int = 0  # relay connections that went live; capped by AI_MAX_CONNECTS
+    client: ClientInfo = Field(default_factory=ClientInfo)  # web build / browser / recorder
+    relay: RelayInfo | None = None  # relay build that last served it (written at connect)
 
 
 def interview_refundable(data: dict[str, Any], now: datetime, threshold_s: float) -> bool:

@@ -492,6 +492,34 @@ export interface components {
             upload_url: string;
         };
         /**
+         * ClientInfo
+         * @description What produced a session or interview (02-logging R13). Client-reported, so every field is
+         *     optional and sanitized, never rejected: non-strings become absent, control characters are
+         *     stripped, and values are cut to a cap. Unknown keys are ignored.
+         */
+        ClientInfo: {
+            /**
+             * Audio Engine
+             * @description Web audio engine name and version
+             */
+            audio_engine?: string | null;
+            /**
+             * Recorder Mime
+             * @description MediaRecorder container the web chose
+             */
+            recorder_mime?: string | null;
+            /**
+             * User Agent
+             * @description Browser User-Agent, trimmed to 200 chars
+             */
+            user_agent?: string | null;
+            /**
+             * Web Version
+             * @description Web build id (git SHA, or `dev`)
+             */
+            web_version?: string | null;
+        };
+        /**
          * CodedSpan
          * @description Exactly one half-open time (milliseconds) or zero-based turn range.
          */
@@ -538,6 +566,8 @@ export interface components {
         };
         /** CreateInterviewRequest */
         CreateInterviewRequest: {
+            /** @description Optional: web build and recorder info */
+            client?: components["schemas"]["ClientInfo"] | null;
             /** Scenario Id */
             scenario_id: string;
             /**
@@ -548,6 +578,8 @@ export interface components {
         };
         /** CreateSessionRequest */
         CreateSessionRequest: {
+            /** @description Optional: which web build, recorder and audio engine made the request */
+            client?: components["schemas"]["ClientInfo"] | null;
             /** @description Half-open milliseconds or zero-based turn range; null codes all turns. */
             coded_span?: components["schemas"]["CodedSpan"] | null;
             /**
@@ -594,6 +626,8 @@ export interface components {
         Empty: Record<string, never>;
         /** EndInterviewRequest */
         EndInterviewRequest: {
+            /** @description Optional: recorder container and audio engine, added to the interview */
+            client?: components["schemas"]["ClientInfo"] | null;
             /**
              * Discard
              * @description Throw the interview away (state `abandoned`)

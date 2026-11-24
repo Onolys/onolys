@@ -9,7 +9,7 @@ import pytest
 from onolys_api.app import create_app
 from onolys_api.jobs import machine as m
 from onolys_api.repo.fake import FakeRepo
-from onolys_api.repo.models import IdempotencyDoc, SessionError
+from onolys_api.repo.models import ClientInfo, IdempotencyDoc, SessionError
 
 A = {"Authorization": "Bearer test:alice"}
 B = {"Authorization": "Bearer test:bob"}
@@ -291,3 +291,45 @@ async def test_errors_validate_against_public_schema(client, schema):
         await client.get("/v1/sessions/" + "0" * 32, headers=A),
     ):
         jsonschema.validate(r.json(), schema)
+
+
+# ---- client version capture (02-logging R13) ----
+
+
+async def test_client_version_header_and_user_agent_are_stored_on_the_session(client, repo):
+    r = await client.post(
+        "/v1/sessions", json={}, headers={**A, "X-Client-Version": "abc123", "User-Agent": "UA/1"}
+    )
+    sid = r.json()["session"]["id"]
+    c = repo.get_session("alice", sid).client
+    assert (c.web_version, c.user_agent) == ("abc123", "UA/1")
+
+
+async def test_client_body_is_stored_and_sanitized(client, repo):
+    body = {
+        "client": {
+            "web_version": "v" * 500,
+            "recorder_mime": "audio/webm\x00;codecs=opus\n",
+            "audio_engine": "worklet@" + "9" * 500,
+            "unknown_key": "ignored",
+        }
+    }
+    r = await client.post("/v1/sessions", json=body, headers={**A, "User-Agent": "U" * 500})
+    assert r.status_code == 202
+    c = repo.get_session("alice", r.json()["session"]["id"]).client
+    assert c.recorder_mime == "audio/webm;codecs=opus"
+    assert len(c.web_version) <= 64 and len(c.audio_engine) <= 100
+    assert c.user_agent == "U" * 200  # trimmed
+    assert ClientInfo(user_agent="Moz\x07\x00illa" + "x" * 500).user_agent.startswith("Mozilla")
+
+
+async def test_bad_header_value_is_dropped_not_rejected(client, repo):
+    r = await client.post("/v1/sessions", json={}, headers={**A, "X-Client-Version": "bad value!"})
+    assert r.status_code == 202
+    assert repo.get_session("alice", r.json()["session"]["id"]).client.web_version is None
+
+
+async def test_old_client_without_client_object_still_works(client, repo):
+    r = await create(client)
+    assert r.status_code == 202
+    assert repo.get_session("alice", r.json()["session"]["id"]).client.web_version is None

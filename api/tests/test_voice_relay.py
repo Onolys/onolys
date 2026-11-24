@@ -686,3 +686,15 @@ async def test_reconnect_cap_ends_the_interview(tmp_path):
         assert await c.recv_json() == {"type": "error", "code": "interview_not_live"}
         await expect_close(c, 4409)
     assert env.doc().state == "ended" and len(env.voice.opened) == 0
+
+
+async def test_connect_writes_relay_version_and_revision_on_the_interview(tmp_path):
+    env = Env(tmp_path, git_sha="abc1234", revision="voice-00042-xyz")
+    env.interview()
+    async with serve(env.app) as base:
+        c = await connect(base)
+        await ready(c)
+        await c.send({"type": "end"})
+        await expect_close(c, 1000)
+    r = env.doc().relay
+    assert (r.relay_version, r.relay_revision) == ("abc1234", "voice-00042-xyz")

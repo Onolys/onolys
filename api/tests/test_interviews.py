@@ -334,3 +334,27 @@ async def test_second_create_while_one_is_open_is_a_conflict_not_a_second_unit(a
     out = repo.create_interview_reserved("alice", "b" * 32, doc, LimitDefaults(10, 5), 2)
     assert out == "open_exists"
     assert usage(repo) == 1
+
+
+async def test_create_and_end_store_client_info_on_the_interview(api, repo):
+    r = await api.post(
+        "/v1/interviews", headers={**A, "X-Client-Version": "sha1", "User-Agent": "UA/2"},
+        json={"scenario_id": SCENARIO, "client": {"recorder_mime": "audio/mp4"}},
+    )  # fmt: skip
+    iid = r.json()["interview_id"]
+    c = repo.get_interview("alice", iid).client
+    assert (c.web_version, c.user_agent, c.recorder_mime) == ("sha1", "UA/2", "audio/mp4")
+    e = await api.post(
+        f"/v1/interviews/{iid}/end", headers={**A, "X-Client-Version": "sha1"},
+        json={"client": {"recorder_mime": "audio/webm", "audio_engine": "worklet-1\x00"}},
+    )  # fmt: skip
+    assert e.status_code == 200
+    c = repo.get_interview("alice", iid).client
+    assert (c.web_version, c.user_agent) == ("sha1", "UA/2")  # kept
+    assert (c.recorder_mime, c.audio_engine) == ("audio/webm", "worklet-1")
+
+
+async def test_interview_without_client_info_still_works(api, repo):
+    iid = (await create(api)).json()["interview_id"]
+    assert (await api.post(f"/v1/interviews/{iid}/end", headers=A)).status_code == 200
+    assert (await api.post(f"/v1/interviews/{iid}/end", headers=A, json={})).status_code == 200

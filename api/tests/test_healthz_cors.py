@@ -23,6 +23,19 @@ async def test_cors_allowed_origin_and_headers(client):
     assert r.headers["access-control-allow-origin"] == "https://app.onolys.com"
 
 
+async def test_cors_allows_the_client_version_header(client):
+    r = await client.options(
+        "/v1/healthz",
+        headers={
+            "Origin": "https://app.onolys.com",
+            "Access-Control-Request-Method": "POST",
+            "Access-Control-Request-Headers": "Authorization,X-Client-Version",
+        },
+    )
+    assert r.status_code == 200
+    assert "x-client-version" in r.headers["access-control-allow-headers"].lower()
+
+
 def test_combined_has_queue_api_does_not(settings):
     from dataclasses import replace
 

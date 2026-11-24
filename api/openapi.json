@@ -148,6 +148,61 @@
         "title": "AudioUploadResponse",
         "type": "object"
       },
+      "ClientInfo": {
+        "description": "What produced a session or interview (02-logging R13). Client-reported, so every field is\noptional and sanitized, never rejected: non-strings become absent, control characters are\nstripped, and values are cut to a cap. Unknown keys are ignored.",
+        "properties": {
+          "audio_engine": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Web audio engine name and version",
+            "title": "Audio Engine"
+          },
+          "recorder_mime": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "MediaRecorder container the web chose",
+            "title": "Recorder Mime"
+          },
+          "user_agent": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Browser User-Agent, trimmed to 200 chars",
+            "title": "User Agent"
+          },
+          "web_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Web build id (git SHA, or `dev`)",
+            "title": "Web Version"
+          }
+        },
+        "title": "ClientInfo",
+        "type": "object"
+      },
       "CodedSpan": {
         "additionalProperties": false,
         "description": "Exactly one half-open time (milliseconds) or zero-based turn range.",
@@ -310,6 +365,17 @@
       },
       "CreateInterviewRequest": {
         "properties": {
+          "client": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ClientInfo"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Optional: web build and recorder info"
+          },
           "scenario_id": {
             "maxLength": 100,
             "minLength": 1,
@@ -338,6 +404,17 @@
       },
       "CreateSessionRequest": {
         "properties": {
+          "client": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ClientInfo"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Optional: which web build, recorder and audio engine made the request"
+          },
           "coded_span": {
             "anyOf": [
               {
@@ -444,6 +521,17 @@
       },
       "EndInterviewRequest": {
         "properties": {
+          "client": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ClientInfo"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Optional: recorder container and audio engine, added to the interview"
+          },
           "discard": {
             "default": false,
             "description": "Throw the interview away (state `abandoned`)",

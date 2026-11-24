@@ -91,6 +91,7 @@ class Settings:
     # Presets beyond the default that users may pick (FX43): empty in prod unless the owner opts in
     extra_presets: tuple[str, ...] = ()
     git_sha: str = "dev"
+    revision: str = ""  # Cloud Run `K_REVISION`
     stt_cap_factor: float = 3.0  # STT poll cap = factor x audio duration ...
     stt_cap_min_s: float = 300.0  # ... but never under this
     stt_time_limit_s: float = 1200.0  # ... and never over this (the old flat limit)
@@ -159,6 +160,7 @@ class Settings:
                 p.strip() for p in e.get("ENABLED_EXTRA_PRESETS", "").split(",") if p.strip()
             ),
             git_sha=e.get("GIT_SHA", "dev"),
+            revision=e.get("K_REVISION", ""),
             voice_url=e.get("VOICE_URL", cls.voice_url if local else ""),
             ai_max_seconds=_int(e, "AI_MAX_SECONDS", cls.ai_max_seconds),
             ai_warn_seconds=_int(e, "AI_WARN_SECONDS", cls.ai_warn_seconds),

@@ -12,6 +12,7 @@ from pydantic import BaseModel, Field, field_validator
 
 from onolys_api import logs
 from onolys_api.auth.deps import AuthUser, current_user
+from onolys_api.client_info import client_info
 from onolys_api.errors import ApiError, ErrorResponse
 from onolys_api.jobs.delete import delete_session_data
 from onolys_api.jobs.machine import advance
@@ -21,6 +22,7 @@ from onolys_api.languages import is_supported_language
 from onolys_api.presets import UnknownPreset
 from onolys_api.repo.base import NotFoundError
 from onolys_api.repo.models import (
+    ClientInfo,
     IdempotencyDoc,
     RatingDraftDoc,
     SessionDoc,
@@ -53,6 +55,10 @@ class CreateSessionRequest(BaseModel):
             "An `ended`, not yet linked AI interview of the caller: the session takes its "
             "scenario language and title (unless `title` is set) and a prefilled rating draft"
         ),
+    )
+
+    client: ClientInfo | None = Field(
+        None, description="Optional: which web build, recorder and audio engine made the request"
     )
 
     @field_validator("language")
@@ -245,6 +251,7 @@ def create_session(
         n_runs=body.n_runs,
         coded_span=body.coded_span,
         preset=preset,
+        client=client_info(request, body.client),
         created_at=now,
         updated_at=now,
     )

@@ -230,6 +230,10 @@ class Relay:
             "duration_s": carried,
             "seen_at": self.clock.wall(),
             "connects": doc.connects + 1,
+            "relay": {
+                "relay_version": settings.git_sha or None,
+                "relay_revision": settings.revision or None,
+            },
         }
         if not resumed:
             live_fields["live_at"] = self.clock.wall()  # the sweep's ceiling counts from here

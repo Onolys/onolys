@@ -4,6 +4,7 @@
  * forced-refresh retry on 401 before signalling sign-out.
  */
 import createClient from "openapi-fetch";
+import { WEB_VERSION } from "./buildInfo";
 import { parseErrorBody } from "./errors";
 import type { ApiPaths } from "./types";
 
@@ -22,6 +23,7 @@ export interface ApiClientOptions {
 }
 
 const IDEMPOTENCY_HEADER = "Idempotency-Key";
+const CLIENT_VERSION_HEADER = "X-Client-Version";
 
 function isCreateSession(request: Request, baseUrl: string): boolean {
   if (request.method !== "POST") return false;
@@ -32,6 +34,7 @@ function isCreateSession(request: Request, baseUrl: string): boolean {
 
 function withToken(request: Request, token: string | null): Request {
   const next = new Request(request);
+  next.headers.set(CLIENT_VERSION_HEADER, WEB_VERSION);
   if (token) next.headers.set("Authorization", `Bearer ${token}`);
   else next.headers.delete("Authorization");
   return next;
