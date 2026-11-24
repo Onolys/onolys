@@ -1,22 +1,34 @@
-"""One place that turns any engine exception into one public error code (SP09 R3, D2, D3).
+"""One place that turns any engine exception into one public error code and kind (SP09 R3,
+03-failure-policy R1).
 
-`to_public(exc, attempt=1, stage="run") -> (code, retryable)`. Codes are existing public codes
+`classify(exc, stage) -> Failure(code, kind)`; `to_public(exc, attempt=1, stage="run") ->
+(code, retryable)` is a thin wrapper (retryable == kind is transient). Kinds: `transient` (a blip),
+`permanent_internal` (our fault), `user_file` (the input's fault). Reads only structured fields
+(`LLMError.http_status`/`error_type`, via `is_transient`), never exception or `provider_error` text. Codes are existing public codes
 (`onolys_api.errors.ERROR_CODES`); the user-facing text is `PUBLIC_MESSAGES[code]`, fixed text,
 never the exception message. Engine failures (`AllRunsFailed`, `CodePassFailed`,
 `GlobalsPassFailed`) are matched by the `code` attribute they inherit from `OnolysError`.
-`stage="stt"` is the transcription path, where a transient provider error is
-`upstream_unavailable` on attempt 1 and `transcription_failed` afterwards.
+`stage="stt"` is the transcription path; a transient provider error stays `upstream_unavailable`
+on every attempt (D6: the file is not at fault).
 """
 
-from typing import Literal
+from typing import Literal, NamedTuple
 
 from google.api_core import exceptions as gexc
 from onolys_engine_core.errors import InputError, OnolysError
-from onolys_engine_core.llm.errors import LLMError
+from onolys_engine_core.llm.errors import LLMError, is_transient
 from onolys_engine_core.validated_run import OutputInvalid
 from onolys_miti.stt.google_chirp import SttProviderError
 
-Stage = Literal["run", "stt"]
+Stage = Literal["validate", "stt", "run"]
+Kind = Literal["transient", "permanent_internal", "user_file"]
+TRANSIENT, PERMANENT, USER_FILE = "transient", "permanent_internal", "user_file"
+
+
+class Failure(NamedTuple):
+    code: str
+    kind: Kind
+
 
 UPSTREAM = "upstream_unavailable"
 DEADLINE = "deadline_exceeded"
@@ -62,55 +74,87 @@ _GOOGLE_TRANSIENT = (
 )
 
 
+# public code -> kind (one table; fills `SessionError.kind` at every write site)
+KIND_BY_CODE: dict[str, Kind] = {
+    UPSTREAM: TRANSIENT,
+    DEADLINE: TRANSIENT,
+    "rate_limited": TRANSIENT,
+    INTERNAL: PERMANENT,
+    "output_invalid": PERMANENT,
+    "invalid_coded_span": USER_FILE,
+    "session_too_long": USER_FILE,
+    "invalid_parameters": USER_FILE,
+    TRANSCRIPTION: USER_FILE,
+    "no_speech": USER_FILE,
+    "speakers_not_separated": USER_FILE,
+}
+
+# AdapterError codes that already are public codes
+_ADAPTER_CODES = frozenset(
+    {UPSTREAM, DEADLINE, "rate_limited", TRANSCRIPTION, "no_speech", "speakers_not_separated"}
+)
+
+_GOOGLE_TRANSIENT = (
+    gexc.TooManyRequests,
+    gexc.ServiceUnavailable,
+    gexc.InternalServerError,
+    gexc.GatewayTimeout,
+    gexc.DeadlineExceeded,
+    gexc.Aborted,
+    gexc.RetryError,
+)
+
+
 def _stt_transient(exc: BaseException) -> bool:
     return bool(getattr(exc, "transient", False)) or isinstance(exc, _GOOGLE_TRANSIENT)
 
 
+def _failure(code: str) -> Failure:
+    return Failure(code, KIND_BY_CODE[code])
+
+
 def to_public(exc: BaseException, attempt: int = 1, stage: Stage = "run") -> tuple[str, bool]:
     """Public error code and whether another attempt may help (the caller applies the attempt
-    limit). `attempt` is 1-based."""
-    code, retryable = _classify(exc, stage)
-    if stage == "stt" and code == UPSTREAM and attempt >= 2:
-        return TRANSCRIPTION, False  # a second transient failure: ask for a different file
-    return code, retryable
+    limit). `attempt` is kept for the callers and no longer changes the result (D6)."""
+    f = classify(exc, stage)
+    return f.code, f.kind == TRANSIENT
 
 
-def _classify(exc: BaseException, stage: Stage) -> tuple[str, bool]:
+def classify(exc: BaseException, stage: Stage = "run") -> Failure:
     # AdapterError lives in adapters.base (imports onolys_miti only); import lazily: no cycle
     from onolys_api.adapters.base import AdapterError
 
     if isinstance(exc, AdapterError):
-        if exc.code in _ADAPTER_CODES:
-            return exc.code, _ADAPTER_CODES[exc.code]
-        return INTERNAL, False
+        return _failure(exc.code if exc.code in _ADAPTER_CODES else INTERNAL)
     if isinstance(exc, OutputInvalid):
-        return "output_invalid", False
+        return _failure("output_invalid")
     if isinstance(exc, InputError):
         code = getattr(exc, "code", None)
         if code in ("invalid_coded_span", "session_too_long"):
-            return code, False
-        return "invalid_parameters", False
+            return _failure(code)
+        return _failure("invalid_parameters")
     if stage == "stt":
         if isinstance(exc, SttProviderError):
-            return (UPSTREAM, True) if _stt_transient(exc) else (TRANSCRIPTION, False)
+            return _failure(UPSTREAM if _stt_transient(exc) else TRANSCRIPTION)
         if _stt_transient(exc):
-            return UPSTREAM, True
+            return _failure(UPSTREAM)
+        if isinstance(exc, gexc.InvalidArgument):
+            return _failure(TRANSCRIPTION)
     if isinstance(exc, _GOOGLE_TRANSIENT):  # validate/run read GCS and Firestore: a blip retries
-        return UPSTREAM, True
+        return _failure(UPSTREAM)
     if isinstance(exc, LLMError):
         return _classify_llm(exc)
     if isinstance(exc, TimeoutError):
-        return DEADLINE, True
+        return _failure(DEADLINE)
     if isinstance(exc, OnolysError):
         # an engine that wrapped a provider failure (AllRunsFailed from LLMUnavailable)
-        # keeps it as `__cause__`/`__context__`: map it like the direct LLM error
+        # keeps it as `__cause__`/`__context__`: classify it like the direct LLM error
         cause = _llm_cause(exc)
         if cause is not None:
             return _classify_llm(cause)
-        # CodePassFailed / GlobalsPassFailed / AllRunsFailed (`code = "run_failed"`): the
-        # engine already halved/retried; R3 "anything else": not retried, owner alerted
-        return INTERNAL, False
-    return INTERNAL, False
+        # CodePassFailed / GlobalsPassFailed / AllRunsFailed without a provider cause
+        return _failure(INTERNAL)
+    return _failure(INTERNAL)
 
 
 def _llm_cause(exc: BaseException) -> LLMError | None:
@@ -124,9 +168,6 @@ def _llm_cause(exc: BaseException) -> LLMError | None:
     return None
 
 
-def _classify_llm(exc: LLMError) -> tuple[str, bool]:
-    # unavailable, timeout, rate limited, bad output (D3): all retryable; FixtureMiss is a
-    # test-only miss and never a provider outage
-    if type(exc).__name__ == "FixtureMiss":
-        return INTERNAL, False
-    return UPSTREAM, True
+def _classify_llm(exc: LLMError) -> Failure:
+    # status/type rules live in engine-core `is_transient`; FixtureMiss/LLMBadOutput are permanent
+    return _failure(UPSTREAM if is_transient(exc) else INTERNAL)

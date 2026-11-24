@@ -71,13 +71,13 @@ The code in the failed line is what `to_public` (`api/src/onolys_api/adapters/er
 | `invalid_coded_span` | `coded_span` outside the transcript, or time span without timestamps | `InputError` from the span check (request validation, run) | no |
 | `session_too_long` | Coded portion over 25 min or 6000 words | `InputError` from `coded_span.py` | no |
 | `invalid_parameters` | Engine rejected the input | Any other `InputError` | no |
-| `upstream_unavailable` | LLM, STT or Google (GCS, Firestore) dependency failed or timed out | `LLMError` (any), transient Google errors, STT transient error on attempt 1 | yes (one automatic retry) |
+| `upstream_unavailable` | LLM, STT or Google (GCS, Firestore) dependency failed or timed out | transient `LLMError` (status 408/429/5xx/529, timeout/rate limit), transient Google errors, transient STT error (any attempt) | yes (one automatic retry) |
 | `deadline_exceeded` | Run exceeded its time limit | `TimeoutError`, adapter deadline | yes |
-| `transcription_failed` | STT failed twice, or a non-transient STT error | `SttProviderError`, 2nd transient STT failure | no |
+| `transcription_failed` | A non-transient STT error | `SttProviderError`, Google `InvalidArgument` (stt) | no |
 | `no_speech` | No usable speech in the recording | STT adapter | no |
 | `speakers_not_separated` | Diarization could not tell speakers apart | STT adapter | no |
 | `rate_limited` | Provider or API rate limit | Adapter error | yes |
-| `internal_error` | Anything else (engine failure with no provider cause, unknown exception, unknown adapter code) | catch-all of `to_public` | no (owner alerted) |
+| `internal_error` | Anything else (permanent `LLMError` such as 400/401/403/404, `LLMBadOutput`, engine failure with no transient cause, unknown exception, unknown adapter code) | catch-all of `to_public` | no (owner alerted) |
 
 Codes that exist only as 4xx replies (`unauthenticated`, `not_found`, `daily_cap_reached`, ...) are listed in `api/src/onolys_api/errors.py` and are not `status=failed` lines. The fix per code is in the [infra runbook](infra.md#error_code-table).
 

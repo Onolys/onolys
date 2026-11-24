@@ -34,3 +34,43 @@ class LLMBadOutput(LLMError):
 
 class FixtureMiss(LLMError):
     """No recorded fixture for this request (never falls back to the network)."""
+
+
+TRANSIENT_STATUSES = frozenset({408, 429, 500, 502, 503, 504, 529})
+_TRANSIENT_ERROR_TYPES = frozenset(
+    {"APIConnectionError", "APITimeoutError", "Timeout", "ConnectionError", "ReadTimeout",
+     "ConnectTimeout", "TimeoutError"}
+)  # fmt: skip
+
+
+def is_transient(exc: BaseException) -> bool:
+    """True when retrying the same call may succeed (03-failure-policy R1/R2, D8).
+
+    Looks at `exc` and its `__cause__`/`__context__` chain for the nearest `LLMError`; any
+    other exception is not an LLM failure, so False. Reads only the structured fields set by the
+    client (`http_status`, `error_type`), never `provider_error` text. Defaults: 529 is
+    transient, 400 permanent. `LLMBadOutput` (after the engine's retry) and `FixtureMiss` are
+    permanent; `LLMTimeout`/`LLMRateLimited` always transient; an `LLMUnavailable` with no
+    status or type is transient (unknown provider blip).
+    """
+    err = _nearest_llm_error(exc)
+    if err is None or isinstance(err, (LLMBadOutput, FixtureMiss)):
+        return False
+    if isinstance(err, (LLMTimeout, LLMRateLimited)):
+        return True
+    if err.http_status is not None:
+        return err.http_status in TRANSIENT_STATUSES
+    if err.error_type is not None:
+        return err.error_type in _TRANSIENT_ERROR_TYPES
+    return isinstance(err, LLMUnavailable)
+
+
+def _nearest_llm_error(exc: BaseException) -> LLMError | None:
+    seen: set[int] = set()
+    cur: BaseException | None = exc
+    while cur is not None and id(cur) not in seen:
+        if isinstance(cur, LLMError):
+            return cur
+        seen.add(id(cur))
+        cur = cur.__cause__ or cur.__context__
+    return None
