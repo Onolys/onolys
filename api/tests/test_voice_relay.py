@@ -626,7 +626,7 @@ async def test_mic_gate_drops_frames_while_ai_speaks(tmp_path, gate):
 async def test_voice_service_mode_is_accepted_and_serves_only_health(tmp_path):
     import httpx
 
-    assert Settings.from_env({"ENV": "local", "SERVICE_MODE": "voice"}).service_mode == "voice"
+    assert Settings.from_env({"APP_BASE_URL": "https://app.onolys.com", "ENV": "local", "SERVICE_MODE": "voice"}).service_mode == "voice"
     env = Env(tmp_path)
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=env.app), base_url="http://t"

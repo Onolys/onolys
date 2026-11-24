@@ -43,6 +43,7 @@ cleanup() {
 trap cleanup EXIT INT TERM
 
 export ENV=local SERVICE_MODE=combined AUTH_MODE=fake ADAPTERS=stub GIT_SHA="${GIT_SHA:-dev}"
+export APP_BASE_URL="${APP_BASE_URL:-http://localhost:5173}"
 export FAKE_BLOB_DIR="$WORK/blobs" FAKE_BLOB_BASE_URL="http://127.0.0.1:$PORT"
 unset FIRESTORE_EMULATOR_HOST
 

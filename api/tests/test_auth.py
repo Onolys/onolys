@@ -294,7 +294,7 @@ def test_fake_auth_refused_outside_local_test(env, blobs):
     with pytest.raises(ConfigError):
         create_app(s, repo=FakeRepo(blobs), blobs=blobs)
     with pytest.raises(ConfigError):
-        Settings.from_env({"ENV": env, "AUTH_MODE": "fake"})
+        Settings.from_env({"APP_BASE_URL": "https://app.onolys.com", "ENV": env, "AUTH_MODE": "fake"})
 
 
 def test_idp_requires_project(blobs):

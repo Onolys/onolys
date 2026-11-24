@@ -289,7 +289,7 @@ async def test_fake_voice_records_open():
 
 
 def test_settings_ai_and_voice_url():
-    s = Settings.from_env({"ENV": "local"})
+    s = Settings.from_env({"APP_BASE_URL": "https://app.onolys.com", "ENV": "local"})
     assert (s.ai_max_seconds, s.ai_warn_seconds, s.ai_min_seconds) == (600, 480, 300)
     assert (s.ai_tolerance_seconds, s.ai_abandon_count_seconds) == (30, 30)
     assert (s.ai_reconnect_seconds, s.ai_mic_gate, s.voice_url) == (
@@ -297,7 +297,7 @@ def test_settings_ai_and_voice_url():
         False,
         "ws://localhost:8081",
     )
-    t = Settings.from_env({"ENV": "prod", "UID_HMAC_KEY": "k", "VOICE_URL": "wss://v.x", "AI_MIC_GATE": "true",
+    t = Settings.from_env({"APP_BASE_URL": "https://app.onolys.com", "ENV": "prod", "UID_HMAC_KEY": "k", "VOICE_URL": "wss://v.x", "AI_MIC_GATE": "true",
                            "AI_MAX_SECONDS": "300", "AI_WARN_SECONDS": "200"})  # fmt: skip
     assert (t.voice_url, t.ai_mic_gate, t.ai_max_seconds) == ("wss://v.x", True, 300)
     for bad in (

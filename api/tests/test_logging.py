@@ -73,7 +73,7 @@ def test_uid_hash_is_keyed_hmac_sha256_prefix():
 
 
 def test_settings_reads_uid_hmac_key_env():
-    assert Settings.from_env({"ENV": "local", "UID_HMAC_KEY": "abc"}).uid_hmac_key == "abc"
+    assert Settings.from_env({"APP_BASE_URL": "https://app.onolys.com", "ENV": "local", "UID_HMAC_KEY": "abc"}).uid_hmac_key == "abc"
 
 
 # ---- request logging middleware ----
@@ -270,3 +270,16 @@ def test_uvicorn_error_log_has_no_traceback_or_input(capsys):
     assert "PHI-SENTINEL" not in out
     assert "Traceback" not in out
     assert "ResponseValidationError" in out
+
+
+def test_auth_email_fields_are_logged_without_recipient_or_links(caplog):
+    with caplog.at_level(logging.INFO):
+        logs.emit("auth_email", email_kind="verify", outcome="send_failed", provider_status=503,
+                  email="person@example.com", link="https://example.com?oobCode=secret", oobCode="secret")
+    (entry,) = lines(caplog)
+    assert entry["email_kind"] == "verify"
+    assert entry["outcome"] == "send_failed"
+    assert entry["provider_status"] == 503
+    assert "person@example.com" not in caplog.text
+    assert "oobCode" not in caplog.text
+    assert "secret" not in caplog.text

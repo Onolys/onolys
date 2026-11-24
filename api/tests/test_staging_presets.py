@@ -125,9 +125,9 @@ def test_extra_presets_flag_enables_claude():
 
 
 def test_extra_presets_env_parsed_and_unknown_name_fails_fast():
-    s = Settings.from_env({"ENV": "test", "ENABLED_EXTRA_PRESETS": "claude, other"})
+    s = Settings.from_env({"APP_BASE_URL": "https://app.onolys.com", "ENV": "test", "ENABLED_EXTRA_PRESETS": "claude, other"})
     assert s.extra_presets == ("claude", "other")
-    assert Settings.from_env({"ENV": "test"}).extra_presets == ()
+    assert Settings.from_env({"APP_BASE_URL": "https://app.onolys.com", "ENV": "test"}).extra_presets == ()
     with pytest.raises(ConfigError, match="nope"):
         _resolver("test", extra_presets=("nope",)).check_keys({})
 

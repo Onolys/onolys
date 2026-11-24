@@ -3,6 +3,7 @@
 import os
 from collections.abc import Mapping
 from dataclasses import dataclass
+from urllib.parse import urlsplit
 
 from onolys_engine_core.errors import ConfigError
 
@@ -11,6 +12,34 @@ SERVICE_MODES = ("api", "worker", "combined", "voice")
 ADAPTER_KINDS = ("stub", "real")
 AUTH_MODES = ("fake", "idp")
 LOCAL_ENVS = ("local", "test")
+# Keep in sync with the web action handler and docs/reference/web-email-actions.md.
+APP_HOSTS = frozenset({"app.onolys.com", "onolys-app.web.app", "onolys-app-staging.web.app"})
+
+
+def _validate_app_base_url(value: str, env: str) -> None:
+    try:
+        parts = urlsplit(value)
+        port = parts.port  # malformed or out-of-range ports raise ValueError
+        origin_only = (
+            bool(value)
+            and not any(c.isspace() or ord(c) < 32 or c == "\\" for c in value)
+            and parts.username is None
+            and parts.password is None
+            and not parts.path
+            and "?" not in value
+            and "#" not in value
+        )
+        allowed = (
+            parts.scheme == "https" and parts.hostname in APP_HOSTS and port in (None, 443)
+        ) or (env in LOCAL_ENVS and parts.scheme == "http" and parts.hostname == "localhost")
+        if origin_only and allowed:
+            return
+    except ValueError:
+        pass
+    raise ConfigError(
+        "APP_BASE_URL is required and must be an HTTPS origin on a known app host "
+        "(http://localhost:<port> is allowed for local or test)"
+    )
 
 
 def _int(e: Mapping[str, str], name: str, default: int) -> int:
@@ -80,6 +109,10 @@ class Settings:
     ai_max_frame_bytes: int = 65536
     ai_max_audio_bytes_per_s: int = 128000
     ai_max_connects: int = 30
+    # Explicit construction supports local tests; from_env requires APP_BASE_URL without a default.
+    app_base_url: str = "http://localhost:5173"
+    email_from: str = "Onolys <no-reply@onolys.com>"
+    resend_api_key: str = ""
     uid_hmac_key: str = ""  # keys the `uid_hash` log field (Secret Manager `uid-hmac-key-{env}`)
 
     @classmethod
@@ -142,6 +175,9 @@ class Settings:
             ),
             ai_max_connects=_int(e, "AI_MAX_CONNECTS", cls.ai_max_connects),
             uid_hmac_key=e.get("UID_HMAC_KEY", ""),
+            app_base_url=e.get("APP_BASE_URL", ""),
+            email_from=e.get("EMAIL_FROM", cls.email_from),
+            resend_api_key=e.get("RESEND_API_KEY", ""),
         )
         s.validate()
         return s
@@ -159,6 +195,7 @@ class Settings:
             raise ConfigError("AUTH_MODE=fake is only allowed when ENV is local or test")
         if self.env not in LOCAL_ENVS and not self.uid_hmac_key:
             raise ConfigError("UID_HMAC_KEY is required when ENV is staging or prod")
+        _validate_app_base_url(self.app_base_url, self.env)
         for kind, day in (("EVAL", self.eval_cap_day), ("AI", self.ai_cap_day)):
             if day < 0:
                 raise ConfigError(f"{kind}_CAP_DAY must be >= 0")

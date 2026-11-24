@@ -438,6 +438,7 @@ jobs:
         run: |
           docker build -f api/Dockerfile --build-arg GIT_SHA="$GITHUB_SHA" -t onolys-api:ci .
           docker run -d --name onolys-api -p 8080:8080 -e ENV=local -e SERVICE_MODE=combined \
+            -e APP_BASE_URL=http://localhost:5173 \
             onolys-api:ci
           for _ in $(seq 1 30); do curl -sf localhost:8080/v1/healthz && break; sleep 1; done
           curl -sf localhost:8080/v1/healthz \

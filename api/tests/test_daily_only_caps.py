@@ -67,15 +67,15 @@ def test_daily_cap_is_the_only_limit(repo, kind):
 
 
 def test_settings_have_no_monthly_caps_():
-    s = Settings.from_env({"ENV": "local"})
+    s = Settings.from_env({"APP_BASE_URL": "https://app.onolys.com", "ENV": "local"})
     assert not hasattr(s, "eval_cap_month") and not hasattr(s, "ai_cap_month")
-    assert Settings.from_env({"ENV": "local", "EVAL_CAP_MONTH": "1", "AI_CAP_MONTH": "1"}) == s  # ignored
+    assert Settings.from_env({"APP_BASE_URL": "https://app.onolys.com", "ENV": "local", "EVAL_CAP_MONTH": "1", "AI_CAP_MONTH": "1"}) == s  # ignored
 
 
 def test_one_active_run_per_user_by_default():
     assert Settings().max_active_runs == 1
-    assert Settings.from_env({"ENV": "local"}).max_active_runs == 1
-    assert Settings.from_env({"ENV": "local", "MAX_ACTIVE_RUNS": "3"}).max_active_runs == 3  # env still overrides
+    assert Settings.from_env({"APP_BASE_URL": "https://app.onolys.com", "ENV": "local"}).max_active_runs == 1
+    assert Settings.from_env({"APP_BASE_URL": "https://app.onolys.com", "ENV": "local", "MAX_ACTIVE_RUNS": "3"}).max_active_runs == 3  # env still overrides
 
 
 def test_second_concurrent_run_is_held_by_the_default_limit(repo):

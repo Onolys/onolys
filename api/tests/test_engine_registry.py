@@ -18,8 +18,8 @@ pytestmark = pytest.mark.unit
 
 def test_production_engine_default_and_env_override():
     assert Settings().prod_engine == "miti"
-    assert Settings.from_env({"ENV": "test"}).prod_engine == "miti"
-    assert Settings.from_env({"ENV": "test", "PROD_ENGINE": "custom"}).prod_engine == "custom"
+    assert Settings.from_env({"APP_BASE_URL": "https://app.onolys.com", "ENV": "test"}).prod_engine == "miti"
+    assert Settings.from_env({"APP_BASE_URL": "https://app.onolys.com", "ENV": "test", "PROD_ENGINE": "custom"}).prod_engine == "custom"
 
 
 def test_api_registry_explicitly_registers_only_miti_and_marks_prod():
