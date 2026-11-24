@@ -278,6 +278,22 @@ async def test_get_failed_session_reports_error_code_only(client, repo):
     assert d["status"] == "failed" and d["error"] == {"code": "audio_unreadable"}
 
 
+async def test_get_failed_session_carries_kind_and_retries_left(client, repo):
+    for code, step, kind, left in (
+        ("upstream_unavailable", "transcribe", "transient", 3),
+        ("audio_unreadable", "validate", "user_file", 0),
+    ):
+        sid = (await create(client)).json()["session"]["id"]
+        for to in ("uploading", "validating"):
+            m.advance(repo, "alice", sid, to=to)
+        m.advance(repo, "alice", sid, to="failed", error=SessionError(code=code, step=step))
+        d = (await client.get(f"/v1/sessions/{sid}", headers=A)).json()
+        assert (d["error"], d["error_kind"], d["retries_left"]) == ({"code": code}, kind, left)
+    ok = (await create(client)).json()["session"]["id"]
+    d = (await client.get(f"/v1/sessions/{ok}", headers=A)).json()
+    assert d["error_kind"] is None and d["retries_left"] is None
+
+
 async def test_get_foreign_or_missing_is_404(client):
     sid = (await create(client)).json()["session"]["id"]
     r1 = await client.get(f"/v1/sessions/{sid}", headers=B)

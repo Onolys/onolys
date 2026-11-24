@@ -124,6 +124,24 @@
       ],
       "default": null
     },
+    "error_kind": {
+      "anyOf": [
+        {
+          "enum": [
+            "transient",
+            "permanent_internal",
+            "user_file"
+          ],
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Failure kind: transient, permanent_internal or user_file; null if ok",
+      "title": "Error Kind"
+    },
     "flags": {
       "$ref": "#/$defs/Flags"
     },
@@ -205,6 +223,19 @@
       "default": null,
       "description": "Base percent of the next stage (99 on the last); null when none",
       "title": "Progress Next"
+    },
+    "retries_left": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Retries left after a transient failure (0 otherwise); null if ok",
+      "title": "Retries Left"
     },
     "stage_expected_s": {
       "anyOf": [

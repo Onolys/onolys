@@ -33,6 +33,7 @@ from onolys_api.repo.base import NotFoundError
 from onolys_api.repo.limits import LimitDefaults
 from onolys_api.repo.models import (
     ClientInfo,
+    FailureKind,
     IdempotencyDoc,
     RatingDraftDoc,
     SessionCancel,
@@ -130,6 +131,12 @@ class SessionDetail(BaseModel):
     flags: Flags
     warnings: list[str]
     error: SessionErrorInfo | None = None
+    error_kind: FailureKind | None = Field(
+        None, description="Failure kind: transient, permanent_internal or user_file; null if ok"
+    )
+    retries_left: int | None = Field(
+        None, description="Retries left after a transient failure (0 otherwise); null if ok"
+    )
     latest_report_version: int | None = None
     language: str
     n_runs: int
@@ -397,6 +404,8 @@ def get_session(id: ResourceId, request: Request, user: User) -> SessionDetail:
         ),
         warnings=s.warnings,
         error={"code": s.error.code} if s.error else None,
+        error_kind=st.error_kind if s.error else None,
+        retries_left=st.retries_left if s.error else None,
         latest_report_version=s.latest_report_version,
         language=s.language,
         n_runs=s.n_runs,

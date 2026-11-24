@@ -1071,6 +1071,11 @@ export interface components {
              */
             created_at: string;
             error?: components["schemas"]["SessionErrorInfo"] | null;
+            /**
+             * Error Kind
+             * @description Failure kind: transient, permanent_internal or user_file; null if ok
+             */
+            error_kind?: ("transient" | "permanent_internal" | "user_file") | null;
             flags: components["schemas"]["Flags"];
             /**
              * Free Run
@@ -1104,6 +1109,11 @@ export interface components {
              * @description Base percent of the next stage (99 on the last); null when none
              */
             progress_next?: number | null;
+            /**
+             * Retries Left
+             * @description Retries left after a transient failure (0 otherwise); null if ok
+             */
+            retries_left?: number | null;
             /**
              * Stage Expected S
              * @description Typical seconds the current stage takes; null when untimed

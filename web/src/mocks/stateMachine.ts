@@ -561,7 +561,13 @@ export class MockBackend {
       progress_next: progressNext(s.state, s.step),
       stage_expected_s: stageExpectedS(s.state, s.step),
     };
-    if (s.error) detail.error = { ...s.error };
+    if (s.error) {
+      detail.error = { ...s.error };
+      const kind = kindFor(s.error.code);
+      detail.error_kind = kind;
+      detail.retries_left = kind === "transient" ? Math.max(0, MAX_SESSION_RETRIES - s.retries) : 0;
+      detail.counted = this.failureCounted(s);
+    }
     if (s.cancel) {
       detail.cancel = { ...s.cancel };
       detail.counted = s.cancel.counted;
@@ -827,6 +833,7 @@ export class MockBackend {
     if (step === "validate" || step === "transcribe") {
       s.retries += 1;
       s.error = null;
+      if (step === "transcribe") s.sttSubmitted = false; // the API's retry_step clears stt_operation
       s.state = step === "validate" ? "validating" : "transcribing";
       s.step = step;
       this.emit(s);

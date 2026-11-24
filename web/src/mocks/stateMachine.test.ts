@@ -645,6 +645,28 @@ describe("final ratings and report versions (FX45)", () => {
     expectHttp(() => backend.retrySession(U, sid), 409, "invalid_state");
   });
 
+  it("session detail carries kind + retries_left, and a transcribe retry clears sttSubmitted", () => {
+    const { backend } = ctx;
+    const sid = started(backend, "fail-transient");
+    backend.settle(sid);
+    backend.confirmSpeaker(U, sid, "spk_0");
+    backend.putRating(U, sid, { final: true, card: SCORED });
+    backend.settle(sid);
+    expect(backend.getSession(U, sid)).toMatchObject({ error_kind: "transient", retries_left: 3 });
+    const bad = started(backend, "fail-no_speech");
+    backend.settle(bad);
+    expect(backend.getSession(U, bad)).toMatchObject({ error_kind: "user_file", retries_left: 0, counted: false });
+    // transcribe retry: the API's retry_step drops stt_operation, so the mock is not submitted again
+    const t = started(backend, "fail-transient");
+    const rec = (backend as unknown as { sessions: Map<string, { state: string; step: string | null; error: unknown; sttSubmitted: boolean }> }).sessions.get(t)!;
+    rec.state = "failed";
+    rec.step = "transcribe";
+    rec.error = { code: "upstream_unavailable", step: "transcribe" };
+    rec.sttSubmitted = true;
+    backend.retrySession(U, t);
+    expect(rec.sttSubmitted).toBe(false);
+  });
+
   it("retry is 409 for a permanent or user_file failure; their docs carry the kind", () => {
     const { backend, emitter } = ctx;
     const sid = started(backend, "fail-code");

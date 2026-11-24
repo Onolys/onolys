@@ -3,6 +3,7 @@ import { act, renderHook } from "@testing-library/react";
 import { createElement, type ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createMemoryStatusEmitter, setStatusListener, type SessionStatusDoc } from "../../api/statusListener";
+import { failureView } from "../../api/errors";
 import { deriveProgress } from "./progress";
 import { FALLBACK_POLL_MS, useProgress, useSessionStatus, type StatusView } from "./useSessionStatus";
 
@@ -94,6 +95,27 @@ describe("useSessionStatus: progress", () => {
     const doc = docFrom(result.current);
     expect(doc.updated_at).toBe(iso(NOW - 120_000));
     expect(deriveProgress(doc, NOW).elapsedMs).toBe(180_000);
+  });
+
+  it("fallback poll maps error_kind, retries_left and counted so the failure card still decides", async () => {
+    const poll = async (over: Record<string, unknown>) => {
+      queryClient.clear();
+      const { result } = mount();
+      act(() => emitter.emitError("s1", new Error("down")));
+      get.mockResolvedValue({
+        data: { ...detailOf(docOf("failed")), error: { code: "x" }, ...over },
+        response: { ok: true },
+      });
+      await act(async () => void (await vi.advanceTimersByTimeAsync(1)));
+      await act(async () => void (await vi.advanceTimersByTimeAsync(FALLBACK_POLL_MS)));
+      expect(result.current.phase).toBe("fallback");
+      return docFrom(result.current);
+    };
+    expect(failureView(await poll({ error_kind: "transient", retries_left: 2 })).action).toBe("retry");
+    const uf = failureView(await poll({ error_kind: "user_file", retries_left: 0, counted: true }));
+    expect(uf.action).toBe("upload_different");
+    expect(uf.note).toBe("This counted toward your limit.");
+    expect((await poll({ status: "cancelled", counted: true })).counted).toBe(true);
   });
 
   it("a late lower doc in the same state cannot move the bar back", () => {
