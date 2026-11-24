@@ -53,3 +53,12 @@ def test_never_invents_speakers_property():
                 lines.append(pool.pop(rng.randrange(len(pool))))
         got = set(speakers("\n".join(lines)))
         assert got <= {lab.upper() if lab in "TC" else lab for lab in labels}
+
+
+def test_two_distinct_named_speakers_each_once_are_speakers():
+    assert speakers(f"Pat: {WORDS}\nSam: {WORDS}") == ["Pat", "Sam"]
+
+
+def test_stray_colon_line_after_two_unanchored_names_is_continuation():
+    source = f"Pat: {WORDS}\nSam: {WORDS}\nnote: wrapped"
+    assert speakers(source) == ["Pat", "Sam"]

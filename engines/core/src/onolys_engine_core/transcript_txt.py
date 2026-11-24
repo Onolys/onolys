@@ -51,12 +51,19 @@ def parse_transcript_txt(source: str | bytes) -> TranscriptV1:
             key = found[0].casefold()
             counts[key] = counts.get(key, 0) + 1
     sole = len(counts) == 1
+    # With no role-style or repeated label to anchor on (e.g. "Pat: ...\nSam: ..."), a name that
+    # appears once is still a speaker if it is one of the first two labels in the file; any later
+    # one-off "word:" line stays a continuation. Labels are used as written, never invented.
+    anchored = any(k.upper() in _KNOWN or n >= 2 for k, n in counts.items())
+    opening = set(list(counts)[:2])
 
     def accepted(found: tuple[str, str] | None) -> bool:
         if not found:
             return False
         label = found[0]
-        return label.upper() in _KNOWN or counts[label.casefold()] >= 2 or sole
+        if label.upper() in _KNOWN or counts[label.casefold()] >= 2 or sole:
+            return True
+        return not anchored and label.casefold() in opening
 
     for line, found in zip(lines, candidates, strict=True):
         if accepted(found):
