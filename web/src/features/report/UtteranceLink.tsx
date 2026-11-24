@@ -3,7 +3,7 @@ import { LINK_BTN } from "../../components/classes";
 import { useCodedDialog } from "./codedDialogContext";
 
 /** Button showing an utterance number; opens the coded transcript at that row. */
-export function UtteranceLink({ n }: { n: number }) {
+export function UtteranceLink({ n, bracketed = false }: { n: number; bracketed?: boolean }) {
   const { open } = useCodedDialog();
   return (
     <Button
@@ -13,7 +13,7 @@ export function UtteranceLink({ n }: { n: number }) {
       aria-label={`Open utterance ${n}`}
       onClick={() => open(n)}
     >
-      {n}
+      {bracketed ? `[${n}]` : n}
     </Button>
   );
 }

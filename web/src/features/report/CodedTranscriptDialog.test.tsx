@@ -45,6 +45,23 @@ describe("CodedTranscriptDialog", () => {
     ).toBeTruthy();
   });
 
+  it("highlights a cited utterance for five seconds and clears it on close", () => {
+    vi.useFakeTimers();
+    view();
+    fireEvent.click(screen.getAllByRole("button", { name: "Open utterance 31" })[0]);
+    const row = document.getElementById("utt-31")!;
+    expect(row).toHaveClass("hl");
+    act(() => vi.advanceTimersByTime(4900));
+    expect(row).toHaveClass("hl");
+    act(() => vi.advanceTimersByTime(100));
+    expect(row).not.toHaveClass("hl");
+    fireEvent.click(within(dlg()).getByRole("button", { name: "Close" }));
+    fireEvent.click(screen.getAllByRole("button", { name: "Open utterance 31" })[0]);
+    expect(row).toHaveClass("hl");
+    fireEvent.click(within(dlg()).getByRole("button", { name: "Close" }));
+    expect(row).not.toHaveClass("hl");
+  });
+
   it("locks body scroll with a class on <html> while open and clears it on close", () => {
     view();
     fireEvent.click(

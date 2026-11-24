@@ -36,9 +36,10 @@ def generate_schema(report_path: Path = DATA / "report.schema.json",
                  definitions["OnolysGlobal"]["properties"]["score"]["anyOf"]
                  if option.get("type") != "null")
     tips = definitions["Tip"]
-    # quote is deliberately excluded: offsets/quotation validation belong to lean.
+    # Quote validation and optional report idea titles belong to lean; keep the
+    # recorded one-shot baseline contract stable when report presentation evolves.
     tip_fields = {key: deepcopy(value) for key, value in tips["properties"].items()
-                  if key != "quote"}
+                  if key not in {"quote", "title"}}
     tip_fields["item_id"]["enum"] = [item["id"] for item in pack["items"]]
     return {
         "$schema": "https://json-schema.org/draft/2020-12/schema",

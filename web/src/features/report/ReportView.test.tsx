@@ -68,23 +68,56 @@ describe("ReportView", () => {
     expect(items[0].textContent).toContain("The client gives reasons to act");
   });
 
-  it("renders Evidence utterance rows from evidence ids, sorted, and opens the dialog at that row", () => {
+  it("renders all evidence inline as bracketed citations and opens the matching row", () => {
     view();
     const cct = screen.getAllByRole("listitem").filter((li) => li.hasAttribute("data-global"))[0];
-    const row = cct.querySelector("[data-evidence]")!;
-    expect(row.textContent).toBe("Evidence: utterances 18, 19, 31, 40, 41");
-    fireEvent.click(within(row as HTMLElement).getByRole("button", { name: "Open utterance 31" }));
+    expect(cct.textContent).not.toContain("Evidence:");
+    expect(within(cct).getAllByRole("button").map((b) => b.textContent)).toEqual(["[18]", "[19]", "[31]", "[40]", "[41]"]);
+    fireEvent.click(within(cct).getByRole("button", { name: "Open utterance 31" }));
     expect(dlg().hasAttribute("open")).toBe(true);
     expect(scroll.mock.instances[0]).toBe(document.getElementById("utt-31"));
   });
 
-  it("hides the Evidence row when there is no evidence or the transcript is not ready", () => {
+  it("converts verified internal IDs without inferring utterance numbers from their suffix", () => {
     const r = structuredClone(drinkingSampleReport);
-    r.globals![0].onolys.evidence = [];
-    const { container, rerender } = view({ report: r });
-    expect(container.querySelectorAll("[data-evidence]")).toHaveLength(3);
-    rerender(<ReportView report={drinkingSampleReport} turns={{ status: "loading" }} title="Report" />);
-    expect(container.querySelectorAll("[data-evidence]")).toHaveLength(0);
+    r.globals![0].onolys.reason = "The response at t40 builds on change talk; t999 is unavailable.";
+    const turns = [...drinkingSampleTurns];
+    [turns[17], turns[39]] = [turns[39], turns[17]];
+    view({ report: r, turns: { status: "ready", turns } });
+    const cct = screen.getAllByRole("listitem").filter((li) => li.hasAttribute("data-global"))[0];
+    expect(cct.textContent).toContain("The response at [18] builds on change talk");
+    expect(cct.textContent).not.toMatch(/t40|t999/);
+    expect(within(cct).getAllByRole("button").map((b) => b.textContent)).not.toContain("[999]");
+  });
+
+  it("keeps ordinary prose intact when arbitrary transcript IDs look like words or scores", () => {
+    const r = structuredClone(drinkingSampleReport);
+    r.globals![0].onolys.reason = "The client gives 3 reasons to act.";
+    const turns = drinkingSampleTurns.map((t, i) => ({ ...t, id: i === 0 ? "The" : i === 1 ? "3" : t.id }));
+    view({ report: r, turns: { status: "ready", turns } });
+    const cct = screen.getAllByRole("listitem").filter((li) => li.hasAttribute("data-global"))[0];
+    expect(cct.textContent).toContain("The client gives 3 reasons to act.");
+  });
+
+  it("uses a neutral code label when an older tip has no idea title", () => {
+    const r = structuredClone(drinkingSampleReport);
+    delete r.tips![0].title;
+    view({ report: r });
+    expect(screen.getByRole("heading", { name: "Confront: an idea to try" })).toBeInTheDocument();
+  });
+
+  it("uses the generated idea title and preserves the original observation verbatim", () => {
+    const r = structuredClone(drinkingSampleReport);
+    r.tips![0].title = "Reflect the client's aim first";
+    r.tips![0].observation = "Onolys reads this as MI advice offered early.";
+    view({ report: r });
+    expect(screen.getByRole("heading", { name: "Reflect the client's aim first" })).toBeInTheDocument();
+    expect(screen.getByText("Onolys reads this as MI advice offered early.")).toBeInTheDocument();
+  });
+
+  it("omits evidence links while the transcript is unavailable", () => {
+    const { container } = view({ turns: { status: "loading" } });
+    expect(container.querySelector("#glance button")).toBeNull();
   });
 
   it("renders the summary table with chips, and No reference level for null references", () => {
@@ -107,6 +140,7 @@ describe("ReportView", () => {
     view();
     const tips = screen.getAllByRole("listitem").filter((li) => li.hasAttribute("data-tip"));
     expect(tips).toHaveLength(3);
+    expect(within(tips[0]).getByRole("heading", { level: 3 })).toBeInTheDocument();
     expect(tips[0].textContent).toContain("Arguing against cutting down closed the client off");
     expect(within(tips[0]).getByText("Confront")).toBeTruthy();
     expect(within(tips[0]).getByText("What was said")).toBeTruthy();

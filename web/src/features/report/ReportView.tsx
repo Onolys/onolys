@@ -8,7 +8,7 @@ import type { ReactNode } from "react";
 import { Fragment, useMemo } from "react";
 import type { components } from "../../api/schema";
 import type { Report } from "../../api/report";
-import { buildCodedRows, evidenceUtterances } from "./codedRows";
+import { buildCodedRows } from "./codedRows";
 import type { CodedRow, TurnsState } from "./codedRows";
 import { Button, Card, Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@onolys/ui";
 import { StatusChip, type ChipTone } from "../../components/StatusChip";
@@ -19,6 +19,7 @@ import { CodeChip } from "./CodeChip";
 import { CodedTranscriptProvider } from "./CodedTranscriptDialog";
 import { useCodedDialog } from "./codedDialogContext";
 import { UtteranceLink } from "./UtteranceLink";
+import { GlobalComment } from "./GlobalComment";
 
 type Turn = components["schemas"]["TranscriptTurnV1"];
 
@@ -29,7 +30,11 @@ export interface ReportViewProps {
   turns: TurnsState;
   /** Page title; the real page uses "Report", the sample "Sample report". */
   title?: string;
-  /** Extra header content (version select / notices, or the sample's grey line). */
+  /** Report identifier from the API envelope (absent for the public sample). */
+  reportId?: string;
+  /** Page-specific actions after the report. */
+  footerSlot?: ReactNode;
+  /** Extra header notices, or the sample's grey line. */
   headerSlot?: ReactNode;
   /** Practitioner turn ids shown as "Not coded" (sample only). */
   notCoded?: ReadonlySet<string>;
@@ -156,7 +161,6 @@ function Glance({ r, turns }: { r: Report; turns: readonly Turn[] | null }) {
       <ul className="m-0 grid list-none grid-cols-1 rounded-md border border-border p-0">
         {(r.globals ?? []).map((g) => {
           const score = g.onolys?.score ?? null;
-          const ev = turns ? evidenceUtterances(g, turns) : [];
           return (
             <li
               key={g.item_id}
@@ -185,18 +189,7 @@ function Glance({ r, turns }: { r: Report; turns: readonly Turn[] | null }) {
                 </span>
               </span>
               <span className="min-w-0 text-sm text-muted-foreground">
-                {g.onolys?.reason}
-                {ev.length > 0 ? (
-                  <span data-evidence="" className="mt-1 block text-xs">
-                    Evidence: utterances{" "}
-                    {ev.map((n, i) => (
-                      <Fragment key={n}>
-                        {i > 0 ? ", " : null}
-                        <UtteranceLink n={n} />
-                      </Fragment>
-                    ))}
-                  </span>
-                ) : null}
+                <GlobalComment global={g} turns={turns} />
               </span>
             </li>
           );
@@ -276,12 +269,13 @@ function Feedback({ r, turns }: { r: Report; turns: readonly Turn[] | null }) {
                 <Card className="grid grid-cols-1 gap-x-4 gap-y-0 p-5 sm:grid-cols-[36px_minmax(0,1fr)]">
                 <span className="mb-2 grid size-8 place-items-center rounded-full bg-primary font-bold text-primary-foreground sm:mb-0">{t.rank}</span>
                 <div className="mb-4 mt-[3px] flex flex-wrap items-center gap-x-2.5 gap-y-1.5 font-semibold">
-                  {t.observation} <CodeChip id={t.item_id} />
+                  <h3 className="m-0 text-base font-semibold">{t.title || `${CODE_META[t.item_id]?.label ?? GLOBAL_LABEL[t.item_id] ?? "Response"}: an idea to try`}</h3> <CodeChip id={t.item_id} />
                 </div>
                 <div className="grid grid-cols-1 gap-4 sm:col-start-2">
-                  <div>
-                    <span className={`${LABEL} mb-1`}>What was said</span>
-                    <blockquote className="m-0 border-l-[3px] border-border py-0 pl-3 pr-0 italic">
+                  {t.observation ? <p className={NOTE}>{t.observation}</p> : null}
+                  <div className="rounded-md bg-score-low-bg px-3.5 py-3">
+                    <span className={`${LABEL} mb-1 text-score-low`}>What was said</span>
+                    <blockquote className="m-0 text-base font-normal text-score-low">
                       “{t.quote.text}”
                       {n !== undefined ? (
                         <cite className="ml-1.5 whitespace-nowrap text-xs not-italic text-muted-foreground">
@@ -292,7 +286,7 @@ function Feedback({ r, turns }: { r: Report; turns: readonly Turn[] | null }) {
                   </div>
                   <div data-try="" className="rounded-md bg-muted px-3.5 py-3">
                     <span className={`${LABEL} mb-1 text-primary`}>Try instead</span>
-                    <p data-eg="" className="font-semibold text-primary">{t.alternative}</p>
+                    <p data-eg="" className="text-base font-normal text-primary">{t.alternative}</p>
                   </div>
                   <div>
                     <span className={`${LABEL} mb-1`}>Why it matters</span>
@@ -419,13 +413,12 @@ function Method({ r }: { r: Report }) {
   if (!m) return null;
   return (
     <Section id="method" title="Method & limits">
-      <p>{m.statement}</p>
-      {m.limits?.map((l) => (
-        <p key={l}>{l}</p>
-      ))}
+      <p>Onolys reads the transcript against the MITI 4.2.1 manual. Compare this reading with your own judgment.</p>
+      {r.header.coded_span ? <p>Coded span: {spanText(r, null)}.</p> : null}
+      <p>Tone of voice, pauses and body language are unavailable. Automatic speaker labels and timestamps may be wrong; utterance splitting affects counts.</p>
       {m.citation ? <p className="text-[0.8125rem] text-muted-foreground">{m.citation}</p> : null}
       {m.not_official_miti_coding ? (
-        <p className="rounded-md bg-score-fair-bg px-4 py-3 font-semibold text-score-fair">
+        <p className={NOTE}>
           Not official MITI coding and cannot be submitted as one.
         </p>
       ) : null}
@@ -438,6 +431,8 @@ export function ReportView({
   turns,
   title = "Report",
   headerSlot,
+  reportId,
+  footerSlot,
   notCoded,
 }: ReportViewProps) {
   const list = turns.status === "ready" ? turns.turns : null;
@@ -466,16 +461,17 @@ export function ReportView({
       legendIds={legendIds}
       showNotCodedLegend={!!notCoded && notCoded.size > 0}
     >
-      <div data-report-view="" className="mx-auto grid grid-cols-1 max-w-[55rem] gap-8 tabular-nums">
+      <div data-report-view="" className="mx-auto grid w-full min-w-0 grid-cols-1 gap-8 tabular-nums">
         <header className="grid grid-cols-1 gap-2">
           <h1 className={`${H1} text-balance tracking-tight`}>{title}</h1>
-          {headerSlot}
+          {reportId ? <p className="break-all text-sm"><b>Report ID:</b> <span>{reportId}</span></p> : null}
           {r.header.change_goal ? (
             <p>
               <b>Change goal:</b> {r.header.change_goal}
             </p>
           ) : null}
-          <ul className="m-0 flex list-none flex-wrap gap-x-5 gap-y-1 p-0 text-[0.8125rem] text-muted-foreground">
+          {headerSlot}
+          {!reportId ? <ul className="m-0 flex list-none flex-wrap gap-x-5 gap-y-1 p-0 text-[0.8125rem] text-muted-foreground">
             <li>
               <b className="font-medium text-foreground">Protocol</b> {r.header.protocol.label}
             </li>
@@ -485,7 +481,7 @@ export function ReportView({
             <li>
               <b className="font-medium text-foreground">Date</b> {formatDate(r.created_at)}
             </li>
-          </ul>
+          </ul> : null}
         </header>
         <Glance r={r} turns={list} />
         <Feedback r={r} turns={list} />
@@ -496,6 +492,7 @@ export function ReportView({
           practitioner={practitioner}
         />
         <Method r={r} />
+        {footerSlot}
       </div>
     </CodedTranscriptProvider>
   );

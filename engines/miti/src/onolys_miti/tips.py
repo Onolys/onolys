@@ -40,7 +40,7 @@ PROMPT_FILE = "tips_system.md"
 
 _OUTPUT_FORMAT = (
     "## Output format\n"
-    'Reply with JSON only: {"tips": [{"item_id": "...", "observation": "...", '
+    'Reply with JSON only: {"tips": [{"title": "...", "item_id": "...", "observation": "...", '
     '"quote": {"turn_id": "...", "text": "..."}, "alternative": "...", '
     '"why_it_matters": "..."}]}.\n'
     "Propose at most 7 tips, ordered by expected impact. `item_id` is one id from the list of "
@@ -67,6 +67,7 @@ class _Quote(BaseModel):
 
 
 class _Proposal(BaseModel):
+    title: str | None = None
     item_id: str
     observation: str
     quote: _Quote
@@ -210,7 +211,9 @@ def validate_proposals(
             code = "alternative_too_long"
         elif _squash(p.alternative) == _squash(text[m.start : m.end]):
             code = "alternative_same_as_quote"
-        elif any(rules.lint(s) for s in (p.observation, p.alternative, p.why_it_matters)):
+        elif any(
+            rules.lint(s) for s in (p.title or "", p.observation, p.alternative, p.why_it_matters)
+        ):
             code = "tone"
         elif per_item.get(p.item_id, 0) >= MAX_PER_ITEM:
             code = "item_limit"
@@ -224,6 +227,7 @@ def validate_proposals(
         seen.add((p.item_id, p.quote.turn_id))
         valid.append(
             Tip(
+                title=p.title.strip() or None if p.title is not None else None,
                 rank=len(valid) + 1,
                 item_id=p.item_id,
                 observation=p.observation.strip(),

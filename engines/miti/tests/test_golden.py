@@ -86,10 +86,14 @@ async def test_golden_report_against_api_local_schema():
 
 
 async def test_fixture_keys_match_existing_golden_filenames(monkeypatch):
-    """Freeze request hashes before extracting the shared LLM implementation."""
+    """Freeze exact request hashes, including prompt wording.
+
+    The globals response was intentionally reused as deterministic synthetic stub data
+    after the concise-prose instruction changed. It is not a new live-model recording.
+    """
     expected = {
         "8340f9e78d95ffa99a37a4ac7015423258eb01f2d2b22d5871e83b9d78645623",
-        "c24dfc214fee7fdb4aa02911ec86b49e7e4dca8b2b4c3f1feba40db6033602a2",
+        "ec02bc75849e82d47f8619a2d9a4fc1648c6d2f7e644cce3ad2d271a08d66f26",
     }
     seen = set()
     original = FixtureClient.complete_json

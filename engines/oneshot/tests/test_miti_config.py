@@ -40,6 +40,7 @@ def test_generated_schema_matches_committed_scoring_subset():
     assert set(schema["properties"]) == {"counts", "globals", "tips"}
     assert len(schema["properties"]["counts"]["properties"]) == 10
     assert len(schema["properties"]["globals"]["properties"]) == 4
+    assert "title" not in schema["properties"]["tips"]["items"]["properties"]
     forbidden = {"quote", "instances", "offsets", "summaries", "scorecard", "run_info", "header"}
     assert not forbidden.intersection(re.findall(r'"(\w+)":', json.dumps(schema)))
 

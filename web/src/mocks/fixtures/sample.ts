@@ -107,7 +107,7 @@ const GLOBALS: { id: string; label: string; score: number; reason: string; utts:
     label: "Cultivating Change Talk",
     score: 2,
     reason:
-      "The client gives reasons to act (utterances 18, 40), but only utterance 41 builds on them; 19 and 31 miss or work against them.",
+      "The client gives reasons to act, but the practitioner rarely builds on them and sometimes works against them.",
     utts: [18, 40, 41, 19, 31],
   },
   {
@@ -115,7 +115,7 @@ const GLOBALS: { id: string; label: string; score: number; reason: string; utts:
     label: "Softening Sustain Talk",
     score: 2,
     reason:
-      "Reflections at 9, 17 and 21 respect the ambivalence, but the confront at 25 and persuasion at 31 draw pushback (26, 30, 32).",
+      "Some reflections respect ambivalence, while confrontation and persuasion draw pushback.",
     utts: [9, 17, 21, 25, 31, 26, 30, 32],
   },
   {
@@ -123,7 +123,7 @@ const GLOBALS: { id: string; label: string; score: number; reason: string; utts:
     label: "Partnership",
     score: 2,
     reason:
-      "The practitioner pushes quitting over the client's aim (25, 27, 31) until the client says they feel told what to do (32); autonomy is restored at 33.",
+      "The practitioner pushes quitting over the client’s aim, then restores choice after the client objects.",
     utts: [25, 27, 31, 32, 33],
   },
   {
@@ -131,7 +131,7 @@ const GLOBALS: { id: string; label: string; score: number; reason: string; utts:
     label: "Empathy",
     score: 3,
     reason:
-      "Reflections at 3, 7 and 21 show real effort to grasp the client's view and stress, but 25 and 31 set it aside.",
+      "Several reflections acknowledge the client’s perspective and stress, while some responses set them aside.",
     utts: [3, 7, 21, 25, 31],
   },
 ];
@@ -198,12 +198,13 @@ const globals: Report["globals"] = GLOBALS.map((g) => ({
   explanation: { ...NO_EXPLANATION },
 }));
 
-function tip(rank: number, item_id: Code, utt: number, observation: string, tryText: string, example: string, why: string) {
+function tip(rank: number, item_id: Code, utt: number, observation: string, title: string, tryText: string, example: string, why: string) {
   const l = lineOf(utt);
   return {
     rank,
     item_id,
     observation,
+    title,
     quote: { turn_id: l.turn_id, start: l.start, end: l.end, text: l.quote },
     alternative: `${tryText} “${example}”`,
     why_it_matters: why,
@@ -254,6 +255,7 @@ export const drinkingSampleReport: Report = {
     tip(
       1, "confront", 25,
       "Arguing against cutting down closed the client off",
+      "Reflect what the client wants",
       "Reflect what the client wants instead of arguing against it.",
       "You'd like to keep wine in your life and bring it back to where it was.",
       "Disagreeing makes people defend their view. The client pushed back right away (utterances 26 and 30).",
@@ -261,6 +263,7 @@ export const drinkingSampleReport: Report = {
     tip(
       2, "persuade", 31,
       "Persuading without asking made the client feel told what to do",
+      "Ask permission before sharing experience",
       "Ask permission, share what you have seen, then ask what the client makes of it.",
       "Would it be okay if I shared what I've seen when people cut back? ... What do you make of that?",
       "Advice that is asked for is heard. Unasked advice led to \"you're telling me what to do\" (utterance 32).",
@@ -268,6 +271,7 @@ export const drinkingSampleReport: Report = {
     tip(
       3, "sr", 19,
       "A simple reflection missed the client's reason to change",
+      "Reflect the value behind the words",
       "Reflect the value behind the words with a complex reflection.",
       "Snapping at your child doesn't fit the parent you want to be, and the foggy mornings are part of that.",
       "Reflecting the client's own reasons draws out more change talk. The client had just said \"That's not me\".",
