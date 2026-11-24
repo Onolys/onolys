@@ -19,6 +19,7 @@ module.exports = defineConfig({
   grepInvert: process.env.CI ? /@live/ : undefined, // no @live specs remain; guards against re-adding emulator-only tests to CI
   use: {
     baseURL: `http://localhost:${PORT}`, // must be `localhost`, not 127.0.0.1 (api CORS)
+    browserName: process.env.E2E_BROWSER || "chromium",
     deviceScaleFactor: 1,
     viewport: { width: 1280, height: 720 },
     trace: "off",

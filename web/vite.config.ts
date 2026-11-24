@@ -40,11 +40,13 @@ export default defineConfig(({ mode }) => ({
   preview: { headers: { "Content-Security-Policy": prodCspHeader() } },
   test: {
     environment: "jsdom",
-    setupFiles: ["./src/test/setup.ts"],
+    setupFiles: ["./src/test/setup.ts", ...(process.env.NIGHTLY_PROPERTIES ? ["./nightly/fast-check.ts"] : [])],
     globals: false,
-    // `*.flaky.test.ts(x)` are excluded here; `npm run test:flaky` (FLAKY=1) runs only them (non-blocking CI step).
+    // Quarantined files can be run locally with `npm run test:flaky` (FLAKY=1).
     // `e2e_review/**` holds Playwright specs (run via `npm run e2e`), never vitest.
-    ...(process.env.FLAKY
+    ...(process.env.NIGHTLY_MUTATION
+      ? { include: ["src/auth/next.test.ts", "src/__fuzz_review__/auth.property.test.ts"] }
+      : process.env.FLAKY
       ? { include: ["src/**/*.flaky.test.{ts,tsx}"] }
       : { exclude: [...configDefaults.exclude, "e2e_review/**", "**/*.flaky.test.{ts,tsx}"] }),
   },

@@ -8,7 +8,7 @@
     "src/auth/errors.ts",
     "src/api/errors.ts"
   ],
-  "vitest": { "configFile": "vite.config.ts" },
+  "vitest": { "configFile": "vite.config.ts", "related": false },
   "coverageAnalysis": "perTest",
   "reporters": ["clear-text", "json"],
   "jsonReporter": { "fileName": "reports/mutation/mutation.json" },

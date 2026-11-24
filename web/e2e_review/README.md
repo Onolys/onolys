@@ -1,6 +1,6 @@
 # e2e_review: Playwright regression suite (web/, main app)
 
-Real-browser checks only (36 tests, 5 specs; trimmed in FX48). Behaviour already covered by vitest (auth pages, /auth/action, flows) is not repeated here. Specs assert the CORRECT behaviour. Finding IDs (E#, W#) in test names refer to the review findings; all were fixed (FX1-46). Findings: `docs/agent_files/review-full-app-20261121/findings-e2e.md`.
+Real-browser checks only. Behaviour already covered by vitest (auth pages, /auth/action, flows) is not repeated here. Specs assert the CORRECT behaviour. Finding IDs (E#, W#) in test names refer to the review findings; all were fixed (FX1-46). Findings: `docs/agent_files/review-full-app-20261121/findings-e2e.md`.
 
 ## Run (mock mode: MSW + fake auth, nothing else needed)
 
@@ -28,3 +28,7 @@ npm run e2e                      # mock mode; add args after `--`, e.g. `npm run
   which signs fake-auth users out mid-test). Screenshots are off by default; `E2E_SHOTS=1` writes `test-results/shots/spec-*.png` (gitignored).
 - Specs: signed-out (nav/guards by auth phase, back/reload), login (logout+back, `?next=`), signup (double submit, unverified phase), mobile (iPhone 13 horizontal scroll), session-flow (file precheck, double Start, unmount autosave, missing session, clipboard, interview page).
 - Fixtures: `fixtures/ten-min.mp3` (10:30 sine), `one-min.wav`, `notaudio.txt`.
+
+## CI tiers
+
+PRs use `npm run e2e -- --config e2e_review/playwright.smoke.config.cjs`: nine existing Chromium cases, including production CSP, focus, native dialog and auth/upload sentinels. Both servers start intentionally because the CSP sentinel needs the built app. Main candidates and nightly retain the complete suite. Nightly also runs the full suite with `E2E_BROWSER=firefox` and `E2E_BROWSER=webkit`; those jobs install their pinned Playwright browsers and system dependencies. Firefox retains the mobile viewport/touch checks with `isMobile: false`, since that browser does not support Playwright's mobile emulation flag. Clipboard permission grants apply only to Chromium; other engines use the Copy button's user activation.
