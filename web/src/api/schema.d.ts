@@ -1053,6 +1053,11 @@ export interface components {
         };
         /** SessionDetail */
         SessionDetail: {
+            /**
+             * Audio S
+             * @description Recording duration in seconds
+             */
+            audio_s?: number | null;
             /** @description Set once cancelled: whether it used a unit, how many, and when */
             cancel?: components["schemas"]["SessionCancel"] | null;
             /**
@@ -1095,6 +1100,26 @@ export interface components {
             /** Progress */
             progress: number;
             /**
+             * Progress Next
+             * @description Base percent of the next stage (99 on the last); null when none
+             */
+            progress_next?: number | null;
+            /**
+             * Stage Expected S
+             * @description Typical seconds the current stage takes; null when untimed
+             */
+            stage_expected_s?: number | null;
+            /**
+             * Stage Started At
+             * @description Entered the current state
+             */
+            stage_started_at?: string | null;
+            /**
+             * Started At
+             * @description First entry to uploading (a re-run: its start); null before
+             */
+            started_at?: string | null;
+            /**
              * Status
              * @enum {string}
              */
@@ -1108,6 +1133,12 @@ export interface components {
              * Format: date-time
              */
             updated_at: string;
+            /**
+             * Waited Ms
+             * @description Total milliseconds spent waiting for the user input
+             * @default 0
+             */
+            waited_ms?: number;
             /** Warnings */
             warnings: string[];
         };
