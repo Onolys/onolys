@@ -49,6 +49,10 @@ export function mapAuthError(code: string | undefined): MappedAuthError {
       return { message: "Your browser is blocking what sign-in needs. Enable cookies and site storage, or try another browser." };
     case "auth/too-many-requests":
       return { message: "Too many attempts. Wait a few minutes and try again." };
+    case "email/rate-limited":
+      return { message: "Too many requests. Wait a minute and try again." };
+    case "email/unavailable":
+      return { message: "We couldn't send the email. Try again in a moment." };
     case "auth/network-request-failed":
       return { message: "Can't reach the server. Check your connection and try again." };
     case "auth/popup-closed-by-user":

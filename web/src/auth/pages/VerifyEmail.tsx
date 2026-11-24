@@ -94,7 +94,7 @@ export function VerifyEmail() {
     setBusy(true);
     try {
       await service.sendVerificationEmail(next);
-      setNote("Verification email sent.");
+      setNote(`Verification email sent to ${user?.email}`);
       setCooldown(RESEND_COOLDOWN_SECONDS);
       cooldownUntil.set(cooldownKey(user?.email), Date.now() + RESEND_COOLDOWN_SECONDS * 1000);
     } catch (err) {

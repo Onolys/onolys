@@ -9,11 +9,11 @@ import { ErrorSummary, FORM, Field, StatusNote } from "./parts";
 import { useFormError } from "./useFormError";
 
 /** Same confirmation for every email: no account enumeration (R2). */
-export const RESET_CONFIRMATION = "If an account exists for that email, we've sent a link to reset your password.";
+export const RESET_CONFIRMATION = "If an account exists for that address, we've emailed a link.";
 
 // Only failures that say nothing about the account are shown; everything else gets the confirmation.
 // "invalid-email" is about the input, not the account.
-const SHOWN = new Set(["auth/network-request-failed", "auth/too-many-requests", "auth/invalid-email"]);
+const SHOWN = new Set(["auth/network-request-failed", "auth/too-many-requests", "auth/invalid-email", "email/rate-limited", "email/unavailable"]);
 
 export function ForgotPassword() {
   const { service } = useAuth();

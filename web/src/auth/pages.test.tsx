@@ -184,7 +184,7 @@ describe("log in", () => {
 });
 
 describe("forgot password", () => {
-  const CONFIRM = "If an account exists for that email, we've sent a link to reset your password.";
+  const CONFIRM = "If an account exists for that address, we've emailed a link.";
 
   it("shows the same confirmation for a known and an unknown email", async () => {
     const service = createFakeAuthService();
@@ -217,6 +217,20 @@ describe("forgot password errors (FX22)", () => {
     vi.spyOn(service, "sendPasswordReset").mockRejectedValueOnce({ code: "auth/network-request-failed" });
     await user.click(screen.getByRole("button", { name: "Send reset link" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("Can't reach the server");
+    expect(screen.queryByRole("status")).toBeNull();
+  });
+
+  it.each([
+    ["email/rate-limited", "Too many requests. Wait a minute and try again."],
+    ["email/unavailable", "We couldn't send the email. Try again in a moment."],
+  ])("shows the %s copy and no confirmation", async (code, copy) => {
+    const user = userEvent.setup();
+    const { service } = renderApp("/forgot-password");
+    await h1("Reset your password");
+    vi.spyOn(service, "sendPasswordReset").mockRejectedValueOnce({ code });
+    await user.type(screen.getByLabelText("Email"), "a@b.co");
+    await user.click(screen.getByRole("button", { name: "Send reset link" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(copy);
     expect(screen.queryByRole("status")).toBeNull();
   });
 
@@ -451,7 +465,7 @@ describe("unverified accounts coming back", () => {
     await h1("Verify your email");
     expect(service.calls.verificationEmails).toBe(0);
     await user.click(screen.getByRole("button", { name: "Resend email" }));
-    await screen.findByText("Verification email sent.");
+    await screen.findByText("Verification email sent to u@clinic.org");
     expect(service.calls.verificationEmails).toBe(1);
   });
 });
