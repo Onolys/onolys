@@ -1,0 +1,27 @@
+version: 1
+models:
+  claude:
+    label: Claude
+    provider: anthropic
+    api_key_env: ANTHROPIC_API_KEY
+    caching_mode: anthropic_ephemeral
+    supports_temperature: false
+    context_tokens: 1000000
+    max_output_tokens: 128000
+    tiers:
+      claude-opus-5-5: {efforts: [low, medium, high, max], default_effort: medium}
+      claude-sonnet-5-5: {efforts: [low, medium, high, max], default_effort: high}
+      claude-haiku-5-5: {efforts: [low, medium, high, max], default_effort: medium}
+  gemini:
+    label: Gemini
+    provider: gemini
+    api_key_env: GEMINI_API_KEY
+    caching_mode: provider_implicit
+    supports_temperature: false
+    context_tokens: 1048576
+    max_output_tokens: 65536
+    tiers:
+      gemini-4-carbon: {efforts: [low, medium, high], default_effort: medium}
+      gemini-4-neon: {efforts: [low, medium, high], default_effort: high}
+      gemini-4-hydrogen: {efforts: [low, medium, high], default_effort: high}
+      gemini-4-argon: {efforts: [low, medium, high], default_effort: medium}
