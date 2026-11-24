@@ -140,11 +140,11 @@ def make_validate_handler(
     def fail(ctx: TaskContext, code: str) -> PermanentError:
         """A file-check failure: discard the upload (audio, session doc, subcollections)."""
         try:
-            if ctx.repo.get_session(ctx.uid, ctx.sid).state == "cancelled":
-                raise Cancelled()  # a cancel landed mid-check: keep the audio (04-cancel R5)
-            purge(ctx.uid, ctx.sid)
+            # The transactional discard refuses `cancelled`; purge only after it succeeds, so a
+            # cancel racing this failure keeps the audio (04-cancel R5).
             ctx.repo.discard_failed_upload(ctx.uid, ctx.sid, code)
-        except ConflictError:  # cancelled between the check and the discard
+            purge(ctx.uid, ctx.sid)
+        except ConflictError:  # cancelled: keep everything
             raise Cancelled() from None
         return UploadFailedError(code)
 

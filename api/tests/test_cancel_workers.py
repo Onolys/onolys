@@ -254,6 +254,28 @@ async def test_cancel_mid_validate_then_failing_file_check_keeps_everything(sett
     assert blobs.list_keys(f"uploads/alice/{sid}/")  # audio kept
 
 
+async def test_cancel_racing_the_discard_keeps_the_audio(settings, blobs, monkeypatch):
+    """Cancel commits after fail() decides to discard but before the discard transaction:
+    the discard refuses, and the audio must not have been purged (discard runs before purge)."""
+    repo = FakeRepo(blobs)
+    holder = {}
+    real = repo.discard_failed_upload
+
+    def cancel_then_discard(uid, sid, code):
+        cancel(repo, uid, sid)  # lands just before the transactional discard
+        return real(uid, sid, code)
+
+    monkeypatch.setattr(repo, "discard_failed_upload", cancel_then_discard)
+    tools = StubTools(probe_error=True)
+    app, sid = await _staged(settings, repo, blobs, tools)
+    holder["sid"] = sid
+    app.state.queue.drain()
+    s = repo.get_session("alice", sid)
+    assert s.state == "cancelled" and s.error is None
+    assert repo.get_status("alice", sid).state == "cancelled"
+    assert blobs.list_keys(f"uploads/alice/{sid}/")  # audio not purged
+
+
 async def test_cancel_after_blob_writes_in_validate_keeps_them(settings, blobs, monkeypatch):
     """Cancel lands right after the original is moved: ensure_active stops, nothing purged."""
     repo = FakeRepo(blobs)
