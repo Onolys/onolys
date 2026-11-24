@@ -76,7 +76,7 @@ publish_report: unchanged single txn
 | Successful report final; only failed runs retry; auto retry keeps run id; user Retry new run id | [RESOLVED: owner, existing policy] |
 | Do not claim reproducibility | [RESOLVED: owner] |
 | Inputs backend-only; no `rating_id` pin, lineage, requested-vs-actual, extra taxonomy | [RESOLVED: owner] |
-| Failed session with transcript ready but speaker unconfirmed and no run: now has no way to confirm (state `failed`). Believed unreachable (run step implies confirmed; other failures precede transcript_ready) | [OPEN: confirm by grep of failure writers in impl; if reachable, allow confirm when `!speaker_confirmed` in `failed`] |
+| Failed session with transcript ready but speaker unconfirmed and no run: no way to confirm (state `failed`) | [RESOLVED: owner — failure is terminal; a session that fails before speaker confirmation stays failed, no confirm after failure, no recovery path] |
 | Start txn adds one transcript doc read; transcript pointer docs hold sha256 in the doc, not the blob | [RESOLVED: acceptable] |
 | Re-transcription / transcript editing | [DEFERRED: hash + R7 guard cover it when built] |
 | Worker recompute cost on large (blob) transcripts | [RESOLVED: transcript already loaded in `_evaluate`; hashing is O(size), negligible vs LLM] |

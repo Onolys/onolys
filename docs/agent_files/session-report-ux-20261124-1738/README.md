@@ -29,6 +29,6 @@ Dependency: `01 ──(commit order only)──▶ 02` ; one PR.
 - Dropped from brainstorm: lineage, requested-vs-actual settings, quote-validation rework, compact anchors, null globals.
 
 ### Cross-cutting open questions
-- 01 [OPEN]: failed session with speaker unconfirmed and no run — confirm unreachable during implementation.
+- 01 [RESOLVED]: failure is terminal; unconfirmed speaker + failure stays failed.
 - 02 [OPEN]: volley `min_other_words: 5` + `?` exception to tune on new fixtures; report schema/UI accepts empty `evidence`; coverage retry thresholds from baseline.
 - Live measurement needs GEMINI_API_KEY on the machine.
