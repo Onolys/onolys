@@ -59,6 +59,9 @@ def test_miti_info_emitted_once_with_context_and_code_version(cfg):
 def test_litellm_warning_kept_debug_dropped_no_duplicates(cfg):
     import litellm
 
+    from onolys_engine_core.json_logging import quiet_litellm
+
+    quiet_litellm()  # what the lazy-import sites do right after `import litellm`
     assert litellm.suppress_debug_info is True
     for name in ("LiteLLM", "LiteLLM Router", "LiteLLM Proxy", "litellm"):
         lg = logging.getLogger(name)
@@ -77,9 +80,10 @@ def test_litellm_warning_kept_debug_dropped_no_duplicates(cfg):
 
 def test_httpx_and_third_party_below_info_dropped_info_kept_capped(cfg):
     logging.getLogger("httpx").debug("x")
-    logging.getLogger("somelib").info("y" * 1000)
+    logging.getLogger("somelib").info("dropped: third party below WARNING")
+    logging.getLogger("miti").info("y" * 1000)
     (d,) = cfg()
-    assert d["logger"] == "somelib" and len(d["message"]) == 300
+    assert d["logger"] == "miti" and len(d["message"]) == 300
 
 
 def test_configure_twice_does_not_duplicate(cfg):
@@ -132,3 +136,69 @@ def test_litellm_log_env_not_left_set(monkeypatch):
         assert "LITELLM_LOG" not in os.environ
     finally:
         root.handlers[:] = before
+
+
+def _run_py(code: str) -> str:
+    import subprocess
+    import sys
+
+    r = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, timeout=120)
+    assert r.returncode == 0, r.stderr
+    return r.stdout.strip()
+
+
+def test_configure_logging_does_not_import_litellm():
+    out = _run_py(
+        "import sys\nfrom types import SimpleNamespace\n"
+        "from onolys_engine_core.json_logging import configure_logging\n"
+        "configure_logging(SimpleNamespace(git_sha='x'))\n"
+        "print('litellm' in sys.modules)"
+    )
+    assert out == "False"
+
+
+def test_quiet_litellm_after_lazy_import_pins_warning_and_strips_handlers():
+    out = _run_py(
+        "import logging\nfrom types import SimpleNamespace\n"
+        "from onolys_engine_core.json_logging import configure_logging, quiet_litellm\n"
+        "configure_logging(SimpleNamespace(git_sha='x'))\n"
+        "import litellm\nquiet_litellm()\nquiet_litellm()\n"
+        "names = ('litellm', 'LiteLLM', 'LiteLLM Router', 'LiteLLM Proxy')\n"
+        "print(all(logging.getLogger(n).level == logging.WARNING for n in names),\n"
+        "      all(not logging.getLogger(n).handlers for n in names), litellm.suppress_debug_info)"
+    )
+    assert out == "True True True"
+
+
+def test_litellm_client_lazy_sites_call_quiet_litellm():
+    import inspect
+
+    from onolys_engine_core.llm import litellm_client
+
+    src = inspect.getsource(litellm_client)
+    assert src.count("quiet_litellm()") >= 2
+
+
+def test_third_party_info_dropped_warning_kept_first_party_info_kept(cfg):
+    for name in ("google_genai.models", "httpx", "httpcore", "somelib"):
+        logging.getLogger(name).info("i-%s", name)
+        logging.getLogger(name).warning("w-%s", name)
+    for name in ("onolys_api.routes.x", "onolys_engine_core.llm", "onolys_eval.run", "miti.x"):
+        logging.getLogger(name).info("first-%s", name)
+    logging.getLogger("litellm").warning("lw")
+    msgs = [d["message"] for d in cfg()]
+    assert not [m for m in msgs if m.startswith("i-")]
+    assert {f"w-{n}" for n in ("google_genai.models", "httpx", "httpcore", "somelib")} <= set(msgs)
+    assert len([m for m in msgs if m.startswith("first-")]) == 4
+    assert "lw" in msgs
+
+
+def test_any_logger_exception_text_and_args_never_reach_the_line(cfg):
+    for name in ("somelib", "google_genai.x"):
+        try:
+            raise KeyError("SECRET-EXC")
+        except KeyError:
+            logging.getLogger(name).exception("boom %s", "SECRET-ARG")
+    out = cfg()
+    assert [d["exc_class"] for d in out] == ["KeyError", "KeyError"]
+    assert "SECRET" not in json.dumps(out) and "Traceback" not in json.dumps(out)

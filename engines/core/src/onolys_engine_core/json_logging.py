@@ -22,6 +22,7 @@ _PROPAGATING = (
     "miti", "onolys_api.events", "litellm", "LiteLLM", "LiteLLM Router", "LiteLLM Proxy", "httpx",
 )  # fmt: skip
 _LITELLM_LOGGERS = ("litellm", "LiteLLM", "LiteLLM Router", "LiteLLM Proxy")
+FIRST_PARTY_PREFIXES = ("onolys", "miti")  # our loggers: INFO passes; all others need WARNING
 
 
 class StderrHandler(logging.StreamHandler):
@@ -44,6 +45,35 @@ class ContextFilter(logging.Filter):
 
     def filter(self, record: logging.LogRecord) -> bool:
         record.ctx = snapshot()
+        return True
+
+
+class FirstPartyInfoFilter(logging.Filter):
+    """Third-party records need WARNING+; our own loggers (``onolys*``, ``miti*``) pass at INFO.
+
+    Keeps library chatter (``google_genai.*``, ``httpx`` request URLs) out of the logs.
+    """
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        return record.levelno >= logging.WARNING or record.name.startswith(FIRST_PARTY_PREFIXES)
+
+
+class NoExceptionDetail(logging.Filter):
+    """Reduce a record carrying an exception to its class name (PRD R5, S1).
+
+    The message and args may embed exception text or PHI (a FastAPI ResponseValidationError
+    embeds the offending ``input``), so the whole message is replaced, not just the traceback.
+    """
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        exc = record.exc_info
+        if exc or record.exc_text:
+            name = exc[0].__name__ if exc and exc[0] else "Exception"
+            record.msg = f"Exception {name} (details suppressed)"
+            record.args = None
+            record.exc_info = record.exc_text = None
+            record.stack_info = None
+            record.exc_class = name
         return True
 
 
@@ -72,7 +102,9 @@ class JsonFormatter(logging.Formatter):
         else:
             out["logger"] = record.name
         extra = {**getattr(record, "ctx", {}), **safe_fields(fields or {})}
-        if record.exc_info or record.exc_text:
+        if exc_class := getattr(record, "exc_class", None):
+            extra.setdefault("exc_class", exc_class)
+        elif record.exc_info or record.exc_text:  # record that skipped NoExceptionDetail
             exc = record.exc_info[0] if record.exc_info else None
             extra.setdefault("exc_class", exc.__name__ if exc else "Exception")
         extra = {k: v for k, v in extra.items() if v is not None}
@@ -90,6 +122,8 @@ def render(record: logging.LogRecord) -> str:
 
 def make_handler(code_version: str = "dev") -> logging.Handler:
     h = StderrHandler()
+    h.addFilter(NoExceptionDetail())
+    h.addFilter(FirstPartyInfoFilter())
     h.addFilter(ContextFilter())
     h.setFormatter(JsonFormatter(code_version))
     return h
@@ -110,22 +144,34 @@ def configure_logging(settings) -> None:
     root.addHandler(handler)
     root.setLevel(logging.INFO)
 
-    os.environ.pop("LITELLM_LOG", None)
-    try:
-        import litellm  # noqa: PLC0415  (adds its own stderr handlers at import; stripped below)
-    except ImportError:  # pragma: no cover
-        litellm = None
-    if litellm is not None:
-        litellm.suppress_debug_info = True
-
     for name in _PROPAGATING:
         lg = logging.getLogger(name)
         for h in [h for h in lg.handlers if name in _LITELLM_LOGGERS or _marked(h)]:
             lg.removeHandler(h)
         lg.propagate = True
-    for name in _LITELLM_LOGGERS:
+    for name in (*_LITELLM_LOGGERS, "httpx", "httpcore"):
         logging.getLogger(name).setLevel(logging.WARNING)
     logging.getLogger("onolys_api.events").setLevel(logging.INFO)
+    quiet_litellm()  # no-op unless litellm is already imported; never imports it (~3 s, 160 MB)
+
+
+def quiet_litellm() -> None:
+    """Strip LiteLLM's own stderr handlers and pin its loggers to WARNING. Idempotent.
+
+    Call right after a lazy ``import litellm`` (it adds handlers and may reset levels at
+    import). Does nothing while litellm is not imported, so api/voice never pay for it.
+    """
+    os.environ.pop("LITELLM_LOG", None)
+    litellm = sys.modules.get("litellm")
+    if litellm is None:
+        return
+    litellm.suppress_debug_info = True
+    for name in _LITELLM_LOGGERS:
+        lg = logging.getLogger(name)
+        for h in list(lg.handlers):
+            lg.removeHandler(h)
+        lg.propagate = True
+        lg.setLevel(logging.WARNING)
 
 
 def _marked(handler: logging.Handler) -> bool:

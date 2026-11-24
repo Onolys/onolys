@@ -13,7 +13,7 @@ import logging
 import re
 import threading
 
-from onolys_engine_core.json_logging import configure_logging
+from onolys_engine_core.json_logging import NoExceptionDetail, configure_logging
 from onolys_engine_core.log_context import bind
 from onolys_engine_core.safe_log import clean_value, register_fields, safe_fields
 from starlette.requests import HTTPConnection
@@ -33,29 +33,13 @@ _state = {"key": b"", "code_version": "dev"}
 _lock = threading.Lock()
 
 
-class _NoTraceback(logging.Filter):
-    """Reduce a record carrying an exception to its class name (S1).
-
-    uvicorn logs `Exception in ASGI application` with the full traceback, and a FastAPI
-    ResponseValidationError's text embeds the offending `input` (transcript/rating/report PHI).
-    """
-
-    def filter(self, record: logging.LogRecord) -> bool:
-        exc = record.exc_info
-        if exc or record.exc_text:
-            name = exc[0].__name__ if exc and exc[0] else "Exception"
-            record.msg = f"Unhandled exception in ASGI application: {name} (details suppressed)"
-            record.args = None
-            record.exc_info = record.exc_text = None
-            record.stack_info = None
-        return True
-
-
 def _guard_uvicorn() -> None:
+    """uvicorn's loggers keep their own handlers (no propagation to root), so give them the
+    same exception rule the JSON handler applies to everything else."""
     for name in ("uvicorn", "uvicorn.error"):
         lg = logging.getLogger(name)
-        if not any(isinstance(f, _NoTraceback) for f in lg.filters):
-            lg.addFilter(_NoTraceback())
+        if not any(isinstance(f, NoExceptionDetail) for f in lg.filters):
+            lg.addFilter(NoExceptionDetail())
 
 
 def configure(settings: Settings) -> None:

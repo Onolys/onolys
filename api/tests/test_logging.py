@@ -284,3 +284,11 @@ def test_auth_email_fields_are_logged_without_recipient_or_links(caplog):
     assert "person@example.com" not in caplog.text
     assert "oobCode" not in caplog.text
     assert "secret" not in caplog.text
+
+
+def test_images_running_litellm_use_local_cost_map():
+    import pathlib
+
+    root = pathlib.Path(__file__).resolve().parents[2]
+    for df in ("api/Dockerfile", "eval/backend/Dockerfile"):
+        assert "LITELLM_LOCAL_MODEL_COST_MAP=True" in (root / df).read_text(), df

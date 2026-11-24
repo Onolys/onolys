@@ -33,6 +33,9 @@ def _git_sha() -> str:
 def _record_cost(record: dict) -> float | None:
     """Local LiteLLM rates are a rough estimate, never a billing guarantee."""
     from litellm import cost_per_token
+    from onolys_engine_core.json_logging import quiet_litellm
+
+    quiet_litellm()
 
     try:
         input_cost, output_cost = cost_per_token(

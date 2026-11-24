@@ -16,6 +16,7 @@ from typing import Any
 from pydantic import ValidationError
 
 from onolys_engine_core.errors import ConfigError
+from onolys_engine_core.json_logging import quiet_litellm
 from onolys_engine_core.retry import retry
 from onolys_engine_core.safe_log import log_event, sanitize_provider_text
 
@@ -55,6 +56,7 @@ def _usage(resp: Any) -> Usage:
     # Unknown/custom models are usable even when LiteLLM has no price for them.
     from litellm import completion_cost
 
+    quiet_litellm()
     try:
         cost = completion_cost(completion_response=resp)
     except Exception:
@@ -203,6 +205,7 @@ class LiteLLMClient:
         if self._acompletion is None:
             import litellm
 
+            quiet_litellm()
             self._acompletion = litellm.acompletion
         return self._acompletion
 
