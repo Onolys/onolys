@@ -70,3 +70,9 @@ def test_base_not_mutated(base):
     model = find_model(load_models(MODELS), "anthropic", "claude-opus-5-5")
     combo_routes(base, model, "claude-opus-5-5", "medium")
     assert base == before
+
+
+def test_effort_output_cap_covers_exactly_the_allowed_efforts():
+    from onolys_engine_core.llm.models import _EFFORTS
+
+    assert set(EFFORT_OUTPUT_CAP) == set(_EFFORTS)
