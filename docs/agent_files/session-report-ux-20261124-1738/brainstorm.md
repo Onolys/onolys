@@ -1,5 +1,5 @@
 ---
-status: draft
+status: done
 summary: Pin session inputs to each MITI run and improve coding with bounded cost
 date: 2026-11-24
 ---
@@ -8,7 +8,7 @@ date: 2026-11-24
 
 ## TL;DR
 
-The user approved the MITI engine changes and including database rewiring in the same PR. The proposal makes each run carry a fixed receipt of its inputs, keeps upload and the canonical change goal with the session, and improves evidence handling within the existing processing stages. Successful-session reruns and the intended PR destination still need confirmation.
+The brainstorm is complete. The user approved the low-complexity MITI engine direction and including database rewiring in the same future PR. This remains proposed future work: each run carries a fixed receipt of its inputs, upload and the canonical change goal stay with the session, and evidence handling improves within the existing processing stages. Keep the current failed-retry-only policy. Push this branch; open one PR later, with no PR now. No further questions or approval gate remain for this brainstorm.
 
 ## Problem
 
@@ -31,7 +31,8 @@ The [transcript model](../../../api/src/onolys_api/repo/models.py) supports inli
 | Keep upload and the canonical change goal with the session | User requested. A run records the values it consumed. |
 | Keep scope within MITI 4.2.1 | Governing mission. Self-ratings remain contextual and never influence coding. |
 | Reuse existing storage, transactions and public contracts where practical | Proposed default to limit work and compatibility risk. |
-| Keep successful-session reruns outside this PR | Recommended default awaiting Q1. |
+| Retain failed-retry-only behavior; exclude successful-session reruns | User resolved Q1. A completed report remains final. |
+| Push this branch and open one PR later | User resolved Q2. No PR now. |
 
 ## Proposed design
 
@@ -48,14 +49,14 @@ Use existing report storage with run ownership and separate browser status. Pres
 1. Upload, transcribe, confirm the speaker and finalize the goal.
 2. Run A starts and pins its input receipt.
 3. An automatic worker retry keeps A's ID and pinned inputs.
-4. A terminal failure leaves A failed. An allowed manual retry creates Run B using the same pinned inputs.
+4. A terminal failure leaves A failed. When the existing failure policy permits a manual retry, it creates Run B using the same pinned inputs. A successful run cannot be retried.
 5. B alone publishes its report if B succeeds. Existing transactional guards prevent concurrent starts.
 
 Retries reuse failed pinned inputs. Editing finalized goals or speakers and running with corrected inputs are separate product behaviors beyond this PR's recommended scope.
 
 Add a previous-run reference only if a concrete consumer needs it. The retry mechanism can copy the prior receipt without a new lineage model.
 
-Future successful-session reruns could be independent runs that reuse the transcript. The latest successful report would stay visible until a newer run succeeds. This describes a possible later policy and awaits Q1.
+Successful-session reruns are excluded. The existing policy keeps a completed report final; only failed runs may be retried under the existing failure policy.
 
 ### MITI engine
 
@@ -80,14 +81,10 @@ Success means traceable coding, stable run inputs and a report that matches its 
 
 Surface material quality, cost or latency changes before shipping. Small samples support limited observations and cannot establish broad accuracy or reliable tail latency.
 
-## Questions awaiting the user
+## Resolved questions and handoff
 
-**Q1 — Successful-session reruns**
+**Q1 — Successful-session reruns:** retain the current failed-retry-only policy. Do not add reruns after success.
 
-Include reruns after success in this PR, or retain the current failed-retry-only policy? Recommended default is to retain the current policy and keep this change smaller.
+**Q2 — PR destination:** push `session-report-ux`; open one PR later. Do not open a PR now.
 
-**Q2 — PR destination**
-
-Use the first PR from `session-report-ux`, or target an existing PR URL? The branch currently has no PR. Recommended default is its first PR, with publication handled at the shipping stage.
-
-Answer by number or say `defaults` to accept both recommendations.
+The approved engine and database directions above are proposed future work, not implementation delivered by this brainstorm. Finalizing this document completes the current task; no further questions or approval gate remain.
