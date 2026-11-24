@@ -12,16 +12,18 @@ from onolys_engine_core.errors import InputError
 from onolys_eval._formulas import compute_summaries
 from onolys_eval.gold import COUNT_IDS, GLOBAL_IDS
 from onolys_eval.metrics import PartialScores, Scores, aggregate, compare
-from pydantic import BaseModel, ConfigDict, Field, StrictInt
+from pydantic import ConfigDict, Field, StrictInt
 
 from onolys_eval_backend.matrix import RunTooLarge, SelectionError, combo_key
-from onolys_eval_backend.runs import RunRequest, Selection, create_run
+from onolys_eval_backend.runs import RunMetadata, RunRequest, Selection, create_run
 from onolys_eval_backend.storage import load_output
 
 router = APIRouter()
 SUMMARY_IDS = ("reflection_question_ratio", "pct_cr")
 METRIC_IDS = (*COUNT_IDS, *GLOBAL_IDS, *SUMMARY_IDS)
 SUMMARY_FIELDS = (
+    "name",
+    "description",
     "status",
     "created_at",
     "cancel_requested",
@@ -361,7 +363,7 @@ def unit_output(request: Request, run_id: str, unit_id: str):
     return output
 
 
-class RerunRequest(BaseModel):
+class RerunRequest(RunMetadata):
     model_config = ConfigDict(extra="forbid")
     engines: list[str] = Field(min_length=1)
     selection: Selection = Field(default_factory=Selection)
@@ -376,6 +378,11 @@ def rerun(request: Request, run_id: str, body: RerunRequest):
         selection = RunRequest.model_validate(
             {
                 **body.model_dump(),
+                **{
+                    key: saved.get(key)
+                    for key in ("name", "description")
+                    if key not in body.model_fields_set
+                },
                 "input": saved["input"],
                 **{key: saved.get(key) for key in ("change_goal", "language", "coded_span")},
             }
@@ -387,6 +394,7 @@ def rerun(request: Request, run_id: str, body: RerunRequest):
             request.state.admin_claims["email"].strip().lower(),
             registry=getattr(services, "registry", None) or request.app.state.catalog.registry,
             input_ref=saved["input_ref"],
+            saved_config=saved,
         )
         return {
             "run_id": rid,

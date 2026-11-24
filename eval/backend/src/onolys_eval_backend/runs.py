@@ -100,7 +100,12 @@ class Selection(BaseModel):
         return self
 
 
-class RunRequest(BaseModel):
+class RunMetadata(BaseModel):
+    name: str | None = Field(default=None, max_length=200)
+    description: str | None = Field(default=None, max_length=4000)
+
+
+class RunRequest(RunMetadata):
     model_config = ConfigDict(extra="forbid")
     input: InputRef
     engines: list[str] = Field(min_length=1)
@@ -260,11 +265,15 @@ def _git_sha():
         return "unknown"
 
 
-def create_run(services, config, body, created_by, *, registry=None, input_ref=None):
+def create_run(
+    services, config, body, created_by, *, registry=None, input_ref=None, saved_config=None
+):
     """Create a run; input_ref is an optional trusted snapshot from an existing run.
 
     HTTP clients can only submit RunRequest.input. The rerun layer can pass the
     original run's input_ref here to preserve bytes and effective session settings.
+    saved_config is likewise server-owned: retain its base preset and verify any
+    selected combinations that already have saved execution provenance.
     """
     registry = registry or services.registry
     infos = registry.engines()
@@ -292,11 +301,29 @@ def create_run(services, config, body, created_by, *, registry=None, input_ref=N
     session_ids = body.input.session_ids if body.input.dataset_id else [body.input.upload_id]
     # Pure and IO-free: oversized runs are rejected before anything is read or written.
     plan = plan_units([{"session_id": sid} for sid in session_ids], engines, combos, body.repeats)
-    base = config.default_preset
-    resolved_combos = {
-        combo_key(c): _combo_snapshot(_routes_for(services.routes, base, models, c), c)
-        for c in combos
-    }
+    base = (saved_config or {}).get("base_preset") or config.default_preset
+    unavailable = (
+        "Saved configuration is unavailable or changed. "
+        "Create a new run to use current settings."
+    )
+    if saved_config and saved_config.get("base_preset") and base not in services.routes.presets:
+        raise HTTPException(409, unavailable)
+    try:
+        resolved_combos = {
+            combo_key(c): _combo_snapshot(_routes_for(services.routes, base, models, c), c)
+            for c in combos
+        }
+    except (ConfigError, InputError, ValueError, KeyError):
+        if saved_config:
+            raise HTTPException(409, unavailable) from None
+        raise
+    previous_combos = (saved_config or {}).get("resolved_combos") or {}
+    if any(combo_key(c) in previous_combos for c in _dropped) or any(
+        previous_combos[key] != snapshot
+        for key, snapshot in resolved_combos.items()
+        if key in previous_combos
+    ):
+        raise HTTPException(409, unavailable)
     sources = (
         _validate_sources(services, input_ref["sessions"], body, engines)
         if input_ref is not None
@@ -337,6 +364,8 @@ def create_run(services, config, body, created_by, *, registry=None, input_ref=N
                 else [],
             }
     run = {
+        "name": body.name,
+        "description": body.description,
         "input": body.input.model_dump(exclude_none=True),
         "input_ref": {"sessions": saved_sources},
         "engines": engines,
