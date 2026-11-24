@@ -14,7 +14,7 @@ This is a design draft. All choices are proposals, not approved requirements. Ev
 
 - **One run = one fixed prompt/pack.** Combos ("configurations") vary provider, model, tier and effort. Compare within one run only.
 - **Out of scope for now:** prompt versioning and cross-run comparison.
-- **Human coding is always the reference.** "Better" means closer to human. Up to 4 combos are compared against human at once.
+- **Human coding is always the reference.** "Better" means closer to human. Any number of combos can be compared against human; the views below scale rather than cap (see "Scaling to many combos").
 - **Goal:**
   1. Decide which combo to use in prod.
   2. See WHERE each combo is better or worse, so the owner can study why. Example: A best at Cultivating Change Talk, B best at Softening Sustain Talk and handling discord, C best at Complex Reflections.
@@ -39,7 +39,7 @@ Rules: built only from table values shown below; says "too few sessions to say" 
 
 ### Leaderboard
 
-One row per combo (at most 4). Best value in each column is marked (`*`).
+One row per combo (any number; sortable by any column, default sort by Count error, scrolls vertically). Best value in each column is marked (`*`).
 
 ```text
 Run: 12 sessions, 3 repeats each. Human labels: all counts, 4 globals.
@@ -62,7 +62,7 @@ Column meanings (one line each; fuller rules in the appendix):
 
 ### Heatmap: who is best at what
 
-Rows are the 10 behavior codes, the 4 globals, R:Q and %CR. Columns are the combos (at most 4, so no horizontal scroll). Each cell shows closeness to human; color intensity shows closeness. The winner per row is marked. This is the main "who is best at what" view.
+Rows are the 10 behavior codes, the 4 globals, R:Q and %CR. Columns are the combos, as compact columns with short labels (A, B, C, ...) and a legend mapping each label to provider/model/effort; beyond about 8 columns the grid scrolls horizontally with the row labels frozen. Each cell shows closeness to human; color intensity shows closeness. The winner per row is marked. This is the main "who is best at what" view.
 
 ```text
                           A       B       C
@@ -86,7 +86,7 @@ Beside the tables: "12 sessions, 3 repeats each; 11 paired for this metric." Cel
 
 ## Level 2: Deep dive
 
-Pick the human reference plus 1 to 4 combos. Four sections, stacked vertically.
+Human is always shown. Default selection is the top 3 combos by Count error; tick more (or any) to add them, so charts stay readable. Four sections, stacked vertically.
 
 ### Globals
 
@@ -134,7 +134,7 @@ Per code, one panel per combo next to human: total count, plus grouped rationale
 
 ## Level 3: Session / line view
 
-A transcript with narrow code lanes beside it. Lanes: Human plus each selected combo (up to 5, drawn vertically so they fit on screen).
+A transcript with narrow code lanes beside it. Lanes: Human plus each selected combo. Beyond about 5 lanes, lanes collapse to chips that show only the combos that disagree with human on that line (agreeing combos are summarized as "+N agree"); expand to see all.
 
 ```text
 Session 03   [x] only disagreements  [code: all v]  [combo: all v]
@@ -170,6 +170,81 @@ Line text, speakers and any timestamps come only from the saved input. Nothing i
 
 **Per-line alignment policy.** Match human and combo lines by `turn_id`. A line counts only when the combo's report and the gold share that turn id. A turn the human coded and the combo did not code becomes "none" for the combo, only when the combo's engine produces line-level output at all. If an engine has no line-level output (for example one-shot scores without spans), it gets no line metrics and its lane says so. Dataset caveat: AnnoMI codes per utterance while the engine applies volley rules, so some lines legitimately differ in grouping; note this beside line metrics for that dataset.
 
+## Scaling to many combos
+
+There is no limit on the number of combos in a run (the backend caps a run at 499 units, not combos). Views scale as follows.
+
+- **Leaderboard:** one row per combo, sortable, vertical scroll.
+- **Heatmap:** metrics as rows, combos as compact columns with short labels and a legend; frozen row labels, horizontal scroll past about 8 columns.
+- **Deep dive:** Human plus the top 3 combos by default; tick more to add.
+- **Line view:** lanes collapse to only-disagreeing chips beyond about 5 combos.
+
+## Storage: eval runs reuse prod runs
+
+Status: proposal, not decided. Based on a code read of `eval/backend`, `api/` and `infra/` on this branch (2026-11-24). Owner direction: eval should use the same DB and storage as a real run and just mark the run `eval = true`, adding only what a prod run lacks.
+
+**How eval stores data today.** Firestore database `staging` (the same database the staging app uses; `infra/main.tf:101`) holds `eval_uploads`, `eval_runs` and `eval_runs/{id}/units` (`eval/backend/.../repository.py:144-145,193`). The private bucket `onolys-eval-data-staging` holds datasets, `uploads/<id>/` and `runs/<run>/inputs/<session>/transcript.json|gold.json`, plus `runs/<run>/<unit>.json` (`runs.py:340-348`; `eval/backend/.../storage.py`). Each run copies a transcript and gold snapshot per session. Engines are called in process through the shared engine registry, not through the api/worker pipeline (`runs.py:717-783`). Work runs on its own Cloud Tasks queue (`infra/eval-services.tf:57-58`, 4 concurrent), with its own lease/retry in `execute_unit`. Identity is an allowlisted admin email (`created_by`, `runs.py:380`), with no per-user uid and no usage cap (`docs/reference/eval-site.md`).
+
+**How a prod run stores data.** `sessions/{sid}` (owner `uid`, state, step, language, `change_goal`, `coded_span`, `clinician_speaker`, `steps`) with subcollections `recordings`, `transcripts` (`current`), `runs/{run_id}`, `reports/{report_id = run_id}` and `ratings`; `session_status/{sid}` is the only client-readable doc (`firestore.rules`; `repo/models.py:180-356`). Blobs live under `{uid}/{sid}/...` and `{uid}/{sid}/runs/{run_id}/{code,tips}.json` (`jobs/run.py`). Upload staging `uploads/{uid}/{sid}/` expires after 1 day (`infra/modules/environment/main.tf:37-44`). Hard delete removes every object and doc for the session (`jobs/delete.py`). The run handler has its own lease/attempts (`claim_run`), `run_info` with usage, and a per-user day cap with `counted`/`released` flags (`repo/limits.py`, `models.py:348-353`). A run takes only an allowlisted `preset` name; there is no per-run model/tier/effort override (`routes/runs.py:62,179-181`, `adapters/real.py:145`).
+
+### Mapping: eval concept to prod equivalent
+
+| Eval concept | Prod equivalent | Verdict |
+|---|---|---|
+| Dataset session as input | `sessions` + `transcripts/current` | Reuse + field (`eval`, `dataset_id`, `dataset_session_id`) |
+| Transcript-only input, no audio | Prod accepts transcript.v1 JSON or label-prefixed text upload (`routes/transcript.py:99`) | Reuse as-is |
+| Audio upload, STT, speaker confirm | Same flow in prod (signed PUT, `recordings`, STT, speakers) | Reuse as-is |
+| Clinician speaker, change goal, language, coded_span | Session fields of the same names | Reuse as-is |
+| One unit = one engine run | `runs/{run_id}` doc with lease, attempts, `run_info`, artifacts | Reuse + field (`eval_run_id`, `combo_key`, `repeat`) |
+| Output / report | `reports/{run_id}` and `{uid}/{sid}/runs/{run_id}/` | Reuse as-is, if the eval engine emits the prod report schema |
+| Per-unit status, lease, retry | `claim_run`, `attempts`, task retries | Reuse as-is |
+| Cost / token usage | `run_info.usage`; `usage` docs are per user | Reuse + price book (cost estimate in eval) |
+| run_info / provenance | `run_info`, `code_version` | Reuse + fields (git SHA, resolved models, drift guard) |
+| Eval run grouping (sessions x combos x repeats) | None; prod has no multi-session group | Missing: keep an `eval_runs` doc, pointing at prod run ids |
+| Combo config (model/tier/effort route override) | Only `preset` names | Missing: allow a route override on a run, accepted only when `eval = true` |
+| Engines other than the prod engine (oneshot, miti_lean variants) | Worker runs only the configured engine | Missing: either keep running them in the eval backend, or add an engine selector to the worker |
+| Human gold labels (counts, globals, utterance_codes) | `ratings` are user ratings of a report, not gold | Missing: keep gold in the eval bucket as a read-only dataset reference; store only a ref and sha on the run |
+| Dataset manifest and files | None | Missing: stays eval-only |
+| Comparison aggregation (`build_compare`, leaderboard) | None | Missing: stays eval-only, reads prod run docs |
+| Owner identity | `uid` of a real user | Reuse + decision: one synthetic uid per eval user (see below) |
+| Usage caps | Per-uid day cap (`EVAL_CAP_DAY`, in prod this counts report runs) | Reuse + field: `counted = false` for eval runs; the field already exists for the exempt first run |
+| Prod vs staging | One env per database | Reuse: eval stays in staging first; prod only after the risks below are settled |
+| Retention | Delete removes everything; `uploads/` 1 day | Reuse + decision: eval data kept until its eval run is deleted |
+| Listing / metrics that must exclude eval | Session list and usage are filtered by `uid` | Reuse + field: `eval: true`, then filter in alerts and billing metrics |
+
+### Genuinely missing (keep or add)
+
+1. The eval run grouping doc (`eval_runs`), with units as references `{session_id, run_id, combo_key, repeat}`.
+2. A per-run route/combo override on the prod run path, rejected unless `eval = true`.
+3. Gold labels and dataset manifests (eval bucket, read-only, referenced by dataset id and sha).
+4. Comparison aggregation, price book and the compare UI.
+5. Engines other than the prod engine, if they must be compared (open question 2).
+
+### Risks
+
+- **Leaking into user views.** Eval sessions must not show in user lists, usage, caps, alerts, billing or product metrics. A synthetic owner uid handles the user lists; `eval: true` must be added to every aggregate query and log metric.
+- **Load on the prod worker and queue.** Prod queue concurrency is `worker_concurrency x worker_max_instances` (`infra/modules/environment/main.tf:63`). A 499-unit eval would starve real users on the same queue. Safer: a separate eval queue (or throttled enqueue) that targets the same run handler.
+- **Rules exposure.** `session_status` is readable by its `uid`. A synthetic uid that nobody logs in as keeps eval statuses unreadable from the client; keep the rest deny-all.
+- **Dataset licensing and privacy.** Research datasets copied into prod Firestore and the prod bucket may violate their terms and mix with real client data. Safer: eval in staging only, or a separate prod bucket prefix with its own lifecycle and access.
+- **Deletion semantics.** Delete of a session removes its runs and reports. Deleting one run from an eval must not delete the shared dataset session used by other combos. Gold and dataset files must never be under the session prefix.
+- **Concurrent runs in one session.** One session with many runs works for retries today; many parallel runs on a shared session may conflict on session `state`/`latest_report_version`. Unverified. Fallback: one session per unit, sharing the same transcript content by reference.
+- **Different engines.** Eval calls engines directly with its own output shape and `scores`; the prod worker validates the prod report schema. A mismatch would force changes to report validation.
+- **Cap naming.** `EVAL_CAP_DAY` in prod is the report-run cap, not an eval-system cap; reuse needs `counted = false`, not a new cap.
+
+### Recommendation
+
+Reuse the prod session, recording, transcript, run and report documents and the `{uid}/{sid}/` bucket layout. Do not copy transcripts or gold per run: create the dataset session once and point many runs at it. Put eval runs under a synthetic eval owner uid with `eval: true`, `eval_run_id`, `combo_key`, `repeat` and `counted = false` on the run. Keep `eval_runs` (grouping), the dataset manifest and gold in eval-owned storage, and keep the compare aggregation and UI eval-only. Run eval against staging only until the open questions are settled. The safer variant of the owner's direction is therefore "same collections and layout, separate owner, separate queue, separate gold", not "same everything": putting research datasets and 499-unit batches on the real prod queue and bucket carries privacy and load risk.
+
+### Open questions
+
+1. Should a prod run accept a route override (model/tier/effort) when `eval = true`, or should the eval backend keep calling engines in process and only write prod-shaped documents?
+2. Must eval compare engines other than the prod engine (oneshot and miti_lean variants)? If yes, those need an engine selector on the worker or stay in the eval backend.
+3. One session with many runs, or one session per unit?
+4. Synthetic owner: one shared eval uid, or one per eval user (for audit)?
+5. Is eval ever run on the prod database, and if so with which datasets (licensing)?
+6. Retention: should eval data be deleted with its eval run, or kept like today until manually removed?
+7. Does the human unit stay out of the run store (gold is a reference, not a run)? Proposed: yes.
+
 ## Phased build order
 
 1. **Overview.** Backend per-combo aggregation vs human, verdict line, leaderboard, heatmap, sample-size notes. Acceptance: partial labels show "not labeled" not zero; each session counts once; grey cells cannot win; no human numeric labels means the view says "no human reference" instead of showing a table.
@@ -178,7 +253,7 @@ Line text, speakers and any timestamps come only from the saved input. Nothing i
 
 ## Open questions
 
-- Should the overview default to "all 4 combos selected" or require choosing combos first? Default proposed: all combos in the run up to 4, with a picker beyond that.
+- Should the overview default to "all 4 combos selected" or require choosing combos first? Default proposed: all combos in the leaderboard and heatmap; deep dive starts at the top 3 plus Human with a picker for the rest.
 - What is the minimum number of paired sessions before a heatmap cell is colored (proposed 5)?
 - Should "Count error" sum all 10 codes equally, or let the owner weight codes that matter for prod? Proposed: equal, with per-code rows visible.
 - Time understates retried units (`started_at` resets on re-claim after lease expiry). Accept with a footnote, or exclude retried units from the Time average?
