@@ -158,7 +158,7 @@ def test_dataset_list_detail_and_gold_presence(services):
     response = c.get("/v1/datasets", headers=AUTH)
     assert response.status_code == 200
     expected = {k: v for k, v in source.items() if k != "sessions"}
-    assert response.json() == {"datasets": [{"label_scheme": None, **expected, "session_count": 1}]}
+    assert response.json() == {"datasets": [{"label_scheme": None, "language": "en", **expected, "session_count": 1}]}
     row = response.json()["datasets"][0]
     assert row["source_media"] == ["video", "transcript"] and row["transcript_origin"] == "human"
     assert row["labels_summary"] == "MITI counts" and row["miti_version"] == "4.2.1"
@@ -319,7 +319,7 @@ def test_catalog_lists_committed_public_datasets(services):
 
     from onolys_eval.manifest import load_manifest
     root = Path(__file__).resolve().parents[2] / "datasets"
-    for ident in ("casaa-miti-practice", "mi-tags-sample", "annomi", "hlqc", "automisc-human", "welivita-mi"):
+    for ident in ("casaa-miti-practice", "mi-tags-sample", "annomi", "hlqc", "automisc-human", "welivita-mi", "phac-en"):
         manifest = load_manifest(root / ident / "manifest.yaml")
         services.bucket.write_json(f"datasets/{ident}/manifest.json", manifest.model_dump(mode="json"))
     c = client(services)
@@ -339,3 +339,7 @@ def test_catalog_lists_committed_public_datasets(services):
     assert rows["automisc-human"]["label_scheme"] == "MISC 2.5 (human) mapped to MITI counts"
     assert rows["welivita-mi"]["session_count"] == 2000 and rows["welivita-mi"]["transcript_origin"] == "human"
     assert rows["welivita-mi"]["source_media"] == ["transcript"] and "CC BY-NC-SA" in rows["welivita-mi"]["license_note"]
+    assert rows["phac-en"]["session_count"] == 4 and rows["phac-en"]["miti_version"] is None
+    assert rows["phac-en"]["label_scheme"] == "none" and rows["phac-en"]["source_media"] == ["video", "transcript"]
+    assert rows["phac-en"]["labels_summary"] == "No human labels (transcript only)"
+    assert rows["phac-en"]["language"] == "en" and "Government of Canada" in rows["phac-en"]["license_note"]

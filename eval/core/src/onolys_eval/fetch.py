@@ -13,7 +13,7 @@ import tempfile
 from datetime import UTC, datetime
 from pathlib import Path
 from urllib.parse import unquote
-from urllib.request import urlopen
+from urllib.request import Request, urlopen
 
 from .manifest import DatasetManifest
 
@@ -51,7 +51,9 @@ def _download(url: str, destination: Path) -> None:
             dir=destination.parent, prefix=f".{destination.name}.", suffix=".part", delete=False,
         ) as output:
             temporary = Path(output.name)
-            with urlopen(url, timeout=60) as response:
+            # canada.ca stalls the default Python-urllib agent; a plain named client works everywhere.
+            request = Request(url, headers={"User-Agent": "curl/8.5"})
+            with urlopen(request, timeout=60) as response:
                 headers = getattr(response, "headers", {})
                 expected_length = headers.get("Content-Length")
                 length = 0

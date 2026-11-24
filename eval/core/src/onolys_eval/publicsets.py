@@ -108,6 +108,8 @@ def write_manifest(path: Path, header: dict, sessions: list[dict]) -> DatasetMan
     for key in ("label_scheme", "transcript_origin", "labels_summary"):
         if data.get(key) is None:
             data.pop(key, None)
+    if data.get("language") == "en":
+        data.pop("language")
     for key in ("overlaps_with", "source_files"):
         if not data[key]:
             data.pop(key)

@@ -326,6 +326,7 @@ _CSV_CONVERTERS = {
     "hlqc_zip": ("hlqc", "convert_hlqc_dataset"),
     "automisc_zip": ("automisc", "convert_automisc_dataset"),
     "welivita_csv": ("welivita", "convert_welivita_dataset"),
+    "phac_html": ("phac", "convert_phac_dataset"),
 }
 
 

@@ -69,6 +69,7 @@ class DatasetMetadata(BaseModel):
     source_media: list[Literal["audio", "video", "transcript"]]
     transcript_origin: Literal["human", "auto_captions", "translated", "stt_ours"] | None = None
     labels_summary: str | None = None
+    language: str = "en"
     overlaps_with: list[dict[str, str]] = []
     session_count: int
 

@@ -16,4 +16,11 @@ describe('source media line', () => {
     expect(sourceLine({ dataset_id: 'a', title: 'A', source_media: ['transcript'], miti_version: null, label_scheme: 'MISC 2.5 mapped to MITI' }))
       .toBe('Original: Transcript only (no audio) · Not MITI-coded · Scheme: MISC 2.5 mapped to MITI');
   });
+
+  it('shows the language only when it is not English', () => {
+    expect(sourceLine({ dataset_id: 'a', title: 'A', source_media: ['transcript'], language: 'fr' }))
+      .toBe('Original: Transcript only (no audio) · Language: fr');
+    expect(sourceLine({ dataset_id: 'a', title: 'A', source_media: ['transcript'], language: 'en' }))
+      .toBe('Original: Transcript only (no audio)');
+  });
 });

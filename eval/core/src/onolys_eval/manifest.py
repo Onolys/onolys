@@ -1,9 +1,9 @@
 """Dataset metadata contract. No source text, recordings, or gold data belong here."""
 from pathlib import Path
-from typing import Literal
+from typing import Annotated, Literal
 
 import yaml
-from pydantic import Field, model_validator
+from pydantic import Field, StringConstraints, model_validator
 
 from ._contracts import CodedSpan, Contract, HttpURL, Identifier, Nonempty
 
@@ -21,6 +21,8 @@ class PDFLayout(Contract):
     number_aliases: dict[str, int] | None = None
 
 
+# BCP-47 language tag of the transcripts, e.g. "en", "fr", "pt-BR".
+Language = Annotated[str, StringConstraints(pattern=r"^[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8})*$")]
 SourceMedia = Literal["audio", "video", "transcript"]
 TranscriptOrigin = Literal["human", "auto_captions", "translated", "stt_ours"]
 
@@ -65,7 +67,7 @@ class SessionManifest(Contract):
 
 
 SourceFormat = Literal[
-    "pdf", "mitags_csv", "annomi_csv", "hlqc_zip", "automisc_zip", "welivita_csv"]
+    "pdf", "mitags_csv", "annomi_csv", "hlqc_zip", "automisc_zip", "welivita_csv", "phac_html"]
 
 
 class DatasetManifest(Contract):
@@ -80,6 +82,8 @@ class DatasetManifest(Contract):
     # What the ORIGINAL source offers (we always store transcript.v1 regardless).
     source_media: list[SourceMedia] = Field(min_length=1)
     transcript_origin: TranscriptOrigin | None = None
+    # Language of every transcript in the dataset; existing datasets are English.
+    language: Language = "en"
     labels_summary: Nonempty | None = None
     overlaps_with: list[DatasetOverlap] = Field(default_factory=list)
     # "pdf": per-session coded/uncoded PDFs. Other formats: dataset-level source_files

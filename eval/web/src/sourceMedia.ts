@@ -22,5 +22,6 @@ export function sourceLine(d: DatasetMetadata): string {
   if (d.miti_version === null) parts.push('Not MITI-coded');
   else if (d.miti_version) parts.push(`MITI ${d.miti_version}`);
   if (d.label_scheme) parts.push(`Scheme: ${d.label_scheme}`);
+  if (d.language && !d.language.toLowerCase().startsWith('en')) parts.push(`Language: ${d.language}`);
   return parts.join(' · ');
 }
