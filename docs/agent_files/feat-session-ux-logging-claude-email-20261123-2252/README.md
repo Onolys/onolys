@@ -10,13 +10,13 @@ Brief: [brainstorm.md](brainstorm.md) (approved).
 ## Sub-projects
 | # | Name | Phase | Depends on | Owns (key files) | PRD | status |
 |---|---|---|---|---|---|---|
-| 01 | LLM outage fix + Claude text steps | 1 (gates 02-06) | none | `config/models.yaml`, `llm/{routes,models}.py`, `config/staging/routes.yaml`, `uv.lock`, `deploy-staging.yml` env_vars | [01](01-llm-outage-claude/PRD.md) | draft |
-| 02 | Traceable logging | 2 | 01 | `log_context.py`, `json_logging.py`, `safe_log.py`, `llm/errors.py` (fields), `logs.py`, `docs/reference/logging.md` | [02](02-logging/PRD.md) | draft |
-| 03 | Failure policy + retry | 2 | 01, 02 | `adapters/error_map.py`, `jobs/charging.py`, `routes/{runs,sessions}.py`, `llm/errors.py` (`is_transient`), `web/src/api/errors.ts`, `RetryButton.tsx` | [03](03-failure-policy/PRD.md) | draft |
-| 04 | Cancel | 2 | 03 (02) | `jobs/{machine,alive,worker}.py`, `repo/limits.py` (`decide_cancel`), `POST /sessions/{id}/cancel`, `CancelLink/ConfirmDialog/CancelledView.tsx` | [04](04-cancel/PRD.md) | draft |
-| 05 | Processing screen clarity | 2 | 04 (file order), 03, 01 | `timeline.ts`, `progress.ts`, `useSessionStatus.ts`, `SessionPage.tsx` (steps/progress/hint), status-doc progress fields | [05](05-processing-screen/PRD.md) | draft |
-| 06 | Eval model -> tier -> effort matrix | 2 | 01 (03 soft) | `eval/backend/.../{runs,read_runs,catalog}.py`, `eval/web/src/{NewRun,Runs}.tsx`, `llm/routes.py` (`combo_routes`) | [06](06-eval-matrix/PRD.md) | draft |
-| 07 | Auth emails via Resend | 1 | none | `routes/auth_email.py`, `email/**`, `adapters/*` email ports, `web/src/auth/*`, `infra/**/secrets|services.tf` | [07](07-auth-emails-resend/PRD.md) | draft |
+| 01 | LLM outage fix + Claude text steps | 1 (gates 02-06) | none | `config/models.yaml`, `llm/{routes,models}.py`, `config/staging/routes.yaml`, `uv.lock`, `deploy-staging.yml` env_vars | [01](01-llm-outage-claude/PRD.md) · [tasks](01-llm-outage-claude/TASKS.md) | draft |
+| 02 | Traceable logging | 2 | 01 | `log_context.py`, `json_logging.py`, `safe_log.py`, `llm/errors.py` (fields), `logs.py`, `docs/reference/logging.md` | [02](02-logging/PRD.md) · [tasks](02-logging/TASKS.md) | draft |
+| 03 | Failure policy + retry | 2 | 01, 02 | `adapters/error_map.py`, `jobs/charging.py`, `routes/{runs,sessions}.py`, `llm/errors.py` (`is_transient`), `web/src/api/errors.ts`, `RetryButton.tsx` | [03](03-failure-policy/PRD.md) · [tasks](03-failure-policy/TASKS.md) | draft |
+| 04 | Cancel | 2 | 03 (02) | `jobs/{machine,alive,worker}.py`, `repo/limits.py` (`decide_cancel`), `POST /sessions/{id}/cancel`, `CancelLink/ConfirmDialog/CancelledView.tsx` | [04](04-cancel/PRD.md) · [tasks](04-cancel/TASKS.md) | draft |
+| 05 | Processing screen clarity | 2 | 04 (file order), 03, 01 | `timeline.ts`, `progress.ts`, `useSessionStatus.ts`, `SessionPage.tsx` (steps/progress/hint), status-doc progress fields | [05](05-processing-screen/PRD.md) · [tasks](05-processing-screen/TASKS.md) | draft |
+| 06 | Eval model -> tier -> effort matrix | 2 | 01 (03 soft) | `eval/backend/.../{runs,read_runs,catalog}.py`, `eval/web/src/{NewRun,Runs}.tsx`, `llm/routes.py` (`combo_routes`) | [06](06-eval-matrix/PRD.md) · [tasks](06-eval-matrix/TASKS.md) | draft |
+| 07 | Auth emails via Resend | 1 | none | `routes/auth_email.py`, `email/**`, `adapters/*` email ports, `web/src/auth/*`, `infra/**/secrets|services.tf` | [07](07-auth-emails-resend/PRD.md) · [tasks](07-auth-emails-resend/TASKS.md) | draft |
 
 ## Dependency graph
 ```
