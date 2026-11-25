@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useState } from "react";
 import { describe, expect, it, vi } from "vitest";
@@ -36,11 +36,11 @@ describe("ConfirmDialog", () => {
   it("closes on Escape and on the cancel button when idle", async () => {
     const { unmount } = render(<Harness />);
     await userEvent.keyboard("{Escape}");
-    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument());
     unmount();
     render(<Harness />);
     await userEvent.click(screen.getByRole("button", { name: "Keep processing" }));
-    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument());
   });
 
   it("blocks Escape and Cancel while a request is in flight", async () => {
