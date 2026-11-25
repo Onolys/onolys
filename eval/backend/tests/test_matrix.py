@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 from test_app import AUTH, client
-from test_runs import services, start
+from test_runs import lstart, services, start
 
 from onolys_eval_backend.matrix import RunTooLarge, SelectionError, plan_units, validate_selection
 
@@ -63,20 +63,18 @@ def test_legacy_presets_body_422(services):
     assert services.repository.list_runs() == {}
 
 
-def test_dataset_without_human_gets_human_units_and_echo(services):
+def test_dataset_without_human_gets_human_counted_and_echo(services):
     c = client(services=services)
     response = start(c, engines=["miti"], selection=SEL)
     assert response.status_code == 200, response.text
     body = response.json()
     assert body["engines"] == ["miti", "human"]
-    units = services.repository.list_units(body["run_id"]).values()
-    assert sorted(u["engine"] for u in units) == ["human", "miti", "miti"]
-    ai = [u for u in units if u["engine"] == "miti"]
-    assert {u["combo_key"] for u in ai} == {
+    doc = services.repository.get_run(body["run_id"])
+    # 1 session x (human + 2 combos); human is complete at creation, no units are stored.
+    assert (doc["total_units"], doc["completed_units"], doc["done_units"]) == (3, 1, 1)
+    assert {c["model"] + "/" + c["tier"] + "/" + c["effort"] for c in doc["combos"]} == {
         "claude/claude-sonnet-5-5/low", "claude/claude-sonnet-5-5/high"}
-    assert all(u["combo"] and u["repeat"] == 0 for u in ai)
-    human = next(u for u in units if u["engine"] == "human")
-    assert human["combo"] is None and human["combo_key"] is None
+    assert services.repository.list_units(body["run_id"]) == {}
 
 
 def test_specific_422_message_and_no_writes(services):

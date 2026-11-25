@@ -5,7 +5,7 @@ from copy import deepcopy
 import pytest
 from onolys_eval.metrics import Scores, aggregate, compare
 from test_app import AUTH, client
-from test_runs import SEL1, saved_upload, start, start_ai
+from test_runs import lstart, start_ai
 from test_uploads import gold
 
 from onolys_eval_backend.storage import INLINE_OUTPUT_LIMIT, store_output
@@ -24,7 +24,7 @@ def scores(**counts):
 
 def start_legacy(c, **kwargs):
     """Create a run, then rewrite it as a stored legacy-preset run (read path until Task 6)."""
-    response = start(c, **kwargs)
+    response = lstart(c, **kwargs)
     to_legacy(c, response.json()["run_id"])
     return response
 
@@ -65,7 +65,7 @@ def detail(c, rid):
 
 def test_combo_run_summary_exposes_resolved_combos_and_base_preset(services):
     c = client(services=services)
-    rid = start(c).json()["run_id"]
+    rid = lstart(c).json()["run_id"]
     saved = services.repository.get_run(rid)
     assert saved["resolved_combos"] and saved["base_preset"]
     summary = c.get("/v1/runs", headers=AUTH).json()["runs"][0]
@@ -76,7 +76,7 @@ def test_combo_run_summary_exposes_resolved_combos_and_base_preset(services):
 
 def test_compare_repeats_equal_core_unit_aggregate(services):
     c = client(services=services)
-    rid = start(c, repeats=3).json()["run_id"]
+    rid = lstart(c, repeats=3).json()["run_id"]
     human = scores(question=2, sr=1, cr=1)
     low, high = scores(question=0, sr=0, cr=0), scores(question=4, sr=2, cr=2)
     finish(services, rid, [human, low, high, None])
@@ -113,7 +113,7 @@ def test_multiple_sessions_and_repeats_aggregate_not_cell_means(services):
     )
     services.bucket.write_json("datasets/synthetic/two/gold.json", {**gold(), "session_id": "two"})
     c = client(services=services)
-    rid = start(
+    rid = lstart(
         c, input={"dataset_id": "synthetic", "session_ids": ["one", "two"]}, repeats=3
     ).json()["run_id"]
     h = scores(question=2)
@@ -150,7 +150,7 @@ def test_no_human_even_with_saved_gold_has_no_diffs_or_errors(services):
 @pytest.mark.parametrize("state", ["queued", "failed"])
 def test_unfinished_human_does_not_use_saved_gold(services, state):
     c = client(services=services)
-    rid = start(c).json()["run_id"]
+    rid = lstart(c).json()["run_id"]
     finish(services, rid, [None, scores()])
     uid = next(iter(services.repository.list_units(rid)))
     services.repository.update_unit(rid, uid, {"status": state})
@@ -197,7 +197,7 @@ def test_history_provenance_and_private_snapshot_paths(services):
 
 def test_protected_inline_and_spilled_output_and_cross_run_rejection(services):
     c = client(services=services)
-    rid = start(c).json()["run_id"]
+    rid = lstart(c).json()["run_id"]
     uids = list(finish(services, rid, [scores(), scores()]))
     path = f"/v1/runs/{rid}/units/{uids[0]}/output"
     assert c.get(path).status_code == 401
@@ -260,80 +260,6 @@ def test_detail_only_omits_null_output_for_valid_unit_reference(services):
     assert "output_ref" not in public_unit
 
 
-def test_rerun_saved_upload_preserves_effective_inputs_and_rechecks_hashes(services):
-    saved_upload(services, has_gold=True)
-    c = client(services=services)
-    rid = start(
-        c,
-        input={"upload_id": "saved"},
-        change_goal="original goal",
-        language="fr",
-        coded_span={"start_turn": 0, "end_turn": 1},
-    ).json()["run_id"]
-    old = services.repository.get_run(rid)
-    services.bucket.write_json("uploads/saved/transcript.json", {"overwritten": True})
-    services.bucket.write_json("uploads/saved/gold.json", {"overwritten": True})
-    services.repository.update_upload("saved", {"status": "failed", "change_goal": "changed"})
-    selection = {"engines": ["human", "oneshot:miti"], "selection": {"models": ["claude"], "tiers": ["claude-sonnet-5-5"], "efforts": ["low"]}, "repeats": 3}
-    response = c.post(f"/v1/runs/{rid}/rerun", headers=AUTH, json=selection)
-    assert response.status_code == 200, response.text
-    new_id = response.json()["run_id"]
-    assert new_id != rid
-    new = services.repository.get_run(new_id)
-    assert new["created_by"] == "alice@example.com"
-    for field in ["input", "change_goal", "language", "coded_span"]:
-        assert new[field] == old[field]
-    before, after = old["input_ref"]["sessions"][0], new["input_ref"]["sessions"][0]
-    for field in ["transcript_sha256", "gold_sha256", "change_goal", "language", "coded_span"]:
-        assert after[field] == before[field]
-    assert detail(c, new_id)["compare"]["notes"].count("human_span_differs") == 1
-    assert new["total_units"] == 4
-    before_count = len(services.repository.list_runs())
-    for replacement in [
-        {"input": {"upload_id": "another"}},
-        {"change_goal": "replace"},
-        {"coded_span": None},
-        {"input_ref": old["input_ref"]},
-        {"repeats": True},
-    ]:
-        assert (
-            c.post(
-                f"/v1/runs/{rid}/rerun", headers=AUTH, json={**selection, **replacement}
-            ).status_code
-            == 422
-        )
-    assert len(services.repository.list_runs()) == before_count
-    modified = services.bucket.read_json(before["transcript_path"])
-    modified["language"] = "de"
-    services.bucket.write_json(before["transcript_path"], modified)
-    assert c.post(f"/v1/runs/{rid}/rerun", headers=AUTH, json=selection).status_code == 422
-    assert len(services.repository.list_runs()) == before_count
-    assert c.post("/v1/runs/missing/rerun", headers=AUTH, json=selection).status_code == 404
-
-
-def test_rerun_dataset_snapshot_survives_deleted_sources_and_gold_hash_is_checked(services):
-    c = client(services=services)
-    rid = start(c).json()["run_id"]
-    old = services.repository.get_run(rid)
-    services.bucket.write_json("datasets/synthetic/manifest.json", {"overwritten": True})
-    services.bucket.write_json("datasets/synthetic/one/transcript.json", {"overwritten": True})
-    services.bucket.write_json("datasets/synthetic/one/gold.json", {"overwritten": True})
-    selection = {"engines": ["human", "miti"], "selection": {"models": ["claude"], "tiers": ["claude-sonnet-5-5"], "efforts": ["low"]}, "repeats": 1}
-    response = c.post(f"/v1/runs/{rid}/rerun", headers=AUTH, json=selection)
-    assert response.status_code == 200, response.text
-    new = services.repository.get_run(response.json()["run_id"])
-    source = new["input_ref"]["sessions"][0]
-    for key in ["change_goal", "coded_span", "language", "transcript_sha256", "gold_sha256"]:
-        assert source[key] == old["input_ref"]["sessions"][0][key]
-    path = old["input_ref"]["sessions"][0]["gold_path"]
-    changed = services.bucket.read_json(path)
-    changed["parse"]["warnings"].append("Synthetic integrity check")
-    services.bucket.write_json(path, changed)
-    count = len(services.repository.list_runs())
-    assert c.post(f"/v1/runs/{rid}/rerun", headers=AUTH, json=selection).status_code == 422
-    assert len(services.repository.list_runs()) == count
-
-
 def test_factory_prices_are_lazy_without_cloud(services):
     from test_app import ENV
 
@@ -375,7 +301,7 @@ def test_matrix_two_sessions_three_combos_hand_computed(services):
     two_session_services(services)
     c = client(services=services)
     sel = {"models": ["claude"], "tiers": ["claude-sonnet-5-5"], "efforts": ["low", "medium", "high"]}
-    rid = start(
+    rid = lstart(
         c, input={"dataset_id": "synthetic", "session_ids": ["one", "two"]}, selection=sel
     ).json()["run_id"]
     repo = services.repository
@@ -463,13 +389,6 @@ def test_legacy_preset_run_derives_preset_labels_everywhere(services):
     (summary,) = [r for r in c.get("/v1/runs", headers=AUTH).json()["runs"] if r["run_id"] == rid]
     assert summary["combo_keys"] == [key] and summary["combo_labels"] == {key: label}
     assert summary["legacy_selection"] is True
-    # Rerun keeps input and engines; the picker selection must come from the client.
-    selection = {"engines": ["human", "miti"], "selection": SEL1, "repeats": 1}
-    response = c.post(f"/v1/runs/{rid}/rerun", headers=AUTH, json=selection)
-    assert response.status_code == 200, response.text
-    new = detail(c, response.json()["run_id"])
-    assert new["legacy_selection"] is False and new["input"] == body["input"]
-    assert new["combo_keys"] == [LOW]
 
 
 def test_partial_human_scores_leave_missing_metrics_null():
@@ -513,7 +432,7 @@ def test_history_rejects_bad_limit_or_cursor(services, params):
 
 def test_summary_exposes_cancel_requested(services):
     c = client(services=services)
-    rid = start(c).json()["run_id"]
+    rid = lstart(c).json()["run_id"]
     assert c.get("/v1/runs", headers=AUTH).json()["runs"][0]["cancel_requested"] is False
     services.repository.cancel_run(rid)
     assert detail(c, rid)["cancel_requested"] is True
@@ -525,7 +444,7 @@ def test_detail_stops_inlining_outputs_past_the_budget(services, monkeypatch):
 
     monkeypatch.setattr(read_runs, "MAX_INLINE_DETAIL_BYTES", 40)
     c = client(services=services)
-    rid = start(c).json()["run_id"]
+    rid = lstart(c).json()["run_id"]
     finish(services, rid, [scores(), scores()])
     units = detail(c, rid)["units"]
     assert [("output" in u) for u in units] == [True, False]
@@ -542,7 +461,7 @@ def test_detail_inline_budget_counts_utf8_bytes(monkeypatch):
 
 def test_attempt_scoped_output_is_fetchable_only_for_the_recorded_owner(services):
     c = client(services=services)
-    rid = start(c).json()["run_id"]
+    rid = lstart(c).json()["run_id"]
     uid = next(iter(services.repository.list_units(rid)))
     path = f"runs/{rid}/{uid}/current.json"
     services.bucket.write_json(path, {"result": "saved"})

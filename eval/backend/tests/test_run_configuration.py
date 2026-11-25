@@ -29,12 +29,12 @@ def test_saved_metadata_and_complete_configuration_are_public_without_private_re
     for public in (summary, body):
         for key in (
             "name", "description", "input", "engines", "selection", "repeats",
-            "change_goal", "language", "coded_span", "base_preset", "resolved_combos",
+            "change_goal", "language", "coded_span", "base_preset",
         ):
             assert public[key] == saved[key]
+        assert public["resolved_combos"] == saved["saved_config"]["resolved_combos"]
         assert "input_ref" not in public and "created_by" not in public
     assert "units" not in summary and "output" not in summary
-    assert body["units"][1]["combo"] == saved["combos"][0]
     assert before == (len(services.queue.tasks), len(services.repository.list_runs()))
 
 
@@ -58,7 +58,7 @@ def test_rerun_preserves_omitted_metadata_and_explicit_edits_or_clears(services,
     new = services.repository.get_run(response.json()["run_id"])
     for key in ("name", "description"):
         assert new[key] == changes.get(key, old[key])
-    for key in ("input", "change_goal", "language", "coded_span", "base_preset", "resolved_combos"):
+    for key in ("input", "change_goal", "language", "coded_span", "base_preset", "saved_config"):
         assert new[key] == old[key]
 
 
@@ -74,15 +74,21 @@ def test_rerun_uses_saved_preset_after_server_default_changes(services):
 
 
 @pytest.mark.parametrize("change", ["preset_removed", "model_changed"])
-def test_unavailable_saved_configuration_rejects_before_writes(services, change):
+def test_unavailable_saved_configuration_rejects_before_writes(services, change, monkeypatch):
     c = client(services=services)
     rid = start(c).json()["run_id"]
-    saved = services.repository.get_run(rid)
     if change == "preset_removed":
-        del services.routes.presets[saved["base_preset"]]
+        saved = services.repository.get_run(rid)["saved_config"]
+        saved["base_preset"] = "removed-preset"  # no longer in the routes file
+        services.repository.update_run(rid, {"saved_config": saved})
     else:
-        model = services.models["claude"]
-        services.models["claude"] = replace(model, supports_temperature=not model.supports_temperature)
+        from onolys_eval_backend import runs
+
+        real = runs.eval_snapshot
+        monkeypatch.setattr(
+            runs, "eval_snapshot",
+            lambda *a: ({**real(*a)[0], "supports_temperature": True}, real(*a)[1]),
+        )
     before = (services.bucket.list(""), len(services.queue.tasks), len(services.repository.list_runs()))
     response = rerun(c, rid)
     assert response.status_code == 409, response.text
@@ -95,7 +101,7 @@ def test_older_run_without_saved_metadata_or_resolution_can_rerun(services):
     c = client(services=services)
     rid = start(c).json()["run_id"]
     # Model a record written before optional metadata / combo snapshots existed.
-    services.repository.update_run(rid, {"name": None, "description": None, "resolved_combos": None, "base_preset": None})
+    services.repository.update_run(rid, {"name": None, "description": None, "saved_config": None})
     response = rerun(c, rid)
     assert response.status_code == 200, response.text
 
@@ -103,14 +109,14 @@ def test_older_run_without_saved_metadata_or_resolution_can_rerun(services):
 def test_rerun_new_combo_does_not_require_matching_unselected_saved_combo(services):
     c = client(services=services)
     rid = start(c).json()["run_id"]
-    saved = services.repository.get_run(rid)
+    saved = services.repository.get_run(rid)["saved_config"]
     snapshot = saved["resolved_combos"]
     snapshot[next(iter(snapshot))]["litellm_id"] = "historical/model"
-    services.repository.update_run(rid, {"resolved_combos": snapshot})
+    services.repository.update_run(rid, {"saved_config": saved})
     response = rerun(c, rid, selection={**SEL1, "efforts": ["high"]})
     assert response.status_code == 200, response.text
     new = services.repository.get_run(response.json()["run_id"])
-    assert list(new["resolved_combos"]) == ["claude/claude-sonnet-5-5/high"]
+    assert list(new["saved_config"]["resolved_combos"]) == ["claude/claude-sonnet-5-5/high"]
 
 
 def test_rerun_rejects_silently_dropping_a_previously_valid_combo(services):

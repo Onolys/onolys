@@ -10,6 +10,8 @@ from unittest.mock import Mock
 
 import pytest
 from fastapi.testclient import TestClient
+from onolys_api.repo.fake import FakeRepo
+from onolys_api.storage.fake import FakeBlobStore
 from onolys_engine_core.engine import EngineResult, RunInfo, RunUsage
 from onolys_engine_core.llm.models import load_models
 from onolys_engine_core.llm.routes import Preset, RouteRegistry
@@ -24,9 +26,23 @@ from onolys_eval_backend.queue import InMemoryTaskQueue
 from onolys_eval_backend.repository import InMemoryEvalRepository
 from onolys_eval_backend.storage import InMemoryBucket
 
+REPO_CONFIG = Path(__file__).parents[3] / "config"
+
+
+@pytest.fixture(autouse=True)
+def eval_routes(tmp_path, monkeypatch):
+    """Real route/model files (the worker's drift check reads them) plus the test preset names."""
+    text = (REPO_CONFIG / "staging" / "routes.yaml").read_text()
+    extra = "presets:\n  configured-prod:\n    routes: {}\n  other:\n    routes: {}\n"
+    assert "presets:\n" in text
+    path = tmp_path / "routes.yaml"
+    path.write_text(text.replace("presets:\n", extra, 1))
+    monkeypatch.setenv("ROUTES_FILE", str(path))
+    monkeypatch.setenv("MODELS_FILE", str(REPO_CONFIG / "models.yaml"))
+
 
 @pytest.fixture
-def services():
+def services(eval_routes):
     registry = EngineRegistry()
     registry.register(MitiEngine())
     registry.register(OneshotEngine(config="miti"))
@@ -43,6 +59,12 @@ def services():
     )
     source = manifest()
     source["sessions"][0]["coded_span"]["end_turn"] = 2
+    # New pipeline (05 R3/R5): prod repo/blobs for sessions, the datasets bucket (same fake here).
+    s.blobs = FakeBlobStore()
+    s.repo = FakeRepo(s.blobs)
+    s.repo.ensure_user("eval-owner")
+    s.datasets = s.bucket
+    s.config = SimpleNamespace(eval_owner_uid="eval-owner", default_preset="configured-prod")
     s.bucket.write_json("datasets/synthetic/manifest.json", source)
     s.bucket.write_json("datasets/synthetic/one/transcript.json", transcript())
     s.bucket.write_json("datasets/synthetic/one/gold.json", gold())
@@ -67,6 +89,28 @@ def start(c, **overrides):
             **overrides,
         },
     )
+
+
+def lstart(c, **overrides):
+    """OLD unit-fanout create, for the old unit engine's tests (removed with it in Task 10)."""
+    from onolys_eval_backend.runs import RunRequest, _legacy_create_run
+
+    body = RunRequest.model_validate(
+        {
+            "input": {"dataset_id": "synthetic", "session_ids": ["one"]},
+            "engines": ["human", "miti"],
+            "selection": SEL1,
+            "repeats": 1,
+            **overrides,
+        }
+    )
+    services = c.app.state.services
+    rid, status = _legacy_create_run(
+        services, c.app.state.config, body, "alice@example.com", registry=services.registry
+    )
+    payload = {"run_id": rid, "status": status,
+               "engines": services.repository.get_run(rid)["engines"]}
+    return SimpleNamespace(status_code=200, text="", json=lambda: payload)
 
 
 def dispatch(c, run_id, unit_id):
@@ -102,7 +146,7 @@ class FakeEngine:
 
 def test_expansion_human_once_and_immutable_provenance(services):
     c = client(services=services)
-    response = start(
+    response = lstart(
         c,
         engines=["human", "miti", "oneshot:miti"],
         selection=SEL2,
@@ -151,7 +195,7 @@ def test_bad_selection_never_writes(services, overrides):
 
 def test_human_no_llm_terminal_redelivery_and_cancel(services):
     c = client(services=services)
-    rid = start(c).json()["run_id"]
+    rid = lstart(c).json()["run_id"]
     units = services.repository.list_units(rid)
     human = next(k for k, u in units.items() if u["engine"] == "human")
     ai = next(k for k, u in units.items() if u["engine"] == "miti")
@@ -204,7 +248,7 @@ def test_simultaneous_claims_execute_only_once(services):
 
     engine.run = waiting
     c = client(services=services)
-    rid = start(c, engines=["oneshot:miti"]).json()["run_id"]
+    rid = lstart(c, engines=["oneshot:miti"]).json()["run_id"]
     uid = next(iter(services.repository.list_units(rid)))
     with ThreadPoolExecutor() as pool:
         first = pool.submit(asyncio.run, execute_unit(services, rid, uid))
@@ -220,7 +264,7 @@ def test_simultaneous_claims_execute_only_once(services):
 def test_transient_execution_snapshot_read_failure_can_retry(services, monkeypatch, read_method):
     engine = services.fake_engine = FakeEngine()
     c = client(services=services)
-    rid = start(c, engines=["oneshot:miti"]).json()["run_id"]
+    rid = lstart(c, engines=["oneshot:miti"]).json()["run_id"]
     uid = next(iter(services.repository.list_units(rid)))
     repository = services.repository
     original_read = getattr(repository, read_method)
@@ -287,36 +331,9 @@ def test_execution_config_drift_fails_before_provider_work(services, monkeypatch
     factory.assert_not_called()
 
 
-def test_rerun_uses_current_execution_snapshot_and_matching_config_runs(services, monkeypatch):
-    engine = services.fake_engine = FakeEngine()
-    monkeypatch.setenv("GIT_SHA", "before-deployment")
-    c = client(services=services)
-    rid = start(c, engines=["oneshot:miti"]).json()["run_id"]
-    original = services.repository.get_run(rid)
-    monkeypatch.setenv("GIT_SHA", "after-deployment")
-    engine.version = "after-deployment"
-    monkeypatch.setattr(services.registry.get("oneshot"), "version", engine.version)
-    response = c.post(
-        f"/v1/runs/{rid}/rerun", headers=AUTH,
-        json={"engines": ["oneshot:miti"], "selection": SEL1, "repeats": 1},
-    )
-    assert response.status_code == 200, response.text
-    rerun_id = response.json()["run_id"]
-    saved = services.repository.get_run(rerun_id)
-    assert saved["engine_git_sha"] == "after-deployment" != original["engine_git_sha"]
-    assert saved["engine_versions"]["oneshot:miti"] == engine.version
-    assert saved["resolved_combos"]["claude/claude-sonnet-5-5/low"]["litellm_id"] == (
-        "anthropic/claude-sonnet-5-5"
-    )
-    uid = next(iter(services.repository.list_units(rerun_id)))
-    assert dispatch(c, rerun_id, uid).status_code == 200
-    assert services.repository.get_unit(rerun_id, uid)["status"] == "done"
-    assert len(engine.calls) == 1
-
-
 def test_human_gold_remains_available_after_runtime_config_changes(services, monkeypatch):
     c = client(services=services)
-    rid = start(c, engines=["human"]).json()["run_id"]
+    rid = lstart(c, engines=["human"]).json()["run_id"]
     monkeypatch.setenv("GIT_SHA", "after-deployment")
     services.routes.raw_routes["oneshot"]["litellm_id"] = "synthetic/changed-model"
     uid = next(iter(services.repository.list_units(rid)))
@@ -337,7 +354,7 @@ def test_queue_partial_failure_finishes_unqueued_units(services):
 
     services.queue.enqueue = flaky
     c = client(services=services)
-    response = start(c)
+    response = lstart(c)
     assert response.status_code == 200
     rid = response.json()["run_id"]
     assert "PRIVATE" not in response.text
@@ -350,7 +367,7 @@ def test_queue_partial_failure_finishes_unqueued_units(services):
 def start_ai(services, c, **overrides):
     """AI-only run: an upload without gold, since dataset runs always add human."""
     saved_upload(services)
-    return start(c, input={"upload_id": "saved"}, **overrides)
+    return lstart(c, input={"upload_id": "saved"}, **overrides)
 
 
 def saved_upload(services, *, ready=True, has_gold=False):
@@ -410,15 +427,12 @@ def test_named_text_upload_with_multiple_clients_runs_without_losing_speakers(se
     response = start(c, **selection)
     assert response.status_code == 200, response.text
     rid = response.json()["run_id"]
-    source = services.repository.get_run(rid)["input_ref"]["sessions"][0]
-    expected_map = {"subject": "Alex", **({"other": clients[0]} if len(clients) == 1 else {})}
-    assert source["speaker_map"] == expected_map
-    assert services.bucket.read_json(source["transcript_path"]) == confirmed
-    uid = next(iter(services.repository.list_units(rid)))
-    assert dispatch(c, rid, uid).status_code == 200
-    assert services.repository.get_unit(rid, uid)["status"] == "done"
-    assert observed == [confirmed]
-    assert len(engine.calls) == 1 and engine.calls[0][1]["speaker_map"] == expected_map
+    ((sid, _),) = services.repository.get_run(rid)["sessions"].items()
+    session = services.repo.get_session("eval-owner", sid)
+    assert session.clinician_speaker == "Alex" and session.eval.source == "upload"
+    stored = services.repo.get_transcript("eval-owner", sid, "current").transcript
+    assert stored.model_dump(mode="json") == confirmed
+    assert services.repo.list_runs("eval-owner", sid) == []  # nothing runs at create time
 
 
 @pytest.mark.parametrize("invalid_speakers", ["unresolved", "no_client"])
@@ -446,18 +460,18 @@ def test_upload_readiness_gold_gate_and_override_snapshot(services):
     )
     assert response.status_code == 200, response.text
     rid = response.json()["run_id"]
-    saved = services.repository.get_run(rid)["input_ref"]["sessions"][0]
-    assert saved["change_goal"] == "override goal" and saved["language"] == "fr"
-    assert saved["coded_span"] == {"start_turn": 0, "end_turn": 1}
-    human = next(u for u in services.repository.list_units(rid).values() if u["engine"] == "human")
-    assert human["coded_span"] == {"start_turn": 0, "end_turn": 2}
-    assert human["warnings"] == ["human_span_differs"]
+    doc = services.repository.get_run(rid)
+    assert (doc["change_goal"], doc["language"]) == ("override goal", "fr")
+    assert doc["coded_span"] == {"start_turn": 0, "end_turn": 1} and doc["human"] is True
+    ((sid, entry),) = doc["sessions"].items()
+    assert entry["dataset_session_id"] == "saved"
+    session = services.repo.get_session("eval-owner", sid)
+    assert session.change_goal == "override goal" and session.language == "fr"
+    assert session.coded_span.model_dump() == {"start_turn": 0, "end_turn": 1}
+    assert session.eval.gold is not None  # gold copied once (the Human reference)
+    # The session snapshot is immutable: corrupting the upload cannot change it.
     services.bucket.write_json("uploads/saved/transcript.json", {"corrupted": True})
-    from onolys_engine_core.transcript_input import validate_transcript_input
-
-    assert services.bucket.read_json(saved["transcript_path"]) == validate_transcript_input(
-        transcript()
-    ).model_dump(mode="json")
+    assert services.repo.get_transcript("eval-owner", sid, "current").transcript is not None
     services.repository.update_upload("saved", {"has_gold": False})
     assert start(c, input={"upload_id": "saved"}).status_code == 422
     services.repository.update_upload("saved", {"status": "awaiting_speakers"})
@@ -479,12 +493,12 @@ def test_bad_upload_span_before_writes(services):
 
 def test_all_cancelled_and_mixed_failure_finalization(services):
     c = client(services=services)
-    rid = start(c).json()["run_id"]
+    rid = lstart(c).json()["run_id"]
     assert c.post(f"/v1/runs/{rid}/cancel", headers=AUTH).json()["status"] == "cancelled"
     assert services.repository.get_run(rid)["cancelled_units"] == 2
     assert all(u["status"] == "cancelled" for u in services.repository.list_units(rid).values())
     services.fake_engine = FakeEngine(fail=True)
-    rid = start(c, engines=["human", "oneshot:miti"]).json()["run_id"]
+    rid = lstart(c, engines=["human", "oneshot:miti"]).json()["run_id"]
     for uid in services.repository.list_units(rid):
         assert dispatch(c, rid, uid).status_code == 200
     run = services.repository.get_run(rid)
@@ -557,7 +571,7 @@ def test_exception_keeps_metrics_usage_and_unknown_pricing(services):
 
     services.fake_engine.run = fail
     c = client(services=services)
-    rid = start(c, engines=["oneshot:miti"]).json()["run_id"]
+    rid = lstart(c, engines=["oneshot:miti"]).json()["run_id"]
     uid = next(iter(services.repository.list_units(rid)))
     assert dispatch(c, rid, uid).status_code == 200
     unit = services.repository.get_unit(rid, uid)
@@ -603,9 +617,9 @@ def test_eight_session_defaults_and_two_session_matrix(services):
     services.bucket.write_json("datasets/synthetic/manifest.json", source)
     c = client(services=services)
     ids = [s["session_id"] for s in source["sessions"]]
-    rid = start(c, input={"dataset_id": "synthetic", "session_ids": ids}).json()["run_id"]
+    rid = lstart(c, input={"dataset_id": "synthetic", "session_ids": ids}).json()["run_id"]
     assert services.repository.get_run(rid)["total_units"] == 16
-    rid = start(
+    rid = lstart(
         c,
         input={"dataset_id": "synthetic", "session_ids": ids[:2]},
         engines=["human", "miti", "oneshot:miti"],
@@ -619,7 +633,7 @@ def test_concurrent_terminal_accounting_once_and_last_unit_status(services):
     from onolys_eval_backend.runs import finish_unit
 
     c = client(services=services)
-    rid = start(
+    rid = lstart(
         c,
         engines=["human", "miti", "oneshot:miti"],
         selection=SEL2,
@@ -687,7 +701,7 @@ def test_success_spills_large_output_and_uses_model_price_fallback(services):
 
     engine.run = large
     c = client(services=services)
-    rid = start(c, engines=["oneshot:miti"]).json()["run_id"]
+    rid = lstart(c, engines=["oneshot:miti"]).json()["run_id"]
     uid = next(iter(services.repository.list_units(rid)))
     assert dispatch(c, rid, uid).status_code == 200
     unit = services.repository.get_unit(rid, uid)
@@ -722,41 +736,12 @@ def test_price_metadata_failure_cannot_strand_billable_unit(services):
     assert run["usage"]["input_tokens"] == 10
 
 
-def test_internal_creation_helper_can_reuse_immutable_saved_input(services):
-    from test_app import ENV
-
-    from onolys_eval_backend.config import EvalConfig
-    from onolys_eval_backend.runs import RunRequest, create_run
-
-    c = client(services=services)
-    original = start(c).json()["run_id"]
-    snapshot = services.repository.get_run(original)["input_ref"]
-    services.bucket.write_json("datasets/synthetic/one/transcript.json", {"changed": True})
-    services.bucket.write_json("datasets/synthetic/manifest.json", {"changed": True})
-    body = RunRequest.model_validate(
-        {
-            "input": {"dataset_id": "synthetic", "session_ids": ["one"]},
-            "engines": ["oneshot:miti"],
-            "selection": SEL1,
-            "repeats": 3,
-        }
-    )
-    rid, status = create_run(
-        services, EvalConfig.from_env(ENV), body, "alice@example.com", input_ref=snapshot
-    )
-    saved = services.repository.get_run(rid)["input_ref"]["sessions"][0]
-    assert saved["transcript_sha256"] == snapshot["sessions"][0]["transcript_sha256"]
-    assert saved["change_goal"] == snapshot["sessions"][0]["change_goal"]
-    assert saved["coded_span"] == snapshot["sessions"][0]["coded_span"]
-    assert status == "queued" and services.repository.get_run(rid)["total_units"] == 4
-
-
 def test_dataset_full_session_null_span_creates_and_executes_human_unit(services):
     source = services.bucket.read_json("datasets/synthetic/manifest.json")
     source["sessions"][0]["coded_span"] = None
     services.bucket.write_json("datasets/synthetic/manifest.json", source)
     c = client(services=services)
-    response = start(c, engines=["human"], selection={})
+    response = lstart(c, engines=["human"], selection={})
     assert response.status_code == 200, response.text
     rid = response.json()["run_id"]
     saved = services.repository.get_run(rid)["input_ref"]["sessions"][0]
@@ -770,7 +755,7 @@ def test_dataset_full_session_null_span_creates_and_executes_human_unit(services
 def test_dataset_session_without_gold_runs_without_human_unit(services):
     # LM-11: human is only auto-added when every selected session has gold.
     services.bucket._objects.pop("datasets/synthetic/one/gold.json")
-    response = start(client(services=services), engines=["miti"])
+    response = lstart(client(services=services), engines=["miti"])
     assert response.status_code == 200, response.text
     run = services.repository.get_run(response.json()["run_id"])
     assert run["engines"] == ["miti"]
@@ -1092,7 +1077,7 @@ def clock(monkeypatch):
 
 
 def one_unit(services, c):
-    rid = start(c, engines=["oneshot:miti"]).json()["run_id"]
+    rid = lstart(c, engines=["oneshot:miti"]).json()["run_id"]
     uid = next(iter(services.repository.list_units(rid)))
     return rid, uid
 
@@ -1193,7 +1178,7 @@ def test_blocking_storage_does_not_stall_the_event_loop(services, clock):
     # B7: bucket reads run off the loop, so an independent coroutine keeps running.
     services.fake_engine = FakeEngine()
     c = client(services=services)
-    rid, uid = start(c, engines=["human"]).json()["run_id"], "u0000"
+    rid, uid = lstart(c, engines=["human"]).json()["run_id"], "u0000"
     entered, release = Event(), Event()
     original = services.bucket.read_json
 

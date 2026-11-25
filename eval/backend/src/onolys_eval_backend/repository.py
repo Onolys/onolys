@@ -24,6 +24,7 @@ class EvalRepository(Protocol):
         self, upload_id: str, expected: str, updates: Record, *, match: Record | None = None
     ) -> bool: ...
     def create_run(self, run_id: str, data: Record, units: Mapping[str, Record]) -> None: ...
+    def create_group(self, run_id: str, data: Record) -> None: ...
     def get_run(self, run_id: str) -> Record | None: ...
     def list_runs(self, limit: int = 100) -> dict[str, Record]: ...
     def list_runs_page(
@@ -75,6 +76,13 @@ class InMemoryEvalRepository:
                 raise ValueError('Run already exists')
             self._runs[run_id] = deepcopy(data)
             self._units[run_id] = deepcopy(dict(units))
+
+    def create_group(self, run_id, data):
+        """The rollup doc alone (05 R4): refs are embedded, there is no units subcollection."""
+        with self._lock:
+            if run_id in self._runs:
+                raise ValueError('Run already exists')
+            self._runs[run_id] = deepcopy(data)
 
     def get_run(self, run_id):
         with self._lock:
@@ -193,6 +201,14 @@ class FirestoreEvalRepository:
             batch.create(ref.collection('units').document(unit_id), unit)
         try:
             batch.commit()
+        except AlreadyExists as exc:
+            raise ValueError('Run already exists') from exc
+
+    def create_group(self, run_id, data):
+        from google.api_core.exceptions import AlreadyExists
+
+        try:
+            self.runs.document(run_id).create(data)
         except AlreadyExists as exc:
             raise ValueError('Run already exists') from exc
 

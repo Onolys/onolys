@@ -14,8 +14,16 @@ from onolys_eval.gold import COUNT_IDS, GLOBAL_IDS
 from onolys_eval.metrics import PartialScores, Scores, aggregate, compare
 from pydantic import ConfigDict, Field, StrictInt
 
+from onolys_eval_backend.eval_sessions import SessionImportError
 from onolys_eval_backend.matrix import RunTooLarge, SelectionError, combo_key
-from onolys_eval_backend.runs import RunMetadata, RunRequest, Selection, create_run
+from onolys_eval_backend.runs import (
+    RunInputError,
+    RunMetadata,
+    RunRequest,
+    SavedInputUnavailable,
+    Selection,
+    create_run,
+)
 from onolys_eval_backend.storage import load_output
 
 router = APIRouter()
@@ -99,6 +107,8 @@ def run_summary(rid, run):
     legacy = is_legacy(run)
     keys = _run_keys(run)
     out = {"run_id": rid, **{key: run.get(key) for key in SUMMARY_FIELDS}}
+    if out["resolved_combos"] is None:
+        out["resolved_combos"] = (run.get("saved_config") or {}).get("resolved_combos")
     if legacy:
         out["selection"] = out["combos"] = None
     return {
@@ -374,6 +384,9 @@ class RerunRequest(RunMetadata):
 def rerun(request: Request, run_id: str, body: RerunRequest):
     services = request.app.state.services
     saved = _run(services.repository, run_id)
+    if not saved.get("sessions"):
+        # Runs saved before the grouping doc carry no pinned sessions to reuse.
+        raise HTTPException(422, "Invalid run selection or saved input.")
     try:
         selection = RunRequest.model_validate(
             {
@@ -393,8 +406,8 @@ def rerun(request: Request, run_id: str, body: RerunRequest):
             selection,
             request.state.user_email,
             registry=getattr(services, "registry", None) or request.app.state.catalog.registry,
-            input_ref=saved["input_ref"],
-            saved_config=saved,
+            pinned=saved.get("sessions") or None,
+            saved_config=saved.get("saved_config"),
         )
         return {
             "run_id": rid,
@@ -405,6 +418,10 @@ def rerun(request: Request, run_id: str, body: RerunRequest):
         raise
     except (SelectionError, RunTooLarge) as error:
         raise HTTPException(422, str(error)) from None
+    except (RunInputError, SessionImportError) as error:
+        raise HTTPException(422, str(error)) from None
+    except SavedInputUnavailable as error:
+        raise HTTPException(409, str(error)) from None
     except (ValueError, KeyError, FileNotFoundError, InputError):
         raise HTTPException(422, "Invalid run selection or saved input.") from None
     except Exception:
