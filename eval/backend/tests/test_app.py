@@ -11,6 +11,7 @@ from onolys_eval_backend.config import EvalConfig
 
 ENV = {
     "ENV": "staging",
+    "FIRESTORE_DATABASE": "staging",
     "GCP_PROJECT": "onolys-test",
     "EVAL_ALLOWED_EMAILS": "Alice@Example.com",
     "CORS_ORIGINS": "https://eval.example",
@@ -245,7 +246,7 @@ def test_config_and_injected_services():
         "TASKS_QUEUE",
         "TASKS_SA",
         "SERVICE_URL",
-        "PROD_ENGINE",
+        "FIRESTORE_DATABASE",
         "DEFAULT_PRESET",
         "ROUTES_FILE",
     ],

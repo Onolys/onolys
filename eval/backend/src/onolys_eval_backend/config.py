@@ -50,7 +50,7 @@ class EvalConfig:
     prod_engine: str
     default_preset: str
     routes_file: str
-    firestore_database: str = "staging"
+    firestore_database: str
     eval_owner_uid: str = "eval"
     max_per_provider: int = 2
     provider_fail_limit: int = 5
@@ -81,22 +81,20 @@ class EvalConfig:
         if not auth_project:
             raise ConfigError("AUTH_PROJECT (or GCP_PROJECT) is required")
         service_url = _required(env, "SERVICE_URL").rstrip("/")
+        # Fail closed: no default database/env (a missing one must never fall back to staging).
+        firestore_database = _required(env, "FIRESTORE_DATABASE")
         # The eval backend composes the api's own settings; it only ever runs as the eval instance.
+        # SERVICE_MODE is forced even if env sets it (terraform sets "api"): it is not an api and
+        # has no voice relay, so "api" would demand VOICE_URL. Settings.from_env requires ENV.
         settings = Settings.from_env(
-            {
-                "ENV": "staging",
-                "FIRESTORE_DATABASE": "staging",
-                "SERVICE_MODE": "worker",  # no voice relay here: VOICE_URL is not needed
-                **env,
-                "AUTH_PROJECT": auth_project,
-            }
+            {**env, "SERVICE_MODE": "worker", "AUTH_PROJECT": auth_project}
         )
         if not settings.eval_mode:
             raise ConfigError("EVAL_MODE=true is required: the eval backend refuses to start")
         return cls(
             auth_project=auth_project,
             allowed_emails=emails,
-            environment=env.get("ENV", "staging").strip(),
+            environment=settings.env,
             project=(env.get("GCP_PROJECT") or auth_project).strip(),
             datasets_bucket=_required(env, "DATASETS_BUCKET"),
             settings=settings,
@@ -104,9 +102,10 @@ class EvalConfig:
             tasks_sa=_required(env, "TASKS_SA"),
             service_url=service_url,
             task_audience=env.get("TASKS_OIDC_AUDIENCE", "").strip() or service_url,
-            prod_engine=_required(env, "PROD_ENGINE"),
+            prod_engine=settings.prod_engine,  # terraform does not set it: api default (miti)
             default_preset=_required(env, "DEFAULT_PRESET"),
             routes_file=_required(env, "ROUTES_FILE"),
+            firestore_database=firestore_database,
             eval_owner_uid=env.get("EVAL_OWNER_UID", "").strip() or cls.eval_owner_uid,
             max_per_provider=_positive_int(env, "EVAL_MAX_PER_PROVIDER", cls.max_per_provider),
             provider_fail_limit=_positive_int(

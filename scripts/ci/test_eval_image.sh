@@ -46,7 +46,7 @@ for base in [Path('/app'), *site.glob('onolys_*')]:
         assert path.suffix not in {'.jsonl', '.vtt', '.srt', '.wav', '.mp3', '.mp4'}, str(path)
 print('ok no admin backend, datasets, uploads, runs, fixtures or recordings in image')
 
-env = dict(ENV='staging', EVAL_ALLOWED_EMAILS='test@example.com',
+env = dict(ENV='staging', FIRESTORE_DATABASE='staging', EVAL_ALLOWED_EMAILS='test@example.com',
            AUTH_PROJECT='demo-project', DATASETS_BUCKET='synthetic-test', EVAL_MODE='true',
            UID_HMAC_KEY='ci-hmac-key', REGION='us-central1', WORKER_URL='https://worker.test.run.app',
            TASKS_QUEUE='projects/demo-project/locations/us-central1/queues/eval-runs',
