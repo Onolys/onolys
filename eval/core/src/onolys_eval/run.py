@@ -16,7 +16,7 @@ from .fetch import default_cache, require_external_path
 from .gold import Gold
 from .manifest import DatasetManifest
 from .metrics import compare, gold_scores
-from .upload import BUCKET
+from .upload import datasets_bucket, gcp_project
 
 # Cache reads/writes are already included in input_tokens; price them separately.
 _TOKEN_KEYS = ('input_tokens', 'output_tokens')
@@ -54,7 +54,7 @@ def _load_inputs(manifest, session, source):
     if source == 'bucket':
         from google.cloud import storage
 
-        bucket = storage.Client(project='onolys').bucket(BUCKET)
+        bucket = storage.Client(project=gcp_project()).bucket(datasets_bucket())
         prefix = f'datasets/{manifest.dataset_id}/{session.session_id}/'
         transcript_data = bucket.blob(prefix + 'transcript.json').download_as_bytes()
         gold_data = bucket.blob(prefix + 'gold.json').download_as_bytes()

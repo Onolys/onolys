@@ -1,5 +1,6 @@
 """Publish converted reference datasets to the private staging bucket via ADC."""
 import json
+import os
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
@@ -9,6 +10,17 @@ from .manifest import DatasetManifest
 from .publicsets import resolve_sessions
 
 BUCKET = "onolys-eval-data-staging"
+DEFAULT_PROJECT = "onolys"
+
+
+def gcp_project() -> str:
+    """GCP project for dataset storage: GCP_PROJECT (set on isolated eval), else legacy."""
+    return os.environ.get("GCP_PROJECT", "").strip() or DEFAULT_PROJECT
+
+
+def datasets_bucket() -> str:
+    """Datasets bucket: DATASETS_BUCKET (set on isolated eval), else legacy."""
+    return os.environ.get("DATASETS_BUCKET", "").strip() or BUCKET
 
 
 def upload_dataset(
@@ -49,8 +61,8 @@ def upload_dataset(
     if client is None:
         from google.cloud import storage
 
-        client = storage.Client(project="onolys")
-    bucket = client.bucket(BUCKET)
+        client = storage.Client(project=gcp_project())
+    bucket = client.bucket(datasets_bucket())
 
     def put(asset):
         name, path, content_type = asset
