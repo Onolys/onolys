@@ -324,8 +324,7 @@ def test_internal_retries_follows_config(env):
     assert len(all_runs(env)) == 1
 
 
-@pytest.mark.parametrize("code", [
-    "deadline_exceeded", "output_invalid", "run_failed", "upstream_unavailable", "rate_limited"])
+@pytest.mark.parametrize("code", ["deadline_exceeded", "output_invalid", "run_failed"])  # overload: test_eval_resilience
 def test_other_failure_codes_stay_failed_without_a_new_run(env, code):
     # upstream_unavailable / rate_limited are plain failures until Task 6 adds overload backoff
     rid = create(env, ["one"], selection=SEL1, repeats=1)

@@ -40,6 +40,7 @@ class EvalRepository(Protocol):
     def claim_slot(self, provider: str, run_id: str, eval_run_id: str, cap: int) -> bool: ...
     def release_slot(self, provider: str, run_id: str) -> None: ...
     def get_slots(self, provider: str) -> Record: ...
+    def update_slot(self, provider: str, fields: Record) -> None: ...
     def advance_tick(self, run_id: str, n: int, at: str) -> bool: ...
 
 
@@ -167,6 +168,12 @@ class InMemoryEvalRepository:
     def get_slots(self, provider):
         with self._lock:
             return deepcopy(self._slots.get(provider, {'holders': {}}))
+
+    def update_slot(self, provider, fields):
+        """Merge non-holder fields (cooldown_until, overload_streak) into the slots doc."""
+        with self._lock:
+            self._slots.setdefault(provider, {}).setdefault('holders', {})
+            self._slots[provider].update(deepcopy(fields))
 
     def advance_tick(self, run_id, n, at):
         """Compare-and-set `tick_seq` n -> n+1: of duplicate deliveries of tick n only one wins."""
@@ -364,6 +371,9 @@ class FirestoreEvalRepository:
 
     def get_slots(self, provider):
         return self._read(self.slots.document(provider)) or {'holders': {}}
+
+    def update_slot(self, provider, fields):
+        self.slots.document(provider).set(fields, merge=True)
 
     def advance_tick(self, run_id, n, at):
         from google.cloud import firestore
