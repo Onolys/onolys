@@ -64,15 +64,22 @@ def test_api_and_worker_grants_unchanged():
     main = (MOD / "main.tf").read_text()
     assert re.search(r"runtime_sas = \{\s*api\s*=\s*google_service_account\.api\.email\s*worker\s*=\s*google_service_account\.worker\.email\s*\}", main)
     assert "voice" not in main and "voice" not in (MOD / "secrets.tf").read_text()
-    # SP07 R8/AC10: firebaseauth.admin is the only added api grant, and only when resend_secret_wired (count-gated).
+    # SP07 R8/AC10: the optional email grant is count-gated by resend_secret_wired.
     gated = blocks(main, "google_project_iam_member")["api_firebaseauth_admin"]
     assert re.search(r'role\s*=\s*"roles/firebaseauth\.admin"', gated)
     assert re.search(r"count\s*=\s*var\.resend_secret_wired\s*\?\s*1\s*:\s*0", gated)
+    # Eval transcribes dataset audio in its backend. Validate this exact grant's isolation
+    # before excluding it from the shared staging/prod API role baseline.
+    eval_speech = blocks(main, "google_project_iam_member")["eval_backend_speech_client"]
+    assert re.search(r'^\s*count\s*=\s*var\.eval_backend_enabled\s*&&\s*var\.env\s*==\s*"eval"\s*\?\s*1\s*:\s*0\s*$', eval_speech, re.M)
+    assert re.search(r'^\s*role\s*=\s*"roles/speech\.client"\s*$', eval_speech, re.M)
+    assert re.search(r'^\s*member\s*=\s*"serviceAccount:\$\{google_service_account\.api\.email\}"\s*$', eval_speech, re.M)
     api_roles = sorted(
         re.search(r'role\s*=\s*"([^"]+)"', b).group(1)
         for t in GRANT_TYPES
         for k, b in blocks(main, t).items()
         if ("runtime_sas" in b or "google_service_account.api.email" in b) and k != "api_firebaseauth_admin"
+        and (t, k) != ("google_project_iam_member", "eval_backend_speech_client")
     )
     assert api_roles == sorted(
         ["roles/datastore.user", "roles/storage.objectAdmin", "roles/cloudtasks.enqueuer",
