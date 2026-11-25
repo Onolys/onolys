@@ -4,7 +4,7 @@ locals {
   apis = toset(concat([
     "serviceusage.googleapis.com", "cloudresourcemanager.googleapis.com", "iam.googleapis.com",
     "iamcredentials.googleapis.com", "sts.googleapis.com", "run.googleapis.com",
-    "artifactregistry.googleapis.com", "firestore.googleapis.com", "storage.googleapis.com",
+    "artifactregistry.googleapis.com", "firestore.googleapis.com",
     "cloudtasks.googleapis.com", "cloudscheduler.googleapis.com", "secretmanager.googleapis.com",
     "identitytoolkit.googleapis.com", "firebase.googleapis.com", "firebasehosting.googleapis.com",
     "generativelanguage.googleapis.com",

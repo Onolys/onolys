@@ -44,7 +44,7 @@ Examples are versioned under `infra/isolated-environment/examples/`:
 - `environment-eval.tfvars.example` and `backend-eval.hcl.example` target new eval.
 - `environment-prod.tfvars.example` and `backend-prod.hcl.example` are references to the existing legacy root/state only. They are not a fresh-production template or a migration command.
 
-If state buckets do not exist, first use the separate `bootstrap/` root. It creates only the new projects' protected, versioned state buckets (and enables Storage), using independent administrative local state. Review a saved bootstrap plan, apply it only with owner authorization, and securely retain its local state; never use the production backend or discard the bootstrap state. Import any already-created state bucket instead of recreating it. No bootstrap command is executed by validation or by the application CI.
+If state buckets do not exist, first use the separate `bootstrap/` root. It creates only the new projects' protected, versioned state buckets (and enables Storage), using independent administrative local state. Bootstrap is the sole Terraform owner of the Storage API enablement; the environment root requires the already-enabled API and does not duplicate its ownership across states. Review a saved bootstrap plan, apply it only with owner authorization, and securely retain its local state; never use the production backend or discard the bootstrap state. Import any already-created state bucket instead of recreating it. No bootstrap command is executed by validation or by the application CI.
 
 Initialize one environment at a time with its own directory. From the repository root, for staging:
 

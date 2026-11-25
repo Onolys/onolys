@@ -60,3 +60,10 @@ def test_eval_speech_prefix_and_optional_readers_preserve_isolation():
     assert 'generativelanguage.googleapis.com' in root
     assert 'var.environment == "staging" ? ["aiplatform.googleapis.com"] : []' in root
     assert 'cloudfunctions.googleapis.com' not in root
+
+
+def test_storage_api_has_one_state_owner():
+    bootstrap = (ROOT / 'bootstrap/main.tf').read_text()
+    assert 'resource "google_project_service" "storage"' in bootstrap
+    assert 'service            = "storage.googleapis.com"' in bootstrap
+    assert '"storage.googleapis.com"' not in (ROOT / 'main.tf').read_text()
