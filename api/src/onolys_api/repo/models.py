@@ -322,6 +322,25 @@ class OutputValidation(BaseModel):
     first_issues: list[OutputValidationIssue] = Field(default_factory=list, max_length=10)
 
 
+class EvalRunInfo(BaseModel):
+    """Eval provenance of a run (SP04 R1). Written once in the create txn, never updated, and
+    never part of a public view."""
+
+    eval_run_id: str
+    combo_key: str
+    repeat: int
+    engine: str  # "miti" or "oneshot:<variant>"
+    route_override: dict[str, Any] | None = None  # {provider, model, tier, effort}
+    resolved_route: dict[str, Any]  # snapshot: litellm_id, effort, token limits, caching_mode, ...
+    engine_version: str
+
+
+def reject_eval_write(fields: dict[str, Any]) -> None:
+    """`RunDoc.eval` is write-once: no `update_run` field path may touch it."""
+    if any(k == "eval" or k.startswith("eval.") for k in fields):
+        raise ValueError("RunDoc.eval is write-once")
+
+
 class RunDoc(Doc):
     change_goal: str
     clinician_speaker: str
@@ -351,6 +370,7 @@ class RunDoc(Doc):
     released: bool = False  # the cap slot was handed back: guards double release
     llm_started: bool = False  # the evaluation was called on some attempt: a unit is spent
     unit_kept: bool | None = None  # set on release: a unit of the limit stays spent (None: open)
+    eval: EvalRunInfo | None = None  # eval provenance; absent on prod runs, write-once
 
 
 class ReportDoc(Doc):

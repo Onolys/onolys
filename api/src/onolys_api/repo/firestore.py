@@ -72,6 +72,7 @@ from onolys_api.repo.models import (
     UserDoc,
     error_status_fields,
     interview_refundable,
+    reject_eval_write,
     retry_allowed,
     upload_failed_stub,
     utcnow,
@@ -730,6 +731,7 @@ class FirestoreRepo:
         return _load(RunDoc, snap)
 
     def update_run(self, uid: str, sid: str, run_id: str, fields: dict[str, Any]) -> None:
+        reject_eval_write(fields)
         ref = self._run_ref(uid, sid, run_id)
         if not ref.get().exists:
             raise NotFoundError()

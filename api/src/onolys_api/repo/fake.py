@@ -63,6 +63,7 @@ from onolys_api.repo.models import (
     UserDoc,
     error_status_fields,
     interview_refundable,
+    reject_eval_write,
     retry_allowed,
     upload_failed_stub,
     utcnow,
@@ -540,6 +541,7 @@ class FakeRepo:
         return self._load(RunDoc, run_id, d)
 
     def update_run(self, uid: str, sid: str, run_id: str, fields: dict[str, Any]) -> None:
+        reject_eval_write(fields)
         self._own(uid, sid)
         d = self._get(f"sessions/{sid}/runs/{run_id}")
         if d is None:
