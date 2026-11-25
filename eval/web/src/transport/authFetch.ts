@@ -4,7 +4,7 @@ export interface AuthFetchDeps {
   getToken: (forceRefresh?: boolean) => Promise<string | null>;
   /** Still 401 after one forced refresh: go to login. */
   onUnauthorized: () => void;
-  /** 403: signed in but not allowed (not on the admin list, or email not verified). */
+  /** 403: signed in but not allowed (not on the eval access list, or email not verified). */
   onForbidden: (code?: string) => void;
 }
 
