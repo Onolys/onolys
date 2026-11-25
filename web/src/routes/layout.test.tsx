@@ -121,20 +121,21 @@ describe("header nav by auth phase (D1)", () => {
     await userEvent.click(btn);
     const settings = screen.getByRole("menuitem", { name: "Settings" });
     const signOut = screen.getByRole("menuitem", { name: "Sign out" });
-    expect(settings).toHaveFocus();
+    // Opening uses requestAnimationFrame; Radix arrow navigation defers focus to a task.
+    await waitFor(() => expect(settings).toHaveFocus());
     await userEvent.keyboard("{ArrowDown}");
-    expect(signOut).toHaveFocus();
+    await waitFor(() => expect(signOut).toHaveFocus());
     await userEvent.keyboard("{ArrowDown}");
-    expect(settings).toHaveFocus();
+    await waitFor(() => expect(settings).toHaveFocus());
     await userEvent.keyboard("{ArrowUp}");
-    expect(signOut).toHaveFocus();
+    await waitFor(() => expect(signOut).toHaveFocus());
     await userEvent.keyboard("{Home}");
-    expect(settings).toHaveFocus();
+    await waitFor(() => expect(settings).toHaveFocus());
     await userEvent.keyboard("{End}");
-    expect(signOut).toHaveFocus();
+    await waitFor(() => expect(signOut).toHaveFocus());
     await userEvent.keyboard("{Escape}");
     expect(screen.queryByRole("menu")).not.toBeInTheDocument();
-    expect(btn).toHaveFocus();
+    await waitFor(() => expect(btn).toHaveFocus());
     await userEvent.click(btn);
     expect(screen.getByRole("menu")).toBeInTheDocument();
     await userEvent.tab();
