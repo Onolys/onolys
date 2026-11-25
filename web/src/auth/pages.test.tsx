@@ -120,6 +120,13 @@ describe("sign up", () => {
 });
 
 describe("log in", () => {
+  it("keeps account creation and password recovery on the app login", async () => {
+    renderApp("/login?next=%2Fsettings");
+    await h1("Log in");
+    expect(screen.getByRole("link", { name: "Create an account" })).toHaveAttribute("href", "/signup?next=%2Fsettings");
+    expect(screen.getByRole("link", { name: "Forgot your password?" })).toHaveAttribute("href", "/forgot-password?next=%2Fsettings");
+  });
+
   it("signs in and goes to ?next=", async () => {
     const user = userEvent.setup();
     const service = createFakeAuthService();

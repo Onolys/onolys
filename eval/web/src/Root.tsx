@@ -31,7 +31,7 @@ export function Root({ service, baseFetch = browserFetch }: { service: AuthServi
   const [queryClient] = useState(() => new QueryClient());
   return <QueryClientProvider client={queryClient}><AuthProvider service={service}><BrowserRouter><Routes>
     <Route element={<Shell />}>
-      <Route element={<PublicOnly />}><Route path="/login" element={<Login />} /></Route>
+      <Route element={<PublicOnly />}><Route path="/login" element={<Login showSignup={false} />} /></Route>
       {PROD_ONLY_PATHS.map(path => <Route key={path} path={path} element={<ToProdApp />} />)}
       <Route element={<RequireVerified />}><Route path="*" element={<AllowedApp baseFetch={baseFetch} />} /></Route>
     </Route>

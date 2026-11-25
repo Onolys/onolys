@@ -14,7 +14,7 @@ export interface LoginState {
   passwordUpdated?: boolean;
 }
 
-export function Login() {
+export function Login({ showSignup = true }: { showSignup?: boolean }) {
   const { service } = useAuth();
   const { search, state } = useLocation();
   const from = (state ?? {}) as LoginState;
@@ -80,12 +80,12 @@ export function Login() {
             Forgot your password?
           </Link>
         </p>
-        <p>
+        {showSignup && <p>
           New here?{" "}
           <Link to={withNext("/signup", search)} className={LINK}>
             Create an account
           </Link>
-        </p>
+        </p>}
       </form>
     </>
   );
