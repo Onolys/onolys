@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "Allowlisted staging evaluation service for MITI engines"
 requires-python = ">=3.12,<3.13"
 dependencies = [
-    "onolys-admin-auth",
+    "onolys-api",
     "onolys-engine-core",
     "onolys-miti[stt-google]",
     "onolys-oneshot",
@@ -34,7 +34,7 @@ packages = ["src/onolys_eval_backend"]
 "prices.yaml" = "onolys_eval_backend/prices.yaml"
 
 [tool.uv.sources]
-onolys-admin-auth = { workspace = true }
+onolys-api = { workspace = true }
 onolys-engine-core = { workspace = true }
 onolys-miti = { workspace = true }
 onolys-oneshot = { workspace = true }

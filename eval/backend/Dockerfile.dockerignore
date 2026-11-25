@@ -3,6 +3,8 @@
 !uv.lock
 !api/
 !api/pyproject.toml
+!api/src/
+!api/src/**
 !engines/
 !engines/core/
 !engines/core/pyproject.toml
@@ -17,10 +19,6 @@
 !engines/oneshot/src/
 !engines/oneshot/src/**
 !eval/
-!eval/auth/
-!eval/auth/pyproject.toml
-!eval/auth/src/
-!eval/auth/src/**
 !eval/core/
 !eval/core/pyproject.toml
 !eval/core/src/

@@ -417,7 +417,7 @@ def post_run(request: Request, body: RunRequest):
             services,
             request.app.state.config,
             body,
-            request.state.admin_claims["email"].strip().lower(),
+            request.state.user_email,
             registry=getattr(services, "registry", None) or request.app.state.catalog.registry,
         )
         return {

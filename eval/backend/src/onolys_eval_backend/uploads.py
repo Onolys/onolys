@@ -276,7 +276,7 @@ async def upload(request: Request):
             "language": language,
             "coded_span": span,
             "content_type": media or sorted(allowed[ext])[0],
-            "created_by": request.state.admin_claims["email"].strip().lower(),
+            "created_by": request.state.user_email,
             "created_at": datetime.now(UTC).isoformat(),
             **metadata,
         }
@@ -385,7 +385,7 @@ async def start_audio_upload(request: Request):
         "coded_span": span,
         "content_type": content_type,
         "expected_size": size,
-        "created_by": request.state.admin_claims["email"].strip().lower(),
+        "created_by": request.state.user_email,
         "created_at": _now().isoformat(),
         "status": "awaiting_upload",
         "speakers": [],

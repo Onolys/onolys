@@ -391,7 +391,7 @@ def rerun(request: Request, run_id: str, body: RerunRequest):
             services,
             request.app.state.config,
             selection,
-            request.state.admin_claims["email"].strip().lower(),
+            request.state.user_email,
             registry=getattr(services, "registry", None) or request.app.state.catalog.registry,
             input_ref=saved["input_ref"],
             saved_config=saved,

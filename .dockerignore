@@ -21,9 +21,6 @@ eval/**
 !eval/core/
 eval/core/**
 !eval/core/pyproject.toml
-!eval/auth/
-eval/auth/**
-!eval/auth/pyproject.toml
 !eval/backend/
 eval/backend/**
 !eval/backend/pyproject.toml

@@ -133,6 +133,38 @@ def test_sub_accepted(uid):
     assert v.verify(mint(uid)) == uid
 
 
+def test_verify_claims_returns_full_claims():
+    v = IdTokenVerifier(PROJECT, fetch_certs=lambda: {KID: PUB})
+    claims = v.verify_claims(mint("u9"))
+    assert claims["sub"] == "u9" and claims["email_verified"] is True
+    assert claims["aud"] == PROJECT
+
+
+def test_verify_claims_unverified_email_raises_unless_allowed():
+    from onolys_api.auth.idtoken import EmailNotVerified
+
+    v = IdTokenVerifier(PROJECT, fetch_certs=lambda: {KID: PUB})
+    with pytest.raises(EmailNotVerified):
+        v.verify_claims(mint(verified=False))
+    assert v.verify_claims(mint(verified=False), allow_unverified=True)["sub"] == "u1"
+
+
+@pytest.mark.parametrize(
+    "kwargs",
+    [{"aud": "other"}, {"iss": "https://evil"}, {"exp_in": -60}, {"priv": OTHER_PRIV}, {"uid": ""}],
+)
+def test_verify_claims_rejects_bad_tokens(kwargs):
+    v = IdTokenVerifier(PROJECT, fetch_certs=lambda: {KID: PUB})
+    with pytest.raises(InvalidToken):
+        v.verify_claims(mint(**kwargs))
+
+
+def test_verify_claims_garbage_is_invalid():
+    v = IdTokenVerifier(PROJECT, fetch_certs=lambda: {KID: PUB})
+    with pytest.raises(InvalidToken):
+        v.verify_claims("not-a-jwt")
+
+
 @pytest.mark.parametrize("uid", ["a" * 129, "", "a/b", 123, None, ["x"]])
 def test_sub_rejected(uid):
     v = IdTokenVerifier(PROJECT, fetch_certs=lambda: {KID: PUB})
@@ -294,7 +326,9 @@ def test_fake_auth_refused_outside_local_test(env, blobs):
     with pytest.raises(ConfigError):
         create_app(s, repo=FakeRepo(blobs), blobs=blobs)
     with pytest.raises(ConfigError):
-        Settings.from_env({"APP_BASE_URL": "https://app.onolys.com", "ENV": env, "AUTH_MODE": "fake"})
+        Settings.from_env(
+            {"APP_BASE_URL": "https://app.onolys.com", "ENV": env, "AUTH_MODE": "fake"}
+        )
 
 
 def test_idp_requires_project(blobs):

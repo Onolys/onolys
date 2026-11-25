@@ -6,9 +6,10 @@ from types import SimpleNamespace
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from onolys_admin_auth import ConfigError
+from onolys_engine_core.errors import ConfigError
 from onolys_engine_core.json_logging import configure_logging
 
+from onolys_eval_backend.allowlist import ClaimsVerifier
 from onolys_eval_backend.auth import EvalAuthMiddleware, TokenVerifier
 from onolys_eval_backend.catalog import router as catalog_router
 from onolys_eval_backend.config import EvalConfig
@@ -23,13 +24,13 @@ from onolys_eval_backend.uploads import router as uploads_router
 def parse_cors_origins(raw: str) -> list[str]:
     origins = [origin.strip() for origin in raw.split(",") if origin.strip()]
     if any("*" in origin or origin == "null" for origin in origins):
-        raise ConfigError("ADMIN_CORS_ORIGINS must list exact origins (no wildcards)")
+        raise ConfigError("CORS_ORIGINS must list exact origins (no wildcards)")
     return origins
 
 
 def create_app(
     env: Mapping[str, str] | None = None,
-    verifier: TokenVerifier | None = None,
+    verifier: ClaimsVerifier | None = None,
     *,
     task_verifier: TokenVerifier | None = None,
     services: object | None = None,
@@ -38,7 +39,7 @@ def create_app(
     config = EvalConfig.from_env(env)
     # One JSON handler on root; configure_logging never imports litellm.
     configure_logging(SimpleNamespace(git_sha=_git_sha()))
-    origins = parse_cors_origins(env.get("ADMIN_CORS_ORIGINS", ""))
+    origins = parse_cors_origins(env.get("CORS_ORIGINS", ""))
     app = FastAPI(title="Onolys eval backend", docs_url=None, redoc_url=None, openapi_url=None)
     # Routers access these through request.app.state; construction performs no cloud I/O.
     # Later services can be supplied as a bundle of repository/storage/queue fakes.

@@ -4,7 +4,6 @@ requires-python = "==3.12.*"
 
 [manifest]
 members = [
-    "onolys-admin-auth",
     "onolys-api",
     "onolys-engine-core",
     "onolys-eval",
@@ -1158,41 +1157,6 @@ wheels = [
 ]
 
 [[package]]
-name = "onolys-admin-auth"
-version = "0.1.0"
-source = { editable = "eval/auth" }
-dependencies = [
-    { name = "google-auth" },
-    { name = "requests" },
-]
-
-[package.dev-dependencies]
-dev = [
-    { name = "cryptography" },
-    { name = "httpx" },
-    { name = "pytest" },
-    { name = "pytest-cov" },
-    { name = "ruff" },
-    { name = "starlette" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "google-auth", specifier = ">=2.30" },
-    { name = "requests", specifier = ">=2.31" },
-]
-
-[package.metadata.requires-dev]
-dev = [
-    { name = "cryptography", specifier = ">=42" },
-    { name = "httpx", specifier = ">=0.27" },
-    { name = "pytest", specifier = ">=8" },
-    { name = "pytest-cov", specifier = ">=5" },
-    { name = "ruff", specifier = ">=0.6" },
-    { name = "starlette", specifier = ">=0.40" },
-]
-
-[[package]]
 name = "onolys-api"
 version = "0.1.0"
 source = { editable = "api" }
@@ -1336,7 +1300,7 @@ dependencies = [
     { name = "google-cloud-firestore" },
     { name = "google-cloud-storage" },
     { name = "google-cloud-tasks" },
-    { name = "onolys-admin-auth" },
+    { name = "onolys-api" },
     { name = "onolys-engine-core" },
     { name = "onolys-eval" },
     { name = "onolys-miti", extra = ["stt-google"] },
@@ -1361,7 +1325,7 @@ requires-dist = [
     { name = "google-cloud-firestore", specifier = ">=2.19" },
     { name = "google-cloud-storage", specifier = ">=2.18" },
     { name = "google-cloud-tasks", specifier = ">=2.16" },
-    { name = "onolys-admin-auth", editable = "eval/auth" },
+    { name = "onolys-api", editable = "api" },
     { name = "onolys-engine-core", editable = "engines/core" },
     { name = "onolys-eval", editable = "eval/core" },
     { name = "onolys-miti", extras = ["stt-google"], editable = "engines/miti" },

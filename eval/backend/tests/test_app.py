@@ -1,21 +1,18 @@
 """Auth boundary tests exercise the actual ASGI middleware, without cloud access."""
 
-import ast
-from pathlib import Path
-
 import pytest
 from fastapi.testclient import TestClient
-from onolys_admin_auth import ConfigError, InvalidToken
-
+from onolys_api.auth.idtoken import EmailNotVerified, InvalidToken
+from onolys_api.errors import ApiError
+from onolys_engine_core.errors import ConfigError
 from onolys_eval_backend import create_app
 from onolys_eval_backend.config import EvalConfig
 
 ENV = {
     "ENV": "staging",
     "GCP_PROJECT": "onolys-test",
-    "ADMIN_AUTH": "on",
-    "ADMIN_ALLOWED_EMAILS": "alice@example.com",
-    "ADMIN_CORS_ORIGINS": "https://eval.example",
+    "EVAL_ALLOWED_EMAILS": "Alice@Example.com",
+    "CORS_ORIGINS": "https://eval.example",
     "EVAL_BUCKET": "eval-test",
     "TASKS_QUEUE": "projects/test/locations/europe-west1/queues/eval-runs",
     "TASKS_SA": "tasks@onolys-test.iam.gserviceaccount.com",
@@ -33,6 +30,8 @@ TASK_CLAIMS = {
 
 
 class Verifier:
+    """Fake of both verifiers: `verify` (task OIDC) and the prod `verify_claims` (user ID token)."""
+
     def __init__(self, claims):
         self.claims = claims
 
@@ -40,6 +39,12 @@ class Verifier:
         if token != "valid":
             raise InvalidToken
         return self.claims
+
+    def verify_claims(self, token):
+        claims = self.verify(token)
+        if claims.get("email_verified") is not True:
+            raise EmailNotVerified  # the prod verifier checks this itself
+        return claims
 
 
 def client(*, claims=None, task_claims=None, **kwargs):
@@ -70,6 +75,45 @@ def test_non_allowlisted_is_403():
     assert response.json()["error"]["code"] == "not_allowlisted"
 
 
+def test_unverified_email_is_403():
+    response = client(claims={"email": "alice@example.com", "email_verified": False}).get(
+        "/v1/me", headers=AUTH
+    )
+    assert response.status_code == 403
+    assert response.json()["error"]["code"] == "email_unverified"
+
+
+def test_invalid_token_is_401():
+    response = client().get("/v1/me", headers={"Authorization": "Bearer bad"})
+    assert response.status_code == 401
+
+
+def test_cert_outage_is_503():
+    class Down:
+        def verify_claims(self, token):
+            raise ApiError.of(503, "upstream_unavailable", "x")
+
+    app = create_app(ENV, verifier=Down(), task_verifier=Verifier(TASK_CLAIMS))
+    assert TestClient(app).get("/v1/me", headers=AUTH).status_code == 503
+
+
+def test_email_is_matched_case_insensitively_and_recorded():
+    seen = []
+    app = create_app(
+        ENV,
+        verifier=Verifier({"email": " ALICE@example.com ", "email_verified": True}),
+        task_verifier=Verifier(TASK_CLAIMS),
+    )
+
+    @app.get("/v1/whoami")
+    async def whoami(request: __import__("fastapi").Request):
+        seen.append(request.state.user_email)
+        return {}
+
+    assert TestClient(app).get("/v1/whoami", headers=AUTH).status_code == 200
+    assert seen == ["alice@example.com"]
+
+
 def test_allowed_me_and_health():
     with client() as c:
         assert c.get("/v1/me", headers=AUTH).json() == {"status": "ok"}
@@ -78,16 +122,32 @@ def test_allowed_me_and_health():
 
 @pytest.mark.parametrize(
     "env",
-    [{"ADMIN_ALLOWED_EMAILS": ""}, {"ADMIN_AUTH": "off"}, {"ENV": "local", "ADMIN_AUTH": "off"}],
+    [
+        {"EVAL_ALLOWED_EMAILS": ""},
+        {"EVAL_ALLOWED_EMAILS": " , "},
+        {"AUTH_MODE": "fake"},
+        {"ENV": "local", "AUTH_MODE": "fake"},
+        {"ADMIN_AUTH": "off"},
+        {"ADMIN_ALLOWED_EMAILS": "alice@example.com"},
+        {"ADMIN_CORS_ORIGINS": "https://eval.example"},
+        {"EVAL_AUTH": "on"},
+        {"GCP_PROJECT": "", "AUTH_PROJECT": ""},
+    ],
 )
 def test_unsafe_auth_config_fails_at_creation(env):
     with pytest.raises(ConfigError):
         create_app({**ENV, **env})
 
 
-def test_auth_defaults_on_even_locally():
-    env = {k: v for k, v in ENV.items() if k != "ADMIN_AUTH"}
-    assert create_app({**env, "ENV": "local"}).state.config.auth.enabled is True
+def test_auth_is_always_on_even_locally():
+    app = create_app({**ENV, "ENV": "local"}, verifier=Verifier({}))
+    assert TestClient(app).get("/v1/me").status_code == 401
+    assert app.state.config.allowed_emails == frozenset({"alice@example.com"})
+
+
+def test_auth_project_falls_back_to_gcp_project():
+    assert create_app(ENV).state.config.auth_project == "onolys-test"
+    assert create_app({**ENV, "AUTH_PROJECT": "idp-proj"}).state.config.auth_project == "idp-proj"
 
 
 @pytest.mark.parametrize("route", ["unit", "transcribe", "unknown"])
@@ -155,7 +215,7 @@ def test_cors_outermost_for_preflight_and_denials():
 @pytest.mark.parametrize("origin", ["*", "https://*.example", "null"])
 def test_unsafe_cors_rejected(origin):
     with pytest.raises(ConfigError):
-        create_app({**ENV, "ADMIN_CORS_ORIGINS": origin})
+        create_app({**ENV, "CORS_ORIGINS": origin})
 
 
 def test_config_and_injected_services():
@@ -190,22 +250,6 @@ def test_config_and_injected_services():
 def test_missing_required_config_fails(field):
     with pytest.raises(ConfigError):
         create_app({**ENV, field: " "})
-
-
-def test_no_api_imports_in_backend():
-    root = Path(__file__).parents[1] / "src"
-    for source in root.rglob("*.py"):
-        for node in ast.walk(ast.parse(source.read_text())):
-            names = (
-                [alias.name for alias in node.names]
-                if isinstance(node, ast.Import)
-                else [node.module or ""]
-                if isinstance(node, ast.ImportFrom)
-                else []
-            )
-            assert not any(
-                name == "onolys_api" or name.startswith("onolys_api.") for name in names
-            ), source
 
 
 @pytest.fixture(scope="module")
@@ -271,9 +315,7 @@ def test_task_verifier_caches_refreshes_and_retains_google_validation(task_keys)
 
 def test_task_verifier_upstream_failure_is_not_an_auth_bypass(task_keys):
     from google.auth.exceptions import TransportError
-    from onolys_admin_auth import UpstreamUnavailable
-
-    from onolys_eval_backend.auth import TaskOidcVerifier
+    from onolys_eval_backend.auth import TaskOidcVerifier, UpstreamUnavailable
 
     calls = []
 
@@ -331,3 +373,10 @@ def test_task_verification_runs_outside_event_loop():
 def test_explicit_task_audience_configuration():
     app = create_app({**ENV, "TASKS_OIDC_AUDIENCE": "https://explicit-audience.example"})
     assert app.state.config.task_audience == "https://explicit-audience.example"
+
+
+def test_allowlist_middleware_refuses_empty_set():
+    from onolys_eval_backend.allowlist import AllowlistMiddleware
+
+    with pytest.raises(ValueError):
+        AllowlistMiddleware(lambda *a: None, Verifier({}), frozenset())
