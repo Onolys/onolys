@@ -18,6 +18,7 @@ name: deploy-prod
 #   WIF_PROVIDER, DEPLOYER_STAGING_SA (read-only resolve step), DEPLOYER_PROD_SA, GCP_PROJECT (optional), GCP_REGION (optional),
 #   PROD_VITE_FIREBASE_{API_KEY,AUTH_DOMAIN,APP_ID,STORAGE_BUCKET,MESSAGING_SENDER_ID} (Terraform output web_env_prod),
 #   PROD_VITE_CONTACT_EMAIL (optional)
+#   PROD_LLM_PROVIDER + PROD_LLM_MODEL (both or neither), PROD_LLM_EFFORT (optional; validated against the promoted image)
 # Approval: the prod jobs (api, worker, voice, rules, web) all start right after `resolve`, so GitHub shows ONE
 # "Review pending deployments" prompt for `production` and one click releases them all (a later-starting gated job
 # would need a second approval). Trade-off: no ordering between api and web; the Hosting rewrite targets the service
@@ -61,6 +62,9 @@ jobs:
     outputs:
       sha: ${{ steps.sha.outputs.sha }}
       image: ${{ steps.digest.outputs.image }}
+      llm_provider: ${{ steps.llm.outputs.provider }}
+      llm_model: ${{ steps.llm.outputs.model }}
+      llm_effort: ${{ steps.llm.outputs.effort }}
     steps:
       # Checkout comes BEFORE auth: checkout cleans the workspace and would delete the gha-creds-*.json that auth writes
       # there. The default-ref checkout is only a git repo to move to the resolved sha later (no checkout after auth).
@@ -111,6 +115,7 @@ jobs:
           # their tree, and nothing from the target sha may run in this job (staging deployer credentials are loaded).
           cp scripts/ci/staging_ran_image.py "$RUNNER_TEMP/staging_ran_image.py"
           cp scripts/ci/check_config.sh "$RUNNER_TEMP/check_config.sh"
+          cp scripts/ci/validate_staging_llm.py "$RUNNER_TEMP/validate_staging_llm.py"
           git fetch --no-tags --depth=1 origin "$SHA"
           git checkout --detach "$SHA"
       - name: Config guard (source tree at this commit; the script is the workflow ref's copy, run with an empty environment)
@@ -153,6 +158,24 @@ jobs:
         # Same rule as the source-tree guard: the workflow ref's copy (made before the checkout), never the target tree's script.
         # HOME stays so docker finds the registry login written above; everything else (creds file vars, GITHUB_ENV) is dropped.
         run: env -i PATH="$PATH" HOME="$HOME" ROOT="$GITHUB_WORKSPACE" bash "$RUNNER_TEMP/check_config.sh" --image "$IMAGE"
+      - name: Validate production LLM variables against the exact promoted image
+        id: llm
+        env:
+          IMAGE: ${{ steps.digest.outputs.image }}
+          LLM_PROVIDER: ${{ vars.PROD_LLM_PROVIDER }}
+          LLM_MODEL: ${{ vars.PROD_LLM_MODEL }}
+          LLM_EFFORT: ${{ vars.PROD_LLM_EFFORT }}
+        run: |
+          # Blank settings explicitly clear previous overrides and support historical images
+          # that predate the override loader. No target-tree code runs on the credentialed host.
+          if [ -z "$LLM_PROVIDER" ] && [ -z "$LLM_MODEL" ] && [ -z "$LLM_EFFORT" ]; then
+            printf 'provider=\nmodel=\neffort=\n' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          docker run --rm --network none --read-only --cap-drop ALL --security-opt no-new-privileges \
+            --entrypoint python -e LLM_PROVIDER -e LLM_MODEL -e LLM_EFFORT \
+            --mount "type=bind,src=$RUNNER_TEMP/validate_staging_llm.py,dst=/tmp/validate_llm.py,readonly" \
+            "$IMAGE" /tmp/validate_llm.py --environment prod --config-root /app/config --stdout >> "$GITHUB_OUTPUT"
 
   deploy-api:
     needs: resolve
@@ -166,6 +189,10 @@ jobs:
       image: ${{ needs.resolve.outputs.image }}
       region: us-central1
       git_sha: ${{ needs.resolve.outputs.sha }}
+      env_vars: |-
+        LLM_PROVIDER=${{ needs.resolve.outputs.llm_provider }}
+        LLM_MODEL=${{ needs.resolve.outputs.llm_model }}
+        LLM_EFFORT=${{ needs.resolve.outputs.llm_effort }}
     secrets: inherit
 
   deploy-worker:
@@ -180,6 +207,10 @@ jobs:
       image: ${{ needs.resolve.outputs.image }}
       region: us-central1
       git_sha: ${{ needs.resolve.outputs.sha }}
+      env_vars: |-
+        LLM_PROVIDER=${{ needs.resolve.outputs.llm_provider }}
+        LLM_MODEL=${{ needs.resolve.outputs.llm_model }}
+        LLM_EFFORT=${{ needs.resolve.outputs.llm_effort }}
     secrets: inherit
 
   deploy-voice:

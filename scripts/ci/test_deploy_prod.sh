@@ -97,4 +97,5 @@ env -i PATH=/usr/bin:/bin HOME="$GT" ROOT="$GT/evil" bash "$GT/check_config.sh" 
 [[ ! -e "$GT/pwned" ]] && ok "target-tree script never executed" || bad "target-tree script never executed"
 
 command -v actionlint >/dev/null 2>&1 && { (cd "$ROOT" && actionlint "$WF") && ok "actionlint" || bad "actionlint"; }
+python3 "$ROOT/scripts/ci/test_deploy_prod_llm.py" || fail=1
 exit $fail
