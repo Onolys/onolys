@@ -35,7 +35,9 @@ export function CompareApp({api,runId,state,navigate}:{api:EvalApi;runId:string;
  const [tabAttempt,setTabAttempt]=useState(0);
  const tabRefs=useRef<(HTMLButtonElement|null)[]>([]);
  const tab=state.tab??'overview';
- const combosKey=JSON.stringify(state.combos??[]);
+ const defaults=overview.data?.combos.filter(combo=>{const cell=overview.data!.count_error[combo.combo_key];return cell && !cell.na && cell.off!==null;}).sort((a,b)=>overview.data!.count_error[a.combo_key].off!-overview.data!.count_error[b.combo_key].off!).slice(0,3).map(combo=>combo.combo_key)??[];
+ const effectiveCombos=tab==='deep'&&!state.combos?.length?defaults:state.combos??[];
+ const combosKey=JSON.stringify(effectiveCombos);
  const session=state.session ?? (run && 'session_ids' in run.input ? run.input.session_ids[0] : undefined);
  const cacheKey=JSON.stringify([tab,combosKey,tab==='lines'?session:null,state.code,state.combo]);
  const entry=cache[cacheKey];
@@ -68,9 +70,10 @@ export function CompareApp({api,runId,state,navigate}:{api:EvalApi;runId:string;
   return {letter:comboLetter(index),combo,label:savedLabel ? `${combo.engine} · ${savedLabel}` : [combo.engine,combo.model,combo.tier,combo.effort,combo.combo_key].filter(Boolean).join(' · ')};
  });
  const labelCoverage=data.header.label_coverage;
- const props={overview:data,run,state,navigate,legend,api,runId};
+ const props={overview:data,run,state:tab==='deep'?{...state,combos:effectiveCombos}:state,navigate,legend,api,runId};
+ const cohorts=tab==='deep'?(active&&'cohorts' in active?active.cohorts??{}:{}):data.cohorts;
  const retryTab=()=>{setCache(previous=>{const next={...previous};delete next[cacheKey];return next;});setTabAttempt(n=>n+1);};
- return <section className="compare-app"><header><EvalLink state={{view:'run',run:runId}} navigate={navigate}>Back to run</EvalLink><h1>{data.header.name||runId}</h1><PartialBadge run={{status:data.coverage.eval_status,cancelled_at:data.coverage.cancelled_at,done_units:data.coverage.runs_done,total_units:data.coverage.runs_total,skipped_units:data.coverage.runs_skipped}}/><p>{data.header.sessions} sessions, {data.header.repeats} repeats</p><p>{labelCoverage ? `Human labels: ${labelCoverage.counts.length===10?'all counts':`${labelCoverage.counts.length} counts`}, ${labelCoverage.globals.length} globals` : 'Human labels: unavailable'}</p><div aria-label="Cohorts">{Object.entries(data.cohorts).map(([metric,cohort])=><p key={metric}>{metric}: paired {cohort.paired} of {cohort.of}</p>)}</div><Coverage data={coverage}/><ProviderSkipNotices skips={coverage.coverage.skipped_providers}/></header>
+ return <section className="compare-app"><header><EvalLink state={{view:'run',run:runId}} navigate={navigate}>Back to run</EvalLink><h1>{data.header.name||runId}</h1><PartialBadge run={{status:data.coverage.eval_status,cancelled_at:data.coverage.cancelled_at,done_units:data.coverage.runs_done,total_units:data.coverage.runs_total,skipped_units:data.coverage.runs_skipped}}/><p>{data.header.sessions} sessions, {data.header.repeats} repeats</p><p>{labelCoverage ? `Human labels: ${labelCoverage.counts.length===10?'all counts':`${labelCoverage.counts.length} counts`}, ${labelCoverage.globals.length} globals` : 'Human labels: unavailable'}</p><div aria-label="Cohorts">{Object.entries(cohorts).map(([metric,cohort])=><p key={metric}>{metric}: paired {cohort.paired} of {cohort.of}</p>)}</div><Coverage data={coverage}/><ProviderSkipNotices skips={coverage.coverage.skipped_providers}/></header>
  <div role="tablist" aria-label="Compare screens">{tabs.map((item,index)=><button key={item.id} ref={node=>{tabRefs.current[index]=node;}} type="button" role="tab" id={`compare-tab-${item.id}`} aria-selected={tab===item.id} aria-controls="compare-panel" tabIndex={tab===item.id?0:-1} onClick={()=>navigate({...state,view:'compare',run:runId,tab:item.id})} onKeyDown={event=>{
   let next:number;if(event.key==='ArrowRight')next=(index+1)%tabs.length;else if(event.key==='ArrowLeft')next=(index+tabs.length-1)%tabs.length;else if(event.key==='Home')next=0;else if(event.key==='End')next=tabs.length-1;else return;
   event.preventDefault();tabRefs.current[next]?.focus();navigate({...state,view:'compare',run:runId,tab:tabs[next].id});

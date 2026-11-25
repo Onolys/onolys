@@ -36,8 +36,9 @@ export interface LineMetrics {
  combos:Record<string,{lane:string|null;n:number;repeats:number;aligned:number;per_code:Record<string,{p:number|null;r:number|null;f1:number|null}>;macro_f1:number|null;line_accuracy:number|null;confusion:Record<string,Record<string,number>>;multi:number}>;
 }
 export interface CompareDeepDive extends CompareCommon {
+ cohorts?:Record<string,{paired:number;of:number}>;
  globals:{cells:MetricCells;dots:{session_id:string;combo_key:string;metric:string;human:number|null;values:number[];n:number;repeats:number}[]};
- counts:{cells:MetricCells;totals:{session_id:string;combo_key:string;human:Record<string,number>;values:Record<string,number>[];n:number;repeats:number}[];bias_pct:Record<string,Record<string,ValueCell>>};
+ counts:{human?:Record<string,ValueCell & {min:number|null;max:number|null}>;cells:MetricCells;totals:{session_id:string;combo_key:string;human:Record<string,number>;values:Record<string,number>[];n:number;repeats:number}[];bias_pct:Record<string,Record<string,ValueCell>>};
  lines:LineMetrics;rationale_counts:Record<string,Record<string,number>>;
 }
 export interface FrontierPoint {combo_key:string;count_error:number;n:number;cost_per_run_usd:number;cost_n:number}
@@ -50,7 +51,7 @@ export interface CompareAnalysis extends CompareCommon {
  error_vs_length:{session_id:string;combo_key:string;off:number;turns:number;words:number;n:number;repeats:number}[];
 }
 export interface Snippet {session_id:string;combo_key:string;repeat:number;rationale:string;withheld:boolean;turn_id?:string;quote?:string|null;quote_verified?:boolean;evidence?:{turn_id:string;quote:string}[]}
-export interface CompareReasoning extends CompareCommon {groups:{code:string;snippets:Snippet[]}[];next_cursor:string|null}
+export interface CompareReasoning extends CompareCommon {groups:{code:string;snippets:Snippet[];human_notes?:{session_id:string;turn_id:string;note:string}[]}[];next_cursor:string|null}
 export interface TranscriptTurn {id:string;speaker:string;is_clinician:boolean;text:string;start_ms?:number|null;end_ms?:number|null}
 export interface ModelLane {missing:string|null;n:number;repeats:number;turns:Record<string,string[][]>}
 export interface CompareLines extends CompareCommon {
@@ -64,8 +65,9 @@ export interface CompareTurn extends Omit<CompareCommon,'combos'> {
  session_id:string;turn_id:string;text:string;human:{codes:string[];note:string|null}|null;missing:string|null;
  combos:Record<string,{missing:string|null;codes:string[][];rationales:Snippet[];agree:{k:number;r:number}|null}>;
 }
-export interface CompareOptions {combos?:string[];code?:string;combo?:string;cursor?:string}
+export interface CompareOptions {combos?:string[];code?:string;combo?:string;metric?:string;cursor?:string}
 export interface CompareApi {
+ compareLineMatches(runId:string,options?:CompareOptions,signal?:AbortSignal):Promise<{session_ids:string[]}>;
  compareOverview(runId:string,options?:CompareOptions,signal?:AbortSignal):Promise<CompareOverview>;
  compareDeepDive(runId:string,options?:CompareOptions,signal?:AbortSignal):Promise<CompareDeepDive>;
  compareAnalysis(runId:string,options?:CompareOptions,signal?:AbortSignal):Promise<CompareAnalysis>;
@@ -90,10 +92,17 @@ function checked<T>(value:unknown, kind:'overview'|'deep'|'analysis'|'reasoning'
 export function createCompareApi(request:<T>(path:string,init?:RequestInit)=>Promise<T>):CompareApi {
  const get = async <T>(run:string,path:string,kind:Parameters<typeof checked>[1],options:CompareOptions={},signal?:AbortSignal):Promise<T> => {
   const query=new URLSearchParams();if(options.combos?.length)query.set('combos',options.combos.join(','));
-  for(const key of ['code','combo','cursor'] as const)if(options[key])query.set(key,options[key]);
+  for(const key of ['code','combo','metric','cursor'] as const)if(options[key])query.set(key,options[key]);
   return checked<T>(await request<unknown>(`${COMPARE_PREFIX}/${encodeURIComponent(run)}/compare/${path}${query.size?`?${query}`:''}`,{signal}),kind);
  };
  return {
+  compareLineMatches:async(r,o={},signal)=>{
+   const query=new URLSearchParams();if(o.combos?.length)query.set('combos',o.combos.join(','));
+   for(const key of ['code','combo','metric'] as const)if(o[key])query.set(key,o[key]);
+   const value=await request<unknown>(`${COMPARE_PREFIX}/${encodeURIComponent(r)}/compare/line-matches?${query}`,{signal});
+   if(!object(value)||!Array.isArray(value.session_ids)||!value.session_ids.every(id=>typeof id==='string'))throw new ComparePayloadError();
+   return {session_ids:value.session_ids as string[]};
+  },
   compareOverview:(r,o,s)=>get(r,'overview','overview',o,s),compareDeepDive:(r,o,s)=>get(r,'deep-dive','deep',o,s),compareAnalysis:(r,o,s)=>get(r,'analysis','analysis',o,s),compareReasoning:(r,o,s)=>get(r,'reasoning','reasoning',o,s),
   compareLines:(r,sid,o,s)=>get(r,`sessions/${encodeURIComponent(sid)}/lines`,'lines',o,s),compareTurn:(r,sid,tid,o,s)=>get(r,`sessions/${encodeURIComponent(sid)}/lines/${encodeURIComponent(tid)}`,'turn',o,s),
  };

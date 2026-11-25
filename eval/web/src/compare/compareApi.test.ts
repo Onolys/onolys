@@ -51,3 +51,14 @@ it('retains normalized backend error envelopes too',async()=>{
  const api=createEvalApi('',vi.fn().mockResolvedValue(new Response(JSON.stringify({error:{code:'not_found',message:'Run missing'}}),{status:404})));
  await expect(api.compareOverview('r')).rejects.toMatchObject({status:404,code:'not_found',message:'Run missing'});
 });
+it('loads matching sessions once using opaque combo and both confusion filters',async()=>{
+ const fetcher=vi.fn().mockResolvedValue(new Response(JSON.stringify({session_ids:['synthetic-s01','synthetic-s02']})));
+ const api=createEvalApi('https://eval',fetcher),signal=new AbortController().signal;
+ expect(await api.compareLineMatches('r/1',{combos:['miti|m/t/e','other'],combo:'miti|m/t/e',code:'sr',metric:'cr'},signal)).toEqual({session_ids:['synthetic-s01','synthetic-s02']});
+ expect(fetcher).toHaveBeenCalledTimes(1);const [url,init]=fetcher.mock.calls[0];const parsed=new URL(String(url));
+ expect(parsed.pathname).toBe('/v1/eval-runs/r%2F1/compare/line-matches');expect(parsed.searchParams.get('combos')).toBe('miti|m/t/e,other');expect(parsed.searchParams.get('combo')).toBe('miti|m/t/e');expect(parsed.searchParams.get('code')).toBe('sr');expect(parsed.searchParams.get('metric')).toBe('cr');expect(init.signal).toBe(signal);
+});
+it.each([null,{}, {session_ids:[1]}, {session_ids:'bad'}])('rejects malformed matching session payload %j',async payload=>{
+ const api=createEvalApi('',vi.fn().mockResolvedValue(new Response(JSON.stringify(payload))));
+ await expect(api.compareLineMatches('r',{combo:'c',code:'multi',metric:'multi'})).rejects.toBeInstanceOf(ComparePayloadError);
+});
