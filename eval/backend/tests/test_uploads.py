@@ -179,7 +179,7 @@ def test_audio_start_poll_complete_and_terminal_redelivery(services):
 
     assert task().status_code == 200
     assert len(services.stt.starts) == 1 and services.stt.polls == []
-    assert services.stt.starts[0][0].uri == f"gs://audio-eval-test/uploads/{uid}/input.wav"
+    assert services.stt.starts[0][0].uri == f"gs://audio-eval-test/eval-uploads/{uid}/input.wav"
     assert services.queue.tasks[-1] == ("transcribe", {"upload_id": uid}, 15)
     assert task().status_code == 200
     assert len(services.stt.starts) == 1 and services.stt.polls == ["opaque-handle"]
@@ -535,10 +535,10 @@ def test_direct_audio_upload_signed_url_then_complete_enqueues_transcription(ser
     body = started.json()
     uid = body["upload_id"]
     assert body["status"] == "awaiting_upload" and body["upload"]["method"] == "PUT"
-    assert body["upload"]["url"].endswith(f"uploads/{uid}/input.wav")
+    assert body["upload"]["url"].endswith(f"eval-uploads/{uid}/input.wav")
     assert body["upload"]["headers"]["x-goog-if-generation-match"] == "0"
     assert services.queue.tasks == []
-    path = f"uploads/{uid}/input.wav"
+    path = f"eval-uploads/{uid}/input.wav"
     # Not uploaded yet.
     assert c.post(f"/v1/uploads/{uid}/complete", headers=AUTH).status_code == 409
     services.bucket.write_bytes(path, b"RIFF\x00\x00\x00\x00WAVEdata", content_type="audio/wav")
@@ -555,7 +555,7 @@ def test_direct_audio_upload_rejects_wrong_bytes_and_bad_requests(services):
     c = client(services=services)
     uid = start_direct(c).json()["upload_id"]
     services.bucket.write_bytes(
-        f"uploads/{uid}/input.wav", b"not audio at all....", content_type="audio/wav"
+        f"eval-uploads/{uid}/input.wav", b"not audio at all....", content_type="audio/wav"
     )
     assert c.post(f"/v1/uploads/{uid}/complete", headers=AUTH).status_code == 422
     assert services.repository.get_upload(uid)["status"] == "failed" and services.queue.tasks == []
@@ -615,7 +615,7 @@ def test_slow_storage_does_not_block_other_requests(services):
 def test_direct_completion_retries_failed_enqueue_without_losing_work(services):
     c = client(services=services)
     uid = start_direct(c).json()["upload_id"]
-    services.bucket.write_bytes(f"uploads/{uid}/input.wav", b"RIFF1234WAVEdata", content_type="audio/wav")
+    services.bucket.write_bytes(f"eval-uploads/{uid}/input.wav", b"RIFF1234WAVEdata", content_type="audio/wav")
     enqueue = services.queue.enqueue
 
     def unavailable(*args, **kwargs):
@@ -632,7 +632,7 @@ def test_direct_completion_retries_failed_enqueue_without_losing_work(services):
 def test_direct_completion_recovers_after_accepted_task_record_failure(services):
     c = client(services=services)
     uid = start_direct(c).json()["upload_id"]
-    services.bucket.write_bytes(f"uploads/{uid}/input.wav", b"RIFF1234WAVEdata", content_type="audio/wav")
+    services.bucket.write_bytes(f"eval-uploads/{uid}/input.wav", b"RIFF1234WAVEdata", content_type="audio/wav")
     update = services.repository.update_upload
 
     def crash_record(upload_id, patch):
@@ -652,7 +652,7 @@ def test_direct_completion_recovers_after_accepted_task_record_failure(services)
 def test_delayed_second_completion_does_not_regress_finished_transcription(services):
     c = client(services=services)
     uid = start_direct(c).json()["upload_id"]
-    services.bucket.write_bytes(f"uploads/{uid}/input.wav", b"RIFF1234WAVEdata", content_type="audio/wav")
+    services.bucket.write_bytes(f"eval-uploads/{uid}/input.wav", b"RIFF1234WAVEdata", content_type="audio/wav")
     size = services.bucket.size
 
     def second_completes_first(path):

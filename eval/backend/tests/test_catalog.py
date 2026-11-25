@@ -35,7 +35,7 @@ def manifest():
 @pytest.fixture
 def services():
     return SimpleNamespace(
-        bucket=InMemoryBucket(), repository=InMemoryEvalRepository(),
+        bucket=InMemoryBucket(), datasets=InMemoryBucket(), repository=InMemoryEvalRepository(),
         models=load_models(MODELS_YAML),
         routes=RouteRegistry({
             "oneshot": {"litellm_id": "synthetic/model"},
@@ -150,10 +150,10 @@ def test_missing_upload_and_invalid_mode(services):
 
 def test_dataset_list_detail_and_gold_presence(services):
     source = manifest()
-    services.bucket.write_json("datasets/synthetic/manifest.json", source)
-    services.bucket.write_json("datasets/synthetic/one/gold.json", {})
-    services.bucket.write_json("datasets/ignored/nested/manifest.json", source)
-    services.bucket.write_json("uploads/ignored/manifest.json", source)
+    services.datasets.write_json("datasets/synthetic/manifest.json", source)
+    services.datasets.write_json("datasets/synthetic/one/gold.json", {})
+    services.datasets.write_json("datasets/ignored/nested/manifest.json", source)
+    services.bucket.write_json("eval-uploads/ignored/manifest.json", source)
     c = client(services)
     response = c.get("/v1/datasets", headers=AUTH)
     assert response.status_code == 200
@@ -171,7 +171,7 @@ def test_dataset_list_detail_and_gold_presence(services):
     assert session["session_id"] == "one" and session["has_gold"] is True
     assert session["coded_span"] == source["sessions"][0]["coded_span"]
     assert session["change_goal"] == "Test goal"
-    services.bucket._objects.pop("datasets/synthetic/one/gold.json")
+    services.datasets._objects.pop("datasets/synthetic/one/gold.json")
     assert c.get("/v1/datasets/synthetic", headers=AUTH).json()["sessions"][0]["has_gold"] is False
     assert c.get("/v1/datasets/missing", headers=AUTH).status_code == 404
 
@@ -185,7 +185,7 @@ def test_invalid_manifests_fail_with_fixed_message(services, change):
         source["dataset_id"] = "different"
     else:
         source["sessions"][0]["coded_span"] = {"start_turn": 10, "end_turn": 1}
-    services.bucket.write_json("datasets/synthetic/manifest.json", source)
+    services.datasets.write_json("datasets/synthetic/manifest.json", source)
     c = client(services)
     for path in ["/v1/datasets", "/v1/datasets/synthetic"]:
         response = c.get(path, headers=AUTH)
@@ -222,7 +222,7 @@ def test_bucket_failures_never_expose_details(services):
     def fail(prefix):
         raise RuntimeError("private paths and credentials")
 
-    services.bucket.list = fail
+    services.datasets.list = fail
     response = client(services).get("/v1/datasets", headers=AUTH)
     assert response.status_code == 503
     assert response.json() == {"detail": "Dataset catalog unavailable."}
@@ -277,10 +277,12 @@ def test_production_cloud_adapters_use_explicit_project_and_staging_database(mon
     services = EvalServices(EvalConfig.from_env(ENV))
     assert calls == []
     assert services.bucket.bucket == "bucket-object"
+    assert services.datasets.bucket == "bucket-object"
     assert services.repository.uploads == "eval_uploads"
     assert services.bucket is services.bucket and services.repository is services.repository
     assert calls == [
         ("storage", {"project": "onolys-test"}), ("bucket", "audio-eval-test"),
+        ("storage", {"project": "onolys-test"}), ("bucket", "datasets-test"),
         ("firestore", {"project": "onolys-test", "database": "staging"}),
         ("collection", "eval_uploads"), ("collection", "eval_runs"),
     ]
@@ -307,7 +309,7 @@ def test_catalog_lists_wider_label_schemes(services):
     ):
         data = {**manifest(), "dataset_id": dataset_id, "miti_version": version,
                 "label_scheme": scheme}
-        services.bucket.write_json(f"datasets/{dataset_id}/manifest.json", data)
+        services.datasets.write_json(f"datasets/{dataset_id}/manifest.json", data)
     rows = {r["dataset_id"]: r for r in client(services).get("/v1/datasets", headers=AUTH).json()["datasets"]}
     assert rows["miti-four"]["miti_version"] == "4.0"
     assert rows["not-miti"]["miti_version"] is None
@@ -329,7 +331,7 @@ def test_catalog_lists_committed_public_datasets(services):
                 "clinician_labels": ["helper"], "code_header": None, "change_goal": "x",
                 "change_goal_source": "curated", "coded_span": None, "notes": ""}
                 for n in range(2000)]
-        services.bucket.write_json(f"datasets/{ident}/manifest.json", data)
+        services.datasets.write_json(f"datasets/{ident}/manifest.json", data)
     c = client(services)
     rows = {r["dataset_id"]: r for r in c.get("/v1/datasets", headers=AUTH).json()["datasets"]}
     assert rows["casaa-miti-practice"]["session_count"] == 12

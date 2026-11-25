@@ -99,7 +99,7 @@ def test_gold_copied_once_content_addressed_and_not_under_uploads(env):
     env.blobs.put_bytes = lambda *a, **k: (writes.append(a[0]), orig(*a, **k))
     ensure_session(env, src())
     assert [w for w in writes if w.startswith("gold/")] == []
-    assert env.blobs.list_keys("uploads/") == []
+    assert env.blobs.list_keys("eval-uploads/") == []
 
 
 def test_no_gold_and_invalid_gold(env):
@@ -115,10 +115,10 @@ def test_no_gold_and_invalid_gold(env):
 
 
 def test_upload_source_reads_upload_bucket(env):
-    env.bucket.write_json("uploads/u1/transcript.json", transcript())
+    env.bucket.write_json("eval-uploads/u1/transcript.json", transcript())
     sid = ensure_session(env, src(
         dataset_id=None, dataset_session_id="u1", source="upload", gold_path=None,
-        transcript_path="uploads/u1/transcript.json",
+        transcript_path="eval-uploads/u1/transcript.json",
     ))
     s = env.repo.get_session(UID, sid)
     assert s.eval.dataset_id is None and s.eval.source == "upload"

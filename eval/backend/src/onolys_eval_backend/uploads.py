@@ -264,7 +264,7 @@ async def upload(request: Request):
         services = bundle(request)
         params = services.stt_params(language) if is_audio else None
         uid = uuid4().hex
-        prefix = f"uploads/{uid}"
+        prefix = f"eval-uploads/{uid}"
         saved = {
             "name": Path(file.filename or "input").name,
             "kind": "audio" if is_audio else "transcript",
@@ -371,7 +371,7 @@ async def start_audio_upload(request: Request):
     services = bundle(request)
     params = services.stt_params(language)
     uid = uuid4().hex
-    prefix = f"uploads/{uid}"
+    prefix = f"eval-uploads/{uid}"
     content_type = media or sorted(_AUDIO_TYPES[ext])[0]
     saved = {
         "name": Path(str(body["filename"])).name,
@@ -507,7 +507,7 @@ async def pick_speaker(upload_id: str, request: Request):
     metadata = transcript_metadata(transcript)
     await asyncio.to_thread(
         services.bucket.write_json,
-        path := f"uploads/{upload_id}/transcripts/{uuid4().hex}.json",
+        path := f"eval-uploads/{upload_id}/transcripts/{uuid4().hex}.json",
         transcript.model_dump(mode="json"),
     )
     metadata["transcript_path"] = path
@@ -589,7 +589,7 @@ async def transcribe_task(request: Request):
                 metadata = transcript_metadata(transcript)
                 await asyncio.to_thread(
                     services.bucket.write_json,
-                    path := f"uploads/{uid}/transcripts/{uuid4().hex}.json",
+                    path := f"eval-uploads/{uid}/transcripts/{uuid4().hex}.json",
                     transcript.model_dump(mode="json"),
                 )
                 changed = await _transcribe_transition(

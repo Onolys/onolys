@@ -2,7 +2,7 @@
 
 `sid = fingerprint[:32]`: the same inputs reuse the session, a changed transcript/goal/span
 makes a new one. Gold is copied once to `gold/<sha256>.json` in the audio bucket (content
-addressed, never under the auto-deleting `uploads/` prefix).
+addressed, never under the auto-deleting `eval-uploads/` prefix).
 """
 
 import hashlib

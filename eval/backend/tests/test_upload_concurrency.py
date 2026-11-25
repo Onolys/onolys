@@ -72,7 +72,7 @@ def test_duplicate_completion_cannot_rewrite_speaker_choice_bytes(services):
     assert task(c, uid).status_code == 200
     assert services.repository.get_upload(uid)["status"] == "ready"
     assert services.bucket.read_json(path) == chosen
-    assert services.bucket.list(f"uploads/{uid}/transcripts/") == []
+    assert services.bucket.list(f"eval-uploads/{uid}/transcripts/") == []
 
 
 def test_initial_start_is_fenced_before_provider_call(services):
@@ -160,7 +160,7 @@ def test_invalid_direct_completion_losing_transition_preserves_ready_upload(serv
 
     c = client(services=services)
     uid = start_direct(c).json()["upload_id"]
-    services.bucket.write_bytes(f"uploads/{uid}/input.wav", b"incorrect bytes", content_type="audio/wav")
+    services.bucket.write_bytes(f"eval-uploads/{uid}/input.wav", b"incorrect bytes", content_type="audio/wav")
     original = services.bucket.read_head
 
     def competing_completion(path, n):
@@ -251,7 +251,7 @@ def test_concurrent_different_speaker_choice_returns_conflict_and_cleans_loser(s
     assert response.status_code == 409
     assert response.json()["error"]["code"] == "speaker_conflict"
     assert services.repository.get_upload(uid)["clinician_speaker"] == "C"
-    assert services.bucket.list(f"uploads/{uid}/transcripts/") == [published]
+    assert services.bucket.list(f"eval-uploads/{uid}/transcripts/") == [published]
 
 
 def test_candidate_cleanup_failure_preserves_winning_result(services):
