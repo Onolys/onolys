@@ -22,7 +22,8 @@ import os
 from importlib.metadata import version
 from pathlib import Path
 
-from onolys_admin_auth import ConfigError, InvalidToken
+from onolys_api.auth.idtoken import InvalidToken
+from onolys_engine_core.errors import ConfigError
 from onolys_eval_backend.app import create_app
 from onolys_eval_backend.config import EvalConfig
 from onolys_eval_backend.runs import _git_sha
@@ -30,10 +31,9 @@ from onolys_eval_backend.runs import _git_sha
 assert os.environ['GIT_SHA'] == os.environ['EXPECTED_GIT_SHA']
 assert _git_sha() == os.environ['EXPECTED_GIT_SHA']
 print('ok image GIT_SHA=' + os.environ['GIT_SHA'])
-for package in ['onolys-eval-backend', 'onolys-eval', 'onolys-admin-auth',
+for package in ['onolys-eval-backend', 'onolys-eval', 'onolys-api',
                 'onolys-engine-core', 'onolys-miti', 'onolys-oneshot']:
     print(f'ok installed {package}={version(package)}')
-assert importlib.util.find_spec('onolys_api') is None
 assert importlib.util.find_spec('onolys_admin_backend') is None
 # Third-party SDKs legitimately contain modules named uploads/runs (e.g. openai.types).
 # Audit application content and every installed Onolys package, not SDK module names.
@@ -44,20 +44,21 @@ for base in [Path('/app'), *site.glob('onolys_*')]:
         assert not {'datasets', 'uploads', 'runs', 'node_modules', '.git', '.worktrees',
                     'fixtures'}.intersection(path.parts), str(path)
         assert path.suffix not in {'.jsonl', '.vtt', '.srt', '.wav', '.mp3', '.mp4'}, str(path)
-print('ok no API/admin backend, datasets, uploads, runs, fixtures or recordings in image')
+print('ok no admin backend, datasets, uploads, runs, fixtures or recordings in image')
 
-env = dict(ENV='staging', ADMIN_AUTH='on', ADMIN_ALLOWED_EMAILS='test@example.com',
-           ADMIN_AUTH_PROJECT='demo-project', EVAL_BUCKET='synthetic-test',
+env = dict(ENV='staging', EVAL_ALLOWED_EMAILS='test@example.com',
+           AUTH_PROJECT='demo-project', EVAL_BUCKET='synthetic-test',
            TASKS_QUEUE='projects/demo-project/locations/us-central1/queues/eval-runs',
            TASKS_SA='tasks@demo-project.iam.gserviceaccount.com',
            SERVICE_URL='https://test.run.app', PROD_ENGINE='miti', DEFAULT_PRESET='default',
            ROUTES_FILE='/app/config/staging/routes.yaml')
 class Verifier:
-    def verify(self, token):
+    def verify_claims(self, token):
         if token == 'invalid':
             raise InvalidToken
         return {'email': 'test@example.com' if token == 'allowed' else 'other@example.com',
                 'email_verified': True}
+    verify = verify_claims
 app = create_app(env, verifier=Verifier(), task_verifier=Verifier())
 services = app.state.catalog
 infos = services.registry.engines()
@@ -90,19 +91,19 @@ async def checks():
     assert {e['id'] for e in json.loads(body)['engines']} == {'human', 'miti', 'oneshot:miti'}
 asyncio.run(checks())
 print('ok offline real-package mock-verifier auth 401/403/200 and options 200')
-for changed in [{'ADMIN_ALLOWED_EMAILS':''}, {'ADMIN_AUTH':'off'}]:
+for changed in [{'EVAL_ALLOWED_EMAILS':''}, {'AUTH_MODE':'off'}, {'EVAL_AUTH':'on'}]:
     try:
         EvalConfig.from_env({**env, **changed})
     except ConfigError:
         pass
     else:
         raise AssertionError('unsafe auth configuration accepted')
-print('ok empty allowlist and disabled auth fail closed')
+print('ok empty allowlist, disabled auth and removed settings fail closed')
 PY
 
 # Actual server process and HTTP anonymous gate, with dummy non-secret configuration.
 docker run -d --name "$NAME" -p "127.0.0.1:$PORT:8080" \
-  -e ADMIN_ALLOWED_EMAILS=test@example.com -e ADMIN_AUTH_PROJECT=demo-project \
+  -e EVAL_ALLOWED_EMAILS=test@example.com -e AUTH_PROJECT=demo-project \
   -e EVAL_BUCKET=synthetic-test \
   -e TASKS_QUEUE=projects/demo-project/locations/us-central1/queues/eval-runs \
   -e TASKS_SA=tasks@demo-project.iam.gserviceaccount.com \

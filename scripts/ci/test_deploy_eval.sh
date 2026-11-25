@@ -30,6 +30,8 @@ for path in ['eval/**', 'engines/**', 'config/**', 'api/pyproject.toml',
 for forbidden in ['DEPLOYER_PROD_SA', 'credentials_json', 'service_account_key',
                   'environment: production', 'update_env_vars:', '_deploy-cloudrun.yml']:
     assert forbidden not in s, f'forbidden workflow config: {forbidden}'
+img = Path('scripts/ci/test_eval_image.sh').read_text()
+assert 'onolys_admin_auth' not in img and 'onolys-admin-auth' not in img and 'ADMIN_' not in img, 'stale admin auth names in test_eval_image.sh'
 assert 'ADMIN_' not in s and 'onolys-eval-backend-staging' not in s, 'legacy admin/staging names remain'
 assert 'vars.PROD_VITE_FIREBASE_AUTH_DOMAIN' not in s, 'auth domain must be the literal eval.onolys.com'
 fs = json.loads(Path('firebase.json').read_text())['firestore']
