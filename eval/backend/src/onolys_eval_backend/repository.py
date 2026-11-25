@@ -36,6 +36,11 @@ class EvalRepository(Protocol):
     def update_unit(self, run_id: str, unit_id: str, updates: Record) -> None: ...
     def transact_unit(self, run_id: str, unit_id: str, mutate: UnitMutation) -> bool: ...
     def cancel_run(self, run_id: str) -> bool: ...
+    # Scheduler (05 R6): the `eval_slots/{provider}` doc, `{holders: {run_id: eval_run_id}}`.
+    def claim_slot(self, provider: str, run_id: str, eval_run_id: str, cap: int) -> bool: ...
+    def release_slot(self, provider: str, run_id: str) -> None: ...
+    def get_slots(self, provider: str) -> Record: ...
+    def advance_tick(self, run_id: str, n: int, at: str) -> bool: ...
 
 
 class InMemoryEvalRepository:
@@ -45,6 +50,7 @@ class InMemoryEvalRepository:
         self._uploads: dict[str, Record] = {}
         self._runs: dict[str, Record] = {}
         self._units: dict[str, dict[str, Record]] = {}
+        self._slots: dict[str, Record] = {}
         self._lock = RLock()
 
     def create_upload(self, upload_id, data):
@@ -143,6 +149,34 @@ class InMemoryEvalRepository:
             self._runs[run_id]['cancel_requested'] = True
             return True
 
+    # The lock is the in-memory equivalent of a Firestore transaction: read, decide, write.
+    def claim_slot(self, provider, run_id, eval_run_id, cap):
+        with self._lock:
+            holders = self._slots.setdefault(provider, {}).setdefault('holders', {})
+            if run_id in holders:
+                return True  # idempotent: a re-claim after a crash is the same slot
+            if len(holders) >= cap:
+                return False
+            holders[run_id] = eval_run_id
+            return True
+
+    def release_slot(self, provider, run_id):
+        with self._lock:
+            self._slots.get(provider, {}).get('holders', {}).pop(run_id, None)
+
+    def get_slots(self, provider):
+        with self._lock:
+            return deepcopy(self._slots.get(provider, {'holders': {}}))
+
+    def advance_tick(self, run_id, n, at):
+        """Compare-and-set `tick_seq` n -> n+1: of duplicate deliveries of tick n only one wins."""
+        with self._lock:
+            run = self._runs.get(run_id)
+            if run is None or run.get('tick_seq') != n:
+                return False
+            run.update({'tick_seq': n + 1, 'last_tick_at': at})
+            return True
+
 
 class FirestoreEvalRepository:
     """Inject a Firestore client targeting database='staging' at service composition."""
@@ -151,6 +185,7 @@ class FirestoreEvalRepository:
         self.client = client
         self.uploads = client.collection('eval_uploads')
         self.runs = client.collection('eval_runs')
+        self.slots = client.collection('eval_slots')
 
     @staticmethod
     def _read(ref):
@@ -296,3 +331,51 @@ class FirestoreEvalRepository:
             return True
 
         return cancel(self.client.transaction())
+
+    def claim_slot(self, provider, run_id, eval_run_id, cap):
+        from google.cloud import firestore
+
+        ref = self.slots.document(provider)
+
+        @firestore.transactional
+        def claim(transaction):
+            snapshot = ref.get(transaction=transaction)
+            holders = (snapshot.to_dict() or {}).get('holders', {}) if snapshot.exists else {}
+            if run_id in holders:
+                return True
+            if len(holders) >= cap:
+                return False
+            if snapshot.exists:
+                transaction.update(ref, {f'holders.{run_id}': eval_run_id})
+            else:
+                transaction.set(ref, {'holders': {run_id: eval_run_id}})
+            return True
+
+        return claim(self.client.transaction())
+
+    def release_slot(self, provider, run_id):
+        from google.api_core.exceptions import NotFound
+        from google.cloud import firestore
+
+        try:
+            self.slots.document(provider).update({f'holders.{run_id}': firestore.DELETE_FIELD})
+        except NotFound:
+            pass
+
+    def get_slots(self, provider):
+        return self._read(self.slots.document(provider)) or {'holders': {}}
+
+    def advance_tick(self, run_id, n, at):
+        from google.cloud import firestore
+
+        ref = self.runs.document(run_id)
+
+        @firestore.transactional
+        def advance(transaction):
+            snapshot = ref.get(transaction=transaction)
+            if not snapshot.exists or snapshot.to_dict().get('tick_seq') != n:
+                return False
+            transaction.update(ref, {'tick_seq': n + 1, 'last_tick_at': at})
+            return True
+
+        return advance(self.client.transaction())

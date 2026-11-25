@@ -3,6 +3,7 @@
 import base64
 import binascii
 import json
+import logging
 import re
 from importlib.resources import files
 
@@ -14,6 +15,7 @@ from onolys_eval.gold import COUNT_IDS, GLOBAL_IDS
 from onolys_eval.metrics import PartialScores, Scores, aggregate, compare
 from pydantic import ConfigDict, Field, StrictInt
 
+from onolys_eval_backend.eval_scheduler import ensure_tick
 from onolys_eval_backend.eval_sessions import SessionImportError
 from onolys_eval_backend.matrix import RunTooLarge, SelectionError, combo_key
 from onolys_eval_backend.runs import (
@@ -27,6 +29,7 @@ from onolys_eval_backend.runs import (
 from onolys_eval_backend.storage import load_output
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 SUMMARY_IDS = ("reflection_question_ratio", "pct_cr")
 METRIC_IDS = (*COUNT_IDS, *GLOBAL_IDS, *SUMMARY_IDS)
 SUMMARY_FIELDS = (
@@ -346,6 +349,10 @@ def _bounded_units(run_id, units):
 def run_detail(request: Request, run_id: str):
     repository = request.app.state.services.repository
     run = _run(repository, run_id)
+    try:  # safety net only: a stalled tick chain is restarted; nothing else needs GET to finish
+        ensure_tick(request.app.state.services, run_id, run)
+    except Exception:
+        logger.exception("tick_reenqueue_failed", extra={"eval_run_id": run_id})
     units = repository.list_units(run_id)
     return {
         **run_summary(run_id, run),

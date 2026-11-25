@@ -13,6 +13,7 @@ from onolys_eval_backend.allowlist import ClaimsVerifier
 from onolys_eval_backend.auth import EvalAuthMiddleware, TokenVerifier
 from onolys_eval_backend.catalog import router as catalog_router
 from onolys_eval_backend.config import EvalConfig
+from onolys_eval_backend.eval_scheduler import router as scheduler_router
 from onolys_eval_backend.read_runs import router as read_runs_router
 from onolys_eval_backend.runs import _git_sha
 from onolys_eval_backend.runs import router as runs_router
@@ -50,6 +51,7 @@ def create_app(
     app.include_router(uploads_router)
     app.include_router(runs_router)
     app.include_router(read_runs_router)
+    app.include_router(scheduler_router)
     install_error_handler(app)
 
     @app.get("/v1/me")
