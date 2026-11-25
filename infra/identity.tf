@@ -168,6 +168,18 @@ output "web_env_prod" {
   }
 }
 
+output "web_env_eval" {
+  description = "VITE_* build vars for eval/web (docs only): prod Firebase web app values, auth domain eval.onolys.com."
+  value = {
+    VITE_FIREBASE_API_KEY             = data.google_firebase_web_app_config.app.api_key
+    VITE_FIREBASE_AUTH_DOMAIN         = "eval.onolys.com"
+    VITE_FIREBASE_PROJECT_ID          = var.project
+    VITE_FIREBASE_APP_ID              = google_firebase_web_app.app.app_id
+    VITE_FIREBASE_STORAGE_BUCKET      = data.google_firebase_web_app_config.app.storage_bucket
+    VITE_FIREBASE_MESSAGING_SENDER_ID = data.google_firebase_web_app_config.app.messaging_sender_id
+  }
+}
+
 output "web_env_admin_staging" {
   description = "VITE_* build vars for the admin staging web app (SP07, after launch)."
   value = var.admin_enabled["staging"] ? {
