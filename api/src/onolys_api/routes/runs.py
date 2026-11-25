@@ -210,6 +210,8 @@ def create_run(
     ):
         raise invalid_state()
     preset, n_runs = s.preset, body.n_runs
+    if is_eval:
+        n_runs = 1  # the worker forces one engine run per eval run; provenance must match
     span = s.coded_span
     if retry:
         prior = repo.list_runs(uid, id)

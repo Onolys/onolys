@@ -17,7 +17,8 @@ from test_run import ROUTES, Env, spy
 from onolys_api.adapters import Adapters, FakeEvaluation, FakeStt
 from onolys_api.adapters.real import RealEvaluation
 from onolys_api.app import create_app
-from onolys_api.jobs.run import eval_snapshot, make_run_handler
+from onolys_api.engines import eval_snapshot
+from onolys_api.jobs.run import make_run_handler
 from onolys_api.jobs.worker import HandlerSpec
 from onolys_api.repo.fake import FakeRepo
 from onolys_api.repo.models import EvalRunInfo

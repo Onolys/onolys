@@ -31,9 +31,21 @@ async def test_runs_list_never_returns_eval(client, app):
     await upload(client, sid, json.dumps(document()))
     r = await client.post(f"/v1/sessions/{sid}/runs", headers=AUTH, json={})
     assert r.status_code == 202, r.text
+    run_id = r.json()["run_id"]
+    path = f"sessions/{sid}/runs/{run_id}"
+    app.state.repo._docs[path]["eval"] = {
+        "eval_run_id": "e1", "combo_key": "c", "repeat": 0, "engine": "miti",
+        "route_override": {"model": "m"}, "resolved_route": {"litellm_id": "x/y"},
+        "engine_version": "v1",
+    }
+    uid = app.state.repo._docs[path]["uid"]
+    assert app.state.repo.get_run(uid, sid, run_id).eval is not None  # the seed is real
     listed = await client.get(f"/v1/sessions/{sid}/runs", headers=AUTH)
-    assert listed.status_code == 200
-    assert "eval" not in listed.text and "route_override" not in listed.text
+    one = await client.get(f"/v1/runs/{run_id}", headers=AUTH)
+    assert listed.status_code == one.status_code == 200
+    for text in (listed.text, one.text):
+        for name in ("eval", "route_override", "resolved_route", "combo_key", "eval_run_id"):
+            assert name not in text, name
 
 
 def test_all_request_bodies_forbid_extras():

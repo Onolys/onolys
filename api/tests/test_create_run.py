@@ -80,3 +80,46 @@ def test_caller_run_id_and_deps_outside_a_request(repo):
     deps = SimpleNamespace(state=app.state)
     out = create_run(deps, UID, sid, RunRequest(), is_eval=True, eval_spec=INFO, run_id="det1")
     assert out.run_id == "det1" and repo.get_run(UID, sid, "det1").eval == INFO
+
+
+def raw_run(repo, sid, run_id) -> dict:
+    """The stored run document as written (fake or emulator), not the parsed model."""
+    if hasattr(repo, "_get"):
+        return repo._get(f"sessions/{sid}/runs/{run_id}")
+    return repo._run_ref(UID, sid, run_id).get().to_dict()
+
+
+def test_prod_run_doc_has_no_eval_key(repo):  # review M1: no `eval: null` on prod runs
+    app, q, sid = setup(repo)
+    out = create_run(app, UID, sid, RunRequest())
+    assert "eval" not in raw_run(repo, sid, out.run_id)
+    assert repo.get_run(UID, sid, out.run_id).eval is None
+
+
+def test_first_run_doc_has_no_eval_key(repo):
+    from test_first_run import set_flags
+
+    uid = "u-first-" + new_session.__name__
+    sid = new_session(repo, uid, state="awaiting_input", ready=True)
+    set_flags(repo, uid, sid, speaker_confirmed=True, clinician_speaker="S1", rating_submitted=True)
+    from onolys_api.jobs.first_run import maybe_start_first_run
+
+    maybe_start_first_run(repo, RecordingQueue(), uid, sid, mk_settings())
+    (run,) = repo.list_runs(uid, sid)
+    d = repo._get(f"sessions/{sid}/runs/{run.run_id}") if hasattr(repo, "_get") else (
+        repo._run_ref(uid, sid, run.run_id).get().to_dict()
+    )
+    assert "eval" not in d
+
+
+def test_eval_run_doc_keeps_eval_key(repo):
+    app, q, sid = setup(repo, "report_ready", eval_mode=True)
+    out = create_run(app, UID, sid, RunRequest(), is_eval=True, eval_spec=INFO)
+    assert raw_run(repo, sid, out.run_id)["eval"]["eval_run_id"] == "e1"
+
+
+def test_eval_run_doc_forces_one_run(repo):  # review A2: provenance matches the worker's n_runs=1
+    app, q, sid = setup(repo, "report_ready", eval_mode=True)
+    out = create_run(app, UID, sid, RunRequest(n_runs=3), is_eval=True, eval_spec=INFO)
+    run = repo.get_run(UID, sid, out.run_id)
+    assert (run.n_runs, run.units) == (1, 1)

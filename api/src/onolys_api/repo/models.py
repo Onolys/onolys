@@ -372,6 +372,12 @@ class RunDoc(Doc):
     unit_kept: bool | None = None  # set on release: a unit of the limit stays spent (None: open)
     eval: EvalRunInfo | None = None  # eval provenance; absent on prod runs, write-once
 
+    def to_store(self) -> dict[str, Any]:
+        d = super().to_store()
+        if d.get("eval") is None:
+            d.pop("eval", None)  # a prod run document has no `eval` key at all
+        return d
+
 
 class ReportDoc(Doc):
     version: int

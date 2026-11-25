@@ -28,16 +28,14 @@ from typing import Any, NoReturn
 
 from onolys_engine_core.context import RunContext
 from onolys_engine_core.errors import ConfigError, InputError
-from onolys_engine_core.llm.routes import resolve_preset
 from onolys_engine_core.validated_run import OutputInvalid
 from pydantic import ValidationError
 
 from onolys_api import logs
 from onolys_api.adapters.base import Evaluation
 from onolys_api.adapters.error_map import kind_for_code, to_public
-from onolys_api.adapters.real import _override_routes
 from onolys_api.adapters.validated import evaluate_validated
-from onolys_api.engines import resolve_engine
+from onolys_api.engines import eval_snapshot
 from onolys_api.jobs.alive import ensure_active
 from onolys_api.jobs.charging import invalid_run_snapshot, release_failed_run, release_once
 from onolys_api.jobs.machine import (
@@ -158,25 +156,6 @@ def _execute(ctx, blobs, evaluation, run_doc, settings=None) -> None:
             repo, uid, sid, to="report_ready", step=None,
             latest_report_version=existing.version,
         )  # fmt: skip
-
-
-def eval_snapshot(settings, preset, engine_id, override) -> tuple[dict, str]:
-    """(route snapshot, engine version) as the worker rebuilds them for an eval run: the same
-    fields eval stored at creation (`EvalRunInfo.resolved_route`, `engine_version`)."""
-    routes, _ = resolve_preset(preset)
-    if override:
-        routes = _override_routes(settings, routes, override)
-    route = next(iter(routes.values()))
-    effort = (override or {}).get("effort") or route.extra_params.get("reasoning_effort")
-    snapshot = {
-        "litellm_id": route.litellm_id,
-        "effort": effort,
-        "max_output_tokens": route.max_output_tokens,
-        "context_tokens": route.context_tokens,
-        "supports_temperature": route.supports_temperature,
-        "caching_mode": route.caching_mode,
-    }
-    return snapshot, resolve_engine(settings, engine_id).version
 
 
 def _eval_guards(settings, run_doc, sid: str) -> None:

@@ -18,7 +18,6 @@ to `internal_error`, not retryable, and the worker logs the class, never the mes
 """
 
 import json
-import os
 import threading
 import time
 from collections.abc import Callable, Mapping
@@ -26,10 +25,9 @@ from typing import Any
 from urllib.parse import parse_qs, urlsplit
 
 from onolys_engine_core.context import RunContext
-from onolys_engine_core.errors import ConfigError, InputError
+from onolys_engine_core.errors import ConfigError
 from onolys_engine_core.llm import LiteLLMClient, LLMConfig, MetricsCollector
-from onolys_engine_core.llm.models import load_models, models_path
-from onolys_engine_core.llm.routes import EFFORT_OUTPUT_CAP, combo_routes, resolve_preset
+from onolys_engine_core.llm.routes import resolve_preset
 from onolys_engine_core.registry import EngineRegistry
 from onolys_engine_core.transcript import Transcript
 from onolys_engine_core.validated_run import run_validated
@@ -42,7 +40,7 @@ from onolys_miti.voice.gemini_live_vertex import GeminiLiveVertex
 
 from onolys_api.adapters.base import AdapterError, AuthAccount, EvaluationOutput, ProgressCb
 from onolys_api.config import Settings
-from onolys_api.engines import build_engine_registry, resolve_engine
+from onolys_api.engines import build_engine_registry, override_routes, resolve_engine
 
 SttFactory = Callable[[], SttAdapter]
 
@@ -119,18 +117,6 @@ def _llm_from_routes(routes: dict) -> Any:
     return LiteLLMClient(LLMConfig(routes=routes))
 
 
-def _override_routes(settings: Settings, base: dict, override: Mapping[str, Any]) -> dict:
-    """Eval only: the preset's routes re-pointed at one (model, tier, effort) combo."""
-    models = load_models(models_path(os.environ, settings.routes_file or None))
-    model = models.get(override.get("model"))
-    if model is None or override.get("tier") not in model.tiers:
-        raise InputError("Unknown eval model or tier.")
-    effort = override.get("effort")
-    if effort not in EFFORT_OUTPUT_CAP or effort not in model.tiers[override["tier"]].efforts:
-        raise InputError("Unknown eval effort.")
-    return combo_routes(base, model, override["tier"], effort)
-
-
 class RealEvaluation:
     """Implements `adapters.base.Evaluation` through the configured engine registry."""
 
@@ -165,7 +151,7 @@ class RealEvaluation:
             engine = self._registry.get(self._settings.prod_engine)
         routes, _ = resolve_preset(params.get("preset"))  # unknown preset: InputError
         if override:
-            routes = _override_routes(self._settings, routes, override)
+            routes = override_routes(self._settings, routes, override)
         deadline = time.monotonic() + RUN_DEADLINE_S
         if ctx.deadline is not None:
             deadline = min(deadline, ctx.deadline)

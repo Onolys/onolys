@@ -1,6 +1,7 @@
 """Eval-only engine and route resolution (04-eval-run-path R5); offline, fake LLM factory."""
 
 import time
+from pathlib import Path
 
 import pytest
 from onolys_engine_core.context import RunContext
@@ -15,6 +16,12 @@ from onolys_api.config import Settings
 from onolys_api.engines import build_engine_registry, resolve_engine
 
 pytestmark = pytest.mark.unit
+MODELS = Path(__file__).resolve().parents[2] / "config" / "models.yaml"
+
+
+@pytest.fixture(autouse=True)
+def _models_file(monkeypatch):  # cwd-independent: the default path is relative
+    monkeypatch.setenv("MODELS_FILE", str(MODELS))
 
 PARAMS = {
     "change_goal": "cut back", "seed": "s", "language": "en", "n_runs": 1,
