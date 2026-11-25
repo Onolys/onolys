@@ -27,12 +27,13 @@ it.each(['queued', 'running', 'done', 'partial', 'failed', 'cancelled', 'deletin
 });
 it.each(['detail', 'history'])('%s guards duplicate cancel clicks, shows pending copy and clears it when terminal', async page => {
  let resolve!: (value: { run_id: string; status: string }) => void;
+ vi.useFakeTimers({ shouldAdvanceTime: true }); // real-time ticking for waitFor; the 3 s poll is advanced by hand
  const api = apiFor(); api.cancel.mockImplementation(() => new Promise(r => { resolve = r; }));
  render(page === 'detail' ? <RunView api={api} runId="r1" onRerun={vi.fn()} /> : <History api={api} onOpen={vi.fn()} onRerun={vi.fn()} />); await openCancel(page);
  const confirm = within(screen.getByRole('dialog')).getByRole('button', { name: 'Cancel run' }); fireEvent.click(confirm); fireEvent.click(confirm); expect(api.cancel).toHaveBeenCalledExactlyOnceWith('r1');
  await act(async () => { resolve({ run_id: 'r1', status: 'running' }); });
  expect(screen.getByText('Cancelled — runs already in progress will finish; no new runs start.')).toBeTruthy(); expect(screen.getByText(/cancelling/)).toBeTruthy();
- api.run.mockResolvedValue(run('done')); await waitFor(() => expect(screen.queryByText('Cancelled — runs already in progress will finish; no new runs start.')).toBeNull(), { timeout: 4000 });
+ api.run.mockResolvedValue(run('done')); await act(async () => { await vi.advanceTimersByTimeAsync(3000); }); await waitFor(() => expect(screen.queryByText('Cancelled — runs already in progress will finish; no new runs start.')).toBeNull());
 });
 it.each(['detail', 'history'])('%s retries cancellation errors and handles 409 with a fresh read', async page => {
  const api = apiFor(); api.cancel.mockRejectedValueOnce(new Error('offline')).mockRejectedValueOnce(new ApiError('Already finished', 409));

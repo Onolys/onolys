@@ -100,6 +100,8 @@ def test_upload_cli_dispatches(tmp_path, monkeypatch, capsys):
 def test_adc_client_uses_staging_project_when_adc_has_no_default_project(tmp_path, monkeypatch):
     from google.cloud import storage
 
+    monkeypatch.delenv('GCP_PROJECT', raising=False)
+
     manifest = dataset(tmp_path)
     client = FakeClient()
     projects = []
@@ -133,3 +135,22 @@ def test_upload_publishes_the_derived_session_list(tmp_path):
     listed = json.loads(client.objects['datasets/ds/manifest.json'][0])
     assert [s['session_id'] for s in listed['sessions']] == ['counsel-chat-7']
     assert 'sessions_from_source' not in listed
+
+
+def test_adc_client_and_bucket_follow_isolated_eval_configuration(tmp_path, monkeypatch):
+    from google.cloud import storage
+
+    manifest = dataset(tmp_path)
+    client = FakeClient()
+    projects = []
+
+    def make_client(*, project):
+        projects.append(project)
+        return client
+
+    monkeypatch.setattr(storage, 'Client', make_client)
+    monkeypatch.setenv('GCP_PROJECT', 'onolys-eval')
+    monkeypatch.setenv('DATASETS_BUCKET', 'onolys-eval-datasets')
+    upload_dataset(manifest, tmp_path)
+    assert projects == ['onolys-eval']
+    assert client.buckets == ['onolys-eval-datasets']

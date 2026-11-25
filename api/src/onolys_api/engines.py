@@ -6,8 +6,8 @@ from typing import Any
 
 from onolys_engine_core.engine import Engine
 from onolys_engine_core.errors import InputError
-from onolys_engine_core.llm.models import load_models, models_path
-from onolys_engine_core.llm.routes import EFFORT_OUTPUT_CAP, combo_routes, resolve_preset
+from onolys_engine_core.llm.models import EFFORTS, load_models, models_path
+from onolys_engine_core.llm.routes import combo_routes, resolve_preset
 from onolys_engine_core.registry import EngineRegistry
 from onolys_miti import MitiEngine
 from onolys_oneshot import OneshotEngine, config_names
@@ -43,7 +43,7 @@ def override_routes(settings: Settings, base: dict, override: Mapping[str, Any])
     if model is None or override.get("tier") not in model.tiers:
         raise InputError("Unknown eval model or tier.")
     effort = override.get("effort")
-    if effort not in EFFORT_OUTPUT_CAP or effort not in model.tiers[override["tier"]].efforts:
+    if effort not in EFFORTS or effort not in model.tiers[override["tier"]].efforts:
         raise InputError("Unknown eval effort.")
     return combo_routes(base, model, override["tier"], effort)
 

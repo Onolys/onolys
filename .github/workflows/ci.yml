@@ -70,7 +70,10 @@ jobs:
       - name: Test deploy-prod staging image matcher
         run: python3 scripts/ci/test_staging_ran_image.py
       - name: Test staging LLM predeployment guard
-        run: python3 scripts/ci/test_deploy_staging.py
+        run: |
+          python3 scripts/ci/test_deploy_staging.py
+          python3 scripts/ci/test_release_targets.py
+          python3 scripts/ci/test_deploy_prod_llm.py
       - name: Test workflow_run fork-safety guard
         run: python3 scripts/ci/test_workflow_run_guard.py
       - name: Test no checkout after GCP auth in workflows
@@ -457,6 +460,8 @@ jobs:
             | jq -e --arg sha "$GITHUB_SHA" '.service_mode == "combined" and .code_version == $sha'
           docker logs onolys-api
           docker rm -f onolys-api
+      - name: Prod LLM validator runs in the image exactly as deploy-prod runs it
+        run: bash scripts/ci/smoke_prod_llm_validator.sh onolys-api:ci
       - name: Image ships core and MITI without eval packages or datasets
         run: |
           for m in paudit onolys_core eaudit onolys_evaluation onolys_eval; do

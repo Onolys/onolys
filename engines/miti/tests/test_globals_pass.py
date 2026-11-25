@@ -173,7 +173,7 @@ def test_default_max_tokens_when_pack_has_no_param(tmp_path, pack_data):
     pack = make_pack(tmp_path, pack_data)
     c = FakeClient(lambda req, n: reply(req, {"g1": g(4, GOOD), "g2": g(4, GOOD)}))
     run(c, pack)
-    assert c.requests[0].max_tokens == 4000
+    assert c.requests[0].max_tokens is None  # route cap applies
 
 
 def test_response_model_requires_every_global():
@@ -227,3 +227,15 @@ def test_sst_five_without_evidence_and_all_four_real_globals():
     assert res.globals["sst"].evidence == []
     assert all(g.source != "default" for g in res.globals.values())
     assert all(w.severity == "info" for w in res.warnings)
+
+
+def test_overlong_reason_truncated_with_warning_and_cited_lists_capped(tmp_path, pack_data):
+    pack = make_pack(tmp_path, pack_data)
+    many = [ev("t1", "What would help?")] * 25
+    c = FakeClient(lambda req, n: reply(req, {"g1": g(4, many, reason="word " * 200), "g2": g(2, [])}))
+    res = run(c, pack)
+    g1 = res.globals["g1"]
+    assert len(g1.reason) <= 300 and g1.reason.endswith("…")
+    assert len(g1.evidence) == 10
+    (w,) = [w for w in res.warnings if w.code == "text_truncated"]
+    assert w.item_id == "g1" and "reason" in w.detail and "quote lists" in w.detail

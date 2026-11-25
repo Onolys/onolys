@@ -9,8 +9,9 @@ Code then checks every proposal: the item is in the MITI definition, the quote i
 clinician turn (core `locate`) and replaced by the real substring with offsets, the alternative
 is non-empty, at most two sentences and not a copy of the quote, at most two tips per item and one
 per (item, turn), and every text passes the tone lint. The first five valid tips are kept. Fewer
-than three valid triggers one retry that lists the violations (codes only, never the offending
-text); still fewer ships fewer with `fewer_tips`; a failed call ships none with `tips_failed`.
+than three valid triggers one retry that lists the violations (codes, plus the length limits
+for `field_too_long`; never the offending text); still fewer ships fewer with `fewer_tips`; a
+failed call ships none with `tips_failed`.
 Model choice, limits and sampling belong to the route.
 """
 
@@ -20,10 +21,19 @@ from dataclasses import dataclass
 from typing import Any
 
 from onolys_engine_core.llm import LLMBadOutput, LLMClient, LLMRequest, MetricsCollector
+from onolys_engine_core.text_limits import (
+    ALTERNATIVE_MAX,
+    MAX_TIPS_PROPOSED,
+    OBSERVATION_MAX,
+    QUOTE_MAX,
+    SENTENCE_MAX,
+    TITLE_MAX,
+)
 from onolys_engine_core.transcript import Transcript
 from pydantic import BaseModel
 
 from onolys_miti import miti
+from onolys_miti.code_pass import _opt_int
 from onolys_miti.locate import locate
 from onolys_miti.prepare import OTHER, SUBJECT, RoleTurn, mark_roles, select_turns
 from onolys_miti.report import Tip, TipQuote, Warning
@@ -35,7 +45,7 @@ MIN_TIPS = 3
 MAX_TIPS = 5
 MAX_PER_ITEM = 2
 MAX_ALT_SENTENCES = 2
-DEFAULT_TIPS_MAX_TOKENS = 4000
+DEFAULT_TIPS_MAX_TOKENS = None  # None: the route's output cap applies
 PROMPT_FILE = "tips_system.md"
 
 _OUTPUT_FORMAT = (
@@ -84,6 +94,24 @@ class TipsArtifact(BaseModel):
 
     valid: list[Tip]
     proposals: list[dict[str, Any]]
+
+
+LIMITS_MESSAGE = (
+    f"Over a length limit (characters): title {TITLE_MAX}, observation {OBSERVATION_MAX}, "
+    f"alternative {ALTERNATIVE_MAX}, why_it_matters {SENTENCE_MAX}, quote text {QUOTE_MAX}. "
+    "Shorten the fields to fit."
+)
+
+
+def _too_long(p: _Proposal) -> bool:
+    """A field over its limit: the tip is dropped and re-proposed (like `alternative_too_long`)."""
+    return (
+        len(p.title or "") > TITLE_MAX
+        or len(p.observation) > OBSERVATION_MAX
+        or len(p.alternative) > ALTERNATIVE_MAX
+        or len(p.why_it_matters) > SENTENCE_MAX
+        or len(p.quote.text) > QUOTE_MAX
+    )
 
 
 def _sentences(text: str) -> int:
@@ -173,7 +201,7 @@ def _build_request(
         call_tag=tag,
         cache_prefixes=[prefix, header],
         unit="tips",
-        max_tokens=int(
+        max_tokens=_opt_int(
             miti.MITI.data.get("params", {}).get("tips_max_tokens", DEFAULT_TIPS_MAX_TOKENS)
         ),
         deadline=deadline,
@@ -199,6 +227,8 @@ def validate_proposals(
             break
         if p.item_id not in item_ids:
             code = "unknown_item"
+        elif _too_long(p):
+            code = "field_too_long"
         elif text is None:
             code = "not_clinician_turn"
         elif m is None:
@@ -220,7 +250,10 @@ def validate_proposals(
         elif (p.item_id, p.quote.turn_id) in seen:
             code = "duplicate_item_turn"
         if code is not None:
-            violations.append({"index": n, "code": code})
+            violation = {"index": n, "code": code}
+            if code == "field_too_long":
+                violation["message"] = LIMITS_MESSAGE  # fixed text, no model output
+            violations.append(violation)
             continue
         assert m is not None and text is not None
         per_item[p.item_id] = per_item.get(p.item_id, 0) + 1
@@ -280,8 +313,9 @@ async def generate_tips(
                 if attempt == 2:
                     break
                 continue
-            parsed += res.parsed.tips
-            proposals += [p.model_dump() for p in res.parsed.tips]
+            kept = res.parsed.tips[:MAX_TIPS_PROPOSED]  # the prompt asks for at most 7
+            parsed += kept
+            proposals += [p.model_dump() for p in kept]
             valid, violations = validate_proposals(parsed, turns)
             if len(valid) >= MIN_TIPS:
                 break

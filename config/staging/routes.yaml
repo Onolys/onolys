@@ -7,9 +7,9 @@ _gemini: &gemini
   structured_output_mode: json_object
   caching_mode: provider_implicit
   supports_temperature: false
-  max_output_tokens: 16000
+  max_output_tokens: 64000
   context_tokens: 1000000
-  timeout_s: 180
+  timeout_s: 300
   max_concurrency: 8
   max_retries: 3
   backoff_s: 2
@@ -25,8 +25,8 @@ strong: *claude_default
 miti_code: {alias: mid}
 miti_globals: {alias: mid}
 tips: {alias: mid}
-# Eval baseline has an explicit cap; the Claude preset overrides its provider too.
-oneshot: {<<: *gemini_mid, max_output_tokens: 4096}
+# Eval baseline has an explicit cap (64000, same as the text routes); the Claude preset overrides its provider too.
+oneshot: {<<: *gemini_mid, max_output_tokens: 64000}
 
 # Named bundles of route overrides (+ an STT key from stt_providers.yaml). DEFAULT_PRESET picks one.
 presets:
@@ -42,16 +42,16 @@ presets:
         structured_output_mode: json_object
         caching_mode: anthropic_ephemeral
         supports_temperature: false
-        max_output_tokens: 16000
+        max_output_tokens: 64000
         context_tokens: 1000000
-        timeout_s: 180
+        timeout_s: 300
         max_concurrency: 8
         max_retries: 3
         backoff_s: 2
         extra_params: {}
       mid: *claude
       strong: *claude
-      oneshot: {<<: *claude, max_output_tokens: 4096}
+      oneshot: {<<: *claude, max_output_tokens: 64000}
 
 # Staging-only forced-failure presets (SP09 D4). Reachable via POST /runs {preset}; never in prod.
 # Task routes are redefined as full working routes (not aliases) so they do not follow a broken `mid`.

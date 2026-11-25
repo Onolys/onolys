@@ -41,6 +41,16 @@ def test_service_sends_trusted_recipient_and_app_host(kind, mode):
     assert url.replace("&", "&amp;") in message["html"]
 
 
+def test_password_reset_passes_idempotency_key_to_sender():
+    from onolys_api.email.service import AuthEmailService
+
+    sender = FakeEmailSender()
+    links = FakeAuthLinks({"uid": AuthAccount("person@example.com")})
+    service = AuthEmailService(Settings(app_base_url="https://app.example.com"), links, sender)
+    assert service.send_password_reset("person@example.com", idempotency_key="reset-k-1") is True
+    assert sender.messages[0]["idempotency_key"] == "reset-k-1"
+
+
 def test_service_skips_verified_and_unknown_accounts():
     from onolys_api.email.service import AuthEmailService
 

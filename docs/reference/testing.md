@@ -64,7 +64,7 @@ Python API contention tests use `@pytest.mark.flaky` or `FLAKY_FIRESTORE_TESTS` 
 
 ### CI tiers
 
-Quick change classification and guard validation run in parallel. PR browser coverage selects nine existing Chromium cases, including production CSP and the native evidence dialog. Runtime image checks and the complete Chromium suite run for every main candidate and through the reusable CI workflow nightly. Nightly adds isolated Python 3.13/3.14 emulator runners, Firefox/WebKit, a fixed-seed 5,000-example auth campaign (three-minute cap), and auth redirect mutation testing (eight-minute cap). Nightly matrix failures remain visible; no provider credentials enter PR checks.
+Quick change classification and guard validation run in parallel. PR browser coverage selects nine existing Chromium cases, including production CSP and the native evidence dialog. Runtime image checks and the complete Chromium suite run for every main candidate and through the reusable CI workflow nightly. Nightly's live Gemini `api-real-mode` job is off by default and opt-in via repo var `NIGHTLY_LEGACY_GEMINI=true` (legacy secret `onolys/gemini-api-key-staging` was deleted; it also pauses once `STAGING_GCP_PROJECT` is set). Nightly adds isolated Python 3.13/3.14 emulator runners, Firefox/WebKit, a fixed-seed 5,000-example auth campaign (three-minute cap), and auth redirect mutation testing (eight-minute cap). Nightly matrix failures remain visible; no provider credentials enter PR checks.
 
 The `required` job rejects missing, failed or unexpectedly skipped checks. For PRs it reads GitHub job timestamps, measuring from the first running job through the aggregate's own API request, with ten seconds reserved for completion. It fails above a 300-second execution budget (270-second target). Initial runner queue time is excluded; gaps between running jobs count. This is a budget check, not a guarantee of runner availability or a new hosted timing measurement. Main runs require every package flag and every full candidate check; staging still consumes only successful same-repository push CI on the exact main SHA.
 
@@ -116,9 +116,9 @@ Staging PR previews (Hosting channels on `onolys-app-staging`) need their host i
 python3 infra/scripts/identity-config.py --domains-only --add-domain <channel-host>
 ```
 
-- Auth: ADC for project `onolys` (the staging deployer SA needs Identity Platform admin: `roles/firebaseauth.admin`).
+- Auth: ADC for the Identity Platform project that owns the app's sign-in (`onolys`, shared with prod, and the issuer for eval; isolated staging uses its own `onolys-staging` once `STAGING_GCP_PROJECT` is set, so use that project's config instead). The staging deployer SA needs Identity Platform admin: `roles/firebaseauth.admin`.
 - Idempotent and add-only (union with the live list; it never removes). Terraform ignores `authorized_domains` drift, so added hosts are not pruned on apply.
-- Hosts accumulate (limit 1000); prune closed-PR hosts occasionally by PATCHing `authorizedDomains` on `https://identitytoolkit.googleapis.com/admin/v2/projects/onolys/config`.
+- Hosts accumulate (limit 1000); prune closed-PR hosts occasionally by PATCHing `authorizedDomains` on `https://identitytoolkit.googleapis.com/admin/v2/projects/onolys/config` (PR previews run only while staging is legacy; they pause once `STAGING_GCP_PROJECT` is set).
 
 ## Preview acceptance (SP00 task 9), measured 2026-11-21
 

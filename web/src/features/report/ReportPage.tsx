@@ -3,9 +3,9 @@
  * transcript is fetched in parallel; while it loads or fails, the rest of the report still shows
  * and the utterance links / Evidence rows (which need turn numbers) are omitted until it is ready.
  */
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useMemo, useRef, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router";
+import { useQuery } from "@tanstack/react-query";
+import { useMemo } from "react";
+import { Link, useParams } from "react-router";
 import { pageLoadError } from "../../pageLoadError";
 import { unwrap } from "../../api/client";
 import { describeError, isNotFoundError } from "../../api/errors";
@@ -14,8 +14,7 @@ import { Button } from "@onolys/ui";
 import { useApiClient } from "../../auth/useApiClient";
 import { H1, LINK, LINK_BTN, NOTE, PAGE } from "../../components/classes";
 import { Notice } from "../../components/Notice";
-import { DeleteDialog } from "../session/DeleteDialog";
-import { dropJob } from "../upload/uploader";
+import { DeleteSession } from "../session/DeleteSession";
 import { ErrorCard } from "../session/ErrorCard";
 import { ReportView as ReportDocument, type TurnsState } from "./ReportView";
 
@@ -49,19 +48,6 @@ function ReportView({ id, version }: { id: string; version: string }) {
 
 function LoadedReport({ id, version }: { id: string; version: number }) {
   const client = useApiClient();
-  const navigate = useNavigate();
-  const queryClient = useQueryClient();
-  const [confirmDelete, setConfirmDelete] = useState(false);
-  const deleteButton = useRef<HTMLButtonElement>(null);
-  const remove = useMutation({
-    mutationFn: async () => unwrap(await client.DELETE("/sessions/{id}", { params: { path: { id } } })),
-    onSuccess: () => {
-      dropJob(id);
-      void queryClient.invalidateQueries({ queryKey: ["sessions"] });
-      void navigate("/sessions");
-    },
-  });
-
   const view = useQuery({
     queryKey: ["report", id, version],
     throwOnError: pageLoadError,
@@ -122,23 +108,8 @@ function LoadedReport({ id, version }: { id: string; version: number }) {
         reportId={view.data.report_id}
         turns={turns}
         headerSlot={newer ? <Notice role="alert">This report was made by a newer version — refresh</Notice> : undefined}
-        footerSlot={
-          <div className="border-t border-border pt-6">
-            <Button ref={deleteButton} type="button" variant="secondary" onClick={() => setConfirmDelete(true)}>
-              Delete session
-            </Button>
-          </div>
-        }
+        footerSlot={<DeleteSession id={id} />}
       />
-      <DeleteDialog
-        open={confirmDelete}
-        busy={remove.isPending}
-        onConfirm={() => remove.mutate()}
-        onCancel={() => { setConfirmDelete(false); remove.reset(); }}
-        onClosed={() => deleteButton.current?.focus()}
-      >
-        {remove.error ? <ErrorCard code={describeError(remove.error).code} reference={describeError(remove.error).requestId} /> : null}
-      </DeleteDialog>
     </>
   );
 }

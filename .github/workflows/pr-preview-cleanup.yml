@@ -22,7 +22,8 @@ env:
 
 jobs:
   cleanup:
-    if: github.event.pull_request.head.repo.full_name == github.repository
+    # Isolated staging previews require an explicit future migration; never touch the old project after cutover.
+    if: github.event.pull_request.head.repo.full_name == github.repository && vars.STAGING_GCP_PROJECT == ''
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:

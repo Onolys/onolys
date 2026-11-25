@@ -29,7 +29,7 @@ locals {
     { name = "GCP_PROJECT", value = var.project },
     { name = "REGION", value = var.region },
     { name = "FIRESTORE_DATABASE", value = var.database_id },
-    { name = "AUTH_PROJECT", value = var.project },
+    { name = "AUTH_PROJECT", value = coalesce(var.auth_project, var.project) },
     { name = "AUDIO_BUCKET", value = google_storage_bucket.audio.name },
     { name = "EVAL_CAP_DAY", value = tostring(var.eval_cap_day) },
     { name = "ADAPTERS", value = "real" },

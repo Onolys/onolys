@@ -139,6 +139,12 @@ def _apply_effort(raw: dict[str, dict], effort: str, entries: dict[str, Model]) 
                 f"({provider}/{tier}); expected one of {allowed}"
             )
         entry["extra_params"] = {**entry.get("extra_params", {}), "reasoning_effort": effort}
+        # Thinking tokens count against the output cap: raise (never lower) cap and timeout.
+        cap = model.max_output_tokens
+        base_cap = entry.get("max_output_tokens", Route.max_output_tokens)
+        if cap > base_cap:
+            entry["max_output_tokens"] = cap
+            entry["timeout_s"] = max(entry.get("timeout_s", Route.timeout_s), output_timeout_s(cap))
 
 
 def _apply_env(
@@ -281,20 +287,24 @@ def check_api_keys(routes: dict[str, Route], env: dict[str, str] | None = None) 
         raise ConfigError("LLM API key environment variable not set: " + "; ".join(parts))
 
 
-# Application budgets (including reasoning), bounded again by each model's output limit.
-EFFORT_OUTPUT_CAP = {
-    "none": 16000, "low": 16000, "medium": 32000, "high": 48000, "xhigh": 64000, "max": 64000
-}
-COMBO_TIMEOUT_S = 300
+# Output cap (incl. reasoning) is the model's own max output: thinking tokens count against it and a
+# truncated answer is a permanent LLMBadOutput. All current models allow >= 64000.
+COMBO_TIMEOUT_S = 300  # per 64000 output tokens
+_TIMEOUT_TOKENS = 64000
+
+
+def output_timeout_s(max_output_tokens: int) -> float:
+    """Timeout for a route with this output cap: COMBO_TIMEOUT_S per 64000 tokens, never less."""
+    return max(COMBO_TIMEOUT_S, COMBO_TIMEOUT_S * max_output_tokens / _TIMEOUT_TOKENS)
 
 
 def combo_routes(base: dict[str, Route], model: Model, tier: str, effort: str) -> dict[str, Route]:
     """Pure: every route of `base` re-pointed at one (model, tier, effort) combo (PRD R6, D2, D9).
 
     `model` is the models.yaml block owning `tier`. Structured-output mode, concurrency and
-    retries are inherited; output cap is min(model max, EFFORT_OUTPUT_CAP[effort]).
+    retries are inherited; output cap is the model's max output.
     """
-    cap = min(model.max_output_tokens, EFFORT_OUTPUT_CAP[effort])
+    cap = model.max_output_tokens
     out = {}
     for name, r in base.items():
         extra = {k: v for k, v in r.extra_params.items() if k != "reasoning_effort"}
@@ -307,7 +317,7 @@ def combo_routes(base: dict[str, Route], model: Model, tier: str, effort: str) -
             supports_temperature=model.supports_temperature,
             context_tokens=model.context_tokens,
             max_output_tokens=cap,
-            timeout_s=COMBO_TIMEOUT_S,
+            timeout_s=output_timeout_s(cap),
             extra_params=extra,
         )
     return out
@@ -319,7 +329,6 @@ def allowed_presets(registry: RouteRegistry | None = None) -> list[str]:
 
 
 __all__ = [
-    "EFFORT_OUTPUT_CAP",
     "Preset",
     "Route",
     "RouteRegistry",

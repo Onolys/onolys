@@ -218,3 +218,21 @@ variable "eval_owner_uid" {
   type        = string
   default     = "eval"
 }
+
+variable "audio_bucket_name" {
+  description = "Optional globally unique audio bucket name; null preserves the legacy environment name."
+  type        = string
+  default     = null
+}
+
+variable "auth_project" {
+  description = "Firebase identity project for ID-token verification; null preserves the runtime project. Auth-email IAM remains local to the runtime project."
+  type        = string
+  default     = null
+}
+
+variable "speech_object_prefix" {
+  description = "Optional audio-object prefix readable by the Speech service agent; null preserves legacy whole-bucket access."
+  type        = string
+  default     = null
+}

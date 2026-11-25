@@ -8,6 +8,8 @@ Everything here was checked on 2026-11-20 against `terraform output`, `terraform
 
 One GCP project (`onolys`, number `1054076260967`), region `us-central1`, two environments (`staging`, `prod`) in one Terraform root (`infra/`, state in `gs://onolys-tfstate`, prefix `infra`, Terraform `1.9.8`). Staging and prod are isolated by Firestore database, bucket, queue, service accounts and secrets. One Identity Platform user pool serves both.
 
+> **Per-environment projects.** Production stays in `onolys` and in this legacy root. Staging (`onolys-staging`, `904020682480`) and eval (`onolys-eval`, `976672392004`) are moving to their own projects through the separate `infra/isolated-environment/` root, activated by the GitHub vars `STAGING_GCP_PROJECT` / `EVAL_GCP_PROJECT`. Until activation, and for everything this page describes about `*-staging` and eval resources in `onolys`, the legacy layout applies; the old `*-staging` / `*-eval` secrets in `onolys` have been deleted by the owner. See [isolated environments](../implementation/isolated-environments.md).
+
 ```
 Browser -> Hosting site (onolys-app) -> /v1/** rewrite -> Cloud Run onolys-api-prod -> Firestore (default), GCS, Cloud Tasks
 Cloud Tasks steps-prod -(OIDC)-> onolys-worker-prod -> STT (location us) + Gemini API (Anthropic API for the `claude` preset)
@@ -166,6 +168,42 @@ Environments: create `production` with Tejit as required reviewer (all prod jobs
 
 `VITE_FIREBASE_PROJECT_ID` is taken from `GCP_PROJECT`/`onolys` in the workflow; `VITE_FIRESTORE_DATABASE` is hard-coded per workflow (see Terraform outputs).
 
+### Isolated staging and eval release targets (opt in)
+
+The current production project is **`onolys`**. The additive isolated targets are **`onolys-staging`** and **`onolys-eval`**; their billing and infrastructure are provisioned separately. These workflow changes create no resources and change no live variables or domains. With both new project variables unset, releases use the existing project, identities, sites and Firebase apps.
+
+Prepare each bundle at repository level, keeping its project variable unset until the infrastructure, IAM, secrets and Firebase settings have been reviewed and provisioned:
+
+| Variable | Staging value | Eval value |
+|---|---|---|
+| `STAGING_GCP_PROJECT` / `EVAL_GCP_PROJECT` | `onolys-staging` (set last to activate) | `onolys-eval` (set last to activate) |
+| `STAGING_WIF_PROVIDER` / `EVAL_WIF_PROVIDER` | isolated staging root's `wif_provider` | isolated eval root's `wif_provider` |
+| `STAGING_DEPLOYER_SA` / `EVAL_DEPLOYER_SA` | isolated staging root's `deployer_email` in `onolys-staging` | isolated eval root's `deployer_email` in `onolys-eval` |
+| `STAGING_HOSTING_SITE` / `EVAL_HOSTING_SITE` | `onolys-staging-app` (`hosting_site_id`; supported email callback origin) | isolated eval root's `hosting_site_id`, a new site distinct from the legacy sites |
+| `STAGING_ISOLATED_VITE_FIREBASE_API_KEY` | new staging Firebase web app SDK API key | unused |
+| `STAGING_ISOLATED_VITE_FIREBASE_AUTH_DOMAIN` | `onolys-staging.firebaseapp.com` | unused |
+| `STAGING_ISOLATED_VITE_FIREBASE_APP_ID` | new staging Firebase web app SDK app ID | unused |
+| `STAGING_ISOLATED_VITE_FIREBASE_STORAGE_BUCKET`, `STAGING_ISOLATED_VITE_FIREBASE_MESSAGING_SENDER_ID` | optional new staging SDK values; never fall back to the legacy app after activation | unused |
+
+The project variable is the activation switch. Preparing the identity, site and isolated Firebase variables alone has no effect. Once activated, an incomplete or invalid bundle fails before cloud authentication, image publication or deployment; the workflow never silently redirects an incomplete active bundle to the old project. Stage the new Firebase values under `STAGING_ISOLATED_VITE_FIREBASE_*`; retain `STAGING_VITE_FIREBASE_*` for the legacy app. `GCP_PROJECT`, `WIF_PROVIDER`, `DEPLOYER_STAGING_SA` and `DEPLOYER_PROD_SA` continue to describe the existing `onolys` project and identities. Keep them unchanged. Region continues to use `GCP_REGION` (default `us-central1`).
+
+After staging activation, app images, Cloud Run, Firestore `staging` rules and Hosting target `app-staging` all use `onolys-staging`. CI creates a project-scoped `.firebaserc` mapping only in its disposable checkout, sets the selected site as the API CORS/email origin and `VITE_APP_HOSTS` email-action destination, and replaces the staging voice CSP origin with that project's provisioned voice URL. Smoke uses `https://onolys-staging-app.web.app`. The new staging runtime must include the admitted callback origin; activate only after these changes and the matching infrastructure are on `main`. PR previews, preview cleanup and preview sweeping pause on activation; existing preview resources stay in the old project until a separately approved preview migration/cleanup. Finish any desired legacy cleanup before setting `STAGING_GCP_PROJECT`.
+
+After eval activation, its worker/backend images, Cloud Run, Firestore `eval` rules and Hosting target `eval-staging` use `onolys-eval` and its project-local deployer. Eval login continues to use the production `onolys` Firebase app, existing `PROD_VITE_FIREBASE_API_KEY`/`APP_ID` and `eval.onolys.com` auth domain. Provision the backend's `AUTH_PROJECT=onolys` and CORS for the new eval site. Before any login smoke, add **`onolys-eval-app.web.app`** (or the explicitly chosen new eval site hostname) to **Firebase Authentication > Settings > Authorized domains in production project `onolys`**, and complete any corresponding OAuth origin configuration. Keep `VITE_FIREBASE_AUTH_DOMAIN=eval.onolys.com`: its existing auth handler stays on the legacy Hosting site in `onolys` and continues to serve the shared production Firebase app. The new temporary site uses that existing handler; moving its custom domain, OAuth redirect or DNS configuration is a separate owner action. No live Firebase Auth/OAuth settings are changed by this patch. Smoke checks the selected site's `.web.app` origin. This does not transfer `eval.onolys.com` or any other live custom domain.
+
+Production writes and the single production approval remain in `onolys`, with the existing production deployer and independent `PROD_LLM_*` settings. Promotion resolves the image and checks staging API/worker/voice revision provenance in the selected staging project. The preapproval resolver intentionally retains the **legacy** `WIF_PROVIDER` + `DEPLOYER_STAGING_SA`: this preserves both manual and `v*` tag promotion without broadening the new main-only staging WIF provider. Before activating staging, grant that legacy resolver read access in `onolys-staging`; production also needs to read the cross-project image:
+
+| Principal | Resource in `onolys-staging` | Required role |
+|---|---|---|
+| existing `DEPLOYER_STAGING_SA` | staging Cloud Run services/project | `roles/run.viewer` (read staging revisions and service state) |
+| existing `DEPLOYER_STAGING_SA` | Artifact Registry repository `onolys`, location `us-central1` (or configured region) | `roles/artifactregistry.reader` |
+| existing `DEPLOYER_PROD_SA` | same Artifact Registry repository | `roles/artifactregistry.reader` |
+| production Cloud Run service agent `service-<onolys-project-number>@serverless-robot-prod.iam.gserviceaccount.com` | same Artifact Registry repository | `roles/artifactregistry.reader` (pulls promoted images into production) |
+
+Apply registry roles on the repository, rather than granting project-wide write access. No new staging/eval deployer receives production write permissions. The workflow still promotes the staging image by digest, validates production LLM settings against that image, and never rebuilds it. Historical promotions after staging activation must have provenance in the newly selected staging project; clearing the activation variable returns provenance lookup to the legacy project. The switch does not copy old registry images or revision history.
+
+Before activation, review/apply the new roots, provision enabled secret versions, confirm all services/sites and cross-project reader grants, and stage the complete repository-variable bundle. Set only the corresponding project variable last, then perform a reviewed release and verify the new `.web.app` site before considering a custom-domain handoff. Clearing the project variable restores legacy workflow targeting on subsequent releases; it does not move data or reverse any resources already created in the new project. The paid Nightly `api-real-mode` job pauses when `STAGING_GCP_PROJECT` is set, preventing its legacy `onolys` Gemini key from charging production after staging isolation. The live Gemini job is now off by default and opt-in via repo var `NIGHTLY_LEGACY_GEMINI=true` (the legacy secret `onolys/gemini-api-key-staging` was deleted). All offline Nightly jobs continue. Resuming paid checks requires a separately reviewed isolated Nightly identity and project-local key; changing the existing Nightly variables alone does not bypass this pause.
+
 ### Gemini key: Secret Manager is the source
 
 `nightly.yml` (`api-real-mode`) reads `gemini-api-key-staging` from Secret Manager, the same secret used by staging runtime services. The action masks the fetched value and exposes it only to the live-test step as `GEMINI_API_KEY`. It does not export the key to the job environment or store it in a GitHub repository secret. Runtime references stay `gemini-api-key-staging` and `gemini-api-key-prod` for their respective environments; the production key stays only in Secret Manager and is never copied into GitHub.
@@ -234,7 +272,7 @@ Cloud Run cannot start revisions whose `latest` secret references have no enable
    terraform apply eval-secret-shells.tfplan
    ```
 
-   Keep `infra/eval-allowlist-import.tf` through the successful first apply: it imports the existing allowlist shell rather than trying to recreate it. Confirm the plan preserves that secret and its enabled value; do not rotate it as part of provisioning.
+   The one-time allowlist import was removed because its source secret in `onolys` was deleted; the plan creates a fresh `eval-allowed-emails-eval` shell. Seed the allowlist value separately (see seed-secrets `--allowlist`); isolated eval lives in `onolys-eval`.
 
 2. From the repository root, securely load the configured eval provider keys into the environment, then run `python3 infra/scripts/seed-secrets.py --env eval`. The helper generates the eval UID HMAC value when missing and seeds the default Gemini/Anthropic mappings. Supply repeated `--map ENVVAR=base-id` flags instead when the operator's `eval_llm_secrets` or `stt_secrets` has additional or different configured keys (the flags replace the default map). Verify enabled version metadata for all referenced secrets, including the existing allowlist. Do not put secret values in command arguments, tfvars, plans or git.
 

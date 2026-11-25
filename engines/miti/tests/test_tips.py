@@ -11,7 +11,7 @@ from onolys_engine_core.llm.fixture_client import FailingClient
 from onolys_engine_core.transcript import Transcript
 
 from onolys_miti.result import MitiResult
-from onolys_miti.tips import ROUTE, generate_tips
+from onolys_miti.tips import LIMITS_MESSAGE, ROUTE, generate_tips
 
 pytestmark = pytest.mark.unit
 
@@ -237,3 +237,49 @@ def test_deadline_reaches_both_attempts(transcript, smap, result):
         stub.register(tag, handler)
     asyncio.run(generate_tips(stub, transcript, smap, result, deadline=77.0))
     assert len(seen) == 2 and [r.deadline for r in seen] == [77.0, 77.0]
+
+
+def test_overlong_title_drops_that_tip_with_field_too_long(transcript, smap, result):
+    bad = tip()
+    bad["title"] = "x " * 60  # 120 chars > 80
+    from onolys_miti.tips import _clinician_turns, _Proposal, validate_proposals
+
+    turns = _clinician_turns(transcript, smap, result)
+    valid, violations = validate_proposals([_Proposal(**bad), *[_Proposal(**p) for p in good(3)]], turns)
+    assert violations == [{"index": 0, "code": "field_too_long", "message": LIMITS_MESSAGE}]
+    for n in ("title 80", "observation 400", "alternative 400", "why_it_matters 300", "quote text 500"):
+        assert n in LIMITS_MESSAGE
+    assert len(valid) == 3
+
+
+def test_retry_for_field_too_long_tells_the_model_the_limits(transcript, smap, result):
+    bad = tip()
+    bad["title"] = "x " * 60
+    (_, _), seen = run([[bad, *good(2)], good(4)], transcript, smap, result)
+    v = json.loads(seen[1].user)["violations"]
+    assert v == [{"index": 0, "code": "field_too_long", "message": LIMITS_MESSAGE}]
+    assert "title 80" in seen[1].user and "x x x" not in seen[1].user  # limits, not the text
+
+
+@pytest.mark.parametrize("field,limit", [("observation", 400), ("why", 300), ("alt", 400)])
+def test_overlong_body_fields_are_dropped_not_truncated(transcript, smap, result, field, limit):
+    long = "Word. " * 200
+    bad = tip(**({"observation": long} if field == "observation" else {"why": long} if field == "why" else {}))
+    if field == "alt":
+        bad["alternative"] = "w" * (limit + 1)
+    (art, _), _ = run([[bad, *good(3)]], transcript, smap, result)
+    assert len(art.valid) == 3
+    assert all(len(t.observation) <= 400 and len(t.why_it_matters) <= 300 and len(t.alternative) <= 400 for t in art.valid)
+
+
+def test_title_at_the_limit_is_kept(transcript, smap, result):
+    ok = good(3)
+    ok[0]["title"] = "t" * 80
+    (art, _), _ = run([ok], transcript, smap, result)
+    assert art.valid[0].title == "t" * 80
+
+
+def test_more_than_seven_proposals_are_capped_in_the_artifact(transcript, smap, result):
+    many = [tip("cct", "t4", alt=f"Option {k} in plain words.") for k in range(30)]
+    (art, _), _ = run([many], transcript, smap, result)
+    assert len(art.proposals) == 7

@@ -78,11 +78,22 @@ async def test_queue_failure_falls_back_to_in_process_send_with_the_same_respons
     assert [m["to"] for m in env.sender.messages] == [EMAIL]
 
 
+async def test_fallback_send_uses_the_same_idempotency_key_as_the_task(blobs):
+    env = Env(blobs)
+    env.app.state.queue = RecordingQueue(fail=True)
+    env.app.state.clock = lambda: NOW
+    async with env.client() as c:
+        await c.post(RESET, json={"email": EMAIL})
+    want = task_name(reset_payload(env.app.state.settings, EMAIL, None, NOW))
+    assert [m["idempotency_key"] for m in env.sender.messages] == [want]
+
+
 class FlakySender:
     def __init__(self, failures, code="email_send_failed"):
-        self.failures, self.code, self.messages = failures, code, []
+        self.failures, self.code, self.messages, self.keys = failures, code, [], []
 
-    def send(self, to, subject, html, text):
+    def send(self, to, subject, html, text, idempotency_key=None):
+        self.keys.append(idempotency_key)
         if self.failures:
             self.failures -= 1
             raise AdapterError(self.code)
@@ -109,6 +120,17 @@ def test_worker_retries_a_transient_failure_once_then_sends(blobs):
     assert second.status_code == 200 and sender.messages == [EMAIL]
 
 
+def test_retry_reuses_the_task_name_as_idempotency_key(blobs):
+    sender = FlakySender(1)
+    env = Env(blobs, sender=sender)
+    runner = _runner(env)
+    p = reset_payload(env.app.state.settings, EMAIL, None, NOW)
+    runner.handle(p, 0)
+    runner.handle(p, 1)
+    assert sender.keys == [task_name(p), task_name(p)]
+    assert EMAIL not in sender.keys[0] and sender.keys[0].startswith("reset-")
+
+
 def test_worker_gives_up_after_the_last_attempt_without_logging_the_address(blobs, caplog):
     env = Env(blobs, sender=FlakySender(5))
     runner = _runner(env)
@@ -124,7 +146,7 @@ def test_unconfigured_email_is_not_retried(blobs):
     runner = TaskRunner(env.app.state.repo, RecordingQueue())
 
     class Svc:
-        def send_password_reset(self, email):
+        def send_password_reset(self, email, idempotency_key=None):
             raise AdapterError("email_unconfigured")
 
     runner.register(

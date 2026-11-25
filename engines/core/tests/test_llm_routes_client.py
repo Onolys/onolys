@@ -203,6 +203,40 @@ async def test_rate_limited_is_unavailable_and_not_retried_after_giving_up():
     assert len(fake.calls) == 1
 
 
+LONG = dict(timeout_s=600, max_retries=2)
+
+
+async def test_bad_output_is_retried_under_run_deadline_with_clamped_timeout():
+    fake = Fake(completion("not json"), completion())
+    r = req(deadline=time.monotonic() + 480)  # run deadline shorter than the 600 s route timeout
+    result = await client(fake, {"mid": route(**LONG)}).complete_json(r)
+    assert result.attempts == 2
+    timeouts = [k["timeout"] for k in fake.calls]
+    assert all(400 < t <= 480 for t in timeouts)  # clamped to what is left, never the full 600
+
+
+async def test_no_deadline_uses_full_route_timeout():
+    fake = Fake(completion("not json"), completion())
+    result = await client(fake, {"mid": route(**LONG)}).complete_json(req())
+    assert result.attempts == 2
+    assert [k["timeout"] for k in fake.calls] == [600, 600]
+
+
+async def test_retry_allowed_with_a_minimum_attempt_window_left():
+    fake = Fake(completion("not json"), completion())
+    r = req(deadline=time.monotonic() + 100)  # >= MIN_ATTEMPT_S left, far below route timeout
+    assert (await client(fake, {"mid": route(**LONG)}).complete_json(r)).attempts == 2
+    assert all(k["timeout"] <= 100 for k in fake.calls)
+
+
+async def test_no_retry_when_less_than_the_attempt_window_is_left():
+    fake = Fake(completion("not json"), completion())
+    r = req(deadline=time.monotonic() + 30)  # < MIN_ATTEMPT_S left
+    with pytest.raises(LLMBadOutput):
+        await client(fake, {"mid": route(**LONG)}).complete_json(r)
+    assert len(fake.calls) == 1 and fake.calls[0]["timeout"] <= 30
+
+
 async def test_semaphore_is_per_route():
     active = {"a": 0, "b": 0}
     peak = {"a": 0, "b": 0}

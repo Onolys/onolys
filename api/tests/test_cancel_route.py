@@ -141,3 +141,15 @@ def test_writes_409_on_cancelled_reads_work(repo):  # noqa: F811
         assert c.get(f"/v1/sessions/{sid}/transcript", headers=h).status_code == 200
         assert c.get(f"/v1/sessions/{sid}/reports", headers=h).status_code == 200
         assert c.get(f"/v1/sessions/{sid}/rating", headers=h).status_code == 200
+
+
+@pytest.mark.parametrize("state", SEVEN)
+def test_cancelled_session_can_be_deleted(repo, state):  # noqa: F811
+    """Cancel keeps the data, so a cancelled session must still be deletable (204, then 404)."""
+    uid = _uid()
+    sid = new_session(repo, uid, state=state, ready=state in ("awaiting_input", "running"))
+    app = mk(repo)
+    assert cancel(app, uid, sid).status_code == 200
+    with TestClient(app) as c:
+        assert c.delete(f"/v1/sessions/{sid}", headers=_hdr(uid)).status_code == 204
+        assert c.get(f"/v1/sessions/{sid}", headers=_hdr(uid)).status_code == 404

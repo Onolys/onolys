@@ -161,6 +161,8 @@ def test_bucket_source_uses_exact_private_objects(tmp_path, monkeypatch, capsys)
         return Client()
 
     monkeypatch.setattr(storage, 'Client', client)
+    monkeypatch.delenv('GCP_PROJECT', raising=False)
+    monkeypatch.delenv('DATASETS_BUCKET', raising=False)
     for path in session.iterdir():
         path.unlink()
     assert cli.main(['run', 'synthetic', 'one', '--source', 'bucket']) == 0

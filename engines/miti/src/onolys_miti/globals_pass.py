@@ -9,7 +9,8 @@ applies a MITI cap only where the item declares `caps[]` (`source: "capped"`, `r
 A truncated or invalid response (`LLMBadOutput`) is retried once, then the run fails.
 
 Token limits, timeouts, sampling and model choice belong to the route (core); the request carries
-only the engine default (or the MITI `params.globals_max_tokens`), which core clamps.
+only the MITI `params.globals_max_tokens` when set (core clamps it); otherwise the route cap
+applies.
 """
 
 import json
@@ -18,16 +19,17 @@ from typing import Any
 
 from onolys_engine_core.errors import OnolysError
 from onolys_engine_core.llm import LLMBadOutput, LLMClient, LLMRequest, MetricsCollector
+from onolys_engine_core.text_limits import MAX_CITED, SENTENCE_MAX, clip
 from pydantic import BaseModel, create_model
 
 from onolys_miti import miti
-from onolys_miti.code_pass import _CFG, _overrides
+from onolys_miti.code_pass import _CFG, _opt_int, _overrides
 from onolys_miti.locate import locate
 from onolys_miti.prepare import Prepared
 from onolys_miti.result import Evidence, GlobalScore, ResultWarning
 
 ROUTE = "miti_globals"
-DEFAULT_GLOBALS_MAX_TOKENS = 4000
+DEFAULT_GLOBALS_MAX_TOKENS = None  # None: the route's output cap applies
 CAP_WHEN_POOR_PRACTICE = "poor_practice_cited"
 
 _OUTPUT_FORMAT = (
@@ -132,7 +134,7 @@ def _build_request(
         call_tag=f"{ROUTE}:r{run_index}:{tag}",
         cache_prefixes=[prefix1, "\n".join(header)],
         unit="globals",
-        max_tokens=int(pp.get("globals_max_tokens", DEFAULT_GLOBALS_MAX_TOKENS)),
+        max_tokens=_opt_int(pp.get("globals_max_tokens", DEFAULT_GLOBALS_MAX_TOKENS)),
         deadline=deadline,
     )
 
@@ -177,7 +179,21 @@ def _rate(item: dict[str, Any], rating: Any, prepared: Prepared, out: GlobalsRes
         raise GlobalsPassFailed(
             f"global {iid}: score {raw} outside scale {scale['min']}-{scale['max']}"
         )
-    evidence = _locate_all(iid, rating.evidence, prepared, out.warnings)
+    reason, cut = clip(rating.reason, SENTENCE_MAX)
+    capped_lists = len(rating.evidence) > MAX_CITED or len(rating.poor_practice_cited) > MAX_CITED
+    if cut or capped_lists:
+        out.warnings.append(
+            ResultWarning(
+                code="text_truncated",
+                severity="info",
+                item_id=iid,
+                detail="; ".join(
+                    ([f"reason cut to {SENTENCE_MAX} characters"] if cut else [])
+                    + ([f"quote lists cut to {MAX_CITED} entries"] if capped_lists else [])
+                ),
+            )
+        )
+    evidence = _locate_all(iid, rating.evidence[:MAX_CITED], prepared, out.warnings)
     need = int(item.get("evidence_min", 0))
     if len(evidence) < need:
         out.warnings.append(
@@ -188,7 +204,7 @@ def _rate(item: dict[str, Any], rating: Any, prepared: Prepared, out: GlobalsRes
                 detail=f"{len(evidence)} located evidence quote(s), below evidence minimum {need}",
             )
         )
-    poor = bool(_locate_all(iid, rating.poor_practice_cited, prepared, out.warnings))
+    poor = bool(_locate_all(iid, rating.poor_practice_cited[:MAX_CITED], prepared, out.warnings))
     cap = _cap_for(item, raw, poor)
     score, source = (raw, "model") if cap is None else (cap, "capped")
     if cap is not None:
@@ -201,7 +217,7 @@ def _rate(item: dict[str, Any], rating: Any, prepared: Prepared, out: GlobalsRes
             )
         )
     out.globals[iid] = GlobalScore(
-        score=score, source=source, raw_score=raw, reason=rating.reason, evidence=evidence
+        score=score, source=source, raw_score=raw, reason=reason, evidence=evidence
     )
 
 

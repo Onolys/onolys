@@ -180,7 +180,9 @@ class RealEvaluation:
 
 
 class UnconfiguredEmailSender:
-    def send(self, to: str, subject: str, html: str, text: str) -> None:
+    def send(
+        self, to: str, subject: str, html: str, text: str, idempotency_key: str | None = None
+    ) -> None:
         raise AdapterError("email_unconfigured")
 
 
@@ -191,13 +193,18 @@ class ResendEmailSender:
         self._api_key = api_key
         self._sender = sender
 
-    def send(self, to: str, subject: str, html: str, text: str) -> None:
+    def send(
+        self, to: str, subject: str, html: str, text: str, idempotency_key: str | None = None
+    ) -> None:
         import requests
 
+        headers = {"Authorization": f"Bearer {self._api_key}"}
+        if idempotency_key:  # a retried delivery of the same task must not email twice
+            headers["Idempotency-Key"] = idempotency_key
         try:
             response = requests.post(
                 "https://api.resend.com/emails",
-                headers={"Authorization": f"Bearer {self._api_key}"},
+                headers=headers,
                 json={
                     "from": self._sender,
                     "to": [to],
@@ -210,6 +217,13 @@ class ResendEmailSender:
             )
         except requests.RequestException:
             raise AdapterError("email_send_failed") from None
+        if response.status_code == 409 and idempotency_key:
+            # A retry of the same task (new reset link, so a new body) hits the stored key:
+            # the first attempt was already accepted, so this is delivered, not a failure.
+            from onolys_api import logs
+
+            logs.emit("auth_email", outcome="duplicate_suppressed", provider_status=409)
+            return
         if not 200 <= response.status_code < 300:
             error = AdapterError("email_send_failed")
             error.provider_status = response.status_code

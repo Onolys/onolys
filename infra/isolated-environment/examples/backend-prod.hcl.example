@@ -1,0 +1,4 @@
+# REFERENCE ONLY for existing infra/ state. Never initialize isolated-environment/
+# against this backend or copy existing production state into a fresh root.
+bucket = "onolys-tfstate"
+prefix = "infra"

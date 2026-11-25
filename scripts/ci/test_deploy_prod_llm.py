@@ -56,4 +56,15 @@ with tempfile.TemporaryDirectory() as tmp:
     assert env['IMAGE'] in args and f'src={tmp}/validate_staging_llm.py' in args
     result = subprocess.run(['bash', '-e', '-o', 'pipefail', '-c', run], env={**env, 'DOCKER_EXIT': '1'}, check=False, capture_output=True, text=True)
     assert result.returncode != 0, 'image validation failure must fail resolve'
+
+# The CI smoke must use the very same docker invocation shape as the production step.
+smoke = (ROOT / 'scripts/ci/smoke_prod_llm_validator.sh').read_text()
+for flag in ('--rm --network none --read-only --cap-drop ALL --security-opt no-new-privileges',
+             '--entrypoint python -e LLM_PROVIDER -e LLM_MODEL -e LLM_EFFORT',
+             'dst=/tmp/validate_llm.py,readonly',
+             '/tmp/validate_llm.py --environment prod --config-root /app/config --stdout'):
+    assert flag in smoke, flag
+ci = (ROOT / '.github/workflows/ci.yml').read_text()
+assert 'bash scripts/ci/smoke_prod_llm_validator.sh onolys-api:ci' in ci.split('  api-image:', 1)[1].split('\n  frontend:', 1)[0]
+
 print('ok   independent production variables, isolated promoted-image preflight and blank historical rollback')

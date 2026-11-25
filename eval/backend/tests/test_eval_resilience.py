@@ -95,6 +95,25 @@ def test_overload_waits_cooldown_blocks_only_that_provider_and_success_clears_it
     assert slots["overload_streak"] == 0 and slots["cooldown_until"] is None
 
 
+def test_retry_started_marks_the_earlier_waiting_ref_failed(env, clock):
+    rid = create(env, ["one"], selection=SEL1, repeats=1)
+    tick(env, rid)
+    (sid, run), = by_sid(env).items()
+    finish(env, sid, run, "failed", "upstream_unavailable")
+    tick(env, rid)
+    assert entry_of(env, rid, sid)["runs"][0]["status"] == "waiting"
+    clock.advance(16)
+    tick(env, rid)  # retry starts as attempt 1
+    refs = entry_of(env, rid, sid)["runs"]
+    assert [r["status"] for r in refs] == ["failed", "running"]
+    assert refs[0]["error"] == "upstream_unavailable"
+    finish(env, sid, by_sid(env)[sid], "done")
+    tick(env, rid)
+    refs = entry_of(env, rid, sid)["runs"]
+    assert [(r["attempt"], r["status"]) for r in refs] == [(0, "failed"), (1, "done")]
+    assert not any(r["status"] == "waiting" for r in refs)
+
+
 def test_cooldown_blocks_other_eval_runs_on_that_provider(env, clock):
     a = create(env, ["one"], selection=SEL1, repeats=1)
     b = create(env, ["two"], selection=SEL1, repeats=1)

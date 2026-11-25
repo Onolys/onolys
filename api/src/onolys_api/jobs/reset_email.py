@@ -16,7 +16,7 @@ from datetime import datetime
 from onolys_api import logs
 from onolys_api.adapters.base import AdapterError
 from onolys_api.config import Settings
-from onolys_api.jobs.queue import MAX_ATTEMPTS, TaskPayload
+from onolys_api.jobs.queue import MAX_ATTEMPTS, TaskPayload, task_name
 from onolys_api.jobs.worker import Handler, RetryableError, TaskContext
 
 WINDOW_S = 600  # a repeat inside it is one task; the limiter bounds requests anyway
@@ -51,7 +51,7 @@ def make_reset_email_handler(get_service: Callable[[], tuple]) -> Handler:
             return
         try:
             service = get_service()[0]
-            sent = service.send_password_reset(email)
+            sent = service.send_password_reset(email, idempotency_key=task_name(ctx.payload))
         except Exception as exc:  # noqa: BLE001
             fields = (
                 _failure_fields(exc)

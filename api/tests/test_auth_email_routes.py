@@ -108,7 +108,7 @@ async def test_reset_identical_for_known_unknown_disabled_limited_and_errors(blo
 
 async def test_reset_send_failure_after_202_is_only_logged(blobs, caplog):
     class Down(FakeEmailSender):
-        def send(self, *a):
+        def send(self, *a, **k):
             e = AdapterError("email_send_failed")
             e.provider_status = 500
             raise e

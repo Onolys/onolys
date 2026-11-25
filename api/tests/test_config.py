@@ -186,6 +186,7 @@ def test_uid_hmac_key_optional_locally():
     "env,url",
     [
         ("staging", "https://onolys-app-staging.web.app"),
+        ("staging", "https://onolys-staging-app.web.app"),
         ("prod", "https://app.onolys.com"),
         ("prod", "https://onolys-app.web.app"),
         ("local", "http://localhost:5173"),
@@ -205,6 +206,9 @@ def test_app_base_url_allowed(env, url):
         "app.onolys.com",
         "http://app.onolys.com",
         "https://evil.example",
+        "https://onolys-staging-app.web.app.evil.example",
+        "http://onolys-staging-app.web.app",
+        "https://arbitrary-project.web.app",
         "https://app.onolys.com.evil.example",
         "https://user@app.onolys.com",
         "https://app.onolys.com/auth/action",

@@ -1,0 +1,10 @@
+environment       = "eval"
+project           = "onolys-eval"
+hosting_site_id   = "onolys-eval-app"
+audio_bucket_name = "onolys-eval-audio"
+auth_project      = "onolys"
+manage_identity   = false
+# Empty = new project-owned bucket. Content is populated only after validation.
+datasets_bucket_name = "onolys-eval-datasets"
+# To retain the source instead, set datasets_source_bucket explicitly; its owner
+# grants the new eval API SA read access separately. This root never modifies it.

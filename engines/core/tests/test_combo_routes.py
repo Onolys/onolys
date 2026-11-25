@@ -3,8 +3,8 @@ from pathlib import Path
 
 import pytest
 
-from onolys_engine_core.llm.models import find_model, load_models
-from onolys_engine_core.llm.routes import EFFORT_OUTPUT_CAP, Route, combo_routes, load_registry
+from onolys_engine_core.llm.models import EFFORTS, find_model, load_models
+from onolys_engine_core.llm.routes import Route, combo_routes, load_registry
 
 pytestmark = pytest.mark.unit
 
@@ -23,8 +23,13 @@ def base():
     return routes
 
 
-def test_caps_table():
-    assert EFFORT_OUTPUT_CAP == {"none": 16000, "low": 16000, "medium": 32000, "high": 48000, "xhigh": 64000, "max": 64000}
+@pytest.mark.parametrize("effort", sorted(EFFORTS))
+def test_cap_is_the_model_max_for_every_effort(base, effort):
+    for _provider, model in load_models(MODELS).items():
+        tier = next(iter(model.tiers))
+        out = combo_routes(base, model, tier, effort)
+        assert {r.max_output_tokens for r in out.values()} == {model.max_output_tokens}
+        assert model.max_output_tokens >= 64000
 
 
 def test_claude_snapshot(base):
@@ -37,8 +42,8 @@ def test_claude_snapshot(base):
         assert r.caching_mode == "anthropic_ephemeral"
         assert r.supports_temperature is False
         assert r.context_tokens == 1_000_000
-        assert r.max_output_tokens == 48000
-        assert r.timeout_s == 300
+        assert r.max_output_tokens == 128000  # the model's own max
+        assert r.timeout_s == 600  # scales with the cap: 300 s per 64000 tokens
         assert r.extra_params["reasoning_effort"] == "high"
     mid = out["mid"]
     assert mid.structured_output_mode == "json_schema"
@@ -48,15 +53,15 @@ def test_claude_snapshot(base):
 
 def test_gemini_snapshot(base):
     model = find_model(load_models(MODELS), "gemini", "gemini-4-neon")
-    out = combo_routes(base, model, "gemini-4-neon", "max")  # cap 64000 < 65536
-    assert out["mid"].max_output_tokens == 64000
+    out = combo_routes(base, model, "gemini-4-neon", "max")  # the model's max, 65536
+    assert out["mid"].max_output_tokens == 65536
     out = combo_routes(base, model, "gemini-4-neon", "low")
     r = out["cheap"]
     assert r.litellm_id == "gemini/gemini-4-neon"
     assert r.api_key_env == "GEMINI_API_KEY"
     assert r.caching_mode == "provider_implicit"
     assert r.context_tokens == 1048576
-    assert r.max_output_tokens == 16000
+    assert r.max_output_tokens == 65536
 
 
 def test_cap_bounded_by_model_max(base):
@@ -72,12 +77,6 @@ def test_base_not_mutated(base):
     assert base == before
 
 
-def test_effort_output_cap_covers_exactly_the_allowed_efforts():
-    from onolys_engine_core.llm.models import _EFFORTS
-
-    assert set(EFFORT_OUTPUT_CAP) == set(_EFFORTS)
-
-
 @pytest.mark.parametrize("tier,effort", [
     (tier, effort)
     for tier in ("gpt-6.1-sol", "gpt-6.1-terra", "gpt-6-luna")
@@ -91,6 +90,6 @@ def test_openai_combo_routes_preserve_explicit_effort_and_provider_caps(base, ti
         assert route.litellm_id == f"openai/{tier}"
         assert route.api_key_env == "OPENAI_API_KEY"
         assert route.extra_params["reasoning_effort"] == effort
-        assert route.max_output_tokens == min(128000, EFFORT_OUTPUT_CAP[effort])
+        assert route.max_output_tokens == model.max_output_tokens
         assert route.context_tokens == 1050000
         assert route.supports_temperature is False

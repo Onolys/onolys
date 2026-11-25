@@ -34,6 +34,57 @@ def test_unconfigured_sender():
         UnconfiguredEmailSender().send("person@example.com", "subject", "html", "text")
 
 
+def test_resend_sends_idempotency_key_header(monkeypatch):
+    from onolys_api.adapters.real import ResendEmailSender
+
+    post = Mock(return_value=SimpleNamespace(status_code=202))
+    monkeypatch.setattr(requests, "post", post)
+    ResendEmailSender("key", "sender").send(
+        "person@example.com", "subject", "html", "text", idempotency_key="reset-abc-7"
+    )
+    assert post.call_args.kwargs["headers"] == {
+        "Authorization": "Bearer key",
+        "Idempotency-Key": "reset-abc-7",
+    }
+
+
+def test_resend_409_with_idempotency_key_counts_as_delivered(monkeypatch):
+    # Resend answers 409 (invalid_idempotent_request / concurrent_idempotent_requests) when a
+    # retry reuses the key with a new body: the first attempt already went out.
+    from onolys_api import logs
+    from onolys_api.adapters.real import ResendEmailSender
+
+    post = Mock(return_value=SimpleNamespace(status_code=409, text="person@example.com secret"))
+    emitted = []
+    monkeypatch.setattr(requests, "post", post)
+    monkeypatch.setattr(logs, "emit", lambda event, *a, **kw: emitted.append((event, a, kw)))
+    ResendEmailSender("key", "sender").send(
+        "person@example.com", "subject", "html", "text", idempotency_key="reset-abc-7"
+    )  # no raise
+    assert len(emitted) == 1
+    event, _, fields = emitted[0]
+    assert event == "auth_email"
+    assert fields["outcome"] == "duplicate_suppressed" and fields["provider_status"] == 409
+    assert "person@example.com" not in repr(emitted)
+
+
+def test_resend_409_without_idempotency_key_is_still_a_failure(monkeypatch):
+    from onolys_api.adapters.real import ResendEmailSender
+
+    monkeypatch.setattr(requests, "post", Mock(return_value=SimpleNamespace(status_code=409)))
+    with pytest.raises(AdapterError) as caught:
+        ResendEmailSender("key", "sender").send("person@example.com", "subject", "html", "text")
+    assert caught.value.code == "email_send_failed" and caught.value.provider_status == 409
+
+
+def test_fake_records_idempotency_key():
+    from onolys_api.adapters.fake import FakeEmailSender
+
+    fake = FakeEmailSender()
+    fake.send("a@example.com", "s", "h", "t", idempotency_key="k1")
+    assert fake.messages[0]["idempotency_key"] == "k1"
+
+
 def test_resend_request_shape(monkeypatch):
     from onolys_api.adapters.real import ResendEmailSender
 

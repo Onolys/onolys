@@ -21,9 +21,9 @@ permissions:
   contents: read
 
 env:
-  PROJECT: ${{ vars.GCP_PROJECT || 'onolys' }}
+  PROJECT: ${{ vars.STAGING_GCP_PROJECT || vars.GCP_PROJECT || 'onolys' }}
   REGION: ${{ vars.GCP_REGION || 'us-central1' }}
-  STAGING_SITE: onolys-app-staging
+  STAGING_SITE: ${{ vars.STAGING_GCP_PROJECT && vars.STAGING_HOSTING_SITE || 'onolys-app-staging' }}
   FIREBASE_TOOLS_VERSION: 15.37.0
 
 jobs:
@@ -78,11 +78,21 @@ jobs:
           LLM_MODEL: ${{ vars.LLM_MODEL }}
           LLM_EFFORT: ${{ vars.LLM_EFFORT }}
         run: uv run --frozen --package onolys-engine-core python scripts/ci/validate_staging_llm.py
+      - name: Validate isolated staging release target before cloud authentication
+        env:
+          STAGING_GCP_PROJECT: ${{ vars.STAGING_GCP_PROJECT }}
+          STAGING_WIF_PROVIDER: ${{ vars.STAGING_WIF_PROVIDER }}
+          STAGING_DEPLOYER_SA: ${{ vars.STAGING_DEPLOYER_SA }}
+          STAGING_HOSTING_SITE: ${{ vars.STAGING_HOSTING_SITE }}
+          STAGING_ISOLATED_VITE_FIREBASE_API_KEY: ${{ vars.STAGING_ISOLATED_VITE_FIREBASE_API_KEY }}
+          STAGING_ISOLATED_VITE_FIREBASE_AUTH_DOMAIN: ${{ vars.STAGING_ISOLATED_VITE_FIREBASE_AUTH_DOMAIN }}
+          STAGING_ISOLATED_VITE_FIREBASE_APP_ID: ${{ vars.STAGING_ISOLATED_VITE_FIREBASE_APP_ID }}
+        run: python3 scripts/ci/release_target.py staging
       - id: auth
         uses: google-github-actions/auth@v2
         with:
-          workload_identity_provider: ${{ vars.WIF_PROVIDER }}
-          service_account: ${{ vars.DEPLOYER_STAGING_SA }}
+          workload_identity_provider: ${{ vars.STAGING_GCP_PROJECT && vars.STAGING_WIF_PROVIDER || vars.WIF_PROVIDER }}
+          service_account: ${{ vars.STAGING_GCP_PROJECT && vars.STAGING_DEPLOYER_SA || vars.DEPLOYER_STAGING_SA }}
           token_format: access_token
       - uses: docker/login-action@v3
         with:
@@ -117,7 +127,10 @@ jobs:
       env: staging
       service: onolys-api-staging
       image: ${{ needs.build.outputs.image }}
-      region: us-central1
+      region: ${{ vars.GCP_REGION || 'us-central1' }}
+      project: ${{ vars.STAGING_GCP_PROJECT || vars.GCP_PROJECT || 'onolys' }}
+      workload_identity_provider: ${{ vars.STAGING_GCP_PROJECT && vars.STAGING_WIF_PROVIDER || vars.WIF_PROVIDER }}
+      service_account: ${{ vars.STAGING_GCP_PROJECT && vars.STAGING_DEPLOYER_SA || vars.DEPLOYER_STAGING_SA }}
       git_sha: ${{ needs.build.outputs.sha }}
       # PR previews (pr-preview.yml) are no-traffic tagged revisions of THIS service and edit its template (combined mode,
       # stub adapters, CORS for the channel, CPU always allocated). Re-specify every key they override so none leaks
@@ -127,8 +140,8 @@ jobs:
         SERVICE_MODE=api
         PR_PREVIEW=false
         ADAPTERS=real
-        CORS_ORIGINS=https://onolys-app-staging.web.app\,http://localhost:5173
-        APP_BASE_URL=https://onolys-app-staging.web.app
+        CORS_ORIGINS=https://${{ vars.STAGING_GCP_PROJECT && vars.STAGING_HOSTING_SITE || 'onolys-app-staging' }}.web.app\,http://localhost:5173
+        APP_BASE_URL=https://${{ vars.STAGING_GCP_PROJECT && vars.STAGING_HOSTING_SITE || 'onolys-app-staging' }}.web.app
         EMAIL_FROM=Onolys <no-reply@onolys.com>
         LLM_PROVIDER=${{ needs.build.outputs.llm_provider }}
         LLM_MODEL=${{ needs.build.outputs.llm_model }}
@@ -138,6 +151,7 @@ jobs:
     secrets: inherit
 
   sweep-previews:
+    if: vars.STAGING_GCP_PROJECT == ''
     # Orphan PR-preview revisions whose cleanup could not delete them (Cloud Run keeps the newest revision). Never fatal.
     needs: [build, deploy-api]
     runs-on: ubuntu-latest
@@ -151,8 +165,8 @@ jobs:
           ref: ${{ needs.build.outputs.sha }}
       - uses: google-github-actions/auth@v2
         with:
-          workload_identity_provider: ${{ vars.WIF_PROVIDER }}
-          service_account: ${{ vars.DEPLOYER_STAGING_SA }}
+          workload_identity_provider: ${{ vars.STAGING_GCP_PROJECT && vars.STAGING_WIF_PROVIDER || vars.WIF_PROVIDER }}
+          service_account: ${{ vars.STAGING_GCP_PROJECT && vars.STAGING_DEPLOYER_SA || vars.DEPLOYER_STAGING_SA }}
       - name: Delete untagged non-latest preview revisions (non-fatal)
         env:
           GCP_PROJECT: ${{ env.PROJECT }}
@@ -169,7 +183,10 @@ jobs:
       env: staging
       service: onolys-worker-staging
       image: ${{ needs.build.outputs.image }}
-      region: us-central1
+      region: ${{ vars.GCP_REGION || 'us-central1' }}
+      project: ${{ vars.STAGING_GCP_PROJECT || vars.GCP_PROJECT || 'onolys' }}
+      workload_identity_provider: ${{ vars.STAGING_GCP_PROJECT && vars.STAGING_WIF_PROVIDER || vars.WIF_PROVIDER }}
+      service_account: ${{ vars.STAGING_GCP_PROJECT && vars.STAGING_DEPLOYER_SA || vars.DEPLOYER_STAGING_SA }}
       git_sha: ${{ needs.build.outputs.sha }}
       # Empty vars = no override (routes.yaml wins). See docs/reference/infra.md "LLM provider and model".
       env_vars: |-
@@ -188,7 +205,10 @@ jobs:
       env: staging
       service: onolys-voice-staging
       image: ${{ needs.build.outputs.image }}
-      region: us-central1
+      region: ${{ vars.GCP_REGION || 'us-central1' }}
+      project: ${{ vars.STAGING_GCP_PROJECT || vars.GCP_PROJECT || 'onolys' }}
+      workload_identity_provider: ${{ vars.STAGING_GCP_PROJECT && vars.STAGING_WIF_PROVIDER || vars.WIF_PROVIDER }}
+      service_account: ${{ vars.STAGING_GCP_PROJECT && vars.STAGING_DEPLOYER_SA || vars.DEPLOYER_STAGING_SA }}
       git_sha: ${{ needs.build.outputs.sha }}
       # Same image as the api; the mode comes from SERVICE_MODE (also set by Terraform on the service).
       env_vars: |-
@@ -208,8 +228,8 @@ jobs:
           ref: ${{ needs.build.outputs.sha }}
       - uses: google-github-actions/auth@v2
         with:
-          workload_identity_provider: ${{ vars.WIF_PROVIDER }}
-          service_account: ${{ vars.DEPLOYER_STAGING_SA }}
+          workload_identity_provider: ${{ vars.STAGING_GCP_PROJECT && vars.STAGING_WIF_PROVIDER || vars.WIF_PROVIDER }}
+          service_account: ${{ vars.STAGING_GCP_PROJECT && vars.STAGING_DEPLOYER_SA || vars.DEPLOYER_STAGING_SA }}
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -237,11 +257,12 @@ jobs:
         env:
           VITE_API_BASE_URL: /v1
           VITE_FIREBASE_PROJECT_ID: ${{ env.PROJECT }}
-          VITE_FIREBASE_API_KEY: ${{ vars.STAGING_VITE_FIREBASE_API_KEY }}
-          VITE_FIREBASE_AUTH_DOMAIN: ${{ vars.STAGING_VITE_FIREBASE_AUTH_DOMAIN }}
-          VITE_FIREBASE_APP_ID: ${{ vars.STAGING_VITE_FIREBASE_APP_ID }}
-          VITE_FIREBASE_STORAGE_BUCKET: ${{ vars.STAGING_VITE_FIREBASE_STORAGE_BUCKET }}
-          VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ vars.STAGING_VITE_FIREBASE_MESSAGING_SENDER_ID }}
+          VITE_APP_HOSTS: ${{ vars.STAGING_GCP_PROJECT && 'onolys-staging-app.web.app' || '' }}
+          VITE_FIREBASE_API_KEY: ${{ vars.STAGING_GCP_PROJECT && vars.STAGING_ISOLATED_VITE_FIREBASE_API_KEY || (!vars.STAGING_GCP_PROJECT && vars.STAGING_VITE_FIREBASE_API_KEY) || '' }}
+          VITE_FIREBASE_AUTH_DOMAIN: ${{ vars.STAGING_GCP_PROJECT && vars.STAGING_ISOLATED_VITE_FIREBASE_AUTH_DOMAIN || (!vars.STAGING_GCP_PROJECT && vars.STAGING_VITE_FIREBASE_AUTH_DOMAIN) || '' }}
+          VITE_FIREBASE_APP_ID: ${{ vars.STAGING_GCP_PROJECT && vars.STAGING_ISOLATED_VITE_FIREBASE_APP_ID || (!vars.STAGING_GCP_PROJECT && vars.STAGING_VITE_FIREBASE_APP_ID) || '' }}
+          VITE_FIREBASE_STORAGE_BUCKET: ${{ vars.STAGING_GCP_PROJECT && vars.STAGING_ISOLATED_VITE_FIREBASE_STORAGE_BUCKET || (!vars.STAGING_GCP_PROJECT && vars.STAGING_VITE_FIREBASE_STORAGE_BUCKET) || '' }}
+          VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ vars.STAGING_GCP_PROJECT && vars.STAGING_ISOLATED_VITE_FIREBASE_MESSAGING_SENDER_ID || (!vars.STAGING_GCP_PROJECT && vars.STAGING_VITE_FIREBASE_MESSAGING_SENDER_ID) || '' }}
           VITE_CONTACT_EMAIL: ${{ vars.STAGING_VITE_CONTACT_EMAIL }}
           VITE_FIRESTORE_DATABASE: staging
         run: |
@@ -249,8 +270,18 @@ jobs:
           npm run build
       - uses: google-github-actions/auth@v2
         with:
-          workload_identity_provider: ${{ vars.WIF_PROVIDER }}
-          service_account: ${{ vars.DEPLOYER_STAGING_SA }}
+          workload_identity_provider: ${{ vars.STAGING_GCP_PROJECT && vars.STAGING_WIF_PROVIDER || vars.WIF_PROVIDER }}
+          service_account: ${{ vars.STAGING_GCP_PROJECT && vars.STAGING_DEPLOYER_SA || vars.DEPLOYER_STAGING_SA }}
+      - name: Set up gcloud for the isolated staging voice origin lookup
+        if: vars.STAGING_GCP_PROJECT != ''
+        uses: google-github-actions/setup-gcloud@v2
+      - name: Configure isolated staging voice origin in Hosting CSP
+        if: vars.STAGING_GCP_PROJECT != ''
+        run: |
+          voice_url="$(gcloud run services describe onolys-voice-staging --project "$PROJECT" --region "$REGION" --format='value(status.url)')"
+          python3 scripts/ci/release_target.py voice web/firebase.json "$voice_url"
+      - name: Configure the selected project Hosting target
+        run: python3 scripts/ci/release_target.py hosting web/firebase.json "$PROJECT" app-staging "$STAGING_SITE"
       - name: Deploy to Hosting target app-staging (site onolys-app-staging, /v1/** rewrite to onolys-api-staging)
         run: npx --yes firebase-tools@${{ env.FIREBASE_TOOLS_VERSION }} deploy --config web/firebase.json --only hosting:app-staging --project "$PROJECT" --non-interactive
 

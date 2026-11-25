@@ -104,14 +104,14 @@ describe("header nav by auth phase (D1)", () => {
     expect(menu.getByRole("menuitem", { name: "Settings" })).toHaveAttribute("href", "/settings");
     expect(menu.getByRole("menuitem", { name: "Sign out" })).toBeInTheDocument();
     await userEvent.keyboard("{Escape}");
-    expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByRole("menu")).not.toBeInTheDocument());
     expect(btn).toHaveFocus();
     await userEvent.click(btn);
     await userEvent.click(screen.getByRole("heading", { level: 1 }));
-    expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByRole("menu")).not.toBeInTheDocument());
     await userEvent.click(btn);
     await userEvent.click(btn);
-    expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByRole("menu")).not.toBeInTheDocument());
   });
 
   it("account menu keyboard: open focuses first item; arrows, Home/End cycle; Escape returns focus; Tab closes", async () => {
@@ -134,12 +134,12 @@ describe("header nav by auth phase (D1)", () => {
     await userEvent.keyboard("{End}");
     await waitFor(() => expect(signOut).toHaveFocus());
     await userEvent.keyboard("{Escape}");
-    expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByRole("menu")).not.toBeInTheDocument());
     await waitFor(() => expect(btn).toHaveFocus());
     await userEvent.click(btn);
     expect(screen.getByRole("menu")).toBeInTheDocument();
     await userEvent.tab();
-    expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByRole("menu")).not.toBeInTheDocument());
   });
 
   it("account menu: Settings navigates and closes", async () => {
@@ -149,7 +149,7 @@ describe("header nav by auth phase (D1)", () => {
     await userEvent.click(screen.getByRole("menuitem", { name: "Settings" }));
     await h1("Settings");
     expect(here(router)).toBe("/settings");
-    expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByRole("menu")).not.toBeInTheDocument());
   });
 
   it("account menu: choosing Settings leaves focus on the Settings heading, not the trigger", async () => {

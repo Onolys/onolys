@@ -40,10 +40,22 @@ class AuthEmailService:
         self._links = links
         self._sender = sender
 
-    def _send(self, kind: EmailKind, to: str, code: str, next_path: str | None = None) -> None:
+    def _send(
+        self,
+        kind: EmailKind,
+        to: str,
+        code: str,
+        next_path: str | None = None,
+        idempotency_key: str | None = None,
+    ) -> None:
         link = build_action_link(self._settings, kind, code, next_path=next_path)
         email = render_email(kind, link)
-        self._sender.send(to, email.subject, email.html, email.text)
+        if idempotency_key:
+            self._sender.send(
+                to, email.subject, email.html, email.text, idempotency_key=idempotency_key
+            )
+        else:
+            self._sender.send(to, email.subject, email.html, email.text)
 
     def require_configured(self) -> None:
         if not self._settings.app_base_url:  # same path as a missing RESEND_API_KEY (AC7)
@@ -63,11 +75,11 @@ class AuthEmailService:
         self._send("verify", account.email, self._links.verification(uid), next_path)
         return True
 
-    def send_password_reset(self, email: str) -> bool:
-        """False for unknown/disabled accounts (nothing sent)."""
+    def send_password_reset(self, email: str, idempotency_key: str | None = None) -> bool:
+        """False for unknown/disabled accounts (nothing sent). The key dedupes provider-side."""
         self.require_configured()
         code = self._links.password_reset(email)
         if code is None:
             return False
-        self._send("reset", email, code)
+        self._send("reset", email, code, idempotency_key=idempotency_key)
         return True

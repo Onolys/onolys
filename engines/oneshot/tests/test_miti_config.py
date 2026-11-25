@@ -9,7 +9,9 @@ from pathlib import Path
 import pytest
 import yaml
 from onolys_engine_core.errors import InputError
+from onolys_engine_core.llm.litellm_client import LiteLLMClient
 from onolys_engine_core.llm.routes import load_registry, resolve_preset
+from onolys_engine_core.llm.types import LLMRequest
 from onolys_engine_core.transcript_v1 import TranscriptV1
 from onolys_engine_core.validate import validate_output
 
@@ -86,6 +88,15 @@ def test_oneshot_route_has_explicit_output_cap(path, preset):
         assert routes["oneshot"].litellm_id == "gemini/gemini-4-neon"
     else:
         assert routes["oneshot"].litellm_id == routes["mid"].litellm_id
+
+
+@pytest.mark.parametrize("path", [ROOT / "config/staging/routes.yaml", ROOT / "config/prod/routes.yaml"])
+@pytest.mark.parametrize("preset", ["default", "claude"])
+def test_oneshot_max_tokens_sent_to_provider_is_64000(path, preset):
+    routes, _ = resolve_preset(preset, load_registry(path, env={}), env={})
+    req = LLMRequest(tier="oneshot", system="s", user="u", response_schema={},
+                     max_tokens=load_config("miti").max_output_tokens)
+    assert LiteLLMClient._limits(routes["oneshot"], req)[0] == 64000
 
 
 def test_schema_generator_has_no_miti_code_imports():

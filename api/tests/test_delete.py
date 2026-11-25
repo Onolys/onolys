@@ -122,6 +122,14 @@ async def test_full_flow_delete_leaves_nothing_anywhere(env, caplog):
     assert len(deleted_lines(caplog)) == 1
 
 
+async def test_failed_session_can_be_deleted(env):
+    sid = await env.finished("[fail:code]")  # a permanently failed run
+    assert env.repo.get_session(env.uid, sid).state == "failed"
+    r = await env.c.delete(f"/v1/sessions/{sid}", headers=env.h)
+    assert r.status_code == 204
+    assert remaining_docs(env, sid) == [] and session_blob_keys(env, sid) == []
+
+
 async def test_delete_is_404_for_other_users_and_unknown_sessions(env):
     sid = await env.finished()
     r = await env.c.delete(f"/v1/sessions/{sid}", headers=env.hb)

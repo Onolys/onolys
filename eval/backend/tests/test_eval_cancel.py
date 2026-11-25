@@ -118,6 +118,36 @@ def test_waiting_cell_becomes_cancelled_and_does_not_touch_the_breaker(env, cloc
     assert len(all_runs(env)) == 1
 
 
+def test_cancel_during_retry_cancels_the_newest_waiting_ref(env, clock):
+    rid = create(env, ["one"], selection=SEL1, repeats=1)
+    tick(env, rid)
+    ((sid, run),) = by_sid(env).items()
+    finish_at(env, sid, run, 1, "failed", "upstream_unavailable")
+    tick(env, rid)
+    clock.advance(16)
+    tick(env, rid)  # retry (attempt 1) starts
+    finish(env, sid, by_sid(env)[sid], "failed", "upstream_unavailable")
+    tick(env, rid)  # attempt 1 waits again
+    cancel(env, rid)
+    tick(env, rid)
+    refs = env.repository.get_run(rid)["sessions"][sid]["runs"]
+    assert [(r["attempt"], r["status"]) for r in refs] == [(0, "failed"), (1, "cancelled")]
+    assert refs[0]["error"] == "upstream_unavailable"
+
+
+def test_cancel_cells_picks_the_newest_of_several_waiting_refs():
+    from onolys_eval_backend.eval_scheduler import _cancel_cells
+
+    cell = {"engine": "miti", "combo_key": "c", "repeat": 0}
+    ref = lambda n: {"run_id": f"r{n}", "engine": "miti", "combo_key": "c", "repeat": 0,  # noqa: E731
+                     "attempt": n, "status": "waiting"}
+    entry = {"cursor": 0, "active_run_id": None, "state": "waiting", "runs": [ref(0), ref(1)],
+             "skipped_idx": []}
+    doc = {"sessions": {"s": entry}, "cells_wait": {}, "cancelled_units": 0}
+    _cancel_cells(doc, [cell])
+    assert [r["status"] for r in entry["runs"]] == ["waiting", "cancelled"]
+
+
 def test_second_cancel_is_a_no_op_with_the_same_cancelled_at(env, clock):
     rid = create(env, ["one"], selection=SEL2, repeats=2)
     tick(env, rid)
