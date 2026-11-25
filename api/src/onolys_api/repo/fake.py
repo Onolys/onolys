@@ -46,6 +46,7 @@ from onolys_api.repo.limits import (
 from onolys_api.repo.models import (
     ApiKeyDoc,
     Doc,
+    EvalRunInfo,
     IdempotencyDoc,
     InterviewDoc,
     InterviewState,
@@ -885,8 +886,13 @@ class FakeRepo:
         self, uid: str, sid: str, run_id: str, date: str, defaults: LimitDefaults, max_active: int,
         code_version: str, start_progress: int, allowed_states: tuple[str, ...],
         n_runs: int | None, preset: str | None, coded_span: dict | None = None,
-        retry_max: int | None = None,
+        retry_max: int | None = None, eval: EvalRunInfo | None = None,  # noqa: A002
     ) -> StartOutcome:  # fmt: skip
+        if eval is not None:  # SP04 R3: an eval run may start on any ready session
+            allowed_states = (
+                *allowed_states,
+                *(x for x in ("report_ready", "failed") if x not in allowed_states),
+            )
         with self._claim_lock:  # the fake's "transaction"
             sess = self._owned(f"sessions/{sid}", uid)
             assert sess is not None
@@ -927,9 +933,10 @@ class FakeRepo:
                          and first.get("counted") is False))
             )  # fmt: skip
             units = n_runs or sess.get("n_runs", 1)
-            decided = decide_start(user, usage, defaults, max_active, exempt, units)
-            if decided != "ok":
-                return START_OUTCOME[decided]  # type: ignore[return-value]
+            if eval is None:
+                decided = decide_start(user, usage, defaults, max_active, exempt, units)
+                if decided != "ok":
+                    return START_OUTCOME[decided]  # type: ignore[return-value]
             revs = [(i, d) for i, d in self._children(sid, "ratings") if i != DRAFT_ID]
             rating_id = max(revs, key=lambda t: (t[1]["created_at"], t[0]))[0] if revs else None
             run = RunDoc(
@@ -940,7 +947,7 @@ class FakeRepo:
                 change_goal=sess.get("change_goal") or "",
                 clinician_speaker=sess["clinician_speaker"],
                 language=transcript["language"], transcript_sha256=transcript["sha256"],
-                counted=not exempt, units=units, coded_span=coded_span,
+                counted=not exempt and eval is None, units=units, coded_span=coded_span, eval=eval,
             )  # fmt: skip
             now = utcnow()
             progress = (
@@ -949,7 +956,7 @@ class FakeRepo:
                 else max(status.get("progress", 0), start_progress)
             )
             self._create(f"sessions/{sid}/runs/{run_id}", run.to_store())
-            if not exempt:
+            if not exempt and eval is None:
                 self._put(f"usage/{uid}_{date}", {**usage, "runs": usage.get("runs", 0) + units})
             self._put(f"users/{uid}", {**user, "active_runs": user.get("active_runs", 0) + 1})
             self._put(

@@ -16,6 +16,7 @@ from onolys_api.errors import ApiError
 from onolys_api.repo.limits import Kind, LimitDefaults, ReserveUsageOutcome
 from onolys_api.repo.models import (
     ApiKeyDoc,
+    EvalRunInfo,
     IdempotencyDoc,
     InterviewDoc,
     InterviewState,
@@ -273,13 +274,15 @@ class Repo(Protocol):
     # clears the error. With `retry_max` (R4 retry of a failed run) the start is a retry: only
     # `retry_allowed(session, retry_max, "run")` passes (else "not_ready"), and it also bumps
     # `retry_count` in the same transaction; a cap/concurrent refusal bumps nothing.
+    # `eval` (SP04 R3, eval run): also allows report_ready/failed, skips decide_start (no cap or
+    # concurrent check), writes counted=False and no usage, and writes the block via txn.create.
     # Exactly one of two racing callers (two manual starts, or a manual start
     # and the first-run gate) wins; the loser reserved nothing, so there is nothing to release.
     def start_run(
         self, uid: str, sid: str, run_id: str, date: str, defaults: LimitDefaults, max_active: int,
         code_version: str, start_progress: int, allowed_states: tuple[str, ...],
         n_runs: int | None, preset: str | None, coded_span: dict | None = None,
-        retry_max: int | None = None,
+        retry_max: int | None = None, eval: EvalRunInfo | None = None,  # noqa: A002
     ) -> StartOutcome: ...  # fmt: skip
     # R4 retry of a validate/transcribe failure, ONE transaction: if `retry_allowed(session,
     # max_retries, step)` (failed, transient, under the cap, failed at `step`), set `state=to`,

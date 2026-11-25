@@ -55,6 +55,7 @@ from onolys_api.repo.limits import (
 from onolys_api.repo.models import (
     ApiKeyDoc,
     Doc,
+    EvalRunInfo,
     IdempotencyDoc,
     InterviewDoc,
     InterviewState,
@@ -1185,8 +1186,13 @@ class FirestoreRepo:
         self, uid: str, sid: str, run_id: str, date: str, defaults: LimitDefaults, max_active: int,
         code_version: str, start_progress: int, allowed_states: tuple[str, ...],
         n_runs: int | None, preset: str | None, coded_span: dict | None = None,
-        retry_max: int | None = None,
+        retry_max: int | None = None, eval: EvalRunInfo | None = None,  # noqa: A002
     ) -> StartOutcome:  # fmt: skip
+        if eval is not None:  # SP04 R3: an eval run may start on any ready session
+            allowed_states = (
+                *allowed_states,
+                *(x for x in ("report_ready", "failed") if x not in allowed_states),
+            )
         sref = self._session_ref(uid, sid)
         stref = self._top("session_status", sid)
         usage_ref = self._top("usage", f"{uid}_{date}")
@@ -1247,9 +1253,10 @@ class FirestoreRepo:
                      or (sess.get("state") == "failed" and first.get("counted") is False))
             )  # fmt: skip
             units = n_runs or sess.get("n_runs", 1)
-            decided = decide_start(user, usage, defaults, max_active, exempt, units)
-            if decided != "ok":
-                return START_OUTCOME[decided]  # type: ignore[return-value]
+            if eval is None:
+                decided = decide_start(user, usage, defaults, max_active, exempt, units)
+                if decided != "ok":
+                    return START_OUTCOME[decided]  # type: ignore[return-value]
             run = RunDoc(
                 uid=uid, session_id=sid, run_id=run_id, n_runs=n_runs or sess.get("n_runs", 1),
                 preset=preset or sess.get("preset"), rating_id=latest[0].id if latest else None,
@@ -1257,7 +1264,7 @@ class FirestoreRepo:
                 change_goal=sess.get("change_goal") or "",
                 clinician_speaker=sess["clinician_speaker"],
                 language=transcript["language"], transcript_sha256=transcript["sha256"],
-                counted=not exempt, units=units, coded_span=coded_span,
+                counted=not exempt and eval is None, units=units, coded_span=coded_span, eval=eval,
             )  # fmt: skip
             progress = (
                 start_progress
@@ -1277,7 +1284,7 @@ class FirestoreRepo:
             if retry_max is not None:
                 fields["retry_count"] = sess.get("retry_count", 0) + 1
             txn.create(run_ref, run.to_store())
-            if not exempt:
+            if not exempt and eval is None:
                 txn.set(
                     usage_ref,
                     {"uid": uid, "date": date, "runs": usage.get("runs", 0) + units},
