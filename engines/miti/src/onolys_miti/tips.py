@@ -20,6 +20,14 @@ from dataclasses import dataclass
 from typing import Any
 
 from onolys_engine_core.llm import LLMBadOutput, LLMClient, LLMRequest, MetricsCollector
+from onolys_engine_core.text_limits import (
+    ALTERNATIVE_MAX,
+    MAX_TIPS_PROPOSED,
+    OBSERVATION_MAX,
+    QUOTE_MAX,
+    SENTENCE_MAX,
+    TITLE_MAX,
+)
 from onolys_engine_core.transcript import Transcript
 from pydantic import BaseModel
 
@@ -84,6 +92,17 @@ class TipsArtifact(BaseModel):
 
     valid: list[Tip]
     proposals: list[dict[str, Any]]
+
+
+def _too_long(p: _Proposal) -> bool:
+    """A field over its limit: the tip is dropped and re-proposed (like `alternative_too_long`)."""
+    return (
+        len(p.title or "") > TITLE_MAX
+        or len(p.observation) > OBSERVATION_MAX
+        or len(p.alternative) > ALTERNATIVE_MAX
+        or len(p.why_it_matters) > SENTENCE_MAX
+        or len(p.quote.text) > QUOTE_MAX
+    )
 
 
 def _sentences(text: str) -> int:
@@ -199,6 +218,8 @@ def validate_proposals(
             break
         if p.item_id not in item_ids:
             code = "unknown_item"
+        elif _too_long(p):
+            code = "field_too_long"
         elif text is None:
             code = "not_clinician_turn"
         elif m is None:
@@ -280,8 +301,9 @@ async def generate_tips(
                 if attempt == 2:
                     break
                 continue
-            parsed += res.parsed.tips
-            proposals += [p.model_dump() for p in res.parsed.tips]
+            kept = res.parsed.tips[:MAX_TIPS_PROPOSED]  # the prompt asks for at most 7
+            parsed += kept
+            proposals += [p.model_dump() for p in kept]
             valid, violations = validate_proposals(parsed, turns)
             if len(valid) >= MIN_TIPS:
                 break

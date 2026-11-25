@@ -18,6 +18,7 @@ from typing import Any
 
 from onolys_engine_core.errors import OnolysError
 from onolys_engine_core.llm import LLMBadOutput, LLMClient, LLMRequest, MetricsCollector
+from onolys_engine_core.text_limits import MAX_CITED, SENTENCE_MAX, clip
 from pydantic import BaseModel, create_model
 
 from onolys_miti import miti
@@ -177,7 +178,21 @@ def _rate(item: dict[str, Any], rating: Any, prepared: Prepared, out: GlobalsRes
         raise GlobalsPassFailed(
             f"global {iid}: score {raw} outside scale {scale['min']}-{scale['max']}"
         )
-    evidence = _locate_all(iid, rating.evidence, prepared, out.warnings)
+    reason, cut = clip(rating.reason, SENTENCE_MAX)
+    capped_lists = len(rating.evidence) > MAX_CITED or len(rating.poor_practice_cited) > MAX_CITED
+    if cut or capped_lists:
+        out.warnings.append(
+            ResultWarning(
+                code="text_truncated",
+                severity="info",
+                item_id=iid,
+                detail="; ".join(
+                    ([f"reason cut to {SENTENCE_MAX} characters"] if cut else [])
+                    + ([f"quote lists cut to {MAX_CITED} entries"] if capped_lists else [])
+                ),
+            )
+        )
+    evidence = _locate_all(iid, rating.evidence[:MAX_CITED], prepared, out.warnings)
     need = int(item.get("evidence_min", 0))
     if len(evidence) < need:
         out.warnings.append(
@@ -188,7 +203,7 @@ def _rate(item: dict[str, Any], rating: Any, prepared: Prepared, out: GlobalsRes
                 detail=f"{len(evidence)} located evidence quote(s), below evidence minimum {need}",
             )
         )
-    poor = bool(_locate_all(iid, rating.poor_practice_cited, prepared, out.warnings))
+    poor = bool(_locate_all(iid, rating.poor_practice_cited[:MAX_CITED], prepared, out.warnings))
     cap = _cap_for(item, raw, poor)
     score, source = (raw, "model") if cap is None else (cap, "capped")
     if cap is not None:
@@ -201,7 +216,7 @@ def _rate(item: dict[str, Any], rating: Any, prepared: Prepared, out: GlobalsRes
             )
         )
     out.globals[iid] = GlobalScore(
-        score=score, source=source, raw_score=raw, reason=rating.reason, evidence=evidence
+        score=score, source=source, raw_score=raw, reason=reason, evidence=evidence
     )
 
 

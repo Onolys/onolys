@@ -20,6 +20,7 @@ from typing import Any, Literal
 from onolys_engine_core.errors import OnolysError
 from onolys_engine_core.llm import LLMBadOutput, LLMClient, LLMRequest, MetricsCollector
 from onolys_engine_core.llm.warm import warm_then_fanout
+from onolys_engine_core.text_limits import SENTENCE_MAX, clip
 from onolys_engine_core.transcript import Turn
 from pydantic import BaseModel, create_model
 
@@ -283,6 +284,16 @@ class _Pass:
             context_drops = sum(w.code == "context_quote" for w in warns)
             total -= context_drops
             dropped += len(warns) - context_drops
+        truncated = 0
+        for insts in by_volley.values():
+            for inst in insts:
+                inst.rationale, cut = clip(inst.rationale, SENTENCE_MAX)
+                truncated += cut
+        if truncated:  # not a drop: kept out of the drop-rate arithmetic above
+            warnings.append(ResultWarning(
+                code="text_truncated", severity="info",
+                detail=f"{truncated} rationale(s) cut to {SENTENCE_MAX} characters",
+            ))
         return _Attempt(by_volley, warnings, total, dropped)
 
     async def _checked(self, batch: list[Volley], tag: str) -> _Attempt:

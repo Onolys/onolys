@@ -576,3 +576,20 @@ async def test_context_only_gap_remains_info_without_retry(tmp_path, pack_data):
     assert [(w.code, w.severity) for w in out.warnings] == [
         ('context_quote', 'warning'), ('coverage_gap', 'info')]
     assert out.coverage['residual_words'] == 40
+
+
+async def test_overlong_rationale_is_truncated_with_an_info_warning(tmp_path, pack_data):
+    client = FakeClient(lambda req, n: good(req, lambda vid: [utt("First thing here.", "a", "word " * 100)]))
+    out = await run(client, make_pack(tmp_path, pack_data), volleys(1))
+    (inst,) = out.instances
+    assert len(inst.rationale) <= 300 and inst.rationale.endswith("…")
+    (w,) = [w for w in out.warnings if w.code == "text_truncated"]
+    assert w.severity == "info" and "rationale" in w.detail
+    assert inst.code == "a" and inst.counted  # coding itself is untouched
+
+
+async def test_rationale_at_the_limit_is_untouched(tmp_path, pack_data):
+    client = FakeClient(lambda req, n: good(req, lambda vid: [utt("First thing here.", "a", "r" * 300)]))
+    out = await run(client, make_pack(tmp_path, pack_data), volleys(1))
+    assert out.instances[0].rationale == "r" * 300
+    assert not [w for w in out.warnings if w.code == "text_truncated"]

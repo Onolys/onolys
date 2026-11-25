@@ -17,6 +17,13 @@ from onolys_engine_core.llm.errors import LLMBadOutput
 from onolys_engine_core.llm.fixture_client import RecordingClient
 from onolys_engine_core.llm.routes import Route, resolve_preset
 from onolys_engine_core.llm.types import LLMRequest
+from onolys_engine_core.text_limits import (
+    ALTERNATIVE_MAX,
+    MAX_TIPS_PROPOSED,
+    OBSERVATION_MAX,
+    SENTENCE_MAX,
+    clip,
+)
 from onolys_engine_core.transcript_v1 import TranscriptV1
 
 from .config import config_names, load_config
@@ -39,6 +46,25 @@ def _route(client, name: str, preset: str | None) -> Route:
         return routes[name]
     except KeyError:
         raise ConfigError(f"unknown LLM route {name!r}") from None
+
+
+_TIP_LIMITS = {
+    "observation": OBSERVATION_MAX, "alternative": ALTERNATIVE_MAX, "why_it_matters": SENTENCE_MAX,
+}
+
+
+def limit_tips(output: dict) -> dict:
+    """Cap the model's tips list and cut overlong tip text (no warning channel: kept, shortened)."""
+    tips = output.get("tips")
+    if not isinstance(tips, list):
+        return output
+    out = []
+    for tip in tips[:MAX_TIPS_PROPOSED]:
+        if isinstance(tip, dict):
+            tip = {k: clip(v, _TIP_LIMITS[k])[0] if k in _TIP_LIMITS and isinstance(v, str) else v
+                   for k, v in tip.items()}
+        out.append(tip)
+    return {**output, "tips": out}
 
 
 class OneshotEngine(Engine):
@@ -105,7 +131,7 @@ class OneshotEngine(Engine):
             if span is not None else {"start_turn": 0, "end_turn": len(transcript.turns)}
         )
         return EngineResult(
-            output=response.parsed,
+            output=limit_tips(response.parsed),
             run_info=RunInfo(
                 engine=self.name,
                 config=config.name,
