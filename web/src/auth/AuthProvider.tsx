@@ -1,6 +1,5 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { clearJobs } from "../features/upload/uploader";
 import type { AuthService, AuthUser } from "./types";
 
 export type AuthPhase = "loading" | "signedOut" | "unverified" | "verified";
@@ -24,8 +23,21 @@ export interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
-export function AuthProvider({ service, children }: { service: AuthService; children: ReactNode }) {
+export function AuthProvider({
+  service,
+  onSignOut,
+  children,
+}: {
+  service: AuthService;
+  /** Extra app-specific cleanup when the user changes or signs out (prod passes `clearJobs`). */
+  onSignOut?: () => void;
+  children: ReactNode;
+}) {
   const queryClient = useQueryClient();
+  const onSignOutRef = useRef(onSignOut);
+  useEffect(() => {
+    onSignOutRef.current = onSignOut;
+  }, [onSignOut]);
   const [state, setState] = useState<{ status: "loading" | "ready"; user: AuthUser | null }>({
     status: "loading",
     user: null,
@@ -41,7 +53,7 @@ export function AuthProvider({ service, children }: { service: AuthService; chil
         // Different user (or signed out by any route: other tab, revoked token): nothing of the old one may linger.
         if (lastUid.current !== undefined && lastUid.current !== uid) {
           queryClient.clear();
-          clearJobs();
+          onSignOutRef.current?.();
         }
         lastUid.current = uid;
         signedIn.current = user !== null;

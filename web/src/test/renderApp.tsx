@@ -3,6 +3,7 @@ import { render } from "@testing-library/react";
 import { createMemoryRouter, RouterProvider, type RouteObject } from "react-router";
 import { AuthProvider } from "../auth/AuthProvider";
 import { createFakeAuthService, type FakeAuthService } from "../auth/fakeService";
+import { clearJobs } from "../features/upload/uploader";
 import { makeQueryClient } from "../queryClient";
 import { routes } from "../routes/routes";
 
@@ -21,7 +22,7 @@ export function renderApp(path: string, opts: RenderOptions = {}) {
   const router = createMemoryRouter(opts.routes ?? routes, { initialEntries: [path] });
   render(
     <QueryClientProvider client={queryClient}>
-      <AuthProvider service={service}>
+      <AuthProvider service={service} onSignOut={clearJobs}>
         <RouterProvider router={router} />
       </AuthProvider>
     </QueryClientProvider>,

@@ -244,3 +244,33 @@ describe("firebase email endpoints", () => {
     await expect(make().sendPasswordReset("a@b.co")).rejects.toMatchObject({ code: "email/unavailable" });
   });
 });
+
+describe("createFirebaseAuthService without emailApi", () => {
+  const bare = () => createFirebaseAuthService({ apiKey: "AIzaSy", authDomain: "d", projectId: "p", appId: "a" }, { emailApi: null });
+
+  it("password reset and verification email reject with email/unavailable and never call the network", async () => {
+    await expect(bare().sendPasswordReset("a@b.co")).rejects.toMatchObject({ code: "email/unavailable" });
+    await expect(bare().sendVerificationEmail()).rejects.toMatchObject({ code: "email/unavailable" });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("sign-in and sign-up still work (sign-up tolerates the missing verification email)", async () => {
+    m.createUser.mockResolvedValue({ user: currentUser });
+    const svc = bare();
+    await svc.signIn("a@b.co", "pw");
+    expect(m.signIn).toHaveBeenCalled();
+    await expect(svc.signUp("a@b.co", "pw")).resolves.toBeUndefined();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("a supplied emailApi is used instead of the default client", async () => {
+    const post = vi.fn().mockResolvedValue({ response: { status: 202 } });
+    const svc = createFirebaseAuthService(
+      { apiKey: "AIzaSy", authDomain: "d", projectId: "p", appId: "a" },
+      { emailApi: () => ({ POST: post }) as never },
+    );
+    await svc.sendPasswordReset("a@b.co");
+    expect(post).toHaveBeenCalledWith("/auth/email/password-reset", { body: { email: "a@b.co" } });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
