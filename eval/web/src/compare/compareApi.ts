@@ -25,7 +25,7 @@ export interface Operations {
 export interface Verdict {text:string;claims:{metric:string;combo:string;value:number;n:number}[]}
 export type MetricCells = Record<string,Record<string,CompareCell>>;
 export interface CompareOverview extends CompareCommon {
- header:{name:string|null;dataset_id:string|null;sessions:number;repeats:number;label_coverage:{counts:string[];globals:string[];line_labels:boolean}|null;coverage:CompareCoverage};
+ header:{line_sessions?:{session_id:string;matched_lines:number|null}[];name:string|null;dataset_id:string|null;sessions:number;repeats:number;label_coverage:{counts:string[];globals:string[];line_labels:boolean}|null;coverage:CompareCoverage};
  count_error:Record<string,CompareCell>;verdict:Verdict[];
  leaderboard:(CompareCell & Operations & {combo_key:string;globals_within_1:QualityCell;line_accuracy:QualityCell;macro_f1:QualityCell})[];
  heatmap:{rows:{id:string;kind:'count'|'global'|'ratio'|'total'}[];human:Record<string,Observed & {values:{session_id:string;value:number}[]}>;cells:MetricCells};
@@ -65,7 +65,7 @@ export interface CompareTurn extends Omit<CompareCommon,'combos'> {
  session_id:string;turn_id:string;text:string;human:{codes:string[];note:string|null}|null;missing:string|null;
  combos:Record<string,{missing:string|null;codes:string[][];rationales:Snippet[];agree:{k:number;r:number}|null}>;
 }
-export interface CompareOptions {combos?:string[];code?:string;combo?:string;metric?:string;cursor?:string}
+export interface CompareOptions {combos?:string[];code?:string;combo?:string;metric?:string;cursor?:string;session?:string;kind?:'global'}
 export interface CompareApi {
  compareLineMatches(runId:string,options?:CompareOptions,signal?:AbortSignal):Promise<{session_ids:string[]}>;
  compareOverview(runId:string,options?:CompareOptions,signal?:AbortSignal):Promise<CompareOverview>;
@@ -86,13 +86,14 @@ function checked<T>(value:unknown, kind:'overview'|'deep'|'analysis'|'reasoning'
  if(kind==='reasoning' && value.next_cursor !== null && typeof value.next_cursor !== 'string') throw new ComparePayloadError();
  if((kind==='lines' || kind==='turn') && typeof value.session_id !== 'string') throw new ComparePayloadError();
  if(kind==='turn' && (typeof value.turn_id !== 'string' || typeof value.text !== 'string')) throw new ComparePayloadError();
+ if(kind==='overview' && object(value.header) && value.header.line_sessions!==undefined && (!Array.isArray(value.header.line_sessions) || value.header.line_sessions.some(row=>!object(row)||typeof row.session_id!=='string'||(row.matched_lines!==null&&(typeof row.matched_lines!=='number'||!Number.isFinite(row.matched_lines)))))) throw new ComparePayloadError();
  if(kind==='overview' && (!object(value.heatmap) || !Array.isArray(value.heatmap.rows) || !object(value.heatmap.cells) || !object(value.heatmap.human))) throw new ComparePayloadError();
  return value as T;
 }
 export function createCompareApi(request:<T>(path:string,init?:RequestInit)=>Promise<T>):CompareApi {
  const get = async <T>(run:string,path:string,kind:Parameters<typeof checked>[1],options:CompareOptions={},signal?:AbortSignal):Promise<T> => {
   const query=new URLSearchParams();if(options.combos?.length)query.set('combos',options.combos.join(','));
-  for(const key of ['code','combo','metric','cursor'] as const)if(options[key])query.set(key,options[key]);
+  for(const key of ['code','combo','metric','cursor','session','kind'] as const)if(options[key])query.set(key,options[key]);
   return checked<T>(await request<unknown>(`${COMPARE_PREFIX}/${encodeURIComponent(run)}/compare/${path}${query.size?`?${query}`:''}`,{signal}),kind);
  };
  return {

@@ -62,3 +62,13 @@ it.each([null,{}, {session_ids:[1]}, {session_ids:'bad'}])('rejects malformed ma
  const api=createEvalApi('',vi.fn().mockResolvedValue(new Response(JSON.stringify(payload))));
  await expect(api.compareLineMatches('r',{combo:'c',code:'multi',metric:'multi'})).rejects.toBeInstanceOf(ComparePayloadError);
 });
+it('scopes global reasoning by session and kind with the existing cursor',async()=>{
+ const fetcher=vi.fn().mockResolvedValue(new Response(JSON.stringify(reasoning))),api=createEvalApi('https://eval',fetcher),signal=new AbortController().signal;
+ await api.compareReasoning('r',{session:'upload/1',kind:'global',combos:['opaque'],cursor:'next'},signal);
+ const query=new URL(String(fetcher.mock.calls[0][0])).searchParams;
+ expect(query.get('session')).toBe('upload/1');expect(query.get('kind')).toBe('global');expect(query.get('cursor')).toBe('next');expect(fetcher.mock.calls[0][1].signal).toBe(signal);
+});
+it.each([{session_id:'s',matched_lines:'5'},{session_id:1,matched_lines:0}])('rejects malformed line session choices %j',async row=>{
+ const api=createEvalApi('',vi.fn().mockResolvedValue(new Response(JSON.stringify({...overview,header:{...overview.header,line_sessions:[row]}}))));
+ await expect(api.compareOverview('r')).rejects.toBeInstanceOf(ComparePayloadError);
+});

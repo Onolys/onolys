@@ -38,8 +38,22 @@ export function CompareApp({api,runId,state,navigate}:{api:EvalApi;runId:string;
  const defaults=overview.data?.combos.filter(combo=>{const cell=overview.data!.count_error[combo.combo_key];return cell && !cell.na && cell.off!==null;}).sort((a,b)=>overview.data!.count_error[a.combo_key].off!-overview.data!.count_error[b.combo_key].off!).slice(0,3).map(combo=>combo.combo_key)??[];
  const effectiveCombos=tab==='deep'&&!state.combos?.length?defaults:state.combos??[];
  const combosKey=JSON.stringify(effectiveCombos);
- const session=state.session ?? (run && 'session_ids' in run.input ? run.input.session_ids[0] : undefined);
- const cacheKey=JSON.stringify([tab,combosKey,tab==='lines'?session:null,state.code,state.combo]);
+ const [matches,setMatches]=useState<Record<string,{session_ids?:string[];error?:unknown}>>({});
+ const matchKey=JSON.stringify([combosKey,state.code,state.metric,state.combo]);
+ const filtered=Boolean(state.code&&state.metric&&state.combo);
+ const match=matches[matchKey];
+ const sessions=overview.data?.header.line_sessions??[];
+ const rankedSessions=[...sessions].sort((a,b)=>(b.matched_lines??-1)-(a.matched_lines??-1));
+ const defaultSession=rankedSessions[0]?.session_id;
+ const matchedSession=rankedSessions.find(item=>match?.session_ids?.includes(item.session_id))?.session_id??match?.session_ids?.[0];
+ const session=state.session ?? (filtered?matchedSession:defaultSession);
+ useEffect(()=>{
+  if(tab!=='lines'||state.session||!filtered||match||!overview.data)return;
+  const controller=new AbortController();
+  api.compareLineMatches(runId,{combos:JSON.parse(combosKey) as string[],code:state.code,metric:state.metric,combo:state.combo},controller.signal).then(value=>{if(!controller.signal.aborted)setMatches(old=>({...old,[matchKey]:value}));}).catch(error=>{if(!controller.signal.aborted)setMatches(old=>({...old,[matchKey]:{error}}));});
+  return ()=>controller.abort();
+ },[api,runId,tab,state.session,filtered,match,overview.data,combosKey,state.code,state.metric,state.combo,matchKey]);
+ const cacheKey=JSON.stringify([tab,combosKey,tab==='lines'?session:null,tab==='lines'?null:state.code,tab==='lines'?null:state.combo]);
  const entry=cache[cacheKey];
  useEffect(()=>{
   const controller=new AbortController();
@@ -70,7 +84,7 @@ export function CompareApp({api,runId,state,navigate}:{api:EvalApi;runId:string;
   return {letter:comboLetter(index),combo,label:savedLabel ? `${combo.engine} · ${savedLabel}` : [combo.engine,combo.model,combo.tier,combo.effort,combo.combo_key].filter(Boolean).join(' · ')};
  });
  const labelCoverage=data.header.label_coverage;
- const props={overview:data,run,state:tab==='deep'?{...state,combos:effectiveCombos}:state,navigate,legend,api,runId};
+ const props={overview:data,run,state:tab==='deep'?{...state,combos:effectiveCombos}:tab==='lines'?{...state,session}:state,navigate,legend,api,runId};
  const cohorts=tab==='deep'?(active&&'cohorts' in active?active.cohorts??{}:{}):data.cohorts;
  const retryTab=()=>{setCache(previous=>{const next={...previous};delete next[cacheKey];return next;});setTabAttempt(n=>n+1);};
  return <section className="compare-app"><header><EvalLink state={{view:'run',run:runId}} navigate={navigate}>Back to run</EvalLink><h1>{data.header.name||runId}</h1><PartialBadge run={{status:data.coverage.eval_status,cancelled_at:data.coverage.cancelled_at,done_units:data.coverage.runs_done,total_units:data.coverage.runs_total,skipped_units:data.coverage.runs_skipped}}/><p>{data.header.sessions} sessions, {data.header.repeats} repeats</p><p>{labelCoverage ? `Human labels: ${labelCoverage.counts.length===10?'all counts':`${labelCoverage.counts.length} counts`}, ${labelCoverage.globals.length} globals` : 'Human labels: unavailable'}</p><div aria-label="Cohorts">{Object.entries(cohorts).map(([metric,cohort])=><p key={metric}>{metric}: paired {cohort.paired} of {cohort.of}</p>)}</div><Coverage data={coverage}/><ProviderSkipNotices skips={coverage.coverage.skipped_providers}/></header>
@@ -79,5 +93,5 @@ export function CompareApp({api,runId,state,navigate}:{api:EvalApi;runId:string;
   event.preventDefault();tabRefs.current[next]?.focus();navigate({...state,view:'compare',run:runId,tab:tabs[next].id});
  }}>{item.label}</button>)}</div>
  <aside aria-label="Combo legend"><h2>Combo legend</h2><dl>{legend.map(item=><div key={item.combo.combo_key}><dt><EvalLink state={{...state,view:'compare',run:runId,tab:'deep',combos:[item.combo.combo_key]}} navigate={navigate}>{item.letter}</EvalLink></dt><dd>{item.label}</dd></div>)}</dl></aside>
- <div role="tabpanel" id="compare-panel" aria-labelledby={`compare-tab-${tab}`} tabIndex={0}>{entry?.error?<Failure error={entry.error} runId={runId} navigate={navigate} retry={retryTab}/>:tab==='overview'?<Overview {...props} data={data}/>:tab==='lines'&&!session?<p>Select a session to view lines.</p>:!active?<p role="status">Loading {tabs.find(item=>item.id===tab)?.label}…</p>:tab==='deep'?<DeepDive {...props} data={active as CompareDeepDive}/>:tab==='more'?<MoreAnalysis {...props} data={active as CompareAnalysis}/>:<LineView {...props} data={active as CompareLines}/>}</div></section>;
+ <div role="tabpanel" id="compare-panel" aria-labelledby={`compare-tab-${tab}`} tabIndex={0}>{entry?.error?<Failure error={entry.error} runId={runId} navigate={navigate} retry={retryTab}/>:tab==='overview'?<Overview {...props} data={data}/>:tab==='lines'&&!session?(match?.error?<Failure error={match.error} runId={runId} navigate={navigate} retry={()=>setMatches(old=>{const next={...old};delete next[matchKey];return next;})}/>:<p role={filtered&&!match?'status':undefined}>{filtered&&!match?'Loading matching sessions…':filtered?'No matching sessions':'No sessions available'}</p>):!active?<p role="status">Loading {tabs.find(item=>item.id===tab)?.label}…</p>:tab==='deep'?<DeepDive {...props} data={active as CompareDeepDive}/>:tab==='more'?<MoreAnalysis {...props} data={active as CompareAnalysis}/>:<LineView {...props} data={active as CompareLines}/>}</div></section>;
 }
