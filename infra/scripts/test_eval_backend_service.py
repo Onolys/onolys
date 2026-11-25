@@ -49,8 +49,8 @@ def test_backend_env_names():
 
 def test_backend_env_has_no_removed_names():
     b = backend()
-    assert not re.search(r"ADMIN_|EVAL_AUTH|EVAL_CORS_ORIGINS", b)
-    assert not re.search(r"ADMIN_|EVAL_AUTH|EVAL_CORS_ORIGINS", re.search(r"platform_env = .*?\n  \)\n", SERVICES, re.S).group(0))
+    assert not re.search(r"EVAL_AUTH|EVAL_CORS_ORIGINS", b)
+    assert not re.search(r"EVAL_AUTH|EVAL_CORS_ORIGINS", re.search(r"platform_env = .*?\n  \)\n", SERVICES, re.S).group(0))
 
 
 def test_backend_reads_no_provider_keys():

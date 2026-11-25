@@ -3,7 +3,7 @@
 
 The API rejects unverified emails (api/src/onolys_api/auth/idtoken.py), so a normal signup cannot sign in
 until the verify link is clicked. This creates the user with emailVerified=true via the Identity Toolkit
-admin API (ADC, quota project `onolys`, same auth as identity-config.py).
+management API (ADC, quota project `onolys`, same auth as identity-config.py).
 
 Usage:
   python3 infra/scripts/create-test-user.py [--email EMAIL] [--password PASSWORD] [--project onolys]

@@ -153,8 +153,8 @@ def test_no_all_users_on_eval_worker():
     for text in (SERVICES, VOICE):
         for rm in re.finditer(r'resource "google_cloud_run_v2_service_iam_member" "(\w+)" \{(.*?)\n\}', text, re.S):
             if "allUsers" in rm.group(2):
-                assert rm.group(1) in {"api_public", "voice_public", "admin_public", "eval_backend_public"}, rm.group(1)
+                assert rm.group(1) in {"api_public", "voice_public", "eval_backend_public"}, rm.group(1)
                 if rm.group(1) == "eval_backend_public":
                     assert "var.eval_backend_enabled" in rm.group(2)
-                elif rm.group(1) != "admin_public":
+                else:
                     assert "var.public_api_enabled" in rm.group(2)

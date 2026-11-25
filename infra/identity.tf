@@ -15,8 +15,6 @@ locals {
       "${var.app_staging_site_id}.web.app",
     ],
     ["eval.onolys.com", "onolys-eval-staging.web.app"],
-    var.admin_enabled["prod"] ? ["${var.admin_site_id}.web.app"] : [],
-    var.admin_enabled["staging"] ? ["admin.onolys.com", "${var.admin_staging_site_id}.web.app"] : [],
   ))
 }
 
@@ -93,26 +91,6 @@ resource "google_firebase_web_app" "app_staging" {
   depends_on = [google_project_service.api]
 }
 
-resource "google_firebase_web_app" "admin" {
-  count           = var.admin_enabled["prod"] ? 1 : 0
-  provider        = google-beta
-  project         = var.project
-  display_name    = "onolys-admin"
-  deletion_policy = "DELETE"
-
-  depends_on = [google_project_service.api]
-}
-
-resource "google_firebase_web_app" "admin_staging" {
-  count           = var.admin_enabled["staging"] ? 1 : 0
-  provider        = google-beta
-  project         = var.project
-  display_name    = "onolys-admin-staging"
-  deletion_policy = "DELETE"
-
-  depends_on = [google_project_service.api]
-}
-
 data "google_firebase_web_app_config" "app" {
   provider   = google-beta
   project    = var.project
@@ -123,20 +101,6 @@ data "google_firebase_web_app_config" "app_staging" {
   provider   = google-beta
   project    = var.project
   web_app_id = google_firebase_web_app.app_staging.app_id
-}
-
-data "google_firebase_web_app_config" "admin" {
-  count      = var.admin_enabled["prod"] ? 1 : 0
-  provider   = google-beta
-  project    = var.project
-  web_app_id = google_firebase_web_app.admin[0].app_id
-}
-
-data "google_firebase_web_app_config" "admin_staging" {
-  count      = var.admin_enabled["staging"] ? 1 : 0
-  provider   = google-beta
-  project    = var.project
-  web_app_id = google_firebase_web_app.admin_staging[0].app_id
 }
 
 # Public web config per build (Firebase web apiKey is a public identifier; access is enforced by Identity Platform + rules).
@@ -178,30 +142,6 @@ output "web_env_eval" {
     VITE_FIREBASE_STORAGE_BUCKET      = data.google_firebase_web_app_config.app.storage_bucket
     VITE_FIREBASE_MESSAGING_SENDER_ID = data.google_firebase_web_app_config.app.messaging_sender_id
   }
-}
-
-output "web_env_admin_staging" {
-  description = "VITE_* build vars for the admin staging web app (SP07, after launch)."
-  value = var.admin_enabled["staging"] ? {
-    VITE_FIREBASE_API_KEY             = data.google_firebase_web_app_config.admin_staging[0].api_key
-    VITE_FIREBASE_AUTH_DOMAIN         = data.google_firebase_web_app_config.admin_staging[0].auth_domain
-    VITE_FIREBASE_PROJECT_ID          = var.project
-    VITE_FIREBASE_APP_ID              = google_firebase_web_app.admin_staging[0].app_id
-    VITE_FIREBASE_STORAGE_BUCKET      = data.google_firebase_web_app_config.admin_staging[0].storage_bucket
-    VITE_FIREBASE_MESSAGING_SENDER_ID = data.google_firebase_web_app_config.admin_staging[0].messaging_sender_id
-  } : null
-}
-
-output "web_env_admin_prod" {
-  description = "VITE_* build vars for the admin prod web app (SP07, after launch)."
-  value = var.admin_enabled["prod"] ? {
-    VITE_FIREBASE_API_KEY             = data.google_firebase_web_app_config.admin[0].api_key
-    VITE_FIREBASE_AUTH_DOMAIN         = data.google_firebase_web_app_config.admin[0].auth_domain
-    VITE_FIREBASE_PROJECT_ID          = var.project
-    VITE_FIREBASE_APP_ID              = google_firebase_web_app.admin[0].app_id
-    VITE_FIREBASE_STORAGE_BUCKET      = data.google_firebase_web_app_config.admin[0].storage_bucket
-    VITE_FIREBASE_MESSAGING_SENDER_ID = data.google_firebase_web_app_config.admin[0].messaging_sender_id
-  } : null
 }
 
 output "voice_url_staging" {

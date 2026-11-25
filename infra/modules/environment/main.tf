@@ -173,7 +173,7 @@ resource "google_service_account_iam_member" "api_self_token_creator" {
   member             = "serviceAccount:${google_service_account.api.email}"
 }
 
-# api generates verify/reset links with the Admin SDK (SP07). Start broad, narrow after smoke (PRD 07 Open Questions).
+# api generates verify/reset links (SP07). Start broad, narrow after smoke (PRD 07 Open Questions).
 # Gated with the Resend wiring so an environment without email gets no extra IAM.
 resource "google_project_iam_member" "api_firebaseauth_admin" {
   count   = var.resend_secret_wired ? 1 : 0
@@ -183,7 +183,7 @@ resource "google_project_iam_member" "api_firebaseauth_admin" {
 }
 
 # The worker only generates password-reset action links (accounts:sendOobCode);
-# it does not need Firebase user/config administration or service-account signing.
+# it does not need Firebase user/config management or service-account signing.
 resource "google_project_iam_custom_role" "worker_auth_email" {
   count       = var.resend_secret_wired ? 1 : 0
   project     = var.project

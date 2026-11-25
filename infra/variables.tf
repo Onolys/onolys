@@ -8,20 +8,6 @@ variable "region" {
   default = "us-central1"
 }
 
-variable "admin_enabled" {
-  description = "Gates the admin (SP07) resources per environment: staging is the ONLY admin environment (serves admin.onolys.com, owner decision 2026-11-21); prod admin is off."
-  type        = map(bool)
-  default = {
-    staging = true
-    prod    = false
-  }
-
-  validation {
-    condition     = toset(keys(var.admin_enabled)) == toset(["staging", "prod"])
-    error_message = "admin_enabled needs exactly the keys staging and prod."
-  }
-}
-
 variable "resend_secret_wired" {
   description = "Per environment: wire auth-email settings and RESEND_API_KEY on the api and worker. Set staging true only after the owner seeds resend-api-key-staging; prod stays false (prod rollout deferred)."
   type        = map(bool)
@@ -81,16 +67,6 @@ variable "app_site_id" {
 variable "app_staging_site_id" {
   type    = string
   default = "onolys-app-staging"
-}
-
-variable "admin_site_id" {
-  type    = string
-  default = "onolys-admin"
-}
-
-variable "admin_staging_site_id" {
-  type    = string
-  default = "onolys-admin-staging"
 }
 
 variable "github_repository" {

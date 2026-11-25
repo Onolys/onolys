@@ -416,87 +416,6 @@ resource "google_cloud_run_v2_service" "eval_backend" {
   ]
 }
 
-resource "google_cloud_run_v2_service" "admin_backend" {
-  count               = var.admin_enabled ? 1 : 0
-  project             = var.project
-  location            = var.region
-  name                = "onolys-admin-backend-${var.env}"
-  ingress             = "INGRESS_TRAFFIC_ALL"
-  deletion_protection = false
-
-  template {
-    service_account                  = google_service_account.admin_backend[0].email
-    timeout                          = "130s"
-    max_instance_request_concurrency = 20
-
-    scaling {
-      min_instance_count = 0
-      max_instance_count = var.admin_max_instances
-    }
-
-    containers {
-      image = var.placeholder_image
-
-      resources {
-        limits = {
-          cpu    = "1"
-          memory = "1Gi"
-        }
-        cpu_idle = true
-      }
-
-      env {
-        name  = "GIT_SHA"
-        value = var.git_sha
-      }
-      env {
-        name  = "ENV"
-        value = var.env
-      }
-      env {
-        name  = "ADMIN_AUTH"
-        value = "on"
-      }
-      env {
-        name  = "ADMIN_AUTH_PROJECT"
-        value = var.project
-      }
-      env {
-        name  = "ADMIN_CORS_ORIGINS"
-        value = join(",", var.admin_cors_origins)
-      }
-      env {
-        name = "ADMIN_ALLOWED_EMAILS"
-        value_source {
-          secret_key_ref {
-            secret  = google_secret_manager_secret.admin_allowed_emails[0].secret_id
-            version = "latest"
-          }
-        }
-      }
-    }
-  }
-
-  lifecycle {
-    ignore_changes = [
-      template[0].containers[0].image,
-      template[0].revision,
-      client,
-      scaling, # service-level block the API fills with zeros (perpetual diff); per-revision scaling is set in template
-      client_version,
-      labels["commit-sha"], # set by CI (google-github-actions/deploy-cloudrun)
-      labels["managed-by"], # set by CI
-      template[0].labels["commit-sha"],
-      template[0].labels["managed-by"],
-      template[0].labels["goog-terraform-provisioned"],
-    ]
-  }
-
-  depends_on = [
-    google_secret_manager_secret_iam_member.admin_emails,
-  ]
-}
-
 # --- invokers (PRD R8) ---
 moved {
   from = google_cloud_run_v2_service_iam_member.api_public
@@ -526,15 +445,6 @@ resource "google_cloud_run_v2_service_iam_member" "eval_backend_public" {
   project  = var.project
   location = var.region
   name     = google_cloud_run_v2_service.eval_backend[0].name
-  role     = "roles/run.invoker"
-  member   = "allUsers"
-}
-
-resource "google_cloud_run_v2_service_iam_member" "admin_public" {
-  count    = var.admin_enabled ? 1 : 0
-  project  = var.project
-  location = var.region
-  name     = google_cloud_run_v2_service.admin_backend[0].name
   role     = "roles/run.invoker"
   member   = "allUsers"
 }

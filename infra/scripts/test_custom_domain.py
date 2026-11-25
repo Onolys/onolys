@@ -31,13 +31,6 @@ def test_app_domain_on_prod_site_ungated():
     assert "wait_dns_verification = false" in b  # owner adds DNS after apply
 
 
-def test_admin_domain_on_staging_admin_site():
-    b = norm(block(src(), 'resource "google_firebase_hosting_custom_domain" "admin"'))
-    assert 'custom_domain = "admin.onolys.com"' in b
-    assert "var.admin_enabled[\"staging\"] ? 1 : 0" in b
-    assert "google_firebase_hosting_site.admin_staging[0].site_id" in b
-
-
 def test_no_staging_custom_domain():
     assert "staging.app.onolys.com" not in src()
     assert "google_firebase_hosting_custom_domain\" \"app_staging" not in src()
@@ -51,6 +44,6 @@ def test_required_dns_updates_output_shape():
     assert "local.custom_domains" in b
     loc = block(src(), "locals")
     assert "google_firebase_hosting_custom_domain.app" in loc
-    assert "google_firebase_hosting_custom_domain.admin" in loc
+    assert "google_firebase_hosting_custom_domain.eval_staging" in loc
     assert "host" in b and "value" in b
     assert "verification" in b  # cert _acme-challenge TXT

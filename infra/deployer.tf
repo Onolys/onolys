@@ -47,18 +47,15 @@ resource "google_service_account_iam_member" "deployer_staging_wif" {
 
 locals {
   deployer_staging_member = "serviceAccount:${google_service_account.deployer_staging.email}"
-  # Admin entries (SP07) are gated per env by admin_enabled (staging and prod); nothing changes for an env while its flag is false.
   staging_services = merge(
     {
       api    = module.staging.api_service_name
       worker = module.staging.worker_service_name
       voice  = module.staging.voice_service_name
     },
-    var.admin_enabled["staging"] ? { admin = module.staging.admin_backend_service_name } : {},
   )
   staging_runtime_sas = merge(
     { api = module.staging.api_sa_email, worker = module.staging.worker_sa_email, voice = module.staging.voice_sa_email },
-    var.admin_enabled["staging"] ? { admin = module.staging.admin_backend_sa_email } : {},
   )
 }
 
@@ -112,10 +109,10 @@ resource "google_project_iam_member" "deployer_staging_usage" {
   member  = local.deployer_staging_member
 }
 
-# Hosting admin is project level on purpose: IAM conditions on resource.name (site name by id, `projects/-`, and the
+# Hosting deploy access is project level on purpose: IAM conditions on resource.name (site name by id, `projects/-`, and the
 # versions/releases children) never matched what Hosting presents (run 44812626576, 403 on .../versions), and Policy
-# Troubleshooter cannot evaluate Hosting site names. Trade-off: either deployer could deploy to any site (incl. admin
-# and prod). Accepted: same GitHub repo trust, workflows only target their own site. See ADR 0022 (D5).
+# Troubleshooter cannot evaluate Hosting site names. Trade-off: either deployer could deploy to any site (incl.
+# prod). Accepted: same GitHub repo trust, workflows only target their own site. See ADR 0022 (D5).
 resource "google_project_iam_member" "deployer_staging_hosting" {
   project = var.project
   role    = "roles/firebasehosting.admin"
@@ -185,11 +182,9 @@ locals {
       worker = module.prod.worker_service_name
       voice  = module.prod.voice_service_name
     },
-    var.admin_enabled["prod"] ? { admin = module.prod.admin_backend_service_name } : {},
   )
   prod_runtime_sas = merge(
     { api = module.prod.api_sa_email, worker = module.prod.worker_sa_email, voice = module.prod.voice_sa_email },
-    var.admin_enabled["prod"] ? { admin = module.prod.admin_backend_sa_email } : {},
   )
 }
 

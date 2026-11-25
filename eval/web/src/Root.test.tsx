@@ -58,7 +58,7 @@ it('restores an existing backend run from its URL after reload and handles brows
   view.unmount(); window.history.replaceState({}, '', '/');
 });
 
-it('offers avatar signout when access is denied (no admin wording)', async () => {
+it('offers avatar signout when access is denied', async () => {
   const provider = fake('a@example.com');
   render(<Root service={provider} baseFetch={vi.fn().mockResolvedValue(new Response('{}', { status: 403 }))} />);
   await screen.findByText('No access');
@@ -88,7 +88,6 @@ it('403 not_allowlisted shows the no-access screen with owner wording and a Sign
   render(<Root service={fake('a@example.com')} baseFetch={vi.fn().mockResolvedValue(new Response(body, { status: 403 }))} />);
   expect(await screen.findByText('No access')).toBeTruthy();
   expect(screen.getByText(/Ask the owner/)).toBeTruthy();
-  expect(document.body.textContent?.toLowerCase()).not.toContain('administrator');
   fireEvent.click(screen.getByRole('button', { name: 'Sign out' }));
   await screen.findByRole('button', { name: 'Log in' });
 });

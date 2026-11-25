@@ -2,13 +2,11 @@
 
 **Audience:** users and contributors.
 
-The former admin backend source and its deployment workflow are retired. Existing cloud services, Hosting sites and the `admin.onolys.com` Identity Platform auth domain are retained; this repository change does not alter them. The retained [frontend](../../frontend/README.md) is the legacy sign-in shell. [ADR 0023](../decisions/0023-admin-deployment-and-auth.md) describes the original deployment.
-
-The shared package now lives in [`eval/auth`](../../eval/auth/pyproject.toml), with its existing Python import `onolys_admin_auth` and project name `onolys-admin-auth`. The [eval backend](../../eval/backend/pyproject.toml) still uses it for staging sign-in. Its CORS settings and Identity Platform domains remain unchanged. The product API is documented in [public-api.md](public-api.md).
+The eval backend ([`eval/backend`](../../eval/backend/pyproject.toml)) signs users in with the prod Identity Platform login and checks the verified email against an allowlist. It verifies tokens with the api's `IdTokenVerifier` (`onolys_api.auth.idtoken`). The product API is documented in [public-api.md](public-api.md).
 
 ## Auth
 
-Every request except a CORS preflight (`OPTIONS`) must carry `Authorization: Bearer <Identity Platform ID token>` (`middleware.py`). The token is checked for an RS256 signature, `aud` equal to the project (`ADMIN_AUTH_PROJECT`), `iss` equal to `https://securetoken.google.com/<project>`, and expiry (`verifier.py`). Then `email_verified` must be true and the email must be in `ADMIN_ALLOWED_EMAILS` (case-insensitive). No second factor is required. Token and email are never logged.
+Every request except a CORS preflight (`OPTIONS`) must carry `Authorization: Bearer <Identity Platform ID token>`. The token is checked for an RS256 signature, `aud` equal to the project (`AUTH_PROJECT`, falling back to `GCP_PROJECT`), `iss` equal to `https://securetoken.google.com/<project>`, and expiry. Then `email_verified` must be true and the email must be in `EVAL_ALLOWED_EMAILS` (case-insensitive). No second factor is required. Token and email are never logged.
 
 | HTTP | `error.code` | When |
 |---|---|---|
@@ -23,6 +21,6 @@ These replies use a small body `{"error": {"code", "message"}}`.
 
 ## Configuration
 
-The package reads `ENV`, `ADMIN_AUTH`, `ADMIN_AUTH_PROJECT` (falling back to `GCP_PROJECT`) and `ADMIN_ALLOWED_EMAILS`. Auth defaults to on outside local/test; disabling it outside local/test stops startup. With auth on, a project and a nonempty email allowlist are required. Cloud Run receives the allowlist through Secret Manager when an instance starts.
+The service reads `ENV`, `AUTH_PROJECT` (falling back to `GCP_PROJECT`), `CORS_ORIGINS` and `EVAL_ALLOWED_EMAILS`. `AUTH_MODE` must be `idp` in every environment. A project and a nonempty email allowlist are required, otherwise startup fails. Cloud Run receives the allowlist through Secret Manager (`eval-allowed-emails-{env}`) when an instance starts. The pre-R14 `EVAL_AUTH*` and `EVAL_CORS_ORIGINS` settings are refused at startup.
 
 CORS belongs to the calling service. Eval deployment and Hosting origin substitution use `.github/workflows/deploy-eval.yml` and `scripts/ci/set_eval_origin.sh`.

@@ -26,7 +26,7 @@ def test_legacy_resources_absent():
                   "\"eval_provider\"", "\"eval_allowlist\"", "eval_service_url", "eval_env ", "eval_enabled",
                   "eval_backend_url_staging", "deployer_staging_eval_developer",
                   "deployer_staging_eval_runtime_user", "google_cloud_run_v2_service\" \"eval_staging",
-                  "google_service_account\" \"eval_staging", "admin-allowed-emails-staging\"\n  role"]:
+                  "google_service_account\" \"eval_staging"]:
         assert token not in tf, token
 
 

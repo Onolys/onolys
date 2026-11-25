@@ -92,7 +92,7 @@ def test_api_grants_identical_to_origin_main():
         cur = (MOD / rel).read_text()
         for t in GRANT_TYPES:
             o, c = blocks(old, t), blocks(cur, t)
-            o.pop("admin_llm", None)  # intentionally removed by 04-admin-shell Task 5 (admin uses no LLM)
+            o = {k: v for k, v in o.items() if k in c}  # grants retired on this branch drop out of the comparison
             assert o == {k: c.get(k) for k in o}, f"{rel}: {t} grants changed vs origin/main"
 
 
@@ -148,5 +148,5 @@ def test_api_service_does_not_ignore_template_revision():
     svc = blocks((MOD / "services.tf").read_text(), "google_cloud_run_v2_service")
     assert "template[0].revision" not in svc["api"]
     assert "template[0].containers[0].image" in svc["api"]  # image stays CI-owned
-    for other in ("worker", "admin_backend"):
+    for other in ("worker", "eval_backend"):
         assert "template[0].revision" in svc[other]

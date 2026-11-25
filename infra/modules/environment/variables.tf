@@ -51,18 +51,6 @@ variable "stt_secrets" {
   default     = {}
 }
 
-variable "admin_enabled" {
-  description = "Gates every admin-backend (SP07) resource."
-  type        = bool
-  default     = false
-}
-
-variable "admin_cors_origins" {
-  description = "Browser origins the admin-backend answers CORS preflight for."
-  type        = list(string)
-  default     = []
-}
-
 variable "placeholder_image" {
   description = "Public image used until CI deploys the real one (image is ignored after create)."
   type        = string
@@ -70,11 +58,6 @@ variable "placeholder_image" {
 }
 
 variable "api_max_instances" {
-  type    = number
-  default = 3
-}
-
-variable "admin_max_instances" {
   type    = number
   default = 3
 }

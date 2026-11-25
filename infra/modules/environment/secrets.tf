@@ -10,16 +10,6 @@ resource "google_secret_manager_secret" "uid_hmac" {
   }
 }
 
-resource "google_secret_manager_secret" "admin_allowed_emails" {
-  count     = var.admin_enabled ? 1 : 0
-  project   = var.project
-  secret_id = "admin-allowed-emails-${var.env}"
-
-  replication {
-    auto {}
-  }
-}
-
 # Eval allowlist (PRD 03-eval-environment R6/R6a): shell only, value copied out of band / seed-secrets.py --allowlist.
 resource "google_secret_manager_secret" "eval_allowed_emails" {
   count     = var.eval_backend_enabled ? 1 : 0
@@ -97,18 +87,3 @@ resource "google_secret_manager_secret_iam_member" "worker_provider" {
   member    = "serviceAccount:${google_service_account.worker.email}"
 }
 
-# --- admin-backend (SP07, behind admin_enabled) ---
-resource "google_service_account" "admin_backend" {
-  count        = var.admin_enabled ? 1 : 0
-  project      = var.project
-  account_id   = "admin-backend-${var.env}"
-  display_name = "Onolys admin-backend (${var.env})"
-}
-
-resource "google_secret_manager_secret_iam_member" "admin_emails" {
-  count     = var.admin_enabled ? 1 : 0
-  project   = var.project
-  secret_id = google_secret_manager_secret.admin_allowed_emails[0].secret_id
-  role      = "roles/secretmanager.secretAccessor"
-  member    = "serviceAccount:${google_service_account.admin_backend[0].email}"
-}

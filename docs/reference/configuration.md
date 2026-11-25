@@ -1,6 +1,6 @@
 # Configuration
 
-Environment variables for the api and the MITI engine. Sources: `api/src/onolys_api/config.py` (`Settings.from_env`), `api/.env.example`, `engines/core/src/onolys_engine_core/llm/routes.py`. The admin backend has its own list in [backend-api.md](backend-api.md#environment-variables).
+Environment variables for the api and the MITI engine. Sources: `api/src/onolys_api/config.py` (`Settings.from_env`), `api/.env.example`, `engines/core/src/onolys_engine_core/llm/routes.py`. The eval backend has its own list in [backend-api.md](backend-api.md#configuration).
 
 **Audience:** users.
 

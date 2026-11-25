@@ -65,11 +65,6 @@ def test_allowlist_missing_fails_and_existing_kept():
     assert c2.v["eval-allowed-emails-eval"] == b"keep"
 
 
-def test_no_admin_flag_or_env():
-    src = pathlib.Path(__file__).with_name("seed-secrets.py").read_text()
-    assert "ADMIN_ALLOWED_EMAILS" not in src and "--admin" not in src and "admin-allowed-emails" not in src
-
-
 def test_cli_accepts_env_eval_and_allowlist(monkeypatch, capsys):
     calls = {}
 

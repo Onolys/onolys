@@ -8,10 +8,6 @@ from onolys_engine_core.errors import ConfigError
 # Pre-R14 names. The eval backend now uses the api's AUTH_PROJECT / CORS_ORIGINS plus
 # EVAL_ALLOWED_EMAILS, and refuses to start if an old name is still set.
 REMOVED_ENV = (
-    "ADMIN_AUTH",
-    "ADMIN_AUTH_PROJECT",
-    "ADMIN_ALLOWED_EMAILS",
-    "ADMIN_CORS_ORIGINS",
     "EVAL_AUTH",
     "EVAL_AUTH_PROJECT",
     "EVAL_CORS_ORIGINS",
