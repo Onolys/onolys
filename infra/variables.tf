@@ -142,3 +142,27 @@ variable "prod_engine" {
   type        = string
   default     = "miti"
 }
+
+variable "eval_worker_concurrency" {
+  description = "Eval worker request concurrency (eval module instance)."
+  type        = number
+  default     = 2
+}
+
+variable "eval_worker_max_instances" {
+  description = "Eval queue max_concurrent_dispatches = eval_worker_concurrency x eval_worker_max_instances."
+  type        = number
+  default     = 4
+}
+
+variable "eval_llm_secrets" {
+  description = "Env-var name to base secret id for the eval instance's LLM keys (`<base>-eval`); same default as llm_secrets."
+  type        = map(string)
+  default     = { GEMINI_API_KEY = "gemini-api-key", ANTHROPIC_API_KEY = "anthropic-api-key" }
+}
+
+variable "eval_git_sha" {
+  description = "Initial/current GIT_SHA env value for the eval instance; CI overwrites it at deploy."
+  type        = string
+  default     = "unset"
+}

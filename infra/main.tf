@@ -151,3 +151,41 @@ module "prod" {
 
   depends_on = [google_project_service.api]
 }
+
+# Eval: third instance of the module (PRD 03-eval-environment R1). Own DB, bucket, queue, SAs and secrets. Runs as
+# ENV=staging with EVAL_MODE=true; no public api/voice services; caps effectively off (big numbers, 0 would block).
+module "eval" {
+  source = "./modules/environment"
+
+  project                  = var.project
+  region                   = var.region
+  env                      = "eval"
+  runtime_env              = "staging"
+  database_id              = "eval"
+  delete_protection        = true
+  default_preset           = var.default_preset
+  worker_concurrency       = var.eval_worker_concurrency
+  worker_max_instances     = var.eval_worker_max_instances
+  llm_secrets              = var.eval_llm_secrets
+  stt_secrets              = var.stt_secrets
+  git_sha                  = var.eval_git_sha
+  app_base_url             = ""
+  alerts_enabled           = false
+  notification_channel_ids = []
+  public_api_enabled       = false
+  eval_mode                = true
+  eval_cap_day             = 1000000
+  max_active_runs          = 1000
+  cors_origins = [
+    "https://eval.onolys.com",
+    "https://onolys-eval-staging.web.app",
+    "http://localhost:5173",
+  ]
+  eval_cors_origins = [
+    "https://eval.onolys.com",
+    "https://onolys-eval-staging.web.app",
+    "http://localhost:5173",
+  ]
+
+  depends_on = [google_project_service.api]
+}

@@ -31,7 +31,7 @@ output "stt_service_agent_email" {
 }
 
 output "api_url" {
-  value = google_cloud_run_v2_service.api.uri
+  value = one(google_cloud_run_v2_service.api[*].uri)
 }
 
 output "worker_url" {
@@ -39,7 +39,7 @@ output "worker_url" {
 }
 
 output "api_service_name" {
-  value = google_cloud_run_v2_service.api.name
+  value = one(google_cloud_run_v2_service.api[*].name)
 }
 
 output "worker_service_name" {
@@ -61,13 +61,13 @@ output "admin_backend_sa_email" {
 
 output "voice_url" {
   description = "Voice relay base URL (https); the browser connects over wss to the same host."
-  value       = google_cloud_run_v2_service.voice.uri
+  value       = one(google_cloud_run_v2_service.voice[*].uri)
 }
 
 output "voice_service_name" {
-  value = google_cloud_run_v2_service.voice.name
+  value = one(google_cloud_run_v2_service.voice[*].name)
 }
 
 output "voice_sa_email" {
-  value = google_service_account.voice.email
+  value = one(google_service_account.voice[*].email)
 }

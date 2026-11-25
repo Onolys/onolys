@@ -105,7 +105,7 @@ def test_voice_service_settings():
     assert re.search(r"cpu_idle\s*=\s*false", svc)  # CPU always allocated
     assert re.search(r"max_instance_count\s*=\s*var\.voice_max_instances", svc)
     assert re.search(r'name\s*=\s*"SERVICE_MODE"\s*value\s*=\s*"voice"', svc)
-    assert "service_account                  = google_service_account.voice.email" in svc
+    assert "service_account                  = google_service_account.voice[0].email" in svc
     assert "template[0].containers[0].image" in svc  # CI owns the image
     inv = blocks(VOICE, "google_cloud_run_v2_service_iam_member")["voice_public"]
     assert '"allUsers"' in inv and '"roles/run.invoker"' in inv

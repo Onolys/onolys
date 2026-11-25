@@ -4,9 +4,10 @@
 # after a CI deploy, plan shows it as drift until applied with -var 'git_sha={staging="<sha>",prod="<sha>"}' (see docs/reference/infra.md).
 
 locals {
-  worker_url = "https://onolys-worker-${var.env}-${data.google_project.this.number}.${var.region}.run.app"
+  runtime_env = coalesce(var.runtime_env, var.env)
+  worker_url  = "https://onolys-worker-${var.env}-${data.google_project.this.number}.${var.region}.run.app"
   routes_env = [
-    { name = "ROUTES_FILE", value = "config/${var.env}/routes.yaml" },
+    { name = "ROUTES_FILE", value = "config/${local.runtime_env}/routes.yaml" },
     { name = "DEFAULT_PRESET", value = var.default_preset },
   ]
   interview_env = [
@@ -22,7 +23,7 @@ locals {
     { name = "AI_MIC_GATE", value = tostring(var.ai_mic_gate) },
   ]
   platform_env = concat(local.interview_env, [
-    { name = "ENV", value = var.env },
+    { name = "ENV", value = local.runtime_env },
     { name = "GCP_PROJECT", value = var.project },
     { name = "REGION", value = var.region },
     { name = "FIRESTORE_DATABASE", value = var.database_id },
@@ -33,10 +34,19 @@ locals {
     { name = "TASKS_QUEUE", value = google_cloud_tasks_queue.steps.name },
     { name = "TASKS_SA", value = google_service_account.tasks_invoker.email },
     { name = "WORKER_URL", value = local.worker_url },
-  ])
+    ],
+    var.eval_mode ? [{ name = "EVAL_MODE", value = "true" }] : [],
+    var.max_active_runs != null ? [{ name = "MAX_ACTIVE_RUNS", value = tostring(var.max_active_runs) }] : [],
+  )
+}
+
+moved {
+  from = google_cloud_run_v2_service.api
+  to   = google_cloud_run_v2_service.api[0]
 }
 
 resource "google_cloud_run_v2_service" "api" {
+  count               = var.public_api_enabled ? 1 : 0
   project             = var.project
   location            = var.region
   name                = "onolys-api-${var.env}"
@@ -364,10 +374,16 @@ resource "google_cloud_run_v2_service" "admin_backend" {
 }
 
 # --- invokers (PRD R8) ---
+moved {
+  from = google_cloud_run_v2_service_iam_member.api_public
+  to   = google_cloud_run_v2_service_iam_member.api_public[0]
+}
+
 resource "google_cloud_run_v2_service_iam_member" "api_public" {
+  count    = var.public_api_enabled ? 1 : 0
   project  = var.project
   location = var.region
-  name     = google_cloud_run_v2_service.api.name
+  name     = google_cloud_run_v2_service.api[0].name
   role     = "roles/run.invoker"
   member   = "allUsers"
 }

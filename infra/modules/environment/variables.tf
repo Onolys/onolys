@@ -7,11 +7,11 @@ variable "region" {
 }
 
 variable "env" {
-  description = "Environment name: staging or prod."
+  description = "Environment name: staging, prod or eval."
   type        = string
   validation {
-    condition     = contains(["staging", "prod"], var.env)
-    error_message = "env must be staging or prod."
+    condition     = contains(["staging", "prod", "eval"], var.env)
+    error_message = "env must be staging, prod or eval."
   }
 }
 
@@ -180,4 +180,40 @@ variable "resend_secret_wired" {
   description = "Wire RESEND_API_KEY on the api and worker via secret_key_ref, plus worker email settings and IAM. Keep false until the owner has seeded a version of resend-api-key-<env> (a revision fails to start if the secret has no version)."
   type        = bool
   default     = false
+}
+
+variable "eval_mode" {
+  description = "Adds EVAL_MODE=true to the api and worker env (eval instance only); omitted entirely when false."
+  type        = bool
+  default     = false
+}
+
+variable "runtime_env" {
+  description = "Value of the ENV env var and the config/<runtime_env>/ directory. null = var.env. Eval runs as `staging`."
+  type        = string
+  default     = null
+}
+
+variable "eval_backend_enabled" {
+  description = "Creates the allowlisted eval-backend service, its grants and the allowlist secret (eval instance only)."
+  type        = bool
+  default     = false
+}
+
+variable "eval_cors_origins" {
+  description = "Browser origins for the eval-backend service (emitted as CORS_ORIGINS, the api Settings name)."
+  type        = list(string)
+  default     = []
+}
+
+variable "public_api_enabled" {
+  description = "Gates the public api and voice Cloud Run services, their allUsers invokers and the voice SA/IAM (off for eval)."
+  type        = bool
+  default     = true
+}
+
+variable "max_active_runs" {
+  description = "MAX_ACTIVE_RUNS env on api and worker; emitted only when non-null."
+  type        = number
+  default     = null
 }
