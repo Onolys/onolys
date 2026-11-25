@@ -111,7 +111,19 @@ def test_isolated_staging_pauses_only_the_legacy_paid_job():
     condition = re.search(r'^    if: >-\n(.*?)(?=^    \S)', job, re.M | re.S)[1]
     assert "vars.STAGING_GCP_PROJECT == '' &&" in condition
     # The activation switch must not pause offline coverage or create a skipped-job dependency.
-    other_jobs = workflow().replace('  api-real-mode:\n' + job, '')
+    paused = re.search(r"^  api-real-mode-paused:\n(.*?)(?=^  [\w-]+:|\Z)", workflow(), re.M | re.S)[1]
+    other_jobs = workflow().replace('  api-real-mode:\n' + job, '').replace('  api-real-mode-paused:\n' + paused, '')
     assert 'STAGING_GCP_PROJECT' not in other_jobs
     assert 'needs: api-real-mode' not in other_jobs
     assert '  full-offline:\n' in other_jobs
+
+
+def test_legacy_live_job_is_opt_in_and_pause_is_announced():
+    """Legacy secret was deleted: unset vars must skip with a notice, never fail."""
+    job = live_job()
+    assert "vars.NIGHTLY_LEGACY_GEMINI == 'true' &&" in job
+    paused = re.search(r"^  api-real-mode-paused:\n(.*?)(?=^  [\w-]+:|\Z)", workflow(), re.M | re.S)[1]
+    assert "vars.STAGING_GCP_PROJECT != '' ||" in paused
+    assert "vars.NIGHTLY_LEGACY_GEMINI != 'true'" in paused
+    assert "::notice" in paused
+    assert "id-token" not in paused and "secrets" not in paused.replace("secret was deleted", "")
