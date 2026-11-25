@@ -1,6 +1,6 @@
 ---
 status: draft
-summary: Pure, offline-tested server-side calculations (session-balanced counts/globals error, cohorts, line alignment, P/R/F1, confusion, cost, time, frontier, head-to-head, reliability, verdict) plus authenticated read endpoints that feed the four compare screens from saved RunDocs, ReportDocs, gold and transcripts.
+summary: Pure, offline-tested server-side calculations (session-balanced counts/globals error, cohorts, line alignment, P/R/F1, confusion, cost, time, frontier, head-to-head, reliability, verdict) plus authenticated read endpoints that feed the four compare screens from saved RunDocs, ReportDocs, gold and transcripts. Works on `done` and `partial` (cancelled) eval runs using only completed runs, reporting the missing ones.
 date: 2026-11-25
 ---
 # PRD: SP06 Compare calculations
@@ -24,14 +24,14 @@ Today's `build_compare` counts every successful repeat as its own comparison and
 
 ## Requirements
 
-**R1 Inputs (assumed SP05 interface, SP05 PRD absent when written).** `EvalRunSource` protocol (fakeable): `eval_run(id)` -> grouping doc `{eval_run_id, name, dataset_id, sessions[{session_id, uid, dataset_session_id, gold_sha256}], combos[], repeats, runs[{session_id, run_id, combo_key, repeat, status}]}`; `run_doc(uid,sid,run_id)`; `report(uid,sid,run_id)` (ReportDoc, pointer resolved); `transcript(uid,sid)`; `gold(sha256)` from eval bucket `gold/<sha256>`, hash re-verified with eval's canonical sha256 (`runs.py:137`). Provenance per run from `RunDoc.eval` (`combo_key`, `repeat`, `engine`, `resolved_route`) [SP04 R1]. Compare never reads outside one `eval_run_id`.
+**R1 Inputs (SP05 interface: grouping doc R4, `eval_view.list_cells` R11).** `EvalRunSource` protocol (fakeable), a thin wrapper over SP05's `eval_view`: `eval_run(id)` -> grouping doc `{eval_run_id, name, dataset_id, status, cancelled_at, sessions[{session_id, uid, dataset_session_id, gold_sha256}], combos[], repeats, runs[{session_id, run_id, combo_key, repeat, attempt, status}]}`; per (session, combo, repeat) only the highest `attempt` counts, earlier failed attempts feed the time footnote only [SP05 R11]; `run_doc(uid,sid,run_id)`; `report(uid,sid,run_id)` (ReportDoc, pointer resolved); `transcript(uid,sid)`; `gold(sha256)` from eval bucket `gold/<sha256>`, hash re-verified with eval's canonical sha256 (`runs.py:137`). Provenance per run from `RunDoc.eval` (`combo_key`, `repeat`, `engine`, `resolved_route`) [SP04 R1]. Compare never reads outside one `eval_run_id`. Every eval run is `n_runs=1` (repeats are separate RunDocs, owner decision), so each report holds integer counts [verified: `models.py:189,334` default 1].
 
 **R2 Report parsing (engine-keyed by `RunDoc.eval.engine`, never sniffed).**
 | Engine | Counts/globals | Lines | Reasons |
 |---|---|---|---|
 | `miti` | reuse `miti_lean_scores` (`behaviours[].onolys_count.mean`, `globals[].onolys.score`) [verified: `adapters.py:13`] | `behaviours[].instances` of each `item_id`: `{turn_id, quote, rationale}`; `Instance.id` is an instance id, the code is the owning `item_id` [verified: `report.py:76,181-190`, `build.py:122-128`] | global `onolys.reason` + `evidence[]`; instance `rationale` (may be `""` when withheld for tone: show "withheld", never fill) [verified: `build.py:119-121`] |
 | `oneshot:*` | reuse `oneshot_scores` (`counts`, `globals`) [verified: `adapters.py:56`] | none (schema has counts, globals, tips only) | none |
-Fail closed: a non-integer count (an `n_runs>1` mean), `onolys.score` null, or schema mismatch marks that run `unparseable` (excluded like failed, reason shown); never rounded. Tips are ignored. Only the saved ReportDoc is read (code.json not needed: report instances already hold the representative run's counted instances).
+Fail closed (guard only; `n_runs=1` makes it unreachable today): a non-integer count (an `n_runs>1` mean), `onolys.score` null, or schema mismatch marks that run `unparseable` (excluded like failed, reason shown); never rounded. Tips are ignored. Only the saved ReportDoc is read (code.json not needed: report instances already hold the representative run's counted instances).
 
 **R3 Gold projection.** From `Gold`, return only `{coded_span, counts (partial), globals (partial), quality_label, utterance_codes[{turn_id, codes, note}]}` [verified: `gold.py:Gold`]. Never `source` URLs, `parse` warnings or storage paths. A count/global missing or null = "not labeled". Label coverage per dataset (from manifests) drives n/a:
 | Dataset | Counts labeled | Globals | Line labels |
@@ -72,7 +72,9 @@ The proposal lists utterance codes for five datasets; CASAA and Welivita also wr
 
 **R9 Verdict line.** Server builds structured clauses `{text, claims[{metric, combo, value, n}]}` only from values in the same payload; never names a winner on an n/a metric; names n ("1 session"). Templates are fixed; no free text.
 
-**R10 No composite score; min/max = observed range (`{min,max,n}` of repeat values), no statistics claims.**
+**R10 Partial (cancelled) eval runs.** An eval run in `partial` state (SP05 R7: cancelled with at least one run completed, or some runs failed) is compared like a finished one using ONLY runs with status `done`; `cancelled`, `failed`, `unparseable` and never-started cells are excluded. n is shown as usual (sessions with `paired` of `of`, repeats counted from completed runs). The missing runs are reported, never imputed or counted as 0: header `coverage {eval_status, cancelled_at|null, runs_done, runs_total}` and `excluded[{session_id, combo_key, repeat, reason}]` with reason `cancelled` (stopped by Cancel, SP05 R7), `failed:<code>`, `unparseable` or `not_started`. The cohort rule (R5) already drops sessions where a selected combo has no completed run, so a partial run can show "4 paired of 12". An eval run with no completed non-human run (status `cancelled`/`failed`) returns 409 `no_completed_runs`; `queued|running|deleting` returns 409 `not_finished`. Compare reads only; it never writes a status.
+
+**R11 No composite score; min/max = observed range (`{min,max,n}` of repeat values), no statistics claims.**
 
 ## Architecture
 ```
@@ -83,18 +85,18 @@ Projection (per run: counts, globals+reason+evidence, turn->codes, instances san
         v  eval_core.summary (pure: no I/O, no clock)
 overview | deep_dive | analysis | session_lines | reasoning  -> compare_routes.py (allowlist auth)
 ```
-Endpoints (prefix owned by SP05; shown as `/v1/eval-runs/{id}`), all `GET`, all take `combos=a,b,c` (default all; cohort is computed over the requested set):
+Endpoints (prefix `/v1/eval-runs/{id}` [RESOLVED: owner — default], behind the eval allowlist auth), all `GET`, all take `combos=a,b,c` (default all; cohort is computed over the requested set):
 | Path | Returns |
 |---|---|
-| `/compare/overview` | header (sessions, repeats, `label_coverage`), `verdict`, `leaderboard[]`, `heatmap{rows[],human[],cells}`, `cohorts`, `footnotes` |
+| `/compare/overview` | header (sessions, repeats, `label_coverage`, `coverage` per R10), `verdict`, `leaderboard[]`, `heatmap{rows[],human[],cells}`, `cohorts`, `footnotes` |
 | `/compare/deep-dive` | globals (per-interview dots, bucket bars, miss, within-1), counts (totals, bias %), line metrics (P/R/F1 per code, confusion per combo), rationale counts per code (no text) |
 | `/compare/analysis` | frontier, baseline, reliability, head-to-head, grid, error-vs-length |
 | `/compare/reasoning?code=&combo=&cursor=` | verbatim rationale snippets, 50 per page, grouped by code only |
 | `/compare/sessions/{sid}/lines` | turns, lanes (human + combos, codes per turn, no rationale), disagreement flags, per-session globals table |
 | `/compare/sessions/{sid}/lines/{turn_id}` | popup: text, human code (+note), each combo's code, rationale, `agree k of r` |
-Cell shape: `{value, off, bias, n, of, repeats, within_tolerance, best, na: {reason}|null}`. Sizing: units <= 499 means sessions x combos <= 499, so heatmap + grid stay under ~1 MB; rationale text and per-turn detail are the only large items and are paged/on demand. Errors: 404 unknown run, 409 not finished enough (`no_human_reference` returns 200 with `has_human=false`), 409 `transcript_changed`.
+Cell shape: `{value, off, bias, n, of, repeats, within_tolerance, best, na: {reason}|null}`. Sizing: units <= 499 means sessions x combos <= 499, so heatmap + grid stay under ~1 MB; rationale text and per-turn detail are the only large items and are paged/on demand. Errors: 404 unknown run, 409 `not_finished` (queued/running/deleting), 409 `no_completed_runs` (R10), 409 `transcript_changed`; `no_human_reference` returns 200 with `has_human=false`. `done` and `partial` eval runs both return 200.
 
-Compute-on-read with an in-process LRU of projections keyed by `(eval_run_id, sha256 of sorted (run_id, status, ended))`; terminal eval runs cache indefinitely, running ones recompute (TTL 10 s). Materialising into Firestore is rejected for now (new schema, invalidation, per-instance caches).
+Compute-on-read with an in-process LRU of projections keyed by `(eval_run_id, sha256 of sorted (run_id, status, ended))`; terminal eval runs (`done|partial|failed|cancelled`) cache indefinitely, running ones recompute (TTL 10 s). Materialising into Firestore is rejected for now (new schema, invalidation, per-instance caches).
 
 ## Decisions
 | # | Decision | Choice | Alternatives | Why |
@@ -108,15 +110,17 @@ Compute-on-read with an in-process LRU of projections keyed by `(eval_run_id, sh
 | 7 | Cache | Compute-on-read + LRU | Materialise on completion | No new schema; revisit if slow |
 | 8 | Cost pricing | `resolved_route.litellm_id` + usage | Per-call metrics | Combo routes share one model; per-call metrics exist only on failures [verified: `run.py:105-117`] |
 | 9 | Head-to-head measure | Per-session Count error | Per-code wins | One locked, unweighted measure; no composite |
+| 10 | Partial eval runs | Compare completed runs only; report missing runs (`excluded`, `coverage`) | Refuse until all done; impute | Owner Cancel keeps completed work; no invented numbers |
 
 ## Risks / Open Questions
-- [OPEN] Heatmap `value` for globals: "never average ratings across interviews" conflicts with a single big number. Default: for globals `value=null`, `off` is the headline, per-interview values live in the Deep dive; SP07 confirms.
-- [OPEN] Tolerance and `best` for R:Q/%CR (no tolerance given). Default: `within_tolerance=null` (uncolored), `best` still marked.
-- [OPEN] Masking codes outside the labeled universe L turns unlabeled-code lines into "none" for human (AnnoMI). Default: mask and print `codes_labeled` beside line metrics.
-- [OPEN] Multi-code turns in confusion. Default: `multi` bucket (R7); revisit if gold shows many.
-- [OPEN] Endpoint prefix and auth reuse depend on SP05. Default: `/v1/eval-runs/{id}/compare/*` behind existing allowlist auth.
-- [OPEN] Cold compute time for 499 reports (Firestore reads + blobs). Default: measure on a staged run; materialise only if > 5 s.
-- [OPEN] A session with an undefined R:Q repeat drops from that metric. Default: exclude session, report in `excluded`.
+- [RESOLVED: owner 2026-11-25 — default: `value=null`, `off` is the headline, per-interview values in Deep dive] Heatmap `value` for globals.
+- [RESOLVED: owner 2026-11-25 — default: `within_tolerance=null` (uncolored), `best` still marked] Tolerance and `best` for R:Q/%CR.
+- [RESOLVED: owner 2026-11-25 — default: mask and print `codes_labeled` beside line metrics] Codes outside the labeled universe L.
+- [RESOLVED: owner 2026-11-25 — default: `multi` bucket (R7); revisit if gold shows many] Multi-code turns in confusion.
+- [RESOLVED: owner — default] Endpoint prefix: `/v1/eval-runs/{id}/compare/*` behind the eval allowlist auth.
+- [RESOLVED: owner — default] Cold compute time for 499 reports: measure on a staged run; materialise only if > 5 s.
+- [RESOLVED: owner 2026-11-25 — default: exclude the session, report in `excluded`] A session with an undefined R:Q repeat.
+- [RESOLVED: owner 2026-11-25 — partial eval runs compare completed runs only; missing runs reported as `cancelled`] See R10.
 - [RESOLVED: no] Any second human coder in `eval/datasets`? None found; baseline is n/a for all datasets today.
 - [DEFERRED] Cross-run comparison; significance tests; statistical intervals.
 
@@ -133,6 +137,7 @@ All tests offline: pure fixtures in `eval/fixtures/compare/`, fake `EvalRunSourc
 - Verdict text contains only values present in the payload, names n, and never names a winner on an n/a metric.
 - Frontier: dominated combo excluded; unpriced combo listed not plotted; baseline always n/a.
 - Reliability level uses inclusive pack thresholds (value 3.5 relational = fair/good boundary check per `formula.py`); repeat agreement n/a with 1 repeat.
+- Partial eval run (cancel after 4 of 12 sessions complete, one combo missing in a session): only `done` runs counted, `n`/`paired of` reflect them, `excluded` lists the cancelled cells with reason `cancelled`, `coverage` has `runs_done`/`runs_total`/`cancelled_at`, nothing imputed as 0; eval run with no completed run -> 409 `no_completed_runs`; `running` -> 409 `not_finished`.
 - Time: `ended - started`, retried count reported; cost n/a for unknown model, never 0.
 - Gold projection contains none of `source`, `parse`; transcript projection 409s on sha mismatch; rationale text appears only in `/reasoning` and popup, verbatim, `""` -> "withheld".
 - 499-run fixture: overview payload < 1.5 MB and no per-instance rationale; second call hits the cache.

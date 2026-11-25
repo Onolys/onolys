@@ -1,6 +1,6 @@
 ---
 status: design
-summary: SP01/SP02 done and pushed; eval-compare-redesign PRDs 03–07 drafted, awaiting owner review.
+summary: SP01/SP02 done and pushed; eval-compare-redesign PRDs 03–07 approved with owner answers; next dev-tasks.
 date: 2026-11-25
 ---
 # session-report-ux
@@ -49,11 +49,11 @@ Input is the approved [proposal](eval-compare-summary-proposal.md) (latest 3f00f
 
 | # | Sub-project | Scope | Depends | Status |
 |---|---|---|---|---|
-| 03 | [Eval environment](03-eval-environment/PRD.md) | Third Terraform env `eval` from infra/modules/environment (Firestore DB `eval`, bucket `onolys-audio-eval`, queue, worker, allowlisted eval-backend, EVAL_MODE on); opt-in module vars leave staging/prod plans unchanged; legacy staging eval kept until SP05 cutover; owner-run read-only SA runbook | — | draft PRD |
+| 03 | [Eval environment](03-eval-environment/PRD.md) | Third Terraform env `eval` from infra/modules/environment (Firestore DB `eval`, bucket `onolys-audio-eval`, queue, worker, allowlisted eval-backend, EVAL_MODE on); opt-in module vars leave staging/prod plans unchanged; legacy staging eval removed right away (eval unusable until SP05, accepted); all admin infra and Terraform budget removed; auth package/env names renamed to eval names; owner-run read-only SA runbook | — | draft PRD |
 | 04 | [Eval run path](04-eval-run-path/PRD.md) | Prod run path gets internal `is_eval` (eval fields on RunDoc, engine+route override, eval-mode guard, caps bypass, public models reject unknown fields); prod unchanged | 03 (config `ENVS` gets `eval` in SP03) | draft PRD |
-| 05 | [Eval backend on prod pipeline](05-eval-backend-on-prod-pipeline/PRD.md) | Eval backend rebuilt on prod pipeline: shared prod sessions, each combo×repeat = prod RunDoc via tick scheduler (one active run per session), `eval_runs` grouping doc, scoped delete, old eval-only run engine deleted; existing eval screens keep working | 03, 04 | draft PRD |
-| 06 | [Compare calculations](06-compare-calculations/PRD.md) | Pure offline-tested server-side compare calculations + authenticated read endpoints | 05 | draft PRD |
-| 07 | [Compare screens](07-compare-screens/PRD.md) | Four read-only Compare screens (Overview, Deep dive, More analysis, Line view) in eval/web, hand-rolled SVG/CSS, replacing old Compare/Summary tables | 06 | draft PRD |
+| 05 | [Eval backend on prod pipeline](05-eval-backend-on-prod-pipeline/PRD.md) | Eval backend rebuilt on prod pipeline: shared prod sessions, each combo×repeat = prod RunDoc (n_runs=1) via server-side tick scheduler (one active run per session, max 2 sessions in flight per AI provider, runs finish with browser closed), `eval_runs` grouping doc, idempotent Cancel (keeps completed, state `partial`), scoped delete, old eval-only run engine deleted; existing eval screens keep working | 03, 04 | draft PRD |
+| 06 | [Compare calculations](06-compare-calculations/PRD.md) | Pure offline-tested server-side compare calculations + authenticated read endpoints; partial (cancelled) eval runs compare completed runs only, missing runs reported | 05 | draft PRD |
+| 07 | [Compare screens](07-compare-screens/PRD.md) | Four read-only Compare screens (Overview, Deep dive, More analysis, Line view) in eval/web, hand-rolled SVG/CSS, replacing old Compare/Summary tables; adds confirmed Cancel button and "Partial — cancelled" badge on History, run detail and Compare; live status on reopen | 06 | draft PRD |
 
 ```
 03 ──▶ 04 ──▶ 05 ──▶ 06 ──▶ 07
@@ -74,19 +74,19 @@ Also `03 ──▶ 05`.
 - Read-only service-account script prepared but run by owner only.
 - No push/PR unless owner asks.
 
-### Cross-cutting open questions
-- [OPEN] Endpoint prefix + auth (SP05/06/07): default `/v1/eval-runs/{id}/compare/*` behind existing allowlist auth, client reads one constant.
-- [OPEN] Heatmap globals value (SP06/07): default `value=null`, `off` is headline, per-interview values in Deep dive. SP07 marked [RESOLVED: confirm SP06].
-- [OPEN] R:Q / %CR tolerance (SP06/07): default no tolerance, never green, `best` outline still shown.
-- [OPEN] Eval worker sizing / max sessions in flight (SP03/SP05): default concurrency 2 × max instances 10 = 20 dispatches; `EVAL_MAX_SESSIONS_IN_FLIGHT=20`.
-- [OPEN] Tick queue shared with run tasks (SP05/SP03): default share `steps-eval`; separate small queue if lag seen.
-- [OPEN] `create_run` needs optional `run_id` + deps object (SP04/SP05): default SP05 makes one additive edit to `routes/runs.py`.
-- [OPEN] Drift guard during long eval runs (SP04/SP05): default strict; SP05 re-creates failed runs as new runs (retry budget 2, backoff 5 s/20 s).
-- [OPEN] Eval-backend separate image vs `SERVICE_MODE` of api image (SP03/SP05): default separate image.
-- [OPEN] Legacy staging eval removal timing (SP03): default two-step (remove after SP05 cutover).
-- [OPEN] Who may delete an eval run (SP05): default any allowlisted user, typed confirmation, audit log with email hash.
-- [OPEN] Owner-only: allowlist membership for `eval` (default same as staging admin list).
-- [DEFERRED, owner] Monthly budget $20 may be exceeded by a 216-run batch.
-- Per-PRD items not listed here remain in each PRD's Risks / Open Questions.
+### Owner decisions 2026-11-25
+- Concurrency: at most 2 interviews in parallel per AI provider (Anthropic, Gemini), config `EVAL_MAX_PER_PROVIDER`=2, plus one active run per session. Replaces `EVAL_MAX_SESSIONS_IN_FLIGHT=20` (SP05).
+- Leave the page: eval runs are fully server-driven; close the browser and the run completes; History/run detail show live status on reopen (SP05, SP07).
+- Cancel (new): button on History + run detail with confirm dialog (SP07), idempotent endpoint (SP05); stops new runs, stops in-flight best effort, keeps everything completed; eval run becomes `partial` (or `cancelled` if none completed); Compare uses completed runs only and reports missing ones (SP06); badge "Partial — cancelled at <time>, X of Y runs done" (SP07). Any allowlisted user.
+- Retries: 2, backoff 5 s / 20 s, transient errors only; runs failed by a `code_version` change are not retried and stay failed.
+- Eval runs use `n_runs=1`; repeats are separate runs.
+- Endpoint prefix `/v1/eval-runs/{id}/compare/*` behind eval allowlist auth; cold load measured on a staged run, materialise only if > 5 s (default).
+- Firestore rules are deployed to the eval DB (SP03).
+- Legacy staging eval is removed now (SP03); eval unusable between SP03 and SP05 (accepted).
+- Admin removed altogether; eval gets its own login pieces first (auth package and env names renamed, SP03).
+- Eval allowlist = existing emails.
+- Terraform budget removed; owner sets spend limits in Anthropic Console and Google Cloud console (final owner step after implementation).
+- All other previously open items took their stated defaults (heatmap globals `value=null`, no R:Q/%CR tolerance, separate eval-backend image, shared tick queue, `create_run` additive edit, any allowlisted user may delete, allow concurrent eval runs on a session, keep eval STT flow, A..Z combo letters, etc.), recorded `[RESOLVED: owner 2026-11-25 — default]` in each PRD.
+- New open items with defaults: worker stage-boundary stop for in-flight cancelled runs (SP05 R7; fallback: in-flight finish and are kept); "X of Y runs done" counters (SP07).
 
-Next: owner reviews PRDs, marks each Open Question `[RESOLVED: …]` or `[DEFERRED]` in the PRD, then `dev-tasks`.
+Next: `dev-tasks` for 03–07.

@@ -1,11 +1,11 @@
 ---
 status: draft
-summary: Four read-only Compare screens (Overview, Deep dive, More analysis, Line view) in eval/web, fed by SP06 endpoints, drawn with hand-rolled SVG/CSS (no chart library), reached from History and run detail, replacing the old embedded Compare/Summary tables.
+summary: Four read-only Compare screens (Overview, Deep dive, More analysis, Line view) in eval/web, fed by SP06 endpoints, drawn with hand-rolled SVG/CSS (no chart library), reached from History and run detail, replacing the old embedded Compare/Summary tables. Also adds a confirmed Cancel action on History and run detail and a "Partial — cancelled at <time>, X of Y runs done" badge on History, run detail and Compare; screens show live progress when reopened because eval runs are fully server-driven (the browser never drives a run).
 date: 2026-11-25
 ---
 # PRD: SP07 Compare screens
 
-Repo/branch: Onolys/iaudit / `session-report-ux` · Depends on: SP06 (endpoints and payload shapes; SP05 owns the URL prefix) · Owns (files): new `eval/web/src/compare/` (`CompareApp.tsx`, `Overview.tsx`, `DeepDive.tsx`, `MoreAnalysis.tsx`, `LineView.tsx`, `charts/*.tsx`, `compareApi.ts`, `compareUrl.ts`, `compare.css`, `*.test.tsx`, `fixtures/`); edits to `Root.tsx`, `Runs.tsx`, `api.ts`, `app.css`, `Runs.test.tsx`, `Root.test.tsx`, `eval/web/README.md`. No backend edits.
+Repo/branch: Onolys/iaudit / `session-report-ux` · Depends on: SP06 (endpoints and payload shapes; SP05 owns the URL prefix) · Owns (files): new `eval/web/src/compare/` (`CompareApp.tsx`, `Overview.tsx`, `DeepDive.tsx`, `MoreAnalysis.tsx`, `LineView.tsx`, `charts/*.tsx`, `compareApi.ts`, `compareUrl.ts`, `compare.css`, `*.test.tsx`, `fixtures/`); edits to `Root.tsx`, `Runs.tsx`, `api.ts` (`cancelled_at` on `RunSummary`), `app.css`, `Runs.test.tsx`, `Root.test.tsx`, `eval/web/README.md`. No backend edits.
 
 ## TL;DR
 Today a finished run shows one wide per-unit table and a MAE "Summary" tab inside run detail. SP07 replaces it with a separate Compare area that answers three questions in order: which combo is closest to human (Overview), where and why (Deep dive, More analysis), and what happened on this line (Line view). The UI only renders SP06 payloads: it computes no metric, picks no winner, and prints every text verbatim from saved data. Charts are small hand-drawn SVG/CSS pieces, so the bundle does not grow.
@@ -18,16 +18,21 @@ Today a finished run shows one wide per-unit table and a MAE "Summary" tab insid
 | No route to Compare from History; no deep links between levels | [verified: `Root.tsx` handles only `?run=` and `?view=history`] |
 
 ## Goals / Non-Goals
-**Goals:** the approved Overview, Deep dive, More analysis and Line view; linked drill-down; honest empty and partial states; 320-1,280 px, keyboard and screen-reader usable; offline fixture tests.
-**Non-goals:** any calculation or wording of verdicts (SP06); run creation, rerun, delete (SP04/05); cross-run compare; composite score; export; editing labels; prompt versioning.
+**Goals:** the approved Overview, Deep dive, More analysis and Line view; linked drill-down; Cancel with confirmation; honest partial (cancelled) display; honest empty and partial states; 320-1,280 px, keyboard and screen-reader usable; offline fixture tests.
+**Non-goals:** any calculation or wording of verdicts (SP06); run creation, rerun, delete and the cancel endpoint/semantics (SP04/05; SP07 only adds the Cancel UI); driving or polling a run to make it progress; cross-run compare; composite score; export; editing labels; prompt versioning.
 
 ## Requirements
 
 **Entry and shell**
-- History rows and run detail get a "Compare" link (real `<a href>`, plain click uses the app's pushState navigation like the existing run link). Enabled for `done` and `partial` runs; for `queued/running/failed/cancelled` it is replaced by status text ("Compare opens when the run has finished results"). A running run's Compare is not offered (SP06 caches running runs for 10 s only).
-- Compare header: run name, "N sessions, R repeats", label coverage ("Human labels: all counts, 4 globals" from `label_coverage`), a Back to run link, and a four-tab bar (Overview, Deep dive, More analysis, Line view). Tabs use `role=tablist` with arrow-key navigation; the selected tab is in the URL.
+- History rows and run detail get a "Compare" link (real `<a href>`, plain click uses the app's pushState navigation like the existing run link). Enabled for `done` and `partial` runs (including cancelled-with-results); for `queued/running/failed/cancelled` (nothing completed) and `deleting` it is replaced by status text ("Compare opens when the run has finished results"). A running run's Compare is not offered (SP06 caches running runs for 10 s only).
+- Compare header: run name, the Partial badge when partial (below), "N sessions, R repeats", label coverage ("Human labels: all counts, 4 globals" from `label_coverage`), a Back to run link, and a four-tab bar (Overview, Deep dive, More analysis, Line view). Tabs use `role=tablist` with arrow-key navigation; the selected tab is in the URL.
 - Combo legend shared by all tabs: short labels A, B, C... mapped to provider/model/tier/effort exactly as `combo_labels` gives. Label letters follow the API order and never change between tabs.
 - Every chart has a short "How to read" caption directly under it (fixed UI copy, plain words, one to three sentences) and a table twin (visually-hidden or toggle) so colour and shape are never the only signal.
+
+**Leave the page, Cancel and Partial (all eval-run screens)**
+- Nothing in the browser drives a run: no screen calls anything to make a run progress; polling is read-only. The owner can close the browser or leave the page and the eval keeps running to completion [SP05 R6]. Reopening History or a run detail shows the live current status and counters from the server (fresh fetch on open). History refreshes non-terminal rows read-only every 3 s while any is `queued|running` and stops when none is (abort on unmount); run detail already polls [verified: `Runs.tsx:144-163`, `POLL_MS`].
+- Cancel button: run detail keeps its "Cancel run" button [verified: `Runs.tsx:180`] and History `RunActions` gets a "Cancel run" item [verified: `RunActions` `Runs.tsx:23-31` has Rerun/Config only]; both shown only for `queued|running` and not already `cancel_requested`. Click opens a confirm dialog (`@onolys/ui` Dialog, focus trapped, Esc closes without cancelling, focus returns): "Stop this eval run? Runs already finished are kept and can be compared. Runs in progress are stopped if possible. No new runs start." Buttons "Cancel run" (confirm) and "Keep running". Allowed for any allowlisted user (same as delete). Confirm calls `api.cancel`; the control disables and the status reads "cancelling" (existing label [verified: `Runs.tsx:11`]) until the server reports terminal. Cancel is idempotent: a repeat or a cancel on a finished run returns the current status and the UI just shows it; errors show `role=alert` with Retry.
+- Partial badge: when `status=partial` and `cancelled_at` is set: "Partial — cancelled at <time>, X of Y runs done" (X = `done_units`, Y = `total_units` as returned, the same counters as the progress line [verified: `Runs.tsx:179`]); `partial` without `cancelled_at` reads "Partial — X of Y runs done" (some runs failed). Shown in the History Status cell, run-detail heading, and Compare header, using words and a symbol, not colour alone. `cancelled` (none completed) reads "Cancelled — no runs completed" and has no Compare link. Compare screens on a partial run show the API's `coverage` and `excluded` (reason `cancelled`) verbatim next to the cohort line, so the missing runs and n are visible.
 
 **1. Overview** (SP06 `/compare/overview`)
 - Verdict line: render `verdict.text` clauses as given; show each clause's n via `claims`; no client rewording. If absent or `has_human=false`: "No human reference in this run" and the screen shows only the operational columns (failures, cost, time) with no error columns.
@@ -68,6 +73,9 @@ Today a finished run shows one wide per-unit table and a MAE "Summary" tab insid
 | `has_human=false` | Overview operational-only; Deep dive, line parts and "More analysis" error charts show "no human reference" |
 | Partial labels (e.g. AnnoMI) | Per-cell n/a with the API reason; `codes_labeled` shown |
 | Combo with failed runs | Shown in the cohort line and Fails column; excluded values say why |
+| Partial (cancelled) run | Badge + `coverage`/`excluded` text on Compare; Compare opens on completed runs only |
+| Cancel request fails | `role=alert` with Retry; status unchanged |
+| 409 `no_completed_runs` / `not_finished` | "No completed runs to compare yet" with link back to run |
 
 ## Architecture
 **Routes.** Root keeps its history/pushState query-param navigation (no router added). New params: `?run=<id>&view=compare&tab=overview|deep|more|lines` plus `combos`, `code`, `metric`, `session`, `turn`, `only`. `compareUrl.ts` parses and builds these (pure, tested); `Root.navigate` stops deleting `view` when `view=compare`. Browser back works between tabs and drill-downs; pasted links restore state.
@@ -80,7 +88,9 @@ Today a finished run shows one wide per-unit table and a MAE "Summary" tab insid
 
 **Responsive.** Heatmap, grids and tables sit in `.table-scroll` regions (`tabindex=0`, labelled) with sticky row labels; below 760 px charts reflow to one column and the leaderboard becomes stacked cards (same `data-label` pattern as `history-table`, `runs.css:22-39`). Lines wrap with `overflow-wrap: anywhere`.
 
-**Removed** (listed so nothing lingers): `CompareView`, `SummaryView`, `sortValue`, the Compare tab bar and its call in `RunView` (`Runs.tsx:62-123,192`); types `CompareCell`, `CompareAggregate`, `Compare`, `ErrorMetric`/`Aggregate` if unused, and `RunDetail.compare` (`api.ts:57-73`); `table.matrix` CSS (`app.css:45-47`) if unused after removal; tests that render `CompareView`/`SummaryView` (`Runs.test.tsx:20-40,211-214`) and the `compare:` fixture key (`Root.test.tsx:47`); README line about "comparison screens attach at that boundary". Unit progress table, Config dialog, cancel and rerun stay unchanged.
+**Cancel and partial in code.** `api.ts`: `RunSummary.cancelled_at?: string | null`; the existing `cancel` stays. `Runs.tsx`: shared `CancelRunDialog`, `PartialBadge`, and a History poll hook; `statusLabel` extended for the partial text. Terminal test `terminal()` already treats `partial` as terminal [verified: `Runs.tsx:9`].
+
+**Removed** (listed so nothing lingers): `CompareView`, `SummaryView`, `sortValue`, the Compare tab bar and its call in `RunView` (`Runs.tsx:62-123,192`); types `CompareCell`, `CompareAggregate`, `Compare`, `ErrorMetric`/`Aggregate` if unused, and `RunDetail.compare` (`api.ts:57-73`); `table.matrix` CSS (`app.css:45-47`) if unused after removal; tests that render `CompareView`/`SummaryView` (`Runs.test.tsx:20-40,211-214`) and the `compare:` fixture key (`Root.test.tsx:47`); README line about "comparison screens attach at that boundary". Unit progress table, Config dialog and rerun stay unchanged; the run-detail Cancel button keeps its place but gains the confirm dialog.
 
 ## Decisions
 | # | Decision | Choice | Alternatives | Why |
@@ -94,18 +104,21 @@ Today a finished run shows one wide per-unit table and a MAE "Summary" tab insid
 | 7 | Metric logic | None in UI | Derive in client | One source of truth (SP06) |
 
 ## Risks / Open Questions
-- [RESOLVED: confirm SP06] Heatmap globals `value=null`: show `off` as headline ("off 0.5"), per-interview ratings only in Deep dive.
-- [RESOLVED: confirm SP06] R:Q / %CR `within_tolerance=null`: never green; `best` outline still shown, legend says "no tolerance set for ratios".
-- [OPEN] Line view session list for a cell/bar drill-down: which session opens first? Default: the session with the most matching lines, session picker shown with counts.
-- [OPEN] Viewport verification: jsdom cannot lay out, so 320-1,280 px "no overflow" cannot be asserted in unit tests. Default: unit tests assert structure (scroll regions, no fixed widths); a recorded browser check at 320, 768, 1,280 px on the fixture run before ship.
-- [OPEN] Verdict text styling for long clauses. Default: plain paragraph, claims as small "n=" tags.
-- [OPEN] Endpoint prefix (SP05). Default: `/v1/eval-runs/{id}/compare/*`, the client reads it from one constant.
-- [OPEN] Combo letter assignment past 26 combos (499 units allow it). Default: A..Z then AA, AB.
+- [RESOLVED: owner 2026-11-25 — default: `value=null`, `off` is the headline ("off 0.5"), per-interview ratings only in Deep dive] Heatmap globals.
+- [RESOLVED: owner 2026-11-25 — default: never green, `best` outline still shown, legend says "no tolerance set for ratios"] R:Q / %CR `within_tolerance=null`.
+- [RESOLVED: owner 2026-11-25 — default: the session with the most matching lines, session picker shown with counts] Line view session list for a cell/bar drill-down.
+- [RESOLVED: owner 2026-11-25 — default: unit tests assert structure (scroll regions, no fixed widths); recorded browser check at 320, 768, 1,280 px on the fixture run before ship] Viewport verification.
+- [RESOLVED: owner 2026-11-25 — default: plain paragraph, claims as small "n=" tags] Verdict text styling.
+- [RESOLVED: owner — default] Endpoint prefix `/v1/eval-runs/{id}/compare/*` behind the eval allowlist auth; client reads it from one constant.
+- [RESOLVED: owner 2026-11-25 — default: A..Z then AA, AB] Combo letters past 26.
+- [RESOLVED: owner 2026-11-25 — leave the page; eval is fully server-driven; screens show live status on reopen] See "Leave the page".
+- [RESOLVED: owner 2026-11-25 — Cancel button with confirm dialog, any allowlisted user, state `partial` (or `cancelled` if none completed), Partial badge on History, run detail, Compare] See "Leave the page, Cancel and Partial".
+- [OPEN] "X of Y runs done" counts: SP05 returns `done_units`/`total_units` (human reference units may be included). Default: render the API's numbers as the progress line does; SP05/SP06 acceptance pins whether human units are in them.
 - [DEFERRED] Export/print, cross-run compare, saved views.
 
 ## Acceptance Criteria
 Fixture-driven (`eval/web/src/compare/fixtures/`, copies of SP06 payload shapes; fake fetch; no network; existing `vitest` + jsdom).
-- History and run detail show a Compare link for done/partial runs, none for running/failed; link opens `view=compare&tab=overview`; run detail has no embedded compare table.
+- History and run detail show a Compare link for done/partial runs, none for running/failed/cancelled/deleting; link opens `view=compare&tab=overview`; run detail has no embedded compare table.
 - Overview: leaderboard sorts on header click/keyboard with `aria-sort`; best cells show star plus "best"; every heatmap cell contains its `n`; `n=1` cell is coloured like others; off 0.6 (lines) and 0.4 (points) render green, 0.61 and 0.41 do not; globals show `off` headline; R:Q has no green; n/a cells show the API reason, never blank or 0; signed bias renders with its sign.
 - Heatmap Human column first, row labels sticky, 9 combos create a horizontal scroll region.
 - Cell click lands on Deep dive with that code row and combo selected (URL asserts).
@@ -113,6 +126,9 @@ Fixture-driven (`eval/web/src/compare/fixtures/`, copies of SP06 payload shapes;
 - Missing line output renders "no line-level output (human)", "(<combo>)" and "(both)" in the three cases; no line chart rendered.
 - Line view: 6 combos collapse to chips + "+N agree"; blank human cell is not "none"; popup shows verbatim text, rationale (`""` -> "withheld"), "2 of 3 repeats agree"; Esc closes and returns focus; transcript text is never altered (string equality with fixture).
 - More analysis: baseline shows the API's n/a text; unpriced combo listed, not plotted; frontier points match the payload flags.
+- Leave the page: opening History/run detail with a `running` fixture shows current status and counters; History polling refreshes `running` rows and stops when none is active; no call other than reads is made for progress (fake fetch asserts only GETs).
+- Cancel: History item and run-detail button appear only for `queued|running` and not `cancel_requested`; click opens the confirm dialog (focus trapped, Esc closes without calling the API, focus returns); confirm POSTs cancel once, shows "cancelling", and a double-click sends one request; cancel on a finished run (409/no-op reply) just shows the status; failure shows alert + Retry.
+- Partial: `partial` + `cancelled_at` renders "Partial — cancelled at <time>, X of Y runs done" on History, run detail and Compare header; `partial` without `cancelled_at` renders the failure variant; `cancelled` renders "Cancelled — no runs completed" with no Compare link; Compare on a partial fixture shows `coverage` and `excluded` (reason `cancelled`).
 - States: loading, tab-local error with Retry, 404, `transcript_changed`, `has_human=false`, partial labels each have a test.
 - Accessibility: tabs arrow-navigable; every chart has a "How to read" caption and a table twin; axe-style lint (`jsx-a11y`) passes; no information by colour alone (marks/words present).
 - Viewport: recorded check at 320, 768, 1,280 px shows no page-level horizontal scroll (only labelled scroll regions).
