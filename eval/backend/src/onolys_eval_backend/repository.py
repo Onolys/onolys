@@ -34,6 +34,7 @@ class EvalRepository(Protocol):
     def create_run(self, run_id: str, data: Record, units: Mapping[str, Record]) -> None: ...
     def create_group(self, run_id: str, data: Record) -> None: ...
     def get_run(self, run_id: str) -> Record | None: ...
+    def delete_run(self, run_id: str) -> None: ...
     def list_runs(self, limit: int = 100) -> dict[str, Record]: ...
     def list_runs_page(
         self, limit: int = 100, after: tuple[str, str] | None = None
@@ -102,6 +103,11 @@ class InMemoryEvalRepository:
     def get_run(self, run_id):
         with self._lock:
             return deepcopy(self._runs.get(run_id))
+
+    def delete_run(self, run_id):
+        """The group doc alone (05 R8 step 4); idempotent."""
+        with self._lock:
+            self._runs.pop(run_id, None)
 
     def list_runs(self, limit=100):
         if limit < 1:
@@ -269,6 +275,9 @@ class FirestoreEvalRepository:
 
     def get_run(self, run_id):
         return self._read(self.runs.document(run_id))
+
+    def delete_run(self, run_id):
+        self.runs.document(run_id).delete()
 
     def list_runs(self, limit=100):
         if limit < 1:
