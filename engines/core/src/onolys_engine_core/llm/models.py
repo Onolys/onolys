@@ -9,7 +9,7 @@ import yaml
 
 from onolys_engine_core.errors import ConfigError
 
-_EFFORTS = {"none", "low", "medium", "high", "xhigh", "max"}
+EFFORTS = {"none", "low", "medium", "high", "xhigh", "max"}
 _CACHING = {"none", "provider_implicit", "anthropic_ephemeral"}
 
 
@@ -95,7 +95,7 @@ def load_models(path: Path | str | None = None) -> dict[str, Model]:
             if (
                 not isinstance(efforts, list)
                 or not efforts
-                or any(not isinstance(effort, str) or effort not in _EFFORTS for effort in efforts)
+                or any(not isinstance(effort, str) or effort not in EFFORTS for effort in efforts)
             ):
                 raise ConfigError(
                     f"tier {tier_id!r}: efforts must be a non-empty list of allowed efforts"

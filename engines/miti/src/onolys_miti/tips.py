@@ -9,7 +9,7 @@ Code then checks every proposal: the item is in the MITI definition, the quote i
 clinician turn (core `locate`) and replaced by the real substring with offsets, the alternative
 is non-empty, at most two sentences and not a copy of the quote, at most two tips per item and one
 per (item, turn), and every text passes the tone lint. The first five valid tips are kept. Fewer
-than three valid triggers one retry that lists the violations (codes only, never the offending
+than three valid triggers one retry that lists the violations (codes, plus the length limits for `field_too_long`; never the offending
 text); still fewer ships fewer with `fewer_tips`; a failed call ships none with `tips_failed`.
 Model choice, limits and sampling belong to the route.
 """
@@ -93,6 +93,13 @@ class TipsArtifact(BaseModel):
 
     valid: list[Tip]
     proposals: list[dict[str, Any]]
+
+
+LIMITS_MESSAGE = (
+    f"Over a length limit (characters): title {TITLE_MAX}, observation {OBSERVATION_MAX}, "
+    f"alternative {ALTERNATIVE_MAX}, why_it_matters {SENTENCE_MAX}, quote text {QUOTE_MAX}. "
+    "Shorten the fields to fit."
+)
 
 
 def _too_long(p: _Proposal) -> bool:
@@ -242,7 +249,10 @@ def validate_proposals(
         elif (p.item_id, p.quote.turn_id) in seen:
             code = "duplicate_item_turn"
         if code is not None:
-            violations.append({"index": n, "code": code})
+            violation = {"index": n, "code": code}
+            if code == "field_too_long":
+                violation["message"] = LIMITS_MESSAGE  # fixed text, no model output
+            violations.append(violation)
             continue
         assert m is not None and text is not None
         per_item[p.item_id] = per_item.get(p.item_id, 0) + 1

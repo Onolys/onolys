@@ -3,8 +3,8 @@ from pathlib import Path
 
 import pytest
 
-from onolys_engine_core.llm.models import find_model, load_models
-from onolys_engine_core.llm.routes import EFFORT_OUTPUT_CAP, Route, combo_routes, load_registry
+from onolys_engine_core.llm.models import EFFORTS, find_model, load_models
+from onolys_engine_core.llm.routes import Route, combo_routes, load_registry
 
 pytestmark = pytest.mark.unit
 
@@ -23,9 +23,13 @@ def base():
     return routes
 
 
-def test_caps_table():
-    # Ceiling for every effort is the model's own max output (clamped in combo_routes); never below 64000.
-    assert set(EFFORT_OUTPUT_CAP.values()) == {128000}
+@pytest.mark.parametrize("effort", sorted(EFFORTS))
+def test_cap_is_the_model_max_for_every_effort(base, effort):
+    for provider, model in load_models(MODELS).items():
+        tier = next(iter(model.tiers))
+        out = combo_routes(base, model, tier, effort)
+        assert {r.max_output_tokens for r in out.values()} == {model.max_output_tokens}
+        assert model.max_output_tokens >= 64000
 
 
 def test_claude_snapshot(base):
@@ -73,12 +77,6 @@ def test_base_not_mutated(base):
     assert base == before
 
 
-def test_effort_output_cap_covers_exactly_the_allowed_efforts():
-    from onolys_engine_core.llm.models import _EFFORTS
-
-    assert set(EFFORT_OUTPUT_CAP) == set(_EFFORTS)
-
-
 @pytest.mark.parametrize("tier,effort", [
     (tier, effort)
     for tier in ("gpt-6.1-sol", "gpt-6.1-terra", "gpt-6-luna")
@@ -92,6 +90,6 @@ def test_openai_combo_routes_preserve_explicit_effort_and_provider_caps(base, ti
         assert route.litellm_id == f"openai/{tier}"
         assert route.api_key_env == "OPENAI_API_KEY"
         assert route.extra_params["reasoning_effort"] == effort
-        assert route.max_output_tokens == min(128000, EFFORT_OUTPUT_CAP[effort])
+        assert route.max_output_tokens == model.max_output_tokens
         assert route.context_tokens == 1050000
         assert route.supports_temperature is False

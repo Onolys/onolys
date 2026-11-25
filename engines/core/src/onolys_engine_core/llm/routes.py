@@ -140,7 +140,7 @@ def _apply_effort(raw: dict[str, dict], effort: str, entries: dict[str, Model]) 
             )
         entry["extra_params"] = {**entry.get("extra_params", {}), "reasoning_effort": effort}
         # Thinking tokens count against the output cap: raise (never lower) cap and timeout.
-        cap = effort_output_cap(model, effort)
+        cap = model.max_output_tokens
         base_cap = entry.get("max_output_tokens", Route.max_output_tokens)
         if cap > base_cap:
             entry["max_output_tokens"] = cap
@@ -287,12 +287,8 @@ def check_api_keys(routes: dict[str, Route], env: dict[str, str] | None = None) 
         raise ConfigError("LLM API key environment variable not set: " + "; ".join(parts))
 
 
-# Application budgets (including reasoning), bounded again by each model's output limit: every
-# effort gets the model's own max output (all current models allow >= 64000), since thinking tokens
-# count against the cap and a truncated answer is a permanent LLMBadOutput.
-EFFORT_OUTPUT_CAP = {
-    "none": 128000, "low": 128000, "medium": 128000, "high": 128000, "xhigh": 128000, "max": 128000
-}
+# Output cap (incl. reasoning) is the model's own max output: thinking tokens count against it and a
+# truncated answer is a permanent LLMBadOutput. All current models allow >= 64000.
 COMBO_TIMEOUT_S = 300  # per 64000 output tokens
 _TIMEOUT_TOKENS = 64000
 
@@ -302,18 +298,13 @@ def output_timeout_s(max_output_tokens: int) -> float:
     return max(COMBO_TIMEOUT_S, COMBO_TIMEOUT_S * max_output_tokens / _TIMEOUT_TOKENS)
 
 
-def effort_output_cap(model: Model, effort: str) -> int:
-    """Output budget (incl. reasoning) for `effort`: min(model max, EFFORT_OUTPUT_CAP[effort])."""
-    return min(model.max_output_tokens, EFFORT_OUTPUT_CAP[effort])
-
-
 def combo_routes(base: dict[str, Route], model: Model, tier: str, effort: str) -> dict[str, Route]:
     """Pure: every route of `base` re-pointed at one (model, tier, effort) combo (PRD R6, D2, D9).
 
     `model` is the models.yaml block owning `tier`. Structured-output mode, concurrency and
-    retries are inherited; output cap is min(model max, EFFORT_OUTPUT_CAP[effort]).
+    retries are inherited; output cap is the model's max output.
     """
-    cap = effort_output_cap(model, effort)
+    cap = model.max_output_tokens
     out = {}
     for name, r in base.items():
         extra = {k: v for k, v in r.extra_params.items() if k != "reasoning_effort"}
@@ -338,7 +329,6 @@ def allowed_presets(registry: RouteRegistry | None = None) -> list[str]:
 
 
 __all__ = [
-    "EFFORT_OUTPUT_CAP",
     "Preset",
     "Route",
     "RouteRegistry",

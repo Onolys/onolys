@@ -7,7 +7,6 @@ import pytest
 from onolys_engine_core.errors import ConfigError
 from onolys_engine_core.llm.models import load_models
 from onolys_engine_core.llm.routes import (
-    EFFORT_OUTPUT_CAP,
     load_registry,
     output_timeout_s,
     resolve_preset,
@@ -85,8 +84,7 @@ def test_high_effort_raises_output_cap_and_timeout(baseline):
     for effort in ("high", "max"):
         r = routes({"LLM_EFFORT": effort})
         for name in TEXT:
-            want = EFFORT_OUTPUT_CAP[effort]
-            assert r[name].max_output_tokens == min(want, MODEL_MAX[r[name].litellm_id])
+            assert r[name].max_output_tokens == MODEL_MAX[r[name].litellm_id]
             assert r[name].max_output_tokens >= baseline[name].max_output_tokens
             assert r[name].timeout_s == output_timeout_s(r[name].max_output_tokens)
 
