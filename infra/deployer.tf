@@ -259,20 +259,3 @@ output "deployer_prod_email" {
   description = "Value for google-github-actions/auth `service_account` (prod, `production` environment jobs only)."
   value       = google_service_account.deployer_prod.email
 }
-
-# Separate evaluation entries keep targeted staging bootstrap independent of existing runtime drift.
-resource "google_cloud_run_v2_service_iam_member" "deployer_staging_eval_developer" {
-  count    = var.eval_enabled ? 1 : 0
-  project  = var.project
-  location = var.region
-  name     = google_cloud_run_v2_service.eval_staging[0].name
-  role     = "roles/run.developer"
-  member   = local.deployer_staging_member
-}
-
-resource "google_service_account_iam_member" "deployer_staging_eval_runtime_user" {
-  count              = var.eval_enabled ? 1 : 0
-  service_account_id = google_service_account.eval_staging[0].name
-  role               = "roles/iam.serviceAccountUser"
-  member             = local.deployer_staging_member
-}
