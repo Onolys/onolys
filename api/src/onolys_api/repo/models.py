@@ -189,6 +189,8 @@ class EvalSessionInfo(BaseModel):
     dataset_session_id: str
     source: str
     gold: EvalGold | None = None
+    # Server-pinned run inputs survive deletion of any group's RunDocs.
+    input_sha256: str | None = None
 
 
 class SessionDoc(Doc):
@@ -293,6 +295,19 @@ def transcript_sha256(transcript: Transcript) -> str:
         separators=(",", ":"),
         ensure_ascii=False,
     )
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
+def eval_session_input_sha256(session: dict, transcript: dict) -> str:
+    """Hash imported eval inputs independently of disposable RunDocs (server-only)."""
+    payload = {
+        "transcript_sha256": transcript.get("sha256"),
+        "language": transcript.get("language"),
+        "clinician_speaker": session.get("clinician_speaker"),
+        "change_goal": session.get("change_goal") or "",
+        "coded_span": session.get("coded_span"),
+    }
+    canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 

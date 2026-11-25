@@ -279,6 +279,9 @@ class Repo(Protocol):
     # `retry_count` in the same transaction; a cap/concurrent refusal bumps nothing.
     # `eval` (SP04 R3, eval run): also allows report_ready/failed, skips decide_start (no cap or
     # concurrent check), writes counted=False and no usage, and writes the block via txn.create.
+    # Imported eval sessions additionally validate their server-pinned input hash inside this
+    # transaction. That pin allows a missing first RunDoc after group deletion; production
+    # retries still require the first RunDoc's transcript hash to match.
     # `eval_guard` (internal scheduler only): fence creation on eval_runs.tick_owner and
     # cancel_requested in this same transaction. None preserves ordinary prod/eval starts.
     # Exactly one of two racing callers (two manual starts, or a manual start

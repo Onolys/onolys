@@ -1,8 +1,9 @@
 """Import a dataset session or ready upload as ONE shared prod session (05 R3).
 
 `sid = fingerprint[:32]`: the same inputs reuse the session, a changed transcript/goal/span
-makes a new one. Gold is copied once to `gold/<sha256>.json` in the audio bucket (content
-addressed, never under the auto-deleting `eval-uploads/` prefix).
+makes a new one. A server-only input hash on the shared session survives group deletion and
+fences future run admissions against changed inputs. Gold is copied once to `gold/<sha256>.json`
+in the audio bucket (content addressed, never under the auto-deleting `eval-uploads/` prefix).
 """
 
 import hashlib
@@ -15,6 +16,7 @@ from onolys_api.repo.models import (
     EvalSessionInfo,
     SessionDoc,
     SessionStatusDoc,
+    eval_session_input_sha256,
 )
 from onolys_api.transcript_store import store_transcript
 from onolys_engine_core.transcript_input import (
@@ -116,6 +118,10 @@ def ensure_session(services, source: SessionSource) -> str:
             source=source.source,
             gold=gold_info,
         ),
+    )
+    session.eval.input_sha256 = eval_session_input_sha256(
+        {**session.to_store(), "clinician_speaker": clinician},
+        {"sha256": transcript_sha, "language": transcript.language or session.language},
     )
     try:
         repo.create_session(uid, sid, session, SessionStatusDoc(uid=uid))

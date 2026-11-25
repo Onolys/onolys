@@ -4,6 +4,7 @@
 Reuses the fake harness of test_eval_scheduler (no LLM, no network).
 """
 
+import pytest
 from onolys_api.repo.models import ReportDoc
 from test_app import AUTH, client
 from test_eval_scheduler import SEL1, all_runs, create, drive, env, finish, provider, tick  # noqa: F401
@@ -190,3 +191,46 @@ def test_cloud_queue_accepts_the_delete_kind():
     q.enqueue("delete", {"eval_run_id": "x", "n": 1}, task_id="x-delete-1")
     assert q.client.create_task.call_args.kwargs["task"]["http_request"]["url"].endswith(
         "/internal/tasks/delete")
+
+
+def test_deleting_first_group_keeps_queued_and_new_groups_schedulable(env):
+    first = finished_run(env, ["one", "two"])
+    queued = create(env, ["one", "two"], selection=SEL1, repeats=1)
+    sessions = env.repository.get_run(first)["sessions"]
+    snapshots = {
+        sid: (env.repo.get_session(UID, sid), env.repo.get_transcript(UID, sid, "current"))
+        for sid in sessions
+    }
+    assert all(s.first_run_id in refs(env, first) for s, _ in snapshots.values())
+    delete(env, first)
+    assert run_delete(env, first, 1) == "deleted"
+    assert not all_runs(env)
+    fresh = create(env, ["one", "two"], selection=SEL1, repeats=1)
+    assert set(env.repository.get_run(fresh)["sessions"]) == set(sessions)
+    drive(env, [queued, fresh])
+    for group in (queued, fresh):
+        assert env.repository.get_run(group)["status"] == "done"
+    for sid, run in all_runs(env):
+        session, transcript = snapshots[sid]
+        assert run.transcript_sha256 == transcript.sha256
+        assert run.clinician_speaker == session.clinician_speaker
+        assert run.change_goal == (session.change_goal or "")
+        assert env.repo.get_transcript(UID, sid, "current") == transcript
+
+
+@pytest.mark.parametrize("tamper", ["transcript", "speaker", "goal"])
+def test_deleted_first_run_cannot_hide_changed_eval_inputs(env, tamper):
+    first = finished_run(env, ["one"])
+    queued = create(env, ["one"], selection=SEL1, repeats=1)
+    ((sid, _),) = env.repository.get_run(first)["sessions"].items()
+    delete(env, first)
+    assert run_delete(env, first, 1) == "deleted"
+    if tamper == "transcript":
+        doc = env.repo._get(f"sessions/{sid}/transcripts/current")
+        env.repo._put(f"sessions/{sid}/transcripts/current", {**doc, "sha256": "replaced"})
+    else:
+        key = "clinician_speaker" if tamper == "speaker" else "change_goal"
+        env.repo.update_session(UID, sid, {key: "replacement"})
+    tick(env, queued)
+    assert all_runs(env) == []
+    assert env.repository.get_slots("anthropic")["holders"] == {}

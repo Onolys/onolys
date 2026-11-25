@@ -152,3 +152,95 @@ def test_firestore_scheduler_guard_reads_group_in_run_transaction(monkeypatch):
     group_ref.get.assert_called_once_with(transaction=transaction)
     session_ref.get.assert_not_called()
     transaction.create.assert_not_called()
+
+
+@pytest.mark.parametrize("backend", ["fake", "firestore_transaction"])
+@pytest.mark.parametrize("change", [None, "transcript", "speaker", "goal", "language", "span", "pin", "prod", "first_hash"])
+def test_imported_eval_pin_survives_first_run_deletion_and_rejects_input_changes(
+    monkeypatch, backend, change,
+):
+    """Exercise the actual Firestore start transaction offline as well as the fake."""
+    import hashlib
+    import json
+    from unittest.mock import Mock
+
+    from google.cloud import firestore
+
+    from onolys_api.repo.fake import FakeRepo
+    from onolys_api.repo.firestore import FirestoreRepo
+    from onolys_api.storage.fake import FakeBlobStore
+
+    fake = FakeRepo(FakeBlobStore())
+    uid, sid = ready(fake, "report_ready")
+    session_path = f"sessions/{sid}"
+    transcript_path = f"{session_path}/transcripts/current"
+    session = fake._get(session_path)
+    transcript = fake._get(transcript_path)
+    payload = {
+        "transcript_sha256": transcript["sha256"], "language": transcript["language"],
+        "clinician_speaker": session["clinician_speaker"],
+        "change_goal": session["change_goal"] or "", "coded_span": session["coded_span"],
+    }
+    pin = hashlib.sha256(json.dumps(
+        payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False,
+    ).encode()).hexdigest()
+    session.update(first_run_id="deleted", eval={
+        "dataset_session_id": "one", "source": "dataset", "input_sha256": pin,
+    })
+    group_path = "eval_runs/e1"
+    fake._put(group_path, {"tick_owner": "owner", "status": "running"})
+    if change == "transcript":
+        transcript["sha256"] = "replaced"
+    elif change == "speaker":
+        session["clinician_speaker"] = "S2"
+    elif change == "goal":
+        session["change_goal"] = "other goal"
+    elif change == "language":
+        transcript["language"] = "fr"
+    elif change == "span":
+        session["coded_span"] = {"start_turn": 0, "end_turn": 1}
+    elif change == "pin":
+        session["eval"].pop("input_sha256")
+    elif change == "first_hash":
+        fake._put(f"{session_path}/runs/deleted", {"transcript_sha256": "different"})
+    fake._put(session_path, session)
+    fake._put(transcript_path, transcript)
+    if backend == "fake":
+        target, transaction, refs = fake, None, {}
+    else:
+        target = FirestoreRepo(Mock(), Mock())
+        transaction, refs = Mock(), {}
+
+        def ref(path):
+            if path not in refs:
+                doc = refs[path] = Mock()
+                doc.get.return_value.exists = path in fake._docs
+                doc.get.return_value.to_dict.return_value = fake._get(path)
+                doc.collection.side_effect = lambda name: collection(f"{path}/{name}")
+            return refs[path]
+
+        def collection(path):
+            col = Mock()
+            col.document.side_effect = lambda key: ref(f"{path}/{key}")
+            col.order_by.return_value.limit.return_value.get.return_value = []
+            return col
+
+        monkeypatch.setattr(firestore, "transactional", lambda fn: fn)
+        monkeypatch.setattr(target, "_session_ref", lambda *_: ref(session_path))
+        monkeypatch.setattr(target, "_top", lambda name, key: ref(f"{name}/{key}"))
+        monkeypatch.setattr(target, "_contended", lambda fn, _: fn(transaction))
+    kwargs = {} if change == "prod" else {"eval": INFO, "eval_guard": "owner"}
+    assert start(target, uid, sid, states=("report_ready",), **kwargs) == (
+        "started" if change is None else "not_ready"
+    )
+    if transaction is not None:
+        for path in (session_path, transcript_path):
+            refs[path].get.assert_called_once_with(transaction=transaction)
+        if change != "prod":
+            refs[group_path].get.assert_called_once_with(transaction=transaction)
+        assert transaction.create.call_count == int(change is None)
+        if change is not None:
+            transaction.update.assert_not_called()
+            transaction.set.assert_not_called()
+    else:
+        assert (fake._get(f"{session_path}/runs/r1") is not None) == (change is None)

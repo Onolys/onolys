@@ -63,6 +63,7 @@ from onolys_api.repo.models import (
     UsageDoc,
     UserDoc,
     error_status_fields,
+    eval_session_input_sha256,
     interview_refundable,
     reject_eval_write,
     retry_allowed,
@@ -941,6 +942,13 @@ class FakeRepo:
             status = self._get(f"session_status/{sid}") or {}
             user = self._get(f"users/{uid}") or {}
             usage = self._get(f"usage/{uid}_{date}") or {"uid": uid, "date": date, "runs": 0}
+            # Imported eval sessions outlive their groups' disposable RunDocs. Validate
+            # their independent server pin in this transaction before admitting any run.
+            pinned_eval = eval is not None and sess.get("eval") is not None
+            if pinned_eval and (
+                sess["eval"].get("input_sha256") != eval_session_input_sha256(sess, transcript)
+            ):
+                return "not_ready"
             # the free first run of an interview-linked session (SP11 R5), same as start_first_run
             first = (
                 self._get(f"sessions/{sid}/runs/{sess['first_run_id']}")
@@ -949,6 +957,7 @@ class FakeRepo:
             )
             if (
                 sess.get("first_run_id")
+                and not (pinned_eval and not first)
                 and (first or {}).get("transcript_sha256") != transcript["sha256"]
             ):
                 return "not_ready"
