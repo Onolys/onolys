@@ -27,13 +27,17 @@ from collections.abc import Callable
 from typing import Any, NoReturn
 
 from onolys_engine_core.context import RunContext
+from onolys_engine_core.errors import ConfigError, InputError
+from onolys_engine_core.llm.routes import resolve_preset
 from onolys_engine_core.validated_run import OutputInvalid
 from pydantic import ValidationError
 
 from onolys_api import logs
 from onolys_api.adapters.base import Evaluation
 from onolys_api.adapters.error_map import kind_for_code, to_public
+from onolys_api.adapters.real import _override_routes
 from onolys_api.adapters.validated import evaluate_validated
+from onolys_api.engines import resolve_engine
 from onolys_api.jobs.alive import ensure_active
 from onolys_api.jobs.charging import invalid_run_snapshot, release_failed_run, release_once
 from onolys_api.jobs.machine import (
@@ -93,7 +97,7 @@ def make_run_handler(
             _input_mismatch(sid, run_id)
         date = run_doc.cap_date
         try:
-            _execute(ctx, blobs, get_evaluation(), run_doc)
+            _execute(ctx, blobs, get_evaluation(), run_doc, settings)
         except Cancelled:
             raise  # the cancel already released the slot (released=true) and marked the run
         except (TaskError, TimeoutError) as e:
@@ -131,7 +135,7 @@ def _release_or_log(repo, uid: str, sid: str, run_id: str, code: str, date) -> N
                   exc_class=type(e).__name__)  # fmt: skip
 
 
-def _execute(ctx, blobs, evaluation, run_doc) -> None:
+def _execute(ctx, blobs, evaluation, run_doc, settings=None) -> None:
     uid, sid, run_id, repo = ctx.uid, ctx.sid, run_doc.run_id, ctx.repo
     session = repo.get_session(uid, sid)
     if session.state == "deleting":
@@ -144,7 +148,7 @@ def _execute(ctx, blobs, evaluation, run_doc) -> None:
     except NotFoundError:
         existing = None
     if existing is None:
-        _evaluate(ctx, blobs, evaluation, run_doc, session)  # publishes atomically (M-11)
+        _evaluate(ctx, blobs, evaluation, run_doc, session, settings)  # publishes atomically (M-11)
         return
 
     # a report stored by an older build without its bookkeeping: only finish that
@@ -156,13 +160,50 @@ def _execute(ctx, blobs, evaluation, run_doc) -> None:
         )  # fmt: skip
 
 
+def eval_snapshot(settings, preset, engine_id, override) -> tuple[dict, str]:
+    """(route snapshot, engine version) as the worker rebuilds them for an eval run: the same
+    fields eval stored at creation (`EvalRunInfo.resolved_route`, `engine_version`)."""
+    routes, _ = resolve_preset(preset)
+    if override:
+        routes = _override_routes(settings, routes, override)
+    route = next(iter(routes.values()))
+    effort = (override or {}).get("effort") or route.extra_params.get("reasoning_effort")
+    snapshot = {
+        "litellm_id": route.litellm_id,
+        "effort": effort,
+        "max_output_tokens": route.max_output_tokens,
+        "context_tokens": route.context_tokens,
+        "supports_temperature": route.supports_temperature,
+        "caching_mode": route.caching_mode,
+    }
+    return snapshot, resolve_engine(settings, engine_id).version
+
+
+def _eval_guards(settings, run_doc, sid: str) -> None:
+    """Fail safe on a misconfigured eval run; failed runs stay failed (no retry here, SP05)."""
+    run_id, info = run_doc.run_id, run_doc.eval
+    if settings is None or not settings.eval_mode:
+        logs.emit("run_input_invalid", logging.ERROR, reason="eval_mode_off",
+                  session_id=sid, run_id=run_id)  # fmt: skip
+        raise PermanentError("internal_error")
+    try:
+        rebuilt = eval_snapshot(settings, run_doc.preset, info.engine, info.route_override)
+        drifted = rebuilt != (info.resolved_route, info.engine_version)
+    except (InputError, ConfigError):  # the engine/model/route no longer resolves
+        drifted = True
+    if drifted or run_doc.code_version != settings.git_sha:
+        logs.emit("run_input_invalid", logging.ERROR, reason="eval_config_drift",
+                  session_id=sid, run_id=run_id)  # fmt: skip
+        raise PermanentError("internal_error")
+
+
 def _input_mismatch(sid: str, run_id: str) -> NoReturn:
     logs.emit("run_input_invalid", logging.ERROR, reason="run_input_mismatch",
               session_id=sid, run_id=run_id)
     raise PermanentError("internal_error") from None
 
 
-def _evaluate(ctx, blobs, evaluation, run_doc, session) -> None:
+def _evaluate(ctx, blobs, evaluation, run_doc, session, settings=None) -> None:
     uid, sid, run_id, repo = ctx.uid, ctx.sid, run_doc.run_id, ctx.repo
     if any(not getattr(run_doc, field, None) for field in (
         "clinician_speaker", "language", "transcript_sha256"
@@ -176,6 +217,8 @@ def _evaluate(ctx, blobs, evaluation, run_doc, session) -> None:
         _input_mismatch(sid, run_id)
     if transcript is None or transcript_sha256(transcript) != run_doc.transcript_sha256:
         _input_mismatch(sid, run_id)
+    if run_doc.eval is not None:
+        _eval_guards(settings, run_doc, sid)
     params = {
         "change_goal": run_doc.change_goal,
         "seed": sid,
@@ -189,6 +232,10 @@ def _evaluate(ctx, blobs, evaluation, run_doc, session) -> None:
         "stt_run": run_doc.stt.run.model_dump() if run_doc.stt and run_doc.stt.run else None,
         "stub_title": session.title or "",  # real adapters ignore it
     }
+    if run_doc.eval is not None:  # eval-only params: a prod run's params are unchanged
+        params.update(
+            engine=run_doc.eval.engine, route_override=run_doc.eval.route_override, n_runs=1
+        )
     done: set[str] = set()
 
     def progress_cb(stage: str, status: str) -> None:
