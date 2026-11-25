@@ -23,7 +23,8 @@ for required in ['branches: [main]', 'workflow_dispatch:', 'environment: staging
                  'hosting:eval-staging']:
     assert required in s, f'missing workflow contract: {required}'
 for path in ['eval/**', 'engines/**', 'config/**', 'api/pyproject.toml',
-             'pyproject.toml', 'uv.lock', '.firebaserc',
+             'pyproject.toml', 'uv.lock', '.firebaserc', 'api/src/**', 'web/src/auth/**',
+             'web/src/api/**', 'web/src/components/classes.ts', 'web/package-lock.json',
              'scripts/ci/*eval*', '.github/workflows/deploy-eval.yml']:
     assert f'"{path}"' in s, f'missing deploy input {path}'
 for forbidden in ['DEPLOYER_PROD_SA', 'credentials_json', 'service_account_key',

@@ -131,8 +131,18 @@ def test_dockerfile_is_slim_miti_only():
     assert "protocols" not in copies and not any(c.startswith("docs/contracts") for c in copies)
     assert not re.search(r"PROTOCOLS_DIR|CONTRACTS_DIR", code)
     assert "COPY engines/miti engines/miti" in code
-    for member in ("engines/core", "engines/miti", "engines/oneshot", "api",
-                   "eval/auth", "eval/core", "eval/backend"):  # every workspace member manifest
+    import tomllib
+
+    ws = tomllib.loads((REPO / "pyproject.toml").read_text())["tool"]["uv"]["workspace"]
+    excluded = set(ws.get("exclude", []))
+    members = set()
+    for pat in ws["members"]:  # every workspace member manifest, derived so it cannot drift
+        members.update(p.parent.relative_to(REPO).as_posix() for p in REPO.glob(f"{pat}/pyproject.toml"))
+    members -= excluded
+    assert {"api", "engines/core", "eval/core", "eval/backend"} <= members and "eval/auth" not in members
+    copied = set(re.findall(r"^COPY\s+(\S+)/pyproject\.toml\s", code, re.M)) - {"."}
+    assert copied == members, f"Dockerfile manifests drifted from workspace: {copied ^ members}"
+    for member in sorted(members):
         assert f"COPY {member}/pyproject.toml {member}/pyproject.toml" in code
 
 

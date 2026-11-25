@@ -17,7 +17,6 @@ COPY eval/backend/pyproject.toml eval/backend/pyproject.toml
 COPY engines/oneshot/pyproject.toml engines/oneshot/pyproject.toml
 COPY engines/miti/pyproject.toml engines/miti/pyproject.toml
 COPY api/pyproject.toml api/pyproject.toml
-COPY eval/auth/pyproject.toml eval/auth/pyproject.toml
 RUN uv sync --frozen --no-dev --package onolys-api --no-install-workspace
 # Source: core, oneshot (eval-mode engines), miti (schemas and fixtures in its wheel), and api (vendored Redoc in static/).
 # Eval needs only a manifest for workspace resolution; no eval source or datasets ship.

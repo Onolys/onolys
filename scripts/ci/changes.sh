@@ -42,7 +42,7 @@ EVAL_EXTRA_RE='^eval/datasets/'
 EVAL_BACKEND_EXTRA_RE='^(config/|protocols/|\.dockerignore$)'
 # The SPA aliases the prod web auth, API client and classes sources and maintains API types by hand; recheck those contracts.
 # These are source/data dependencies, not npm runtime edges in DEPS.
-EVAL_WEB_EXTRA_RE='^(web/src/auth/|web/src/api/client\.ts$|web/src/components/classes/|eval/backend/|api/openapi\.json$|docs/contracts/public/|engines/miti/src/onolys_miti/data/report\.schema\.json$)'
+EVAL_WEB_EXTRA_RE='^(web/src/auth/|web/src/api/|web/src/components/classes\.ts$|eval/backend/|api/openapi\.json$|docs/contracts/public/|engines/miti/src/onolys_miti/data/report\.schema\.json$)'
 
 # The infra job's static tests run in the root workspace env, so lock/root manifest changes also run infra.
 INFRA_EXTRA_RE='^(pyproject\.toml$|uv\.lock$)'
