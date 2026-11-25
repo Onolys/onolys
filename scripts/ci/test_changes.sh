@@ -53,6 +53,7 @@ run false "core=false oneshot=false miti=false api=false eval=false eval-backend
 mkdir -p "$T/eval/core"; touch "$T/eval/core/pyproject.toml"
 run false "core=false oneshot=false miti=false api=false eval=true eval-backend=false eval-web=false frontend=false web=false infra=false" eval/core/src/onolys_eval/metrics.py
 run false "core=false oneshot=false miti=false api=false eval=true eval-backend=false eval-web=false frontend=false web=false infra=false" eval/datasets/synthetic/manifest.yaml
+run false "core=false oneshot=false miti=false api=false eval=true eval-backend=false eval-web=false frontend=false web=false infra=false" eval/fixtures/compare/counts_golden.json
 run false "core=false oneshot=false miti=true api=true eval=true eval-backend=false eval-web=false frontend=false web=false infra=false" engines/miti/src/x.py
 run false "core=false oneshot=false miti=true api=true eval=true eval-backend=false eval-web=false frontend=false web=false infra=false" pyproject.toml
 run false "core=false oneshot=false miti=true api=true eval=true eval-backend=false eval-web=false frontend=false web=false infra=false" uv.lock

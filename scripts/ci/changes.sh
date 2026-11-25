@@ -35,8 +35,8 @@ WEB_EXTRA_RE='^(api/openapi\.json$|engines/miti/src/onolys_miti/data/report\.sch
 # One-shot drift tests read these repo data files; MITI is not a runtime dependency.
 ONESHOT_EXTRA_RE='^(scripts/gen_miti_schema\.py$|config/staging/routes\.yaml$|engines/miti/src/onolys_miti/data/(pack\.yaml$|report\.schema\.json$|prompts/(code|globals)_system\.md$|fixtures/good_practice\.json$))'
 
-# Dataset manifests and metadata-only overrides are inputs to eval/core.
-EVAL_EXTRA_RE='^eval/datasets/'
+# Dataset manifests, metadata-only overrides and shared synthetic fixtures (eval/fixtures) are inputs to eval/core.
+EVAL_EXTRA_RE='^eval/(datasets|fixtures)/'
 
 # Backend runtime configuration and image inputs are not Python package dependencies.
 EVAL_BACKEND_EXTRA_RE='^(config/|protocols/|\.dockerignore$)'
