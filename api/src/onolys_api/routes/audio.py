@@ -5,7 +5,7 @@ from typing import Annotated
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, Request
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from onolys_api.audio import (
     CANONICAL_TYPES,
@@ -28,6 +28,8 @@ User = Annotated[AuthUser, Depends(current_user)]
 
 
 class AudioUploadRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     content_type: str = Field("", max_length=100, description="Browser type; may be empty")
     size_bytes: int = Field(ge=1, description="File size; above 300 MB is `audio_too_large`")
     filename_ext: str = Field("", max_length=16, description="Used only when content_type is empty")

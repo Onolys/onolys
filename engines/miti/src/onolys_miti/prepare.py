@@ -1,6 +1,8 @@
 """Pure steps before any model call (PRD R2 steps 1-3): role marking, span selection,
 input checks and volley building. Protocol-agnostic: "subject" / "other" roles only."""
 
+import re
+import unicodedata
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -25,8 +27,8 @@ class RoleTurn:
 @dataclass(frozen=True)
 class Volley:
     id: str  # v1..vN
-    turns: list[Turn]  # consecutive subject turns
-    prev_other: Turn | None  # most recent other-speaker turn before the volley (context only)
+    turns: list[Turn]  # subject turns, possibly separated by facilitative client input
+    context_before: dict[str, Any] = field(default_factory=dict)  # bounded text only, no ids
 
 
 @dataclass(frozen=True)
@@ -108,29 +110,99 @@ def select_turns(
     return kept, []
 
 
+def _spaceless_script(text: str) -> bool:
+    letters = [c for c in text if c.isalpha()]
+
+    def relevant(c: str) -> bool:
+        n = ord(c)
+        return (
+            0x0E00 <= n <= 0x0E7F  # Thai
+            or 0x3040 <= n <= 0x30FF  # Hiragana / Katakana
+            or 0x31F0 <= n <= 0x31FF  # Katakana extensions
+            or 0xFF66 <= n <= 0xFF9D  # half-width Katakana
+            or unicodedata.name(c, "").startswith(
+                ("CJK UNIFIED IDEOGRAPH", "CJK COMPATIBILITY IDEOGRAPH")
+            )
+        )
+    return bool(letters) and sum(relevant(c) for c in letters) * 2 >= len(letters)
+
+
+def _size(text: str) -> tuple[int, bool]:
+    spaceless = _spaceless_script(text)
+    return (sum(not c.isspace() for c in text) if spaceless else _words(text)), spaceless
+
+
+def _asks_question(text: str) -> bool:
+    # A short tail after the final question is still a direct question (R1).
+    text = text.rstrip()
+    while text and (text[-1] in "\"'" or unicodedata.category(text[-1]) in {"Pe", "Pf"}):
+        text = text[:-1].rstrip()
+    last = max(text.rfind(marker) for marker in ("?", "？", "؟"))
+    if last < 0:
+        return False
+    tail = text[last + 1:].strip()
+    size, spaceless = _size(tail)
+    return size <= (6 if spaceless else 3)
+
+
+def _last_words(text: str, limit: int) -> str:
+    words = list(re.finditer(r"\S+", text))
+    return text[words[-limit].start():] if len(words) > limit else text
+
+
+def _client_context(texts: list[str]) -> list[str]:
+    """Keep recent whole turns; truncate only an oversized newest turn."""
+    kept = texts[-4:]
+    while kept:
+        size, spaceless = _size(" ".join(kept))
+        limit = 300 if spaceless else 150
+        if size <= limit:
+            return kept
+        if len(kept) > 1:
+            kept = kept[1:]
+            continue
+        text = kept[0]
+        if spaceless:
+            chars = [i for i, char in enumerate(text) if not char.isspace()]
+            return [text[chars[-limit]:]]
+        return [_last_words(text, limit)]
+    return []
+
+
 def build_volleys(turns: list[RoleTurn], volley_cfg: dict[str, Any]) -> list[Volley]:
-    """Consecutive subject turns = one volley. An other-speaker turn breaks it when it has at
-    least `min_other_words` words (default 0: any other turn breaks)."""
-    min_words = int(volley_cfg.get("min_other_words", 0))
+    """Keep facilitative input inside volleys (manual pp.13, 15–16).
+
+    Context snapshots precede each volley's first clinician turn. Retain client
+    history, including earlier facilitative input, across volleys and batches.
+    """
+    min_words = int(volley_cfg.get("min_other_words", 3))
+    min_chars = int(volley_cfg.get("min_other_chars", 6))
     volleys: list[Volley] = []
     current: list[Turn] = []
-    prev_other: Turn | None = None
-    current_prev: Turn | None = None
+    clients: list[str] = []
+    context: dict[str, Any] = {}
 
     def flush() -> None:
         nonlocal current
         if current:
-            volleys.append(Volley(f"v{len(volleys) + 1}", current, current_prev))
+            volleys.append(Volley(f"v{len(volleys) + 1}", current, context))
             current = []
 
     for rt in turns:
         if rt.role == SUBJECT:
             if not current:
-                current_prev = prev_other
+                previous = " ".join(t.text for t in volleys[-1].turns) if volleys else None
+                context = {
+                    "client_turns": _client_context(clients),
+                    "previous_clinician_volley": _last_words(previous, 100) if previous else None,
+                }
             current.append(rt.turn)
         else:
-            prev_other = rt.turn
-            if _words(rt.turn.text) >= min_words:
+            clients = [*clients[-3:], rt.turn.text]
+            size, spaceless = _size(rt.turn.text)
+            if size >= (min_chars if spaceless else min_words) or (
+                current and _asks_question(current[-1].text)
+            ):
                 flush()
     flush()
     return volleys

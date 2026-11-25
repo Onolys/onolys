@@ -9,6 +9,11 @@
       "database": "staging",
       "rules": "firestore.rules",
       "indexes": "api/firestore.indexes.json"
+    },
+    {
+      "database": "eval",
+      "rules": "firestore.rules",
+      "indexes": "api/firestore.indexes.json"
     }
   ],
   "emulators": {

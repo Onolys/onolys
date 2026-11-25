@@ -2,6 +2,7 @@
 import { Badge, Button, Card, CardContent, Skeleton } from "@onolys/ui";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { Link } from "react-router";
+import { pageLoadError } from "../../pageLoadError";
 import { unwrap } from "../../api/client";
 import { describeError } from "../../api/errors";
 import { useApiClient } from "../../auth/useApiClient";
@@ -21,6 +22,7 @@ export function SessionsPage() {
   const client = useApiClient();
   const sessions = useInfiniteQuery({
     queryKey: ["sessions"],
+    throwOnError: pageLoadError,
     staleTime: 0,
     gcTime: 0,
     retry: false,
@@ -75,17 +77,14 @@ export function SessionsPage() {
               const chip = chipFor(s.status);
               return (
                 <li key={s.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-border px-4 py-3 last:border-b-0">
-                  <Link to={`/sessions/${s.id}`} className={`${LINK} flex min-h-11 items-center`}>
-                    {s.title ?? date(s.created_at)}
-                  </Link>
-                  {s.interview_id ? <Badge variant="outline">AI interview</Badge> : null}
-                  <StatusChip tone={chip.tone}>{chip.text}</StatusChip>
-                  <span className={NOTE}>{date(s.created_at)}</span>
-                  {s.latest_report_version ? (
-                    <Link to={`/sessions/${s.id}/reports/${s.latest_report_version}`} className={`${LINK} flex min-h-11 items-center`}>
-                      Report v{s.latest_report_version}
+                  <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-3 gap-y-1">
+                    <Link to={s.latest_report_version != null ? `/sessions/${s.id}/reports/${s.latest_report_version}` : `/sessions/${s.id}`} className={`${LINK} flex min-h-11 min-w-0 items-center break-words [overflow-wrap:anywhere]`}>
+                      {s.title ?? date(s.created_at)}
                     </Link>
-                  ) : null}
+                    {s.interview_id ? <Badge variant="outline">AI interview</Badge> : null}
+                    <StatusChip tone={chip.tone}>{chip.text}</StatusChip>
+                  </div>
+                  <time dateTime={s.created_at} className={`${NOTE} ml-auto w-full shrink-0 text-right sm:w-auto`}>{date(s.created_at)}</time>
                 </li>
               );
             })}

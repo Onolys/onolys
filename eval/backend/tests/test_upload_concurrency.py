@@ -64,15 +64,15 @@ def test_duplicate_completion_cannot_rewrite_speaker_choice_bytes(services):
     async def completed(handle):
         result = await original(handle)
         # A different poll completed and the user selected their clinician meanwhile.
-        services.bucket.write_json(path, chosen)
+        services.audio_bucket.write_json(path, chosen)
         services.repository.update_upload(uid, {"status": "ready", "clinician_speaker": "T"})
         return result
 
     services.stt.poll = completed
     assert task(c, uid).status_code == 200
     assert services.repository.get_upload(uid)["status"] == "ready"
-    assert services.bucket.read_json(path) == chosen
-    assert services.bucket.list(f"uploads/{uid}/transcripts/") == []
+    assert services.audio_bucket.read_json(path) == chosen
+    assert services.audio_bucket.list(f"eval-uploads/{uid}/transcripts/") == []
 
 
 def test_initial_start_is_fenced_before_provider_call(services):
@@ -145,14 +145,14 @@ def test_successful_poll_and_speaker_choice_publish_distinct_immutable_transcrip
     completed = services.repository.get_upload(uid)
     assert completed["status"] == "awaiting_speakers"
     stt_path = completed["transcript_path"]
-    normalized = services.bucket.read_json(stt_path)
+    normalized = services.audio_bucket.read_json(stt_path)
     assert [turn["role"] for turn in normalized["turns"]] == [None, None]
     picked = c.post(f"/v1/uploads/{uid}/speakers", headers=AUTH, json={"clinician_speaker": "T"})
     assert picked.status_code == 200 and picked.json()["status"] == "ready"
     ready = services.repository.get_upload(uid)
     assert ready["transcript_path"] != stt_path
-    assert services.bucket.read_json(stt_path) == normalized
-    assert [turn["role"] for turn in services.bucket.read_json(ready["transcript_path"])["turns"]] == ["clinician", "client"]
+    assert services.audio_bucket.read_json(stt_path) == normalized
+    assert [turn["role"] for turn in services.audio_bucket.read_json(ready["transcript_path"])["turns"]] == ["clinician", "client"]
 
 
 def test_invalid_direct_completion_losing_transition_preserves_ready_upload(services):
@@ -160,14 +160,14 @@ def test_invalid_direct_completion_losing_transition_preserves_ready_upload(serv
 
     c = client(services=services)
     uid = start_direct(c).json()["upload_id"]
-    services.bucket.write_bytes(f"uploads/{uid}/input.wav", b"incorrect bytes", content_type="audio/wav")
-    original = services.bucket.read_head
+    services.audio_bucket.write_bytes(f"eval-uploads/{uid}/input.wav", b"incorrect bytes", content_type="audio/wav")
+    original = services.audio_bucket.read_head
 
     def competing_completion(path, n):
         services.repository.update_upload(uid, {"status": "ready"})
         return original(path, n)
 
-    services.bucket.read_head = competing_completion
+    services.audio_bucket.read_head = competing_completion
     response = c.post(f"/v1/uploads/{uid}/complete", headers=AUTH)
     assert response.json()["status"] == "ready"
     assert services.repository.get_upload(uid)["status"] == "ready"
@@ -237,7 +237,7 @@ def test_concurrent_different_speaker_choice_returns_conflict_and_cleans_loser(s
     c, uid = pending(services)
     services.stt.complete = True
     assert task(c, uid).status_code == 200
-    original = services.bucket.write_json
+    original = services.audio_bucket.write_json
     published = services.repository.get_upload(uid)["transcript_path"]
 
     def competing_choice(path, value):
@@ -246,12 +246,12 @@ def test_concurrent_different_speaker_choice_returns_conflict_and_cleans_loser(s
             "status": "ready", "clinician_speaker": "C", "transcript_path": published,
         })
 
-    services.bucket.write_json = competing_choice
+    services.audio_bucket.write_json = competing_choice
     response = c.post(f"/v1/uploads/{uid}/speakers", headers=AUTH, json={"clinician_speaker": "T"})
     assert response.status_code == 409
     assert response.json()["error"]["code"] == "speaker_conflict"
     assert services.repository.get_upload(uid)["clinician_speaker"] == "C"
-    assert services.bucket.list(f"uploads/{uid}/transcripts/") == [published]
+    assert services.audio_bucket.list(f"eval-uploads/{uid}/transcripts/") == [published]
 
 
 def test_candidate_cleanup_failure_preserves_winning_result(services):
@@ -268,7 +268,7 @@ def test_candidate_cleanup_failure_preserves_winning_result(services):
         raise RuntimeError("cleanup unavailable")
 
     services.stt.poll = poll
-    services.bucket.delete = unavailable
+    services.audio_bucket.delete = unavailable
     assert task(c, uid).status_code == 200
     assert services.repository.get_upload(uid)["status"] == "ready"
 

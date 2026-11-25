@@ -1,5 +1,7 @@
 """Repo contract suite: identical tests against FakeRepo and the Firestore emulator."""
 
+import hashlib
+import json
 import os
 import uuid
 from datetime import UTC, datetime, timedelta
@@ -25,6 +27,8 @@ from onolys_api.repo.models import (
     SessionError,
     SessionStatusDoc,
     StepRecord,
+    TranscriptDoc,
+    transcript_sha256,
 )
 from onolys_api.storage.fake import FakeBlobStore
 
@@ -249,6 +253,43 @@ def test_transcript_over_500kb_goes_to_blob_with_pointer_roundtrip(repo, blobs):
     assert repo.get_transcript(uid, sid, "tr1").transcript == big
 
 
+@pytest.mark.parametrize("large_body", [False, True])
+@pytest.mark.parametrize(
+    "transcript_language,session_language,effective",
+    [("fr", "auto", "fr"), (None, "auto", "auto"), (None, "de", "de"), ("", "de", "de")],
+)
+def test_transcript_stored_inputs(
+    repo, large_body, transcript_language, session_language, effective
+):
+    uid, sid = seed(repo)
+    repo.update_session(uid, sid, {"language": session_language})
+    original = transcript(n=60, text="é" * 10_000) if large_body else transcript(text="échange")
+    original.language = transcript_language
+    repo.put_transcript(uid, sid, "tr1", original)
+    raw = repo.get_transcript(uid, sid, "tr1", resolve=False)
+    assert (raw.pointer is not None) == large_body
+    canonical = json.dumps(
+        original.model_dump(mode="json"), sort_keys=True, separators=(",", ":"), ensure_ascii=False
+    ).encode("utf-8")
+    assert raw.sha256 == hashlib.sha256(canonical).hexdigest()
+    assert raw.language == effective
+    resolved = repo.get_transcript(uid, sid, "tr1")
+    assert transcript_sha256(resolved.transcript) == raw.sha256
+    repo.put_transcript(uid, sid, "tr2", original.model_copy(deep=True))
+    assert repo.get_transcript(uid, sid, "tr2", resolve=False).sha256 == raw.sha256
+
+
+def test_transcript_factory_hashes_content_and_resolves_language():
+    original = transcript(text="échange")
+    a = TranscriptDoc.build(original, None, "auto")
+    b = TranscriptDoc.build(original.model_copy(deep=True), None, "de")
+    assert a.sha256 == b.sha256 == transcript_sha256(original)
+    assert a.language == b.language == "en"
+    changed = original.model_copy(deep=True)
+    changed.turns[0].text = "changed"
+    assert transcript_sha256(changed) != a.sha256
+
+
 def test_ratings_revisions_draft_and_latest(repo):
     uid, sid = seed(repo)
     assert repo.latest_rating(uid, sid) is None
@@ -281,11 +322,34 @@ def test_runs_create_update_list_and_lookup_by_id(repo):
         uid,
         sid,
         run_id,
-        RunDoc(uid=uid, session_id=sid, run_id=run_id, n_runs=1, preset="p", started=now),
+        RunDoc(
+            change_goal="",
+            clinician_speaker="S1",
+            language="en",
+            transcript_sha256="test-hash",
+            uid=uid,
+            session_id=sid,
+            run_id=run_id,
+            n_runs=1,
+            preset="p",
+            started=now,
+        ),
     )
     with pytest.raises(ConflictError):
         repo.create_run(
-            uid, sid, run_id, RunDoc(uid=uid, session_id=sid, run_id=run_id, started=now)
+            uid,
+            sid,
+            run_id,
+            RunDoc(
+                change_goal="",
+                clinician_speaker="S1",
+                language="en",
+                transcript_sha256="test-hash",
+                uid=uid,
+                session_id=sid,
+                run_id=run_id,
+                started=now,
+            ),
         )
     repo.update_run(uid, sid, run_id, {"status": "done", "stage": "assemble"})
     r = repo.get_run(uid, sid, run_id)
@@ -331,7 +395,21 @@ def test_delete_session_removes_doc_status_and_every_subcollection(repo):
     repo.put_transcript(uid, sid, "tr1", transcript())
     repo.put_rating_revision(uid, sid, "rt1", RatingDoc(card={}, created_at=now))
     repo.put_rating_draft(uid, sid, RatingDraftDoc(card={}, updated_at=now))
-    repo.create_run(uid, sid, "run1", RunDoc(uid=uid, session_id=sid, run_id="run1", started=now))
+    repo.create_run(
+        uid,
+        sid,
+        "run1",
+        RunDoc(
+            change_goal="",
+            clinician_speaker="S1",
+            language="en",
+            transcript_sha256="test-hash",
+            uid=uid,
+            session_id=sid,
+            run_id="run1",
+            started=now,
+        ),
+    )
     repo.put_report(uid, sid, "rp1", ReportDoc(version=1, run_id="run1", report={}, created_at=now))
     assert repo.delete_session(uid, sid) is True
     with pytest.raises(NotFoundError):
@@ -353,7 +431,7 @@ def _child_writes(repo, uid, sid):
         "transcript": lambda: repo.put_transcript(uid, sid, "tr1", transcript()),
         "rating": lambda: repo.put_rating_revision(uid, sid, "rt1", RatingDoc(card={}, created_at=now)),
         "draft": lambda: repo.put_rating_draft(uid, sid, RatingDraftDoc(card={}, updated_at=now)),
-        "run": lambda: repo.create_run(uid, sid, "run1", RunDoc(uid=uid, session_id=sid, run_id="run1")),
+        "run": lambda: repo.create_run(uid, sid, "run1", RunDoc(change_goal="", clinician_speaker="S1", language="en", transcript_sha256="test-hash", uid=uid, session_id=sid, run_id="run1")),
         "report": lambda: repo.put_report(uid, sid, "rp1", ReportDoc(version=1, run_id="run1", report={}, created_at=now)),
     }  # fmt: skip
 
@@ -413,7 +491,20 @@ def test_delete_racing_a_big_write_leaves_no_doc_and_no_blob(repo, tmp_path, kin
 
 def test_update_run_on_deleted_session_is_not_found_and_creates_nothing(repo):
     uid, sid = seed(repo)
-    repo.create_run(uid, sid, "run1", RunDoc(uid=uid, session_id=sid, run_id="run1"))
+    repo.create_run(
+        uid,
+        sid,
+        "run1",
+        RunDoc(
+            change_goal="",
+            clinician_speaker="S1",
+            language="en",
+            transcript_sha256="test-hash",
+            uid=uid,
+            session_id=sid,
+            run_id="run1",
+        ),
+    )
     repo.delete_session(uid, sid)
     with pytest.raises(NotFoundError):
         repo.update_run(uid, sid, "run1", {"released": True})
@@ -480,7 +571,21 @@ def test_two_user_cross_uid_reads_and_writes_are_not_found(repo):
     repo.put_transcript(a, sid, "tr1", transcript())
     repo.put_rating_revision(a, sid, "rt1", RatingDoc(card={}, created_at=now))
     repo.put_rating_draft(a, sid, RatingDraftDoc(card={}, updated_at=now))
-    repo.create_run(a, sid, "run1", RunDoc(uid=a, session_id=sid, run_id="run1", started=now))
+    repo.create_run(
+        a,
+        sid,
+        "run1",
+        RunDoc(
+            change_goal="",
+            clinician_speaker="S1",
+            language="en",
+            transcript_sha256="test-hash",
+            uid=a,
+            session_id=sid,
+            run_id="run1",
+            started=now,
+        ),
+    )
     repo.put_report(a, sid, "rp1", ReportDoc(version=1, run_id="run1", report={}, created_at=now))
 
     calls = {
@@ -610,7 +715,20 @@ def test_claim_run_lifecycle(repo):
     uid, sid = seed(repo)
     run_id = f"run-{uuid.uuid4().hex[:8]}"
     now = datetime.now(UTC)
-    repo.create_run(uid, sid, run_id, RunDoc(uid=uid, session_id=sid, run_id=run_id))
+    repo.create_run(
+        uid,
+        sid,
+        run_id,
+        RunDoc(
+            change_goal="",
+            clinician_speaker="S1",
+            language="en",
+            transcript_sha256="test-hash",
+            uid=uid,
+            session_id=sid,
+            run_id=run_id,
+        ),
+    )
     assert repo.claim_run(uid, sid, run_id, now, LEASE).outcome == "claimed"
     r = repo.get_run(uid, sid, run_id)
     assert r.status == "running" and r.attempts == 1 and r.started is not None
@@ -649,7 +767,20 @@ def test_claim_survives_exhausted_txn_retries(repo, monkeypatch, kind):
     uid, sid = seed(repo)
     now = datetime.now(UTC)
     run_id = f"run-{uuid.uuid4().hex[:8]}"
-    repo.create_run(uid, sid, run_id, RunDoc(uid=uid, session_id=sid, run_id=run_id))
+    repo.create_run(
+        uid,
+        sid,
+        run_id,
+        RunDoc(
+            change_goal="",
+            clinician_speaker="S1",
+            language="en",
+            transcript_sha256="test-hash",
+            uid=uid,
+            session_id=sid,
+            run_id=run_id,
+        ),
+    )
     real, calls = repo._client.transaction, []
 
     def flaky(*a, **kw):
@@ -984,17 +1115,39 @@ def test_rotate_api_key_leaves_one_active_even_under_concurrency(repo):
     assert repo.active_api_key(uid) is None
 
 
-def test_confirm_speaker_only_in_allowed_states(repo):
+def test_confirm_speaker_write_once_and_idempotent(repo):
     uid, sid = seed(repo)
-    allowed = ("awaiting_input", "report_ready", "failed")
-    repo.update_session(uid, sid, {"state": "running"})
-    assert repo.confirm_speaker(uid, sid, "A", allowed) is False
-    assert repo.get_session(uid, sid).clinician_speaker is None
+    allowed = ("awaiting_input",)
+    assert repo.confirm_speaker(uid, sid, "A", allowed) == "conflict"
     repo.update_session(uid, sid, {"state": "awaiting_input"})
-    assert repo.confirm_speaker(uid, sid, "A", allowed) is True
-    s = repo.get_session(uid, sid)
-    assert s.clinician_speaker == "A" and s.speaker_confirmed
+    assert repo.confirm_speaker(uid, sid, "A", allowed) == "written"
     assert repo.get_status(uid, sid).speaker_confirmed
+    for state in ("awaiting_input", "running", "report_ready"):
+        repo.update_session(uid, sid, {"state": state})
+        before, status = repo.get_session(uid, sid), repo.get_status(uid, sid)
+        assert repo.confirm_speaker(uid, sid, "A", allowed) == "same"
+        assert repo.confirm_speaker(uid, sid, "B", allowed) == "conflict"
+        assert repo.get_session(uid, sid) == before
+        assert repo.get_status(uid, sid) == status
+
+
+@pytest.mark.parametrize("state", ["failed", "cancelled", "deleting"])
+@pytest.mark.parametrize("confirmed", [False, True])
+def test_confirm_speaker_terminal_states_precede_idempotency(repo, state, confirmed):
+    uid, sid = seed(repo)
+    repo.update_session(
+        uid,
+        sid,
+        {
+            "state": state,
+            "speaker_confirmed": confirmed,
+            "clinician_speaker": "A",
+        },
+    )
+    before = repo.get_session(uid, sid)
+    for speaker in ("A", "B"):
+        assert repo.confirm_speaker(uid, sid, speaker, ("awaiting_input",)) == "conflict"
+    assert repo.get_session(uid, sid) == before
 
 
 def test_txn_does_not_retry_unrelated_value_error(repo):
@@ -1019,7 +1172,21 @@ def test_discard_failed_upload_leaves_only_a_data_free_stub(repo):
     uid, sid = seed(repo)
     now = datetime.now(UTC)
     repo.add_recording(uid, sid, "original", RecordingDoc(gcs_uri="gs://b/x"))
-    repo.create_run(uid, sid, "run1", RunDoc(uid=uid, session_id=sid, run_id="run1", started=now))
+    repo.create_run(
+        uid,
+        sid,
+        "run1",
+        RunDoc(
+            change_goal="",
+            clinician_speaker="S1",
+            language="en",
+            transcript_sha256="test-hash",
+            uid=uid,
+            session_id=sid,
+            run_id="run1",
+            started=now,
+        ),
+    )
     repo.discard_failed_upload(uid, sid, "audio_too_long")
     with pytest.raises(NotFoundError):
         repo.get_session(uid, sid)
@@ -1054,3 +1221,72 @@ def test_discard_failed_upload_refuses_a_foreign_session(repo):
     with pytest.raises(NotFoundError):
         repo.discard_failed_upload("someone-else", sid, "audio_unreadable")
     assert repo.get_session(uid, sid)
+
+
+# ---- 05 Task 1: eval hooks (additive; prod never calls them) ----
+
+
+def _mk_run(uid, sid, run_id):
+    return RunDoc(
+        change_goal="", clinician_speaker="S1", language="en", transcript_sha256="h",
+        uid=uid, session_id=sid, run_id=run_id, started=datetime.now(UTC),
+    )  # fmt: skip
+
+
+def test_get_runs_returns_only_requested_ids(repo):
+    uid, sid = seed(repo)
+    for rid in ("ra", "rb", "rc"):
+        repo.create_run(uid, sid, rid, _mk_run(uid, sid, rid))
+    got = repo.get_runs(uid, sid, ["rc", "ra", "missing"])
+    assert [r.run_id for r in got] == ["rc", "ra"]  # request order; absent ids are skipped
+    assert repo.get_runs(uid, sid, []) == []
+    with pytest.raises(NotFoundError):
+        repo.get_runs(new_ids()[0], sid, ["ra"])  # foreign uid
+
+
+def test_delete_run_data_removes_run_report_and_pointer_only_for_that_run(repo, blobs):
+    uid, sid = seed(repo)
+    for rid in ("ra", "rb"):
+        repo.create_run(uid, sid, rid, _mk_run(uid, sid, rid))
+    big = {"blob": "y" * (MAX_INLINE_BYTES + 10)}
+    for v, rid in enumerate(("ra", "rb"), start=1):
+        repo.put_report(uid, sid, rid, ReportDoc(version=v, run_id=rid, report=big))
+    keys = {rid: repo.get_report(uid, sid, rid, resolve=False).pointer.key for rid in ("ra", "rb")}
+    assert all(blobs.exists(k) for k in keys.values())
+    repo.delete_run_data(uid, sid, "ra")
+    with pytest.raises(NotFoundError):
+        repo.get_run(uid, sid, "ra")
+    with pytest.raises(NotFoundError):
+        repo.get_report(uid, sid, "ra")
+    assert not blobs.exists(keys["ra"])
+    assert repo.get_run(uid, sid, "rb").run_id == "rb"  # other run untouched
+    assert repo.get_report(uid, sid, "rb").report == big and blobs.exists(keys["rb"])
+    repo.get_session(uid, sid)  # the session stays
+
+
+def test_delete_run_data_is_idempotent_and_handles_run_without_report(repo):
+    uid, sid = seed(repo)
+    repo.create_run(uid, sid, "ra", _mk_run(uid, sid, "ra"))
+    repo.delete_run_data(uid, sid, "ra")
+    repo.delete_run_data(uid, sid, "ra")  # resumable: second call is a no-op
+    repo.delete_run_data(uid, sid, "never-existed")
+    assert repo.list_runs(uid, sid) == []
+    with pytest.raises(NotFoundError):
+        repo.delete_run_data(new_ids()[0], sid, "ra")  # foreign uid
+
+
+def test_prod_session_stores_no_eval_key_and_eval_session_roundtrips(repo):
+    uid, sid = seed(repo)
+    assert "eval" not in SessionDoc(uid=uid).to_store()
+    assert repo.get_session(uid, sid).eval is None
+    from onolys_api.repo.models import EvalGold, EvalSessionInfo
+
+    info = EvalSessionInfo(
+        dataset_id="d", dataset_session_id="ds", source="dataset",
+        gold=EvalGold(sha256="ab", path="gold/ab.json"),
+    )  # fmt: skip
+    uid2, sid2 = new_ids()
+    repo.create_session(
+        uid2, sid2, SessionDoc(uid=uid2, eval=info), SessionStatusDoc(uid=uid2)
+    )
+    assert repo.get_session(uid2, sid2).eval == info

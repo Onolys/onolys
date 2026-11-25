@@ -1,0 +1,16 @@
+---
+status: done
+summary: Thin evidence preserves model global ratings; information diagnostics remain and poor-practice caps are unchanged.
+date: 2026-11-24
+---
+# Step 3 — global ratings (SP02 Task 5)
+
+Removed the evidence-minimum midpoint reset. Located evidence is retained, the model score stands, and `insufficient_evidence` is informational with no reset wording. The existing poor-practice cap is applied regardless of evidence quantity. The prompt still starts at 3, rates all four dimensions, and permits high SST without sustain talk; the only added line requires evidence of clinician behavior for low-score anchors.
+
+Test-first: `.venv/bin/python -m pytest engines/miti/tests/test_globals_pass.py engines/miti/tests/test_miti_pack.py -q` → **9 failed, 27 passed**. Failures showed midpoint replacement of low/high scores, loss of located evidence, the sparse-evidence cap bypass, SST 5 replaced by 3, and the missing prompt line.
+
+Final focused check: `.venv/bin/python -m pytest engines/miti/tests/test_globals_pass.py engines/miti/tests/test_miti_pack.py engines/miti/tests/test_golden.py engines/miti/tests/test_data.py engines/miti/tests/test_offline_tools.py engines/miti/tests/test_manual_fixtures.py -q` → **57 passed in 1.39s**. Coverage includes scores 1, 2, 4, 5 with one located quote; zero evidence; invalid quote dropping; info severity; no emitted default source; unchanged cap behavior; all four required real MITI globals; SST 5 with no evidence; prompt constraints; full adapter bytes; schemas and manual hand fixtures.
+
+Ran `.venv/bin/python engines/miti/tools/regen_goldens.py`, reusing synthetic response bytes under the new globals request hash. A second invocation printed `No changes.` Code request hash is unchanged. Pack fingerprint is `2913ee4eaed0bc33`; globals prompt fingerprint is `b7b9b0fa188a1322`. Only those two fingerprints change in complete normalized adapter output. Adapter parity first failed as expected (**1 failed, 56 passed**) before deliberate fingerprint refresh. Report provenance was updated for those same fingerprints; no global, count, evidence, transcript or other adapter behavior changes for the existing good-practice stub. Historical SP01 fixture `engines/miti/tests/fixtures/adapter_pre_input_locks.json` and its assertion remain preserved at commit `ce65eef`. Normalization still covers only generated `created_at` timestamps.
+
+Generated `step3.json` using `.venv/bin/python engines/miti/audit_report.py --output docs/agent_files/session-report-ux-20261124-1738/02-miti-manual-alignment/measurements/step3.json`. Compared step 2 and step 3: volley/batch counts, hand-derived counts, count/summary drift, double persuasion and coverage are unchanged across all five fixtures. Request words increase by 13 per fixture (the one globals prompt line), giving totals 4628, 4292, 3782, 8923, 3629 for good, poor, short, batch-edge and sparse. All have zero count/summary drift, double persuasion and hand-span residual coverage. This audit uses hand global targets, so the global score behavior is demonstrated by the focused tests, not audit summaries. Evidence is deterministic manual alignment, not model accuracy, token/cost or latency measurement. No live LLM, network or credential use.

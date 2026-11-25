@@ -5,35 +5,53 @@ locals {
   # Deterministic like worker_url, so the api service can carry it without depending on the voice service.
   voice_host = "onolys-voice-${var.env}-${data.google_project.this.number}.${var.region}.run.app"
   voice_env = concat(local.interview_env, [
-    { name = "ENV", value = var.env },
+    { name = "ENV", value = local.runtime_env },
     { name = "GCP_PROJECT", value = var.project },
     { name = "GOOGLE_CLOUD_PROJECT", value = var.project },
     { name = "REGION", value = var.region },
     { name = "FIRESTORE_DATABASE", value = var.database_id },
     { name = "AUTH_PROJECT", value = var.project },
     { name = "CORS_ORIGINS", value = join(",", var.cors_origins) },
-    { name = "VOICE_PROVIDERS_FILE", value = "config/${var.env}/voice_providers.yaml" },
+    { name = "VOICE_PROVIDERS_FILE", value = "config/${local.runtime_env}/voice_providers.yaml" },
     { name = "ADAPTERS", value = "real" },
   ])
 }
 
+moved {
+  from = google_service_account.voice
+  to   = google_service_account.voice[0]
+}
+
 resource "google_service_account" "voice" {
+  count        = var.public_api_enabled ? 1 : 0
   project      = var.project
   account_id   = "voice-${var.env}"
   display_name = "Onolys voice relay (${var.env})"
 }
 
 # Only two grants: Vertex AI (Gemini Live) and Firestore, limited to this env's database (same condition as api/worker).
+moved {
+  from = google_project_iam_member.voice_aiplatform_user
+  to   = google_project_iam_member.voice_aiplatform_user[0]
+}
+
 resource "google_project_iam_member" "voice_aiplatform_user" {
+  count   = var.public_api_enabled ? 1 : 0
   project = var.project
   role    = "roles/aiplatform.user"
-  member  = "serviceAccount:${google_service_account.voice.email}"
+  member  = "serviceAccount:${google_service_account.voice[0].email}"
+}
+
+moved {
+  from = google_project_iam_member.voice_datastore_user
+  to   = google_project_iam_member.voice_datastore_user[0]
 }
 
 resource "google_project_iam_member" "voice_datastore_user" {
+  count   = var.public_api_enabled ? 1 : 0
   project = var.project
   role    = "roles/datastore.user"
-  member  = "serviceAccount:${google_service_account.voice.email}"
+  member  = "serviceAccount:${google_service_account.voice[0].email}"
 
   condition {
     title       = "firestore-${var.env}-only"
@@ -44,14 +62,26 @@ resource "google_project_iam_member" "voice_datastore_user" {
   depends_on = [google_firestore_database.db]
 }
 
+moved {
+  from = google_secret_manager_secret_iam_member.voice_hmac
+  to   = google_secret_manager_secret_iam_member.voice_hmac[0]
+}
+
 resource "google_secret_manager_secret_iam_member" "voice_hmac" {
+  count     = var.public_api_enabled ? 1 : 0
   project   = var.project
   secret_id = google_secret_manager_secret.uid_hmac.secret_id
   role      = "roles/secretmanager.secretAccessor"
-  member    = "serviceAccount:${google_service_account.voice.email}"
+  member    = "serviceAccount:${google_service_account.voice[0].email}"
+}
+
+moved {
+  from = google_cloud_run_v2_service.voice
+  to   = google_cloud_run_v2_service.voice[0]
 }
 
 resource "google_cloud_run_v2_service" "voice" {
+  count               = var.public_api_enabled ? 1 : 0
   project             = var.project
   location            = var.region
   name                = "onolys-voice-${var.env}"
@@ -59,7 +89,7 @@ resource "google_cloud_run_v2_service" "voice" {
   deletion_protection = false
 
   template {
-    service_account                  = google_service_account.voice.email
+    service_account                  = google_service_account.voice[0].email
     timeout                          = "3600s"
     max_instance_request_concurrency = 10
     session_affinity                 = true
@@ -130,10 +160,16 @@ resource "google_cloud_run_v2_service" "voice" {
 }
 
 # Browsers connect directly; access is enforced by the first-frame ID-token auth, not by Cloud Run IAM.
+moved {
+  from = google_cloud_run_v2_service_iam_member.voice_public
+  to   = google_cloud_run_v2_service_iam_member.voice_public[0]
+}
+
 resource "google_cloud_run_v2_service_iam_member" "voice_public" {
+  count    = var.public_api_enabled ? 1 : 0
   project  = var.project
   location = var.region
-  name     = google_cloud_run_v2_service.voice.name
+  name     = google_cloud_run_v2_service.voice[0].name
   role     = "roles/run.invoker"
   member   = "allUsers"
 }

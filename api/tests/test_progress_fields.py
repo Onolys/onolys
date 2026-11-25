@@ -168,6 +168,10 @@ def test_repo_transaction_start_updates_the_same_fields(repo, clock):
         UID, SID,
         {"transcript_ready": True, "speaker_confirmed": True, "rating_submitted": True},
     )  # fmt: skip
+    from test_first_run import transcript
+
+    repo.update_session(UID, SID, {"clinician_speaker": "S1"})
+    repo.put_transcript(UID, SID, "current", transcript())
     wait_start = repo.get_session(UID, SID).stage_started_at
     out = repo.start_first_run(
         UID,

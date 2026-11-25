@@ -4,7 +4,7 @@ How to write and run tests in every package. One convention for all.
 
 **Audience:** contributors.
 
-Package paths below use `engines/miti/`; the other Python packages (`api`, `admin/auth`, `admin/backend`) follow the same layout.
+Package paths below use `engines/miti/`; the other Python packages (`api`, `eval/backend`) follow the same layout.
 
 ## Markers (Python, pytest)
 
@@ -47,7 +47,7 @@ uv run --package onolys-miti pytest engines/miti -q -m unit          # only unit
 uv run --package onolys-miti pytest engines/miti -q -m live -s       # live only; needs keys
 ```
 
-Web (`web/`) and the admin frontend (`frontend/`): vitest, Testing Library, MSW. Browser E2E for `web/` is Playwright (`web/e2e_review`).
+Web (`web/`): vitest, Testing Library, MSW. Browser E2E for `web/` is Playwright (`web/e2e_review`).
 
 ```bash
 cd web
@@ -126,7 +126,7 @@ PR #35 preview: web `onolys-app-staging--pr-35-kkj34ogl.web.app`, API tag `pr-35
 
 | Check | Result | Evidence |
 |---|---|---|
-| Authorised domains, wildcard | Rejected (see above); not tried again | Live `authorizedDomains` (Identity Toolkit admin v2): `localhost, onolys.firebaseapp.com, onolys.web.app, app.onolys.com, onolys-app.web.app, onolys-app-staging.web.app, onolys-admin-staging.web.app`. No `pr-35` host. |
+| Authorised domains, wildcard | Rejected (see above); not tried again | Live `authorizedDomains` (Identity Toolkit admin/v2): `localhost, onolys.firebaseapp.com, onolys.web.app, app.onolys.com, onolys-app.web.app, onolys-app-staging.web.app`. No `pr-35` host. |
 | Email/password sign-in on the preview host | Pass | Playwright: `/login`, submit, redirect to `/` in 3.2 s, sessions list loads from the combined API. Email/password does not use the authorised-domain list. |
 | Google popup sign-in on the preview host | FAIL | Clicking "Continue with Google" opens no popup; the form shows "Something went wrong. Please try again." On staging (`onolys-app-staging.web.app`) the popup opens `onolys.firebaseapp.com/__/auth/handler`. Cause: host not in authorised domains. Screenshots: `pv-google.png`, `st-google.png` (scratchpad of the 2026-11-21 session). |
 | Workflow adds the channel host | Not wired | `.github`, `scripts/ci` have no call to `identity-config.py --add-domain`; the deployer SA role `roles/firebaseauth.admin` is also not confirmed. Fix needs a workflow change plus an IAM change in SP06 Terraform (owner approval, not applied). |

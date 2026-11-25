@@ -1,6 +1,7 @@
 {
   "$id": "confirm-request.schema.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
   "properties": {
     "clinician_speaker": {
       "maxLength": 200,

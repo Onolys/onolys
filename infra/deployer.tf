@@ -47,18 +47,15 @@ resource "google_service_account_iam_member" "deployer_staging_wif" {
 
 locals {
   deployer_staging_member = "serviceAccount:${google_service_account.deployer_staging.email}"
-  # Admin entries (SP07) are gated per env by admin_enabled (staging and prod); nothing changes for an env while its flag is false.
   staging_services = merge(
     {
       api    = module.staging.api_service_name
       worker = module.staging.worker_service_name
       voice  = module.staging.voice_service_name
     },
-    var.admin_enabled["staging"] ? { admin = module.staging.admin_backend_service_name } : {},
   )
   staging_runtime_sas = merge(
     { api = module.staging.api_sa_email, worker = module.staging.worker_sa_email, voice = module.staging.voice_sa_email },
-    var.admin_enabled["staging"] ? { admin = module.staging.admin_backend_sa_email } : {},
   )
 }
 
@@ -112,10 +109,10 @@ resource "google_project_iam_member" "deployer_staging_usage" {
   member  = local.deployer_staging_member
 }
 
-# Hosting admin is project level on purpose: IAM conditions on resource.name (site name by id, `projects/-`, and the
+# Hosting deploy access is project level on purpose: IAM conditions on resource.name (site name by id, `projects/-`, and the
 # versions/releases children) never matched what Hosting presents (run 44812626576, 403 on .../versions), and Policy
-# Troubleshooter cannot evaluate Hosting site names. Trade-off: either deployer could deploy to any site (incl. admin
-# and prod). Accepted: same GitHub repo trust, workflows only target their own site. See ADR 0022 (D5).
+# Troubleshooter cannot evaluate Hosting site names. Trade-off: either deployer could deploy to any site (incl.
+# prod). Accepted: same GitHub repo trust, workflows only target their own site. See ADR 0022 (D5).
 resource "google_project_iam_member" "deployer_staging_hosting" {
   project = var.project
   role    = "roles/firebasehosting.admin"
@@ -143,6 +140,48 @@ resource "google_project_iam_member" "deployer_staging_rules_admin" {
   project = var.project
   role    = "roles/firebaserules.admin"
   member  = local.deployer_staging_member
+}
+
+# Firestore indexes of the `eval` database (rules are project level above).
+resource "google_project_iam_member" "deployer_staging_eval_index_admin" {
+  project = var.project
+  role    = "roles/datastore.indexAdmin"
+  member  = local.deployer_staging_member
+
+  condition {
+    title       = "firestore-eval-only"
+    description = "Only the eval database"
+    expression  = "resource.name.startsWith(\"${module.eval.firestore_db_resource}\")"
+  }
+}
+
+# --- Eval environment (03-eval R8): worker-eval takes the staging image digest, eval-backend its own image ---
+locals {
+  eval_services = {
+    worker  = module.eval.worker_service_name
+    backend = module.eval.eval_backend_service_name
+  }
+  # The eval backend runs as the module's api SA.
+  eval_runtime_sas = {
+    api    = module.eval.api_sa_email
+    worker = module.eval.worker_sa_email
+  }
+}
+
+resource "google_cloud_run_v2_service_iam_member" "deployer_eval_developer" {
+  for_each = local.eval_services
+  project  = var.project
+  location = var.region
+  name     = each.value
+  role     = "roles/run.developer"
+  member   = local.deployer_staging_member
+}
+
+resource "google_service_account_iam_member" "deployer_eval_runtime_user" {
+  for_each           = local.eval_runtime_sas
+  service_account_id = "projects/${var.project}/serviceAccounts/${each.value}"
+  role               = "roles/iam.serviceAccountUser"
+  member             = local.deployer_staging_member
 }
 
 # --- PR previews (SP00 R3, PRD R13) ---
@@ -185,11 +224,9 @@ locals {
       worker = module.prod.worker_service_name
       voice  = module.prod.voice_service_name
     },
-    var.admin_enabled["prod"] ? { admin = module.prod.admin_backend_service_name } : {},
   )
   prod_runtime_sas = merge(
     { api = module.prod.api_sa_email, worker = module.prod.worker_sa_email, voice = module.prod.voice_sa_email },
-    var.admin_enabled["prod"] ? { admin = module.prod.admin_backend_sa_email } : {},
   )
 }
 
@@ -258,21 +295,4 @@ resource "google_project_iam_member" "deployer_prod_rules_admin" {
 output "deployer_prod_email" {
   description = "Value for google-github-actions/auth `service_account` (prod, `production` environment jobs only)."
   value       = google_service_account.deployer_prod.email
-}
-
-# Separate evaluation entries keep targeted staging bootstrap independent of existing runtime drift.
-resource "google_cloud_run_v2_service_iam_member" "deployer_staging_eval_developer" {
-  count    = var.eval_enabled ? 1 : 0
-  project  = var.project
-  location = var.region
-  name     = google_cloud_run_v2_service.eval_staging[0].name
-  role     = "roles/run.developer"
-  member   = local.deployer_staging_member
-}
-
-resource "google_service_account_iam_member" "deployer_staging_eval_runtime_user" {
-  count              = var.eval_enabled ? 1 : 0
-  service_account_id = google_service_account.eval_staging[0].name
-  role               = "roles/iam.serviceAccountUser"
-  member             = local.deployer_staging_member
 }

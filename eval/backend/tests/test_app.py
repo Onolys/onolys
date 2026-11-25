@@ -1,22 +1,28 @@
 """Auth boundary tests exercise the actual ASGI middleware, without cloud access."""
 
-import ast
-from pathlib import Path
+from dataclasses import replace
 
 import pytest
 from fastapi.testclient import TestClient
-from onolys_admin_auth import ConfigError, InvalidToken
+from onolys_api.auth.idtoken import EmailNotVerified, InvalidToken
+from onolys_api.errors import ApiError
+from onolys_engine_core.errors import ConfigError
 
 from onolys_eval_backend import create_app
 from onolys_eval_backend.config import EvalConfig
 
 ENV = {
     "ENV": "staging",
+    "FIRESTORE_DATABASE": "staging",
     "GCP_PROJECT": "onolys-test",
-    "ADMIN_AUTH": "on",
-    "ADMIN_ALLOWED_EMAILS": "alice@example.com",
-    "ADMIN_CORS_ORIGINS": "https://eval.example",
-    "EVAL_BUCKET": "eval-test",
+    "EVAL_ALLOWED_EMAILS": "Alice@Example.com",
+    "CORS_ORIGINS": "https://eval.example",
+    "DATASETS_BUCKET": "datasets-test",
+    "AUDIO_BUCKET": "audio-eval-test",
+    "EVAL_MODE": "true",
+    "REGION": "europe-west1",
+    "WORKER_URL": "https://worker.example",
+    "UID_HMAC_KEY": "test-hmac-key",
     "TASKS_QUEUE": "projects/test/locations/europe-west1/queues/eval-runs",
     "TASKS_SA": "tasks@onolys-test.iam.gserviceaccount.com",
     "SERVICE_URL": "https://eval-backend.example",
@@ -33,6 +39,8 @@ TASK_CLAIMS = {
 
 
 class Verifier:
+    """Fake of both verifiers: `verify` (task OIDC) and the prod `verify_claims` (user ID token)."""
+
     def __init__(self, claims):
         self.claims = claims
 
@@ -40,6 +48,12 @@ class Verifier:
         if token != "valid":
             raise InvalidToken
         return self.claims
+
+    def verify_claims(self, token):
+        claims = self.verify(token)
+        if claims.get("email_verified") is not True:
+            raise EmailNotVerified  # the prod verifier checks this itself
+        return claims
 
 
 def client(*, claims=None, task_claims=None, **kwargs):
@@ -70,6 +84,45 @@ def test_non_allowlisted_is_403():
     assert response.json()["error"]["code"] == "not_allowlisted"
 
 
+def test_unverified_email_is_403():
+    response = client(claims={"email": "alice@example.com", "email_verified": False}).get(
+        "/v1/me", headers=AUTH
+    )
+    assert response.status_code == 403
+    assert response.json()["error"]["code"] == "email_unverified"
+
+
+def test_invalid_token_is_401():
+    response = client().get("/v1/me", headers={"Authorization": "Bearer bad"})
+    assert response.status_code == 401
+
+
+def test_cert_outage_is_503():
+    class Down:
+        def verify_claims(self, token):
+            raise ApiError.of(503, "upstream_unavailable", "x")
+
+    app = create_app(ENV, verifier=Down(), task_verifier=Verifier(TASK_CLAIMS))
+    assert TestClient(app).get("/v1/me", headers=AUTH).status_code == 503
+
+
+def test_email_is_matched_case_insensitively_and_recorded():
+    seen = []
+    app = create_app(
+        ENV,
+        verifier=Verifier({"email": " ALICE@example.com ", "email_verified": True}),
+        task_verifier=Verifier(TASK_CLAIMS),
+    )
+
+    @app.get("/v1/whoami")
+    async def whoami(request: __import__("fastapi").Request):
+        seen.append(request.state.user_email)
+        return {}
+
+    assert TestClient(app).get("/v1/whoami", headers=AUTH).status_code == 200
+    assert seen == ["alice@example.com"]
+
+
 def test_allowed_me_and_health():
     with client() as c:
         assert c.get("/v1/me", headers=AUTH).json() == {"status": "ok"}
@@ -78,16 +131,29 @@ def test_allowed_me_and_health():
 
 @pytest.mark.parametrize(
     "env",
-    [{"ADMIN_ALLOWED_EMAILS": ""}, {"ADMIN_AUTH": "off"}, {"ENV": "local", "ADMIN_AUTH": "off"}],
+    [
+        {"EVAL_ALLOWED_EMAILS": ""},
+        {"EVAL_ALLOWED_EMAILS": " , "},
+        {"AUTH_MODE": "fake"},
+        {"ENV": "local", "AUTH_MODE": "fake"},
+        {"EVAL_AUTH": "on"},
+        {"GCP_PROJECT": "", "AUTH_PROJECT": ""},
+    ],
 )
 def test_unsafe_auth_config_fails_at_creation(env):
     with pytest.raises(ConfigError):
         create_app({**ENV, **env})
 
 
-def test_auth_defaults_on_even_locally():
-    env = {k: v for k, v in ENV.items() if k != "ADMIN_AUTH"}
-    assert create_app({**env, "ENV": "local"}).state.config.auth.enabled is True
+def test_auth_is_always_on_even_locally():
+    app = create_app({**ENV, "ENV": "local"}, verifier=Verifier({}))
+    assert TestClient(app).get("/v1/me").status_code == 401
+    assert app.state.config.allowed_emails == frozenset({"alice@example.com"})
+
+
+def test_auth_project_falls_back_to_gcp_project():
+    assert create_app(ENV).state.config.auth_project == "onolys-test"
+    assert create_app({**ENV, "AUTH_PROJECT": "idp-proj"}).state.config.auth_project == "idp-proj"
 
 
 @pytest.mark.parametrize("route", ["unit", "transcribe", "unknown"])
@@ -110,19 +176,19 @@ def test_internal_requires_token_even_with_cloudtasks_headers(route):
     ],
 )
 def test_internal_checks_all_identity_claims(claims):
-    response = client(task_claims=claims).post("/internal/tasks/unit", headers=AUTH)
+    response = client(task_claims=claims).post("/internal/tasks/tick", headers=AUTH)
     assert response.status_code == 403
     assert response.json()["error"]["code"] == "forbidden"
 
 
 def test_internal_invalid_token():
     assert (
-        client().post("/internal/tasks/unit", headers={"Authorization": "Bearer bad"}).status_code
+        client().post("/internal/tasks/tick", headers={"Authorization": "Bearer bad"}).status_code
         == 401
     )
 
 
-@pytest.mark.parametrize("route,status", [("unit", 422), ("transcribe", 422)])
+@pytest.mark.parametrize("route,status", [("tick", 422), ("delete", 422), ("transcribe", 422)])
 def test_task_identity_passes_without_allowlist_membership(route, status):
     assert client().post(f"/internal/tasks/{route}", headers=AUTH).status_code == status
 
@@ -146,7 +212,7 @@ def test_cors_outermost_for_preflight_and_denials():
             },
         )
         assert response.status_code == 200
-        for path in ("/v1/me", "/internal/tasks/unit"):
+        for path in ("/v1/me", "/internal/tasks/tick"):
             response = c.get(path, headers={"Origin": "https://eval.example"})
             assert response.status_code == 401
             assert response.headers["access-control-allow-origin"] == "https://eval.example"
@@ -155,7 +221,7 @@ def test_cors_outermost_for_preflight_and_denials():
 @pytest.mark.parametrize("origin", ["*", "https://*.example", "null"])
 def test_unsafe_cors_rejected(origin):
     with pytest.raises(ConfigError):
-        create_app({**ENV, "ADMIN_CORS_ORIGINS": origin})
+        create_app({**ENV, "CORS_ORIGINS": origin})
 
 
 def test_config_and_injected_services():
@@ -163,7 +229,7 @@ def test_config_and_injected_services():
     app = create_app(ENV, services=services)
     config = app.state.config
     assert isinstance(config, EvalConfig)
-    assert config.bucket == ENV["EVAL_BUCKET"]
+    assert config.datasets_bucket == ENV["DATASETS_BUCKET"]
     assert config.tasks_queue == ENV["TASKS_QUEUE"]
     assert config.tasks_sa == ENV["TASKS_SA"]
     assert config.task_audience == ENV["SERVICE_URL"]
@@ -178,11 +244,11 @@ def test_config_and_injected_services():
 @pytest.mark.parametrize(
     "field",
     [
-        "EVAL_BUCKET",
+        "DATASETS_BUCKET",
         "TASKS_QUEUE",
         "TASKS_SA",
         "SERVICE_URL",
-        "PROD_ENGINE",
+        "FIRESTORE_DATABASE",
         "DEFAULT_PRESET",
         "ROUTES_FILE",
     ],
@@ -190,22 +256,6 @@ def test_config_and_injected_services():
 def test_missing_required_config_fails(field):
     with pytest.raises(ConfigError):
         create_app({**ENV, field: " "})
-
-
-def test_no_api_imports_in_backend():
-    root = Path(__file__).parents[1] / "src"
-    for source in root.rglob("*.py"):
-        for node in ast.walk(ast.parse(source.read_text())):
-            names = (
-                [alias.name for alias in node.names]
-                if isinstance(node, ast.Import)
-                else [node.module or ""]
-                if isinstance(node, ast.ImportFrom)
-                else []
-            )
-            assert not any(
-                name == "onolys_api" or name.startswith("onolys_api.") for name in names
-            ), source
 
 
 @pytest.fixture(scope="module")
@@ -271,9 +321,8 @@ def test_task_verifier_caches_refreshes_and_retains_google_validation(task_keys)
 
 def test_task_verifier_upstream_failure_is_not_an_auth_bypass(task_keys):
     from google.auth.exceptions import TransportError
-    from onolys_admin_auth import UpstreamUnavailable
 
-    from onolys_eval_backend.auth import TaskOidcVerifier
+    from onolys_eval_backend.auth import TaskOidcVerifier, UpstreamUnavailable
 
     calls = []
 
@@ -292,7 +341,7 @@ def test_task_verifier_upstream_failure_is_not_an_auth_bypass(task_keys):
             raise UpstreamUnavailable
 
     with TestClient(create_app(ENV, task_verifier=Unavailable())) as c:
-        assert c.post("/internal/tasks/unit", headers=AUTH).status_code == 503
+        assert c.post("/internal/tasks/tick", headers=AUTH).status_code == 503
 
 
 def test_task_verification_runs_outside_event_loop():
@@ -317,7 +366,7 @@ def test_task_verification_runs_outside_event_loop():
         await middleware(
             {
                 "type": "http",
-                "path": "/internal/tasks/unit",
+                "path": "/internal/tasks/tick",
                 "headers": [(b"authorization", b"Bearer valid")],
             },
             None,
@@ -331,3 +380,83 @@ def test_task_verification_runs_outside_event_loop():
 def test_explicit_task_audience_configuration():
     app = create_app({**ENV, "TASKS_OIDC_AUDIENCE": "https://explicit-audience.example"})
     assert app.state.config.task_audience == "https://explicit-audience.example"
+
+
+def test_allowlist_middleware_refuses_empty_set():
+    from onolys_eval_backend.allowlist import AllowlistMiddleware
+
+    with pytest.raises(ValueError):
+        AllowlistMiddleware(lambda *a: None, Verifier({}), frozenset())
+
+
+def test_eval_config_defaults_and_overrides():
+    config = EvalConfig.from_env(ENV)
+    assert (config.eval_owner_uid, config.max_per_provider, config.provider_fail_limit) == (
+        "eval", 2, 5
+    )
+    assert (config.overload_max_wait_s, config.internal_retries) == (300, 1)
+    assert config.settings.eval_mode is True
+    assert config.audio_bucket == ENV["AUDIO_BUCKET"]  # uploads only; datasets_bucket is separate
+    over = EvalConfig.from_env(
+        {
+            **ENV,
+            "EVAL_OWNER_UID": "owner-x",
+            "EVAL_MAX_PER_PROVIDER": "3",
+            "EVAL_PROVIDER_FAIL_LIMIT": "2",
+            "EVAL_OVERLOAD_MAX_WAIT_S": "60",
+            "EVAL_INTERNAL_RETRIES": "0",
+        }
+    )
+    assert (over.eval_owner_uid, over.max_per_provider, over.provider_fail_limit) == (
+        "owner-x", 3, 2
+    )
+    assert (over.overload_max_wait_s, over.internal_retries) == (60, 0)
+
+
+def test_audio_bucket_fails_closed_without_falling_back_to_datasets():
+    config = EvalConfig.from_env(ENV)
+    config = replace(config, settings=replace(config.settings, audio_bucket=""))
+    assert config.datasets_bucket
+    with pytest.raises(ConfigError):
+        _ = config.audio_bucket
+
+
+@pytest.mark.parametrize("name", ["EVAL_MAX_PER_PROVIDER", "EVAL_PROVIDER_FAIL_LIMIT"])
+@pytest.mark.parametrize("bad", ["0", "x"])
+def test_eval_config_bad_numbers_fail(name, bad):
+    with pytest.raises(ConfigError):
+        EvalConfig.from_env({**ENV, name: bad})
+
+
+@pytest.mark.parametrize("value", [None, "false"])
+def test_refuses_to_start_unless_eval_mode(value):
+    env = {k: v for k, v in ENV.items() if k != "EVAL_MODE"}
+    if value is not None:
+        env["EVAL_MODE"] = value
+    with pytest.raises(ConfigError, match="EVAL_MODE"):
+        EvalConfig.from_env(env)
+    with pytest.raises(ConfigError, match="EVAL_MODE"):
+        create_app(env)
+
+
+def test_services_compose_api_pieces_and_ensure_owner_once():
+    from onolys_api.jobs.queue import InMemoryQueue
+    from onolys_api.repo.fake import FakeRepo
+    from onolys_api.storage.fake import FakeBlobStore
+
+    from onolys_eval_backend.services import EvalServices
+
+    blobs = FakeBlobStore()
+    repo = FakeRepo(blobs)
+    calls = []
+    real = repo.ensure_user
+    repo.ensure_user = lambda uid: calls.append(uid) or real(uid)
+    queue = InMemoryQueue()
+    services = EvalServices(
+        EvalConfig.from_env({**ENV, "EVAL_OWNER_UID": "owner-x"}),
+        blobs=blobs, repo=repo, run_queue=queue,
+    )
+    assert services.settings.eval_mode is True
+    assert services.blobs is blobs and services.run_queue is queue
+    assert services.repo is repo and services.repo is repo and services.repo is repo
+    assert calls == ["owner-x"]

@@ -97,9 +97,9 @@ def test_missing_global_score_does_not_default(report):
 
 @pytest.fixture
 def oneshot_output():
-    # Actual recorded provider reply for the synthetic good-practice session.
+    # Recorded provider reply (offline structural stub, see fixtures/recorded/README.md) for the synthetic good-practice session.
     recording = (Path(__file__).resolve().parents[3] / "engines/oneshot/tests/fixtures/recorded"
-                 / "78eccc44b0064774023ebe2e5bf374016f16e816a4013df04b34f49a4a440b15.json")
+                 / "9da4249d4db8713a715e51822b4e9042f770b5c58126460faeb9d0684ad724e8.json")
     return json.loads(recording.read_text())
 
 

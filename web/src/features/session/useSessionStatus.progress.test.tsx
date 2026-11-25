@@ -87,8 +87,8 @@ describe("useSessionStatus: progress", () => {
 
   it("a fallback-poll doc behaves the same (real updated_at, same Elapsed)", async () => {
     const { result } = mount();
-    act(() => emitter.emitError("s1", new Error("down")));
     get.mockResolvedValue({ data: detailOf(docOf("transcribing")), response: { ok: true } });
+    act(() => emitter.emitError("s1", new Error("down")));
     await act(async () => void (await vi.advanceTimersByTimeAsync(1)));
     await act(async () => void (await vi.advanceTimersByTimeAsync(FALLBACK_POLL_MS)));
     expect(result.current.phase).toBe("fallback");
@@ -100,22 +100,33 @@ describe("useSessionStatus: progress", () => {
   it("fallback poll maps error_kind, retries_left and counted so the failure card still decides", async () => {
     const poll = async (over: Record<string, unknown>) => {
       queryClient.clear();
-      const { result } = mount();
-      act(() => emitter.emitError("s1", new Error("down")));
       get.mockResolvedValue({
         data: { ...detailOf(docOf("failed")), error: { code: "x" }, ...over },
         response: { ok: true },
       });
+      const { result, unmount } = mount();
+      act(() => emitter.emitError("s1", new Error("down")));
       await act(async () => void (await vi.advanceTimersByTimeAsync(1)));
       await act(async () => void (await vi.advanceTimersByTimeAsync(FALLBACK_POLL_MS)));
       expect(result.current.phase).toBe("fallback");
-      return docFrom(result.current);
+      const doc = docFrom(result.current);
+      unmount();
+      return doc;
     };
     expect(failureView(await poll({ error_kind: "transient", retries_left: 2 })).action).toBe("retry");
     const uf = failureView(await poll({ error_kind: "user_file", retries_left: 0, counted: true }));
     expect(uf.action).toBe("upload_different");
     expect(uf.note).toBe("This counted toward your limit.");
     expect((await poll({ status: "cancelled", counted: true })).counted).toBe(true);
+  });
+
+  it("keeps the last live status when fallback polling has a server failure", async () => {
+    get.mockResolvedValue({ error: {}, response: { ok: false, status: 503 } });
+    const { result } = mount();
+    act(() => emitter.emit("s1", docOf("running")));
+    act(() => emitter.emitError("s1", new Error("down")));
+    await act(async () => void (await vi.advanceTimersByTimeAsync(1)));
+    expect(docFrom(result.current).state).toBe("running");
   });
 
   it("a late lower doc in the same state cannot move the bar back", () => {

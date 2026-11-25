@@ -24,7 +24,7 @@ API_FIELDS = frozenset({
     "uid_hash", "session_id", "run_id", "step", "status", "attempt", "duration_ms",
     "auth_kind", "error_code", "exc_class", "request_id", "code_version",
     "method", "route", "stt_operation", "stt_started", "poll_n", "elapsed_s", "outcome",
-    "email_kind", "provider_status", "from_state", "counted",
+    "email_kind", "provider_status", "from_state", "counted", "reason",
 })  # fmt: skip
 register_fields(API_FIELDS)
 

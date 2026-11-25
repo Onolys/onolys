@@ -164,7 +164,7 @@ def read_dataset(bucket, dataset_id: str) -> DatasetManifest:
 @router.get("/datasets", response_model=DatasetListResponse)
 def datasets(request: Request) -> DatasetListResponse:
     try:
-        bucket = request.app.state.services.bucket
+        bucket = request.app.state.services.datasets
         manifests = []
         for path in sorted(bucket.list("datasets/")):
             parts = path.split("/")
@@ -186,7 +186,7 @@ def dataset_detail(request: Request, dataset_id: str) -> DatasetDetail:
     if not _IDENTIFIER.fullmatch(dataset_id):
         raise HTTPException(404, "Dataset not found.")
     try:
-        bucket = request.app.state.services.bucket
+        bucket = request.app.state.services.datasets
         manifest = read_dataset(bucket, dataset_id)
         objects = set(bucket.list(f"datasets/{dataset_id}/"))
         sessions = [DatasetSession(

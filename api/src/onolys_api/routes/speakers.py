@@ -1,9 +1,9 @@
 """`/v1/sessions/{id}/speakers`, `.../speakers/confirm`, `.../transcript` (R2, R4, D13).
 
-The speaker gate is the last human input. `confirm` sets `speaker_confirmed` and the clinician's
-speaker label (every other speaker counts as client) and calls the first-run gate. In
-`failed` it only changes the choice for the NEXT run; reports are never touched. Not allowed in
-`report_ready` (no rerun is possible there; it would relabel the transcript against a fixed report).
+The speaker gate is the last human input. `confirm` selects the clinician once in
+`awaiting_input` (every other speaker counts as client). Identical retries do not write and
+still call the first-run gate, including after a run starts. Different selections conflict;
+failed and cancelled sessions refuse confirmation, and deleting sessions remain hidden.
 The transcript read is owner-scoped and `private, no-store`: it carries PHI.
 """
 
@@ -11,7 +11,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, Request, Response
 from onolys_engine_core.transcript_v1 import TranscriptV1
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from onolys_api.auth.deps import AuthUser, current_user
 from onolys_api.errors import ApiError, ErrorResponse
@@ -24,7 +24,7 @@ from onolys_api.routes.ids import ResourceId
 
 SAMPLES_PER_SPEAKER = 3
 SAMPLE_MAX_CHARS = 300
-CONFIRM_STATES = ("awaiting_input", "failed")  # not report_ready: no rerun, the report is fixed
+CONFIRM_STATES = ("awaiting_input",)
 
 ERRORS = {"default": {"model": ErrorResponse, "description": "Error"}}
 router = APIRouter(prefix="/sessions/{id}", tags=["speakers"], responses=ERRORS)
@@ -43,6 +43,8 @@ class SpeakersView(BaseModel):
 
 
 class ConfirmRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     clinician_speaker: str = Field(min_length=1, max_length=200)
 
 
@@ -105,9 +107,10 @@ def get_speakers(id: ResourceId, request: Request, user: User) -> SpeakersView:
     response_model=ConfirmResponse,
     summary="Pick the clinician speaker (every other speaker is the client)",
     description=(
-        "Allowed in `awaiting_input` and `failed` once the transcript is ready; any other state "
-        "(a run in progress, `report_ready`) is 409 `invalid_state`. In `failed` it applies to "
-        "the next run only. May start the first run (R4)."
+        "First selection is allowed in `awaiting_input` once the transcript is ready. "
+        "An identical confirmed selection returns 202 without writing and may start the first "
+        "run, including after a run starts. A different selection or a failed/cancelled session "
+        "is 409 `invalid_state`; deleting sessions are 404."
     ),
 )
 def confirm_speakers(
@@ -115,14 +118,21 @@ def confirm_speakers(
 ) -> ConfirmResponse:
     repo = request.app.state.repo
     s = _ready_session(request, user, id)
-    if s.state not in CONFIRM_STATES:
+    if s.state in ("failed", "cancelled"):
         raise invalid_state()
-    tdoc = repo.get_transcript(user.uid, id, TRANSCRIPT_ID)
-    assert tdoc.transcript is not None
-    if body.clinician_speaker not in {i.speaker for i in _speakers(tdoc.transcript)}:
-        raise ApiError.of(422, "invalid_parameters", "clinician_speaker: unknown speaker")
-    if not repo.confirm_speaker(user.uid, id, body.clinician_speaker, CONFIRM_STATES):
-        raise invalid_state()  # a run started between the check above and the write
+    if s.speaker_confirmed:
+        if s.clinician_speaker != body.clinician_speaker:
+            raise invalid_state()
+    else:
+        if s.state not in CONFIRM_STATES:
+            raise invalid_state()
+        tdoc = repo.get_transcript(user.uid, id, TRANSCRIPT_ID)
+        assert tdoc.transcript is not None
+        if body.clinician_speaker not in {i.speaker for i in _speakers(tdoc.transcript)}:
+            raise ApiError.of(422, "invalid_parameters", "clinician_speaker: unknown speaker")
+    outcome = repo.confirm_speaker(user.uid, id, body.clinician_speaker, CONFIRM_STATES)
+    if outcome == "conflict":
+        raise invalid_state()  # state or selection changed since the read above
     maybe_start_first_run(
         repo,
         getattr(request.app.state, "queue", None),

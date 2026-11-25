@@ -1,4 +1,4 @@
-import { render } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { SessionStatusDoc } from "../../api/statusListener";
 import { UploadSlot } from "./UploadSlot";
@@ -32,5 +32,6 @@ describe("UploadSlot onFraction", () => {
     getJob.mockReturnValue(job as unknown as uploader.UploadJob);
     rerender(<UploadSlot sessionId="s1" doc={{ ...doc }} onFraction={onFraction} />);
     expect(onFraction).toHaveBeenLastCalledWith(0.25);
+    expect(screen.queryByRole("progressbar", { name: "Upload progress" })).not.toBeInTheDocument();
   });
 });

@@ -67,7 +67,7 @@ describe("header nav by auth phase (D1)", () => {
   it("verified: Sessions and New Session plain links, no Sample report; email and Sign out live in the account menu", async () => {
     renderApp("/sessions", { user: { email: "a@clinic.org", verified: true } });
     await h1("Sessions");
-    expect(navNames()).toEqual(["Sessions", "New Session"]);
+    expect(navNames()).toEqual(["New Session", "Sessions"]);
     for (const n of ["Sessions", "New Session"]) expectPlainLink(inNav().getByRole("link", { name: n }));
     expect(inNav().getByRole("link", { name: "Sessions" })).toHaveAttribute("href", "/sessions");
     expect(inNav().getByRole("link", { name: "New Session" })).toHaveAttribute("href", "/new");
@@ -188,14 +188,6 @@ describe("header nav by auth phase (D1)", () => {
     await h1("Settings");
     await userEvent.click(screen.getByRole("button", { name: "Account menu" }));
     await userEvent.click(screen.getByRole("menuitem", { name: "Sign out" }));
-    await h1("Log in");
-    expect(here(router)).toBe("/login");
-  });
-
-  it("sign-out from the Settings button lands on plain /login", async () => {
-    const { router } = renderApp("/settings", { user: { email: "a@clinic.org", verified: true } });
-    await h1("Settings");
-    await userEvent.click(within(screen.getByRole("main")).getByRole("button", { name: "Sign out" }));
     await h1("Log in");
     expect(here(router)).toBe("/login");
   });

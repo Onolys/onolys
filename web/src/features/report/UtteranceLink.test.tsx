@@ -47,7 +47,7 @@ describe("UtteranceLink", () => {
   it("is a button labelled with the number and an accessible name", () => {
     view();
     const b = link(25);
-    expect(b.textContent).toBe("25");
+    expect(b.textContent).toBe("[25]");
     expect(b.getAttribute("type")).toBe("button");
   });
 
@@ -64,12 +64,12 @@ describe("UtteranceLink", () => {
     });
   });
 
-  it("highlights the row for about 1.5 s then removes the class", () => {
+  it("highlights the row for about 5 s then removes the class", () => {
     vi.useFakeTimers();
     view();
     fireEvent.click(link(25));
     expect(row(25).classList.contains("hl")).toBe(true);
-    vi.advanceTimersByTime(1400);
+    vi.advanceTimersByTime(4900);
     expect(row(25).classList.contains("hl")).toBe(true);
     vi.advanceTimersByTime(200);
     expect(row(25).classList.contains("hl")).toBe(false);

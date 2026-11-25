@@ -449,3 +449,21 @@ async def test_preview_starts_with_in_process_tasks_and_idp(blobs):
         transport=httpx.ASGITransport(app=app), base_url="http://preview"
     ) as client:
         assert (await client.get("/v1/healthz")).status_code == 200
+
+
+def test_eval_mode_default_off():
+    assert Settings().eval_mode is False
+    assert _settings_from_env({"APP_BASE_URL": "https://app.onolys.com", "ENV": "local"}).eval_mode is False
+
+
+@pytest.mark.parametrize("raw,want", [("true", True), ("false", False)])
+def test_eval_mode_parses(raw, want):
+    env = {"APP_BASE_URL": "https://app.onolys.com", "ENV": "local", "EVAL_MODE": raw}
+    assert _settings_from_env(env).eval_mode is want
+
+
+@pytest.mark.parametrize("raw", ["1", "yes", "True", "on", "", "maybe"])
+def test_eval_mode_rejects_other_values(raw):
+    env = {"APP_BASE_URL": "https://app.onolys.com", "ENV": "local", "EVAL_MODE": raw}
+    with pytest.raises(ConfigError, match="EVAL_MODE"):
+        _settings_from_env(env)

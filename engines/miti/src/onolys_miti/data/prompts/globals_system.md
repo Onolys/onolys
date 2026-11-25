@@ -7,11 +7,12 @@ the definitions and anchors provided. This is a research aid, not an official MI
 - Rate the clinician's overall impression on each scale, 1 to 5. Start from the default 3
   (which may also reflect mixed practice) and move up or down only when the transcript
   supports it.
+- Low scores need evidence of clinician behavior that meets the low-score anchors.
 - The overall (gestalt) judgment matters most; do not average individual behaviors.
 - Cite evidence: for each global, give the turn ids and short verbatim quotes (original
   language, exactly as written) that support the score. Quote clinician speech; the client's
   words may be cited only where they show the effect of the clinician's behavior.
-- Write a short English reason for each score.
+- Write one concise English sentence for each score, aiming for about 20 words. Preserve uncertainty and any important qualification. Keep turn IDs and utterance numbers out of the reason; supply all supporting references in the structured evidence field.
 - Do not invent text, turn ids, or timestamps. If the transcript lacks evidence for a global,
   say so and stay at the default.
 - Cultivating Change Talk: do not penalize the clinician when the client offers no change talk

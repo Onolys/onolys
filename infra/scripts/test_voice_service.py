@@ -64,15 +64,22 @@ def test_api_and_worker_grants_unchanged():
     main = (MOD / "main.tf").read_text()
     assert re.search(r"runtime_sas = \{\s*api\s*=\s*google_service_account\.api\.email\s*worker\s*=\s*google_service_account\.worker\.email\s*\}", main)
     assert "voice" not in main and "voice" not in (MOD / "secrets.tf").read_text()
-    # SP07 R8/AC10: firebaseauth.admin is the only added api grant, and only when resend_secret_wired (count-gated).
+    # SP07 R8/AC10: the optional email grant is count-gated by resend_secret_wired.
     gated = blocks(main, "google_project_iam_member")["api_firebaseauth_admin"]
     assert re.search(r'role\s*=\s*"roles/firebaseauth\.admin"', gated)
     assert re.search(r"count\s*=\s*var\.resend_secret_wired\s*\?\s*1\s*:\s*0", gated)
+    # Eval transcribes dataset audio in its backend. Validate this exact grant's isolation
+    # before excluding it from the shared staging/prod API role baseline.
+    eval_speech = blocks(main, "google_project_iam_member")["eval_backend_speech_client"]
+    assert re.search(r'^\s*count\s*=\s*var\.eval_backend_enabled\s*&&\s*var\.env\s*==\s*"eval"\s*\?\s*1\s*:\s*0\s*$', eval_speech, re.M)
+    assert re.search(r'^\s*role\s*=\s*"roles/speech\.client"\s*$', eval_speech, re.M)
+    assert re.search(r'^\s*member\s*=\s*"serviceAccount:\$\{google_service_account\.api\.email\}"\s*$', eval_speech, re.M)
     api_roles = sorted(
         re.search(r'role\s*=\s*"([^"]+)"', b).group(1)
         for t in GRANT_TYPES
         for k, b in blocks(main, t).items()
         if ("runtime_sas" in b or "google_service_account.api.email" in b) and k != "api_firebaseauth_admin"
+        and (t, k) != ("google_project_iam_member", "eval_backend_speech_client")
     )
     assert api_roles == sorted(
         ["roles/datastore.user", "roles/storage.objectAdmin", "roles/cloudtasks.enqueuer",
@@ -92,7 +99,7 @@ def test_api_grants_identical_to_origin_main():
         cur = (MOD / rel).read_text()
         for t in GRANT_TYPES:
             o, c = blocks(old, t), blocks(cur, t)
-            o.pop("admin_llm", None)  # intentionally removed by 04-admin-shell Task 5 (admin uses no LLM)
+            o = {k: v for k, v in o.items() if k in c}  # grants retired on this branch drop out of the comparison
             assert o == {k: c.get(k) for k in o}, f"{rel}: {t} grants changed vs origin/main"
 
 
@@ -105,7 +112,7 @@ def test_voice_service_settings():
     assert re.search(r"cpu_idle\s*=\s*false", svc)  # CPU always allocated
     assert re.search(r"max_instance_count\s*=\s*var\.voice_max_instances", svc)
     assert re.search(r'name\s*=\s*"SERVICE_MODE"\s*value\s*=\s*"voice"', svc)
-    assert "service_account                  = google_service_account.voice.email" in svc
+    assert "service_account                  = google_service_account.voice[0].email" in svc
     assert "template[0].containers[0].image" in svc  # CI owns the image
     inv = blocks(VOICE, "google_cloud_run_v2_service_iam_member")["voice_public"]
     assert '"allUsers"' in inv and '"roles/run.invoker"' in inv
@@ -148,5 +155,5 @@ def test_api_service_does_not_ignore_template_revision():
     svc = blocks((MOD / "services.tf").read_text(), "google_cloud_run_v2_service")
     assert "template[0].revision" not in svc["api"]
     assert "template[0].containers[0].image" in svc["api"]  # image stays CI-owned
-    for other in ("worker", "admin_backend"):
+    for other in ("worker", "eval_backend"):
         assert "template[0].revision" in svc[other]

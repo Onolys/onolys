@@ -2,7 +2,6 @@
 
 import json
 from typing import Annotated
-from uuid import uuid4
 
 from fastapi import APIRouter, Depends, Request
 from onolys_engine_core.transcript_input import (
@@ -17,13 +16,11 @@ from onolys_api.auth.deps import AuthUser, current_user
 from onolys_api.coded_span import validate_coded_input
 from onolys_api.errors import ApiError, ErrorResponse
 from onolys_api.jobs.first_run import maybe_start_first_run
-from onolys_api.jobs.machine import invalid_state, transition_plan
-from onolys_api.jobs.transcribe import TRANSCRIPT_ID
-from onolys_api.repo import large
+from onolys_api.jobs.machine import invalid_state
 from onolys_api.repo.base import NotFoundError
-from onolys_api.repo.models import TranscriptDoc
 from onolys_api.routes.ids import ResourceId
 from onolys_api.routes.sessions import CreateSessionResponse, SessionRef
+from onolys_api.transcript_store import store_transcript
 
 MAX_TRANSCRIPT_BYTES = 1024 * 1024
 router = APIRouter(
@@ -32,13 +29,6 @@ router = APIRouter(
     responses={"default": {"model": ErrorResponse, "description": "Error"}},
 )
 User = Annotated[AuthUser, Depends(current_user)]
-
-
-def _session_language(session_language: str, transcript_language: str | None) -> str:
-    """A language the user chose stays; only `auto` takes the transcript's, else `en` (LM-4)."""
-    if session_language not in ("", "auto"):
-        return session_language
-    return transcript_language or "en"
 
 
 def _public_error(error: TranscriptInputError) -> ApiError:
@@ -59,31 +49,7 @@ def _public_error(error: TranscriptInputError) -> ApiError:
 def _persist(request: Request, uid: str, id: str, session, transcript, clinician) -> str:
     """The synchronous storage/Firestore sequence; runs in a worker thread."""
     repo = request.app.state.repo
-    # ONE transaction (N1): the `created` check, the transcript doc and the move to
-    # `awaiting_input` commit together, so two concurrent PUTs cannot both write.
-    blobs = request.app.state.blobs
-    pointer = large.pack(
-        blobs, f"{uid}/{id}/transcripts/{uuid4().hex}.json",
-        transcript.model_dump(mode="json"),
-    )  # a unique key: the losing PUT must not overwrite the winner's blob
-    tdoc = TranscriptDoc(transcript=None if pointer else transcript, pointer=pointer)
-    try:
-        repo.transition_session(
-            uid, id,
-            transition_plan(
-                to="awaiting_input", step=None, only_from=("created",),
-                flags={"transcript_ready": True, "speaker_confirmed": clinician is not None},
-                extra_fields={
-                    "clinician_speaker": clinician, "stt": None,
-                    "language": _session_language(session.language, transcript.language),
-                },
-            ),
-            children=((f"transcripts/{TRANSCRIPT_ID}", tdoc.to_store(), False),),
-        )  # fmt: skip
-    except Exception:
-        if pointer is not None:
-            blobs.delete(pointer.key)
-        raise
+    store_transcript(repo, request.app.state.blobs, uid, id, session, transcript, clinician)
     maybe_start_first_run(
         repo,
         getattr(request.app.state, "queue", None),

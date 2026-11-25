@@ -1,36 +1,12 @@
-import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import { here, renderApp } from "../../test/renderApp";
-import { mockBackend, server } from "../../mocks/server";
+import { server } from "../../mocks/server";
 
-const UID = "u_rater_clinic_org";
 const USER = { email: "rater@clinic.org", verified: true };
-const SECRET_RE = /onolys_[A-Za-z0-9]+_[A-Za-z0-9]+/;
 const main = () => within(screen.getByRole("main"));
-const dialog = () => screen.getByRole("dialog");
-const confirmDialog = () => screen.getByRole("alertdialog");
-
-async function createKey(user: ReturnType<typeof userEvent.setup>) {
-  await user.click(await main().findByRole("button", { name: "Create API key" }));
-  const text = await within(await screen.findByRole("dialog")).findByTestId("api-secret");
-  return text.textContent ?? "";
-}
-
-let spies: ReturnType<typeof vi.spyOn>[] = [];
-beforeEach(() => {
-  spies = (["log", "info", "warn", "error", "debug"] as const).map((m) => vi.spyOn(console, m).mockImplementation(() => {}));
-});
-afterEach(() => {
-  spies.forEach((s) => s.mockRestore());
-  localStorage.clear();
-  sessionStorage.clear();
-});
-
-const everythingLogged = () => JSON.stringify(spies.flatMap((s) => s.mock.calls));
-const everythingStored = () =>
-  JSON.stringify({ l: { ...localStorage }, s: { ...sessionStorage } });
 
 describe("settings: usage failure (I2)", () => {
   it("shows an error with Retry, not 'Loading…' forever, then recovers", async () => {
@@ -56,160 +32,35 @@ describe("settings: usage failure (I2)", () => {
   });
 });
 
-describe("settings: API key", () => {
-  it("shows 'no key' and offers Create when none is active", async () => {
-    renderApp("/settings", { user: USER });
-    expect(await screen.findByText(/no api key/i)).toBeInTheDocument();
-    expect(main().queryByRole("button", { name: /regenerate|revoke/i })).toBeNull();
-  });
-
-  it("shows the secret once in a modal, gated by 'I've stored it', and never again", async () => {
-    const user = userEvent.setup();
+describe("settings", () => {
+  it("shows usage and account-removal information without API tools or sign out", async () => {
+    const apiKeyCalls: string[] = [];
+    server.use(http.all("*/v1/api-key", ({ request }) => {
+      apiKeyCalls.push(request.method);
+      return HttpResponse.json({ active: false });
+    }));
     const { queryClient } = renderApp("/settings", { user: USER });
-    const secret = await createKey(user);
-    expect(secret).toMatch(/^onolys_[A-Za-z0-9]+_[A-Za-z0-9]+$/);
-
-    const done = within(dialog()).getByRole("button", { name: "Done" });
-    expect(done).toBeDisabled();
-    await user.keyboard("{Escape}");
-    expect(screen.getByRole("dialog")).toBeInTheDocument(); // Escape does not skip the gate
-    await user.click(within(dialog()).getByRole("checkbox", { name: /i've stored it/i }));
-    expect(done).toBeEnabled();
-    await user.click(done);
-
-    expect(screen.queryByRole("dialog")).toBeNull();
-    expect(document.body.textContent).not.toContain(secret);
-    // metadata shows only the public key id prefix
-    expect(await main().findByText(/active/i)).toBeInTheDocument();
-    expect(JSON.stringify(queryClient.getQueryCache().getAll().map((q) => q.state.data))).not.toContain(secret);
-    expect(JSON.stringify(queryClient.getMutationCache().getAll().map((m) => m.state.data))).not.toContain(secret);
-  });
-
-  it("is absent after reload and the server never returns it again", async () => {
-    const user = userEvent.setup();
-    renderApp("/settings", { user: USER });
-    const secret = await createKey(user);
-    cleanup(); // a reload: all component state gone
-    renderApp("/settings", { user: USER });
-    expect(await main().findByText(/active/i)).toBeInTheDocument();
-    expect(document.body.textContent).not.toContain(secret);
-    expect(document.body.textContent).not.toMatch(SECRET_RE);
-  });
-
-  it("never writes the secret to localStorage, sessionStorage or the console", async () => {
-    const user = userEvent.setup();
-    renderApp("/settings", { user: USER });
-    const secret = await createKey(user);
-    await user.click(within(dialog()).getByRole("checkbox", { name: /i've stored it/i }));
-    await user.click(within(dialog()).getByRole("button", { name: "Done" }));
-    expect(everythingStored()).not.toContain(secret);
-    expect(everythingLogged()).not.toContain(secret);
-  });
-
-  it("copy button copies the secret", async () => {
-    const user = userEvent.setup();
-    renderApp("/settings", { user: USER });
-    const secret = await createKey(user);
-    await user.click(within(dialog()).getByRole("button", { name: "Copy" }));
-    expect(await navigator.clipboard.readText()).toBe(secret);
-  });
-
-  it("copy shows 'Copied' feedback, and a rejected clipboard write shows a failure note instead of an unhandled rejection (W26)", async () => {
-    const user = userEvent.setup();
-    renderApp("/settings", { user: USER });
-    await createKey(user);
-    await user.click(within(dialog()).getByRole("button", { name: "Copy" }));
-    expect(await within(dialog()).findByText("Copied")).toBeInTheDocument();
-    vi.spyOn(navigator.clipboard, "writeText").mockRejectedValueOnce(new Error("denied"));
-    await user.click(within(dialog()).getByRole("button", { name: "Copy" }));
-    expect(await within(dialog()).findByText(/couldn't copy/i)).toBeInTheDocument();
-  });
-
-  it("the secret dialog ignores outside clicks as well as Escape", async () => {
-    const user = userEvent.setup();
-    renderApp("/settings", { user: USER });
-    await createKey(user);
-    fireEvent.pointerDown(document.querySelector("[data-slot='dialog-overlay']") ?? document.body);
-    fireEvent.pointerUp(document.body);
-    fireEvent.click(document.body);
-    expect(screen.getByRole("dialog")).toBeInTheDocument();
-    expect(within(dialog()).queryByRole("button", { name: /close/i })).toBeNull();
-  });
-
-  it("restores focus to the opener when a confirm dialog closes (W26)", async () => {
-    const user = userEvent.setup();
-    mockBackend.createApiKey(UID);
-    renderApp("/settings", { user: USER });
-    const opener = await main().findByRole("button", { name: "Revoke" });
-    await user.click(opener);
-    await user.click(within(confirmDialog()).getByRole("button", { name: "Cancel" }));
-    expect(screen.queryByRole("alertdialog")).toBeNull();
-    expect(opener).toHaveFocus();
-  });
-
-  it("keeps the confirm dialog open and shows the error when revoke fails (W26)", async () => {
-    const user = userEvent.setup();
-    mockBackend.createApiKey(UID);
-    server.use(http.delete("*/v1/api-key", () => HttpResponse.json({ code: "internal_error" }, { status: 500 })));
-    renderApp("/settings", { user: USER });
-    await user.click(await main().findByRole("button", { name: "Revoke" }));
-    await user.click(within(confirmDialog()).getByRole("button", { name: "Revoke key" }));
-    expect(await within(confirmDialog()).findByText(/something went wrong/i)).toBeInTheDocument();
-    expect(screen.getByRole("alertdialog")).toBeInTheDocument();
-  });
-
-  it("regenerate asks to confirm that the old key stops working; cancel changes nothing", async () => {
-    const user = userEvent.setup();
-    mockBackend.createApiKey(UID);
-    const before = mockBackend.getApiKey(UID);
-    renderApp("/settings", { user: USER });
-    await user.click(await main().findByRole("button", { name: "Regenerate" }));
-    expect(within(confirmDialog()).getByText(/old key stops working/i)).toBeInTheDocument();
-    await user.click(within(confirmDialog()).getByRole("button", { name: "Cancel" }));
-    expect(screen.queryByRole("alertdialog")).toBeNull();
-    expect(mockBackend.getApiKey(UID).key_id).toBe(before.key_id);
-
-    await user.click(main().getByRole("button", { name: "Regenerate" }));
-    await user.click(within(confirmDialog()).getByRole("button", { name: "Regenerate key" }));
-    const secret = await within(await screen.findByTestId("api-secret-dialog")).findByTestId("api-secret");
-    expect(secret.textContent).toMatch(SECRET_RE);
-    expect(mockBackend.getApiKey(UID).key_id).not.toBe(before.key_id);
-  });
-
-  it("revoke deactivates the key after confirmation", async () => {
-    const user = userEvent.setup();
-    mockBackend.createApiKey(UID);
-    renderApp("/settings", { user: USER });
-    await user.click(await main().findByRole("button", { name: "Revoke" }));
-    await user.click(within(confirmDialog()).getByRole("button", { name: "Revoke key" }));
-    expect(await screen.findByText(/no api key/i)).toBeInTheDocument();
-    expect(mockBackend.getApiKey(UID).active).toBe(false);
-  });
-
-  it("links to the API docs at /v1/docs with a placeholder curl example", async () => {
-    renderApp("/settings", { user: USER });
-    const link = await main().findByRole("link", { name: "API docs" });
-    expect(link).toHaveAttribute("href", "/v1/docs");
-    expect(main().getByText(/curl .*X-API-Key: onolys_<id>_<secret>/)).toBeInTheDocument();
-  });
-
-  it("shows usage and the account-removal contact link", async () => {
-    renderApp("/settings", { user: USER });
     expect(await main().findByText("20 of 20 left today")).toBeInTheDocument();
     expect(main().getByText("5 of 5 left today")).toBeInTheDocument();
-    expect(main().queryByText(/this month/)).toBeNull();
     expect(main().getByText(/account removal/i)).toBeInTheDocument();
     expect(main().getByRole("link", { name: "tejitpabari99@gmail.com" })).toHaveAttribute("href", "mailto:tejitpabari99@gmail.com");
     expect(main().getByText(/deleting a session removes/i)).toBeInTheDocument();
+    expect(main().queryAllByText(/api key|use the api|curl|api docs/i)).toHaveLength(0);
+    expect(main().queryByRole("button", { name: "Sign out" })).toBeNull();
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(screen.queryByRole("alertdialog")).toBeNull();
+    expect(apiKeyCalls).toEqual([]);
+    expect(queryClient.getQueryCache().find({ queryKey: ["api-key"] })).toBeUndefined();
   });
 
-  it("sign out clears the query cache and returns to login", async () => {
+  it("keeps sign out in the avatar menu and clears the query cache", async () => {
     const user = userEvent.setup();
     const { router, queryClient } = renderApp("/settings", { user: USER });
     await main().findByText("20 of 20 left today");
     expect(queryClient.getQueryCache().getAll().length).toBeGreaterThan(0);
-    await user.click(main().getByRole("button", { name: "Sign out" }));
-    await waitFor(() => expect(here(router)).toMatch(/^\/login/));
+    await user.click(screen.getByRole("button", { name: "Account menu" }));
+    await user.click(screen.getByRole("menuitem", { name: "Sign out" }));
+    await waitFor(() => expect(here(router)).toBe("/login"));
     expect(queryClient.getQueryCache().getAll()).toHaveLength(0);
   });
 });

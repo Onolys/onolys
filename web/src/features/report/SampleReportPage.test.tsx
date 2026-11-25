@@ -29,12 +29,15 @@ describe("/sample", () => {
     expect(requests).toEqual([]);
   });
 
-  it("shows the grey example line and no yellow Sample banner", async () => {
+  it("shows the fictional example line and warns about the short session", async () => {
     renderApp("/sample");
     const main = within(screen.getByRole("main"));
     expect(await main.findByText("Example report from a made-up role-play conversation.")).toBeInTheDocument();
     expect(main.queryByText(/^Sample$/)).toBeNull();
-    expect(main.queryByRole("note")).toBeNull();
+    expect(main.getAllByRole("note").map((n) => n.textContent)).toEqual([
+      "This session is shorter than 10 minutes, so global ratings may be harder to judge.",
+      "The practitioner speaks first in this excerpt. Opening reflections have no earlier client speech here to refer to.",
+    ]);
     expect(main.queryByRole("alert")).toBeNull();
   });
 

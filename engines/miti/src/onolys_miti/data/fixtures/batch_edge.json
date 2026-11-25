@@ -1,0 +1,405 @@
+{
+  "language": "en",
+  "duration_ms": 1200000,
+  "turns": [
+    {
+      "id": "intro",
+      "speaker": "B",
+      "text": "I have brought my notebook so we can talk about what happens around lunchtime during an ordinary working week.",
+      "start_ms": 0,
+      "end_ms": 20952
+    },
+    {
+      "id": "b01a",
+      "speaker": "A",
+      "text": "The information sheet lists opening hours for the surrounding area. It includes the published times and locations, together with a telephone number for checking details when the schedule changes.",
+      "start_ms": 21052,
+      "end_ms": 42005
+    },
+    {
+      "id": "ack",
+      "speaker": "B",
+      "text": "yeah",
+      "start_ms": 42105,
+      "end_ms": 63057
+    },
+    {
+      "id": "b01b",
+      "speaker": "A",
+      "text": "The same sheet is available at the front desk.",
+      "start_ms": 63157,
+      "end_ms": 84110
+    },
+    {
+      "id": "client01",
+      "speaker": "B",
+      "text": "I can see the section about opening hours on this page. My notebook has a copy of that information beside the entries for my usual lunch schedule.",
+      "start_ms": 84210,
+      "end_ms": 105163
+    },
+    {
+      "id": "b02a",
+      "speaker": "A",
+      "text": "The information sheet lists walking routes for the surrounding area. It includes the published times and locations, together with a telephone number for checking details when the schedule changes.",
+      "start_ms": 105263,
+      "end_ms": 126215
+    },
+    {
+      "id": "client02",
+      "speaker": "B",
+      "text": "I can see the section about walking routes on this page. My notebook has a copy of that information beside the entries for my usual lunch schedule.",
+      "start_ms": 126315,
+      "end_ms": 147268
+    },
+    {
+      "id": "b03a",
+      "speaker": "A",
+      "text": "The information sheet lists indoor corridors for the surrounding area. It includes the published times and locations, together with a telephone number for checking details when the schedule changes.",
+      "start_ms": 147368,
+      "end_ms": 168321
+    },
+    {
+      "id": "client03",
+      "speaker": "B",
+      "text": "I can see the section about indoor corridors on this page. My notebook has a copy of that information beside the entries for my usual lunch schedule.",
+      "start_ms": 168421,
+      "end_ms": 189373
+    },
+    {
+      "id": "b04a",
+      "speaker": "A",
+      "text": "The information sheet lists building entrances for the surrounding area. It includes the published times and locations, together with a telephone number for checking details when the schedule changes.",
+      "start_ms": 189473,
+      "end_ms": 210426
+    },
+    {
+      "id": "client04",
+      "speaker": "B",
+      "text": "I can see the section about building entrances on this page. My notebook has a copy of that information beside the entries for my usual lunch schedule.",
+      "start_ms": 210526,
+      "end_ms": 231478
+    },
+    {
+      "id": "b05a",
+      "speaker": "A",
+      "text": "The information sheet lists local maps for the surrounding area. It includes the published times and locations, together with a telephone number for checking details when the schedule changes.",
+      "start_ms": 231578,
+      "end_ms": 252531
+    },
+    {
+      "id": "client05",
+      "speaker": "B",
+      "text": "I can see the section about local maps on this page. My notebook has a copy of that information beside the entries for my usual lunch schedule.",
+      "start_ms": 252631,
+      "end_ms": 273584
+    },
+    {
+      "id": "b06a",
+      "speaker": "A",
+      "text": "The information sheet lists weather reports for the surrounding area. It includes the published times and locations, together with a telephone number for checking details when the schedule changes.",
+      "start_ms": 273684,
+      "end_ms": 294636
+    },
+    {
+      "id": "client06",
+      "speaker": "B",
+      "text": "I can see the section about weather reports on this page. My notebook has a copy of that information beside the entries for my usual lunch schedule.",
+      "start_ms": 294736,
+      "end_ms": 315689
+    },
+    {
+      "id": "b07a",
+      "speaker": "A",
+      "text": "The information sheet lists work calendars for the surrounding area. It includes the published times and locations, together with a telephone number for checking details when the schedule changes.",
+      "start_ms": 315789,
+      "end_ms": 336742
+    },
+    {
+      "id": "client07",
+      "speaker": "B",
+      "text": "I can see the section about work calendars on this page. My notebook has a copy of that information beside the entries for my usual lunch schedule.",
+      "start_ms": 336842,
+      "end_ms": 357794
+    },
+    {
+      "id": "b08a",
+      "speaker": "A",
+      "text": "The information sheet lists lunch schedules for the surrounding area. It includes the published times and locations, together with a telephone number for checking details when the schedule changes.",
+      "start_ms": 357894,
+      "end_ms": 378847
+    },
+    {
+      "id": "client08",
+      "speaker": "B",
+      "text": "I can see the section about lunch schedules on this page. My notebook has a copy of that information beside the entries for my usual lunch schedule.",
+      "start_ms": 378947,
+      "end_ms": 399900
+    },
+    {
+      "id": "b09a",
+      "speaker": "A",
+      "text": "The information sheet lists public benches for the surrounding area. It includes the published times and locations, together with a telephone number for checking details when the schedule changes.",
+      "start_ms": 400000,
+      "end_ms": 420952
+    },
+    {
+      "id": "client09",
+      "speaker": "B",
+      "text": "I can see the section about public benches on this page. My notebook has a copy of that information beside the entries for my usual lunch schedule.",
+      "start_ms": 421052,
+      "end_ms": 442005
+    },
+    {
+      "id": "b10a",
+      "speaker": "A",
+      "text": "The information sheet lists park paths for the surrounding area. It includes the published times and locations, together with a telephone number for checking details when the schedule changes.",
+      "start_ms": 442105,
+      "end_ms": 463057
+    },
+    {
+      "id": "client10",
+      "speaker": "B",
+      "text": "I can see the section about park paths on this page. My notebook has a copy of that information beside the entries for my usual lunch schedule.",
+      "start_ms": 463157,
+      "end_ms": 484110
+    },
+    {
+      "id": "b11a",
+      "speaker": "A",
+      "text": "The information sheet lists office stairs for the surrounding area. It includes the published times and locations, together with a telephone number for checking details when the schedule changes.",
+      "start_ms": 484210,
+      "end_ms": 505163
+    },
+    {
+      "id": "client11",
+      "speaker": "B",
+      "text": "I can see the section about office stairs on this page. My notebook has a copy of that information beside the entries for my usual lunch schedule.",
+      "start_ms": 505263,
+      "end_ms": 526215
+    },
+    {
+      "id": "b12a",
+      "speaker": "A",
+      "text": "The information sheet lists crossing signals for the surrounding area. It includes the published times and locations, together with a telephone number for checking details when the schedule changes.",
+      "start_ms": 526315,
+      "end_ms": 547268
+    },
+    {
+      "id": "client12",
+      "speaker": "B",
+      "text": "I can see the section about crossing signals on this page. My notebook has a copy of that information beside the entries for my usual lunch schedule.",
+      "start_ms": 547368,
+      "end_ms": 568321
+    },
+    {
+      "id": "b13a",
+      "speaker": "A",
+      "text": "The information sheet lists water fountains for the surrounding area. It includes the published times and locations, together with a telephone number for checking details when the schedule changes.",
+      "start_ms": 568421,
+      "end_ms": 589373
+    },
+    {
+      "id": "client13",
+      "speaker": "B",
+      "text": "I can see the section about water fountains on this page. My notebook has a copy of that information beside the entries for my usual lunch schedule.",
+      "start_ms": 589473,
+      "end_ms": 610426
+    },
+    {
+      "id": "b14a",
+      "speaker": "A",
+      "text": "The information sheet lists notice boards for the surrounding area. It includes the published times and locations, together with a telephone number for checking details when the schedule changes.",
+      "start_ms": 610526,
+      "end_ms": 631478
+    },
+    {
+      "id": "client14",
+      "speaker": "B",
+      "text": "I can see the section about notice boards on this page. My notebook has a copy of that information beside the entries for my usual lunch schedule.",
+      "start_ms": 631578,
+      "end_ms": 652531
+    },
+    {
+      "id": "b15a",
+      "speaker": "A",
+      "text": "The information sheet lists meeting rooms for the surrounding area. It includes the published times and locations, together with a telephone number for checking details when the schedule changes.",
+      "start_ms": 652631,
+      "end_ms": 673584
+    },
+    {
+      "id": "client15",
+      "speaker": "B",
+      "text": "I can see the section about meeting rooms on this page. My notebook has a copy of that information beside the entries for my usual lunch schedule.",
+      "start_ms": 673684,
+      "end_ms": 694636
+    },
+    {
+      "id": "b16a",
+      "speaker": "A",
+      "text": "The information sheet lists reception desks for the surrounding area. It includes the published times and locations, together with a telephone number for checking details when the schedule changes.",
+      "start_ms": 694736,
+      "end_ms": 715689
+    },
+    {
+      "id": "client16",
+      "speaker": "B",
+      "text": "I can see the section about reception desks on this page. My notebook has a copy of that information beside the entries for my usual lunch schedule.",
+      "start_ms": 715789,
+      "end_ms": 736742
+    },
+    {
+      "id": "b17a",
+      "speaker": "A",
+      "text": "The information sheet lists walking distances for the surrounding area. It includes the published times and locations, together with a telephone number for checking details when the schedule changes.",
+      "start_ms": 736842,
+      "end_ms": 757794
+    },
+    {
+      "id": "client17",
+      "speaker": "B",
+      "text": "I can see the section about walking distances on this page. My notebook has a copy of that information beside the entries for my usual lunch schedule.",
+      "start_ms": 757894,
+      "end_ms": 778847
+    },
+    {
+      "id": "b18a",
+      "speaker": "A",
+      "text": "The information sheet lists bus stops for the surrounding area. It includes the published times and locations, together with a telephone number for checking details when the schedule changes.",
+      "start_ms": 778947,
+      "end_ms": 799900
+    },
+    {
+      "id": "client18",
+      "speaker": "B",
+      "text": "I can see the section about bus stops on this page. My notebook has a copy of that information beside the entries for my usual lunch schedule.",
+      "start_ms": 800000,
+      "end_ms": 820952
+    },
+    {
+      "id": "b19a",
+      "speaker": "A",
+      "text": "The information sheet lists station exits for the surrounding area. It includes the published times and locations, together with a telephone number for checking details when the schedule changes.",
+      "start_ms": 821052,
+      "end_ms": 842005
+    },
+    {
+      "id": "client19",
+      "speaker": "B",
+      "text": "I can see the section about station exits on this page. My notebook has a copy of that information beside the entries for my usual lunch schedule.",
+      "start_ms": 842105,
+      "end_ms": 863057
+    },
+    {
+      "id": "b20a",
+      "speaker": "A",
+      "text": "The information sheet lists library hours for the surrounding area. It includes the published times and locations, together with a telephone number for checking details when the schedule changes.",
+      "start_ms": 863157,
+      "end_ms": 884110
+    },
+    {
+      "id": "client20",
+      "speaker": "B",
+      "text": "I can see the section about library hours on this page. My notebook has a copy of that information beside the entries for my usual lunch schedule.",
+      "start_ms": 884210,
+      "end_ms": 905163
+    },
+    {
+      "id": "b21a",
+      "speaker": "A",
+      "text": "The information sheet lists shared calendars for the surrounding area. It includes the published times and locations, together with a telephone number for checking details when the schedule changes.",
+      "start_ms": 905263,
+      "end_ms": 926215
+    },
+    {
+      "id": "client21",
+      "speaker": "B",
+      "text": "I can see the section about shared calendars on this page. My notebook has a copy of that information beside the entries for my usual lunch schedule.",
+      "start_ms": 926315,
+      "end_ms": 947268
+    },
+    {
+      "id": "b22a",
+      "speaker": "A",
+      "text": "The information sheet lists nearby squares for the surrounding area. It includes the published times and locations, together with a telephone number for checking details when the schedule changes.",
+      "start_ms": 947368,
+      "end_ms": 968321
+    },
+    {
+      "id": "client22",
+      "speaker": "B",
+      "text": "I can see the section about nearby squares on this page. My notebook has a copy of that information beside the entries for my usual lunch schedule.",
+      "start_ms": 968421,
+      "end_ms": 989373
+    },
+    {
+      "id": "b23a",
+      "speaker": "A",
+      "text": "The information sheet lists covered passages for the surrounding area. It includes the published times and locations, together with a telephone number for checking details when the schedule changes.",
+      "start_ms": 989473,
+      "end_ms": 1010426
+    },
+    {
+      "id": "client23",
+      "speaker": "B",
+      "text": "I can see the section about covered passages on this page. My notebook has a copy of that information beside the entries for my usual lunch schedule.",
+      "start_ms": 1010526,
+      "end_ms": 1031478
+    },
+    {
+      "id": "b24a",
+      "speaker": "A",
+      "text": "The information sheet lists community maps for the surrounding area. It includes the published times and locations, together with a telephone number for checking details when the schedule changes.",
+      "start_ms": 1031578,
+      "end_ms": 1052531
+    },
+    {
+      "id": "client24",
+      "speaker": "B",
+      "text": "I can see the section about community maps on this page. My notebook has a copy of that information beside the entries for my usual lunch schedule.",
+      "start_ms": 1052631,
+      "end_ms": 1073584
+    },
+    {
+      "id": "b25",
+      "speaker": "A",
+      "text": "May I offer a suggestion about fitting a short walk into your lunch break?",
+      "start_ms": 1073684,
+      "end_ms": 1094636
+    },
+    {
+      "id": "permission",
+      "speaker": "B",
+      "text": "yeah",
+      "start_ms": 1094736,
+      "end_ms": 1115689
+    },
+    {
+      "id": "b26",
+      "speaker": "A",
+      "text": "You should put a walk on your calendar today. With your permission, I suggest trying a ten minute walk after lunch tomorrow.",
+      "start_ms": 1115789,
+      "end_ms": 1136742
+    },
+    {
+      "id": "client26",
+      "speaker": "B",
+      "text": "I could try that tomorrow and see how it fits with the afternoon meeting before choosing what happens next.",
+      "start_ms": 1136842,
+      "end_ms": 1157794
+    },
+    {
+      "id": "b27",
+      "speaker": "A",
+      "text": "Whether you try this is entirely your decision.",
+      "start_ms": 1157894,
+      "end_ms": 1178847
+    },
+    {
+      "id": "closing",
+      "speaker": "B",
+      "text": "Thank you for discussing the information with me today.",
+      "start_ms": 1178947,
+      "end_ms": 1199900
+    }
+  ]
+}

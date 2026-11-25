@@ -3,6 +3,8 @@
 `id` is the document id: filled on read, never written. Datetimes are tz-aware UTC.
 """
 
+import hashlib
+import json
 from datetime import UTC, datetime, timedelta
 from typing import Any, Literal
 
@@ -175,6 +177,22 @@ class SessionCancel(BaseModel):
     at: datetime
 
 
+class EvalGold(BaseModel):
+    sha256: str
+    path: str
+
+
+class EvalSessionInfo(BaseModel):
+    """Eval provenance of a session (05 R3). Never part of a public view or the OpenAPI schema."""
+
+    dataset_id: str | None = None
+    dataset_session_id: str
+    source: str
+    gold: EvalGold | None = None
+    # Server-pinned run inputs survive deletion of any group's RunDocs.
+    input_sha256: str | None = None
+
+
 class SessionDoc(Doc):
     uid: str
     title: str | None = None
@@ -205,6 +223,13 @@ class SessionDoc(Doc):
     stage_started_at: datetime | None = None  # entered this state; other writes never bump it
     latest_report_version: int | None = None
     discard_code: str | None = None  # tombstone of `discard_failed_upload` (state is `deleting`)
+    eval: EvalSessionInfo | None = None  # eval provenance; absent on prod sessions
+
+    def to_store(self) -> dict[str, Any]:
+        d = super().to_store()
+        if d.get("eval") is None:
+            d.pop("eval", None)  # a prod session document has no `eval` key at all
+        return d
 
 
 class SessionStatusDoc(Doc):
@@ -262,10 +287,48 @@ class RecordingDoc(Doc):
     sha256: str | None = None
 
 
+def transcript_sha256(transcript: Transcript) -> str:
+    """Hash transcript content independently of its inline/blob storage representation."""
+    canonical = json.dumps(
+        transcript.model_dump(mode="json"),
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+    )
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
+def eval_session_input_sha256(session: dict, transcript: dict) -> str:
+    """Hash imported eval inputs independently of disposable RunDocs (server-only)."""
+    payload = {
+        "transcript_sha256": transcript.get("sha256"),
+        "language": transcript.get("language"),
+        "clinician_speaker": session.get("clinician_speaker"),
+        "change_goal": session.get("change_goal") or "",
+        "coded_span": session.get("coded_span"),
+    }
+    canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
 class TranscriptDoc(Doc):
+    sha256: str
+    language: str
     transcript: Transcript | None = None  # None when stored out of line (pointer set)
     pointer: BlobPointer | None = None
     created_at: datetime = Field(default_factory=utcnow)
+
+    @classmethod
+    def build(
+        cls, transcript: Transcript, pointer: BlobPointer | None, session_language: str
+    ) -> "TranscriptDoc":
+        """Resolve stored run inputs once, while the complete transcript is in memory."""
+        return cls(
+            transcript=None if pointer else transcript,
+            pointer=pointer,
+            sha256=transcript_sha256(transcript),
+            language=transcript.language or session_language,
+        )
 
 
 class RatingDoc(Doc):
@@ -295,7 +358,30 @@ class OutputValidation(BaseModel):
     first_issues: list[OutputValidationIssue] = Field(default_factory=list, max_length=10)
 
 
+class EvalRunInfo(BaseModel):
+    """Eval provenance of a run (SP04 R1). Written once in the create txn, never updated, and
+    never part of a public view."""
+
+    eval_run_id: str
+    combo_key: str
+    repeat: int
+    engine: str  # "miti" or "oneshot:<variant>"
+    route_override: dict[str, Any] | None = None  # {provider, model, tier, effort}
+    resolved_route: dict[str, Any]  # snapshot: litellm_id, effort, token limits, caching_mode, ...
+    engine_version: str
+
+
+def reject_eval_write(fields: dict[str, Any]) -> None:
+    """`RunDoc.eval` is write-once: no `update_run` field path may touch it."""
+    if any(k == "eval" or k.startswith("eval.") for k in fields):
+        raise ValueError("RunDoc.eval is write-once")
+
+
 class RunDoc(Doc):
+    change_goal: str
+    clinician_speaker: str
+    language: str
+    transcript_sha256: str
     coded_span: CodedSpan | None = None
     uid: str
     session_id: str
@@ -320,6 +406,13 @@ class RunDoc(Doc):
     released: bool = False  # the cap slot was handed back: guards double release
     llm_started: bool = False  # the evaluation was called on some attempt: a unit is spent
     unit_kept: bool | None = None  # set on release: a unit of the limit stays spent (None: open)
+    eval: EvalRunInfo | None = None  # eval provenance; absent on prod runs, write-once
+
+    def to_store(self) -> dict[str, Any]:
+        d = super().to_store()
+        if d.get("eval") is None:
+            d.pop("eval", None)  # a prod run document has no `eval` key at all
+        return d
 
 
 class ReportDoc(Doc):

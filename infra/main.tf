@@ -40,7 +40,7 @@ resource "google_artifact_registry_repository" "onolys" {
   location      = var.region
   repository_id = "onolys"
   format        = "DOCKER"
-  description   = "Onolys api/worker/admin images"
+  description   = "Onolys api/worker images"
 
   depends_on = [google_project_service.api]
 }
@@ -58,25 +58,6 @@ resource "google_firebase_hosting_site" "app_staging" {
   provider = google-beta
   project  = var.project
   site_id  = var.app_staging_site_id
-
-  depends_on = [google_project_service.api]
-}
-
-# Admin sites (SP07, after launch): gated by admin_enabled (per env).
-resource "google_firebase_hosting_site" "admin" {
-  count    = var.admin_enabled["prod"] ? 1 : 0
-  provider = google-beta
-  project  = var.project
-  site_id  = var.admin_site_id
-
-  depends_on = [google_project_service.api]
-}
-
-resource "google_firebase_hosting_site" "admin_staging" {
-  count    = var.admin_enabled["staging"] ? 1 : 0
-  provider = google-beta
-  project  = var.project
-  site_id  = var.admin_staging_site_id
 
   depends_on = [google_project_service.api]
 }
@@ -106,17 +87,11 @@ module "staging" {
   api_max_instances        = 3
   llm_secrets              = var.llm_secrets
   stt_secrets              = var.stt_secrets
-  admin_enabled            = var.admin_enabled["staging"]
   git_sha                  = var.git_sha["staging"]
   app_base_url             = "https://${var.app_staging_site_id}.web.app"
   resend_secret_wired      = var.resend_secret_wired["staging"]
   alerts_enabled           = var.staging_alerts
   notification_channel_ids = [google_monitoring_notification_channel.owner_email.id]
-  admin_cors_origins = [
-    "https://${var.admin_staging_site_id}.web.app",
-    "https://admin.onolys.com",
-    "http://localhost:5173",
-  ]
   cors_origins = [
     "https://${var.app_staging_site_id}.web.app",
     "http://localhost:5173",
@@ -140,14 +115,52 @@ module "prod" {
   api_max_instances        = 10
   llm_secrets              = var.llm_secrets
   stt_secrets              = var.stt_secrets
-  admin_enabled            = var.admin_enabled["prod"]
   git_sha                  = var.git_sha["prod"]
   app_base_url             = "https://app.onolys.com"
   resend_secret_wired      = var.resend_secret_wired["prod"]
   alerts_enabled           = true
   notification_channel_ids = [google_monitoring_notification_channel.owner_email.id]
-  admin_cors_origins       = ["https://${var.admin_site_id}.web.app"]
   cors_origins             = ["https://app.onolys.com"]
+
+  depends_on = [google_project_service.api]
+}
+
+# Eval: third instance of the module (PRD 03-eval-environment R1). Own DB, bucket, queue, SAs and secrets. Runs as
+# ENV=staging with EVAL_MODE=true; no public api/voice services; caps effectively off (big numbers, 0 would block).
+module "eval" {
+  source = "./modules/environment"
+
+  project                  = var.project
+  region                   = var.region
+  env                      = "eval"
+  runtime_env              = "staging"
+  database_id              = "eval"
+  delete_protection        = true
+  default_preset           = var.default_preset
+  worker_concurrency       = var.eval_worker_concurrency
+  worker_max_instances     = var.eval_worker_max_instances
+  llm_secrets              = var.eval_llm_secrets
+  stt_secrets              = var.stt_secrets
+  git_sha                  = var.eval_git_sha
+  app_base_url             = ""
+  alerts_enabled           = false
+  notification_channel_ids = []
+  public_api_enabled       = false
+  eval_mode                = true
+  eval_backend_enabled     = true
+  datasets_bucket          = google_storage_bucket.eval_staging.name
+  eval_cap_day             = 1000000
+  max_active_runs          = 1000
+  cors_origins = [
+    "https://eval.onolys.com",
+    "https://onolys-eval-staging.web.app",
+    "http://localhost:5173",
+  ]
+  eval_cors_origins = [
+    "https://eval.onolys.com",
+    "https://onolys-eval-staging.web.app",
+    "http://localhost:5173",
+  ]
 
   depends_on = [google_project_service.api]
 }

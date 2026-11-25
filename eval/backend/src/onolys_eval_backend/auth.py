@@ -2,20 +2,102 @@
 
 import asyncio
 import json
+import threading
 import time
 from collections.abc import Callable
 from types import SimpleNamespace
 from typing import Any, Protocol
 
-from google.auth import exceptions
+from google.auth import exceptions, jwt
 from google.auth.transport.requests import Request
 from google.oauth2 import id_token
-from onolys_admin_auth import AdminAuthMiddleware, InvalidToken, UpstreamUnavailable
-from onolys_admin_auth.verifier import CertificateCache, token_key_id
+from onolys_api.auth.idtoken import IdTokenVerifier, InvalidToken
 
+from onolys_eval_backend.allowlist import AllowlistMiddleware, ClaimsVerifier, bearer_token, deny
 from onolys_eval_backend.config import EvalConfig
 
+CERT_TTL_S = 3600
+
+CertFetcher = Callable[[], dict[str, str]]
+
 GOOGLE_ISSUERS = frozenset({"accounts.google.com", "https://accounts.google.com"})
+
+
+class UpstreamUnavailable(Exception):
+    pass
+
+
+class CertificateCache:
+    """Single-flight refresh with bounded waits, cooldown, and no expired-key fallback.
+
+    Unknown IDs share one refresh deadline rather than accumulating per-token state.
+    Normal key rotation is discovered within a cooldown after the last fetch.
+    """
+
+    def __init__(
+        self,
+        fetch: CertFetcher,
+        ttl_s: float = CERT_TTL_S,
+        clock: Callable[[], float] = time.monotonic,
+        cooldown_s: float = 30,
+        lock_timeout_s: float = 6,
+    ) -> None:
+        self._fetch = fetch
+        self._ttl = ttl_s
+        self._clock = clock
+        self._cooldown = cooldown_s
+        self._lock_timeout = lock_timeout_s
+        self._certs: dict[str, str] = {}
+        self._fetched_at = float("-inf")
+        self._retry_at = float("-inf")
+        self._failed = False
+        self._lock = threading.Lock()
+
+    def get(self, kid: str) -> dict[str, str]:
+        if not self._lock.acquire(timeout=self._lock_timeout):
+            raise UpstreamUnavailable
+        try:
+            now = self._clock()
+            fresh = bool(self._certs) and now - self._fetched_at < self._ttl
+            if fresh and kid in self._certs:
+                return self._certs
+            if now < self._retry_at:
+                if self._failed or not fresh:
+                    raise UpstreamUnavailable
+                return self._certs
+            try:
+                certs = self._fetch()
+                if (
+                    not isinstance(certs, dict)
+                    or not certs
+                    or not all(
+                        isinstance(k, str) and isinstance(v, str) and v for k, v in certs.items()
+                    )
+                ):
+                    raise ValueError("Invalid certificate response")
+            except Exception:
+                self._failed = True
+                raise UpstreamUnavailable from None
+            else:
+                self._certs = dict(certs)
+                self._fetched_at = self._clock()
+                self._failed = False
+                return self._certs
+            finally:
+                self._retry_at = self._clock() + self._cooldown
+        finally:
+            self._lock.release()
+
+
+def token_key_id(token: str) -> str:
+    try:
+        header = jwt.decode_header(token)
+        kid = header.get("kid")
+        if header.get("alg") != "RS256" or not isinstance(kid, str) or not kid:
+            raise InvalidToken
+        return kid
+    except Exception:
+        raise InvalidToken from None
 
 
 class TokenVerifier(Protocol):
@@ -66,49 +148,34 @@ class EvalAuthMiddleware:
         self,
         app,
         config: EvalConfig,
-        verifier: TokenVerifier | None = None,
+        verifier: ClaimsVerifier | None = None,
         task_verifier: TokenVerifier | None = None,
     ) -> None:
         self.app = app
         self.config = config
-        self.admin = AdminAuthMiddleware(app, config=config.auth, verifier=verifier)
+        self.users = AllowlistMiddleware(
+            app, verifier or IdTokenVerifier(config.auth_project), config.allowed_emails
+        )
         self.task_verifier = task_verifier or TaskOidcVerifier(config.task_audience)
 
     async def __call__(self, scope, receive, send):
         if scope["type"] != "http" or not scope["path"].startswith("/internal/tasks/"):
-            if scope["type"] != "http":
-                return await self.admin(scope, receive, send)
-            # Preserve verified identity for audit records without another token verification.
-            verifier = self.admin.verifier
-
-            class CaptureIdentity:
-                def verify(self, token):
-                    claims = verifier.verify(token)
-                    scope.setdefault("state", {})["admin_claims"] = claims
-                    return claims
-
-            return await AdminAuthMiddleware(
-                self.app, config=self.config.auth, verifier=CaptureIdentity()
-            )(scope, receive, send)
+            return await self.users(scope, receive, send)
         # Cloud Tasks request headers are metadata, never proof of caller identity.
-        authorization = next(
-            (v.decode("latin-1") for k, v in scope["headers"] if k == b"authorization"), ""
-        ).split(None, 1)
-        if len(authorization) != 2 or authorization[0].lower() != "bearer":
-            return await self.admin._deny(send, 401, "unauthenticated", "Authentication required.")
+        token = bearer_token(scope)
+        if token is None:
+            return await deny(send, 401, "unauthenticated", "Authentication required.")
         try:
-            claims = await asyncio.to_thread(self.task_verifier.verify, authorization[1])
+            claims = await asyncio.to_thread(self.task_verifier.verify, token)
         except InvalidToken:
-            return await self.admin._deny(send, 401, "unauthenticated", "Authentication required.")
+            return await deny(send, 401, "unauthenticated", "Authentication required.")
         except UpstreamUnavailable:
-            return await self.admin._deny(
-                send, 503, "upstream_unavailable", "Service temporarily unavailable."
-            )
+            return await deny(send, 503, "upstream_unavailable", "Service temporarily unavailable.")
         if (
             claims.get("iss") not in GOOGLE_ISSUERS
             or claims.get("aud") != self.config.task_audience
             or claims.get("email") != self.config.tasks_sa
             or claims.get("email_verified") is not True
         ):
-            return await self.admin._deny(send, 403, "forbidden", "Not allowed.")
+            return await deny(send, 403, "forbidden", "Not allowed.")
         return await self.app(scope, receive, send)

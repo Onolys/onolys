@@ -20,7 +20,6 @@ staging: same shape, site onolys-app-staging, Firestore DB `staging`, *-staging 
 |---|---|---|
 | Cloud Run api | `onolys-api-staging` | `onolys-api-prod` |
 | Cloud Run worker | `onolys-worker-staging` | `onolys-worker-prod` |
-| Cloud Run admin backend | `onolys-admin-backend-staging` (`admin_enabled.staging=true`) | none (prod admin removed 2026-11-21, `admin_enabled.prod=false`) |
 | Firestore database (Native, `us-central1`) | `staging` | `(default)` (delete-protection on) |
 | GCS bucket (private) | `onolys-audio-staging` | `onolys-audio-prod` |
 | Cloud Tasks queue | `steps-staging` | `steps-prod` |
@@ -32,9 +31,7 @@ staging: same shape, site onolys-app-staging, Firestore DB `staging`, *-staging 
 | Alert policies | none while `staging_alerts=false` | `Onolys failed step/run (prod)`, `Onolys api 5xx rate (prod)` |
 | Hosting site | `onolys-app-staging` (`https://onolys-app-staging.web.app`) | `onolys-app` (`https://onolys-app.web.app`, custom domain `app.onolys.com`) |
 
-Shared (project level): Artifact Registry repo `onolys` (`us-central1-docker.pkg.dev/onolys/onolys`, no cleanup policy, so any earlier sha stays deployable), budget `onolys monthly`, Monitoring channel `Onolys owner email`, Workload Identity pool `github` with provider `github` (condition `assertion.repository=='Onolys/onolys'`), Speech-to-Text service agent `service-1054076260967@gcp-sa-speech.iam.gserviceaccount.com` (`objectViewer` on both buckets), Identity Platform config (email+password, min length 8, open sign-up, no MFA). Email verify/reset links need `notification.sendEmail.callbackUri` = `https://app.onolys.com/auth/action` (set only by `python3 infra/scripts/identity-config.py`, a manual Terraform apply); `python3 infra/scripts/identity-config.py --check` is a read-only drift check (exit 1 and the remedy if it differs). Not in CI: the deployer SAs hold no Identity Platform read role (would need e.g. `roles/firebaseauth.viewer`).
-
-Admin (SP07) resources (`onolys-admin`, `onolys-admin-staging` sites, `admin.onolys.com`, `onolys-admin-backend-{env}`, `admin-allowed-emails-{env}`) exist only per env while `admin_enabled` (a map, default `{ staging = true, prod = false }`) is true for that env. Owner decision 2026-11-21: staging is the ONLY admin environment and serves `admin.onolys.com` (it auto-deploys from `main`; admin uses only synthetic MITI fixtures, no user data). Staging owns the `onolys-admin-staging` site, its web app, `onolys-admin-backend-staging` (CORS allows `https://admin.onolys.com` and `https://onolys-admin-staging.web.app`), `admin-allowed-emails-staging`, the `admin.onolys.com` Hosting custom domain and the `admin.onolys.com` / `onolys-admin-staging.web.app` authorised domains. The prod admin (`onolys-admin` site and web app, `onolys-admin-backend-prod`, its SA, invoker, secret and IAM, prod admin deployer IAM) was destroyed. `onolys-admin-backend-staging` is public at Cloud Run (`allUsers` invoker) on purpose; access is enforced in the app (Firebase ID token + allowlist), timeout 130 s, runs as `admin-backend-staging`.
+Shared (project level): Artifact Registry repo `onolys` (`us-central1-docker.pkg.dev/onolys/onolys`, no cleanup policy, so any earlier sha stays deployable), spend limits are not in Terraform (owner sets the Anthropic Console limit and a Google Cloud billing budget in the consoles; the former `google_billing_budget.monthly` was dropped from state with a `removed` block, `destroy = false`, so the existing budget is untouched), Monitoring channel `Onolys owner email`, Workload Identity pool `github` with provider `github` (condition `assertion.repository=='Onolys/onolys'`), Speech-to-Text service agent `service-1054076260967@gcp-sa-speech.iam.gserviceaccount.com` (`objectViewer` on both buckets), Identity Platform config (email+password, min length 8, open sign-up, no MFA). Email verify/reset links need `notification.sendEmail.callbackUri` = `https://app.onolys.com/auth/action` (set only by `python3 infra/scripts/identity-config.py`, a manual Terraform apply); `python3 infra/scripts/identity-config.py --check` is a read-only drift check (exit 1 and the remedy if it differs). Not in CI: the deployer SAs hold no Identity Platform read role (would need e.g. `roles/firebaseauth.viewer`).
 
 Sizing (checked on the live services):
 
@@ -58,7 +55,6 @@ Set by Terraform (`infra/modules/environment/services.tf`). Base service values 
 | `SERVICE_MODE` | yes | yes | `api` or `worker` |
 | `ENV` | yes | yes | `staging` / `prod` |
 | `GCP_PROJECT`, `AUTH_PROJECT` | yes | yes | `onolys` |
-| `ADMIN_AUTH_PROJECT` | no | no | `onolys`; admin-backend only (admin auth does not read `AUTH_PROJECT`) |
 | `REGION` | yes | yes | `us-central1` |
 | `FIRESTORE_DATABASE` | yes | yes | `staging` / `(default)` |
 | `AUDIO_BUCKET` | yes | yes | `onolys-audio-{env}` |
@@ -124,7 +120,7 @@ Run `cd infra && terraform output` (needs ADC; see Operating Terraform).
 | `nightly_gemini_email` | GitHub var `NIGHTLY_GEMINI_SA`; `nightly-gemini@onolys.iam.gserviceaccount.com`, available after apply |
 | `web_env_staging` | map with `VITE_FIREBASE_API_KEY`, `_AUTH_DOMAIN`, `_APP_ID`, `_STORAGE_BUCKET`, `_MESSAGING_SENDER_ID`, `_PROJECT_ID`, and `VITE_FIRESTORE_DATABASE` (= `staging`). Sensitive: read with `terraform output -json web_env_staging` |
 | `web_env_prod` | same keys; `VITE_FIRESTORE_DATABASE` = `(default)` |
-| `web_env_admin_staging`, `web_env_admin_prod` | `null` until `admin_enabled` is true for that env (`web_env_admin_prod` stays `null`) |
+| `web_env_eval` | VITE_* build vars for the eval web app (prod login project, site `onolys-eval-staging`) |
 | `required_dns_updates` | DNS records the owner adds (next section) |
 | `custom_domain_status` | Hosting verification state per custom domain |
 
@@ -145,7 +141,7 @@ Status then (`terraform output custom_domain_status`): `ownership OWNERSHIP_MISS
 
 Re-run the output before adding records: the values change if Hosting changes its desired state, and the TXT value is per-certificate. Remove any conflicting `A`/`AAAA` record on `app.onolys.com` (a `CNAME` cannot coexist with other records on the same host).
 
-`admin.onolys.com` is a custom domain on the staging admin site `onolys-admin-staging`; its records are in `required_dns_updates` (CNAME to `onolys-admin-staging.web.app` plus the `_acme-challenge` TXT); the owner adds them. No other staging custom domain (`onolys-app-staging.web.app` only).
+No other staging custom domain (`onolys-app-staging.web.app` only).
 
 ## GitHub settings the owner must set
 
@@ -155,16 +151,16 @@ Environments: create `production` with Tejit as required reviewer (all prod jobs
 
 | Variable | Used by | Value (Terraform output) |
 |---|---|---|
-| `WIF_PROVIDER` | deploy-staging, deploy-prod, deploy-admin, `_deploy-cloudrun` | `wif_provider` |
+| `WIF_PROVIDER` | deploy-staging, deploy-prod, deploy-eval, `_deploy-cloudrun` | `wif_provider` |
 | `DEPLOYER_STAGING_SA` | same (and the read-only `resolve` step of deploy-prod) | `deployer_staging_email` |
-| `DEPLOYER_PROD_SA` | deploy-prod, deploy-admin, `_deploy-cloudrun` | `deployer_prod_email` |
+| `DEPLOYER_PROD_SA` | deploy-prod, `_deploy-cloudrun` | `deployer_prod_email` |
 | `NIGHTLY_WIF_PROVIDER` | Nightly `api-real-mode`, trusted `main` only | `nightly_wif_provider` |
 | `NIGHTLY_GEMINI_SA` | Nightly `api-real-mode`, staging secret reader | `nightly_gemini_email` |
 | `GCP_PROJECT`, `GCP_REGION` | optional; default `onolys`, `us-central1` | leave unset |
 | `STAGING_VITE_FIREBASE_API_KEY`, `_AUTH_DOMAIN`, `_APP_ID`, `_STORAGE_BUCKET`, `_MESSAGING_SENDER_ID` | deploy-staging (web build) | `web_env_staging` keys `VITE_FIREBASE_*` (same names without the `STAGING_` prefix) |
 | `PROD_VITE_FIREBASE_API_KEY`, `_AUTH_DOMAIN`, `_APP_ID`, `_STORAGE_BUCKET`, `_MESSAGING_SENDER_ID` | deploy-prod (web build) | `web_env_prod` keys |
 | `STAGING_VITE_CONTACT_EMAIL`, `PROD_VITE_CONTACT_EMAIL` | optional, web build | owner's contact address |
-| `ADMIN_STAGING_VITE_FIREBASE_{API_KEY,AUTH_DOMAIN,APP_ID}` | deploy-admin | `web_env_admin_staging` (no prod admin vars) |
+| eval web build vars | deploy-eval | none new: reuses `PROD_VITE_FIREBASE_API_KEY` and `PROD_VITE_FIREBASE_APP_ID`; auth domain `eval.onolys.com` is literal in `deploy-eval.yml` (`web_env_eval` is for local builds). Any leftover legacy admin-app GitHub variables are unused and can be deleted |
 
 `VITE_FIREBASE_PROJECT_ID` is taken from `GCP_PROJECT`/`onolys` in the workflow; `VITE_FIRESTORE_DATABASE` is hard-coded per workflow (see Terraform outputs).
 
@@ -181,9 +177,15 @@ Activate in this order:
 3. After the workflow is on `main`, manually dispatch **Nightly on `main`** and verify `api-real-mode` succeeds through OIDC, masked Secret Manager retrieval and the live Gemini test. A dispatch from another ref skips this job. No key or credentials should be printed or uploaded as an artifact.
 4. Only after that successful verification, delete the now-unused GitHub `GEMINI_API_KEY` repository secret. No workflow consumes it after this change. Deploys and Nightly require no GCP JSON key or provider-key repository secret.
 
-Offline guards: `uv run --package onolys-admin-auth pytest infra/scripts/test_nightly_gemini_secret.py -q`, `python3 scripts/ci/check_no_llm_keys_in_pr_workflows.py`, `actionlint .github/workflows/nightly.yml`, and Terraform `fmt -check` / `validate`. These validate configuration, not live IAM propagation; the trusted-main Nightly run completes activation.
+Offline guards: `python3 -m pytest infra/scripts/test_nightly_gemini_secret.py -q`, `python3 scripts/ci/check_no_llm_keys_in_pr_workflows.py`, `actionlint .github/workflows/nightly.yml`, and Terraform `fmt -check` / `validate`. These validate configuration, not live IAM propagation; the trusted-main Nightly run completes activation.
 
-Workflows: `deploy-staging.yml` runs after the `CI` workflow succeeds on `main` (also manual). `deploy-prod.yml` is manual (`workflow_dispatch`, input `sha` or `version`) or on a `v*` tag. `deploy-admin.yml` deploys the staging admin only (backend + `onolys-admin-staging` site): automatically on push to `main` touching `admin/`, `frontend/`, root `pyproject.toml`/`uv.lock`, `.dockerignore`, or `deploy-admin.yml`/`_deploy-cloudrun.yml`; also manual. There is no prod admin. `nightly.yml` runs 06:17 UTC daily.
+Workflows: `deploy-staging.yml` runs after the `CI` workflow succeeds on `main` (also manual). Before cloud authentication, automatic and manual releases verify that the SHA is still current `main` and has successful push CI in this repository. A stale queued run fails rather than rolling back a newer release. `deploy-prod.yml` is manual (`workflow_dispatch`, input `sha` or `version`) or on a `v*` tag. `nightly.yml` runs 06:17 UTC daily.
+
+Eval releases are part of that same serialized staging workflow. It deploys `onolys-worker-eval` with the **exact staging worker image digest**, then calls `deploy-eval.yml` with the same tested SHA to build/deploy the eval backend (`onolys-eval-backend-eval`), Firestore rules/indexes (`firestore:eval`) and the eval site. Every checkout, backend image provenance and both runtime `GIT_SHA` values use that SHA; the backend deploy explicitly updates `GIT_SHA`, replacing Terraform's bootstrap value. There is no path gate or independent eval push/manual trigger. The staging concurrency lock remains held until the called workflow finishes, so another release cannot move either side independently.
+
+To release eval manually, dispatch **deploy-staging on `main` after its push CI succeeds**; this releases the worker and backend together. Do not dispatch or rerun an old independent eval workflow. During the first transition, wait for or cancel any runs started under the previous deployment definitions before starting the coordinated release: changing a workflow cannot retroactively lock an already running historical definition. Deployment is sequential, so in-flight evals can still fail the strict code-drift check while revisions change. If a deployment fails between services, correct the failure and dispatch staging again on current CI-green `main` to restore the pair. This does not weaken the worker's drift guard.
+
+The eval backend's `api-eval` service account starts and polls Speech-to-Text operations for dataset audio. It receives `roles/speech.client` only when the eval backend is enabled in `env=eval`; staging/prod API grants remain unchanged. The existing worker Speech grants remain in place.
 
 ## Operating Terraform
 
@@ -195,7 +197,7 @@ cd infra && terraform init && terraform plan     # add -lock=false for a read-on
 terraform apply
 ```
 
-No `gcloud` needed; the providers use `user_project_override` with billing project `onolys`. `terraform plan/apply` is manual (no CI apply). Cloud Run images and `GIT_SHA` belong to CI: after a CI deploy `plan` may show `GIT_SHA` drift; apply with `-var 'git_sha={staging="<staging sha>",prod="<prod sha>"}'` (root map var, one value per env) to keep it quiet. CI-set labels: `commit-sha`, `managed-by` (service + template) and `goog-terraform-provisioned` (template) are ignored via `lifecycle`.
+No `gcloud` needed; the providers use `user_project_override` with billing project `onolys`. `terraform plan/apply` is manual (no CI apply). Cloud Run images and `GIT_SHA` belong to CI: after a CI deploy `plan` may show `GIT_SHA` drift; apply with `-var 'git_sha={staging="<staging sha>",prod="<prod sha>"}' -var 'eval_git_sha=<eval sha>'` (one value per environment) to keep it quiet. CI-set labels: `commit-sha`, `managed-by` (service + template) and `goog-terraform-provisioned` (template) are ignored via `lifecycle`.
 
 After a CI pinned api deploy (`pin_traffic`, revision named `<service>-<sha7>-<run>-<attempt>`), the next plan shows a harmless `template.revision -> null` on the api (it is deliberately not in `ignore_changes`, otherwise apply fails with 409 "Revision ... with different configuration already exists"); Cloud Run then auto-names the new revision.
 
@@ -272,38 +274,64 @@ Then dispatch `deploy-staging` / `deploy-prod` (or just confirm the new worker r
 
 `deploy-staging.yml` runs after CI via `workflow_run`. That trigger's `branches: [main]` filter matches the head branch name, so a fork PR from a branch named `main` would match, and the deploy job would check out fork code with WIF access. The `build` job therefore requires `workflow_run.event == 'push'`, `head_repository.full_name == github.repository` and `head_branch == 'main'`; every other job `needs` it. `scripts/ci/test_workflow_run_guard.py` (run in CI) enforces this for any `workflow_run` workflow and bans `pull_request_target`. The WIF `attribute_condition` in `infra/deployer.tf` only checks the repository; tightening it to a ref is a separate owner apply.
 
-## Admin access
+## Eval access
 
-Who may use the admin app is a comma-separated list of emails in Secret Manager `admin-allowed-emails-{env}` (case-insensitive, spaces around commas ignored). The admin backend reads it as env `ADMIN_ALLOWED_EMAILS` (secret ref, `latest`). Anyone signed in but not on the list gets 403; no token gets 401.
+The eval backend allowlist is a comma-separated list of emails in Secret Manager `eval-allowed-emails-{env}` (case-insensitive, spaces around commas ignored). The service reads it as env `EVAL_ALLOWED_EMAILS` (secret ref, `latest`). Anyone signed in but not on the list gets 403; no token gets 401.
 
-Today (staging, same list intended for prod): `tejitpabari99@gmail.com`, `gitika.bose@gmail.com`, `falakpabari386@gmail.com`.
+Edit in the console: Secret Manager, open `eval-allowed-emails-{env}`, **+ New version**, paste the FULL list (it replaces the old one), Add. A running revision keeps the old value, so deploy a new revision (Cloud Run, **Edit & deploy new revision**, **Deploy**).
 
-Edit in the console: Secret Manager, open `admin-allowed-emails-{env}`, **+ New version**, paste the FULL list (it replaces the old one), Add. A running revision keeps the old value, so make Cloud Run pick it up: Cloud Run, `onolys-admin-backend-{env}`, **Edit & deploy new revision**, **Deploy** (or re-run `deploy-admin.yml`).
-
-Edit with the script (value never printed; staging shown, `--admin` is staging only, prod admin is removed):
+Edit with the script (value never printed):
 
 ```bash
-ADMIN_ALLOWED_EMAILS="a@x.com,b@y.com" python3 infra/scripts/seed-secrets.py --env staging --admin
+EVAL_ALLOWED_EMAILS="a@x.com,b@y.com" python3 infra/scripts/seed-secrets.py --env eval --allowlist
 ```
-
-Then deploy a new revision as above. First-time order for an env: `terraform apply -target='module.<env>.google_secret_manager_secret.admin_allowed_emails'`, run the seed command, then the full `terraform apply` (a revision that references a secret with no version fails).
 
 ## LLM provider and model
 
 Which provider, model and reasoning effort the text routes (evaluation LLM calls) use, and where to change them.
 
 - **Default:** `config/{env}/routes.yaml` (baked into the image). Staging routes point at Claude (`anthropic/claude-sonnet-5-5`); prod is unchanged.
-- **Override (staging):** set GitHub repo variables (Settings > Secrets and variables > Actions > Variables) `LLM_PROVIDER` (`anthropic` or `gemini`) and `LLM_MODEL` (a tier id listed in `config/models.yaml`, e.g. `claude-sonnet-5-5`, `gemini-4-neon`), then re-run `deploy-staging` (or push to `main`). Set both or neither. Optionally set `LLM_EFFORT` to an exact lowercase effort supported by every effective text tier (`low`, `medium`, `high`, or `max` where supported). Effort may be set independently of provider/model; empty values preserve the route defaults. `deploy-staging.yml` validates all three using the runtime loader before cloud authentication, image publishing or deployment, and passes only validated values to the api and worker services. Invalid pairs, unsupported efforts, whitespace and separators fail this preflight. Runtime loading also rejects invalid configuration (the api loads routes at startup but does not need provider keys). The voice relay does not load these routes.
+- **Override (staging):** set GitHub repo variables (Settings > Secrets and variables > Actions > Variables) `LLM_PROVIDER` (`anthropic`, `gemini`, or `openai`) and `LLM_MODEL` (a tier id listed in `config/models.yaml`, e.g. `claude-sonnet-5-5`, `gemini-4-neon`, `gpt-6.1-sol`), then re-run `deploy-staging` (or push to `main`). Set both or neither. Optionally set `LLM_EFFORT` to an exact lowercase effort supported by every effective text tier (`none`, `low`, `medium`, `high`, `xhigh`, or `max` where supported). Effort may be set independently of provider/model; empty values preserve the route defaults. `deploy-staging.yml` validates all three using the runtime loader before cloud authentication, image publishing or deployment, and passes only validated values to the api and worker services. Invalid pairs, unsupported efforts, whitespace and separators fail this preflight. Runtime loading also rejects invalid configuration (the api loads routes at startup but does not need provider keys). The voice relay does not load these routes.
 - **Precedence (low to high):** `routes.yaml` < `MITI_MODEL_*` < `LLM_PROVIDER`/`LLM_MODEL` < `LLM_EFFORT` < preset overlay. Only concrete text routes are rewritten; aliases follow their target. Effort changes `extra_params.reasoning_effort`, preserving other extra parameters and token caps. Neither override changes `oneshot`; presets apply last.
 - **models.yaml:** the override reads `config/models.yaml`, found at `<ROUTES_FILE dir>/../models.yaml` (`/app/config/models.yaml` in the images; `MODELS_FILE` overrides the path). It is shipped in the api/worker image (`COPY config /app/config`) and the eval backend image (whitelisted in `eval/backend/Dockerfile.dockerignore`). `scripts/ci/check_config.sh` fails the build if it is missing in the repo or image.
 - **Secret names:** `anthropic-api-key-staging` mounted as `ANTHROPIC_API_KEY` and `gemini-api-key-staging` as `GEMINI_API_KEY` on the worker (Terraform `llm_secrets`; prod uses `-prod`). Nothing to add in Terraform to switch between the two. The worker fails at startup if the key for the selected provider is missing.
 - **Rollback (back to Gemini):** set `LLM_PROVIDER=gemini` and `LLM_MODEL=gemini-4-neon`, clear `LLM_EFFORT` or select a supported Gemini effort, then re-run `deploy-staging`. To drop all overrides, clear all three variables and re-run the deploy; routes.yaml applies again.
 - **Terraform drift:** `LLM_PROVIDER`, `LLM_MODEL` and `LLM_EFFORT` are set only by CI, not by Terraform. A `terraform apply` on the staging services rewrites the env and removes them (the routes.yaml default applies until the next deploy). After any apply, re-run `deploy-staging` to restore the overrides. Same drift pattern as `GIT_SHA` above.
-- **Eval service:** unchanged; it reads routes from its image config and has no `LLM_*` env (`deploy-eval`/Terraform not touched). It still ships `models.yaml` so an override can be added later.
+- **Eval service:** the per-run picker reads `models.yaml`; selecting OpenAI resolves `openai/<tier>` through the existing LiteLLM client. Runtime keys must be mounted before executing that provider. It does not require a GitHub Actions secret.
+
+### OpenAI runtime opt-in
+
+`config/models.yaml` includes `gpt-6.1-sol` (low, medium, high, xhigh, max),
+`gpt-6.1-terra` and `gpt-6-luna` (none, low, medium, high, xhigh, max).
+Their picker default is medium. The existing route defaults remain active until a
+per-run selection or deployment override is made. For a staging override, use
+`LLM_PROVIDER=openai`, `LLM_MODEL=gpt-6.1-sol`, `LLM_EFFORT=medium` (or another supported
+combination). Empty `LLM_EFFORT` preserves the route's current effort, rather than
+selecting the catalog default.
+
+Owner setup before live OpenAI execution: provide an existing Secret Manager secret
+version and extend the environment's runtime secret map with `OPENAI_API_KEY`.
+For the eval instance, a local tfvars override is:
+
+```hcl
+eval_llm_secrets = {
+  GEMINI_API_KEY    = "gemini-api-key"
+  ANTHROPIC_API_KEY = "anthropic-api-key"
+  OPENAI_API_KEY    = "openai-api-key"
+}
+```
+
+The existing module adds the `-eval` suffix and mounts the value on the eval worker;
+use `llm_secrets` for staging/prod (`-staging`/`-prod`). Keep the existing entries.
+Follow the secret-shell, seed and deployment sequence below. Supply secret values
+through the secure runtime provisioning process; do not put them in tfvars, Git,
+CI variables, logs or examples. The committed maps deliberately retain their current
+defaults so deployment does not depend on a new, unpopulated secret.
+
 
 ## Adding an LLM or STT provider
 
-1. **tfvars line.** The committed default already holds the two shipped providers (`GEMINI_API_KEY = "gemini-api-key"` for the evaluation routes, `ANTHROPIC_API_KEY = "anthropic-api-key"` for the `claude` preset). For a further provider, in a `terraform.tfvars` (local, not committed) extend the map, keeping the default entries (shown here with a hypothetical `OPENAI_API_KEY`):
+1. **tfvars line.** The committed default already holds the two shipped providers (`GEMINI_API_KEY = "gemini-api-key"` for the evaluation routes, `ANTHROPIC_API_KEY = "anthropic-api-key"` for the `claude` preset). For a further provider, in a `terraform.tfvars` (local, not committed) extend the map, keeping the default entries (shown here with the optional `OPENAI_API_KEY`):
    ```hcl
    llm_secrets = {
      GEMINI_API_KEY    = "gemini-api-key"
@@ -386,22 +414,22 @@ Details (from `.github/workflows/deploy-prod.yml`): Actions > deploy-prod > Run 
 
 ## Acceptance sweep (SP06, 2026-11-21)
 
-Measured live on 2026-11-21 (about 16:50-17:05 UTC) with ADC REST calls (Cloud Run v2, Cloud Tasks, Storage, Firestore, Identity Toolkit admin v2, Service Usage, Secret Manager, IAM, Monitoring, Logging, Billing Budgets), `curl`, `gh`, the Firestore emulator and `terraform plan` (read-only, `-lock=false`, no apply). PRD: `docs/agent_files/feat-miti-platform-20261120-0153/06-infra/PRD.md` AC1-AC10, R8, R13. Prod runs `205a03f` (rollback of `096e3ed`); staging api live traffic is `096e3ed`.
+Measured live on 2026-11-21 (about 16:50-17:05 UTC) with ADC REST calls (Cloud Run v2, Cloud Tasks, Storage, Firestore, Identity Toolkit admin/v2, Service Usage, Secret Manager, IAM, Monitoring, Logging, Billing Budgets), `curl`, `gh`, the Firestore emulator and `terraform plan` (read-only, `-lock=false`, no apply). PRD: `docs/agent_files/feat-miti-platform-20261120-0153/06-infra/PRD.md` AC1-AC10, R8, R13. Prod runs `205a03f` (rollback of `096e3ed`); staging api live traffic is `096e3ed`.
 
 | AC | Result | Evidence |
 |---|---|---|
 | AC1 | MET | `terraform` 1.9.8 in `~/.local/bin`, ADC quota project still `juno-medical-clarity`, no `gcloud`. `terraform init` + `validate` ("configuration is valid") + `plan` succeed. `plan -target=module.prod` (with `staging_alerts=true` and the live `git_sha` map): **No changes**. Unscoped plan: see "Terraform plan results" below (staging drift only, not a gap in the sweep) |
 | AC2 | MET | Per env: bucket `onolys-audio-{env}` public access prevention `enforced`, uniform access on, soft-delete `0s`, versioning off, `uploads/` delete lifecycle (age 1), CORS PUT/HEAD for the env origin. Queue `steps-{env}` `maxAttempts 2`, backoff 5-30 s. Cloud Run limits match R8 (table below). Firestore `(default)` and `staging`: `FIRESTORE_NATIVE`, `us-central1`, PITR disabled (`(default)` delete-protection on). All 21 APIs in `local.apis` enabled (Service Usage). Identity Platform: email sign-in enabled, sign-up not disabled, password policy `ENFORCE` with `minPasswordLength 8`, `mfa.state DISABLED`. Rules emulator tests (`firestore-rules-test`, `firebase-tools` 14.27.0 `emulators:exec`): 16 pass, 0 fail, including the 3 listener cases (owner listen after create ok, other user denied, missing doc denied). Live rules releases exist for `cloud.firestore` (prod, 16:16Z) and `cloud.firestore/staging` (16:01Z) |
 | AC3 | MET | Bucket IAM: `storage.objectAdmin` only for that env's `api-{env}`/`worker-{env}` (plus Speech service agent `objectViewer`). `datastore.user` bindings are conditioned `resource.name == "projects/onolys/databases/staging"` (staging SAs) and `.../(default)` (prod SAs). Secret IAM: each env's secrets list only its own SAs. Anonymous `GET` on `onolys-worker-prod` and `onolys-worker-staging` returns 403; worker `run.invoker` is only `tasks-invoker-{env}`; api (`/v1/healthz` direct run.app URL) returns 200 and its invoker is `allUsers` |
-| AC4 | MET | Worker env in both envs has `ANTHROPIC_API_KEY` (secret ref `anthropic-api-key-{env}`) and no other provider key; no `STT_*` var (full env list checked). `stt_secrets = {}`: no STT secret exists. Plan with an extra `llm_secrets` entry `GEMINI_API_KEY` (prod-targeted): creates exactly `provider["GEMINI_API_KEY"]` shell, `admin_llm` and `worker_provider` accessor bindings, and updates the worker and admin-backend services (env refs); 3 to add, 2 to change, 0 to destroy; nothing else touched. Image carries `config/` (`api/Dockerfile` `COPY config /app/config`) and `deploy-staging.yml` runs `test -s /app/config/<env>/<file>.yaml` per file against the image digest before deploy; both envs run `ROUTES_FILE=config/{env}/routes.yaml` and serve `/v1/healthz` 200 |
+| AC4 | MET | Worker env in both envs has `ANTHROPIC_API_KEY` (secret ref `anthropic-api-key-{env}`) and no other provider key; no `STT_*` var (full env list checked). `stt_secrets = {}`: no STT secret exists. Plan with an extra `llm_secrets` entry `GEMINI_API_KEY` (prod-targeted): creates exactly `provider["GEMINI_API_KEY"]` shell, and `worker_provider` accessor bindings, and updates the worker service (env refs); 3 to add, 2 to change, 0 to destroy; nothing else touched. Image carries `config/` (`api/Dockerfile` `COPY config /app/config`) and `deploy-staging.yml` runs `test -s /app/config/<env>/<file>.yaml` per file against the image digest before deploy; both envs run `ROUTES_FILE=config/{env}/routes.yaml` and serve `/v1/healthz` 200 |
 | AC5 | MET | `deploy-staging` run 44922123760 (workflow_run after CI 44921577408 on `096e3ed`) succeeded. Repo secrets: only `ANTHROPIC_API_KEY` (nightly); no GCP JSON key; WIF vars only. `https://onolys-app-staging.web.app/v1/healthz` 200 with `code_version 096e3ed`. Signed PUT CORS: preflight `OPTIONS` to `onolys-audio-staging` with the staging origin returns 200 and `access-control-allow-origin: https://onolys-app-staging.web.app`; real signed-URL upload through that origin passed in SP09 (`staging-e2e.md`) |
 | AC6 | MET | `deploy-prod` run 44922391380: `production` environment approved by Tejit, all jobs passed, api digest equal to staging (`sha256:88045a94...`). GitHub environment `production` has `required_reviewers` (tejitpabari99) and a branch policy. `deployer-prod` can be impersonated only by `principalSet .../attribute.environment/production`; the provider condition is `assertion.repository=='Onolys/onolys'` (state ACTIVE), so forks and other workflows cannot mint a token for it |
 | AC7 | MET | Budget `onolys monthly` (USD 20; 50 %, 90 %, 100 % current, 100 % forecast) with channel `Onolys owner email` (id 749283734341274206), project-scoped. Note: a second, non-Terraform budget `onolys` (USD 20; 50/80/100 %, project-level recipients) also exists on the billing account; left untouched. Cloud Run: api max 10 prod / 3 staging, concurrency 80; worker concurrency 2, max 3 both envs. Queues: `maxConcurrentDispatches 6` in both (2 x 3), `maxDispatchesPerSecond 5` |
-| AC8 | MET | This page: resource names, env var table, outputs (incl. `VITE_FIRESTORE_DATABASE`), DNS records, runbook (reference id query, `error_code` table, rollback). DNS section refreshed against `terraform output` today: `app.onolys.com` is now `OWNERSHIP_ACTIVE`, `HOST_ACTIVE`, `CERT_ACTIVE` (was missing on 2026-11-20); `admin.onolys.com` still `OWNERSHIP_MISSING`, `HOST_UNHOSTED`, `CERT_VALIDATING` (needs the owner's DNS records, below) |
+| AC8 | MET | This page: resource names, env var table, outputs (incl. `VITE_FIRESTORE_DATABASE`), DNS records, runbook (reference id query, `error_code` table, rollback). DNS section refreshed against `terraform output` today: `app.onolys.com` is now `OWNERSHIP_ACTIVE`, `HOST_ACTIVE`, `CERT_ACTIVE` (was missing on 2026-11-20) |
 | AC9 | MET (drill partial) | Live revisions carry the deployed commit: staging api (traffic revision `onolys-api-staging-096e3ed-34-1`) and worker `GIT_SHA=096e3ed...`; prod api and worker `205a03f...` (healthz `code_version` agrees on `app.onolys.com`, `onolys-app.web.app` and the run.app URL). Rollback drill run 44922869893 (earlier sha `205a03f`) redeployed rules, web, api and worker and passed smoke; its `tag` job failed (fix in PR #42, unmerged). Roll-forward by tag deferred by the owner; see the drill section above |
 | AC10 | MET (owner confirmed email arrived, 2026-11-21) | Test line written to prod at launch check: `request_id sp06-sweep-1795279972`, `status=failed`, `error_code sp06_sweep_test`, service `onolys-worker-prod`, 16:52:52Z. Alert `0.ofa4aj5s6bk0` on policy `Onolys failed step/run (prod)` opened 16:53:06Z (14 s later), state OPEN. Runbook query `jsonPayload.request_id="sp06-sweep-1795279972"` through `entries:list` returned that one line. Policies `Onolys api 5xx rate (prod|staging)` and metrics `onolys-api-5xx-{env}` exist and are enabled. The agent did not read the owner's inbox: owner to confirm one email "Onolys failed step/run (prod)" arrived. Staging precedent: 71 s incident, SP09 Task 10 |
 
-Cloud Run limits as measured (R8): api 1 CPU / 1 GiB, 60 s, concurrency 80; worker 2 CPU / 2 GiB, 900 s, concurrency 2; admin-backend 1 CPU / 1 GiB, 130 s, concurrency 20 (max 3). Prod admin-backend was removed 2026-11-21. R13: `deploy-staging.yml`, `deploy-prod.yml`, `_deploy-cloudrun.yml` exist; every deploy authenticates by WIF.
+Cloud Run limits as measured (R8): api 1 CPU / 1 GiB, 60 s, concurrency 80; worker 2 CPU / 2 GiB, 900 s, concurrency 2; R13: `deploy-staging.yml`, `deploy-prod.yml`, `_deploy-cloudrun.yml` exist; every deploy authenticates by WIF.
 
 ### Terraform plan results
 
@@ -410,7 +438,6 @@ Command: `cd infra && terraform plan -var staging_alerts=true -var 'git_sha={sta
 - `-target=module.prod`: **No changes** (prod has no drift).
 - Unscoped: `Plan: 0 to add, 2 to change, 0 to destroy`, both on staging, both known and pre-existing, not a sweep failure:
   - `module.staging...google_cloud_run_v2_service.api`: its template is currently the no-traffic PR-42 preview revision (`onolys-api-staging-pr-42-fc89744-14-1`: `SERVICE_MODE=combined`, `ADAPTERS=stub`, preview `CORS_ORIGINS`, `GIT_SHA=fc89744`, `cpu_idle=false`) while 100 % of traffic stays on `onolys-api-staging-096e3ed-34-1`. A preview deploy replaces the service template. Plan would reset it to the real template.
-  - `module.staging...admin_backend[0]`: `GIT_SHA` is `205a03f`, plan sets `096e3ed` (admin deploys come from `deploy-admin.yml`, not `deploy-staging`).
   - Staging worker is not drifting (`GIT_SHA` already `096e3ed`).
   - Follow-up DONE (fix/ci-preview-and-prod-guard): `pr-preview.yml` now runs `scripts/ci/pr_preview.sh restore-template` right after the preview deploy (and `pr-preview-cleanup.yml` runs it again, no-op when already matching). It reads the revision that serves traffic and PATCHes the service `template` back to that revision's config (Cloud Run v2, `updateMask=template`, service etag; traffic and the `pr-<N>` tag are untouched), creating one 0 %-traffic revision `onolys-api-staging-pr-<N>-tpl-<epoch>` that cleanup / sweep delete like any preview revision. After a preview the staging template matches the main revision again (no drift, nothing inherits preview mode). The pr-42 drift above predates this fix; apply or the next staging deploy clears it.
 
@@ -418,7 +445,7 @@ Command: `cd infra && terraform plan -var staging_alerts=true -var 'git_sha={sta
 
 **(a) Worker `max-instances`: KEEP 3 (prod and staging).** Evidence: the Anthropic rate tier (owner step 7a) is not recorded anywhere (`docs/implementation/infra-staging-first-apply.md`: "unknown, owner to confirm"). SP09 measured N=1 only: no back-off, every run 1 attempt, 42-68 s to `report_ready` (default preset, 8,486 in / 1,303 out tokens); N=6 parallel is not measured; no real prod runs exist yet. Worker memory is not a constraint (`validate` peak 0.23 of 2 GiB). Decision: `worker_max_instances` stays 3, so the queue cap stays 6 (2 x 3). To raise: once the tier is confirmed and an N>1 staging run shows no 429 / back-off, set `worker_max_instances` (tfvar); the dispatch cap follows as 2 x new max, then confirm `maxConcurrentDispatches` with the Cloud Tasks API.
 
-**(b) Preview-channel authorised domain (vs SP00 task 9): wildcard REJECTED.** `onolys-app-staging--pr-*.web.app` returns `400 INVALID_AUTHORIZED_DOMAIN` (checked 2026-11-20, `testing.md` "Preview auth domains"); this is not retried. SP00 task 9 fallback (add each channel host through the Identity Toolkit API) exists as `infra/scripts/identity-config.py --domains-only --add-domain HOST` (add-only; Terraform ignores `authorized_domains` drift) but is not wired into the preview workflow. Owner decision 2026-11-21: Google sign-in on previews is not needed (email/password works there), so no workflow step and no `firebaseauth.admin` on the preview deployer. Live list today: `localhost`, `onolys.firebaseapp.com`, `onolys.web.app`, `app.onolys.com`, `onolys-app.web.app`, `onolys-app-staging.web.app`, `onolys-admin-staging.web.app`, `admin.onolys.com`, `onolys-admin.web.app`; no `pr-*` host. Closed (won't-fix, owner).
+**(b) Preview-channel authorised domain (vs SP00 task 9): wildcard REJECTED.** `onolys-app-staging--pr-*.web.app` returns `400 INVALID_AUTHORIZED_DOMAIN` (checked 2026-11-20, `testing.md` "Preview auth domains"); this is not retried. SP00 task 9 fallback (add each channel host through the Identity Toolkit API) exists as `infra/scripts/identity-config.py --domains-only --add-domain HOST` (add-only; Terraform ignores `authorized_domains` drift) but is not wired into the preview workflow. Owner decision 2026-11-21: Google sign-in on previews is not needed (email/password works there), so no workflow step and no `firebaseauth.admin` on the preview deployer. Live list today: `localhost`, `onolys.firebaseapp.com`, `onolys.web.app`, `app.onolys.com`, `onolys-app.web.app`, `onolys-app-staging.web.app`; no `pr-*` host. Closed (won't-fix, owner).
 
 **(c) Hosting `/v1` pass-through: SP09's acceptance, referenced only.** `staging-e2e.md` Task 11(a): Hosting forwards `Authorization`, `/v1` not cached (`no-cache`, no `HIT`/`Age`), AC11 there. Spot check today: `/v1/healthz` returns 200 through `app.onolys.com`, `onolys-app.web.app` and `onolys-app-staging.web.app`.
 
@@ -430,6 +457,5 @@ Command: `cd infra && terraform plan -var staging_alerts=true -var 'git_sha={sta
 
 ### Needs the owner
 
-- DNS for `admin.onolys.com` (now on the staging admin site, 2026-11-21): `CNAME admin.onolys.com -> onolys-admin-staging.web.app` (change from `onolys-admin.web.app` if already added) and `TXT _acme-challenge.admin.onolys.com = xxXeEebxmc605rHqNrOZN69RxCiSd4SQOsPva57mgKs` (re-read `terraform output required_dns_updates` first; the TXT value is per certificate).
 - Anthropic rate tier (step 7a) if `worker_max_instances` is ever raised (currently kept at 3).
 - Merge PR #42 (tag job fix); then the deferred roll-forward-by-tag drill if wanted.

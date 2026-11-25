@@ -6,6 +6,9 @@ from pathlib import Path
 import pytest
 
 MAX_FILE_BYTES = 200_000
+# npm-generated dependency metadata grew with the shared UI dependency. Keep this
+# exact file exempt from the data-size cap; dataset content rules still apply.
+GENERATED_DEPENDENCY_LOCK = "eval/web/package-lock.json"
 
 
 def assert_eval_files_safe(repo: Path) -> None:
@@ -19,7 +22,7 @@ def assert_eval_files_safe(repo: Path) -> None:
             "transcript.json", "gold.json"
         }:
             violations.append(f"dataset content: {name}")
-        if path.stat().st_size > MAX_FILE_BYTES:
+        if name != GENERATED_DEPENDENCY_LOCK and path.stat().st_size > MAX_FILE_BYTES:
             violations.append(f"over {MAX_FILE_BYTES} bytes: {name}")
     assert not violations, "Unsafe tracked eval files:\n" + "\n".join(violations)
 
@@ -59,3 +62,11 @@ def test_guard_allows_metadata_at_limit_and_ignores_untracked_data(synthetic_rep
     track(synthetic_repo, "eval/example/manifest.yaml", b"x" * MAX_FILE_BYTES)
     (synthetic_repo / "eval/example/transcript.json").write_text("synthetic")
     assert_eval_files_safe(synthetic_repo)
+
+
+def test_guard_allows_only_the_generated_web_dependency_lock_to_exceed_size_limit(synthetic_repo):
+    track(synthetic_repo, "eval/web/package-lock.json", b"x" * (MAX_FILE_BYTES + 1))
+    assert_eval_files_safe(synthetic_repo)
+    track(synthetic_repo, "eval/example/package-lock.json", b"x" * (MAX_FILE_BYTES + 1))
+    with pytest.raises(AssertionError, match="over 200000 bytes"):
+        assert_eval_files_safe(synthetic_repo)

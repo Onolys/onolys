@@ -9,7 +9,7 @@ import yaml
 PKG = Path(__file__).resolve().parents[1] / "src" / "onolys_miti"
 DATA = PKG / "data"
 # Current pack_hash (re-pinned after dropping dead reasons_audit config; also in the golden report fixture).
-KNOWN_PACK_HASH = "d98e79648859d15e"
+KNOWN_PACK_HASH = "c13785af2f3da30d"
 
 
 def _hash_paths():

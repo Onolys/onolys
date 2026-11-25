@@ -7,11 +7,11 @@ variable "region" {
 }
 
 variable "env" {
-  description = "Environment name: staging or prod."
+  description = "Environment name: staging, prod or eval."
   type        = string
   validation {
-    condition     = contains(["staging", "prod"], var.env)
-    error_message = "env must be staging or prod."
+    condition     = contains(["staging", "prod", "eval"], var.env)
+    error_message = "env must be staging, prod or eval."
   }
 }
 
@@ -51,18 +51,6 @@ variable "stt_secrets" {
   default     = {}
 }
 
-variable "admin_enabled" {
-  description = "Gates every admin-backend (SP07) resource."
-  type        = bool
-  default     = false
-}
-
-variable "admin_cors_origins" {
-  description = "Browser origins the admin-backend answers CORS preflight for."
-  type        = list(string)
-  default     = []
-}
-
 variable "placeholder_image" {
   description = "Public image used until CI deploys the real one (image is ignored after create)."
   type        = string
@@ -70,11 +58,6 @@ variable "placeholder_image" {
 }
 
 variable "api_max_instances" {
-  type    = number
-  default = 3
-}
-
-variable "admin_max_instances" {
   type    = number
   default = 3
 }
@@ -180,4 +163,58 @@ variable "resend_secret_wired" {
   description = "Wire RESEND_API_KEY on the api and worker via secret_key_ref, plus worker email settings and IAM. Keep false until the owner has seeded a version of resend-api-key-<env> (a revision fails to start if the secret has no version)."
   type        = bool
   default     = false
+}
+
+variable "eval_mode" {
+  description = "Adds EVAL_MODE=true to the api and worker env (eval instance only); omitted entirely when false."
+  type        = bool
+  default     = false
+}
+
+variable "runtime_env" {
+  description = "Value of the ENV env var and the config/<runtime_env>/ directory. null = var.env. Eval runs as `staging`."
+  type        = string
+  default     = null
+}
+
+variable "eval_backend_enabled" {
+  description = "Creates the allowlisted eval-backend service, its grants and the allowlist secret (eval instance only)."
+  type        = bool
+  default     = false
+}
+
+variable "eval_cors_origins" {
+  description = "Browser origins for the eval-backend service (emitted as CORS_ORIGINS, the api Settings name)."
+  type        = list(string)
+  default     = []
+}
+
+variable "public_api_enabled" {
+  description = "Gates the public api and voice Cloud Run services, their allUsers invokers and the voice SA/IAM (off for eval)."
+  type        = bool
+  default     = true
+}
+
+variable "max_active_runs" {
+  description = "MAX_ACTIVE_RUNS env on api and worker; emitted only when non-null."
+  type        = number
+  default     = null
+}
+
+variable "datasets_bucket" {
+  description = "Datasets bucket name emitted as DATASETS_BUCKET on the eval-backend service (read-only use by the backend)."
+  type        = string
+  default     = ""
+}
+
+variable "eval_max_per_provider" {
+  description = "EVAL_MAX_PER_PROVIDER on the eval-backend service: max interviews in parallel per AI provider (enforced by the backend scheduler, not Terraform)."
+  type        = number
+  default     = 2
+}
+
+variable "eval_owner_uid" {
+  description = "EVAL_OWNER_UID on the eval-backend service: the single uid every allowlisted eval user acts as."
+  type        = string
+  default     = "eval"
 }

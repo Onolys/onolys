@@ -1,28 +1,28 @@
 /**
  * `/sessions/:id` (PRD R4, D7, D14): status timeline derived from the live status doc,
- * gate slots, error cards and delete. The upload, rating card and speaker gate mount in
+ * gate slots and error cards. Completed sessions open their report automatically.
+ * The upload, rating card and speaker gate mount in
  * `slots.tsx`.
  */
 import { Button, Progress, Spinner } from "@onolys/ui";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router";
+import { Link, Navigate, useParams } from "react-router";
 import { unwrap } from "../../api/client";
 import { cancelErrorMessage, describeError, failureView } from "../../api/errors";
 import type { SessionStatusDoc } from "../../api/statusListener";
 import { useApiClient } from "../../auth/useApiClient";
-import { ACTIONS, H1, LINK, LINK_BTN, NOTE, PAGE } from "../../components/classes";
+import { H1, LINK, LINK_BTN, NOTE, PAGE } from "../../components/classes";
 import { Notice } from "../../components/Notice";
+import { codePointLength, sliceCodePoints } from "../../lib/codepoints";
 import { formatElapsed, formatResetTime } from "../../lib/format";
 import { blockingPeriod, formatBlockingReset } from "../usage/usage";
 import { USAGE_KEY, useUsage } from "../usage/useUsage";
 import { CancelLink, isCancellable } from "./CancelLink";
 import { CancelledView } from "./CancelledView";
-import { DeleteDialog } from "./DeleteDialog";
 import { ErrorCard } from "./ErrorCard";
 import { RetryButton } from "./RetryButton";
 import { UploadFailedView } from "./UploadFailedView";
-import { dropJob } from "../upload/uploader";
 import { RatingCardSlot, SpeakerGateSlot, UploadSlot } from "./slots";
 import { deriveTimeline } from "./timeline";
 import { useProgress, useSessionStatus } from "./useSessionStatus";
@@ -46,11 +46,8 @@ export function SessionPage() {
 function SessionView({ id }: { id: string }) {
   const client = useApiClient();
   const queryClient = useQueryClient();
-  const navigate = useNavigate();
-  const deleting = useRef(false);
-  const view = useSessionStatus(id, deleting);
-  const [confirmDelete, setConfirmDelete] = useState(false);
-  const deleteButton = useRef<HTMLButtonElement>(null);
+  const quiet = useRef(false);
+  const view = useSessionStatus(id, quiet);
 
   const doc: SessionStatusDoc | null = view.phase === "live" || view.phase === "fallback" ? view.doc : null;
   // This tab's upload byte fraction (UploadSlot), so the bar moves during the upload (05-processing-screen D4).
@@ -66,18 +63,26 @@ function SessionView({ id }: { id: string }) {
   const resetsAt = formatBlockingReset(blocking) ?? formatResetTime(usage.data?.eval.day.resets_at);
 
   // An interview-linked session's first run is free (SP11 R5), so a held first start is not blocked by
-  // the eval cap. The status doc is PHI-free and carries no link: ask the session detail, only then.
-  const [cancelOpened, setCancelOpened] = useState(false);
+  // the eval cap. The status doc is PHI-free; session detail supplies the free-run flag.
   const firstStartHeld =
     doc !== null &&
     doc.state === "awaiting_input" &&
     (doc.error_code === "daily_cap_reached" || doc.error_code === "concurrent_runs");
   const detail = useQuery({
     queryKey: ["session-detail", id],
-    // The cancel dialog needs `free_run` too (D7), but only once it is opened: no extra GET otherwise.
-    enabled: firstStartHeld || (cancelOpened && isCancellable(doc?.state)),
+    // The status document omits session names; load private metadata through the API.
     queryFn: async () => unwrap(await client.GET("/sessions/{id}", { params: { path: { id } } })),
   });
+  const rating = useQuery({
+    queryKey: ["session-heading-goal", id, doc?.rating_submitted],
+    enabled: Boolean(detail.data && !detail.data.title?.trim()),
+    retry: false,
+    queryFn: async () => unwrap(await client.GET("/sessions/{id}/rating", { params: { path: { id } } })),
+  });
+  const savedGoal = rating.data?.final?.card?.change_goal ?? rating.data?.draft?.card?.change_goal;
+  const goal = typeof savedGoal === "string" ? savedGoal.trim() : "";
+  const label = detail.data?.title?.trim() || (goal ? `${sliceCodePoints(goal, 0, 20)}${codePointLength(goal) > 20 ? "…" : ""}` : "");
+  const heading = label ? `Session - ${label}` : "Session";
   const freeFirstRun = firstStartHeld && Boolean(detail.data?.free_run);
 
   // Cancel (04-cancel R9): idempotent, so a failed POST is safe to retry.
@@ -108,32 +113,13 @@ function SessionView({ id }: { id: string }) {
     resetRetry();
   }, [docState, retriesLeft, resetRun, resetRetry]);
 
-  const remove = useMutation({
-    mutationFn: async () => {
-      deleting.current = true; // the doc vanishing is expected, not an error
-      try {
-        unwrap(await client.DELETE("/sessions/{id}", { params: { path: { id } } }));
-      } catch (e) {
-        deleting.current = false;
-        throw e;
-      }
-    },
-    onSuccess: () => {
-      dropJob(id); // a deleted session's upload job (and its File) goes with it
-      void queryClient.invalidateQueries({ queryKey: ["sessions"] });
-      void navigate("/sessions");
-    },
-  });
-
-  const closeDialog = () => {
-    setConfirmDelete(false);
-    remove.reset();
-  };
+  const reportVersion = doc?.latest_report_version ?? detail.data?.latest_report_version;
+  if (reportVersion != null) return <Navigate to={`/sessions/${id}/reports/${reportVersion}`} replace />;
 
   if (view.phase === "error") {
     return (
       <div className={PAGE}>
-        <h1 className={H1}>Session</h1>
+        <h1 className={H1}>{heading}</h1>
         {/* A failed upload with a stub shows UploadFailedView; a missing session without one is generic not-found (R11). */}
         <ErrorCard
           code={view.error.code}
@@ -156,7 +142,7 @@ function SessionView({ id }: { id: string }) {
   if (doc && doc.state === "upload_failed") {
     return (
       <div className={PAGE}>
-        <h1 className={H1}>Session</h1>
+        <h1 className={H1}>{heading}</h1>
         <UploadFailedView code={doc.error_code} reference={id} />
       </div>
     );
@@ -171,10 +157,10 @@ function SessionView({ id }: { id: string }) {
 
   return (
     <div className={PAGE}>
-      <h1 className={H1}>Session</h1>
+      <h1 className={H1}>{heading}</h1>
 
       {cancelled ? (
-        <CancelledView counted={cancelledCounted} onDelete={() => setConfirmDelete(true)} deleteRef={deleteButton} />
+        <CancelledView counted={cancelledCounted} />
       ) : null}
 
       {cancelled ? null : <div className="grid gap-1 font-semibold" role="status" aria-live="polite">
@@ -213,21 +199,6 @@ function SessionView({ id }: { id: string }) {
             </p>
           ) : null}
 
-          {isCancellable(doc.state) ? (
-            <div data-slot="cancel" className="flex justify-end">
-              <CancelLink
-                state={doc.state}
-                freeRun={Boolean(detail.data?.free_run)}
-                pending={cancel.isPending}
-                onOpen={() => {
-                  setCancelOpened(true);
-                  cancel.reset();
-                }}
-                onConfirm={() => cancel.mutate()}
-              />
-            </div>
-          ) : null}
-
           <ol className="m-0 grid list-none gap-2 p-0" aria-label="Progress">
             {timeline.steps.map((s) => (
               <li
@@ -249,6 +220,20 @@ function SessionView({ id }: { id: string }) {
             ))}
           </ol>
 
+          {isCancellable(doc.state) ? (
+            <div data-slot="cancel" className="flex justify-end">
+              <CancelLink
+                state={doc.state}
+                freeRun={Boolean(detail.data?.free_run)}
+                pending={cancel.isPending}
+                onOpen={() => {
+                  cancel.reset();
+                }}
+                onConfirm={() => cancel.mutate()}
+              />
+            </div>
+          ) : null}
+
           {timeline.capReached ? (
             <div>
               <Button
@@ -257,14 +242,6 @@ function SessionView({ id }: { id: string }) {
                 onClick={() => run.mutate()}
               >
                 Start
-              </Button>
-            </div>
-          ) : null}
-
-          {doc.state === "report_ready" && doc.latest_report_version !== null ? (
-            <div>
-              <Button asChild>
-                <Link to={`/sessions/${id}/reports/${doc.latest_report_version}`}>View report</Link>
               </Button>
             </div>
           ) : null}
@@ -289,38 +266,16 @@ function SessionView({ id }: { id: string }) {
           {runError ? <ErrorCard code={runError.code} reference={runError.requestId} resetsAt={resetsAt} /> : null}
 
           {doc.state === "created" || doc.state === "uploading" || doc.state === "upload_incomplete" ? <UploadSlot sessionId={id} doc={doc} onFraction={setUploadFraction} /> : null}
-          {doc.state !== "deleting" ? <RatingCardSlot sessionId={id} doc={doc} readOnly={doc.rating_submitted || doc.state === "report_ready"} /> : null}
-          {doc.transcript_ready && doc.state !== "deleting" && (!doc.speaker_confirmed || doc.state === "failed") ? (
+          {doc.state !== "deleting" ? <RatingCardSlot sessionId={id} doc={doc} readOnly={doc.rating_submitted || doc.state === "running" || doc.state === "failed" || doc.state === "report_ready"} /> : null}
+          {doc.transcript_ready && !doc.speaker_confirmed && doc.state === "awaiting_input" ? (
             <SpeakerGateSlot sessionId={id} doc={doc} />
           ) : null}
 
           {cancel.error ? (
             <ErrorCard message={cancelErrorMessage(cancel.error)} code={undefined} reference={id} />
           ) : null}
-
-          <div className={ACTIONS}>
-            <Button
-              ref={deleteButton}
-              type="button"
-              variant="secondary"
-              onClick={() => setConfirmDelete(true)}
-            >
-              Delete session
-            </Button>
-          </div>
         </>
       )}
-
-      <DeleteDialog open={confirmDelete} busy={remove.isPending} onConfirm={() => remove.mutate()} onCancel={closeDialog}
-        onClosed={() => deleteButton.current?.focus()}
-      >
-        {remove.error ? (
-          <ErrorCard
-            code={describeError(remove.error).code}
-            reference={describeError(remove.error).requestId}
-          />
-        ) : null}
-      </DeleteDialog>
     </div>
   );
 }

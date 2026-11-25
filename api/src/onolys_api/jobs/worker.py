@@ -279,13 +279,13 @@ class TaskRunner:
         counted = None
         if spec.scope == "run" and p.run_id:  # the refund already ran in `run.py`
             # backstop (M-2): if that release failed, try again; a no-op when it already ran
-            self._safe(
-                release_failed_run, self.repo, p.uid, p.sid, p.run_id, kind_for_code(code), None
-            )
-            try:
-                counted = self.repo.get_run(p.uid, p.sid, p.run_id).unit_kept
-            except NotFoundError:
-                pass
+            def release_and_count():
+                nonlocal counted
+                counted = release_failed_run(
+                    self.repo, p.uid, p.sid, p.run_id, kind_for_code(code), None
+                )
+
+            self._safe(release_and_count)
         elif spec.scope != "run":  # interview sessions are never counted (R5, R9)
             try:
                 if self.repo.get_session(p.uid, p.sid).interview_id:

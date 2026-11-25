@@ -30,11 +30,29 @@ def test_validates_schema():
     assert not errors, errors[:3]
 
 
-def test_matches_golden_except_volatile_and_run_info():
+def test_matches_golden_payload_with_explicit_builder_provenance():
     got, want = doc(), load("report_no_rating.json")
+    # The builder uses legacy synthetic inputs; the complete golden is now the
+    # fixed-build adapter report. Assert their intentional provenance separately.
+    provenance = ("models", "preset", "code_version", "params")
+    assert {k: got["header"][k] for k in provenance} == {
+        "models": {name: "anthropic/claude-sonnet-5-5"
+                   for name in ("miti_code", "miti_globals", "tips")},
+        "preset": "fixture", "code_version": "fixture",
+        "params": {"n_runs": 1, "preset": "fixture", "code_version": "fixture"},
+    }
+    assert {k: want["header"][k] for k in provenance} == {
+        "models": {name: "gemini/gemini-4-neon" for name in ("miti_code", "miti_globals")},
+        "preset": None, "code_version": "fixture-build",
+        "params": {"change_goal": "walk more during the working week", "seed": None,
+                   "language": None, "n_runs": 1, "preset": None,
+                   "code_version": "fixture-build", "coded_span": None},
+    }
     for d in (got, want):
         for k in ("created_at", "request_id", "run_info"):
             d.pop(k)
+        for k in provenance:
+            d["header"].pop(k)
     assert got == want
 
 
@@ -45,7 +63,16 @@ def test_run_info_renames():
     golden = load("report_no_rating.json")["run_info"]
     assert ri["evaluation"]["pack"] == golden["evaluation"]["pack"]
     assert ri["evaluation"]["prompt_hashes"] == golden["evaluation"]["prompt_hashes"]
-    assert set(ri["evaluation"]) - {"span"} == set(golden["evaluation"])
+    assert set(ri["evaluation"]) == set(golden["evaluation"])
+    assert ri["evaluation"] == {
+        **golden["evaluation"], "code_version": "fixture", "preset": "fixture",
+    }
+    assert ri["evaluation"]["span"] is None
+    assert ri["miti"] == inputs()["result"].run_info.model_dump(mode="json")
+    assert ri["miti"]["span"] is None
+    assert golden["miti"]["span"] == {
+        "mode": "whole", "duration_s": 1205, "seed": "req-golden",
+    }
 
 
 def test_layout_follows_report_yaml():

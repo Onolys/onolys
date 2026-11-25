@@ -130,6 +130,7 @@ export type Role = "supporting" | "contradicting" | "qualifying";
 export type Evidence1 = AuditEvidence[];
 export type Claims = AuditClaim[];
 export type Items1 = AuditItem[];
+export type Title1 = string | null;
 export type Rank = number;
 export type ItemId4 = string;
 export type Observation = string;
@@ -379,6 +380,7 @@ export interface AuditEvidence {
   role: Role;
 }
 export interface Tip {
+  title?: Title1;
   rank: Rank;
   item_id: ItemId4;
   observation: Observation;

@@ -3,8 +3,8 @@
 The model sees the selected span (turn ids and text), the change goal and the MITI global
 definitions, never counts. It returns per global a score, a reason, evidence quotes and
 `poor_practice_cited`. Code then: locates each quote in its turn (code-point offsets; unlocatable
-ones are dropped with `quote_not_found`), errors on an out-of-scale score, resets to the scale
-default with `insufficient_evidence` when fewer than `evidence_min` quotes were located, and
+ones are dropped with `quote_not_found`), errors on an out-of-scale score, flags thin evidence
+with an info-only `insufficient_evidence` diagnostic without changing the model score, and
 applies a MITI cap only where the item declares `caps[]` (`source: "capped"`, `raw_score` kept).
 A truncated or invalid response (`LLMBadOutput`) is retried once, then the run fails.
 
@@ -183,19 +183,11 @@ def _rate(item: dict[str, Any], rating: Any, prepared: Prepared, out: GlobalsRes
         out.warnings.append(
             ResultWarning(
                 code="insufficient_evidence",
+                severity="info",
                 item_id=iid,
-                detail=f"{len(evidence)} located evidence quote(s), {need} required; "
-                f"reset to default {scale['default']}",
+                detail=f"{len(evidence)} located evidence quote(s), below evidence minimum {need}",
             )
         )
-        out.globals[iid] = GlobalScore(
-            score=scale["default"],
-            source="default",
-            raw_score=raw,
-            reason=rating.reason,
-            evidence=[],
-        )
-        return
     poor = bool(_locate_all(iid, rating.poor_practice_cited, prepared, out.warnings))
     cap = _cap_for(item, raw, poor)
     score, source = (raw, "model") if cap is None else (cap, "capped")

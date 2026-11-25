@@ -17,6 +17,7 @@ import {
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { Link, useBlocker, useLocation, useNavigate, useParams } from "react-router";
+import { pageLoadError } from "../../pageLoadError";
 import { unwrap } from "../../api/client";
 import { ApiError, describeError } from "../../api/errors";
 import type { Schemas } from "../../api/types";
@@ -77,6 +78,7 @@ function InterviewView({ id }: { id: string }) {
 
   const interview = useQuery({
     queryKey: ["interview", id],
+    throwOnError: pageLoadError,
     initialData: fromPicker && fromPicker.interview_id === id ? fromPicker : undefined,
     queryFn: async () => unwrap(await client.GET("/interviews/{id}", { params: { path: { id } } })),
   });

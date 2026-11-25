@@ -118,7 +118,20 @@ def test_publish_report_after_a_cancel_from_another_instance_stores_nothing(repo
 
     uid, sid = f"u-{uuid.uuid4().hex[:10]}", f"s-{uuid.uuid4().hex[:10]}"
     _running_session(repos[0], uid, sid)
-    repos[0].create_run(uid, sid, "r1", RunDoc(uid=uid, session_id=sid, run_id="r1"))
+    repos[0].create_run(
+        uid,
+        sid,
+        "r1",
+        RunDoc(
+            change_goal="",
+            clinician_speaker="S1",
+            language="en",
+            transcript_sha256="test-hash",
+            uid=uid,
+            session_id=sid,
+            run_id="r1",
+        ),
+    )
     repos[1].cancel_session(uid, sid, caps.utc_date(), LimitDefaults(10, 5))
     out = repos[0].publish_report(
         uid, sid, "r1", ReportDoc(version=0, run_id="r1", report={"k": 1}), {"stage": None},
@@ -166,7 +179,7 @@ def test_stale_fail_releases_runs_in_one_txn_and_reconcile_repairs_a_leak(repos)
     for rid in ("r1", "r2"):
         assert repos[0].reserve_usage(uid, "eval", day, defaults, 9) == "ok"
         repos[0].create_run(
-            uid, sid, rid, RunDoc(uid=uid, session_id=sid, run_id=rid, status="running",
+            uid, sid, rid, RunDoc(change_goal="", clinician_speaker="S1", language="en", transcript_sha256="test-hash", uid=uid, session_id=sid, run_id=rid, status="running",
                                   cap_date=day),
         )  # fmt: skip
     err = SessionError(code="deadline_exceeded", step="run", kind="transient")

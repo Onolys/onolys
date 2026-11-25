@@ -39,3 +39,33 @@ A route may be an alias (`miti_code: {alias: mid}`). A `presets:` section bundle
 `cache_prefix` (one) or `cache_prefixes` (up to two, each a cache breakpoint) become leading system blocks marked ephemeral; the call's own `system` text follows. A fixture key includes `cache_prefixes` only when present.
 
 `LLM_PROVIDER` and `LLM_MODEL` replace the concrete text routes' provider settings; `LLM_EFFORT` independently replaces their `extra_params.reasoning_effort`, validated against each effective tier in `config/models.yaml`. The order is route data, `MITI_MODEL_*`, provider/model override, effort override, then preset overlay. Empty effort preserves the route value. Neither override changes the `oneshot` baseline, and effort leaves token limits and other extra parameters intact. Staging CI invokes the same `load_registry` validation before cloud side effects and feeds only validated outputs into API/worker deployment. The eval per-run model/tier/effort picker continues to use `combo_routes` independently.
+
+
+### OpenAI text routes
+
+The shared catalog offers `openai/gpt-6.1-sol`, `openai/gpt-6.1-terra` and
+`openai/gpt-6-luna`, using `OPENAI_API_KEY` and implicit provider caching. Sol accepts
+low, medium, high, xhigh and max; Terra and Luna also accept the explicit string
+`none`. Each defaults to medium in the picker, advertises 1,050,000 context tokens
+and 128,000 maximum output tokens, and omits temperature. Sources checked
+2026-11-25: [Sol](https://developers.openai.com/api/docs/models/gpt-6.1-sol),
+[Terra](https://developers.openai.com/api/docs/models/gpt-6.1-terra),
+[Luna](https://developers.openai.com/api/docs/models/gpt-6-luna).
+
+Eval combo output budgets remain application limits: none/low 16k, medium 32k,
+high 48k, xhigh/max 64k, further bounded by the model maximum. Other provider
+budgets and defaults are unchanged. Request-specific 4k/8k stage limits still
+clamp those budgets. These limits include reasoning tokens; high effort can exhaust
+a small stage budget before the JSON finishes. Existing length-finish handling
+marks that response as truncated and retains billable usage; larger model limits
+do not guarantee adequate room for every transcript.
+
+Offline HTTP-boundary tests exercise the installed LiteLLM 1.110.2 adapter for all
+17 supported tier/effort pairs with 4k and 8k limits and both JSON output modes.
+It already maps `max_tokens` to OpenAI's `max_completion_tokens`, forwards every
+effort including `none`, and reports completion usage including reasoning tokens
+without adding them twice. No provider adapter workaround is needed. These tests
+prove request transformation and usage accounting, not live model access or quality.
+The fallback price book records Standard text rates (Sol $2/$10, Terra $1/$5,
+Luna $0.10/$0.50 input/output per million) as estimates; its existing flat token
+calculation omits cache discounts, cache-write and long-context adjustments.

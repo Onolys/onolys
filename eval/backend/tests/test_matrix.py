@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 from test_app import AUTH, client
-from test_runs import services, start
+from test_runs import eval_routes, services, start
 
 from onolys_eval_backend.matrix import RunTooLarge, SelectionError, plan_units, validate_selection
 
@@ -63,20 +63,17 @@ def test_legacy_presets_body_422(services):
     assert services.repository.list_runs() == {}
 
 
-def test_dataset_without_human_gets_human_units_and_echo(services):
+def test_dataset_without_human_gets_human_counted_and_echo(services):
     c = client(services=services)
     response = start(c, engines=["miti"], selection=SEL)
     assert response.status_code == 200, response.text
     body = response.json()
     assert body["engines"] == ["miti", "human"]
-    units = services.repository.list_units(body["run_id"]).values()
-    assert sorted(u["engine"] for u in units) == ["human", "miti", "miti"]
-    ai = [u for u in units if u["engine"] == "miti"]
-    assert {u["combo_key"] for u in ai} == {
+    doc = services.repository.get_run(body["run_id"])
+    # 1 session x (human + 2 combos); human is complete at creation, no units are stored.
+    assert (doc["total_units"], doc["completed_units"], doc["done_units"]) == (3, 1, 1)
+    assert {c["model"] + "/" + c["tier"] + "/" + c["effort"] for c in doc["combos"]} == {
         "claude/claude-sonnet-5-5/low", "claude/claude-sonnet-5-5/high"}
-    assert all(u["combo"] and u["repeat"] == 0 for u in ai)
-    human = next(u for u in units if u["engine"] == "human")
-    assert human["combo"] is None and human["combo_key"] is None
 
 
 def test_specific_422_message_and_no_writes(services):
@@ -110,3 +107,22 @@ def test_rerun_dataset_adds_human_and_rejects_legacy(services):
     legacy = c.post(f"/v1/runs/{rid}/rerun", headers=AUTH,
                     json={"engines": ["miti"], "presets": ["other"], "repeats": 1})
     assert legacy.status_code == 422
+
+
+def test_openai_full_matrix_pins_routes_and_drops_only_sol_none(services):
+    selection = {
+        "models": ["openai"], "tiers": ["gpt-6.1-sol", "gpt-6.1-terra", "gpt-6-luna"],
+        "efforts": ["none", "low", "medium", "high", "xhigh", "max"],
+    }
+    response = start(client(services=services), selection=selection)
+    assert response.status_code == 200, response.text
+    doc = services.repository.get_run(response.json()["run_id"])
+    assert len(doc["combos"]) == 17
+    assert all(combo["model"] == "openai" for combo in doc["combos"])
+    assert not any(c["tier"] == "gpt-6.1-sol" and c["effort"] == "none" for c in doc["combos"])
+    resolved = doc["saved_config"]["resolved_combos"]
+    assert len(resolved) == 17
+    for key, item in resolved.items():
+        assert item["litellm_id"].startswith("openai/gpt-6")
+        assert item["context_tokens"] == 1050000
+        assert item["effort"] == key.rsplit("/", 1)[1]

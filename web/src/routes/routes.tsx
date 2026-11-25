@@ -23,6 +23,7 @@ import * as P from "./placeholders";
 export const routes: RouteObject[] = [
   {
     element: <Layout />,
+    errorElement: <RouteError standalone />,
     children: [
       {
         errorElement: <RouteError />,

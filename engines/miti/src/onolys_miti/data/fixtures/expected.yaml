@@ -6,6 +6,20 @@ fixtures:
     transcript: good_practice.json
     params: good_practice.params.json
     change_goal: walk more during the working week
+    volleys:
+      count: 10
+      reason: Manual pp. 13, 15–16; substantive client turns break, consecutive clinician turns stay together.
+      turn_ids:
+      - [t2]
+      - [t4]
+      - [t6]
+      - [t8, t9]
+      - [t11]
+      - [t13]
+      - [t15]
+      - [t17]
+      - [t19]
+      - [t21]
     warnings: []
     counts:
       gi: 1
@@ -179,6 +193,22 @@ fixtures:
     transcript: poor_practice.json
     params: poor_practice.params.json
     change_goal: cut back on evening drinking
+    volleys:
+      count: 12
+      reason: Manual pp. 13, 15–16; substantive client turns break, consecutive clinician turns stay together.
+      turn_ids:
+      - [t2]
+      - [t4]
+      - [t6]
+      - [t8]
+      - [t10]
+      - [t12]
+      - [t14]
+      - [t16]
+      - [t18]
+      - [t20]
+      - [t22]
+      - [t24]
     warnings: []
     counts:
       gi: 2
@@ -356,6 +386,15 @@ fixtures:
     transcript: short_session.json
     params: short_session.params.json
     change_goal: take blood pressure medicine every day
+    volleys:
+      count: 5
+      reason: Manual pp. 13, 15–16; substantive client turns break, consecutive clinician turns stay together.
+      turn_ids:
+      - [t2]
+      - [t4]
+      - [t6]
+      - [t8]
+      - [t10]
     warnings:
     - short_session
     counts:
@@ -462,3 +501,319 @@ fixtures:
       quote: We can see how it goes next time.
       code: null
       rationale: 'Intended code: none (synthetic).'
+  batch_edge:
+    transcript: batch_edge.json
+    params: batch_edge.params.json
+    change_goal: walk during lunch breaks
+    volleys:
+      count: 27
+      reason: 'Manual pp.13, 15–16: substantive answers break; facilitative acknowledgements between statements do not. Direct-question answers always break.'
+      turn_ids:
+      - - b01a
+        - b01b
+      - - b02a
+      - - b03a
+      - - b04a
+      - - b05a
+      - - b06a
+      - - b07a
+      - - b08a
+      - - b09a
+      - - b10a
+      - - b11a
+      - - b12a
+      - - b13a
+      - - b14a
+      - - b15a
+      - - b16a
+      - - b17a
+      - - b18a
+      - - b19a
+      - - b20a
+      - - b21a
+      - - b22a
+      - - b23a
+      - - b24a
+      - - b25
+      - - b26
+      - - b27
+    warnings: []
+    counts:
+      gi: 24
+      persuade: 0
+      persuade_permission: 1
+      question: 0
+      sr: 0
+      cr: 0
+      affirm: 0
+      seek_collab: 1
+      emphasize_autonomy: 1
+      confront: 0
+    count_reasons: &id002
+      gi: 'Manual pp.13, 16–17: neutral information, once per volley.'
+      persuade: 'Manual pp.13, 17–20: one persuasion slot; permission takes precedence (volley extension: PRD D3).'
+      persuade_permission: 'Manual pp.18–20: advice after explicit permission; one persuasion slot at p.13.'
+      question: 'Manual pp.13, 21: information-seeking question, once per volley; asking permission is collaboration.'
+      sr: 'Manual pp.13, 22–23: repeats client meaning without adding meaning, once per volley.'
+      cr: 'Manual pp.13, 22–24: no added-meaning reflection in these hand examples.'
+      affirm: 'Manual pp.25–26: no positive attribution of client strengths in these hand examples.'
+      seek_collab: 'Manual pp.26–27: asking permission before advice shares power.'
+      emphasize_autonomy: 'Manual pp.27–28: explicit client control over decisions.'
+      confront: 'Manual pp.20–21: no disagreement, blame or challenge in these hand examples.'
+    summaries:
+      technical: 3.0
+      relational: 3.0
+      pct_cr: null
+      reflection_question_ratio: null
+      total_mia: 2
+      total_mina: 0
+    globals:
+      cct:
+        score: 3
+        range:
+        - 2
+        - 4
+        reason: 'Manual p.4: hand-set starting point for this batch-structure example.'
+        evidence: &id001 []
+        poor_practice_cited: []
+      sst:
+        score: 3
+        range:
+        - 2
+        - 4
+        reason: 'Manual p.4: hand-set starting point for this batch-structure example.'
+        evidence: *id001
+        poor_practice_cited: []
+      partnership:
+        score: 3
+        range:
+        - 2
+        - 4
+        reason: 'Manual p.4: hand-set starting point for this batch-structure example.'
+        evidence: *id001
+        poor_practice_cited: []
+      empathy:
+        score: 3
+        range:
+        - 2
+        - 4
+        reason: 'Manual p.4: hand-set starting point for this batch-structure example.'
+        evidence: *id001
+        poor_practice_cited: []
+    utterances:
+    - turn_id: b01a
+      quote: The information sheet lists opening hours for the surrounding area. It includes the published times and locations, together with a telephone number for checking details when the schedule changes.
+      code: gi
+      rationale: 'Manual pp.13, 16–17: neutral information, once per volley.'
+    - turn_id: b01b
+      quote: The same sheet is available at the front desk.
+      code: gi
+      rationale: 'Manual pp.13, 16–17: neutral information, once per volley.'
+    - turn_id: b02a
+      quote: The information sheet lists walking routes for the surrounding area. It includes the published times and locations, together with a telephone number for checking details when the schedule changes.
+      code: gi
+      rationale: 'Manual pp.13, 16–17: neutral information, once per volley.'
+    - turn_id: b03a
+      quote: The information sheet lists indoor corridors for the surrounding area. It includes the published times and locations, together with a telephone number for checking details when the schedule changes.
+      code: gi
+      rationale: 'Manual pp.13, 16–17: neutral information, once per volley.'
+    - turn_id: b04a
+      quote: The information sheet lists building entrances for the surrounding area. It includes the published times and locations, together with a telephone number for checking details when the schedule changes.
+      code: gi
+      rationale: 'Manual pp.13, 16–17: neutral information, once per volley.'
+    - turn_id: b05a
+      quote: The information sheet lists local maps for the surrounding area. It includes the published times and locations, together with a telephone number for checking details when the schedule changes.
+      code: gi
+      rationale: 'Manual pp.13, 16–17: neutral information, once per volley.'
+    - turn_id: b06a
+      quote: The information sheet lists weather reports for the surrounding area. It includes the published times and locations, together with a telephone number for checking details when the schedule changes.
+      code: gi
+      rationale: 'Manual pp.13, 16–17: neutral information, once per volley.'
+    - turn_id: b07a
+      quote: The information sheet lists work calendars for the surrounding area. It includes the published times and locations, together with a telephone number for checking details when the schedule changes.
+      code: gi
+      rationale: 'Manual pp.13, 16–17: neutral information, once per volley.'
+    - turn_id: b08a
+      quote: The information sheet lists lunch schedules for the surrounding area. It includes the published times and locations, together with a telephone number for checking details when the schedule changes.
+      code: gi
+      rationale: 'Manual pp.13, 16–17: neutral information, once per volley.'
+    - turn_id: b09a
+      quote: The information sheet lists public benches for the surrounding area. It includes the published times and locations, together with a telephone number for checking details when the schedule changes.
+      code: gi
+      rationale: 'Manual pp.13, 16–17: neutral information, once per volley.'
+    - turn_id: b10a
+      quote: The information sheet lists park paths for the surrounding area. It includes the published times and locations, together with a telephone number for checking details when the schedule changes.
+      code: gi
+      rationale: 'Manual pp.13, 16–17: neutral information, once per volley.'
+    - turn_id: b11a
+      quote: The information sheet lists office stairs for the surrounding area. It includes the published times and locations, together with a telephone number for checking details when the schedule changes.
+      code: gi
+      rationale: 'Manual pp.13, 16–17: neutral information, once per volley.'
+    - turn_id: b12a
+      quote: The information sheet lists crossing signals for the surrounding area. It includes the published times and locations, together with a telephone number for checking details when the schedule changes.
+      code: gi
+      rationale: 'Manual pp.13, 16–17: neutral information, once per volley.'
+    - turn_id: b13a
+      quote: The information sheet lists water fountains for the surrounding area. It includes the published times and locations, together with a telephone number for checking details when the schedule changes.
+      code: gi
+      rationale: 'Manual pp.13, 16–17: neutral information, once per volley.'
+    - turn_id: b14a
+      quote: The information sheet lists notice boards for the surrounding area. It includes the published times and locations, together with a telephone number for checking details when the schedule changes.
+      code: gi
+      rationale: 'Manual pp.13, 16–17: neutral information, once per volley.'
+    - turn_id: b15a
+      quote: The information sheet lists meeting rooms for the surrounding area. It includes the published times and locations, together with a telephone number for checking details when the schedule changes.
+      code: gi
+      rationale: 'Manual pp.13, 16–17: neutral information, once per volley.'
+    - turn_id: b16a
+      quote: The information sheet lists reception desks for the surrounding area. It includes the published times and locations, together with a telephone number for checking details when the schedule changes.
+      code: gi
+      rationale: 'Manual pp.13, 16–17: neutral information, once per volley.'
+    - turn_id: b17a
+      quote: The information sheet lists walking distances for the surrounding area. It includes the published times and locations, together with a telephone number for checking details when the schedule changes.
+      code: gi
+      rationale: 'Manual pp.13, 16–17: neutral information, once per volley.'
+    - turn_id: b18a
+      quote: The information sheet lists bus stops for the surrounding area. It includes the published times and locations, together with a telephone number for checking details when the schedule changes.
+      code: gi
+      rationale: 'Manual pp.13, 16–17: neutral information, once per volley.'
+    - turn_id: b19a
+      quote: The information sheet lists station exits for the surrounding area. It includes the published times and locations, together with a telephone number for checking details when the schedule changes.
+      code: gi
+      rationale: 'Manual pp.13, 16–17: neutral information, once per volley.'
+    - turn_id: b20a
+      quote: The information sheet lists library hours for the surrounding area. It includes the published times and locations, together with a telephone number for checking details when the schedule changes.
+      code: gi
+      rationale: 'Manual pp.13, 16–17: neutral information, once per volley.'
+    - turn_id: b21a
+      quote: The information sheet lists shared calendars for the surrounding area. It includes the published times and locations, together with a telephone number for checking details when the schedule changes.
+      code: gi
+      rationale: 'Manual pp.13, 16–17: neutral information, once per volley.'
+    - turn_id: b22a
+      quote: The information sheet lists nearby squares for the surrounding area. It includes the published times and locations, together with a telephone number for checking details when the schedule changes.
+      code: gi
+      rationale: 'Manual pp.13, 16–17: neutral information, once per volley.'
+    - turn_id: b23a
+      quote: The information sheet lists covered passages for the surrounding area. It includes the published times and locations, together with a telephone number for checking details when the schedule changes.
+      code: gi
+      rationale: 'Manual pp.13, 16–17: neutral information, once per volley.'
+    - turn_id: b24a
+      quote: The information sheet lists community maps for the surrounding area. It includes the published times and locations, together with a telephone number for checking details when the schedule changes.
+      code: gi
+      rationale: 'Manual pp.13, 16–17: neutral information, once per volley.'
+    - turn_id: b25
+      quote: May I offer a suggestion about fitting a short walk into your lunch break?
+      code: seek_collab
+      rationale: 'Manual pp.26–27: asking permission before advice shares power.'
+    - turn_id: b26
+      quote: You should put a walk on your calendar today.
+      code: persuade
+      rationale: 'Manual pp.13, 17–20: one persuasion slot; permission takes precedence (volley extension: PRD D3).'
+    - turn_id: b26
+      quote: With your permission, I suggest trying a ten minute walk after lunch tomorrow.
+      code: persuade_permission
+      rationale: 'Manual pp.18–20: advice after explicit permission; one persuasion slot at p.13.'
+    - turn_id: b27
+      quote: Whether you try this is entirely your decision.
+      code: emphasize_autonomy
+      rationale: 'Manual pp.27–28: explicit client control over decisions.'
+    pre_alignment:
+      count_delta:
+        persuade: 1
+      persuasion_double_count_volleys:
+      - v26
+      reason: Before Task 4, the pack lacks the shared persuasion slot (manual p.13). Hand instances deliberately propose both codes on distinct v26 utterances. Target is one permission count; the audit exposes one extra Persuade until alignment.
+  sparse_evidence:
+    transcript: sparse_evidence.json
+    params: sparse_evidence.params.json
+    change_goal: walk during lunch breaks
+    volleys:
+      count: 5
+      reason: 'Manual pp.13, 15–16: substantive answers break; facilitative acknowledgements between statements do not. Direct-question answers always break.'
+      turn_ids:
+      - - s2
+      - - s4
+      - - s6
+      - - s8
+      - - s10
+    warnings:
+    - short_session
+    counts:
+      gi: 0
+      persuade: 0
+      persuade_permission: 0
+      question: 1
+      sr: 3
+      cr: 0
+      affirm: 0
+      seek_collab: 0
+      emphasize_autonomy: 1
+      confront: 0
+    count_reasons: *id002
+    summaries:
+      technical: 4.0
+      relational: 4.0
+      pct_cr: 0.0
+      reflection_question_ratio: 3.0
+      total_mia: 1
+      total_mina: 0
+    globals:
+      cct:
+        score: 3
+        range:
+        - 2
+        - 4
+        reason: 'Manual pp.4–5: little change talk; hand-set starting score, not a model evaluation.'
+        evidence:
+        - turn_id: s2
+          quote: What does lunchtime usually look like?
+        poor_practice_cited: []
+      sst:
+        score: 5
+        range:
+        - 4
+        - 5
+        reason: 'Manual p.38 FAQ 6 and p.7: no sustain talk; its absence does not prevent a high SST rating.'
+        evidence: *id001
+        poor_practice_cited: []
+      partnership:
+        score: 4
+        range:
+        - 3
+        - 5
+        reason: 'Manual pp.9–10: clinician explicitly leaves the choice with the client.'
+        evidence:
+        - turn_id: s10
+          quote: You decide whether to try a walk.
+        poor_practice_cited: []
+      empathy:
+        score: 4
+        range:
+        - 3
+        - 5
+        reason: 'Manual pp.11–12: accurate short reflections; hand score is a thin-evidence target.'
+        evidence:
+        - turn_id: s4
+          quote: You eat at noon.
+        poor_practice_cited: []
+    utterances:
+    - turn_id: s2
+      quote: What does lunchtime usually look like?
+      code: question
+      rationale: 'Manual pp.13, 21: information-seeking question, once per volley; asking permission is collaboration.'
+    - turn_id: s4
+      quote: You eat at noon.
+      code: sr
+      rationale: 'Manual pp.13, 22–23: repeats client meaning without adding meaning, once per volley.'
+    - turn_id: s6
+      quote: The meeting follows lunch.
+      code: sr
+      rationale: 'Manual pp.13, 22–23: repeats client meaning without adding meaning, once per volley.'
+    - turn_id: s8
+      quote: Your timetable is in the notebook.
+      code: sr
+      rationale: 'Manual pp.13, 22–23: repeats client meaning without adding meaning, once per volley.'
+    - turn_id: s10
+      quote: You decide whether to try a walk.
+      code: emphasize_autonomy
+      rationale: 'Manual pp.27–28: explicit client control over decisions.'

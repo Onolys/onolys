@@ -119,7 +119,7 @@ async def test_stuck_validating_is_failed(client, repo, clock):
 async def test_stuck_running_is_failed_and_releases_the_slot(client, repo, clock):
     """A crashed worker leaves `running` + an unreleased run: fail it, hand the slot back (A1)."""
     seed(repo, state="running")
-    repo.create_run("alice", S1, "r1", RunDoc(uid="alice", session_id=S1, run_id="r1",
+    repo.create_run("alice", S1, "r1", RunDoc(change_goal="", clinician_speaker="S1", language="en", transcript_sha256="test-hash", uid="alice", session_id=S1, run_id="r1",
                                                 status="running", cap_date="2026-01-01"))  # fmt: skip
     clock.now = T0 + timedelta(hours=1)
     body = (await get(client)).json()
@@ -131,7 +131,7 @@ async def test_stuck_running_is_failed_and_releases_the_slot(client, repo, clock
 async def test_worker_crash_refunds_the_unit(client, repo, clock, monkeypatch):
     """Owner decision: a system failure (worker crash) refunds, even after the LLM started."""
     seed(repo, state="running")
-    repo.create_run("alice", S1, "r1", RunDoc(uid="alice", session_id=S1, run_id="r1",
+    repo.create_run("alice", S1, "r1", RunDoc(change_goal="", clinician_speaker="S1", language="en", transcript_sha256="test-hash", uid="alice", session_id=S1, run_id="r1",
                                                 status="running", cap_date="2026-01-01",
                                                 llm_started=True))  # fmt: skip
     repo.add_usage("alice", "2026-01-01", runs=1)  # the unit the run spent

@@ -1,0 +1,531 @@
+{
+  "schema": 1,
+  "pack_hash": "e068479e6bb821dd",
+  "expected_sha256": "9de5dc02708b946513bfbd8f2db4f9ea8d0b807d4b345a9c345ccabf90efd8ed",
+  "source_sha256": {
+    "prepare.py": "0eca15f039cd6665a44f0ca2bbd921d43fa5f5d380f22c7a1096ad0d40a93e3d",
+    "score.py": "24f82b5b58d117ff09c6750f44f05f0586b494365f4ccd9580376492c9e75244",
+    "code_pass.py": "9c8d7c170ee28fdf2da3896b9bf437a78b1111295083fd8bd528914f7c924e8a",
+    "globals_pass.py": "281b9fce834607d98e8932926a62517959fda04b98c3cb228a6d824f1d26da91"
+  },
+  "stages": [
+    "code",
+    "globals"
+  ],
+  "request_words_method": "Whitespace words in cache prefixes + system + user per initial call; repeated prefixes included per batch. Excludes schemas, tips and retries.",
+  "coverage_method": "Whitespace words overlapping the union of located hand-authored utterance spans, including uncoded and down-counted; null when utterances undefined.",
+  "limits": "Synthetic hand-authored fixtures; deterministic manual alignment evidence, not accuracy. No model outputs, network calls, latency, tokens or cost measured. Summary globals are hand targets, not evaluated global ratings.",
+  "fixtures": [
+    {
+      "fixture": "good_practice",
+      "volley_count": 10,
+      "volley_turn_ids": [
+        [
+          "t2"
+        ],
+        [
+          "t4"
+        ],
+        [
+          "t6"
+        ],
+        [
+          "t8",
+          "t9"
+        ],
+        [
+          "t11"
+        ],
+        [
+          "t13"
+        ],
+        [
+          "t15"
+        ],
+        [
+          "t17"
+        ],
+        [
+          "t19"
+        ],
+        [
+          "t21"
+        ]
+      ],
+      "batch_limit": 25,
+      "batch_count": 1,
+      "request_words": {
+        "code": 2621,
+        "globals": 1906,
+        "total": 4527
+      },
+      "request_keys": [
+        "8340f9e78d95ffa99a37a4ac7015423258eb01f2d2b22d5871e83b9d78645623",
+        "ec02bc75849e82d47f8619a2d9a4fc1648c6d2f7e644cce3ad2d271a08d66f26"
+      ],
+      "counts": {
+        "gi": 1,
+        "persuade": 0,
+        "persuade_permission": 1,
+        "question": 6,
+        "sr": 2,
+        "cr": 4,
+        "affirm": 2,
+        "seek_collab": 2,
+        "emphasize_autonomy": 2,
+        "confront": 0
+      },
+      "target_counts": {
+        "gi": 1,
+        "persuade": 0,
+        "persuade_permission": 1,
+        "question": 6,
+        "sr": 2,
+        "cr": 4,
+        "affirm": 2,
+        "seek_collab": 2,
+        "emphasize_autonomy": 2,
+        "confront": 0
+      },
+      "count_drift": {
+        "gi": 0,
+        "persuade": 0,
+        "persuade_permission": 0,
+        "question": 0,
+        "sr": 0,
+        "cr": 0,
+        "affirm": 0,
+        "seek_collab": 0,
+        "emphasize_autonomy": 0,
+        "confront": 0
+      },
+      "summaries_with_hand_globals": {
+        "technical": 4.0,
+        "relational": 4.5,
+        "pct_cr": 0.6666666666666666,
+        "reflection_question_ratio": 1.0,
+        "total_mia": 6.0,
+        "total_mina": 0.0
+      },
+      "target_summaries": {
+        "technical": 4.0,
+        "relational": 4.5,
+        "pct_cr": 0.6666666666666666,
+        "reflection_question_ratio": 1.0,
+        "total_mia": 6,
+        "total_mina": 0
+      },
+      "summary_drift": {
+        "technical": 0.0,
+        "relational": 0.0,
+        "pct_cr": 0.0,
+        "reflection_question_ratio": 0.0,
+        "total_mia": 0.0,
+        "total_mina": 0.0
+      },
+      "persuasion_double_count_volleys": [],
+      "persuasion_double_count": 0,
+      "coverage": {
+        "clinician_words": 294,
+        "covered_words": 294,
+        "residual_words": 0,
+        "volleys": [
+          {
+            "volley_id": "v1",
+            "clinician_words": 15,
+            "covered_words": 15,
+            "residual_words": 0
+          },
+          {
+            "volley_id": "v2",
+            "clinician_words": 9,
+            "covered_words": 9,
+            "residual_words": 0
+          },
+          {
+            "volley_id": "v3",
+            "clinician_words": 25,
+            "covered_words": 25,
+            "residual_words": 0
+          },
+          {
+            "volley_id": "v4",
+            "clinician_words": 37,
+            "covered_words": 37,
+            "residual_words": 0
+          },
+          {
+            "volley_id": "v5",
+            "clinician_words": 35,
+            "covered_words": 35,
+            "residual_words": 0
+          },
+          {
+            "volley_id": "v6",
+            "clinician_words": 20,
+            "covered_words": 20,
+            "residual_words": 0
+          },
+          {
+            "volley_id": "v7",
+            "clinician_words": 61,
+            "covered_words": 61,
+            "residual_words": 0
+          },
+          {
+            "volley_id": "v8",
+            "clinician_words": 30,
+            "covered_words": 30,
+            "residual_words": 0
+          },
+          {
+            "volley_id": "v9",
+            "clinician_words": 47,
+            "covered_words": 47,
+            "residual_words": 0
+          },
+          {
+            "volley_id": "v10",
+            "clinician_words": 15,
+            "covered_words": 15,
+            "residual_words": 0
+          }
+        ]
+      },
+      "warnings": []
+    },
+    {
+      "fixture": "poor_practice",
+      "volley_count": 12,
+      "volley_turn_ids": [
+        [
+          "t2"
+        ],
+        [
+          "t4"
+        ],
+        [
+          "t6"
+        ],
+        [
+          "t8"
+        ],
+        [
+          "t10"
+        ],
+        [
+          "t12"
+        ],
+        [
+          "t14"
+        ],
+        [
+          "t16"
+        ],
+        [
+          "t18"
+        ],
+        [
+          "t20"
+        ],
+        [
+          "t22"
+        ],
+        [
+          "t24"
+        ]
+      ],
+      "batch_limit": 25,
+      "batch_count": 1,
+      "request_words": {
+        "code": 2453,
+        "globals": 1738,
+        "total": 4191
+      },
+      "request_keys": [
+        "2803875f127f4667137d2c0e70d81bae54987c908fd0275f0e4bfd36d451daa6",
+        "1065e4bbdc6eb27a9d6a98a3b9e56bc5380dfdf414f26932df2dc1e1af717f83"
+      ],
+      "counts": {
+        "gi": 2,
+        "persuade": 5,
+        "persuade_permission": 0,
+        "question": 3,
+        "sr": 0,
+        "cr": 0,
+        "affirm": 0,
+        "seek_collab": 0,
+        "emphasize_autonomy": 0,
+        "confront": 4
+      },
+      "target_counts": {
+        "gi": 2,
+        "persuade": 5,
+        "persuade_permission": 0,
+        "question": 3,
+        "sr": 0,
+        "cr": 0,
+        "affirm": 0,
+        "seek_collab": 0,
+        "emphasize_autonomy": 0,
+        "confront": 4
+      },
+      "count_drift": {
+        "gi": 0,
+        "persuade": 0,
+        "persuade_permission": 0,
+        "question": 0,
+        "sr": 0,
+        "cr": 0,
+        "affirm": 0,
+        "seek_collab": 0,
+        "emphasize_autonomy": 0,
+        "confront": 0
+      },
+      "summaries_with_hand_globals": {
+        "technical": 1.0,
+        "relational": 1.5,
+        "pct_cr": null,
+        "reflection_question_ratio": 0.0,
+        "total_mia": 0.0,
+        "total_mina": 9.0
+      },
+      "target_summaries": {
+        "technical": 1.0,
+        "relational": 1.5,
+        "pct_cr": null,
+        "reflection_question_ratio": 0.0,
+        "total_mia": 0,
+        "total_mina": 9
+      },
+      "summary_drift": {
+        "technical": 0.0,
+        "relational": 0.0,
+        "pct_cr": null,
+        "reflection_question_ratio": 0.0,
+        "total_mia": 0.0,
+        "total_mina": 0.0
+      },
+      "persuasion_double_count_volleys": [],
+      "persuasion_double_count": 0,
+      "coverage": {
+        "clinician_words": 184,
+        "covered_words": 184,
+        "residual_words": 0,
+        "volleys": [
+          {
+            "volley_id": "v1",
+            "clinician_words": 11,
+            "covered_words": 11,
+            "residual_words": 0
+          },
+          {
+            "volley_id": "v2",
+            "clinician_words": 19,
+            "covered_words": 19,
+            "residual_words": 0
+          },
+          {
+            "volley_id": "v3",
+            "clinician_words": 24,
+            "covered_words": 24,
+            "residual_words": 0
+          },
+          {
+            "volley_id": "v4",
+            "clinician_words": 8,
+            "covered_words": 8,
+            "residual_words": 0
+          },
+          {
+            "volley_id": "v5",
+            "clinician_words": 25,
+            "covered_words": 25,
+            "residual_words": 0
+          },
+          {
+            "volley_id": "v6",
+            "clinician_words": 21,
+            "covered_words": 21,
+            "residual_words": 0
+          },
+          {
+            "volley_id": "v7",
+            "clinician_words": 19,
+            "covered_words": 19,
+            "residual_words": 0
+          },
+          {
+            "volley_id": "v8",
+            "clinician_words": 10,
+            "covered_words": 10,
+            "residual_words": 0
+          },
+          {
+            "volley_id": "v9",
+            "clinician_words": 12,
+            "covered_words": 12,
+            "residual_words": 0
+          },
+          {
+            "volley_id": "v10",
+            "clinician_words": 12,
+            "covered_words": 12,
+            "residual_words": 0
+          },
+          {
+            "volley_id": "v11",
+            "clinician_words": 15,
+            "covered_words": 15,
+            "residual_words": 0
+          },
+          {
+            "volley_id": "v12",
+            "clinician_words": 8,
+            "covered_words": 8,
+            "residual_words": 0
+          }
+        ]
+      },
+      "warnings": []
+    },
+    {
+      "fixture": "short_session",
+      "volley_count": 5,
+      "volley_turn_ids": [
+        [
+          "t2"
+        ],
+        [
+          "t4"
+        ],
+        [
+          "t6"
+        ],
+        [
+          "t8"
+        ],
+        [
+          "t10"
+        ]
+      ],
+      "batch_limit": 25,
+      "batch_count": 1,
+      "request_words": {
+        "code": 2208,
+        "globals": 1473,
+        "total": 3681
+      },
+      "request_keys": [
+        "702b4ea48c935d9da8a04491fdf930ffba5db76e3cd9956589aecb392d3b8816",
+        "4884dd2c011f92fed4abfd8770e23b498f596ccba02b025f4a697fd69af14506"
+      ],
+      "counts": {
+        "gi": 1,
+        "persuade": 0,
+        "persuade_permission": 0,
+        "question": 1,
+        "sr": 2,
+        "cr": 1,
+        "affirm": 1,
+        "seek_collab": 1,
+        "emphasize_autonomy": 0,
+        "confront": 0
+      },
+      "target_counts": {
+        "gi": 1,
+        "persuade": 0,
+        "persuade_permission": 0,
+        "question": 1,
+        "sr": 2,
+        "cr": 1,
+        "affirm": 1,
+        "seek_collab": 1,
+        "emphasize_autonomy": 0,
+        "confront": 0
+      },
+      "count_drift": {
+        "gi": 0,
+        "persuade": 0,
+        "persuade_permission": 0,
+        "question": 0,
+        "sr": 0,
+        "cr": 0,
+        "affirm": 0,
+        "seek_collab": 0,
+        "emphasize_autonomy": 0,
+        "confront": 0
+      },
+      "summaries_with_hand_globals": {
+        "technical": 3.0,
+        "relational": 3.0,
+        "pct_cr": 0.3333333333333333,
+        "reflection_question_ratio": 3.0,
+        "total_mia": 2.0,
+        "total_mina": 0.0
+      },
+      "target_summaries": {
+        "technical": 3.0,
+        "relational": 3.0,
+        "pct_cr": 0.3333333333333333,
+        "reflection_question_ratio": 3.0,
+        "total_mia": 2,
+        "total_mina": 0
+      },
+      "summary_drift": {
+        "technical": 0.0,
+        "relational": 0.0,
+        "pct_cr": 0.0,
+        "reflection_question_ratio": 0.0,
+        "total_mia": 0.0,
+        "total_mina": 0.0
+      },
+      "persuasion_double_count_volleys": [],
+      "persuasion_double_count": 0,
+      "coverage": {
+        "clinician_words": 70,
+        "covered_words": 70,
+        "residual_words": 0,
+        "volleys": [
+          {
+            "volley_id": "v1",
+            "clinician_words": 13,
+            "covered_words": 13,
+            "residual_words": 0
+          },
+          {
+            "volley_id": "v2",
+            "clinician_words": 9,
+            "covered_words": 9,
+            "residual_words": 0
+          },
+          {
+            "volley_id": "v3",
+            "clinician_words": 18,
+            "covered_words": 18,
+            "residual_words": 0
+          },
+          {
+            "volley_id": "v4",
+            "clinician_words": 17,
+            "covered_words": 17,
+            "residual_words": 0
+          },
+          {
+            "volley_id": "v5",
+            "clinician_words": 13,
+            "covered_words": 13,
+            "residual_words": 0
+          }
+        ]
+      },
+      "warnings": [
+        {
+          "code": "short_session",
+          "severity": "warning",
+          "detail": "duration_min: session shorter than 10 min"
+        }
+      ]
+    }
+  ]
+}

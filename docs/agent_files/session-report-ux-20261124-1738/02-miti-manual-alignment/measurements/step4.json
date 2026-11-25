@@ -1,0 +1,1001 @@
+{
+  "schema": 1,
+  "pack_hash": "c13785af2f3da30d",
+  "expected_sha256": "fa544cbffbc34f9ebcf2979e8335391ff21df7452e579e74fd46a964a2a4c77e",
+  "source_sha256": {
+    "prepare.py": "cec1438a5682ee75c2c8dd962e77968101ba209b98d2d8dde21aa8fda211b994",
+    "score.py": "24f82b5b58d117ff09c6750f44f05f0586b494365f4ccd9580376492c9e75244",
+    "code_pass.py": "8b5469ce6293c314ad2e676c86b2fd5fdb7179c37c701c6379f491f88cf160cc",
+    "globals_pass.py": "6e4b32213af111d38bd50734da3e4be381032700c5ee5e3d7afdf1bab983ff45"
+  },
+  "stages": [
+    "code",
+    "globals"
+  ],
+  "request_words_method": "Whitespace words in cache prefixes + system + user per initial call; repeated prefixes included per batch. Excludes schemas, tips and retries.",
+  "coverage_method": "Whitespace words overlapping the union of located hand-authored utterance spans, including uncoded and down-counted; null when utterances undefined.",
+  "limits": "Synthetic hand-authored fixtures; deterministic manual alignment evidence, not accuracy. No model outputs, network calls, latency, tokens or cost measured. Summary globals are hand targets, not evaluated global ratings.",
+  "fixtures": [
+    {
+      "fixture": "good_practice",
+      "volley_count": 10,
+      "volley_turn_ids": [
+        [
+          "t2"
+        ],
+        [
+          "t4"
+        ],
+        [
+          "t6"
+        ],
+        [
+          "t8",
+          "t9"
+        ],
+        [
+          "t11"
+        ],
+        [
+          "t13"
+        ],
+        [
+          "t15"
+        ],
+        [
+          "t17"
+        ],
+        [
+          "t19"
+        ],
+        [
+          "t21"
+        ]
+      ],
+      "batch_limit": 25,
+      "batch_count": 1,
+      "request_words": {
+        "code": 3588,
+        "globals": 1919,
+        "total": 5507
+      },
+      "request_keys": [
+        "bb4f265ebc3b2af2851f88a74d4537170289fd4578de52d5752b2f01c8f79f48",
+        "3c57a37926ed1da6e177264069b0836bf0cc242b91f38476e49a3192e0816b3a"
+      ],
+      "counts": {
+        "gi": 1,
+        "persuade": 0,
+        "persuade_permission": 1,
+        "question": 6,
+        "sr": 2,
+        "cr": 4,
+        "affirm": 2,
+        "seek_collab": 2,
+        "emphasize_autonomy": 2,
+        "confront": 0
+      },
+      "target_counts": {
+        "gi": 1,
+        "persuade": 0,
+        "persuade_permission": 1,
+        "question": 6,
+        "sr": 2,
+        "cr": 4,
+        "affirm": 2,
+        "seek_collab": 2,
+        "emphasize_autonomy": 2,
+        "confront": 0
+      },
+      "count_drift": {
+        "gi": 0,
+        "persuade": 0,
+        "persuade_permission": 0,
+        "question": 0,
+        "sr": 0,
+        "cr": 0,
+        "affirm": 0,
+        "seek_collab": 0,
+        "emphasize_autonomy": 0,
+        "confront": 0
+      },
+      "summaries_with_hand_globals": {
+        "technical": 4.0,
+        "relational": 4.5,
+        "pct_cr": 0.6666666666666666,
+        "reflection_question_ratio": 1.0,
+        "total_mia": 6.0,
+        "total_mina": 0.0
+      },
+      "target_summaries": {
+        "technical": 4.0,
+        "relational": 4.5,
+        "pct_cr": 0.6666666666666666,
+        "reflection_question_ratio": 1.0,
+        "total_mia": 6,
+        "total_mina": 0
+      },
+      "summary_drift": {
+        "technical": 0.0,
+        "relational": 0.0,
+        "pct_cr": 0.0,
+        "reflection_question_ratio": 0.0,
+        "total_mia": 0.0,
+        "total_mina": 0.0
+      },
+      "persuasion_double_count_volleys": [],
+      "persuasion_double_count": 0,
+      "coverage": {
+        "clinician_words": 294,
+        "covered_words": 294,
+        "residual_words": 0,
+        "volleys": [
+          {
+            "volley_id": "v1",
+            "clinician_words": 15,
+            "covered_words": 15,
+            "residual_words": 0
+          },
+          {
+            "volley_id": "v2",
+            "clinician_words": 9,
+            "covered_words": 9,
+            "residual_words": 0
+          },
+          {
+            "volley_id": "v3",
+            "clinician_words": 25,
+            "covered_words": 25,
+            "residual_words": 0
+          },
+          {
+            "volley_id": "v4",
+            "clinician_words": 37,
+            "covered_words": 37,
+            "residual_words": 0
+          },
+          {
+            "volley_id": "v5",
+            "clinician_words": 35,
+            "covered_words": 35,
+            "residual_words": 0
+          },
+          {
+            "volley_id": "v6",
+            "clinician_words": 20,
+            "covered_words": 20,
+            "residual_words": 0
+          },
+          {
+            "volley_id": "v7",
+            "clinician_words": 61,
+            "covered_words": 61,
+            "residual_words": 0
+          },
+          {
+            "volley_id": "v8",
+            "clinician_words": 30,
+            "covered_words": 30,
+            "residual_words": 0
+          },
+          {
+            "volley_id": "v9",
+            "clinician_words": 47,
+            "covered_words": 47,
+            "residual_words": 0
+          },
+          {
+            "volley_id": "v10",
+            "clinician_words": 15,
+            "covered_words": 15,
+            "residual_words": 0
+          }
+        ]
+      },
+      "warnings": []
+    },
+    {
+      "fixture": "poor_practice",
+      "volley_count": 12,
+      "volley_turn_ids": [
+        [
+          "t2"
+        ],
+        [
+          "t4"
+        ],
+        [
+          "t6"
+        ],
+        [
+          "t8"
+        ],
+        [
+          "t10"
+        ],
+        [
+          "t12"
+        ],
+        [
+          "t14"
+        ],
+        [
+          "t16"
+        ],
+        [
+          "t18"
+        ],
+        [
+          "t20"
+        ],
+        [
+          "t22"
+        ],
+        [
+          "t24"
+        ]
+      ],
+      "batch_limit": 25,
+      "batch_count": 1,
+      "request_words": {
+        "code": 3169,
+        "globals": 1751,
+        "total": 4920
+      },
+      "request_keys": [
+        "affd640023529f504b6b806431f09a6f199a76a2c752f1a68f2d9d1243097a12",
+        "238effee10ffc66dc257cfc284ec3e054e916c9040d9539d72af8e4ed2a26208"
+      ],
+      "counts": {
+        "gi": 2,
+        "persuade": 5,
+        "persuade_permission": 0,
+        "question": 3,
+        "sr": 0,
+        "cr": 0,
+        "affirm": 0,
+        "seek_collab": 0,
+        "emphasize_autonomy": 0,
+        "confront": 4
+      },
+      "target_counts": {
+        "gi": 2,
+        "persuade": 5,
+        "persuade_permission": 0,
+        "question": 3,
+        "sr": 0,
+        "cr": 0,
+        "affirm": 0,
+        "seek_collab": 0,
+        "emphasize_autonomy": 0,
+        "confront": 4
+      },
+      "count_drift": {
+        "gi": 0,
+        "persuade": 0,
+        "persuade_permission": 0,
+        "question": 0,
+        "sr": 0,
+        "cr": 0,
+        "affirm": 0,
+        "seek_collab": 0,
+        "emphasize_autonomy": 0,
+        "confront": 0
+      },
+      "summaries_with_hand_globals": {
+        "technical": 1.0,
+        "relational": 1.5,
+        "pct_cr": null,
+        "reflection_question_ratio": 0.0,
+        "total_mia": 0.0,
+        "total_mina": 9.0
+      },
+      "target_summaries": {
+        "technical": 1.0,
+        "relational": 1.5,
+        "pct_cr": null,
+        "reflection_question_ratio": 0.0,
+        "total_mia": 0,
+        "total_mina": 9
+      },
+      "summary_drift": {
+        "technical": 0.0,
+        "relational": 0.0,
+        "pct_cr": null,
+        "reflection_question_ratio": 0.0,
+        "total_mia": 0.0,
+        "total_mina": 0.0
+      },
+      "persuasion_double_count_volleys": [],
+      "persuasion_double_count": 0,
+      "coverage": {
+        "clinician_words": 184,
+        "covered_words": 184,
+        "residual_words": 0,
+        "volleys": [
+          {
+            "volley_id": "v1",
+            "clinician_words": 11,
+            "covered_words": 11,
+            "residual_words": 0
+          },
+          {
+            "volley_id": "v2",
+            "clinician_words": 19,
+            "covered_words": 19,
+            "residual_words": 0
+          },
+          {
+            "volley_id": "v3",
+            "clinician_words": 24,
+            "covered_words": 24,
+            "residual_words": 0
+          },
+          {
+            "volley_id": "v4",
+            "clinician_words": 8,
+            "covered_words": 8,
+            "residual_words": 0
+          },
+          {
+            "volley_id": "v5",
+            "clinician_words": 25,
+            "covered_words": 25,
+            "residual_words": 0
+          },
+          {
+            "volley_id": "v6",
+            "clinician_words": 21,
+            "covered_words": 21,
+            "residual_words": 0
+          },
+          {
+            "volley_id": "v7",
+            "clinician_words": 19,
+            "covered_words": 19,
+            "residual_words": 0
+          },
+          {
+            "volley_id": "v8",
+            "clinician_words": 10,
+            "covered_words": 10,
+            "residual_words": 0
+          },
+          {
+            "volley_id": "v9",
+            "clinician_words": 12,
+            "covered_words": 12,
+            "residual_words": 0
+          },
+          {
+            "volley_id": "v10",
+            "clinician_words": 12,
+            "covered_words": 12,
+            "residual_words": 0
+          },
+          {
+            "volley_id": "v11",
+            "clinician_words": 15,
+            "covered_words": 15,
+            "residual_words": 0
+          },
+          {
+            "volley_id": "v12",
+            "clinician_words": 8,
+            "covered_words": 8,
+            "residual_words": 0
+          }
+        ]
+      },
+      "warnings": []
+    },
+    {
+      "fixture": "short_session",
+      "volley_count": 5,
+      "volley_turn_ids": [
+        [
+          "t2"
+        ],
+        [
+          "t4"
+        ],
+        [
+          "t6"
+        ],
+        [
+          "t8"
+        ],
+        [
+          "t10"
+        ]
+      ],
+      "batch_limit": 25,
+      "batch_count": 1,
+      "request_words": {
+        "code": 2517,
+        "globals": 1486,
+        "total": 4003
+      },
+      "request_keys": [
+        "174e3ec015767054604e205f038ebb43d870868cafdb3f72a38e9e3c1713dce9",
+        "63c59bd150eaa28d77e0e586501ef65133ffd223d03dd81c33536c56c2f0bdca"
+      ],
+      "counts": {
+        "gi": 1,
+        "persuade": 0,
+        "persuade_permission": 0,
+        "question": 1,
+        "sr": 2,
+        "cr": 1,
+        "affirm": 1,
+        "seek_collab": 1,
+        "emphasize_autonomy": 0,
+        "confront": 0
+      },
+      "target_counts": {
+        "gi": 1,
+        "persuade": 0,
+        "persuade_permission": 0,
+        "question": 1,
+        "sr": 2,
+        "cr": 1,
+        "affirm": 1,
+        "seek_collab": 1,
+        "emphasize_autonomy": 0,
+        "confront": 0
+      },
+      "count_drift": {
+        "gi": 0,
+        "persuade": 0,
+        "persuade_permission": 0,
+        "question": 0,
+        "sr": 0,
+        "cr": 0,
+        "affirm": 0,
+        "seek_collab": 0,
+        "emphasize_autonomy": 0,
+        "confront": 0
+      },
+      "summaries_with_hand_globals": {
+        "technical": 3.0,
+        "relational": 3.0,
+        "pct_cr": 0.3333333333333333,
+        "reflection_question_ratio": 3.0,
+        "total_mia": 2.0,
+        "total_mina": 0.0
+      },
+      "target_summaries": {
+        "technical": 3.0,
+        "relational": 3.0,
+        "pct_cr": 0.3333333333333333,
+        "reflection_question_ratio": 3.0,
+        "total_mia": 2,
+        "total_mina": 0
+      },
+      "summary_drift": {
+        "technical": 0.0,
+        "relational": 0.0,
+        "pct_cr": 0.0,
+        "reflection_question_ratio": 0.0,
+        "total_mia": 0.0,
+        "total_mina": 0.0
+      },
+      "persuasion_double_count_volleys": [],
+      "persuasion_double_count": 0,
+      "coverage": {
+        "clinician_words": 70,
+        "covered_words": 70,
+        "residual_words": 0,
+        "volleys": [
+          {
+            "volley_id": "v1",
+            "clinician_words": 13,
+            "covered_words": 13,
+            "residual_words": 0
+          },
+          {
+            "volley_id": "v2",
+            "clinician_words": 9,
+            "covered_words": 9,
+            "residual_words": 0
+          },
+          {
+            "volley_id": "v3",
+            "clinician_words": 18,
+            "covered_words": 18,
+            "residual_words": 0
+          },
+          {
+            "volley_id": "v4",
+            "clinician_words": 17,
+            "covered_words": 17,
+            "residual_words": 0
+          },
+          {
+            "volley_id": "v5",
+            "clinician_words": 13,
+            "covered_words": 13,
+            "residual_words": 0
+          }
+        ]
+      },
+      "warnings": [
+        {
+          "code": "short_session",
+          "severity": "warning",
+          "detail": "duration_min: session shorter than 10 min"
+        }
+      ]
+    },
+    {
+      "fixture": "batch_edge",
+      "volley_count": 27,
+      "volley_turn_ids": [
+        [
+          "b01a",
+          "b01b"
+        ],
+        [
+          "b02a"
+        ],
+        [
+          "b03a"
+        ],
+        [
+          "b04a"
+        ],
+        [
+          "b05a"
+        ],
+        [
+          "b06a"
+        ],
+        [
+          "b07a"
+        ],
+        [
+          "b08a"
+        ],
+        [
+          "b09a"
+        ],
+        [
+          "b10a"
+        ],
+        [
+          "b11a"
+        ],
+        [
+          "b12a"
+        ],
+        [
+          "b13a"
+        ],
+        [
+          "b14a"
+        ],
+        [
+          "b15a"
+        ],
+        [
+          "b16a"
+        ],
+        [
+          "b17a"
+        ],
+        [
+          "b18a"
+        ],
+        [
+          "b19a"
+        ],
+        [
+          "b20a"
+        ],
+        [
+          "b21a"
+        ],
+        [
+          "b22a"
+        ],
+        [
+          "b23a"
+        ],
+        [
+          "b24a"
+        ],
+        [
+          "b25"
+        ],
+        [
+          "b26"
+        ],
+        [
+          "b27"
+        ]
+      ],
+      "batch_limit": 25,
+      "batch_count": 2,
+      "request_words": {
+        "code": 8729,
+        "globals": 3031,
+        "total": 11760
+      },
+      "request_keys": [
+        "720970be09b5a9d450c945bc659ef3c53089bee6bac65fb4cc937cb2afe89788",
+        "df918d30d613984c8cbb1af447a65d176fa082c7763f16f8b76cd5f5ef62b7b7",
+        "06cb5c4c00b48fa1e0544228a2daa1d58d2c271d0cbeb58a60887d7b2c790f3d"
+      ],
+      "counts": {
+        "gi": 24,
+        "persuade": 0,
+        "persuade_permission": 1,
+        "question": 0,
+        "sr": 0,
+        "cr": 0,
+        "affirm": 0,
+        "seek_collab": 1,
+        "emphasize_autonomy": 1,
+        "confront": 0
+      },
+      "target_counts": {
+        "gi": 24,
+        "persuade": 0,
+        "persuade_permission": 1,
+        "question": 0,
+        "sr": 0,
+        "cr": 0,
+        "affirm": 0,
+        "seek_collab": 1,
+        "emphasize_autonomy": 1,
+        "confront": 0
+      },
+      "count_drift": {
+        "gi": 0,
+        "persuade": 0,
+        "persuade_permission": 0,
+        "question": 0,
+        "sr": 0,
+        "cr": 0,
+        "affirm": 0,
+        "seek_collab": 0,
+        "emphasize_autonomy": 0,
+        "confront": 0
+      },
+      "summaries_with_hand_globals": {
+        "technical": 3.0,
+        "relational": 3.0,
+        "pct_cr": null,
+        "reflection_question_ratio": null,
+        "total_mia": 2.0,
+        "total_mina": 0.0
+      },
+      "target_summaries": {
+        "technical": 3.0,
+        "relational": 3.0,
+        "pct_cr": null,
+        "reflection_question_ratio": null,
+        "total_mia": 2,
+        "total_mina": 0
+      },
+      "summary_drift": {
+        "technical": 0.0,
+        "relational": 0.0,
+        "pct_cr": null,
+        "reflection_question_ratio": null,
+        "total_mia": 0.0,
+        "total_mina": 0.0
+      },
+      "persuasion_double_count_volleys": [],
+      "persuasion_double_count": 0,
+      "coverage": {
+        "clinician_words": 749,
+        "covered_words": 749,
+        "residual_words": 0,
+        "volleys": [
+          {
+            "volley_id": "v1",
+            "clinician_words": 38,
+            "covered_words": 38,
+            "residual_words": 0
+          },
+          {
+            "volley_id": "v2",
+            "clinician_words": 29,
+            "covered_words": 29,
+            "residual_words": 0
+          },
+          {
+            "volley_id": "v3",
+            "clinician_words": 29,
+            "covered_words": 29,
+            "residual_words": 0
+          },
+          {
+            "volley_id": "v4",
+            "clinician_words": 29,
+            "covered_words": 29,
+            "residual_words": 0
+          },
+          {
+            "volley_id": "v5",
+            "clinician_words": 29,
+            "covered_words": 29,
+            "residual_words": 0
+          },
+          {
+            "volley_id": "v6",
+            "clinician_words": 29,
+            "covered_words": 29,
+            "residual_words": 0
+          },
+          {
+            "volley_id": "v7",
+            "clinician_words": 29,
+            "covered_words": 29,
+            "residual_words": 0
+          },
+          {
+            "volley_id": "v8",
+            "clinician_words": 29,
+            "covered_words": 29,
+            "residual_words": 0
+          },
+          {
+            "volley_id": "v9",
+            "clinician_words": 29,
+            "covered_words": 29,
+            "residual_words": 0
+          },
+          {
+            "volley_id": "v10",
+            "clinician_words": 29,
+            "covered_words": 29,
+            "residual_words": 0
+          },
+          {
+            "volley_id": "v11",
+            "clinician_words": 29,
+            "covered_words": 29,
+            "residual_words": 0
+          },
+          {
+            "volley_id": "v12",
+            "clinician_words": 29,
+            "covered_words": 29,
+            "residual_words": 0
+          },
+          {
+            "volley_id": "v13",
+            "clinician_words": 29,
+            "covered_words": 29,
+            "residual_words": 0
+          },
+          {
+            "volley_id": "v14",
+            "clinician_words": 29,
+            "covered_words": 29,
+            "residual_words": 0
+          },
+          {
+            "volley_id": "v15",
+            "clinician_words": 29,
+            "covered_words": 29,
+            "residual_words": 0
+          },
+          {
+            "volley_id": "v16",
+            "clinician_words": 29,
+            "covered_words": 29,
+            "residual_words": 0
+          },
+          {
+            "volley_id": "v17",
+            "clinician_words": 29,
+            "covered_words": 29,
+            "residual_words": 0
+          },
+          {
+            "volley_id": "v18",
+            "clinician_words": 29,
+            "covered_words": 29,
+            "residual_words": 0
+          },
+          {
+            "volley_id": "v19",
+            "clinician_words": 29,
+            "covered_words": 29,
+            "residual_words": 0
+          },
+          {
+            "volley_id": "v20",
+            "clinician_words": 29,
+            "covered_words": 29,
+            "residual_words": 0
+          },
+          {
+            "volley_id": "v21",
+            "clinician_words": 29,
+            "covered_words": 29,
+            "residual_words": 0
+          },
+          {
+            "volley_id": "v22",
+            "clinician_words": 29,
+            "covered_words": 29,
+            "residual_words": 0
+          },
+          {
+            "volley_id": "v23",
+            "clinician_words": 29,
+            "covered_words": 29,
+            "residual_words": 0
+          },
+          {
+            "volley_id": "v24",
+            "clinician_words": 29,
+            "covered_words": 29,
+            "residual_words": 0
+          },
+          {
+            "volley_id": "v25",
+            "clinician_words": 14,
+            "covered_words": 14,
+            "residual_words": 0
+          },
+          {
+            "volley_id": "v26",
+            "clinician_words": 22,
+            "covered_words": 22,
+            "residual_words": 0
+          },
+          {
+            "volley_id": "v27",
+            "clinician_words": 8,
+            "covered_words": 8,
+            "residual_words": 0
+          }
+        ]
+      },
+      "warnings": []
+    },
+    {
+      "fixture": "sparse_evidence",
+      "volley_count": 5,
+      "volley_turn_ids": [
+        [
+          "s2"
+        ],
+        [
+          "s4"
+        ],
+        [
+          "s6"
+        ],
+        [
+          "s8"
+        ],
+        [
+          "s10"
+        ]
+      ],
+      "batch_limit": 25,
+      "batch_count": 1,
+      "request_words": {
+        "code": 2332,
+        "globals": 1411,
+        "total": 3743
+      },
+      "request_keys": [
+        "7d2b6d3a845dda6b37c56f35abecf993bd9b082a89645727ae032c1126ac8d91",
+        "0ba1f83f736522b5d4936d87b207b25f9a1690bfa58056aa9448063f6c85548e"
+      ],
+      "counts": {
+        "gi": 0,
+        "persuade": 0,
+        "persuade_permission": 0,
+        "question": 1,
+        "sr": 3,
+        "cr": 0,
+        "affirm": 0,
+        "seek_collab": 0,
+        "emphasize_autonomy": 1,
+        "confront": 0
+      },
+      "target_counts": {
+        "gi": 0,
+        "persuade": 0,
+        "persuade_permission": 0,
+        "question": 1,
+        "sr": 3,
+        "cr": 0,
+        "affirm": 0,
+        "seek_collab": 0,
+        "emphasize_autonomy": 1,
+        "confront": 0
+      },
+      "count_drift": {
+        "gi": 0,
+        "persuade": 0,
+        "persuade_permission": 0,
+        "question": 0,
+        "sr": 0,
+        "cr": 0,
+        "affirm": 0,
+        "seek_collab": 0,
+        "emphasize_autonomy": 0,
+        "confront": 0
+      },
+      "summaries_with_hand_globals": {
+        "technical": 4.0,
+        "relational": 4.0,
+        "pct_cr": 0.0,
+        "reflection_question_ratio": 3.0,
+        "total_mia": 1.0,
+        "total_mina": 0.0
+      },
+      "target_summaries": {
+        "technical": 4.0,
+        "relational": 4.0,
+        "pct_cr": 0.0,
+        "reflection_question_ratio": 3.0,
+        "total_mia": 1,
+        "total_mina": 0
+      },
+      "summary_drift": {
+        "technical": 0.0,
+        "relational": 0.0,
+        "pct_cr": 0.0,
+        "reflection_question_ratio": 0.0,
+        "total_mia": 0.0,
+        "total_mina": 0.0
+      },
+      "persuasion_double_count_volleys": [],
+      "persuasion_double_count": 0,
+      "coverage": {
+        "clinician_words": 27,
+        "covered_words": 27,
+        "residual_words": 0,
+        "volleys": [
+          {
+            "volley_id": "v1",
+            "clinician_words": 6,
+            "covered_words": 6,
+            "residual_words": 0
+          },
+          {
+            "volley_id": "v2",
+            "clinician_words": 4,
+            "covered_words": 4,
+            "residual_words": 0
+          },
+          {
+            "volley_id": "v3",
+            "clinician_words": 4,
+            "covered_words": 4,
+            "residual_words": 0
+          },
+          {
+            "volley_id": "v4",
+            "clinician_words": 6,
+            "covered_words": 6,
+            "residual_words": 0
+          },
+          {
+            "volley_id": "v5",
+            "clinician_words": 7,
+            "covered_words": 7,
+            "residual_words": 0
+          }
+        ]
+      },
+      "warnings": [
+        {
+          "code": "short_session",
+          "severity": "warning",
+          "detail": "duration_min: session shorter than 10 min"
+        }
+      ]
+    }
+  ]
+}

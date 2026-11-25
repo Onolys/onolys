@@ -3,18 +3,19 @@
  * transcript is fetched in parallel; while it loads or fails, the rest of the report still shows
  * and the utterance links / Evidence rows (which need turn numbers) are omitted until it is ready.
  */
-import { useQuery } from "@tanstack/react-query";
-import { useMemo } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
+import { pageLoadError } from "../../pageLoadError";
 import { unwrap } from "../../api/client";
 import { describeError, isNotFoundError } from "../../api/errors";
 import type { Report } from "../../api/report";
-import { Button, Select } from "@onolys/ui";
+import { Button } from "@onolys/ui";
 import { useApiClient } from "../../auth/useApiClient";
-import { ACTIONS, H1, LINK, LINK_BTN, NOTE, PAGE } from "../../components/classes";
-import { Field } from "../../components/Field";
+import { H1, LINK, LINK_BTN, NOTE, PAGE } from "../../components/classes";
 import { Notice } from "../../components/Notice";
-import { formatDate } from "../../lib/format";
+import { DeleteDialog } from "../session/DeleteDialog";
+import { dropJob } from "../upload/uploader";
 import { ErrorCard } from "../session/ErrorCard";
 import { ReportView as ReportDocument, type TurnsState } from "./ReportView";
 
@@ -49,20 +50,26 @@ function ReportView({ id, version }: { id: string; version: string }) {
 function LoadedReport({ id, version }: { id: string; version: number }) {
   const client = useApiClient();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const deleteButton = useRef<HTMLButtonElement>(null);
+  const remove = useMutation({
+    mutationFn: async () => unwrap(await client.DELETE("/sessions/{id}", { params: { path: { id } } })),
+    onSuccess: () => {
+      dropJob(id);
+      void queryClient.invalidateQueries({ queryKey: ["sessions"] });
+      void navigate("/sessions");
+    },
+  });
 
   const view = useQuery({
     queryKey: ["report", id, version],
+    throwOnError: pageLoadError,
     staleTime: 0,
     gcTime: 0,
     retry: false,
     queryFn: async () =>
       unwrap(await client.GET("/sessions/{id}/reports/{version}", { params: { path: { id, version } } })),
-  });
-  const versions = useQuery({
-    queryKey: ["reports", id],
-    staleTime: 0,
-    gcTime: 0,
-    queryFn: async () => unwrap(await client.GET("/sessions/{id}/reports", { params: { path: { id } } })),
   });
   // Same query key as the coded-transcript dialog; fetched in parallel so the report renders without waiting for it.
   const transcript = useQuery({
@@ -108,41 +115,30 @@ function LoadedReport({ id, version }: { id: string; version: number }) {
   }
 
   const newer = Number.isFinite(major(view.data.report_schema_version)) && major(view.data.report_schema_version) !== SUPPORTED_MAJOR;
-  const h = report.header;
-  const date = formatDate;
-  const details = [
-    h.stt ? [h.stt.provider, h.stt.model].filter(Boolean).join(" ") : null,
-    h.preset,
-    h.code_version,
-  ].filter(Boolean);
-
-  const headerSlot = (
-    <>
-      {newer ? (
-        <Notice role="alert">This report was made by a newer version — refresh</Notice>
-      ) : null}
-      <p className={NOTE}>Run details: {details.join(" · ") || "not recorded"}</p>
-      <div className={ACTIONS}>
-        <Field label="Version">
-          {(fid) => (
-            <Select
-              id={fid}
-              value={String(version)}
-              onChange={(e) => void navigate(`/sessions/${id}/reports/${e.target.value}`)}
-            >
-              {(versions.data?.items ?? [{ version, created_at: view.data.created_at }]).map((v) => (
-                <option key={v.version} value={String(v.version)}>
-                  v{v.version} · {date(v.created_at)}
-                </option>
-              ))}
-            </Select>
-          )}
-        </Field>
-      </div>
-    </>
-  );
-
   return (
-    <ReportDocument report={report} turns={turns} headerSlot={headerSlot} />
+    <>
+      <ReportDocument
+        report={report}
+        reportId={view.data.report_id}
+        turns={turns}
+        headerSlot={newer ? <Notice role="alert">This report was made by a newer version — refresh</Notice> : undefined}
+        footerSlot={
+          <div className="border-t border-border pt-6">
+            <Button ref={deleteButton} type="button" variant="secondary" onClick={() => setConfirmDelete(true)}>
+              Delete session
+            </Button>
+          </div>
+        }
+      />
+      <DeleteDialog
+        open={confirmDelete}
+        busy={remove.isPending}
+        onConfirm={() => remove.mutate()}
+        onCancel={() => { setConfirmDelete(false); remove.reset(); }}
+        onClosed={() => deleteButton.current?.focus()}
+      >
+        {remove.error ? <ErrorCard code={describeError(remove.error).code} reference={describeError(remove.error).requestId} /> : null}
+      </DeleteDialog>
+    </>
   );
 }

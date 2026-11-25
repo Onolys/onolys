@@ -8,20 +8,6 @@ variable "region" {
   default = "us-central1"
 }
 
-variable "admin_enabled" {
-  description = "Gates the admin (SP07) resources per environment: staging is the ONLY admin environment (serves admin.onolys.com, owner decision 2026-11-21); prod admin is off."
-  type        = map(bool)
-  default = {
-    staging = true
-    prod    = false
-  }
-
-  validation {
-    condition     = toset(keys(var.admin_enabled)) == toset(["staging", "prod"])
-    error_message = "admin_enabled needs exactly the keys staging and prod."
-  }
-}
-
 variable "resend_secret_wired" {
   description = "Per environment: wire auth-email settings and RESEND_API_KEY on the api and worker. Set staging true only after the owner seeds resend-api-key-staging; prod stays false (prod rollout deferred)."
   type        = map(bool)
@@ -42,22 +28,10 @@ variable "staging_alerts" {
   default     = false
 }
 
-variable "monthly_budget_usd" {
-  description = "Monthly budget in USD (alerts only, no spend cap)."
-  type        = number
-  default     = 20
-}
-
 variable "alert_email" {
-  description = "Owner email for budget and failure alerts (Monitoring channel needs a verification click)."
+  description = "Owner email for failure alerts (Monitoring channel needs a verification click)."
   type        = string
   default     = "tejitpabari99@gmail.com"
-}
-
-variable "billing_account_id" {
-  description = "Billing account linked to the project (from cloudbilling projects/onolys/billingInfo)."
-  type        = string
-  default     = "0175C5-F7E3DF-EE9F98"
 }
 
 variable "llm_secrets" {
@@ -95,16 +69,6 @@ variable "app_staging_site_id" {
   default = "onolys-app-staging"
 }
 
-variable "admin_site_id" {
-  type    = string
-  default = "onolys-admin"
-}
-
-variable "admin_staging_site_id" {
-  type    = string
-  default = "onolys-admin-staging"
-}
-
 variable "github_repository" {
   description = "GitHub repo (owner/name) allowed to impersonate the deployer SAs via WIF."
   type        = string
@@ -125,12 +89,6 @@ variable "git_sha" {
   }
 }
 
-variable "eval_enabled" {
-  description = "Enable the staging-only evaluation site and backend."
-  type        = bool
-  default     = true
-}
-
 variable "default_preset" {
   description = "Production default preset, shared with evaluation prod labels."
   type        = string
@@ -141,4 +99,28 @@ variable "prod_engine" {
   description = "Production engine key, shared with evaluation prod labels."
   type        = string
   default     = "miti"
+}
+
+variable "eval_worker_concurrency" {
+  description = "Eval worker request concurrency (eval module instance)."
+  type        = number
+  default     = 2
+}
+
+variable "eval_worker_max_instances" {
+  description = "Eval queue max_concurrent_dispatches = eval_worker_concurrency x eval_worker_max_instances."
+  type        = number
+  default     = 4
+}
+
+variable "eval_llm_secrets" {
+  description = "Env-var name to base secret id for the eval instance's LLM keys (`<base>-eval`); same default as llm_secrets."
+  type        = map(string)
+  default     = { GEMINI_API_KEY = "gemini-api-key", ANTHROPIC_API_KEY = "anthropic-api-key" }
+}
+
+variable "eval_git_sha" {
+  description = "Initial/current GIT_SHA env value for the eval instance; CI overwrites it at deploy."
+  type        = string
+  default     = "unset"
 }

@@ -35,7 +35,7 @@ class CloudTasksQueue:
         self.config, self.client, self.now = config, client, now
 
     def enqueue(self, kind, payload, *, delay_seconds=0, task_id=None):
-        if kind not in {"unit", "transcribe"}:
+        if kind not in {"transcribe", "tick", "delete"}:
             raise ValueError("Unknown task kind")
         task = {
             "http_request": {

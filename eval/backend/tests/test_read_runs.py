@@ -1,18 +1,25 @@
-"""Read-side comparisons, protected output and immutable reruns; synthetic fixtures."""
+"""Read side on the prod pipeline (05 R10/R11): RunDocs, ReportDocs and gold behind the legacy
+shapes. No units subcollection; scores are computed on read. Synthetic fixtures only."""
 
+import hashlib
 from copy import deepcopy
+from datetime import timedelta
 
 import pytest
-from onolys_eval.metrics import Scores, aggregate, compare
+from onolys_api.repo.models import ReportDoc, RunDoc, utcnow
+from onolys_eval._formulas import compute_summaries
+from onolys_eval.metrics import Scores
 from test_app import AUTH, client
-from test_runs import SEL1, saved_upload, start, start_ai
+from test_runs import SEL2, start
 from test_uploads import gold
 
-from onolys_eval_backend.storage import INLINE_OUTPUT_LIMIT, store_output
+from onolys_eval_backend import eval_view
 
 pytest_plugins = ["test_runs"]
 
+UID = "eval-owner"
 LOW = "claude/claude-sonnet-5-5/low"
+MED, HIGH = "claude/claude-sonnet-5-5/medium", "claude/claude-sonnet-5-5/high"
 
 
 def scores(**counts):
@@ -22,39 +29,61 @@ def scores(**counts):
     ).model_dump(mode="json")
 
 
-def start_legacy(c, **kwargs):
-    """Create a run, then rewrite it as a stored legacy-preset run (read path until Task 6)."""
-    response = start(c, **kwargs)
-    to_legacy(c, response.json()["run_id"])
-    return response
+def gold_with(session_id="one", **counts):
+    data = {**gold(), "session_id": session_id}
+    data["counts"] = {**data["counts"], **counts}
+    data["summaries"] = compute_summaries(data["counts"], data["globals"])
+    return data
 
 
-def to_legacy(c, rid):
-    repository = c.app.state.services.repository
-    repository.update_run(
-        rid, {"presets": ["configured-prod"], "resolved_presets": {"configured-prod": {}}}
+def lean_report(sc):
+    """A prod lean report whose projection is exactly the given Scores dump."""
+    return {
+        "behaviours": [{"item_id": k, "onolys_count": {"mean": v}} for k, v in sc["counts"].items()],
+        "globals": [{"item_id": k, "onolys": {"score": v}} for k, v in sc["globals"].items()],
+    }
+
+
+def make_run(c, **overrides):
+    """Create through the real endpoint; returns (eval run id, {dataset id: prod sid})."""
+    response = start(c, **overrides)
+    assert response.status_code == 200, response.text
+    rid = response.json()["run_id"]
+    doc = c.app.state.services.repository.get_run(rid)
+    return rid, {e["dataset_session_id"]: sid for sid, e in doc["sessions"].items()}
+
+
+def put_run(
+    services, rid, sid, combo_key, repeat=0, attempt=0, *, status="done", report=None,
+    error=None, usage=None, stage=None, ref_status=None, engine="miti", record=True,
+):
+    """What the scheduler + prod worker leave behind: a RunDoc, maybe a ReportDoc, a group ref."""
+    run_id = hashlib.sha256(f"{rid}|{sid}|{combo_key}|{repeat}|{attempt}".encode()).hexdigest()[:32]
+    now = utcnow()
+    services.repo.create_run(
+        UID, sid, run_id,
+        RunDoc(
+            change_goal="g", clinician_speaker="c", language="en", transcript_sha256="x" * 64,
+            uid=UID, session_id=sid, run_id=run_id, status=status, stage=stage, error=error,
+            started=now, ended=None if status in ("pending", "running") else now + timedelta(seconds=7),
+            run_info={"usage": usage} if usage else None,
+        ),
     )
-    for uid, unit in repository.list_units(rid).items():
-        if unit["engine"] != "human":
-            repository.update_unit(
-                rid, uid, {"preset": "configured-prod", "combo": None, "combo_key": None}
-            )
+    if report is not None:
+        services.repo.put_report(UID, sid, run_id, ReportDoc(version=1, run_id=run_id, report=report))
+    if record:
+        doc = services.repository.get_run(rid)
+        doc["sessions"][sid]["runs"].append({
+            "run_id": run_id, "combo_key": combo_key, "engine": engine, "repeat": repeat,
+            "attempt": attempt, "status": ref_status or status,
+            **({"error": error} if error else {}),
+        })
+        services.repository.update_run(rid, {"sessions": doc["sessions"]})
+    return run_id
 
 
-def finish(services, rid, values):
-    units = services.repository.list_units(rid)
-    for uid, score in zip(units, values, strict=True):
-        services.repository.update_unit(
-            rid,
-            uid,
-            {
-                "status": "failed" if score is None else "done",
-                "scores": score,
-                "output": {"synthetic": uid},
-                "output_ref": None,
-            },
-        )
-    return units
+def done(services, rid, sid, combo_key, sc, repeat=0, **kw):
+    return put_run(services, rid, sid, combo_key, repeat, report=lean_report(sc), **kw)
 
 
 def detail(c, rid):
@@ -63,108 +92,230 @@ def detail(c, rid):
     return response.json()
 
 
+def units_of(body, **match):
+    return [u for u in body["units"] if all(u.get(k) == v for k, v in match.items())]
+
+
 def test_combo_run_summary_exposes_resolved_combos_and_base_preset(services):
     c = client(services=services)
-    rid = start(c).json()["run_id"]
+    rid, _ = make_run(c)
     saved = services.repository.get_run(rid)
-    assert saved["resolved_combos"] and saved["base_preset"]
+    assert saved["saved_config"]["resolved_combos"] and saved["base_preset"]
     summary = c.get("/v1/runs", headers=AUTH).json()["runs"][0]
-    assert summary["resolved_combos"] == saved["resolved_combos"]
+    assert summary["resolved_combos"] == saved["saved_config"]["resolved_combos"]
     assert summary["base_preset"] == saved["base_preset"]
-    assert detail(c, rid)["resolved_combos"] == saved["resolved_combos"]
+    assert detail(c, rid)["resolved_combos"] == saved["saved_config"]["resolved_combos"]
 
 
-def test_compare_repeats_equal_core_unit_aggregate(services):
+def test_summary_and_detail_carry_new_group_fields(services):
     c = client(services=services)
-    rid = start(c, repeats=3).json()["run_id"]
-    human = scores(question=2, sr=1, cr=1)
-    low, high = scores(question=0, sr=0, cr=0), scores(question=4, sr=2, cr=2)
-    finish(services, rid, [human, low, high, None])
+    rid, by = make_run(c, engines=["miti"])
+    services.repository.update_run(rid, {
+        "cancelled_at": "2026-11-24T10:00:00+00:00", "skipped_units": 2,
+        "provider_skips": {"gemini": {"after_failures": 3, "skipped_cells": 4,
+                                     "skipped_at": "2026-11-24T10:01:00+00:00"}},
+    })
+    expected = [{"provider": "gemini", "after_failures": 3, "skipped_cells": 4,
+                 "skipped_at": "2026-11-24T10:01:00+00:00"}]
+    (summary,) = c.get("/v1/runs", headers=AUTH).json()["runs"]
+    assert summary["cancelled_at"] == "2026-11-24T10:00:00+00:00"
+    assert summary["skipped_units"] == 2 and summary["provider_skips"] == expected
     body = detail(c, rid)
-    result = body["compare"]
-    assert result["has_human"] is True and len(result["metrics"]) == 16
-    assert [m["id"] for m in result["metrics"]][-2:] == ["reflection_question_ratio", "pct_cr"]
-    session = result["sessions"][0]
-    assert session["session_id"] == "one" and session["human"]["pct_cr"] == 0.5
-    cell = session["cells"][0]
-    assert cell["n"] == 2 and cell["failed"] == 1 and len(cell["unit_ids"]) == 3
-    assert cell["values"]["question"] == {"mean": 2, "min": 0, "max": 4, "n": 2}
-    assert cell["values"]["pct_cr"] == {"mean": 0.5, "min": 0.5, "max": 0.5, "n": 1}
-    assert cell["diff"]["question"] == 0
-    expected = aggregate(
-        [compare(Scores.model_validate(human), Scores.model_validate(s)) for s in [low, high]]
-    )
-    (agg,) = result["aggregates"]
-    assert agg["engine"] == "miti" and agg["combo_key"] == LOW and "preset" not in agg
-    assert agg["metrics"] == expected and cell["combo_key"] == LOW and "preset" not in cell
-    assert expected["counts"]["question"]["mae"] == 2  # Cell mean's error is zero.
-    assert any("consensus" in note for note in result["notes"])
-    assert "unit_id" in body["units"][0]
+    assert body["provider_skips"] == expected and body["skipped_units"] == 2
 
 
-def test_multiple_sessions_and_repeats_aggregate_not_cell_means(services):
-    source = services.bucket.read_json("datasets/synthetic/manifest.json")
-    other = {**deepcopy(source["sessions"][0]), "session_id": "two"}
-    source["sessions"].append(other)
-    services.bucket.write_json("datasets/synthetic/manifest.json", source)
-    services.bucket.write_json(
-        "datasets/synthetic/two/transcript.json",
-        services.bucket.read_json("datasets/synthetic/one/transcript.json"),
-    )
-    services.bucket.write_json("datasets/synthetic/two/gold.json", {**gold(), "session_id": "two"})
+def test_missing_new_fields_are_tolerated(services):
+    services.repository.create_group(
+        "old", {"created_at": "2026-01-01T00:00:00+00:00", "input": {}, "engines": [],
+                "sessions": {}})
     c = client(services=services)
-    rid = start(
-        c, input={"dataset_id": "synthetic", "session_ids": ["one", "two"]}, repeats=3
-    ).json()["run_id"]
-    h = scores(question=2)
-    samples = [scores(question=0), scores(question=4), scores(question=6)]
-    finish(services, rid, [h, *samples, h, samples[0], None, None])
-    result = detail(c, rid)["compare"]
-    assert [s["session_id"] for s in result["sessions"]] == ["one", "two"]
-    expected = aggregate(
-        [
-            compare(Scores.model_validate(h), Scores.model_validate(s))
-            for s in [*samples, samples[0]]
-        ]
-    )
-    assert result["aggregates"][0]["metrics"] == expected
-    assert expected["n"] == 4
+    (summary,) = c.get("/v1/runs", headers=AUTH).json()["runs"]
+    assert summary["cancelled_at"] is None and summary["skipped_units"] == 0
+    assert summary["provider_skips"] == []
 
 
-def test_no_human_even_with_saved_gold_has_no_diffs_or_errors(services):
+def test_provider_cooldowns_come_from_slots_docs(services):
     c = client(services=services)
-    rid = start_ai(services, c, engines=["miti"], repeats=3).json()["run_id"]
-    finish(services, rid, [scores(question=0, sr=0, cr=0), None, None])
-    result = detail(c, rid)["compare"]
-    assert result["has_human"] is False and result["aggregates"] == []
-    session = result["sessions"][0]
-    assert session["human"] is None and "diff" not in session["cells"][0]
-    assert session["cells"][0]["values"]["pct_cr"] == {
-        "mean": None,
-        "min": None,
-        "max": None,
-        "n": 0,
-    }
+    rid, by = make_run(c, engines=["miti"])
+    repo = services.repository
+    assert detail(c, rid)["provider_cooldowns"] == []  # no field on the slots doc
+    assert repo.claim_slot("anthropic", "r1", rid, 2)
+    repo._slots["anthropic"]["cooldown_until"] = "2026-11-24T12:00:00+00:00"
+    assert detail(c, rid)["provider_cooldowns"] == [
+        {"provider": "anthropic", "cooldown_until": "2026-11-24T12:00:00+00:00"}]
 
 
-@pytest.mark.parametrize("state", ["queued", "failed"])
-def test_unfinished_human_does_not_use_saved_gold(services, state):
+def test_unit_shape_ids_and_never_inline_output(services):
     c = client(services=services)
-    rid = start(c).json()["run_id"]
-    finish(services, rid, [None, scores()])
-    uid = next(iter(services.repository.list_units(rid)))
-    services.repository.update_unit(rid, uid, {"status": state})
-    result = detail(c, rid)["compare"]
-    assert result["has_human"] is True
-    assert result["sessions"][0]["human"] is None
-    assert result["aggregates"][0]["metrics"] == aggregate([])
-    assert all(v is None for v in result["sessions"][0]["cells"][0]["diff"].values())
-    assert result["sessions"][0]["cells"][0]["error"] is None
+    rid, by = make_run(c)
+    sid = by["one"]
+    run_id = done(services, rid, sid, LOW, scores(question=2), usage={
+        "input_tokens": 10, "output_tokens": 5, "calls": 1, "cost_usd": 0.25})
+    body = detail(c, rid)
+    human, ai = units_of(body, engine="human")[0], units_of(body, engine="miti")[0]
+    assert human["unit_id"] == f"human-{sid}" and human["session_id"] == "one"
+    assert human["status"] == "done" and human["combo_key"] is None
+    assert ai["unit_id"] == run_id and ai["run_id"] == run_id and ai["prod_session_id"] == sid
+    assert (ai["session_id"], ai["attempt"], ai["repeat"], ai["combo_key"]) == ("one", 0, 0, LOW)
+    assert ai["status"] == "done" and ai["cost_usd_est"] == 0.25
+    assert ai["run_info"]["usage"]["input_tokens"] == 10
+    for unit in body["units"]:
+        assert "output" not in unit and "output_ref" not in unit
+    assert "runs/" not in str(body)
+
+
+def test_output_is_served_from_the_report_doc_or_gold(services):
+    c = client(services=services)
+    rid, by = make_run(c)
+    sid = by["one"]
+    report = lean_report(scores(question=1))
+    run_id = put_run(services, rid, sid, LOW, report=report)
+    url = f"/v1/runs/{rid}/units/{{}}/output"
+    assert c.get(url.format(run_id)).status_code == 401
+    assert c.get(url.format(run_id), headers=AUTH).json() == report
+    served = c.get(url.format(f"human-{sid}"), headers=AUTH)
+    assert served.status_code == 200 and served.json()["session_id"] == "one"
+    assert served.json()["counts"] == gold()["counts"]
+    outsider = client(services=services, claims={"email": "o@example.com", "email_verified": True})
+    assert outsider.get(url.format(run_id), headers=AUTH).status_code == 403
+
+
+def test_large_report_is_resolved_through_its_blob_pointer(services):
+    c = client(services=services)
+    rid, by = make_run(c, engines=["miti"])
+    report = {**lean_report(scores()), "pad": "x" * 600_000}
+    run_id = put_run(services, rid, by["one"], LOW, report=report)
+    stored = services.repo.get_report(UID, by["one"], run_id, resolve=False)
+    assert stored.pointer is not None and stored.report is None
+    assert c.get(f"/v1/runs/{rid}/units/{run_id}/output", headers=AUTH).json() == report
+
+
+def test_output_rejects_unknown_foreign_and_malformed_units(services):
+    c = client(services=services)
+    rid, by = make_run(c)
+    other_rid, other_by = make_run(c)
+    foreign = put_run(services, other_rid, other_by["one"], LOW, report=lean_report(scores()))
+    failed = put_run(services, rid, by["one"], LOW, status="failed", error="internal_error")
+    for unit in [foreign, failed, "missing", "bad.id", "human-nope", f"human-{other_by['one']}x"]:
+        assert c.get(f"/v1/runs/{rid}/units/{unit}/output", headers=AUTH).status_code == 404, unit
+    for suffix in ["/missing", f"/{rid}/units/missing/output", "/bad.id"]:
+        assert c.get("/v1/runs" + suffix, headers=AUTH).status_code == 404
+
+
+def two_session_services(services):
+    source = services.datasets.read_json("datasets/synthetic/manifest.json")
+    source["sessions"].append({**deepcopy(source["sessions"][0]), "session_id": "two"})
+    services.datasets.write_json("datasets/synthetic/manifest.json", source)
+    other = services.datasets.read_json("datasets/synthetic/one/transcript.json")
+    other["turns"][0]["text"] = "a distinct opening " + "actual speech " * 30
+    services.datasets.write_json("datasets/synthetic/two/transcript.json", other)
+
+
+def test_final_attempt_is_highest_and_earlier_failures_stay_listed(services):
+    services.datasets.write_json("datasets/synthetic/one/gold.json", gold_with(question=2))
+    c = client(services=services)
+    rid, by = make_run(c, engines=["miti"])
+    sid = by["one"]
+    first = put_run(services, rid, sid, LOW, attempt=0, status="failed", error="internal_error")
+    second = done(services, rid, sid, LOW, scores(question=2), attempt=1)
+    body = detail(c, rid)
+    ai = units_of(body, engine="miti")
+    assert [(u["unit_id"], u["attempt"], u["status"]) for u in ai] == [
+        (first, 0, "failed"), (second, 1, "done")]
+    assert [u["final"] for u in ai] == [False, True]
+    cells = eval_view.list_cells(c.app.state.services, rid)
+    assert [(x["attempt"], x["status"], x["run_id"]) for x in cells] == [
+        (0, "failed", first), (1, "done", second)]
+
+
+def test_live_status_then_final_status_without_any_earlier_get(services):
+    c = client(services=services)
+    rid, by = make_run(c, engines=["miti"])
+    sid = by["one"]
+    run_id = put_run(services, rid, sid, LOW, status="running", stage="evaluating")
+    live = units_of(detail(c, rid), engine="miti")[0]
+    assert live["status"] == "running" and live["stage"] == "evaluating"
+    # The worker finishes; the scheduler has not ticked: the group ref still says running.
+    services.repo.update_run(UID, sid, run_id, {"status": "done", "stage": None, "ended": utcnow()})
+    services.repo.put_report(UID, sid, run_id, ReportDoc(
+        version=1, run_id=run_id, report=lean_report(scores(question=3))))
+    assert services.repository.get_run(rid)["sessions"][sid]["runs"][0]["status"] == "running"
+    final = detail(c, rid)
+    assert units_of(final, engine="miti")[0]["status"] == "done"
+    assert units_of(final, engine="miti")[0]["scores"]["counts"]["question"] == 3
+
+
+def test_waiting_skipped_and_unstarted_cells(services):
+    c = client(services=services)
+    rid, by = make_run(c, engines=["miti"], selection=SEL2)
+    sid = by["one"]
+    high = "claude/claude-sonnet-5-5/high"
+    put_run(services, rid, sid, LOW, status="failed", error="rate_limited", ref_status="waiting")
+    body = detail(c, rid)
+    by_combo = {u["combo_key"]: u for u in units_of(body, engine="miti")}
+    assert by_combo[LOW]["status"] == "waiting" and by_combo[high]["status"] == "queued"
+    assert by_combo[high]["run_id"] is None
+    services.repository.update_run(rid, {"provider_skips": {"anthropic": {"skipped_cells": 1}}})
+    again = {u["combo_key"]: u for u in units_of(detail(c, rid), engine="miti")}
+    assert again[high]["status"] == "skipped"
+    out = c.get(f"/v1/runs/{rid}/units/{again[high]['unit_id']}/output", headers=AUTH)
+    assert out.status_code == 404
+
+
+def test_drift_failed_cell_without_run_id_is_listed(services):
+    c = client(services=services)
+    rid, by = make_run(c, engines=["miti"])
+    sid = by["one"]
+    doc = services.repository.get_run(rid)
+    doc["sessions"][sid]["runs"].append({
+        "run_id": None, "combo_key": LOW, "engine": "miti", "repeat": 0, "attempt": 0,
+        "status": "failed", "error": "execution_config_changed"})
+    services.repository.update_run(rid, {"sessions": doc["sessions"]})
+    (unit,) = units_of(detail(c, rid), engine="miti")
+    assert unit["status"] == "failed" and unit["run_id"] is None
+    assert unit["error"] == {"code": "execution_config_changed"}
+
+
+def test_done_run_with_unreadable_report_is_listed_without_scores(services):
+    c = client(services=services)
+    rid, by = make_run(c, engines=["miti"])
+    put_run(services, rid, by["one"], LOW, report={"behaviours": "broken"})
+    body = detail(c, rid)
+    assert units_of(body, engine="miti")[0]["status"] == "done"
+    assert units_of(body, engine="miti")[0]["scores"] is None
+
+
+def test_list_cells_shape_order_and_loaders(services):
+    two_session_services(services)
+    services.datasets.write_json("datasets/synthetic/two/gold.json", gold_with("two"))
+    c = client(services=services)
+    rid, by = make_run(
+        c, input={"dataset_id": "synthetic", "session_ids": ["two", "one"]}, selection=SEL2)
+    high = "claude/claude-sonnet-5-5/high"
+    # created out of order on purpose; the listing is session -> plan -> attempt
+    done(services, rid, by["one"], high, scores(), usage={
+        "input_tokens": 1, "output_tokens": 2, "calls": 1, "cost_usd": 0.1})
+    done(services, rid, by["two"], LOW, scores())
+    svc = c.app.state.services
+    cells = eval_view.list_cells(svc, rid)
+    assert [(x["dataset_session_id"], x["combo_key"], x["status"]) for x in cells] == [
+        ("two", LOW, "done"), ("two", high, "queued"), ("one", LOW, "queued"), ("one", high, "done")]
+    cell = cells[3]
+    assert set(cell) == {"sid", "dataset_session_id", "engine", "combo_key", "repeat", "attempt",
+                         "run_id", "status", "started", "ended", "error", "run_info", "gold_ref"}
+    assert cell["sid"] == by["one"] and cell["run_info"]["cost_usd_est"] == 0.1
+    assert cell["run_info"]["usage"]["output_tokens"] == 2 and cell["error"] is None
+    assert cell["gold_ref"]["path"].startswith("gold/") and cell["gold_ref"]["sha256"]
+    assert cell["started"] is not None and cell["ended"] is not None
+    assert eval_view.load_report(svc, cell)["behaviours"]
+    assert eval_view.load_report(svc, cells[1]) is None  # not started: no report
+    assert eval_view.load_gold(svc, by["one"])["counts"] == gold()["counts"]
+    assert eval_view.load_gold(svc, "unknown") is None
 
 
 def test_history_provenance_and_private_snapshot_paths(services):
     c = client(services=services)
-    rid = start_legacy(c).json()["run_id"]
+    rid, _ = make_run(c)
     services.repository.update_run(
         rid,
         {
@@ -174,164 +325,49 @@ def test_history_provenance_and_private_snapshot_paths(services):
         },
     )
     saved = services.repository.get_run(rid)
-    response = c.get("/v1/runs", headers=AUTH)
-    assert response.status_code == 200
-    summary = response.json()["runs"][0]
+    summary = c.get("/v1/runs", headers=AUTH).json()["runs"][0]
     assert summary["run_id"] == rid
-    for field in [
-        "input",
-        "engine_versions",
-        "engine_git_sha",
-        "resolved_presets",
-        "created_at",
-        "usage",
-        "cost_usd_est",
-        "unpriced_units",
-    ]:
+    for field in ["input", "engine_versions", "engine_git_sha", "created_at", "usage",
+                  "cost_usd_est", "unpriced_units", "total_units", "done_units"]:
         assert summary[field] == saved[field]
     body = detail(c, rid)
-    assert "input_ref" not in summary and "input_ref" not in body
-    assert "runs/" not in str(summary)
-    assert "output_ref" not in str(body)
+    for private in ("input_ref", "sessions", "cells_wait", "saved_config"):
+        assert private not in summary and private not in body
+    assert "gold/" not in str(body)
 
 
-def test_protected_inline_and_spilled_output_and_cross_run_rejection(services):
-    c = client(services=services)
-    rid = start(c).json()["run_id"]
-    uids = list(finish(services, rid, [scores(), scores()]))
-    path = f"/v1/runs/{rid}/units/{uids[0]}/output"
-    assert c.get(path).status_code == 401
-    outsider = client(
-        services=services, claims={"email": "other@example.com", "email_verified": True}
-    )
-    assert outsider.get(path, headers=AUTH).status_code == 403
-    assert c.get(path, headers=AUTH).json() == {"synthetic": uids[0]}
-    ref = f"runs/{rid}/{uids[1]}.json"
-    services.bucket.write_json(ref, {"large": "synthetic"})
-    services.repository.update_unit(rid, uids[1], {"output": None, "output_ref": ref})
-    assert c.get(f"/v1/runs/{rid}/units/{uids[1]}/output", headers=AUTH).json() == {
-        "large": "synthetic"
-    }
-    services.repository.update_unit(rid, uids[1], {"output_ref": f"runs/another/{uids[1]}.json"})
-    assert c.get(f"/v1/runs/{rid}/units/{uids[1]}/output", headers=AUTH).status_code == 404
-    services.repository.update_unit(rid, uids[1], {"output_ref": f"runs/{rid}/../secret.json"})
-    assert c.get(f"/v1/runs/{rid}/units/{uids[1]}/output", headers=AUTH).status_code == 404
-    for suffix in ["/missing", f"/{rid}/units/missing/output", "/bad.id"]:
-        assert c.get("/v1/runs" + suffix, headers=AUTH).status_code == 404
-
-
-def test_spilled_output_detail_omits_placeholder_and_private_reference(services):
-    c = client(services=services)
-    rid = start_ai(services, c, engines=["miti"]).json()["run_id"]
-    uid = next(iter(finish(services, rid, [scores()])))
-    output = {"synthetic": "x" * INLINE_OUTPUT_LIMIT}
-    saved = store_output(services.bucket, rid, uid, output)
-    assert saved == {"output": None, "output_ref": f"runs/{rid}/{uid}.json"}
-    services.repository.update_unit(rid, uid, saved)
-    public_unit = detail(c, rid)["units"][0]
-    assert "output" not in public_unit
-    assert "output_ref" not in public_unit
-    assert saved["output_ref"] not in str(public_unit)
-    response = c.get(f"/v1/runs/{rid}/units/{uid}/output", headers=AUTH)
-    assert response.status_code == 200
-    assert response.json() == output
-
-
-@pytest.mark.parametrize("output", [None, False, 0, ""])
-def test_detail_preserves_inline_json_values(services, output):
-    c = client(services=services)
-    rid = start_ai(services, c, engines=["miti"]).json()["run_id"]
-    uid = next(iter(finish(services, rid, [scores()])))
-    services.repository.update_unit(rid, uid, {"output": output, "output_ref": None})
-    public_unit = detail(c, rid)["units"][0]
-    assert "output" in public_unit and public_unit["output"] == output
-    assert "output_ref" not in public_unit
-
-
-def test_detail_only_omits_null_output_for_valid_unit_reference(services):
-    c = client(services=services)
-    rid = start_ai(services, c, engines=["miti"]).json()["run_id"]
-    uid = next(iter(finish(services, rid, [scores()])))
-    services.repository.update_unit(
-        rid, uid, {"output": None, "output_ref": "runs/another/private.json"},
-    )
-    public_unit = detail(c, rid)["units"][0]
-    assert "output" in public_unit and public_unit["output"] is None
-    assert "output_ref" not in public_unit
-
-
-def test_rerun_saved_upload_preserves_effective_inputs_and_rechecks_hashes(services):
-    saved_upload(services, has_gold=True)
-    c = client(services=services)
-    rid = start(
-        c,
-        input={"upload_id": "saved"},
-        change_goal="original goal",
-        language="fr",
-        coded_span={"start_turn": 0, "end_turn": 1},
-    ).json()["run_id"]
-    old = services.repository.get_run(rid)
-    services.bucket.write_json("uploads/saved/transcript.json", {"overwritten": True})
-    services.bucket.write_json("uploads/saved/gold.json", {"overwritten": True})
-    services.repository.update_upload("saved", {"status": "failed", "change_goal": "changed"})
-    selection = {"engines": ["human", "oneshot:miti"], "selection": {"models": ["claude"], "tiers": ["claude-sonnet-5-5"], "efforts": ["low"]}, "repeats": 3}
-    response = c.post(f"/v1/runs/{rid}/rerun", headers=AUTH, json=selection)
-    assert response.status_code == 200, response.text
-    new_id = response.json()["run_id"]
-    assert new_id != rid
-    new = services.repository.get_run(new_id)
-    assert new["created_by"] == "alice@example.com"
-    for field in ["input", "change_goal", "language", "coded_span"]:
-        assert new[field] == old[field]
-    before, after = old["input_ref"]["sessions"][0], new["input_ref"]["sessions"][0]
-    for field in ["transcript_sha256", "gold_sha256", "change_goal", "language", "coded_span"]:
-        assert after[field] == before[field]
-    assert detail(c, new_id)["compare"]["notes"].count("human_span_differs") == 1
-    assert new["total_units"] == 4
-    before_count = len(services.repository.list_runs())
-    for replacement in [
-        {"input": {"upload_id": "another"}},
-        {"change_goal": "replace"},
-        {"coded_span": None},
-        {"input_ref": old["input_ref"]},
-        {"repeats": True},
-    ]:
-        assert (
-            c.post(
-                f"/v1/runs/{rid}/rerun", headers=AUTH, json={**selection, **replacement}
-            ).status_code
-            == 422
+def test_history_paginates_past_default_cap_with_stable_cursor(services):
+    repository = services.repository
+    for i in range(7):
+        repository.create_group(
+            f"r{i}",
+            {"created_at": f"2026-01-01T00:00:0{i}+00:00", "input": {}, "engines": []},
         )
-    assert len(services.repository.list_runs()) == before_count
-    modified = services.bucket.read_json(before["transcript_path"])
-    modified["language"] = "de"
-    services.bucket.write_json(before["transcript_path"], modified)
-    assert c.post(f"/v1/runs/{rid}/rerun", headers=AUTH, json=selection).status_code == 422
-    assert len(services.repository.list_runs()) == before_count
-    assert c.post("/v1/runs/missing/rerun", headers=AUTH, json=selection).status_code == 404
-
-
-def test_rerun_dataset_snapshot_survives_deleted_sources_and_gold_hash_is_checked(services):
     c = client(services=services)
-    rid = start(c).json()["run_id"]
-    old = services.repository.get_run(rid)
-    services.bucket.write_json("datasets/synthetic/manifest.json", {"overwritten": True})
-    services.bucket.write_json("datasets/synthetic/one/transcript.json", {"overwritten": True})
-    services.bucket.write_json("datasets/synthetic/one/gold.json", {"overwritten": True})
-    selection = {"engines": ["human", "miti"], "selection": {"models": ["claude"], "tiers": ["claude-sonnet-5-5"], "efforts": ["low"]}, "repeats": 1}
-    response = c.post(f"/v1/runs/{rid}/rerun", headers=AUTH, json=selection)
-    assert response.status_code == 200, response.text
-    new = services.repository.get_run(response.json()["run_id"])
-    source = new["input_ref"]["sessions"][0]
-    for key in ["change_goal", "coded_span", "language", "transcript_sha256", "gold_sha256"]:
-        assert source[key] == old["input_ref"]["sessions"][0][key]
-    path = old["input_ref"]["sessions"][0]["gold_path"]
-    changed = services.bucket.read_json(path)
-    changed["parse"]["warnings"].append("Synthetic integrity check")
-    services.bucket.write_json(path, changed)
-    count = len(services.repository.list_runs())
-    assert c.post(f"/v1/runs/{rid}/rerun", headers=AUTH, json=selection).status_code == 422
-    assert len(services.repository.list_runs()) == count
+    seen, cursor = [], None
+    while True:
+        params = {"limit": 3, **({"cursor": cursor} if cursor else {})}
+        page = c.get("/v1/runs", headers=AUTH, params=params).json()
+        seen += [r["run_id"] for r in page["runs"]]
+        cursor = page["next_cursor"]
+        if cursor is None:
+            break
+    assert seen == [f"r{i}" for i in reversed(range(7))]
+    default = c.get("/v1/runs", headers=AUTH).json()
+    assert len(default["runs"]) == 7 and default["next_cursor"] is None
+
+
+@pytest.mark.parametrize("params", [{"limit": 0}, {"limit": 201}, {"cursor": "!!"}])
+def test_history_rejects_bad_limit_or_cursor(services, params):
+    assert client(services=services).get("/v1/runs", headers=AUTH, params=params).status_code == 422
+
+
+def test_summary_exposes_cancel_requested(services):
+    c = client(services=services)
+    rid, _ = make_run(c)
+    assert c.get("/v1/runs", headers=AUTH).json()["runs"][0]["cancel_requested"] is False
+    services.repository.cancel_run(rid)
+    assert detail(c, rid)["cancel_requested"] is True
 
 
 def test_factory_prices_are_lazy_without_cloud(services):
@@ -344,213 +380,10 @@ def test_factory_prices_are_lazy_without_cloud(services):
     factory = EvalServices(EvalConfig.from_env(ENV))
     assert "prices" not in factory.__dict__
     assert isinstance(factory.prices, PriceBook)
-    assert "bucket" not in factory.__dict__ and "repository" not in factory.__dict__
+    assert "audio_bucket" not in factory.__dict__ and "repository" not in factory.__dict__
 
 
-MED, HIGH = "claude/claude-sonnet-5-5/medium", "claude/claude-sonnet-5-5/high"
-
-
-def two_session_services(services):
-    source = services.bucket.read_json("datasets/synthetic/manifest.json")
-    source["sessions"].append({**deepcopy(source["sessions"][0]), "session_id": "two"})
-    services.bucket.write_json("datasets/synthetic/manifest.json", source)
-    services.bucket.write_json(
-        "datasets/synthetic/two/transcript.json",
-        services.bucket.read_json("datasets/synthetic/one/transcript.json"),
-    )
-    services.bucket.write_json("datasets/synthetic/two/gold.json", {**gold(), "session_id": "two"})
-
-
-def with_globals(counts, **globals_):
-    from onolys_eval.gold import GLOBAL_IDS
-
-    data = scores(**counts)
-    data["globals"] = {**data["globals"], **{GLOBAL_IDS[0]: globals_["g"]}} if globals_ else data["globals"]
-    return data
-
-
-def test_matrix_two_sessions_three_combos_hand_computed(services):
-    from onolys_eval.gold import GLOBAL_IDS
-
-    two_session_services(services)
+def test_detail_defers_compare_to_dedicated_routes(services):
     c = client(services=services)
-    sel = {"models": ["claude"], "tiers": ["claude-sonnet-5-5"], "efforts": ["low", "medium", "high"]}
-    rid = start(
-        c, input={"dataset_id": "synthetic", "session_ids": ["one", "two"]}, selection=sel
-    ).json()["run_id"]
-    repo = services.repository
-    units = repo.list_units(rid)
-    by = {(u["session_id"], u["combo_key"]): uid for uid, u in units.items() if u["engine"] == "miti"}
-    human = {u["session_id"]: uid for uid, u in units.items() if u["engine"] == "human"}
-    g = GLOBAL_IDS[0]
-    done = {
-        human["one"]: with_globals({"question": 2}),
-        human["two"]: with_globals({"question": 4}),
-        by["one", LOW]: with_globals({"question": 4}, g=5),
-        by["one", MED]: with_globals({"question": 1}, g=4),
-        by["two", LOW]: with_globals({"question": 4}),
-        by["two", MED]: with_globals({"question": 0}),
-        by["two", HIGH]: with_globals({"question": 6}),
-    }
-    for uid, sc in done.items():
-        repo.update_unit(rid, uid, {"status": "done", "scores": sc})
-    repo.update_unit(
-        rid, by["one", HIGH],
-        {"status": "failed", "error": {"code": "rate_limited", "retryable": True},
-         "run_info": {"usage": {"input_tokens": 7, "output_tokens": 1, "calls": 1}}},
-    )
-    for key, tin, tout, cost in [(("one", LOW), 10, 5, 0.5), (("two", LOW), 20, 10, 0.25)]:
-        repo.update_unit(
-            rid, by[key],
-            {"run_info": {"usage": {"input_tokens": tin, "output_tokens": tout, "calls": 1}},
-             "cost_usd_est": cost},
-        )
-    result = detail(c, rid)["compare"]
-    one, two = result["sessions"]
-    cells = {x["combo_key"]: x for x in one["cells"]}
-    assert list(cells) == [LOW, MED, HIGH] and all(x["engine"] == "miti" for x in cells.values())
-    assert cells[LOW]["label"] == LOW
-    q = cells[LOW]["error"]["question"]
-    assert (q["mae"], q["mean_bias"], q["n"]) == (2, 2, 1)
-    assert cells[LOW]["error"][g]["mae"] == 2
-    assert cells[MED]["error"]["question"]["mean_bias"] == -1
-    assert cells[HIGH]["error"] is None
-    assert cells[HIGH]["failed"] == 1 and cells[HIGH]["n"] == 0
-    assert cells[HIGH]["error_code"] == "rate_limited"
-    assert cells[LOW]["error_code"] is None
-    cells2 = {x["combo_key"]: x for x in two["cells"]}
-    assert cells2[LOW]["error"]["question"] == {"mae": 0, "mean_bias": 0, "n": 1}
-    assert cells2[MED]["error"]["question"]["mae"] == 4
-    assert cells2[HIGH]["error"]["question"]["mean_bias"] == 2
-    aggs = {a["combo_key"]: a for a in result["aggregates"]}
-    assert list(aggs) == [LOW, MED, HIGH]
-    assert aggs[LOW]["metrics"]["counts"]["question"]["mae"] == 1
-    assert aggs[LOW]["metrics"]["counts"]["question"]["mean_bias"] == 1
-    assert aggs[MED]["metrics"]["counts"]["question"]["mae"] == 2.5
-    assert aggs[MED]["metrics"]["counts"]["question"]["mean_bias"] == -2.5
-    assert aggs[HIGH]["metrics"]["counts"]["question"]["mae"] == 2
-    assert [aggs[k]["n"] for k in (LOW, MED, HIGH)] == [2, 2, 1]
-    assert [aggs[k]["failed"] for k in (LOW, MED, HIGH)] == [0, 0, 1]
-    assert aggs[LOW]["within_1"][g] == {"n": 1, "total": 2, "fraction": 0.5}
-    assert aggs[MED]["within_1"][g] == {"n": 2, "total": 2, "fraction": 1.0}
-    assert aggs[HIGH]["within_1"][g] == {"n": 1, "total": 1, "fraction": 1.0}
-    assert set(aggs[LOW]["within_1"]) == set(GLOBAL_IDS)
-    assert aggs[LOW]["usage"] == {"input_tokens": 30, "output_tokens": 15, "calls": 2}
-    assert aggs[LOW]["cost_usd_est"] == 0.75
-    assert aggs[HIGH]["usage"]["input_tokens"] == 7 and aggs[HIGH]["cost_usd_est"] == 0
-    body = detail(c, rid)
-    assert body["legacy_selection"] is False and body["combo_keys"] == [LOW, MED, HIGH]
-    assert body["selection"] == sel and "presets" not in services.repository.get_run(rid)
-
-
-def test_legacy_preset_run_derives_preset_labels_everywhere(services):
-    c = client(services=services)
-    rid = start_legacy(c).json()["run_id"]
-    repo = services.repository
-    repo.update_run(rid, {"combos": [], "selection": None, "resolved_combos": {}})
-    finish(services, rid, [scores(question=2), scores(question=4)])
-    key, label = "preset:configured-prod", "preset: configured-prod (legacy)"
-    body = detail(c, rid)
-    assert body["legacy_selection"] is True and body["selection"] is None
-    assert body["engines"] == ["human", "miti"] and body["input"]["session_ids"] == ["one"]
-    assert body["combo_keys"] == [key] and body["combo_labels"] == {key: label}
-    assert {u["combo_key"] for u in body["units"] if u["engine"] == "miti"} == {key}
-    cell = body["compare"]["sessions"][0]["cells"][0]
-    assert cell["combo_key"] == key and cell["label"] == label
-    assert cell["error"]["question"]["mae"] == 2
-    agg = body["compare"]["aggregates"][0]
-    assert agg["combo_key"] == key and agg["label"] == label and agg["n"] == 1
-    (summary,) = [r for r in c.get("/v1/runs", headers=AUTH).json()["runs"] if r["run_id"] == rid]
-    assert summary["combo_keys"] == [key] and summary["combo_labels"] == {key: label}
-    assert summary["legacy_selection"] is True
-    # Rerun keeps input and engines; the picker selection must come from the client.
-    selection = {"engines": ["human", "miti"], "selection": SEL1, "repeats": 1}
-    response = c.post(f"/v1/runs/{rid}/rerun", headers=AUTH, json=selection)
-    assert response.status_code == 200, response.text
-    new = detail(c, response.json()["run_id"])
-    assert new["legacy_selection"] is False and new["input"] == body["input"]
-    assert new["combo_keys"] == [LOW]
-
-
-def test_partial_human_scores_leave_missing_metrics_null():
-    from onolys_eval.metrics import PartialScores
-
-    from onolys_eval_backend.read_runs import _values
-
-    values = _values(PartialScores(counts={"question": 3, "cr": 1, "sr": 1}, quality_label="low"))
-    assert values["question"] == 3 and values["gi"] is None and values["cct"] is None
-    assert values["pct_cr"] == .5 and values["reflection_question_ratio"] == 2 / 3
-
-
-def test_history_paginates_past_default_cap_with_stable_cursor(services):
-    # D8: nothing is silently dropped; next_cursor walks the whole history newest first.
-    repository = services.repository
-    for i in range(7):
-        repository.create_run(
-            f"r{i}",
-            {"created_at": f"2026-01-01T00:00:0{i}+00:00", "input": {}, "engines": []},
-            {},
-        )
-    c = client(services=services)
-    seen, cursor = [], None
-    while True:
-        params = {"limit": 3, **({"cursor": cursor} if cursor else {})}
-        page = c.get("/v1/runs", headers=AUTH, params=params).json()
-        seen += [r["run_id"] for r in page["runs"]]
-        cursor = page["next_cursor"]
-        if cursor is None:
-            break
-    assert seen == [f"r{i}" for i in reversed(range(7))]
-    # Backward compatible: no params still returns {runs} (plus a null cursor) in one page.
-    default = c.get("/v1/runs", headers=AUTH).json()
-    assert len(default["runs"]) == 7 and default["next_cursor"] is None
-
-
-@pytest.mark.parametrize("params", [{"limit": 0}, {"limit": 201}, {"cursor": "!!"}])
-def test_history_rejects_bad_limit_or_cursor(services, params):
-    assert client(services=services).get("/v1/runs", headers=AUTH, params=params).status_code == 422
-
-
-def test_summary_exposes_cancel_requested(services):
-    c = client(services=services)
-    rid = start(c).json()["run_id"]
-    assert c.get("/v1/runs", headers=AUTH).json()["runs"][0]["cancel_requested"] is False
-    services.repository.cancel_run(rid)
-    assert detail(c, rid)["cancel_requested"] is True
-
-
-def test_detail_stops_inlining_outputs_past_the_budget(services, monkeypatch):
-    # B14: omitted outputs load through /units/{id}/output like spilled ones.
-    from onolys_eval_backend import read_runs
-
-    monkeypatch.setattr(read_runs, "MAX_INLINE_DETAIL_BYTES", 40)
-    c = client(services=services)
-    rid = start(c).json()["run_id"]
-    finish(services, rid, [scores(), scores()])
-    units = detail(c, rid)["units"]
-    assert [("output" in u) for u in units] == [True, False]
-
-
-def test_detail_inline_budget_counts_utf8_bytes(monkeypatch):
-    from onolys_eval_backend import read_runs
-
-    output = {"text": "é" * 10}
-    monkeypatch.setattr(read_runs, "MAX_INLINE_DETAIL_BYTES", 25)
-    public = read_runs._bounded_units("r", {"u": {"output": output}})
-    assert "output" not in public[0]
-
-
-def test_attempt_scoped_output_is_fetchable_only_for_the_recorded_owner(services):
-    c = client(services=services)
-    rid = start(c).json()["run_id"]
-    uid = next(iter(services.repository.list_units(rid)))
-    path = f"runs/{rid}/{uid}/current.json"
-    services.bucket.write_json(path, {"result": "saved"})
-    services.repository.update_unit(rid, uid, {
-        "lease_owner": "current", "output_ref": path, "output": None,
-    })
-    url = f"/v1/runs/{rid}/units/{uid}/output"
-    assert c.get(url, headers=AUTH).json() == {"result": "saved"}
-    assert "output" not in detail(c, rid)["units"][0]
-    services.repository.update_unit(rid, uid, {"lease_owner": "superseded"})
-    assert c.get(url, headers=AUTH).status_code == 404
+    rid, _ = make_run(c)
+    assert "compare" not in detail(c, rid)

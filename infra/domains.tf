@@ -8,21 +8,10 @@ resource "google_firebase_hosting_custom_domain" "app" {
   wait_dns_verification = false
 }
 
-# Admin domain: the single (staging) admin environment serves admin.onolys.com (owner decision 2026-11-21).
-resource "google_firebase_hosting_custom_domain" "admin" {
-  count                 = var.admin_enabled["staging"] ? 1 : 0
-  provider              = google-beta
-  project               = var.project
-  site_id               = google_firebase_hosting_site.admin_staging[0].site_id
-  custom_domain         = "admin.onolys.com"
-  wait_dns_verification = false
-}
-
 locals {
   custom_domains = merge(
     { "app.onolys.com" = google_firebase_hosting_custom_domain.app },
-    { for d in google_firebase_hosting_custom_domain.admin : "admin.onolys.com" => d },
-    { for d in google_firebase_hosting_custom_domain.eval_staging : "eval.onolys.com" => d },
+    { "eval.onolys.com" = google_firebase_hosting_custom_domain.eval_staging },
   )
 }
 
@@ -78,10 +67,9 @@ output "custom_domain_status" {
 }
 
 resource "google_firebase_hosting_custom_domain" "eval_staging" {
-  count                 = var.eval_enabled ? 1 : 0
   provider              = google-beta
   project               = var.project
-  site_id               = google_firebase_hosting_site.eval_staging[0].site_id
+  site_id               = google_firebase_hosting_site.eval_staging.site_id
   custom_domain         = "eval.onolys.com"
   wait_dns_verification = false
 }

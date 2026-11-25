@@ -6,12 +6,17 @@ from types import SimpleNamespace
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from onolys_admin_auth import ConfigError
+from onolys_engine_core.errors import ConfigError
 from onolys_engine_core.json_logging import configure_logging
 
+from onolys_eval_backend.allowlist import ClaimsVerifier
 from onolys_eval_backend.auth import EvalAuthMiddleware, TokenVerifier
 from onolys_eval_backend.catalog import router as catalog_router
+from onolys_eval_backend.compare_cache import CompareCache
+from onolys_eval_backend.compare_routes import router as compare_router
 from onolys_eval_backend.config import EvalConfig
+from onolys_eval_backend.eval_delete import router as delete_router
+from onolys_eval_backend.eval_scheduler import router as scheduler_router
 from onolys_eval_backend.read_runs import router as read_runs_router
 from onolys_eval_backend.runs import _git_sha
 from onolys_eval_backend.runs import router as runs_router
@@ -23,13 +28,13 @@ from onolys_eval_backend.uploads import router as uploads_router
 def parse_cors_origins(raw: str) -> list[str]:
     origins = [origin.strip() for origin in raw.split(",") if origin.strip()]
     if any("*" in origin or origin == "null" for origin in origins):
-        raise ConfigError("ADMIN_CORS_ORIGINS must list exact origins (no wildcards)")
+        raise ConfigError("CORS_ORIGINS must list exact origins (no wildcards)")
     return origins
 
 
 def create_app(
     env: Mapping[str, str] | None = None,
-    verifier: TokenVerifier | None = None,
+    verifier: ClaimsVerifier | None = None,
     *,
     task_verifier: TokenVerifier | None = None,
     services: object | None = None,
@@ -38,17 +43,21 @@ def create_app(
     config = EvalConfig.from_env(env)
     # One JSON handler on root; configure_logging never imports litellm.
     configure_logging(SimpleNamespace(git_sha=_git_sha()))
-    origins = parse_cors_origins(env.get("ADMIN_CORS_ORIGINS", ""))
+    origins = parse_cors_origins(env.get("CORS_ORIGINS", ""))
     app = FastAPI(title="Onolys eval backend", docs_url=None, redoc_url=None, openapi_url=None)
     # Routers access these through request.app.state; construction performs no cloud I/O.
     # Later services can be supplied as a bundle of repository/storage/queue fakes.
     app.state.config = config
     app.state.catalog = EvalServices(config)
     app.state.services = services if services is not None else app.state.catalog
+    app.state.compare_cache = CompareCache()
+    app.include_router(compare_router)
     app.include_router(catalog_router)
     app.include_router(uploads_router)
     app.include_router(runs_router)
     app.include_router(read_runs_router)
+    app.include_router(scheduler_router)
+    app.include_router(delete_router)
     install_error_handler(app)
 
     @app.get("/v1/me")

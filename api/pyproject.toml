@@ -6,6 +6,7 @@ requires-python = ">=3.12,<3.13"
 dependencies = [
     "onolys-engine-core",
     "onolys-miti[stt-google,voice-gemini]",
+    "onolys-oneshot",
     "fastapi>=0.115",
     "uvicorn>=0.30",
     "pydantic>=2.7",
@@ -21,6 +22,7 @@ dependencies = [
 [tool.uv.sources]
 onolys-engine-core = { workspace = true }
 onolys-miti = { workspace = true }
+onolys-oneshot = { workspace = true }
 
 [dependency-groups]
 dev = [

@@ -244,6 +244,7 @@ class TipQuote(_Model):
 
 
 class Tip(_Model):
+    title: str | None = Field(default=None, exclude_if=lambda value: value is None)
     rank: Annotated[int, Field(ge=1)]
     item_id: str
     observation: str

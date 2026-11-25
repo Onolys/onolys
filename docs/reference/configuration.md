@@ -1,6 +1,6 @@
 # Configuration
 
-Environment variables for the api and the MITI engine. Sources: `api/src/onolys_api/config.py` (`Settings.from_env`), `api/.env.example`, `engines/core/src/onolys_engine_core/llm/routes.py`. The admin backend has its own list in [backend-api.md](backend-api.md#environment-variables).
+Environment variables for the api and the MITI engine. Sources: `api/src/onolys_api/config.py` (`Settings.from_env`), `api/.env.example`, `engines/core/src/onolys_engine_core/llm/routes.py`. The eval backend has its own list in [backend-api.md](backend-api.md#configuration).
 
 **Audience:** users.
 
@@ -42,7 +42,7 @@ STT and voice providers come from `config/{env}/stt_providers.yaml` and `voice_p
 |---|---|---|
 | `MITI_MODEL_CHEAP`, `MITI_MODEL_MID`, `MITI_MODEL_STRONG` | from the routes file | LiteLLM model id for that route. Applied before a preset's overrides. |
 | `LLM_PROVIDER`, `LLM_MODEL` | unset | Both or neither: exact lowercase provider and tier id from `config/models.yaml`. Override concrete text routes after `MITI_MODEL_*`; presets apply last. The `oneshot` baseline is unchanged. |
-| `LLM_EFFORT` | from the routes file | Optional exact lowercase effort supported by every effective text tier in `config/models.yaml` (e.g. `low`, `medium`, `high`, `max` where supported). Overrides `extra_params.reasoning_effort` before presets. Can be used alone with the routes' effective models. Empty preserves route defaults; does not change token caps or `oneshot`. |
+| `LLM_EFFORT` | from the routes file | Optional exact lowercase effort supported by every effective text tier in `config/models.yaml` (e.g. `none`, `low`, `medium`, `high`, `xhigh`, `max` where supported). Overrides `extra_params.reasoning_effort` before presets. Can be used alone with the routes' effective models. Empty preserves route defaults; does not change token caps or `oneshot`. |
 | `MITI_LLM_RESPONSE_FORMAT` | from the routes file | `json_object` or `json_schema`, set on every full route. |
 | `MITI_LLM_RECORD` | unset | `1` wraps the live client and writes fixtures for replay. |
 | `MITI_LIVE_PRESET` | unset | Route preset for the live checks. |

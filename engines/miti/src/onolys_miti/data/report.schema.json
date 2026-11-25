@@ -1570,6 +1570,18 @@
     "Tip": {
       "additionalProperties": false,
       "properties": {
+        "title": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Title"
+        },
         "rank": {
           "minimum": 1,
           "title": "Rank",

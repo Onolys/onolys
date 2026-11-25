@@ -277,7 +277,9 @@ def test_run_re_enters_running_with_the_same_submission(repo):  # noqa: F811
     queue = RecordingQueue()
     sid = failed(repo, uid, step="run")
     rid = rate(repo, uid, sid)
-    prior = RunDoc(uid=uid, session_id=sid, run_id="old", preset="p-old", n_runs=2,
+    prior = RunDoc(change_goal="", clinician_speaker="S1", language="en",
+                   transcript_sha256=repo.get_transcript(uid, sid, "current").sha256,
+                   uid=uid, session_id=sid, run_id="old", preset="p-old", n_runs=2,
                    status="failed", coded_span={"start_ms": 1000, "end_ms": 5000},
                    rating_id=rid, counted=True, released=True)  # fmt: skip
     repo.create_run(uid, sid, "old", prior)

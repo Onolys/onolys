@@ -3,13 +3,8 @@
 !uv.lock
 !api/
 !api/pyproject.toml
-!admin/
-!admin/auth/
-!admin/auth/pyproject.toml
-!admin/auth/src/
-!admin/auth/src/**
-!admin/backend/
-!admin/backend/pyproject.toml
+!api/src/
+!api/src/**
 !engines/
 !engines/core/
 !engines/core/pyproject.toml

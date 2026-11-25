@@ -193,3 +193,29 @@ def test_score_run_div_by_zero_without_globals():
     _, counts, summaries, _ = score_run([], {})
     assert all(v == 0 for v in counts.values())
     assert summaries["pct_cr"].value is None and summaries["technical"].value is None
+
+
+@pytest.mark.parametrize("permission_first", [False, True])
+def test_real_pack_has_one_persuasion_slot_and_at_most_eight_codes(permission_first):
+    # Distinct utterances exercise volley precedence in either text order.
+    persuasion = ["persuade_permission", "persuade"] if permission_first else ["persuade", "persuade_permission"]
+    codes = persuasion + ["gi", "question", "sr", "cr", "affirm", "seek_collab", "emphasize_autonomy", "confront"]
+    src = [inst(i, code, turn=f"t{i}") for i, code in enumerate(codes)]
+    final, counts, summaries, warnings = score_run(src, {})
+    loser = next(i for i in final if i.code == "persuade")
+    assert not loser.counted
+    assert loser.uncounted_reason == "superseded_by_persuade_permission"
+    assert counts["persuade_permission"] == 1 and counts["persuade"] == 0
+    assert summaries["total_mina"].value == counts["confront"] == 1
+    assert sum(i.counted and i.code is not None for i in final) == 8
+    assert warnings == []
+
+
+def test_persuasion_in_separate_volleys_is_not_superseded():
+    final, counts, summaries, _ = score_run([
+        inst(1, "persuade", volley="v1"),
+        inst(2, "persuade_permission", volley="v2", turn="t2"),
+    ], {})
+    assert all(i.counted for i in final)
+    assert counts["persuade"] == counts["persuade_permission"] == 1
+    assert summaries["total_mina"].value == 1

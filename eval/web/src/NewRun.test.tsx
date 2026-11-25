@@ -71,7 +71,10 @@ describe('new run', () => {
   });
   it('shows the original source media line for the selected dataset', async () => {
     await mount();
-    expect(screen.getByTestId('dataset-source').textContent).toBe('Original: Video + transcript · Transcript: human · Labels: MITI counts · MITI 4.2.1');
+    expect(screen.getByTestId('dataset-source').querySelectorAll('dt')).toHaveLength(4);
+    expect(screen.getByText('Original')).toBeTruthy();
+    expect(screen.getByText('Video + transcript')).toBeTruthy();
+    expect(screen.getByText('MITI version')).toBeTruthy();
     expect(screen.getByRole('option', { name: 'Sample dataset (Video + transcript)' })).toBeTruthy();
   });
   it('loads configured dataset defaults, all sessions, prod labels and starts with a selection', async () => {
@@ -321,4 +324,43 @@ it('retries preparation with the same input object so a completed PUT is not rep
   const initial = api.upload.mock.calls[0][0];
   fireEvent.click(screen.getByRole('button', { name: 'Retry' })); await screen.findByText(/Upload ready/);
   expect(api.upload.mock.calls[1][0]).toBe(initial);
+});
+
+
+it('saves optional run details only after explicit submit', async () => {
+  const { api } = await mount(12);
+  const slider = screen.getByRole('slider') as HTMLInputElement;
+  expect(slider.style.getPropertyValue('--range-fill')).toBe('100%');
+  fireEvent.change(screen.getByLabelText('Name (optional)'), { target: { value: 'Baseline' } });
+  fireEvent.change(screen.getByLabelText('Description (optional)'), { target: { value: 'Compare the same sessions' } });
+  expect(api.start).not.toHaveBeenCalled();
+  fireEvent.click(start());
+  await waitFor(() => expect(api.start).toHaveBeenCalledWith(expect.objectContaining({ name: 'Baseline', description: 'Compare the same sessions' })));
+});
+
+it('prefills saved details and keeps unavailable engines visible until removed', async () => {
+  const api = makeApi();
+  const saved = { run_id: 'saved', input: { upload_id: 'old-upload' }, engines: ['miti', 'retired'], selection: sonnetLow, repeats: 3, name: 'Saved name', description: 'Saved description' } as RunSummary;
+  render(<NewRun api={api} initialRun={saved} onRunCreated={vi.fn()} />);
+  await screen.findByLabelText('retired (unavailable)');
+  expect((screen.getByLabelText('Name (optional)') as HTMLInputElement).value).toBe('Saved name');
+  expect((screen.getByLabelText('Description (optional)') as HTMLTextAreaElement).value).toBe('Saved description');
+  expect(start().disabled).toBe(true);
+  expect(api.rerun).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByLabelText('retired (unavailable)'));
+  fireEvent.change(screen.getByLabelText('Name (optional)'), { target: { value: '' } });
+  fireEvent.click(start());
+  await waitFor(() => expect(api.rerun).toHaveBeenCalledWith('saved', { engines: ['miti'], selection: sonnetLow, repeats: 3, name: null, description: 'Saved description' }));
+});
+
+it('retains unavailable saved model, tier and effort values visibly', async () => {
+  const api = makeApi();
+  const saved = { run_id: 'retired', input: { upload_id: 'saved-upload' }, engines: ['miti'], selection: { models: ['retired-model'], tiers: ['retired-tier'], efforts: ['retired-effort'] }, repeats: 1 } as RunSummary;
+  render(<NewRun api={api} initialRun={saved} onRunCreated={vi.fn()} />);
+  for (const value of ['retired-model', 'retired-tier', 'retired-effort']) {
+    const choice = await screen.findByLabelText(`${value} (unavailable)`) as HTMLInputElement;
+    expect(choice.checked).toBe(true);
+  }
+  expect(start().disabled).toBe(true);
+  expect(api.rerun).not.toHaveBeenCalled();
 });

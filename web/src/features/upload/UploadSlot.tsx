@@ -111,7 +111,7 @@ export function UploadSlot({
       {state.phase === "uploading" || state.phase === "completing" ? (
         <>
           <p>
-            <progress max={100} value={pct} aria-label="Upload progress" className="h-3 w-64 max-w-full align-middle accent-primary" /> {mb(state.loaded)} of{" "}
+            {mb(state.loaded)} of{" "}
             {mb(state.total)} MB ({pct}%)
           </p>
           {state.attempt > 0 ? <p className={NOTE}>Trying again…</p> : null}

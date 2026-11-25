@@ -16,6 +16,7 @@ from onolys_api.errors import ApiError
 from onolys_api.repo.limits import Kind, LimitDefaults, ReserveUsageOutcome
 from onolys_api.repo.models import (
     ApiKeyDoc,
+    EvalRunInfo,
     IdempotencyDoc,
     InterviewDoc,
     InterviewState,
@@ -128,9 +129,11 @@ class Repo(Protocol):
         self, uid: str, sid: str, run_id: str, doc: ReportDoc, run_fields: dict[str, Any],
         plan_for: Callable[[int], SessionPlan], date: str | None,
     ) -> ReportDoc | None: ...  # fmt: skip
+    # Atomic write-once selection; same returns without writing, even after a run starts.
+    # Failed/cancelled/deleting sessions conflict before the idempotency check.
     def confirm_speaker(
         self, uid: str, sid: str, clinician: str, states: tuple[str, ...]
-    ) -> bool: ...
+    ) -> Literal["written", "same", "conflict"]: ...
     def list_sessions(
         self, uid: str, limit: int = 20, cursor: str | None = None
     ) -> Page[SessionDoc]: ...
@@ -197,6 +200,9 @@ class Repo(Protocol):
     def get_run(self, uid: str, sid: str, run_id: str) -> RunDoc: ...
     def update_run(self, uid: str, sid: str, run_id: str, fields: dict[str, Any]) -> None: ...
     def list_runs(self, uid: str, sid: str) -> list[RunDoc]: ...
+    # eval-only hooks (05 R3/R8): prod routes never call them
+    def get_runs(self, uid: str, sid: str, run_ids: list[str]) -> list[RunDoc]: ...
+    def delete_run_data(self, uid: str, sid: str, run_id: str) -> None: ...
     # atomic claim with lease (R5): pending|expired-running -> running, attempts+1
     def claim_step(self, uid: str, sid: str, step: str, now: datetime, lease_s: float) -> Claim: ...
     def claim_run(
@@ -271,13 +277,21 @@ class Repo(Protocol):
     # clears the error. With `retry_max` (R4 retry of a failed run) the start is a retry: only
     # `retry_allowed(session, retry_max, "run")` passes (else "not_ready"), and it also bumps
     # `retry_count` in the same transaction; a cap/concurrent refusal bumps nothing.
+    # `eval` (SP04 R3, eval run): also allows report_ready/failed, skips decide_start (no cap or
+    # concurrent check), writes counted=False and no usage, and writes the block via txn.create.
+    # Imported eval sessions additionally validate their server-pinned input hash inside this
+    # transaction. That pin allows a missing first RunDoc after group deletion; production
+    # retries still require the first RunDoc's transcript hash to match.
+    # `eval_guard` (internal scheduler only): fence creation on eval_runs.tick_owner and
+    # cancel_requested in this same transaction. None preserves ordinary prod/eval starts.
     # Exactly one of two racing callers (two manual starts, or a manual start
     # and the first-run gate) wins; the loser reserved nothing, so there is nothing to release.
     def start_run(
         self, uid: str, sid: str, run_id: str, date: str, defaults: LimitDefaults, max_active: int,
         code_version: str, start_progress: int, allowed_states: tuple[str, ...],
         n_runs: int | None, preset: str | None, coded_span: dict | None = None,
-        retry_max: int | None = None,
+        retry_max: int | None = None, eval: EvalRunInfo | None = None,  # noqa: A002
+        eval_guard: str | None = None,
     ) -> StartOutcome: ...  # fmt: skip
     # R4 retry of a validate/transcribe failure, ONE transaction: if `retry_allowed(session,
     # max_retries, step)` (failed, transient, under the cap, failed at `step`), set `state=to`,

@@ -107,7 +107,7 @@ async function uploadViaUi(u: ReturnType<typeof user>, router: Parameters<typeof
   await u.click(screen.getByRole("button", { name: /start/i }));
   await waitFor(() => expect(here(router)).toMatch(/^\/sessions\/(?!new)[^/]+$/));
   const sid = sessionId(router);
-  await h1("Session");
+  await screen.findByRole("heading", { level: 1, name: /^Session(?: - .+)?$/ });
   await waitFor(() => expect(mockBackend.getSession(UID, sid).status).not.toBe("uploading"));
   return sid;
 }
@@ -151,7 +151,6 @@ describe("flow: one submit, no rating card (default)", () => {
     await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Coding the session"));
     expect(screen.getByRole("status")).not.toHaveTextContent(/rating the session/i);
     settle(sid);
-    await u.click(await screen.findByRole("link", { name: "View report" }));
     await waitFor(() => expect(here(router)).toBe(`/sessions/${sid}/reports/1`));
     await h1("Report");
     const glance = await screen.findByRole("region", { name: "At a glance" });
@@ -216,7 +215,6 @@ describe("flow (rating on): sign-up, verify, upload, speaker + rating during tra
     await confirmSpeakerViaUi(u, sid); // run starts by itself once speaker + rating are in
     await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Coding the session"));
     settle(sid);
-    await u.click(await screen.findByRole("link", { name: "View report" }));
     await waitFor(() => expect(here(router)).toBe(`/sessions/${sid}/reports/1`));
     await h1("Report");
     const glance = await screen.findByRole("region", { name: "At a glance" });
@@ -226,13 +224,10 @@ describe("flow (rating on): sign-up, verify, upload, speaker + rating during tra
 
     // FX45: the report is final: no Run again, no rating edit, a single version
     expect(screen.queryByRole("button", { name: /run again|edit my rating|submit/i })).toBeNull();
-    const select = screen.getByLabelText("Version");
-    expect(within(select).getAllByRole("option")).toHaveLength(1);
+    expect(screen.queryByRole("combobox", { name: "Version" })).not.toBeInTheDocument();
     await u.click(nav("Sessions"));
     await u.click(await screen.findByRole("link", { name: /Visit 3/ }));
-    await h1("Session");
-    expect(await screen.findByRole("textbox", { name: "Change goal" })).toBeDisabled();
-    expect(screen.getByText(/Your rating is final/)).toBeInTheDocument();
+    await h1("Report");
     expect(screen.queryByRole("button", { name: /run again|submit rating|no rating/i })).toBeNull();
     expect(mockBackend.listRuns(UID, sid)).toHaveLength(1);
   });
@@ -251,7 +246,6 @@ describe("flow (rating on): no-rating run is final too (AC3)", () => {
     await screen.findByText(/Saved without a rating/);
     await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Coding the session"));
     settle(sid);
-    await u.click(await screen.findByRole("link", { name: "View report" }));
     await h1("Report");
     const glance = within(await screen.findByRole("region", { name: "At a glance" }));
     expect(glance.getByText("Cultivating Change Talk")).toBeInTheDocument();
@@ -302,19 +296,24 @@ describe("flow (rating on): daily cap reached at auto-start, then Start (AC6a)",
     await u.click(screen.getByRole("button", { name: "Start" }));
     await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Coding the session"));
     settle(sid);
-    await u.click(await screen.findByRole("link", { name: "View report" }));
     await waitFor(() => expect(here(router)).toBe(`/sessions/${sid}/reports/1`));
   });
 });
 
 describe("flow: delete a session (AC2)", () => {
-  it("dashboard -> session -> confirm delete -> dashboard without it", async () => {
+  it("dashboard -> report -> confirm delete -> dashboard without it", async () => {
     const u = user();
     const sid = mockBackend.createSession(UID, { title: "Doomed visit" }).session.id;
+    mockBackend.requestAudio(UID, sid, { content_type: "audio/mpeg", size_bytes: 100, filename_ext: "mp3" });
+    mockBackend.completeAudio(UID, sid);
+    mockBackend.settle(sid);
+    mockBackend.confirmSpeaker(UID, sid, "spk_0");
+    mockBackend.putRating(UID, sid, { final: true, no_rating: true, card: { change_goal: "Walk more" } });
+    mockBackend.settle(sid);
     const { router } = renderApp("/sessions", { user: USER });
     await u.click(await screen.findByRole("link", { name: /Doomed visit/ }));
-    await h1("Session");
-    expect(here(router)).toBe(`/sessions/${sid}`);
+    await h1("Report");
+    expect(here(router)).toBe(`/sessions/${sid}/reports/1`);
     await u.click(await screen.findByRole("button", { name: "Delete session" }));
     await u.click(within(await screen.findByRole("alertdialog")).getByRole("button", { name: "Delete permanently" }));
     await h1("Sessions"); // delete lands on the sessions list
@@ -325,37 +324,21 @@ describe("flow: delete a session (AC2)", () => {
   });
 });
 
-describe("flow: API key is shown once (AC7)", () => {
-  it("secret visible in the modal only; gone after Done and after leaving and coming back; not stored or logged", async () => {
+describe("flow: settings from the account menu", () => {
+  it("opens usage and account information without API tools, then returns to sessions", async () => {
     const u = user();
-    const spies = (["log", "info", "warn", "error", "debug"] as const).map((m) => vi.spyOn(console, m).mockImplementation(() => {}));
-    try {
-      renderApp("/sessions", { user: USER });
-      await h1("Sessions");
-      await u.click(screen.getByRole("button", { name: "Account menu" }));
-      await u.click(screen.getByRole("menuitem", { name: "Settings" }));
-      await h1("Settings");
-      await u.click(await screen.findByRole("button", { name: "Create API key" }));
-      const dialog = await screen.findByRole("dialog");
-      const secret = (await within(dialog).findByTestId("api-secret")).textContent ?? "";
-      expect(secret).toMatch(/^onolys_[A-Za-z0-9]+_[A-Za-z0-9]+$/);
-      await u.click(within(dialog).getByRole("checkbox", { name: /i've stored it/i }));
-      await u.click(within(dialog).getByRole("button", { name: "Done" }));
-      expect(screen.queryByRole("dialog")).toBeNull();
-      expect(document.body.textContent).not.toContain(secret);
-
-      await u.click(nav("Sessions"));
-      await h1("Sessions");
-      await u.click(screen.getByRole("button", { name: "Account menu" }));
-      await u.click(screen.getByRole("menuitem", { name: "Settings" }));
-      await h1("Settings");
-      expect(await screen.findByText(/active/i)).toBeInTheDocument();
-      expect(document.body.textContent).not.toContain(secret);
-      expect(JSON.stringify({ l: { ...localStorage }, s: { ...sessionStorage } })).not.toContain(secret);
-      expect(JSON.stringify(spies.flatMap((s) => s.mock.calls))).not.toContain(secret);
-    } finally {
-      spies.forEach((s) => s.mockRestore());
-    }
+    renderApp("/sessions", { user: USER });
+    await h1("Sessions");
+    await u.click(screen.getByRole("button", { name: "Account menu" }));
+    await u.click(screen.getByRole("menuitem", { name: "Settings" }));
+    await h1("Settings");
+    const main = within(screen.getByRole("main"));
+    expect(await main.findByText("20 of 20 left today")).toBeInTheDocument();
+    expect(main.getByText(/account removal/i)).toBeInTheDocument();
+    expect(main.queryByRole("button", { name: /API key|Sign out/i })).toBeNull();
+    expect(main.queryByRole("link", { name: "API docs" })).toBeNull();
+    await u.click(nav("Sessions"));
+    await h1("Sessions");
   });
 });
 

@@ -75,7 +75,8 @@ const SIGNED_IN = {
     await p.locator("input[type=file]").setInputFiles(FIX("ten-min.mp3"));
     await p.getByRole("button", { name: "Start", exact: true }).click();
     await expect(p).toHaveURL(/\/sessions\/(?!new$)[^/]+$/);
-    await expect(p.getByRole("button", { name: "Delete session" })).toBeVisible();
+    await expect(p.getByRole("list", { name: "Progress" })).toBeVisible();
+    await expect(p.getByRole("button", { name: "Delete session" })).toHaveCount(0);
   },
   "session-speaker-gate": async (p) => { await startSession(p, "i@example.com"); await gate(p); },
   "session-failed": async (p) => {
@@ -86,21 +87,15 @@ const SIGNED_IN = {
     await startSession(p, "k@example.com");
     await gate(p);
     await p.getByRole("button", { name: "This is the clinician" }).first().click();
-    await expect(p.getByRole("link", { name: "View report" })).toBeVisible({ timeout: 60_000 });
-    await p.getByRole("link", { name: "View report" }).click();
+    await expect(p).toHaveURL(/\/sessions\/[^/]+\/reports\/1$/, { timeout: 60_000 });
     await expect(p.getByRole("heading", { name: "At a glance" })).toBeVisible();
   },
   "session-delete-dialog": async (p) => {
-    await SIGNED_IN.session(p);
+    await SIGNED_IN.report(p);
     await p.getByRole("button", { name: "Delete session" }).click();
     await expect(p.getByRole("alertdialog")).toBeVisible();
   },
   settings: async (p) => { await verified(p, "f@example.com"); await accountMenu(p, "Settings"); await expect(p.getByRole("heading", { name: "Settings" })).toBeVisible(); },
-  "settings-secret-dialog": async (p) => {
-    await SIGNED_IN.settings(p);
-    await p.getByRole("button", { name: "Create API key" }).click();
-    await expect(p.getByRole("dialog")).toBeVisible();
-  },
   "account-menu-open": async (p) => { await verified(p, "g@example.com"); await p.getByRole("button", { name: "Account menu" }).click(); await expect(p.getByRole("menuitem", { name: "Settings" })).toBeVisible(); },
 };
 

@@ -277,6 +277,7 @@ function build(turns: Turn[], picks: Picks): Report {
       {
         rank: 1,
         item_id: "cr",
+        title: "Reflect what walking could offer",
         observation: "A reflection could add the client's reason for change.",
         quote: { turn_id: L.sr.turn_id, start: L.sr.start, end: L.sr.end, text: L.sr.quote },
         alternative: "You might add what walking would give them.",
@@ -285,6 +286,7 @@ function build(turns: Turn[], picks: Picks): Report {
       {
         rank: 2,
         item_id: "question",
+        title: "Ask what would help most",
         observation: "An open question gave the client room to plan.",
         quote: { turn_id: L.q.turn_id, start: L.q.start, end: L.q.end, text: L.q.quote },
         alternative: "A follow-up could ask what would help most.",
@@ -293,6 +295,7 @@ function build(turns: Turn[], picks: Picks): Report {
       {
         rank: 3,
         item_id: "emphasize_autonomy",
+        title: "Pair choice with a reflection",
         observation: "Naming the client's choice supported their plan.",
         quote: { turn_id: L.aut.turn_id, start: L.aut.start, end: L.aut.end, text: L.aut.quote },
         alternative: "You could pair it with a reflection of their plan.",

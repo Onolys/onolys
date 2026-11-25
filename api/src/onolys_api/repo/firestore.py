@@ -55,6 +55,7 @@ from onolys_api.repo.limits import (
 from onolys_api.repo.models import (
     ApiKeyDoc,
     Doc,
+    EvalRunInfo,
     IdempotencyDoc,
     InterviewDoc,
     InterviewState,
@@ -71,7 +72,9 @@ from onolys_api.repo.models import (
     UsageDoc,
     UserDoc,
     error_status_fields,
+    eval_session_input_sha256,
     interview_refundable,
+    reject_eval_write,
     retry_allowed,
     upload_failed_stub,
     utcnow,
@@ -395,27 +398,36 @@ class FirestoreRepo:
             self._drop_pointer(pointer)  # not published (or someone else's report won)
         return out
 
-    def confirm_speaker(self, uid: str, sid: str, clinician: str, states: tuple[str, ...]) -> bool:
-        """Record the clinician only while the session is still in one of `states` (checked and
-        written in one transaction, so a run starting concurrently cannot be overwritten)."""
+    def confirm_speaker(
+        self, uid: str, sid: str, clinician: str, states: tuple[str, ...]
+    ) -> Literal["written", "same", "conflict"]:
+        """Select once in `states`, or accept an identical retry without writing.
+
+        Terminal failure/cancellation/deletion precedes idempotency. All checks and writes
+        share a transaction so concurrent selections cannot overwrite the chosen speaker.
+        """
         sref = self._top("sessions", sid)  # read inside the txn only: a plain read can abort
         stref = self._top("session_status", sid)
 
         @firestore.transactional
-        def txn_fn(txn) -> bool:
+        def txn_fn(txn) -> Literal["written", "same", "conflict"]:
             snap = sref.get(transaction=txn)
             cur = snap.to_dict() or {}
             if not snap.exists or cur.get("uid") != uid:
                 raise NotFoundError()
+            if cur.get("state") in ("failed", "cancelled", "deleting"):
+                return "conflict"
+            if cur.get("speaker_confirmed"):
+                return "same" if cur.get("clinician_speaker") == clinician else "conflict"
             if cur.get("state") not in states:
-                return False
+                return "conflict"
             now = utcnow()
             txn.update(
                 sref,
                 {"clinician_speaker": clinician, "speaker_confirmed": True, "updated_at": now},
             )
             txn.set(stref, {"speaker_confirmed": True, "uid": uid, "updated_at": now}, merge=True)
-            return True
+            return "written"
 
         return self._contended(txn_fn, uid)
 
@@ -651,10 +663,11 @@ class FirestoreRepo:
 
     def put_transcript(self, uid: str, sid: str, tid: str, transcript: Transcript) -> None:
         ref = self._session_ref(uid, sid).collection("transcripts").document(tid)
+        session_language = self.get_session(uid, sid).language
         pointer = large.pack(
             self._blobs, large.transcript_key(uid, sid), transcript.model_dump(mode="json")
         )
-        doc = TranscriptDoc(transcript=None if pointer else transcript, pointer=pointer)
+        doc = TranscriptDoc.build(transcript, pointer, session_language)
         try:
             self._create_child(uid, sid, ref, doc.to_store(), exclusive=False)
         except NotFoundError:
@@ -720,6 +733,7 @@ class FirestoreRepo:
         return _load(RunDoc, snap)
 
     def update_run(self, uid: str, sid: str, run_id: str, fields: dict[str, Any]) -> None:
+        reject_eval_write(fields)
         ref = self._run_ref(uid, sid, run_id)
         if not ref.get().exists:
             raise NotFoundError()
@@ -786,6 +800,27 @@ class FirestoreRepo:
             (_load(RunDoc, s) for s in coll.stream()),
             key=lambda r: (r.started or utcnow(), r.run_id),
         )
+
+    def get_runs(self, uid: str, sid: str, run_ids: list[str]) -> list[RunDoc]:
+        """The requested runs of one session, in request order; absent ids are skipped."""
+        sref = self._session_ref(uid, sid)  # NotFoundError for a foreign/missing session
+        refs = [sref.collection("runs").document(r) for r in dict.fromkeys(run_ids)]
+        snaps = {s.id: s for s in self._client.get_all(refs)} if refs else {}
+        return [_load(RunDoc, snaps[r]) for r in dict.fromkeys(run_ids) if snaps[r].exists]
+
+    def delete_run_data(self, uid: str, sid: str, run_id: str) -> None:
+        """Delete one run's RunDoc, its ReportDoc (id == run id) and the report blob pointer's
+        object. Idempotent; the session, transcripts and other runs are untouched. Output blobs
+        under `{uid}/{sid}/runs/{run_id}/` are the eval caller's to delete."""
+        sref = self._session_ref(uid, sid)
+        rep_ref = sref.collection("reports").document(run_id)
+        snap = rep_ref.get()
+        if snap.exists:
+            pointer = (snap.to_dict() or {}).get("pointer")
+            if pointer:
+                self._blobs.delete(pointer["key"])
+            rep_ref.delete()
+        sref.collection("runs").document(run_id).delete()
 
     def get_run_by_id(self, uid: str, run_id: str) -> RunDoc:
         q = _uid_query(self._client.collection_group("runs"), uid)
@@ -1102,7 +1137,23 @@ class FirestoreRepo:
             if sess.get("first_run_id"):
                 return "already"
             if sess.get("state") != "awaiting_input" or not all(
-                sess.get(f) for f in ("transcript_ready", "speaker_confirmed", "rating_submitted")
+                sess.get(f)
+                for f in (
+                    "transcript_ready",
+                    "speaker_confirmed",
+                    "rating_submitted",
+                    "clinician_speaker",
+                )
+            ):
+                return "not_ready"
+            if not isinstance(sess.get("clinician_speaker"), str):
+                return "not_ready"
+            transcript = (
+                sref.collection("transcripts").document("current").get(transaction=txn).to_dict()
+                or {}
+            )
+            if not all(
+                isinstance(transcript.get(k), str) and transcript[k] for k in ("sha256", "language")
             ):
                 return "not_ready"
             status = stref.get(transaction=txn).to_dict() or {}
@@ -1123,6 +1174,9 @@ class FirestoreRepo:
                 uid=uid, session_id=sid, run_id=run_id, n_runs=sess.get("n_runs", 1),
                 preset=sess.get("preset"), rating_id=latest[0].id if latest else None,
                 stt=sess.get("stt"), code_version=code_version, cap_date=date,
+                change_goal=sess.get("change_goal") or "",
+                clinician_speaker=sess["clinician_speaker"],
+                language=transcript["language"], transcript_sha256=transcript["sha256"],
                 counted=not exempt, units=units, coded_span=sess.get("coded_span"),
             )  # fmt: skip
             txn.create(run_ref, run.to_store())
@@ -1154,8 +1208,14 @@ class FirestoreRepo:
         self, uid: str, sid: str, run_id: str, date: str, defaults: LimitDefaults, max_active: int,
         code_version: str, start_progress: int, allowed_states: tuple[str, ...],
         n_runs: int | None, preset: str | None, coded_span: dict | None = None,
-        retry_max: int | None = None,
+        retry_max: int | None = None, eval: EvalRunInfo | None = None,  # noqa: A002
+        eval_guard: str | None = None,
     ) -> StartOutcome:  # fmt: skip
+        if eval is not None:  # SP04 R3: an eval run may start on any ready session
+            allowed_states = (
+                *allowed_states,
+                *(x for x in ("report_ready", "failed") if x not in allowed_states),
+            )
         sref = self._session_ref(uid, sid)
         stref = self._top("session_status", sid)
         usage_ref = self._top("usage", f"{uid}_{date}")
@@ -1166,6 +1226,14 @@ class FirestoreRepo:
 
         @firestore.transactional
         def txn_fn(txn) -> StartOutcome:
+            if eval_guard is not None:
+                if eval is None:
+                    raise ValueError("eval_guard requires eval provenance")
+                group_ref = self._top("eval_runs", eval.eval_run_id)
+                group = group_ref.get(transaction=txn).to_dict() or {}
+                if (group.get("tick_owner") != eval_guard or group.get("cancel_requested")
+                        or group.get("status") not in ("queued", "running")):
+                    return "not_ready"
             snap = sref.get(transaction=txn)
             sess = snap.to_dict() or {}
             if not snap.exists or sess.get("uid") != uid:
@@ -1178,10 +1246,27 @@ class FirestoreRepo:
                 return "not_ready"
             if retry_max is not None and not retry_allowed(sess, retry_max, "run"):
                 return "not_ready"
+            if not isinstance(sess.get("clinician_speaker"), str):
+                return "not_ready"
+            transcript = (
+                sref.collection("transcripts").document("current").get(transaction=txn).to_dict()
+                or {}
+            )
+            if not all(
+                isinstance(transcript.get(k), str) and transcript[k] for k in ("sha256", "language")
+            ):
+                return "not_ready"
             status = stref.get(transaction=txn).to_dict() or {}
             user = user_ref.get(transaction=txn).to_dict() or {}
             usage = usage_ref.get(transaction=txn).to_dict() or {}
             latest = [s for s in newest.get(transaction=txn) if s.id != DRAFT_ID]
+            # Imported eval sessions outlive their groups' disposable RunDocs. Validate
+            # their independent server pin in this transaction before admitting any run.
+            pinned_eval = eval is not None and sess.get("eval") is not None
+            if pinned_eval and (
+                sess["eval"].get("input_sha256") != eval_session_input_sha256(sess, transcript)
+            ):
+                return "not_ready"
             # the free first run of an interview-linked session (SP11 R5), same as start_first_run
             first = (
                 (
@@ -1194,6 +1279,12 @@ class FirestoreRepo:
                 if sess.get("first_run_id")
                 else {}
             )
+            if (
+                sess.get("first_run_id")
+                and not (pinned_eval and not first)
+                and (first or {}).get("transcript_sha256") != transcript["sha256"]
+            ):
+                return "not_ready"
             # Try again after a failed free run stays free (review R1): the free rating is owed
             exempt = (
                 bool(sess.get("interview_id"))
@@ -1201,14 +1292,18 @@ class FirestoreRepo:
                      or (sess.get("state") == "failed" and first.get("counted") is False))
             )  # fmt: skip
             units = n_runs or sess.get("n_runs", 1)
-            decided = decide_start(user, usage, defaults, max_active, exempt, units)
-            if decided != "ok":
-                return START_OUTCOME[decided]  # type: ignore[return-value]
+            if eval is None:
+                decided = decide_start(user, usage, defaults, max_active, exempt, units)
+                if decided != "ok":
+                    return START_OUTCOME[decided]  # type: ignore[return-value]
             run = RunDoc(
                 uid=uid, session_id=sid, run_id=run_id, n_runs=n_runs or sess.get("n_runs", 1),
                 preset=preset or sess.get("preset"), rating_id=latest[0].id if latest else None,
                 stt=sess.get("stt"), code_version=code_version, cap_date=date,
-                counted=not exempt, units=units, coded_span=coded_span,
+                change_goal=sess.get("change_goal") or "",
+                clinician_speaker=sess["clinician_speaker"],
+                language=transcript["language"], transcript_sha256=transcript["sha256"],
+                counted=not exempt and eval is None, units=units, coded_span=coded_span, eval=eval,
             )  # fmt: skip
             progress = (
                 start_progress
@@ -1228,7 +1323,7 @@ class FirestoreRepo:
             if retry_max is not None:
                 fields["retry_count"] = sess.get("retry_count", 0) + 1
             txn.create(run_ref, run.to_store())
-            if not exempt:
+            if not exempt and eval is None:
                 txn.set(
                     usage_ref,
                     {"uid": uid, "date": date, "runs": usage.get("runs", 0) + units},

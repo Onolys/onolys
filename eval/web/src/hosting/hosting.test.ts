@@ -25,7 +25,7 @@ describe("eval/web/firebase.json", () => {
   it("frame-src allows the default Firebase authDomain host and Google sign-in", () => {
     vi.stubEnv("VITE_FIREBASE_AUTH_DOMAIN", "");
     const authDomain = getConfig().firebase.authDomain;
-    expect(authDomain).toBe("admin.onolys.com");
+    expect(authDomain).toBe("eval.onolys.com");
     for (const entry of entries) {
       expect(csp(entry)["frame-src"]).toEqual(expect.arrayContaining([`https://${authDomain}`, "https://accounts.google.com"]));
     }

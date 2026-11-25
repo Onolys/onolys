@@ -31,7 +31,7 @@ const CELL = "whitespace-normal align-top";
 // Below 640px the table is too wide for the screen and the Why column is cut off, so each row becomes a stacked block
 // whose cells carry their column name (data-label, shown by ::before); the header row stays for screen readers only.
 const STACK_CELL = `${CELL} max-[640px]:block max-[640px]:empty:hidden max-[640px]:px-0 max-[640px]:py-0.5 max-[640px]:before:mr-2 max-[640px]:before:text-xs max-[640px]:before:font-semibold max-[640px]:before:uppercase max-[640px]:before:text-muted-foreground max-[640px]:before:content-[attr(data-label)]`;
-const HIGHLIGHT_MS = 1500;
+const HIGHLIGHT_MS = 5000;
 const prefersReducedMotion = () =>
   typeof window.matchMedia === "function" &&
   window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -114,6 +114,7 @@ export function CodedTranscriptProvider({
 
   const onClose = () => {
     clearTimeout(timer.current);
+    dialogRef.current?.querySelectorAll("tr.hl").forEach((r) => r.classList.remove("hl"));
     document.documentElement.classList.remove("dlg-open");
     opener.current?.focus?.();
     opener.current = null;

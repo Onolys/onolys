@@ -55,7 +55,14 @@ async function emailCall(run: () => Promise<{ response: Response }>): Promise<vo
   if (status < 200 || status >= 300) throw new AuthError("email/unavailable");
 }
 
-export function createFirebaseAuthService(config: FirebaseWebConfig): AuthService {
+type EmailApi = (getToken: () => Promise<string | null>) => Pick<ReturnType<typeof createApiClient>, "POST">;
+
+export interface FirebaseServiceOptions {
+  /** Client for the server-sent email routes. Omitted: the same-origin prod `/v1` client. `null`: no email flows (they reject `email/unavailable`). */
+  emailApi?: EmailApi | null;
+}
+
+export function createFirebaseAuthService(config: FirebaseWebConfig, options: FirebaseServiceOptions = {}): AuthService {
   const app = initializeApp(config);
   const auth = getAuth(app);
   const listeners = new Set<(u: AuthUser | null) => void>();
@@ -72,12 +79,17 @@ export function createFirebaseAuthService(config: FirebaseWebConfig): AuthServic
   onIdTokenChanged(auth, emit);
 
   // Same-origin `/v1` in prod; the verification route takes the user's ID token, the reset route none.
-  const emailApi = (getToken: () => Promise<string | null>) =>
+  const defaultEmailApi: EmailApi = (getToken) =>
     createApiClient({
       baseUrl: new URL(import.meta.env.VITE_API_BASE_URL ?? DEFAULT_BASE_URL, window.location.origin).href.replace(/\/$/, ""),
       getToken,
       onSessionExpired: () => {},
     });
+  const emailApi: EmailApi = (getToken) => {
+    const make = options.emailApi === undefined ? defaultEmailApi : options.emailApi;
+    if (!make) throw new AuthError("email/unavailable");
+    return make(getToken);
+  };
   const requestVerification = (user: User, next?: string) =>
     emailCall(() => emailApi(() => user.getIdToken()).POST("/auth/email/verification", { body: { next } }));
 

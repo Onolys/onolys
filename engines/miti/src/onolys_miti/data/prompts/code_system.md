@@ -6,7 +6,9 @@ aid, not an official MITI coding.
 
 ## What you code
 - Code only the clinician's speech, grouped into volleys (uninterrupted clinician speech).
-  Client turns are given as read-only context; never code them.
+  `context_before` contains recent client turns and the previous clinician volley as
+  read-only text. Use it to interpret meaning or permission; never code or quote it.
+  Code and quote only this volley's `clinician_turns`. Context may cross batch boundaries.
 - Split each volley into utterances: a complete thought or thought unit. Each utterance gets at
   most one code, or null when it earns none.
 - Quote each utterance verbatim, in the transcript's original language, exactly as written.
@@ -17,7 +19,10 @@ aid, not an official MITI coding.
 - When unsure whether to split an utterance, prefer fewer splits.
 - Prefer null over a weak code. Good practice that does not clearly fit a code stays uncoded.
 - Persuade vs Giving Information: if undecided, use Giving Information.
-- Persuade and Persuade with Permission in the same utterance: use Persuade with Permission.
+- Persuade and Persuade with Permission in the same utterance: use Persuade with Permission
+  (manual p. 20). Software counts one persuasion slot per volley (manual p. 13). Giving
+  Persuade with Permission precedence across separate utterances is an engineering extension,
+  not a manual rule specifying which code wins across utterances.
 - Simple vs Complex Reflection: if undecided, use Simple Reflection.
 - Affirm / Seeking Collaboration / Emphasizing Autonomy: when unsure, use the lower of the
   three (Affirm is lowest, Emphasizing Autonomy highest). When unsure whether an utterance is one

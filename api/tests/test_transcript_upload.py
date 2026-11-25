@@ -8,6 +8,7 @@ from cards import valid_card
 
 from onolys_api.jobs import caps
 from onolys_api.repo.base import NotFoundError
+from onolys_api.repo.models import transcript_sha256
 
 pytestmark = pytest.mark.unit
 AUTH = {"Authorization": "Bearer test:upload-user"}
@@ -84,6 +85,29 @@ async def test_upload_gate_and_normalized_storage(client, app, queue, kind):
     assert t.language == "en" and len(t.turns) == 2
     assert not queue.calls
     assert app.state.repo.get_usage("upload-user", caps.utc_date()).runs == 0
+
+
+@pytest.mark.parametrize("large_body", [False, True])
+@pytest.mark.parametrize("session_language,transcript_language", [("auto", None), ("de", "fr")])
+async def test_upload_persists_hash_and_effective_language(
+    client, app, queue, large_body, session_language, transcript_language
+):
+    sid = await create(client, language=session_language)
+    doc = document()
+    doc["language"] = transcript_language
+    if large_body:
+        # Stay within the upload word limit while exceeding inline byte storage.
+        doc["turns"] = [
+            {**doc["turns"][i % 2], "id": f"t{i}", "text": "é" * 10_000 + " word"}
+            for i in range(30)
+        ]
+    response = await upload(client, sid, json.dumps(doc, ensure_ascii=False))
+    assert response.status_code == 202, response.text
+    raw = app.state.repo.get_transcript("upload-user", sid, "current", resolve=False)
+    resolved = app.state.repo.get_transcript("upload-user", sid, "current")
+    assert (raw.pointer is not None) == large_body
+    assert raw.language == (transcript_language or ("en" if session_language == "auto" else session_language))
+    assert raw.sha256 == transcript_sha256(resolved.transcript)
 
 
 @pytest.mark.parametrize("before", [True, False])

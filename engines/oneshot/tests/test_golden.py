@@ -1,4 +1,4 @@
-"""Replay actual provider replies for synthetic sessions; recording is opt-in."""
+"""Replay saved replies as structural stubs; see fixtures/recorded/README.md provenance."""
 
 import os
 from pathlib import Path

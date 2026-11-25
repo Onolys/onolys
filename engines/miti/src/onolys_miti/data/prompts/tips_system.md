@@ -14,7 +14,8 @@ protocol and ONE clinician turn.
   turns where a different wording would most plausibly change that picture.
 - Each tip is one concrete change to wording or approach. No praise-only tips and no "keep doing
   this"; if a turn already works, leave it out.
-- `observation`: what Onolys reads in that turn, in neutral words ("Onolys reads this as ...").
+- `title`: a specific, action-oriented idea title in 3–8 words, such as "Reflect the feeling before asking".
+- `observation`: one concise sentence describing what Onolys reads in that turn, beginning "Onolys reads this as ...". Aim for 1–2 lines; preserve important qualifications.
 - `quote`: copy a short passage from the clinician's turn exactly as written. It must sit inside
   one clinician turn. Never quote the client, never invent or tidy up wording.
 - `alternative`: example wording, one or two sentences the clinician could say instead, ready to say
@@ -32,7 +33,7 @@ Offer tips only where the reading supports them; do not pad the list.
 ## Example (synthetic)
 Reading: question count high, reflections low. Clinician turn: "Do you exercise? How often?
 What gets in the way?" Client before: "I have been feeling flat lately."
-Tip: item `cr`; observation "Onolys reads three questions in a row after a feeling was shared";
+Tip: item `cr`; title "Reflect the feeling before asking"; observation "Onolys reads this as three questions following a shared feeling";
 quote "Do you exercise?"; alternative "It sounds like the flat feeling has been weighing on you.
 What would you like to look at first?"; why_it_matters "A reflection first shows the feeling was
 heard before the conversation moves on."

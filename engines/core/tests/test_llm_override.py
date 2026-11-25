@@ -46,8 +46,8 @@ def test_one_of_two_is_config_error(env):
 
 
 def test_unknown_provider():
-    with pytest.raises(ConfigError, match="LLM_PROVIDER='openai'"):
-        load_registry(STAGING, env={"LLM_PROVIDER": "openai", "LLM_MODEL": "gpt-5"})
+    with pytest.raises(ConfigError, match="LLM_PROVIDER='unknown'"):
+        load_registry(STAGING, env={"LLM_PROVIDER": "unknown", "LLM_MODEL": "gpt-5"})
 
 
 @pytest.mark.parametrize(
@@ -149,3 +149,22 @@ def test_effort_preserves_other_extra_params(tmp_path):
     env = {"MODELS_FILE": str(ROOT / "config/models.yaml"), "LLM_EFFORT": "medium"}
     r = load_registry(source, env).routes()
     assert r["cheap"].extra_params == {"reasoning_effort": "medium", "other": 42}
+
+
+@pytest.mark.parametrize("tier,effort", [
+    ("gpt-6.1-sol", "xhigh"), ("gpt-6.1-terra", "none"), ("gpt-6-luna", "max"),
+])
+def test_openai_deployment_override(tier, effort, baseline):
+    out = routes({"LLM_PROVIDER": "openai", "LLM_MODEL": tier, "LLM_EFFORT": effort})
+    for name in TEXT:
+        assert out[name].litellm_id == f"openai/{tier}"
+        assert out[name].api_key_env == "OPENAI_API_KEY"
+        assert out[name].caching_mode == "provider_implicit"
+        assert out[name].extra_params["reasoning_effort"] == effort
+        assert out[name].max_output_tokens == baseline[name].max_output_tokens
+    assert out["oneshot"] == baseline["oneshot"]
+
+
+def test_sol_none_effort_rejected():
+    with pytest.raises(ConfigError, match="LLM_EFFORT.*none"):
+        routes({"LLM_PROVIDER": "openai", "LLM_MODEL": "gpt-6.1-sol", "LLM_EFFORT": "none"})

@@ -5,6 +5,7 @@ import { unwrap } from "../../api/client";
 import type { components } from "../../api/schema";
 import { getStatusListener, normalizeStatusDoc, type SessionStatusDoc } from "../../api/statusListener";
 import { useApiClient } from "../../auth/useApiClient";
+import { pageLoadError } from "../../pageLoadError";
 import { deriveProgress, isTimedState, isUploadState, type DerivedProgress } from "./progress";
 
 export type StatusView =
@@ -241,6 +242,7 @@ export function useSessionStatus(id: string, quiet: RefObject<boolean>): StatusV
   const poll = useQuery({
     queryKey: ["session-detail", id],
     enabled: link !== "up",
+    throwOnError: (error, query) => view.phase === "loading" && pageLoadError(error, query),
     refetchInterval: FALLBACK_POLL_MS,
     queryFn: async () => unwrap(await client.GET("/sessions/{id}", { params: { path: { id } } })),
   });
@@ -256,7 +258,7 @@ export function useSessionStatus(id: string, quiet: RefObject<boolean>): StatusV
 
   if (link === "up") return view;
   // 404 / 4xx (unknown or someone else's session) will not heal by polling.
-  if (poll.isError && (!poll.data || (poll.error instanceof ApiError && poll.error.status < 500))) {
+  if (poll.isError && ((!poll.data && view.phase !== "live") || (poll.error instanceof ApiError && poll.error.status < 500))) {
     return { phase: "error", error: describeLookupError(poll.error) };
   }
   if (fallbackDoc) return { phase: "fallback", doc: fallbackDoc, exhausted: link === "exhausted" };

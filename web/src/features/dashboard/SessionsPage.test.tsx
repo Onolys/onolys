@@ -49,11 +49,11 @@ describe("sessions page: list", () => {
     for (const [i, [, label]] of cases.entries()) {
       const li = await waitFor(() => rowOf(`Session s${i}`));
       expect(within(li).getByText(label)).toBeInTheDocument();
-      expect(within(li).getByRole("link", { name: `Session s${i}` })).toHaveAttribute("href", `/sessions/s${i}`);
+      expect(within(li).getByRole("link", { name: `Session s${i}` })).toHaveAttribute("href", i === 7 ? `/sessions/s${i}/reports/2` : `/sessions/s${i}`);
     }
   });
 
-  it("links in-flight and failed rows to the session and Report vN straight to the report", async () => {
+  it("links completed titles straight to the report with one link per row", async () => {
     server.use(
       http.get("*/v1/sessions", () =>
         HttpResponse.json({
@@ -70,8 +70,13 @@ describe("sessions page: list", () => {
     expect(await main().findByRole("link", { name: "Session run1" })).toHaveAttribute("href", "/sessions/run1");
     expect(main().getByRole("link", { name: "Session bad1" })).toHaveAttribute("href", "/sessions/bad1");
     expect(within(rowOf("Session run1")).queryByRole("link", { name: /Report v/ })).toBeNull();
-    const rep = within(rowOf("Session ok1")).getByRole("link", { name: "Report v3" });
-    expect(rep).toHaveAttribute("href", "/sessions/ok1/reports/3");
+    expect(main().getByRole("link", { name: "Session ok1" })).toHaveAttribute("href", "/sessions/ok1/reports/3");
+    const completedRow = rowOf("Session ok1");
+    expect(within(completedRow).getAllByRole("link")).toHaveLength(1);
+    expect(within(completedRow).queryByRole("link", { name: /Report v/ })).toBeNull();
+    expect(completedRow.lastElementChild?.tagName).toBe("TIME");
+    expect(completedRow.lastElementChild).toHaveAttribute("dateTime", "2026-11-18T10:00:00.000Z");
+    const rep = within(completedRow).getByRole("link", { name: "Session ok1" });
     await user.click(rep);
     expect(here(router)).toBe("/sessions/ok1/reports/3");
   });
@@ -103,14 +108,14 @@ describe("sessions page: list", () => {
     server.events.removeAllListeners();
   });
 
-  it("shows an error with Try again when the list fails", async () => {
+  it("keeps a request error local with a working Try again", async () => {
     let fail = true;
     server.use(
       http.get("*/v1/sessions", () =>
         fail
           ? HttpResponse.json(
-              { schema_version: "0.0.1", status: 500, message: "x", details: [{ code: "internal_error", message: "x" }], request_id: "r" },
-              { status: 500 },
+              { schema_version: "0.0.1", status: 400, message: "x", details: [{ code: "invalid_parameters", message: "x" }], request_id: "r" },
+              { status: 400 },
             )
           : HttpResponse.json({ items: [item("z", "running")] }),
       ),

@@ -64,8 +64,22 @@ def test_active_users_cannot_starve_later_leaked_user_across_instances(pair, set
     for uid in ("a-live", "b-live", "z-leak"):
         reserve(first, settings, uid)
         session(first, uid, uid, "running" if uid != "z-leak" else "failed")
-        first.create_run(uid, uid, "run", RunDoc(uid=uid, session_id=uid, run_id="run",
-                         status="running" if uid != "z-leak" else "failed", cap_date=DATE))
+        first.create_run(
+            uid,
+            uid,
+            "run",
+            RunDoc(
+                change_goal="",
+                clinician_speaker="S1",
+                language="en",
+                transcript_sha256="test-hash",
+                uid=uid,
+                session_id=uid,
+                run_id="run",
+                status="running" if uid != "z-leak" else "failed",
+                cap_date=DATE,
+            ),
+        )
     assert run_sweep(first, blobs, settings, NOW, batch=1).repaired == 0
     assert run_sweep(second, blobs, settings, NOW, batch=1).repaired == 0
     assert run_sweep(first, blobs, settings, NOW, batch=1).repaired == 1

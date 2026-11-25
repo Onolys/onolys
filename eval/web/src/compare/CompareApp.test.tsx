@@ -1,0 +1,99 @@
+// @vitest-environment jsdom
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { afterEach, expect, it, vi } from 'vitest';
+import { ApiError, createEvalApi } from '../api';
+import { CompareApp, comboLetter } from './CompareApp';
+import overview from './fixtures/overview.json';
+import deep from './fixtures/deepDive.json';
+import analysis from './fixtures/analysis.json';
+import { parseCompareUrl } from './compareUrl';
+afterEach(cleanup);
+const state = (tab = 'overview') => parseCompareUrl(`?run=r1&view=compare&tab=${tab}`);
+const api = () => ({...createEvalApi('',vi.fn()), run:vi.fn().mockRejectedValue(new Error('detail unavailable')), compareOverview:vi.fn().mockResolvedValue(overview), compareDeepDive:vi.fn().mockResolvedValue(deep), compareAnalysis:vi.fn().mockResolvedValue(analysis)});
+it('renders overview header, cohorts and stable letters beyond Z',async()=>{
+ const partial={...overview,header:{...overview.header,progress:{done_units:11,total_units:15,skipped_units:2}},coverage:{...overview.coverage,eval_status:'partial',runs_done:3,runs_total:8,runs_skipped:2,skipped_providers:[{provider:'gemini',after_failures:5}]},excluded:[{session_id:'s1',combo_key:null,reason:'cancelled'}]};
+ const client={...api(),compareOverview:vi.fn().mockResolvedValue(partial)};
+ render(<CompareApp api={client} runId="r1" state={state()} navigate={vi.fn()}/>);
+ expect(screen.getByRole('status').textContent).toContain('Loading');
+ await screen.findByRole('heading',{name:'Synthetic lines'});
+ expect(screen.getByText('2 sessions, 2 repeats')).toBeTruthy();
+ expect(screen.getByText('Human labels: all counts, 4 globals')).toBeTruthy();
+ expect(screen.getByText(/Partial — 11 of 15 runs done, 2 skipped/)).toBeTruthy();
+ expect(screen.getByText('Coverage: 3 of 8 runs done, 2 skipped · partial')).toBeTruthy();
+ expect(screen.getByText(/Gemini skipped after 5 failures in a row/)).toBeTruthy();
+ expect(screen.getByText(/s1.*cancelled/)).toBeTruthy();
+ expect(screen.getByRole('link',{name:'Back to run'}).getAttribute('href')).toBe('?run=r1');
+ expect(screen.getByText('gi: paired 2 of 2')).toBeTruthy();
+ expect([0,25,26,27,51,52].map(comboLetter)).toEqual(['A','Z','AA','AB','AZ','BA']);
+});
+it('navigates tabs by arrow key, caches completed tabs, and keeps tab errors local with Retry',async()=>{
+ const client=api();client.compareDeepDive.mockRejectedValueOnce(new Error('deep failed')).mockResolvedValue(deep);
+ const navigate=vi.fn(); const view=render(<CompareApp api={client} runId="r1" state={state()} navigate={navigate}/>);
+ await screen.findByRole('heading',{name:'Synthetic lines'});
+ fireEvent.keyDown(screen.getByRole('tab',{name:'Overview'}),{key:'ArrowRight'});
+ expect(navigate).toHaveBeenLastCalledWith(expect.objectContaining({tab:'deep'}));
+ view.rerender(<CompareApp api={client} runId="r1" state={state('deep')} navigate={navigate}/>);
+ expect((await screen.findByRole('alert')).textContent).toContain('deep failed');
+ fireEvent.click(screen.getByRole('button',{name:'Retry'})); await act(async()=>{});
+ expect(screen.queryByRole('alert')).toBeNull(); expect(client.compareDeepDive).toHaveBeenCalledTimes(2);
+ view.rerender(<CompareApp api={client} runId="r1" state={state('more')} navigate={navigate}/>);await act(async()=>{});
+ view.rerender(<CompareApp api={client} runId="r1" state={state('deep')} navigate={navigate}/>);await act(async()=>{});
+ expect(client.compareDeepDive).toHaveBeenCalledTimes(2);expect(client.compareOverview).toHaveBeenCalledTimes(1);expect(client.run).toHaveBeenCalledTimes(1);
+});
+it.each([[404,'not_found','Run not found'],[409,'no_completed_runs','No completed runs to compare yet'],[409,'not_finished','No completed runs to compare yet']])('shows HTTP %s %s despite detail failure',async(status,code,text)=>{
+ const client={...api(),compareOverview:vi.fn().mockRejectedValue(new ApiError('server',Number(status),String(code)))};
+ render(<CompareApp api={client} runId="r1" state={state()} navigate={vi.fn()}/>);
+ expect(await screen.findByText(text)).toBeTruthy(); expect(screen.getByRole('link',{name:status===404?'History':'Back to run'})).toBeTruthy();
+});
+it('refetches a new combo cohort, reuses its cache, and preserves overview legend order',async()=>{
+ const client=api(); const navigate=vi.fn();
+ const view=render(<CompareApp api={client} runId="r1" state={{...state('deep'),combos:['second']}} navigate={navigate}/>);await act(async()=>{});
+ expect(client.compareDeepDive).toHaveBeenLastCalledWith('r1',{combos:['second'],code:undefined,combo:undefined},expect.any(AbortSignal));
+ const first=screen.getByRole('link',{name:'A'}).getAttribute('href');
+ view.rerender(<CompareApp api={client} runId="r1" state={{...state('deep'),combos:['first','second']}} navigate={navigate}/>);await act(async()=>{});
+ expect(client.compareDeepDive).toHaveBeenCalledTimes(2);expect(screen.getByRole('link',{name:'A'}).getAttribute('href')).toBe(first);
+ view.rerender(<CompareApp api={client} runId="r1" state={{...state('deep'),combos:['second']}} navigate={navigate}/>);await act(async()=>{});
+ expect(client.compareDeepDive).toHaveBeenCalledTimes(2);
+});
+it('handles a tab-local transcript conflict and aborts in-flight requests on unmount',async()=>{
+ const client={...api(),compareLines:vi.fn().mockRejectedValue(new ApiError('conflict',409,'transcript_changed'))};
+ const view=render(<CompareApp api={client} runId="r1" state={{...state('lines'),session:'s1'}} navigate={vi.fn()}/>);
+ expect(await screen.findByText('The saved transcript changed since this run; lines cannot be shown.')).toBeTruthy();
+ view.unmount();expect((client.compareLines.mock.calls[0] as unknown as [string,string,unknown,AbortSignal])[3].aborted).toBe(true);
+ expect((client.compareOverview.mock.calls[0] as unknown as [string,unknown,AbortSignal])[2].aborted).toBe(true);
+});
+it('retries an overview failure and keeps exact saved combo labels with distinct engines',async()=>{
+ const client={...api(),run:vi.fn().mockResolvedValue({input:{dataset_id:'saved',session_ids:['s1']},combo_labels:{[overview.combos[0].combo_key]:'Saved model / tier / effort'}})};
+ client.compareOverview.mockRejectedValueOnce(new Error('temporary'));
+ render(<CompareApp api={client} runId="r1" state={state()} navigate={vi.fn()}/>);
+ expect((await screen.findByRole('alert')).textContent).toContain('temporary');
+ fireEvent.click(screen.getByRole('button',{name:'Retry'}));
+ expect(await screen.findByText('miti · Saved model / tier / effort',{selector:'dd'})).toBeTruthy();expect(client.run).toHaveBeenCalledTimes(1);
+});
+it('uses saved progress for the cancelled partial badge while retaining AI coverage',async()=>{
+ const cancelled_at='2026-11-25T01:00:00Z';
+ const partial={...overview,header:{...overview.header,progress:{done_units:11,total_units:15,skipped_units:2}},coverage:{...overview.coverage,eval_status:'partial',cancelled_at,runs_done:7,runs_total:10,runs_skipped:1}};
+ const client={...api(),compareOverview:vi.fn().mockResolvedValue(partial)};
+ const view=render(<CompareApp api={client} runId="r1" state={state()} navigate={vi.fn()}/>);
+ await screen.findByRole('heading',{name:'Synthetic lines'});
+ const badge=view.container.querySelector('[data-partial-badge]')!;
+ expect(badge.textContent).toContain(`Partial — cancelled at ${new Date(cancelled_at).toLocaleString()}, 11 of 15 runs done, 2 skipped`);
+ expect(screen.getByText('Coverage: 7 of 10 runs done, 1 skipped · partial')).toBeTruthy();
+});
+it('rejects malformed nested tab payloads with local Retry and keeps other tabs usable',async()=>{
+ const {default:lines}=await import('./fixtures/lines.json');let lineAttempts=0;
+ const fetcher=vi.fn(async(input:RequestInfo|URL)=>{
+  const path=new URL(String(input),'https://eval').pathname;
+  if(path.endsWith('/overview'))return new Response(JSON.stringify(overview));
+  if(path.endsWith('/analysis'))return new Response(JSON.stringify(analysis));
+  if(path.endsWith('/lines'))return new Response(JSON.stringify(++lineAttempts===1?{...lines,globals:{}}:lines));
+  if(path.endsWith('/reasoning'))return new Response(JSON.stringify({...lines,groups:[],next_cursor:null}));
+  return new Response(JSON.stringify({detail:{code:'not_found'}}),{status:404});
+ });
+ const client=createEvalApi('https://eval',fetcher),navigate=vi.fn(),lineState={...state('lines'),session:'synthetic-s01'};
+ const view=render(<CompareApp api={client} runId="r1" state={lineState} navigate={navigate}/>);
+ expect((await screen.findByRole('alert')).textContent).toContain('invalid compare response');expect(screen.getByRole('button',{name:'Retry'})).toBeTruthy();
+ view.rerender(<CompareApp api={client} runId="r1" state={state('more')} navigate={navigate}/>);await screen.findByRole('heading',{name:'More analysis'});expect(screen.queryByRole('alert')).toBeNull();
+ view.rerender(<CompareApp api={client} runId="r1" state={lineState} navigate={navigate}/>);fireEvent.click(screen.getByRole('button',{name:'Retry'}));await screen.findByRole('button',{name:'Inspect turn t5'});expect(screen.queryByRole('alert')).toBeNull();
+ expect(fetcher.mock.calls.filter(([input])=>String(input).includes('/overview'))).toHaveLength(1);
+});

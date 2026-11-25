@@ -14,6 +14,8 @@ from onolys_miti.prepare import OTHER, SUBJECT, CheckInput, RoleTurn
 
 pytestmark = pytest.mark.unit
 
+KNOWN_PACK_HASH = "c13785af2f3da30d"
+
 GLOBALS = ["cct", "sst", "partnership", "empathy"]
 CODES = ["gi", "persuade", "persuade_permission", "question", "sr", "cr", "affirm",
          "seek_collab", "emphasize_autonomy", "confront"]
@@ -33,8 +35,10 @@ def test_loads_and_has_all_items(pack):
     assert [i["id"] for i in pack.items if i["kind"] == "global"] == GLOBALS
     assert [i["id"] for i in pack.items if i["kind"] == "count"] == CODES
     assert pack.data["speaker_roles"] == {"subject": "clinician", "other": "client"}
-    assert pack.data["volley"] == {"breaks_on": "other_speaker", "min_other_words": 0}
-    assert pack.hash == "d98e79648859d15e"
+    assert pack.data["volley"] == {
+        "breaks_on": "other_speaker", "min_other_words": 3, "min_other_chars": 6,
+    }
+    assert pack.hash == KNOWN_PACK_HASH
 
 
 def test_prompt_files_present_and_json_valid(pack):
@@ -75,6 +79,9 @@ def test_rules(pack):
         {"kind": "max_per_unit", "unit": "volley", "code": "any", "n": 1},
         {"kind": "exclusive_group", "unit": "volley", "codes": ["sr", "cr"],
          "precedence": ["cr", "sr"]},
+        {"kind": "exclusive_group", "unit": "volley",
+         "codes": ["persuade_permission", "persuade"],
+         "precedence": ["persuade_permission", "persuade"]},
     ]
 
 
@@ -168,3 +175,12 @@ def test_hook_warns_once_for_consecutive_opening_turns(pack):
 
 def test_hook_no_turns(pack):
     assert run_hook(pack, []) == []
+
+
+def test_globals_prompt_requires_behavior_evidence_for_low_scores(pack):
+    text = (pack.data_dir / "prompts/globals_system.md").read_text()
+    assert "Low scores need evidence of clinician behavior that meets the low-score anchors." in text
+    assert "Start from the default 3" in text
+    assert "Rate four global dimensions" in text
+    assert "a high score is allowed when no sustain talk occurs" in text
+    assert "do not penalize the clinician when the client offers no change talk" in text

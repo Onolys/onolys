@@ -25,3 +25,15 @@ models:
       gemini-4-neon: {efforts: [low, medium, high], default_effort: high}
       gemini-4-hydrogen: {efforts: [low, medium, high], default_effort: high}
       gemini-4-argon: {efforts: [low, medium, high], default_effort: medium}
+  openai:
+    label: OpenAI
+    provider: openai
+    api_key_env: OPENAI_API_KEY
+    caching_mode: provider_implicit
+    supports_temperature: false
+    context_tokens: 1050000
+    max_output_tokens: 128000
+    tiers:
+      gpt-6.1-sol: {efforts: [low, medium, high, xhigh, max], default_effort: medium}
+      gpt-6.1-terra: {efforts: [none, low, medium, high, xhigh, max], default_effort: medium}
+      gpt-6-luna: {efforts: [none, low, medium, high, xhigh, max], default_effort: medium}

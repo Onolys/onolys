@@ -4,7 +4,7 @@ from typing import Annotated
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, Request
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from onolys_api.auth.deps import AuthUser, current_user
 from onolys_api.client_info import client_info
@@ -24,6 +24,8 @@ User = Annotated[AuthUser, Depends(current_user)]
 
 
 class CreateInterviewRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     scenario_id: str = Field(min_length=1, max_length=100)
     voice: str | None = Field(
         None, max_length=64, description="One of the configured voices; default: the scenario's"
@@ -32,6 +34,8 @@ class CreateInterviewRequest(BaseModel):
 
 
 class EndInterviewRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     discard: bool = Field(False, description="Throw the interview away (state `abandoned`)")
     client: ClientInfo | None = Field(
         None, description="Optional: recorder container and audio engine, added to the interview"

@@ -2,11 +2,7 @@
  * Mount points: the rating card (R4, `features/rating`) and the speaker gate (R4, `features/speakers`). The uploader (R3) lives in
  * `features/upload`.
  */
-import { Button } from "@onolys/ui";
-import { useState } from "react";
-import { failureView } from "../../api/errors";
 import type { SessionStatusDoc } from "../../api/statusListener";
-import { LINK_BTN } from "../../components/classes";
 import { SpeakerGate } from "../speakers/SpeakerGate";
 import { ratingEnabled } from "../../config";
 import { RatingCard } from "../rating/RatingCard";
@@ -18,11 +14,12 @@ export interface SlotProps {
   doc: SessionStatusDoc;
 }
 
-/** `readOnly`: the rating was submitted, so it is final (FX45). */
+/** The rating is final once submitted or a run has started. */
 export function RatingCardSlot({ sessionId, doc, readOnly = false }: SlotProps & { readOnly?: boolean }) {
+  const locked = readOnly || doc.rating_submitted || doc.state === "running" || doc.state === "failed" || doc.state === "report_ready";
   if (!ratingEnabled()) {
     // Flag off (PRD R2/R3): no card; only an unsubmitted, live session gets the goal-only fallback.
-    if (doc.rating_submitted || doc.state === "deleting") return null;
+    if (locked || doc.state === "deleting") return null;
     return (
       <div data-slot="rating-fallback" data-session={sessionId}>
         <SetupFallback sessionId={sessionId} />
@@ -31,39 +28,16 @@ export function RatingCardSlot({ sessionId, doc, readOnly = false }: SlotProps &
   }
   return (
     <div data-slot="rating-card" data-session={sessionId}>
-      <RatingCard sessionId={sessionId} readOnly={readOnly} />
+      <RatingCard sessionId={sessionId} readOnly={locked} />
     </div>
   );
 }
 
 export function SpeakerGateSlot({ sessionId, doc }: SlotProps) {
-  const [open, setOpen] = useState(false);
-  const [dismissed, setDismissed] = useState(false);
-  // Only a retryable failure re-runs (via /retry); a ready report is final (FX45) and a permanent failure needs a new session.
-  const failed = doc.state === "failed";
-  const rerunnable = failed && failureView(doc).action === "retry";
-  // A failed session whose speaker was never confirmed opens the rerun gate (confirm, then /retry): "first" would only confirm and leave it failed.
-  const showRerun = rerunnable && (open || (!doc.speaker_confirmed && !dismissed));
+  if (!doc.transcript_ready || doc.speaker_confirmed || doc.state !== "awaiting_input") return null;
   return (
     <div data-slot="speaker-gate" data-session={sessionId}>
-      {!doc.speaker_confirmed && !failed ? (
-        <SpeakerGate sessionId={sessionId} mode="first" />
-      ) : showRerun ? (
-        <SpeakerGate
-          sessionId={sessionId}
-          mode="rerun"
-          onDone={() => {
-            setOpen(false);
-            setDismissed(true);
-          }}
-        />
-      ) : rerunnable ? (
-        <div>
-          <Button type="button" variant="link" className={LINK_BTN} onClick={() => setOpen(true)}>
-            Change who the clinician is
-          </Button>
-        </div>
-      ) : null}
+      <SpeakerGate sessionId={sessionId} />
     </div>
   );
 }

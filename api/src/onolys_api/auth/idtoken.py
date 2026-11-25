@@ -1,8 +1,8 @@
 """Identity Platform ID-token verification with Google's public keys.
 
 Checks signature (securetoken certs), expiry, `aud` = project, `iss`, a non-empty `sub`
-and `email_verified`. Only `uid` is taken from the claims. The cert fetcher is injectable so
-tests mint tokens with a local key and never touch the network.
+and `email_verified`. `verify` returns only `uid`; `verify_claims` returns the verified claims.
+The cert fetcher is injectable so tests mint tokens with a local key and never touch the network.
 """
 
 import threading
@@ -136,7 +136,8 @@ class IdTokenVerifier:
             clock_skew_in_seconds=CLOCK_SKEW_S,
         )
 
-    def verify(self, token: str, *, allow_unverified: bool = False) -> str:
+    def _verified_claims(self, token: str) -> dict:
+        """Shared decode path: signature, alg, kid, aud, exp, iss and a well-formed `sub`."""
         try:
             header = jwt.decode_header(token)
             if header.get("alg") != "RS256":
@@ -160,6 +161,17 @@ class IdTokenVerifier:
         sub = claims.get("sub")
         if not isinstance(sub, str) or not sub or len(sub) > 128 or "/" in sub:
             raise InvalidToken
+        return claims
+
+    def verify(self, token: str, *, allow_unverified: bool = False) -> str:
+        claims = self._verified_claims(token)
         if not allow_unverified and claims.get("email_verified") is not True:
             raise EmailNotVerified  # only after signature, iss, aud and sub all checked out
-        return sub
+        return claims["sub"]
+
+    def verify_claims(self, token: str, *, allow_unverified: bool = False) -> dict:
+        """Same checks as `verify`, but return the full verified claims (e.g. `email`)."""
+        claims = self._verified_claims(token)
+        if not allow_unverified and claims.get("email_verified") is not True:
+            raise EmailNotVerified
+        return claims

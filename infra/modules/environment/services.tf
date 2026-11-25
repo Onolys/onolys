@@ -4,9 +4,12 @@
 # after a CI deploy, plan shows it as drift until applied with -var 'git_sha={staging="<sha>",prod="<sha>"}' (see docs/reference/infra.md).
 
 locals {
-  worker_url = "https://onolys-worker-${var.env}-${data.google_project.this.number}.${var.region}.run.app"
+  runtime_env = coalesce(var.runtime_env, var.env)
+  worker_url  = "https://onolys-worker-${var.env}-${data.google_project.this.number}.${var.region}.run.app"
+  # Deterministic run.app URL (same pattern as worker_url); the backend verifies Cloud Tasks OIDC against it.
+  eval_backend_url = "https://onolys-eval-backend-${var.env}-${data.google_project.this.number}.${var.region}.run.app"
   routes_env = [
-    { name = "ROUTES_FILE", value = "config/${var.env}/routes.yaml" },
+    { name = "ROUTES_FILE", value = "config/${local.runtime_env}/routes.yaml" },
     { name = "DEFAULT_PRESET", value = var.default_preset },
   ]
   interview_env = [
@@ -22,7 +25,7 @@ locals {
     { name = "AI_MIC_GATE", value = tostring(var.ai_mic_gate) },
   ]
   platform_env = concat(local.interview_env, [
-    { name = "ENV", value = var.env },
+    { name = "ENV", value = local.runtime_env },
     { name = "GCP_PROJECT", value = var.project },
     { name = "REGION", value = var.region },
     { name = "FIRESTORE_DATABASE", value = var.database_id },
@@ -33,10 +36,19 @@ locals {
     { name = "TASKS_QUEUE", value = google_cloud_tasks_queue.steps.name },
     { name = "TASKS_SA", value = google_service_account.tasks_invoker.email },
     { name = "WORKER_URL", value = local.worker_url },
-  ])
+    ],
+    var.eval_mode ? [{ name = "EVAL_MODE", value = "true" }] : [],
+    var.max_active_runs != null ? [{ name = "MAX_ACTIVE_RUNS", value = tostring(var.max_active_runs) }] : [],
+  )
+}
+
+moved {
+  from = google_cloud_run_v2_service.api
+  to   = google_cloud_run_v2_service.api[0]
 }
 
 resource "google_cloud_run_v2_service" "api" {
+  count               = var.public_api_enabled ? 1 : 0
   project             = var.project
   location            = var.region
   name                = "onolys-api-${var.env}"
@@ -282,22 +294,23 @@ resource "google_cloud_run_v2_service" "worker" {
   ]
 }
 
-resource "google_cloud_run_v2_service" "admin_backend" {
-  count               = var.admin_enabled ? 1 : 0
+resource "google_cloud_run_v2_service" "eval_backend" {
+  count               = var.eval_backend_enabled ? 1 : 0
   project             = var.project
   location            = var.region
-  name                = "onolys-admin-backend-${var.env}"
+  name                = "onolys-eval-backend-${var.env}"
   ingress             = "INGRESS_TRAFFIC_ALL"
   deletion_protection = false
 
   template {
-    service_account                  = google_service_account.admin_backend[0].email
-    timeout                          = "130s"
+    # Same SA as the module's api (identical grants by construction, PRD 03 R4).
+    service_account                  = google_service_account.api.email
+    timeout                          = "60s"
     max_instance_request_concurrency = 20
 
     scaling {
-      min_instance_count = 0
-      max_instance_count = var.admin_max_instances
+      min_instance_count = 0 # Cloud Tasks wakes it
+      max_instance_count = var.api_max_instances
     }
 
     containers {
@@ -316,28 +329,67 @@ resource "google_cloud_run_v2_service" "admin_backend" {
         value = var.git_sha
       }
       env {
-        name  = "ENV"
-        value = var.env
+        name  = "SERVICE_MODE"
+        value = "api"
       }
       env {
-        name  = "ADMIN_AUTH"
-        value = "on"
-      }
-      env {
-        name  = "ADMIN_AUTH_PROJECT"
-        value = var.project
-      }
-      env {
-        name  = "ADMIN_CORS_ORIGINS"
-        value = join(",", var.admin_cors_origins)
-      }
-      env {
-        name = "ADMIN_ALLOWED_EMAILS"
+        name = "UID_HMAC_KEY"
         value_source {
           secret_key_ref {
-            secret  = google_secret_manager_secret.admin_allowed_emails[0].secret_id
+            secret  = google_secret_manager_secret.uid_hmac.secret_id
             version = "latest"
           }
+        }
+      }
+      env {
+        name  = "BLOB_SIGNER_EMAIL"
+        value = google_service_account.api.email
+      }
+      env {
+        name  = "CORS_ORIGINS"
+        value = join(",", var.eval_cors_origins)
+      }
+      env {
+        name  = "SERVICE_URL"
+        value = local.eval_backend_url
+      }
+      env {
+        name  = "TASKS_OIDC_AUDIENCE"
+        value = local.eval_backend_url
+      }
+      env {
+        name  = "DATASETS_BUCKET"
+        value = var.datasets_bucket
+      }
+      env {
+        name  = "EVAL_MAX_PER_PROVIDER"
+        value = tostring(var.eval_max_per_provider)
+      }
+      env {
+        name  = "EVAL_OWNER_UID"
+        value = var.eval_owner_uid
+      }
+      env {
+        name = "EVAL_ALLOWED_EMAILS"
+        value_source {
+          secret_key_ref {
+            secret  = google_secret_manager_secret.eval_allowed_emails[0].secret_id
+            version = "latest"
+          }
+        }
+      }
+      dynamic "env" {
+        for_each = local.platform_env
+        content {
+          name  = env.value.name
+          value = env.value.value
+        }
+      }
+      dynamic "env" {
+        for_each = local.routes_env
+        content {
+          name  = env.value.name
+          value = env.value.value
         }
       }
     }
@@ -348,10 +400,10 @@ resource "google_cloud_run_v2_service" "admin_backend" {
       template[0].containers[0].image,
       template[0].revision,
       client,
-      scaling, # service-level block the API fills with zeros (perpetual diff); per-revision scaling is set in template
+      scaling,
       client_version,
-      labels["commit-sha"], # set by CI (google-github-actions/deploy-cloudrun)
-      labels["managed-by"], # set by CI
+      labels["commit-sha"],
+      labels["managed-by"],
       template[0].labels["commit-sha"],
       template[0].labels["managed-by"],
       template[0].labels["goog-terraform-provisioned"],
@@ -359,15 +411,22 @@ resource "google_cloud_run_v2_service" "admin_backend" {
   }
 
   depends_on = [
-    google_secret_manager_secret_iam_member.admin_emails,
+    google_secret_manager_secret_iam_member.hmac,
+    google_secret_manager_secret_iam_member.eval_allowed_emails,
   ]
 }
 
 # --- invokers (PRD R8) ---
+moved {
+  from = google_cloud_run_v2_service_iam_member.api_public
+  to   = google_cloud_run_v2_service_iam_member.api_public[0]
+}
+
 resource "google_cloud_run_v2_service_iam_member" "api_public" {
+  count    = var.public_api_enabled ? 1 : 0
   project  = var.project
   location = var.region
-  name     = google_cloud_run_v2_service.api.name
+  name     = google_cloud_run_v2_service.api[0].name
   role     = "roles/run.invoker"
   member   = "allUsers"
 }
@@ -380,11 +439,12 @@ resource "google_cloud_run_v2_service_iam_member" "worker_tasks_invoker" {
   member   = "serviceAccount:${google_service_account.tasks_invoker.email}"
 }
 
-resource "google_cloud_run_v2_service_iam_member" "admin_public" {
-  count    = var.admin_enabled ? 1 : 0
+# Auth is in-app (Firebase ID token + allowlist), same as the legacy eval service.
+resource "google_cloud_run_v2_service_iam_member" "eval_backend_public" {
+  count    = var.eval_backend_enabled ? 1 : 0
   project  = var.project
   location = var.region
-  name     = google_cloud_run_v2_service.admin_backend[0].name
+  name     = google_cloud_run_v2_service.eval_backend[0].name
   role     = "roles/run.invoker"
   member   = "allUsers"
 }

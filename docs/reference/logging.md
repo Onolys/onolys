@@ -49,6 +49,7 @@ All names a line may carry (anything else is dropped; see `ALLOWED_FIELDS` and `
 |---|---|
 | Ids | `request_id`, `session_id`, `run_id`, `step`, `job_id`, `interview_id`, `uid_hash` (keyed HMAC of the uid, 16 hex) |
 | Outcome | `status` (`failed` is what alerts match), `outcome`, `result`, `failure`, `error_code`, `exc_class`, `attempt`, `retries` |
+| Input integrity | `reason` (fixed safe classification, such as `run_input_mismatch`; never transcript content) |
 | Cancel | `from_state` (state the cancel left), `counted` (did it use a unit); events `session_cancel_requested` (`from_state`), `session_cancelled` (`from_state`, `counted`, `run_id` if any), `session_cancel_failed` (`exc_class`), and `task_cancelled` (`step`) at each worker abort. Ids come from the log context, never content |
 | Request | `method`, `route`, `auth_kind`, `duration_ms`, `total_ms` |
 | LLM metrics | `calls`, `calls_ok`, `input_tokens`, `output_tokens`, `cache_read_tokens`, `cache_write_tokens`, `models` |

@@ -92,6 +92,23 @@ def test_valid_three_to_five_ranked_with_real_offsets(transcript, smap, result):
         assert turns[q.turn_id][q.start:q.end] == q.text
 
 
+def test_optional_idea_title_is_kept_and_legacy_tips_still_work(transcript, smap, result):
+    proposals = good(3)
+    proposals[0]["title"] = "  Reflect the client's reasons first  "
+    (art, warns), _ = run([proposals], transcript, smap, result)
+    assert warns == []
+    assert art.valid[0].title == "Reflect the client's reasons first"
+    assert art.valid[1].title is None
+
+
+def test_idea_title_obeys_the_same_tone_validation(transcript, smap, result):
+    bad = tip()
+    bad["title"] = "You should have listened."
+    (art, _), _ = run([[bad, *good(3)]], transcript, smap, result)
+    assert all(t.title != bad["title"] for t in art.valid)
+    assert len(art.valid) == 3
+
+
 def test_quote_replaced_by_actual_substring(transcript, smap, result):
     sloppy = tip("cct", "t4", quote="what makes  walking more important to you right now")
     (art, _), _ = run([[sloppy, *good(3)[1:]], ], transcript, smap, result)

@@ -1,5 +1,5 @@
-# Evaluation reference data is staging-only; uploads/ is reserved for SP5.
-# No public IAM bindings: ADC callers require existing project/bucket permissions.
+# Evaluation datasets bucket (kept from the legacy staging eval; address unchanged so it is not recreated).
+# Read-only for the eval API SA; no public IAM bindings.
 resource "google_storage_bucket" "eval_staging" {
   project                     = var.project
   name                        = "onolys-eval-data-staging"
@@ -22,4 +22,41 @@ resource "google_storage_bucket" "eval_staging" {
   versioning {
     enabled = false
   }
+}
+
+# Datasets are read-only for the eval backend (module `eval` api SA); no write grant.
+resource "google_storage_bucket_iam_member" "eval_datasets_viewer" {
+  bucket = google_storage_bucket.eval_staging.name
+  role   = "roles/storage.objectViewer"
+  member = "serviceAccount:${module.eval.api_sa_email}"
+}
+
+# Speech service agent reads eval uploads only (prefix-conditioned) from the eval audio bucket.
+resource "google_storage_bucket_iam_member" "eval_speech_uploads" {
+  bucket = module.eval.bucket_name
+  role   = "roles/storage.objectViewer"
+  member = "serviceAccount:${module.eval.stt_service_agent_email}"
+  condition {
+    title       = "eval-uploads-only"
+    description = "Speech may read evaluation uploads only"
+    expression  = "resource.name.startsWith(\"projects/_/buckets/${module.eval.bucket_name}/objects/eval-uploads/\")"
+  }
+}
+
+# Eval web hosting site (R10): kept, no longer gated by a feature flag.
+resource "google_firebase_hosting_site" "eval_staging" {
+  provider   = google-beta
+  project    = var.project
+  site_id    = "onolys-eval-staging"
+  depends_on = [google_project_service.api]
+}
+
+moved {
+  from = google_firebase_hosting_site.eval_staging[0]
+  to   = google_firebase_hosting_site.eval_staging
+}
+
+moved {
+  from = google_firebase_hosting_custom_domain.eval_staging[0]
+  to   = google_firebase_hosting_custom_domain.eval_staging
 }

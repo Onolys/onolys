@@ -8,7 +8,6 @@ import { here, renderApp } from "../../test/renderApp";
 
 const UID = "u_rater_clinic_org";
 const USER = { email: "rater@clinic.org", verified: true };
-const CARD = { change_goal: "Walk more in the evenings" };
 const SCORED = { change_goal: "Walk more in the evenings", globals: { cct: { score: 3 } } };
 
 /** A session at report_ready with v1 made from `rating`. */
@@ -54,7 +53,7 @@ afterEach(() => {
 });
 
 describe("report page", () => {
-  it("shows the header with run details and version select, and the new single-column sections", async () => {
+  it("shows the report ID before the goal without run details or version selection", async () => {
     serve(clone());
     serveTranscript();
     const sid = reported({ final: true, card: SCORED });
@@ -62,11 +61,10 @@ describe("report page", () => {
     expect(await screen.findByRole("heading", { level: 1, name: "Report" })).toBeInTheDocument();
     expect(await screen.findByText(/Cut down on drinking/)).toBeInTheDocument();
     expect(screen.getAllByText(/MITI 4\.2\.1/).length).toBeGreaterThan(0);
-    const details = screen.getByText(/Run details/);
-    expect(details).toHaveTextContent(/default/);
-    expect(details).toHaveTextContent(/mock/);
-    const select = screen.getByLabelText("Version");
-    expect(within(select).getAllByRole("option").map((o) => o.textContent)).toEqual([expect.stringMatching(/^v1/)]);
+    expect(screen.getByText("rep_x")).toBeInTheDocument();
+    expect(screen.getByText("Report ID:").parentElement?.nextElementSibling).toHaveTextContent("Change goal:");
+    expect(screen.queryByText(/Run details/)).toBeNull();
+    expect(screen.queryByLabelText("Version")).toBeNull();
     expect(screen.getAllByRole("heading", { level: 2 }).map((h) => h.textContent)).toEqual([
       "At a glance",
       "Feedback: ideas to try",
@@ -124,28 +122,36 @@ describe("report page", () => {
   });
 });
 
-describe("report page, versions", () => {
-  it("switching the version select goes to that version's route", async () => {
-    const sid = reported({ final: true, no_rating: true, card: CARD });
-    serve(clone());
-    serveTranscript();
-    server.use(
-      http.get("*/v1/sessions/:id/reports", () =>
-        HttpResponse.json({
-          items: [1, 2].map((version) => ({
-            version,
-            report_id: `rep_${version}`,
-            run_id: `run_${version}`,
-            created_at: "2026-11-20T09:30:00.000Z",
-          })),
-        }),
-      ),
-    );
-    const { router } = open(sid, 2);
-    const select = await screen.findByLabelText("Version");
-    await waitFor(() => expect(within(select).getAllByRole("option")).toHaveLength(2));
-    await userEvent.selectOptions(select, "1");
-    await waitFor(() => expect(here(router)).toBe(`/sessions/${sid}/reports/1`));
+describe("report page, deletion", () => {
+  it("requires confirmation, allows cancellation, then deletes and returns to sessions", async () => {
+    const sid = reported({ final: true, card: SCORED });
+    const { router } = open(sid);
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: "Delete session" }));
+    expect(screen.getByRole("alertdialog", { name: "Delete this session?" })).toBeVisible();
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(here(router)).toBe(`/sessions/${sid}/reports/1`);
+    await user.click(screen.getByRole("button", { name: "Delete session" }));
+    await user.click(screen.getByRole("button", { name: "Delete permanently" }));
+    await waitFor(() => expect(here(router)).toBe("/sessions"));
+  });
+
+  it("keeps deletion errors in the confirmation dialog and permits retry", async () => {
+    const sid = reported({ final: true, card: SCORED });
+    let attempts = 0;
+    server.use(http.delete("*/v1/sessions/:id", () => {
+      attempts += 1;
+      return HttpResponse.json({ status: 503, details: [{ code: "upstream_unavailable", message: "unavailable" }], request_id: "req_delete" }, { status: 503 });
+    }));
+    const { router } = open(sid);
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole("button", { name: "Delete session" }));
+    await user.click(screen.getByRole("button", { name: "Delete permanently" }));
+    const dialog = screen.getByRole("alertdialog", { name: "Delete this session?" });
+    expect(await within(dialog).findByText(/req_delete/)).toBeInTheDocument();
+    expect(here(router)).toBe(`/sessions/${sid}/reports/1`);
+    await user.click(within(dialog).getByRole("button", { name: "Delete permanently" }));
+    await waitFor(() => expect(attempts).toBe(2));
   });
 });
 

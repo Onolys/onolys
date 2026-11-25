@@ -164,6 +164,7 @@
   },
   "$id": "create-session-request.schema.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
   "properties": {
     "client": {
       "anyOf": [
