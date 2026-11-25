@@ -182,3 +182,24 @@ def test_multi_code_turn_maps_to_all_owning_codes():
     owners = {b["item_id"] for b in rep["report"]["behaviours"]
               if any(i["turn_id"] == "t7" for i in b["instances"])}
     assert run.turn_codes["t7"] == frozenset(owners)
+
+
+def test_transcript_time_span_uses_overlap_boundaries_and_keeps_untimed_turns():
+    doc, tdoc = _tx()
+    times = [(0, 10), (5, 15), (10, 20), (20, 30), (None, None), (15, None), (10, None)]
+    turns = [{"id": f"t{i}", "speaker": "A", "text": "Synthetic turn.",
+              "start_ms": start, "end_ms": end} for i, (start, end) in enumerate(times)]
+    tdoc = dict(tdoc, transcript={"turns": turns})
+    doc = dict(doc, coded_span={"start_ms": 10, "end_ms": 20})
+    assert [t.id for t in project_transcript(doc, tdoc)] == ["t1", "t2", "t4", "t5"]
+
+
+def test_transcript_time_span_rejects_fully_untimed_transcript():
+    from onolys_engine_core.errors import InvalidCodedSpan
+
+    doc, tdoc = _tx()
+    tdoc = dict(tdoc, transcript={"turns": [
+        {"id": "untimed", "speaker": "A", "text": "Synthetic untimed turn."}]})
+    doc = dict(doc, coded_span={"start_ms": 10, "end_ms": 20})
+    with pytest.raises(InvalidCodedSpan, match="time spans require turn timestamps"):
+        project_transcript(doc, tdoc)

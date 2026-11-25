@@ -122,6 +122,7 @@ def compute_metrics(sessions: Sequence[SessionInput], combos: Sequence[str]) -> 
         labeled = [sid for sid in sess if _labeled(sess[sid].human, metric)]
         # a human value that is undefined (e.g. human Question 0) cannot be missed against
         defined = []
+        undefined = False
         for sid in labeled:
             if sid not in paired_ids:
                 continue
@@ -129,6 +130,16 @@ def compute_metrics(sessions: Sequence[SessionInput], combos: Sequence[str]) -> 
             if _rows(cmps[0], metric)["gold"] is None:
                 out.excluded.append({"session_id": sid, "combo_key": None, "metric": metric,
                                      "reason": _UNDEFINED_REASON.get(metric, NOT_LABELED)})
+                undefined = True
+                continue
+            invalid_combos = [combo for combo in combos
+                              if any(_rows(c, metric)["diff"] is None
+                                     for c in comparisons[sid][combo])]
+            for combo in invalid_combos:
+                out.excluded.append({"session_id": sid, "combo_key": combo, "metric": metric,
+                                     "reason": _UNDEFINED_REASON.get(metric, NOT_LABELED)})
+            if invalid_combos:
+                undefined = True
                 continue
             defined.append(sid)
         out.cohorts[metric] = {"paired": len(defined), "of": len(labeled)}
@@ -142,9 +153,11 @@ def compute_metrics(sessions: Sequence[SessionInput], combos: Sequence[str]) -> 
                 row[combo] = _na_cell(_na_reason(metric))
                 continue
             if not defined:
-                row[combo] = _na_cell(NO_PAIRED if paired_ids else NO_RUNS, of=len(labeled))
+                reason = (_UNDEFINED_REASON.get(metric, NOT_LABELED) if undefined
+                          else NO_PAIRED if paired_ids else NO_RUNS)
+                row[combo] = _na_cell(reason, of=len(labeled))
                 continue
-            row[combo] = _cell(metric, combo, defined, comparisons, labeled, out)
+            row[combo] = _cell(metric, combo, defined, comparisons, labeled)
         _mark_best(row)
         out.cells[metric] = row
 
@@ -152,15 +165,11 @@ def compute_metrics(sessions: Sequence[SessionInput], combos: Sequence[str]) -> 
     return out
 
 
-def _cell(metric, combo, defined, comparisons, labeled, out) -> dict[str, Any]:
+def _cell(metric, combo, defined, comparisons, labeled) -> dict[str, Any]:
     misses, biases, means, repeat_values, shares = [], [], [], [], []
     repeats = 0
     for sid in defined:
         rows = [_rows(c, metric) for c in comparisons[sid][combo]]
-        if any(r["diff"] is None for r in rows):
-            out.excluded.append({"session_id": sid, "combo_key": combo, "metric": metric,
-                                 "reason": _UNDEFINED_REASON.get(metric, NOT_LABELED)})
-            continue
         repeats = max(repeats, len(rows))
         misses.append(_mean([r["abs_diff"] for r in rows]))
         biases.append(_mean([r["diff"] for r in rows]))

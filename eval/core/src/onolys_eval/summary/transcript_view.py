@@ -9,6 +9,9 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
 
+from onolys_engine_core.spans import apply_coded_span
+from onolys_engine_core.transcript_v1 import TranscriptV1
+
 
 class TranscriptChanged(Exception):
     """The stored transcript no longer matches the run's `transcript_sha256`."""
@@ -32,17 +35,9 @@ def project_transcript(run_doc: Mapping[str, Any], transcript_doc: Mapping[str, 
                        ) -> tuple[TurnView, ...]:
     if transcript_doc.get("sha256") != run_doc.get("transcript_sha256"):
         raise TranscriptChanged(run_doc.get("transcript_sha256"))
-    turns = transcript_doc["transcript"]["turns"]
-    span = run_doc.get("coded_span")
-    if span is None:
-        chosen = list(turns)
-    elif "start_turn" in span:  # zero-based, half-open [start_turn, end_turn)
-        chosen = list(turns[span["start_turn"]:span["end_turn"]])
-    else:  # time span: turns that start inside [start_ms, end_ms)
-        chosen = [t for t in turns
-                  if t.get("start_ms") is not None
-                  and span["start_ms"] <= t["start_ms"] < span["end_ms"]]
+    transcript = TranscriptV1.model_validate(transcript_doc["transcript"])
+    chosen = apply_coded_span(transcript, run_doc.get("coded_span")).turns
     clinician = run_doc.get("clinician_speaker")
-    return tuple(TurnView(id=t["id"], speaker=t["speaker"], is_clinician=t["speaker"] == clinician,
-                          text=t["text"], start_ms=t.get("start_ms"), end_ms=t.get("end_ms"))
+    return tuple(TurnView(id=t.id, speaker=t.speaker, is_clinician=t.speaker == clinician,
+                          text=t.text, start_ms=t.start_ms, end_ms=t.end_ms)
                  for t in chosen)

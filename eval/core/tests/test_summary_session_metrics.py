@@ -140,3 +140,39 @@ def test_every_cell_has_n_and_no_runs_is_na():
         for cell in row.values():
             assert "n" in cell and "of" in cell
     assert m.cells["question"]["B"]["na"] == {"reason": "no completed runs"}
+
+
+@pytest.mark.parametrize("metric,bad,reference", [
+    ("reflection_question_ratio", {"sr": 4}, {"question": 2, "sr": 4}),
+    ("pct_cr", {"question": 2}, {"question": 2, "sr": 3, "cr": 1}),
+])
+def test_undefined_repeat_excludes_session_from_every_combos_metric_cohort(metric, bad, reference):
+    h = human({**ZERO, **reference})
+    sessions = [
+        sess("valid", h, A=[run(reference)], B=[run(reference)]),
+        sess("undefined", h, A=[run(reference), run(bad)], B=[run({"question": 1, "cr": 8})]),
+    ]
+    m = compute_metrics(sessions, ["A", "B"])
+    assert m.cohorts[metric] == {"paired": 1, "of": 2}
+    assert m.human[metric]["n"] == 1
+    for cell in m.cells[metric].values():
+        assert cell["n"] == 1 and cell["of"] == 2
+        assert cell["off"] == 0 and cell["best"] is True
+        assert cell["observed"]["n"] == 1
+    assert [(e["session_id"], e["combo_key"]) for e in m.excluded if e["metric"] == metric] == [
+        ("undefined", "A")]
+    # The undefined ratio must not reduce unrelated count cohorts.
+    assert m.cohorts["question"] == {"paired": 2, "of": 2}
+
+
+@pytest.mark.parametrize("metric,bad,reason", [
+    ("reflection_question_ratio", {"sr": 4}, "no Questions in this session"),
+    ("pct_cr", {"question": 2}, "no reflections in this session"),
+])
+def test_empty_ratio_cohort_keeps_undefined_reason_and_no_winner(metric, bad, reason):
+    h = human({**ZERO, "question": 2, "sr": 3, "cr": 1})
+    m = compute_metrics([sess("s1", h, A=[run(bad)], B=[run(h.counts)])], ["A", "B"])
+    assert m.cohorts[metric] == {"paired": 0, "of": 1}
+    for cell in m.cells[metric].values():
+        assert cell["n"] == 0 and cell["best"] is False
+        assert cell["na"] == {"reason": reason}
