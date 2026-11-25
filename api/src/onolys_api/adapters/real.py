@@ -217,6 +217,13 @@ class ResendEmailSender:
             )
         except requests.RequestException:
             raise AdapterError("email_send_failed") from None
+        if response.status_code == 409 and idempotency_key:
+            # A retry of the same task (new reset link, so a new body) hits the stored key:
+            # the first attempt was already accepted, so this is delivered, not a failure.
+            from onolys_api import logs
+
+            logs.emit("auth_email", outcome="duplicate_suppressed", provider_status=409)
+            return
         if not 200 <= response.status_code < 300:
             error = AdapterError("email_send_failed")
             error.provider_status = response.status_code
