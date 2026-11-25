@@ -67,3 +67,14 @@ def test_storage_api_has_one_state_owner():
     assert 'resource "google_project_service" "storage"' in bootstrap
     assert 'service            = "storage.googleapis.com"' in bootstrap
     assert '"storage.googleapis.com"' not in (ROOT / 'main.tf').read_text()
+
+
+def test_owner_billing_caps_remain_outside_foundation_state():
+    foundation = '\n'.join(path.read_text() for path in ROOT.rglob('*.tf') if '.terraform' not in path.parts)
+    assert not re.search(r'resource\s+"google_billing_', foundation)
+    assert not re.search(r'\bbilling_account(?:_id)?\s*=', foundation)
+    assert 'all_updates_rule' not in foundation
+    assert 'disable_billing' not in foundation
+    legacy = (INFRA / 'budget.tf').read_text()
+    removed = re.search(r'removed\s*\{\s*from\s*=\s*google_billing_budget\.monthly\b(.*?)\n\}', legacy, re.S)
+    assert removed and re.search(r'destroy\s*=\s*false', removed[1])

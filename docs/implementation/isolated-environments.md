@@ -8,7 +8,7 @@ The additive root at [`infra/isolated-environment/`](../../infra/isolated-enviro
 | staging | `onolys-staging` | `904020682480` | New common root, `gs://onolys-staging-tfstate/environment` |
 | eval | `onolys-eval` | `976672392004` | New common root, `gs://onolys-eval-tfstate/environment` |
 
-Project creation, billing linkage and the operator's permissions are prerequisites. The new root refuses production, enforces the project/environment pairing, and records a protected state identity: reusing one environment's initialized state for another requires destroying that protected identity and fails planning. Separate backend buckets and `TF_DATA_DIR` directories are still required; the protection complements operator review.
+Project creation, billing linkage and the operator's permissions are prerequisites. Existing manually configured Cloud Billing budgets, caps and notifications remain owner-managed and unchanged; this foundation assigns no billing accounts and creates no budget or spend-control actions. The new root refuses production, enforces the project/environment pairing, and records a protected state identity: reusing one environment's initialized state for another requires destroying that protected identity and fails planning. Separate backend buckets and `TF_DATA_DIR` directories are still required; the protection complements operator review.
 
 ## Common template and differences
 
