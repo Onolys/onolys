@@ -80,3 +80,20 @@ it('uses saved progress for the cancelled partial badge while retaining AI cover
  expect(badge.textContent).toContain(`Partial — cancelled at ${new Date(cancelled_at).toLocaleString()}, 11 of 15 runs done, 2 skipped`);
  expect(screen.getByText('Coverage: 7 of 10 runs done, 1 skipped · partial')).toBeTruthy();
 });
+it('rejects malformed nested tab payloads with local Retry and keeps other tabs usable',async()=>{
+ const {default:lines}=await import('./fixtures/lines.json');let lineAttempts=0;
+ const fetcher=vi.fn(async(input:RequestInfo|URL)=>{
+  const path=new URL(String(input),'https://eval').pathname;
+  if(path.endsWith('/overview'))return new Response(JSON.stringify(overview));
+  if(path.endsWith('/analysis'))return new Response(JSON.stringify(analysis));
+  if(path.endsWith('/lines'))return new Response(JSON.stringify(++lineAttempts===1?{...lines,globals:{}}:lines));
+  if(path.endsWith('/reasoning'))return new Response(JSON.stringify({...lines,groups:[],next_cursor:null}));
+  return new Response(JSON.stringify({detail:{code:'not_found'}}),{status:404});
+ });
+ const client=createEvalApi('https://eval',fetcher),navigate=vi.fn(),lineState={...state('lines'),session:'synthetic-s01'};
+ const view=render(<CompareApp api={client} runId="r1" state={lineState} navigate={navigate}/>);
+ expect((await screen.findByRole('alert')).textContent).toContain('invalid compare response');expect(screen.getByRole('button',{name:'Retry'})).toBeTruthy();
+ view.rerender(<CompareApp api={client} runId="r1" state={state('more')} navigate={navigate}/>);await screen.findByRole('heading',{name:'More analysis'});expect(screen.queryByRole('alert')).toBeNull();
+ view.rerender(<CompareApp api={client} runId="r1" state={lineState} navigate={navigate}/>);fireEvent.click(screen.getByRole('button',{name:'Retry'}));await screen.findByRole('button',{name:'Inspect turn t5'});expect(screen.queryByRole('alert')).toBeNull();
+ expect(fetcher.mock.calls.filter(([input])=>String(input).includes('/overview'))).toHaveLength(1);
+});

@@ -82,3 +82,40 @@ it.each([null, {}, {failures:true,cost:true,time:1}])('rejects malformed operati
  const api=createEvalApi('',vi.fn().mockResolvedValue(new Response(JSON.stringify(payload))));
  await expect(api.compareOverview('r')).rejects.toBeInstanceOf(ComparePayloadError);
 });
+const malformedNested=[
+ ['overview','missing heatmap cell',()=>({...overview,heatmap:{...overview.heatmap,cells:{}}})],
+ ['overview','human heatmap values',()=>({...overview,heatmap:{...overview.heatmap,human:{gi:{min:1,max:1,n:1,values:{}}}}})],
+ ['overview','nullable metric string',()=>({...overview,count_error:{bad:{...Object.values(overview.count_error)[0],off:'1'}}})],
+ ['overview','coverage providers',()=>({...overview,coverage:{...overview.coverage,skipped_providers:[{}]}})],
+ ['deep','missing global collections',()=>({...deep,globals:{}})],
+ ['deep','invalid dot values',()=>({...deep,globals:{...deep.globals,dots:[{...deep.globals.dots[0],values:{}}]}})],
+ ['deep','invalid confusion count',()=>({...deep,lines:{...deep.lines,combos:{bad:{...Object.values(deep.lines.combos)[0],confusion:{sr:{cr:'1'}}}}}})],
+ ['analysis','missing frontier collections',()=>({...analysis,frontier:{}})],
+ ['analysis','invalid reliability levels',()=>({...analysis,reliability:{bad:{...Object.values(analysis.reliability)[0],levels:[]}}})],
+ ['analysis','invalid grid value',()=>({...analysis,grid:[{session_id:'s',cells:{bad:{off:'1',n:1,repeats:1,codes_labeled:10,observed:{min:1,max:1,n:1},na:null}}}]})],
+ ['lines','missing global collections',()=>({...lines,globals:{}})],
+ ['lines','invalid transcript text',()=>({...lines,turns:[{...lines.turns[0],text:{}}]})],
+ ['lines','invalid repeat code array',()=>({...lines,lanes:{human:{},bad:{missing:null,n:1,repeats:1,turns:{t1:[{}]}}}})],
+ ['lines','invalid human codes',()=>({...lines,gold:{...lines.gold,utterance_codes:[{turn_id:'t1',codes:[1],note:null}]}})],
+ ['turn','invalid popup code array',()=>({...turn,combos:{bad:{missing:null,codes:{},rationales:[],agree:null}}})],
+ ['turn','invalid agreement',()=>({...turn,combos:{bad:{missing:null,codes:[[]],rationales:[],agree:{k:null,r:1}}}})],
+ ['reasoning','invalid snippet text',()=>({...reasoning,groups:[{code:'sr',snippets:[{session_id:'s',combo_key:'c',repeat:1,rationale:{},withheld:false}]}]})],
+ ['reasoning','invalid evidence',()=>({...reasoning,groups:[{code:'sr',snippets:[{session_id:'s',combo_key:'c',repeat:1,rationale:'reason',withheld:false,evidence:[{turn_id:'t',quote:{}}]}]}]})],
+ ['reasoning','invalid human note',()=>({...reasoning,groups:[{code:'sr',snippets:[],human_notes:[{session_id:'s',turn_id:'t',note:{}}]}]})],
+] as const;
+it.each(malformedNested)('rejects %s nested %s at the transport boundary',async(kind,_description,payload)=>{
+ const api=createEvalApi('',vi.fn().mockResolvedValue(new Response(JSON.stringify(payload()))));
+ const calls={overview:()=>api.compareOverview('r'),deep:()=>api.compareDeepDive('r'),analysis:()=>api.compareAnalysis('r'),lines:()=>api.compareLines('r','s'),turn:()=>api.compareTurn('r','s','t'),reasoning:()=>api.compareReasoning('r')};
+ await expect(calls[kind]()).rejects.toBeInstanceOf(ComparePayloadError);
+});
+it.each([
+ {value:null,n:1,na:{reason:'unavailable'}},
+ {value:0,n:0,na:null},
+])('preserves nullable values and zero observations without coercion %j',async baseline=>{
+ const payload={...analysis,baseline},api=createEvalApi('',vi.fn().mockResolvedValue(new Response(JSON.stringify(payload))));
+ expect((await api.compareAnalysis('r')).baseline).toEqual(baseline);
+});
+it.each([{value:'0',n:1,na:null},{value:null,n:null,na:null},{value:1,n:1,na:{reason:{}}}])('rejects invalid scalar/null semantics %j',async baseline=>{
+ const api=createEvalApi('',vi.fn().mockResolvedValue(new Response(JSON.stringify({...analysis,baseline}))));
+ await expect(api.compareAnalysis('r')).rejects.toBeInstanceOf(ComparePayloadError);
+});

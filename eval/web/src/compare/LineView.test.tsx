@@ -72,3 +72,19 @@ it('handles direct matching-session errors with Retry and empty results without 
  render(<CompareApp api={p.api} runId="r1" state={{view:'compare',tab:'lines',code:'none',metric:'multi',combo:p.data.combos[0].combo_key}} navigate={p.navigate}/>);
  expect(await screen.findByText('Matching sessions unavailable')).toBeTruthy();fireEvent.click(screen.getByRole('button',{name:'Retry'}));await screen.findByText('No matching sessions');expect(p.api.compareLines).not.toHaveBeenCalled();expect(p.api.compareLineMatches).toHaveBeenCalledTimes(2);
 });
+it('keeps skipped, failed and empty turn lanes out of agreement while preserving evaluated none',()=>{
+ const p=props(),first=p.data.combos[0];p.data.combos=Array.from({length:6},(_,i)=>({...first,combo_key:`c${i}`}));p.legend=p.data.combos.map((combo,i)=>({combo,letter:String.fromCharCode(65+i),label:combo.combo_key}));p.data.lanes.human!.t3=[];
+ for(const combo of p.data.combos)p.data.lanes[combo.combo_key]={missing:null,n:1,repeats:1,turns:{t3:[[]]}};
+ p.data.lanes.c0={missing:null,n:0,repeats:0,turns:{t3:[]}};p.data.lanes.c1={missing:null,n:0,repeats:0,turns:{}};p.data.lanes.c2={missing:null,n:1,repeats:1,turns:{t3:[]}};
+ p.data.excluded=[{session_id:p.data.session_id,combo_key:'c0',reason:'skipped: provider unavailable'},{session_id:p.data.session_id,combo_key:'c1',reason:'failed: provider error'}];
+ const view=render(<LineView {...p}/>),row=view.container.querySelector('[data-turn="t3"]') as HTMLElement;
+ expect(within(row).getByText('skipped: provider unavailable')).toBeTruthy();expect(within(row).getByText('failed: provider error')).toBeTruthy();expect(within(row).getByText('no line-level output for this turn')).toBeTruthy();
+ fireEvent.click(within(row).getByRole('button',{name:'+3 agree'}));expect(within(row).getByText('D: none')).toBeTruthy();
+});
+it('filters and marks disagreement for the selected combo instead of another combo',()=>{
+ const p=props(),a=p.data.combos[0].combo_key,b=p.data.combos[1].combo_key;
+ p.data.lanes[b]={missing:null,n:1,repeats:1,turns:{t5:[['sr']]}};
+ const view=render(<LineView {...p} state={{...p.state,combo:b,only:'disagree'}}/>);expect(screen.queryByRole('button',{name:'Inspect turn t5'})).toBeNull();
+ view.rerender(<LineView {...p} state={{...p.state,combo:a,only:'disagree'}}/>);expect(screen.getByRole('button',{name:'Inspect turn t5'})).toBeTruthy();
+ view.rerender(<LineView {...p} state={{...p.state,combo:b}}/>);const row=view.container.querySelector('[data-turn="t5"]') as HTMLElement;expect(within(row).queryByLabelText('Disagreement')).toBeNull();
+});

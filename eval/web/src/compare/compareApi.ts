@@ -77,23 +77,74 @@ export interface CompareApi {
 }
 export class ComparePayloadError extends Error {constructor(){super('The server returned an invalid compare response. Please retry.');this.name='ComparePayloadError';}}
 const object = (v:unknown): v is Record<string,unknown> => v !== null && typeof v === 'object' && !Array.isArray(v);
-/** Boundary checks deliberately inspect containers only; metric semantics stay on the server. */
-function checked<T>(value:unknown, kind:'overview'|'deep'|'analysis'|'reasoning'|'lines'|'turn'):T {
- if (!object(value) || typeof value.eval_run_id!=='string' || typeof value.has_human!=='boolean' || !object(value.coverage) || !Array.isArray(value.excluded) || (kind==='turn' ? !object(value.combos) : !Array.isArray(value.combos))) throw new ComparePayloadError();
- const records:Record<typeof kind,string[]>={overview:['header','count_error','heatmap','cohorts'],deep:['globals','counts','lines','rationale_counts'],analysis:['frontier','baseline','reliability'],reasoning:[],lines:['gold','lanes','globals','disagreement'],turn:[]};
- const arrays:Record<typeof kind,string[]>={overview:['leaderboard','verdict','footnotes'],deep:[],analysis:['grid','head_to_head','error_vs_length'],reasoning:['groups'],lines:['turns','dataset_notes'],turn:[]};
- if(records[kind].some(k=>!object(value[k])) || arrays[kind].some(k=>!Array.isArray(value[k]))) throw new ComparePayloadError();
- if(kind==='reasoning' && value.next_cursor !== null && typeof value.next_cursor !== 'string') throw new ComparePayloadError();
- if((kind==='lines' || kind==='turn') && typeof value.session_id !== 'string') throw new ComparePayloadError();
- if(kind==='turn' && (typeof value.turn_id !== 'string' || typeof value.text !== 'string')) throw new ComparePayloadError();
+/** Validate the collections and scalar types used by renderers, without deriving metrics. */
+type Check = (value:unknown)=>boolean;
+const string:Check=value=>typeof value==='string';
+const number:Check=value=>typeof value==='number'&&Number.isFinite(value);
+const boolean:Check=value=>typeof value==='boolean';
+const nullable=(check:Check):Check=>value=>value===null||check(value);
+const array=(check:Check):Check=>value=>Array.isArray(value)&&value.every(check);
+const record=(check:Check):Check=>value=>object(value)&&Object.values(value).every(check);
+const shape=(required:Record<string,Check>,optional:Record<string,Check>={}):Check=>value=>object(value)&&Object.entries(required).every(([key,check])=>check(value[key]))&&Object.entries(optional).every(([key,check])=>value[key]===undefined||check(value[key]));
+const strings=array(string), numbers=array(number), numericRecord=record(number);
+const na=nullable(shape({reason:string}));
+const observed=shape({min:nullable(number),max:nullable(number),n:number});
+const valueCell=shape({value:nullable(number),n:number,na},{observed});
+const cell=shape({value:nullable(number),off:nullable(number),bias:nullable(number),n:number,of:number,repeats:number,within_tolerance:nullable(boolean),best:boolean,na},{observed,buckets:shape({same:number,off1:number,off2plus:number}),within_1:number,codes_labeled:number,codes_total:number});
+const metricCells=record(record(cell));
+const quality=shape({value:nullable(number),n:number,na,repeats:number,best:boolean},{observed});
+const time=shape({mean_seconds:nullable(number),n:number,retried_runs:number});
+const failures=array(shape({code:string,count:number}));
+const coverage=shape({eval_status:string,cancelled_at:nullable(string),runs_done:number,runs_total:number,runs_skipped:number,skipped_providers:array(shape({provider:string,after_failures:number}))});
+const combo=shape({combo_key:string,engine:string,model:nullable(string),tier:nullable(string),effort:nullable(string)});
+const excluded=array(shape({session_id:string,combo_key:nullable(string),reason:string},{repeat:number,metric:string}));
+const cohorts=record(shape({paired:number,of:number}));
+const verdict=array(shape({text:string,claims:array(shape({metric:string,combo:string,value:number,n:number}))}));
+const note=shape({turn_id:string,codes:strings,note:nullable(string)});
+const snippet=shape({session_id:string,combo_key:string,repeat:number,rationale:string,withheld:boolean},{turn_id:string,quote:nullable(string),quote_verified:boolean,evidence:array(shape({turn_id:string,quote:string}))});
+const popupLane=shape({missing:nullable(string),codes:array(strings),rationales:array(snippet),agree:nullable(shape({k:number,r:number}))});
+const modelLane=shape({missing:nullable(string),n:number,repeats:number,turns:record(array(strings))});
+const lineLanes:Check=value=>object(value)&&Object.entries(value).every(([key,lane])=>key==='human'?record(strings)(lane):modelLane(lane));
+const common=shape({eval_run_id:string,has_human:boolean,coverage,excluded});
+const frontierPoint=shape({combo_key:string,count_error:number,n:number,cost_per_run_usd:number,cost_n:number});
+const progress=shape({done_units:number,total_units:number,skipped_units:number});
+const projections:Record<'overview'|'deep'|'analysis'|'reasoning'|'lines'|'turn',Check>={
+ overview:shape({
+  header:shape({name:nullable(string),dataset_id:nullable(string),sessions:number,repeats:number,progress,label_coverage:nullable(shape({counts:strings,globals:strings,line_labels:boolean})),coverage},{line_sessions:array(shape({session_id:string,matched_lines:nullable(number)}))}),
+  count_error:record(cell),verdict,cohorts,footnotes:strings,
+  leaderboard:array(value=>cell(value)&&shape({combo_key:string,operational_best:shape({failures:boolean,cost:boolean,time:boolean}),globals_within_1:quality,line_accuracy:quality,macro_f1:quality,time,failures,cost:shape({total_usd:nullable(number),per_run_usd:nullable(number),n:number,na})})(value)),
+  heatmap:shape({rows:array(shape({id:string,kind:value=>typeof value==='string'&&['count','global','ratio','total'].includes(value)})),human:record(value=>observed(value)&&shape({values:array(shape({session_id:string,value:number}))})(value)),cells:metricCells}),
+ }),
+ deep:shape({
+  globals:shape({cells:metricCells,dots:array(shape({session_id:string,combo_key:string,metric:string,human:nullable(number),values:numbers,n:number,repeats:number}))}),
+  counts:shape({cells:metricCells,totals:array(shape({session_id:string,combo_key:string,human:numericRecord,values:array(numericRecord),n:number,repeats:number})),bias_pct:record(record(valueCell))},{human:record(value=>valueCell(value)&&shape({min:nullable(number),max:nullable(number)})(value))}),
+  lines:shape({missing:nullable(string),codes_labeled:strings,dataset_notes:strings,combos:record(shape({lane:nullable(string),n:number,repeats:number,aligned:number,per_code:record(shape({p:nullable(number),r:nullable(number),f1:nullable(number)})),macro_f1:nullable(number),line_accuracy:nullable(number),confusion:record(numericRecord),multi:number}))}),
+  rationale_counts:record(numericRecord),
+ },{cohorts}),
+ analysis:shape({
+  count_error:record(shape({off:nullable(number),n:number,na})),skipped_combos:strings,verdict,baseline:valueCell,
+  frontier:shape({points:array(frontierPoint),dominated:array(frontierPoint),unpriced:array(shape({combo_key:string,count_error:number,n:number,cost_per_run_usd:value=>value===null,na})),unavailable:array(shape({combo_key:string,n:number,na}))}),
+  reliability:record(shape({levels:record(valueCell),repeat_agreement:shape({globals:value=>valueCell(value)&&shape({agree:number})(value),lines:value=>valueCell(value)&&shape({agree:number})(value)}),na,failures,time})),
+  head_to_head:array(shape({a:string,b:string,a_closer:number,b_closer:number,ties:number,n:number,na})),
+  grid:array(shape({session_id:string,cells:record(shape({off:nullable(number),n:number,repeats:number,codes_labeled:number,observed,na}))})),
+  error_vs_length:array(shape({session_id:string,combo_key:string,off:number,turns:number,words:number,n:number,repeats:number})),
+ }),
+ reasoning:shape({groups:array(shape({code:string,snippets:array(snippet)},{human_notes:array(shape({session_id:string,turn_id:string,note:string}))})),next_cursor:nullable(string)}),
+ lines:shape({
+  session_id:string,missing:nullable(string),dataset_notes:strings,
+  turns:array(shape({id:string,speaker:string,is_clinician:boolean,text:string},{start_ms:nullable(number),end_ms:nullable(number)})),
+  gold:shape({counts:numericRecord,globals:numericRecord,quality_label:nullable(string),utterance_codes:nullable(array(note))}),
+  lanes:lineLanes,disagreement:record(boolean),globals:shape({human:numericRecord,combos:record(array(numericRecord))}),
+ }),
+ turn:shape({session_id:string,turn_id:string,text:string,human:nullable(shape({codes:strings,note:nullable(string)})),missing:nullable(string),combos:record(popupLane)}),
+};
+function checked<T>(value:unknown,kind:keyof typeof projections):T {
+ if(!common(value)||!projections[kind](value)||!object(value)||(kind!=='turn'&&!array(combo)(value.combos)))throw new ComparePayloadError();
  if(kind==='overview') {
-  const header=value.header as Record<string,unknown>;
-  const progress=header.progress;
-  if(!object(progress) || ['done_units','total_units','skipped_units'].some(key=>typeof progress[key]!=='number'||!Number.isFinite(progress[key]))) throw new ComparePayloadError();
-  if((value.leaderboard as unknown[]).some(row=>!object(row)||!object(row.operational_best)||['failures','cost','time'].some(key=>typeof (row.operational_best as Record<string,unknown>)[key]!=='boolean'))) throw new ComparePayloadError();
+  // Overview indexes every row and combo directly; reject incomplete lookup tables.
+  const data=value as unknown as CompareOverview;
+  if(data.heatmap.rows.some(row=>!data.heatmap.human[row.id]||!data.heatmap.cells[row.id]||data.combos.some(combo=>!data.heatmap.cells[row.id][combo.combo_key])))throw new ComparePayloadError();
  }
- if(kind==='overview' && object(value.header) && value.header.line_sessions!==undefined && (!Array.isArray(value.header.line_sessions) || value.header.line_sessions.some(row=>!object(row)||typeof row.session_id!=='string'||(row.matched_lines!==null&&(typeof row.matched_lines!=='number'||!Number.isFinite(row.matched_lines)))))) throw new ComparePayloadError();
- if(kind==='overview' && (!object(value.heatmap) || !Array.isArray(value.heatmap.rows) || !object(value.heatmap.cells) || !object(value.heatmap.human))) throw new ComparePayloadError();
  return value as T;
 }
 export function createCompareApi(request:<T>(path:string,init?:RequestInit)=>Promise<T>):CompareApi {
