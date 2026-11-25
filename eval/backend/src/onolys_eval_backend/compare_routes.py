@@ -13,6 +13,8 @@ from onolys_eval.summary.gold_view import label_coverage
 from onolys_eval.summary.line_metrics import (
     DATASET_NOTES,
     LineSession,
+    _aligned,
+    _label,
     compute_line_metrics,
     turn_agreement,
 )
@@ -147,6 +149,13 @@ def overview(request: Request, eval_run_id: str, combos: str | None = None):
     labels = label_coverage(group.get("dataset_id"))
     header = {"name": group.get("name"), "dataset_id": group.get("dataset_id"),
               "sessions": len(v.sessions), "repeats": group["repeats"],
+              "progress": group.get("progress") or {
+                  key: group.get(key) or 0
+                  for key in ("done_units", "total_units", "skipped_units")},
+              "line_sessions": [{"session_id": sid, "matched_lines": None
+                  if s.transcript_changed else len(_aligned(
+                      LineSession(sid, s.gold, s.turns, {}), frozenset(s.gold.counts)))}
+                  for sid, s in v.projection.sessions.items()],
               "label_coverage": None if labels is None else {
                   "counts": list(labels.counts), "globals": list(labels.globals),
                   "line_labels": labels.line_labels}, "coverage": v.common["coverage"]}
@@ -160,11 +169,12 @@ def overview(request: Request, eval_run_id: str, combos: str | None = None):
         row["values"] = values
     count_error = m.cells["count_error"]
     quality = _leaderboard_quality(v)
+    best = _operational_best(v)
     heatmap_rows = (*COUNT_IDS, *GLOBAL_IDS, "reflection_question_ratio", "pct_cr")
     return {**v.common, "header": header, "count_error": count_error,
             "verdict": build_verdict({"count_error": count_error, "skipped_combos": v.skipped}),
             "leaderboard": [{"combo_key": key, **count_error[key], **v.ops[key],
-                             **quality[key]} for key in v.keys],
+                             **quality[key], "operational_best": best[key]} for key in v.keys],
             "heatmap": {"rows": [{"id": key, "kind": kind(key)} for key in heatmap_rows],
                         "human": {k: m.human[k] for k in heatmap_rows},
                         "cells": {k: m.cells[k] for k in heatmap_rows}},
@@ -173,10 +183,15 @@ def overview(request: Request, eval_run_id: str, combos: str | None = None):
                           "Started resets on re-claim; retried_runs counts retried cells."]}
 
 
-def _line_metrics(v):
+def _line_cohort(v):
     codes = [k for k in COUNT_IDS if any(k in s.human.counts for s in v.sessions)]
     active = [k for k in v.keys if k not in v.skipped]
     paired = [s for s in v.line_sessions if all(s.runs.get(k) for k in active)]
+    return codes, active, paired
+
+
+def _line_metrics(v):
+    codes, active, paired = _line_cohort(v)
     result = compute_line_metrics(paired, active,
                                   codes, v.projection.group.get("dataset_id"))
     return {"missing": result.missing, "codes_labeled": list(result.codes_labeled),
@@ -185,6 +200,26 @@ def _line_metrics(v):
                       "aligned": c.aligned, "per_code": c.per_code, "macro_f1": c.macro_f1,
                       "line_accuracy": c.line_accuracy, "confusion": c.confusion, "multi": c.multi}
                 for key, c in result.combos.items()}}
+
+
+def _operational_best(v):
+    """Lowest observed operations, with ties; skipped and missing data never win."""
+    finished = {c["combo_key"] for c in final_attempts(v.projection.attempts)
+                if c["status"] in ("done", "failed")}
+    values = {key: {
+        "failures": sum(f["count"] for f in v.ops[key]["failures"])
+                    if key in finished else None,
+        "cost": v.ops[key]["cost"]["per_run_usd"]
+                if v.ops[key]["cost"]["n"] and not v.ops[key]["cost"]["na"] else None,
+        "time": v.ops[key]["time"]["mean_seconds"] if v.ops[key]["time"]["n"] else None}
+        for key in v.keys if key not in v.skipped}
+    best = {key: dict.fromkeys(("failures", "cost", "time"), False) for key in v.keys}
+    for metric in ("failures", "cost", "time"):
+        eligible = [row[metric] for row in values.values() if row[metric] is not None]
+        if eligible:
+            for key, row in values.items():
+                best[key][metric] = row[metric] == min(eligible)
+    return best
 
 
 def _quality_cell(value, n, repeats, reason):
@@ -263,11 +298,51 @@ def deep_dive(request: Request, eval_run_id: str, combos: str | None = None):
         if run.cell["combo_key"] in v.keys and run.parsed.status == "ok":
             for instance in run.parsed.instances:
                 counts[instance.code][run.cell["combo_key"]] += 1
-    return {**v.common,
+    return {**v.common, "cohorts": v.metrics.cohorts,
             "globals": {"cells": {k: v.metrics.cells[k] for k in GLOBAL_IDS}, "dots": dots},
             "counts": {"cells": {k: v.metrics.cells[k] for k in COUNT_IDS},
+                       "human": {k: _paired_human(v.metrics, k) for k in COUNT_IDS},
                        "totals": totals, "bias_pct": biases},
             "lines": _line_metrics(v), "rationale_counts": dict(counts)}
+
+
+def _paired_human(metrics, metric):
+    # The session-balanced signed bias is AI mean minus human mean on this exact
+    # cohort. Reuse those calculated values instead of selecting a second cohort.
+    cells = metrics.cells[metric].values()
+    cell = next((c for c in cells if c["value"] is not None), None)
+    reason = next((c["na"] for c in metrics.cells[metric].values() if c["na"]),
+                  {"reason": "no paired sessions"})
+    return {**metrics.human[metric],
+            "value": cell["value"] - cell["bias"] if cell else None,
+            "na": None if cell else reason}
+
+
+@router.get("/line-matches")
+def line_matches(request: Request, eval_run_id: str, combo: str, code: str, metric: str,
+                 combos: str | None = None):
+    """Bounded session IDs for a confusion cell, or the aggregate multi bucket."""
+    v = _view(request, eval_run_id, combos)
+    allowed = (*COUNT_IDS, "none", "multi")
+    if combo not in v.keys or code not in allowed or metric not in allowed:
+        _error(422, "invalid_filter")
+    codes, active, paired = _line_cohort(v)
+    labeled = [s for s in paired if s.human.utterance_codes is not None]
+    if combo not in active or any(not r.has_lines for s in labeled
+                                 for r in s.runs.get(combo, ())):
+        return {"session_ids": []}
+    universe = frozenset(codes)
+    matched = []
+    for session in labeled:
+        for tid, human in _aligned(session, universe):
+            row = _label(human)
+            labels = [(row, _label(r.turn_codes.get(tid, frozenset()) & universe))
+                      for r in session.runs.get(combo, ())]
+            if any((a is None or b is None) if code == metric == "multi" else
+                   (a == code and b == metric) for a, b in labels):
+                matched.append(session.session_id)
+                break
+    return {"session_ids": matched}
 
 
 @router.get("/analysis")
@@ -297,40 +372,65 @@ def _cursor_decode(cursor, scope):
     _error(422, "invalid_cursor")
 
 
+def _human_notes(v, code, session):
+    rows = []
+    for sid, saved in v.projection.sessions.items():
+        if saved.transcript_changed or session is not None and sid != session:
+            continue
+        line_session = LineSession(sid, saved.gold, saved.turns, {})
+        aligned = dict(_aligned(line_session, frozenset(saved.gold.counts)))
+        for row in saved.gold.utterance_codes or ():
+            if not row.note or row.turn_id not in aligned:
+                continue
+            for metric in sorted(aligned[row.turn_id]):
+                if code is None or code == metric:
+                    rows.append((metric, "human_notes", {
+                        "session_id": sid, "turn_id": row.turn_id, "note": row.note}))
+    return rows
+
+
 @router.get("/reasoning")
 def reasoning(request: Request, eval_run_id: str, combos: str | None = None,
               code: str | None = None, combo: str | None = None,
+              session: str | None = None, kind: str | None = None,
               cursor: str | None = Query(None, max_length=2048)):
     v = _view(request, eval_run_id, combos)
-    if combo and combo not in v.keys or code and code not in (*COUNT_IDS, *GLOBAL_IDS):
+    if combo and combo not in v.keys or code and code not in (*COUNT_IDS, *GLOBAL_IDS) \
+            or kind not in (None, "global"):
         _error(422, "invalid_filter")
-    scope = [eval_run_id, v.keys, code, combo]
+    if session is not None and session not in v.projection.sessions:
+        _error(404, "not_found")
+    scope = [eval_run_id, v.keys, code, combo, session, kind]
     offset = _cursor_decode(cursor, scope) if cursor else 0
     rows = []
     for run in v.projection.runs:
         if run.parsed.status != "ok" or run.cell["combo_key"] not in v.keys \
-                or combo and run.cell["combo_key"] != combo:
+                or combo and run.cell["combo_key"] != combo \
+                or session is not None and run.cell["sid"] != session:
             continue
-        for inst in run.parsed.instances:
-            if code is None or code == inst.code:
-                rows.append((inst.code, _snippet(run, inst)))
+        if kind is None:
+            for inst in run.parsed.instances:
+                if code is None or code == inst.code:
+                    rows.append((inst.code, "snippets", _snippet(run, inst)))
         for metric, reason in run.parsed.global_reasons.items():
             if code is None or code == metric:
                 turns = {t.id: t for t in run.turns}
-                rows.append((metric, {"session_id": run.cell["sid"],
+                rows.append((metric, "snippets", {"session_id": run.cell["sid"],
                     "combo_key": run.cell["combo_key"], "repeat": run.cell["repeat"],
                     "rationale": reason.reason, "withheld": reason.reason == "",
                     "evidence": [{"turn_id": e.turn_id, "quote": e.quote}
                                  for e in reason.evidence if e.turn_id in turns
                                  and e.quote in turns[e.turn_id].text]}))
-    grouped = defaultdict(list)
-    for metric, snippet in rows[offset:offset + 50]:
-        grouped[metric].append(snippet)
+    # Gold notes share the same page budget and are omitted for AI-only/global requests.
+    if combo is None and kind is None:
+        rows.extend(_human_notes(v, code, session))
+    grouped = {}
+    for metric, section, snippet in rows[offset:offset + 50]:
+        group = grouped.setdefault(metric, {"code": metric, "snippets": []})
+        group.setdefault(section, []).append(snippet)
     next_cursor = base64.urlsafe_b64encode(json.dumps({"scope": scope, "offset": offset + 50})
                                          .encode()).decode() if len(rows) > offset + 50 else None
-    return {**v.common, "groups": [{"code": metric, "snippets": snippets}
-                                   for metric, snippets in grouped.items()],
-            "next_cursor": next_cursor}
+    return {**v.common, "groups": list(grouped.values()), "next_cursor": next_cursor}
 
 
 def _session(v, sid):

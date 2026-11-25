@@ -73,6 +73,8 @@ class ServiceEvalRunSource:
                 "dataset_id": (doc.get("input") or {}).get("dataset_id"),
                 "status": doc["status"],
                 "cancelled_at": doc.get("cancelled_at"), "sessions": sessions,
+                "progress": {key: doc.get(key) or 0
+                             for key in ("done_units", "total_units", "skipped_units")},
                 "combos": list(combos.values()), "repeats": doc["repeats"],
                 "provider_skips": eval_view.provider_skips(doc),
                 "runs": [{**c, "session_id": c["sid"]} for c in cells]}

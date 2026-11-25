@@ -27,8 +27,19 @@ def test_499_runs_payload_cache_and_advisory_cold_timing(monkeypatch):
     assert len(response.content) < 1_500_000
     assert '"rationale"' not in response.text
     assert response.json()["coverage"]["runs_done"] == 499
+    choices = response.json()["header"]["line_sessions"]
+    assert len(choices) == 499
+    assert all(set(row) == {"session_id", "matched_lines"} for row in choices)
     before = len(source.calls)
     assert c.get(path, headers=AUTH).json() == response.json()
     assert [call[0] for call in source.calls[before:]] == ["eval_run", "cells"]
+    combo = scenario["eval_run"]["combos"][0]["combo_key"]
+    matched = c.get(path.removesuffix("overview") + "line-matches",
+                    params={"combo": combo, "code": "question", "metric": "question"},
+                    headers=AUTH)
+    assert matched.status_code == 200
+    assert len(matched.json()["session_ids"]) <= 499
+    assert len(matched.content) < 30_000
+    assert all(call[0] in {"eval_run", "cells"} for call in source.calls[before:])
     print(f"499-run cold compute: {elapsed:.3f}s; overview: {len(response.content):,} bytes")
     assert elapsed < 5, f"Advisory 5s offline cold-compute budget exceeded: {elapsed:.3f}s"

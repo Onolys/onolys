@@ -154,7 +154,8 @@ def test_service_source_normalizes_sp05_group_and_resolves_saved_gold(monkeypatc
     raw = {"name": "saved", "input": {"dataset_id": "annomi"}, "status": "done",
            "sessions": {"s": {"dataset_session_id": "ds", "transcript_sha256": "t"}},
            "combos": [{}], "engines": ["miti"], "repeats": 1,
-           "saved_config": {"resolved_combos": {"ck": {"litellm_id": "provider/model"}}}}
+           "saved_config": {"resolved_combos": {"ck": {"litellm_id": "provider/model"}}},
+           "done_units": 7, "total_units": 9, "skipped_units": 1}
     cell = {"sid": "s", "gold_ref": {"sha256": sha}, "run_id": "run"}
     monkeypatch.setattr(compare_load.eval_view, "list_cells", lambda *args: [cell])
     monkeypatch.setattr(compare_load, "plan_cells", lambda doc: [
@@ -167,6 +168,7 @@ def test_service_source_normalizes_sp05_group_and_resolves_saved_gold(monkeypatc
     source = compare_load.ServiceEvalRunSource(services)
     group = source.eval_run("r")
     assert group["dataset_id"] == "annomi"
+    assert group["progress"] == {"done_units": 7, "total_units": 9, "skipped_units": 1}
     assert group["sessions"][0]["transcript_sha256"] == "t"
     assert group["combos"][0]["litellm_id"] == "provider/model"
     assert source.gold(sha) == {"counts": {}}
