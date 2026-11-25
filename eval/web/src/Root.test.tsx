@@ -6,7 +6,8 @@ import { createFakeAuthService } from '@prod-auth/fakeService';
 
 afterEach(() => { cleanup(); window.history.replaceState({}, '', '/'); });
 const fake = (email?: string) => { const s = createFakeAuthService(); if (email) s.signedInAs(email, { verified: true }); return s; };
-it('never calls the API while signed out', async () => {
+it.each(['/', '/?run=r1&view=compare&tab=overview'])('never calls the API while signed out at %s', async path => {
+  window.history.replaceState({}, '', path);
   const baseFetch = vi.fn();
   render(<Root service={fake()} baseFetch={baseFetch} />);
   await screen.findByRole('button', { name: 'Log in' }); expect(baseFetch).not.toHaveBeenCalled();

@@ -72,3 +72,13 @@ it.each([{session_id:'s',matched_lines:'5'},{session_id:1,matched_lines:0}])('re
  const api=createEvalApi('',vi.fn().mockResolvedValue(new Response(JSON.stringify({...overview,header:{...overview.header,line_sessions:[row]}}))));
  await expect(api.compareOverview('r')).rejects.toBeInstanceOf(ComparePayloadError);
 });
+it.each([null, {}, {done_units:'11',total_units:15,skipped_units:2}])('rejects malformed saved progress %j',async progress=>{
+ const payload={...overview,header:{...overview.header,progress}};
+ const api=createEvalApi('',vi.fn().mockResolvedValue(new Response(JSON.stringify(payload))));
+ await expect(api.compareOverview('r')).rejects.toBeInstanceOf(ComparePayloadError);
+});
+it.each([null, {}, {failures:true,cost:true,time:1}])('rejects malformed operational best flags %j',async operational_best=>{
+ const payload={...overview,leaderboard:overview.leaderboard.map(row=>({...row,operational_best}))};
+ const api=createEvalApi('',vi.fn().mockResolvedValue(new Response(JSON.stringify(payload))));
+ await expect(api.compareOverview('r')).rejects.toBeInstanceOf(ComparePayloadError);
+});

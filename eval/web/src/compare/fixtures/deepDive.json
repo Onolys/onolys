@@ -26,6 +26,88 @@
     "skipped_providers": []
   },
   "excluded": [],
+  "cohorts": {
+    "gi": {
+      "paired": 2,
+      "of": 2
+    },
+    "persuade": {
+      "paired": 2,
+      "of": 2
+    },
+    "persuade_permission": {
+      "paired": 2,
+      "of": 2
+    },
+    "question": {
+      "paired": 2,
+      "of": 2
+    },
+    "sr": {
+      "paired": 2,
+      "of": 2
+    },
+    "cr": {
+      "paired": 2,
+      "of": 2
+    },
+    "affirm": {
+      "paired": 2,
+      "of": 2
+    },
+    "seek_collab": {
+      "paired": 2,
+      "of": 2
+    },
+    "emphasize_autonomy": {
+      "paired": 2,
+      "of": 2
+    },
+    "confront": {
+      "paired": 2,
+      "of": 2
+    },
+    "cct": {
+      "paired": 2,
+      "of": 2
+    },
+    "sst": {
+      "paired": 2,
+      "of": 2
+    },
+    "partnership": {
+      "paired": 2,
+      "of": 2
+    },
+    "empathy": {
+      "paired": 2,
+      "of": 2
+    },
+    "technical": {
+      "paired": 2,
+      "of": 2
+    },
+    "relational": {
+      "paired": 2,
+      "of": 2
+    },
+    "pct_cr": {
+      "paired": 2,
+      "of": 2
+    },
+    "reflection_question_ratio": {
+      "paired": 2,
+      "of": 2
+    },
+    "total_mia": {
+      "paired": 2,
+      "of": 2
+    },
+    "total_mina": {
+      "paired": 2,
+      "of": 2
+    }
+  },
   "globals": {
     "cells": {
       "cct": {
@@ -749,6 +831,78 @@
             "n": 4
           }
         }
+      }
+    },
+    "human": {
+      "gi": {
+        "min": 0,
+        "max": 1,
+        "n": 2,
+        "value": 0.5,
+        "na": null
+      },
+      "persuade": {
+        "min": 0,
+        "max": 0,
+        "n": 2,
+        "value": 0.0,
+        "na": null
+      },
+      "persuade_permission": {
+        "min": 0,
+        "max": 0,
+        "n": 2,
+        "value": 0.0,
+        "na": null
+      },
+      "question": {
+        "min": 1,
+        "max": 2,
+        "n": 2,
+        "value": 1.5,
+        "na": null
+      },
+      "sr": {
+        "min": 1,
+        "max": 1,
+        "n": 2,
+        "value": 1.0,
+        "na": null
+      },
+      "cr": {
+        "min": 1,
+        "max": 1,
+        "n": 2,
+        "value": 1.0,
+        "na": null
+      },
+      "affirm": {
+        "min": 0,
+        "max": 1,
+        "n": 2,
+        "value": 0.5,
+        "na": null
+      },
+      "seek_collab": {
+        "min": 0,
+        "max": 0,
+        "n": 2,
+        "value": 0.0,
+        "na": null
+      },
+      "emphasize_autonomy": {
+        "min": 0,
+        "max": 0,
+        "n": 2,
+        "value": 0.0,
+        "na": null
+      },
+      "confront": {
+        "min": 0,
+        "max": 1,
+        "n": 2,
+        "value": 0.5,
+        "na": null
       }
     },
     "totals": [

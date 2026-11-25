@@ -2,7 +2,7 @@
 
 These JSON files are actual SP06 `compare_routes.py` responses, generated offline from
 `eval/fixtures/compare/lines.json` using `eval/backend/tests/test_compare_routes.py`'s
-`routes` fixture, `test_app.AUTH` and its fake saved-document source. No external service
+`routes` fixture (refreshed against backend commit `a6157d9`), `test_app.AUTH` and its fake saved-document source. No external service
 or model was called. They contain synthetic source text from that existing fixture.
 
 | File | Endpoint suffix |
@@ -19,3 +19,7 @@ Preserve these payload structures when deriving display-state fixtures. In parti
 `line_accuracy`, and `macro_f1`; the heatmap has exactly 16 rows. Combo keys are opaque:
 these saved synthetic scenarios predate current `engine|model/tier/effort` keys. Popup
 `combos` is a keyed object, while the other endpoint projections use a descriptor array.
+
+Overview separates `header.progress` (saved scheduler counters, including Human units)
+from AI-only `coverage`; `leaderboard[].operational_best` contains the server’s
+failures/cost/time winner flags, including ties. The fixture text is synthetic.

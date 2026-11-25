@@ -31,6 +31,21 @@
     "dataset_id": "casaa-miti421-video2013",
     "sessions": 2,
     "repeats": 2,
+    "progress": {
+      "done_units": 0,
+      "total_units": 0,
+      "skipped_units": 0
+    },
+    "line_sessions": [
+      {
+        "session_id": "synthetic-s01",
+        "matched_lines": 5
+      },
+      {
+        "session_id": "synthetic-s02",
+        "matched_lines": 4
+      }
+    ],
     "label_coverage": {
       "counts": [
         "gi",
@@ -148,6 +163,11 @@
         "repeats": 2,
         "best": true,
         "na": null
+      },
+      "operational_best": {
+        "failures": true,
+        "cost": false,
+        "time": true
       }
     },
     {
@@ -199,6 +219,11 @@
         "na": {
           "reason": "no line-level output"
         }
+      },
+      "operational_best": {
+        "failures": true,
+        "cost": true,
+        "time": true
       }
     }
   ],

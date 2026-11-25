@@ -31,6 +31,25 @@ function Score({cell,of,skipped,count=false}:{cell:CompareCell|QualityCell;of:nu
  return <>{cell.na ? <span>n/a — {cell.na.reason}</span> : <span>{number(value)}</span>}<small>{cell.n} paired of {of}</small><Best show={!skipped && !cell.na && cell.best}/></>;
 }
 
+function LeaderScore({row,column,skipped,sessions}:{row:Leader;column:Column;skipped:boolean;sessions:number}) {
+ switch(column) {
+  case 'count': return <Score cell={row} of={row.of} skipped={skipped} count/>;
+  case 'fails': return <>
+   {row.failures.length ? row.failures.map(failure=><span key={failure.code}>{failure.code}: {failure.count}</span>) : <span>0</span>}
+   <Best show={!skipped && row.operational_best.failures}/>
+  </>;
+  case 'cost': return <>
+   <span>{row.cost.na ? `n/a — ${row.cost.na.reason}` : row.cost.per_run_usd===null ? 'n/a' : `$${row.cost.per_run_usd}`}</span>
+   <small>n={row.cost.n} runs · per run</small><Best show={!skipped && row.operational_best.cost}/>
+  </>;
+  case 'time': return <>
+   <span>{row.time.mean_seconds===null ? 'n/a' : `${row.time.mean_seconds} s`}</span>
+   <small>n={row.time.n} runs</small><Best show={!skipped && row.operational_best.time}/>
+  </>;
+  default: return <Score cell={row[column]} of={sessions} skipped={skipped}/>;
+ }
+}
+
 /** Overview displays the saved projection. Only leaderboard ordering happens here. */
 export function Overview({data,state,navigate,legend,runId}:CompareTabProps<CompareOverview>) {
  const human = data.has_human && data.verdict.length > 0;
@@ -56,7 +75,9 @@ export function Overview({data,state,navigate,legend,runId}:CompareTabProps<Comp
    <table className="overview-leaderboard" aria-label="Combo leaderboard"><thead><tr><th scope="col">Combo</th>{visible.map(column=><th key={column.key} scope="col" aria-sort={activeSort.key===column.key?(activeSort.descending?'descending':'ascending'):'none'}><button type="button" onClick={()=>changeSort(column)} onKeyDown={event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();changeSort(column);}}}>{column.label}</button></th>)}</tr></thead>
     <tbody>{rows.map(row=>{const entry=legend.find(item=>item.combo.combo_key===row.combo_key),isSkipped=skipped(row.combo_key);return <tr key={row.combo_key}>
      <th scope="row"><EvalLink state={drill(row.combo_key)} navigate={navigate}>{entry?.letter??row.combo_key}</EvalLink>{isSkipped&&<span> — skipped</span>}<small>{entry?.label??row.combo_key}</small></th>
-     {visible.map(column=><td key={column.key} data-label={column.label}>{column.key==='count' ? <Score cell={row} of={row.of} skipped={isSkipped} count/> : column.key==='fails' ? <>{row.failures.length ? row.failures.map(failure=><span key={failure.code}>{failure.code}: {failure.count}</span>) : <span>0</span>}</> : column.key==='cost' ? <><span>{row.cost.na?`n/a — ${row.cost.na.reason}`:row.cost.per_run_usd===null?'n/a':`$${row.cost.per_run_usd}`}</span><small>n={row.cost.n} runs · per run</small></> : column.key==='time' ? <><span>{row.time.mean_seconds===null?'n/a':`${row.time.mean_seconds} s`}</span><small>n={row.time.n} runs</small></> : <Score cell={row[column.key]} of={data.header.sessions} skipped={isSkipped}/>}</td>)}
+     {visible.map(column=><td key={column.key} data-label={column.label}>
+      <LeaderScore row={row} column={column.key} skipped={isSkipped} sessions={data.header.sessions}/>
+     </td>)}
     </tr>;})}</tbody>
    </table>
   </div>

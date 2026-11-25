@@ -25,9 +25,9 @@ export interface Operations {
 export interface Verdict {text:string;claims:{metric:string;combo:string;value:number;n:number}[]}
 export type MetricCells = Record<string,Record<string,CompareCell>>;
 export interface CompareOverview extends CompareCommon {
- header:{line_sessions?:{session_id:string;matched_lines:number|null}[];name:string|null;dataset_id:string|null;sessions:number;repeats:number;label_coverage:{counts:string[];globals:string[];line_labels:boolean}|null;coverage:CompareCoverage};
+ header:{progress:{done_units:number;total_units:number;skipped_units:number};line_sessions?:{session_id:string;matched_lines:number|null}[];name:string|null;dataset_id:string|null;sessions:number;repeats:number;label_coverage:{counts:string[];globals:string[];line_labels:boolean}|null;coverage:CompareCoverage};
  count_error:Record<string,CompareCell>;verdict:Verdict[];
- leaderboard:(CompareCell & Operations & {combo_key:string;globals_within_1:QualityCell;line_accuracy:QualityCell;macro_f1:QualityCell})[];
+ leaderboard:(CompareCell & Operations & {combo_key:string;operational_best:{failures:boolean;cost:boolean;time:boolean};globals_within_1:QualityCell;line_accuracy:QualityCell;macro_f1:QualityCell})[];
  heatmap:{rows:{id:string;kind:'count'|'global'|'ratio'|'total'}[];human:Record<string,Observed & {values:{session_id:string;value:number}[]}>;cells:MetricCells};
  cohorts:Record<string,{paired:number;of:number}>;footnotes:string[];
 }
@@ -86,6 +86,12 @@ function checked<T>(value:unknown, kind:'overview'|'deep'|'analysis'|'reasoning'
  if(kind==='reasoning' && value.next_cursor !== null && typeof value.next_cursor !== 'string') throw new ComparePayloadError();
  if((kind==='lines' || kind==='turn') && typeof value.session_id !== 'string') throw new ComparePayloadError();
  if(kind==='turn' && (typeof value.turn_id !== 'string' || typeof value.text !== 'string')) throw new ComparePayloadError();
+ if(kind==='overview') {
+  const header=value.header as Record<string,unknown>;
+  const progress=header.progress;
+  if(!object(progress) || ['done_units','total_units','skipped_units'].some(key=>typeof progress[key]!=='number'||!Number.isFinite(progress[key]))) throw new ComparePayloadError();
+  if((value.leaderboard as unknown[]).some(row=>!object(row)||!object(row.operational_best)||['failures','cost','time'].some(key=>typeof (row.operational_best as Record<string,unknown>)[key]!=='boolean'))) throw new ComparePayloadError();
+ }
  if(kind==='overview' && object(value.header) && value.header.line_sessions!==undefined && (!Array.isArray(value.header.line_sessions) || value.header.line_sessions.some(row=>!object(row)||typeof row.session_id!=='string'||(row.matched_lines!==null&&(typeof row.matched_lines!=='number'||!Number.isFinite(row.matched_lines)))))) throw new ComparePayloadError();
  if(kind==='overview' && (!object(value.heatmap) || !Array.isArray(value.heatmap.rows) || !object(value.heatmap.cells) || !object(value.heatmap.human))) throw new ComparePayloadError();
  return value as T;

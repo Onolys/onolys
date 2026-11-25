@@ -82,3 +82,28 @@ it('shows a partial-label reason as n/a rather than a zero headline',()=>{
  Object.assign(data.heatmap.cells.gi[key],{value:null,off:null,bias:null,n:0,best:false,within_tolerance:null,na:{reason:'not labeled in this dataset'}});show(data);
  expect(cell('gi').querySelector('strong')?.textContent).toBe('n/a');expect(cell('gi').textContent).toContain('not labeled in this dataset');expect(cell('gi').textContent).toContain('n=0');
 });
+
+it('prints tied operational best flags verbatim and suppresses skipped rows',()=>{
+ const data=sample();
+ data.leaderboard.forEach(row=>{row.operational_best={failures:true,cost:true,time:true};});
+ // Deliberately different values: the UI must trust the flags, not choose minima.
+ data.leaderboard[0].cost.per_run_usd=99;
+ show(data);
+ const rows=within(table()).getAllByRole('row').slice(1);
+ rows.forEach(row=>{
+  for(const label of ['Fails','Cost','Time']) expect(within(row.querySelector(`[data-label="${label}"]`) as HTMLElement).getByText('★ best')).toBeTruthy();
+ });
+ cleanup();
+ data.leaderboard[0].na={reason:'skipped: provider unavailable'};
+ show(data);
+ const skipped=within(table()).getAllByRole('row').find(row=>row.textContent?.includes('— skipped'))!;
+ expect(within(skipped).queryByText('★ best')).toBeNull();
+});
+it('does not infer an operational winner when the server flags are false',()=>{
+ const data=sample();
+ data.leaderboard.forEach(row=>{row.operational_best={failures:false,cost:false,time:false};});
+ show(data);
+ within(table()).getAllByRole('row').slice(1).forEach(row=>{
+  for(const label of ['Fails','Cost','Time']) expect(row.querySelector(`[data-label="${label}"]`)?.textContent).not.toContain('best');
+ });
+});
