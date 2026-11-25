@@ -15,6 +15,7 @@ from onolys_eval.gold import COUNT_IDS, GLOBAL_IDS
 from onolys_eval.metrics import PartialScores, Scores, aggregate, compare
 from pydantic import ConfigDict, Field, StrictInt
 
+from onolys_eval_backend import eval_view
 from onolys_eval_backend.eval_scheduler import ensure_tick
 from onolys_eval_backend.eval_sessions import SessionImportError
 from onolys_eval_backend.matrix import RunTooLarge, SelectionError, combo_key
@@ -26,7 +27,6 @@ from onolys_eval_backend.runs import (
     Selection,
     create_run,
 )
-from onolys_eval_backend.storage import load_output
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -38,6 +38,7 @@ SUMMARY_FIELDS = (
     "status",
     "created_at",
     "cancel_requested",
+    "cancelled_at",
     "input",
     "engines",
     "presets",
@@ -48,6 +49,7 @@ SUMMARY_FIELDS = (
     "language",
     "coded_span",
     "total_units",
+    "skipped_units",
     "completed_units",
     "done_units",
     "failed_units",
@@ -110,6 +112,8 @@ def run_summary(rid, run):
     legacy = is_legacy(run)
     keys = _run_keys(run)
     out = {"run_id": rid, **{key: run.get(key) for key in SUMMARY_FIELDS}}
+    out["skipped_units"] = run.get("skipped_units") or 0
+    out["provider_skips"] = eval_view.provider_skips(run)
     if out["resolved_combos"] is None:
         out["resolved_combos"] = (run.get("saved_config") or {}).get("resolved_combos")
     if legacy:
@@ -301,80 +305,32 @@ def history(
     }
 
 
-def _valid_output_ref(run_id, unit_id, unit):
-    ref = unit.get("output_ref")
-    legacy = f"runs/{run_id}/{unit_id}.json"
-    owner = unit.get("lease_owner")
-    attempt = f"runs/{run_id}/{unit_id}/{owner}.json"
-    return ref == legacy or (isinstance(owner, str) and _valid_id(owner) and ref == attempt)
-
-
-def _public_unit(run_id, unit_id, unit):
-    spilled = _valid_output_ref(run_id, unit_id, unit)
-    return {
-        "unit_id": unit_id,
-        **{
-            key: value
-            for key, value in unit.items()
-            if key != "output_ref" and not (key == "output" and value is None and spilled)
-        },
-        "combo_key": _unit_key(unit),
-    }
-
-
-MAX_INLINE_DETAIL_BYTES = 8 * 1024 * 1024
-
-
-def _bounded_units(run_id, units):
-    """Inline outputs only while the response stays small; the rest load per unit.
-
-    A unit whose output is omitted is exactly like a spilled one: clients fetch
-    /units/{id}/output. Keeps run detail well under the 32 MiB Cloud Run response cap.
-    """
-    out, budget = [], MAX_INLINE_DETAIL_BYTES
-    for uid, unit in units.items():
-        public = _public_unit(run_id, uid, unit)
-        output = public.get("output")
-        if output is not None:
-            size = len(json.dumps(output, separators=(",", ":"), ensure_ascii=False).encode())
-            if size > budget:
-                public.pop("output")
-            else:
-                budget -= size
-        out.append(public)
-    return out
-
-
 @router.get("/v1/runs/{run_id}")
 def run_detail(request: Request, run_id: str):
-    repository = request.app.state.services.repository
-    run = _run(repository, run_id)
+    services = request.app.state.services
+    run = _run(services.repository, run_id)
     try:  # safety net only: a stalled tick chain is restarted; nothing else needs GET to finish
-        ensure_tick(request.app.state.services, run_id, run)
+        ensure_tick(services, run_id, run)
     except Exception:
         logger.exception("tick_reenqueue_failed", extra={"eval_run_id": run_id})
-    units = repository.list_units(run_id)
+    units = eval_view.build_units(services, run)
+    # Outputs are never inline (clients fetch /units/{id}/output). Compare sees each cell's
+    # final attempt only; earlier attempts stay in `units` (`final: false`).
+    final = {u["unit_id"]: u for u in units if u["final"]}
     return {
         **run_summary(run_id, run),
-        "units": _bounded_units(run_id, units),
-        "compare": build_compare(run, units),
+        "units": units,
+        "compare": build_compare(run, final),
+        "provider_cooldowns": eval_view.provider_cooldowns(services, run),
     }
 
 
 @router.get("/v1/runs/{run_id}/units/{unit_id}/output")
 def unit_output(request: Request, run_id: str, unit_id: str):
     services = request.app.state.services
-    _run(services.repository, run_id)
-    unit = services.repository.get_unit(run_id, unit_id) if _valid_id(unit_id) else None
-    if unit is None:
-        raise HTTPException(404, "Unit output not found.")
-    # Never accept arbitrary paths, URLs, or another run's saved output reference.
-    if unit.get("output_ref") and not _valid_output_ref(run_id, unit_id, unit):
-        raise HTTPException(404, "Unit output not found.")
-    try:
-        output = load_output(services.bucket, unit)
-    except (FileNotFoundError, ValueError):
-        raise HTTPException(404, "Unit output not found.") from None
+    run = _run(services.repository, run_id)
+    # Only units of this eval run resolve: a run id from another group, or any path, is a 404.
+    output = eval_view.output_for(services, run, unit_id) if _valid_id(unit_id) else None
     if not isinstance(output, dict):
         raise HTTPException(404, "Unit output not found.")
     return output
