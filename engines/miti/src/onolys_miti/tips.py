@@ -9,8 +9,9 @@ Code then checks every proposal: the item is in the MITI definition, the quote i
 clinician turn (core `locate`) and replaced by the real substring with offsets, the alternative
 is non-empty, at most two sentences and not a copy of the quote, at most two tips per item and one
 per (item, turn), and every text passes the tone lint. The first five valid tips are kept. Fewer
-than three valid triggers one retry that lists the violations (codes, plus the length limits for `field_too_long`; never the offending
-text); still fewer ships fewer with `fewer_tips`; a failed call ships none with `tips_failed`.
+than three valid triggers one retry that lists the violations (codes, plus the length limits
+for `field_too_long`; never the offending text); still fewer ships fewer with `fewer_tips`; a
+failed call ships none with `tips_failed`.
 Model choice, limits and sampling belong to the route.
 """
 

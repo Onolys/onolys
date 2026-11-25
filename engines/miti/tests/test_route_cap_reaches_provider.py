@@ -1,14 +1,13 @@
 """The route's output cap (not a hard-coded engine value) reaches litellm for every miti call."""
 
 import asyncio
-import json
 from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 from conftest import install_demo
-from onolys_engine_core.llm import LiteLLMClient, LLMConfig, LLMError, LLMResult
+from onolys_engine_core.llm import LiteLLMClient, LLMConfig, LLMError
 from onolys_engine_core.llm.routes import load_registry, resolve_preset
 from onolys_engine_core.transcript import Turn
 

@@ -9,7 +9,8 @@ applies a MITI cap only where the item declares `caps[]` (`source: "capped"`, `r
 A truncated or invalid response (`LLMBadOutput`) is retried once, then the run fails.
 
 Token limits, timeouts, sampling and model choice belong to the route (core); the request carries
-only the MITI `params.globals_max_tokens` when set (core clamps it); otherwise the route cap applies.
+only the MITI `params.globals_max_tokens` when set (core clamps it); otherwise the route cap
+applies.
 """
 
 import json

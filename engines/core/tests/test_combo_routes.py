@@ -25,7 +25,7 @@ def base():
 
 @pytest.mark.parametrize("effort", sorted(EFFORTS))
 def test_cap_is_the_model_max_for_every_effort(base, effort):
-    for provider, model in load_models(MODELS).items():
+    for _provider, model in load_models(MODELS).items():
         tier = next(iter(model.tiers))
         out = combo_routes(base, model, tier, effort)
         assert {r.max_output_tokens for r in out.values()} == {model.max_output_tokens}
