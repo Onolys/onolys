@@ -93,6 +93,7 @@
         "type": "object"
       },
       "AudioUploadRequest": {
+        "additionalProperties": false,
         "properties": {
           "content_type": {
             "default": "",
@@ -316,6 +317,7 @@
         "type": "object"
       },
       "ConfirmRequest": {
+        "additionalProperties": false,
         "properties": {
           "clinician_speaker": {
             "maxLength": 200,
@@ -379,6 +381,7 @@
         "type": "object"
       },
       "CreateInterviewRequest": {
+        "additionalProperties": false,
         "properties": {
           "client": {
             "anyOf": [
@@ -418,6 +421,7 @@
         "type": "object"
       },
       "CreateSessionRequest": {
+        "additionalProperties": false,
         "properties": {
           "client": {
             "anyOf": [
@@ -535,6 +539,7 @@
         "type": "object"
       },
       "EndInterviewRequest": {
+        "additionalProperties": false,
         "properties": {
           "client": {
             "anyOf": [
@@ -941,6 +946,7 @@
         "type": "object"
       },
       "RatingRequest": {
+        "additionalProperties": false,
         "properties": {
           "card": {
             "additionalProperties": true,
@@ -1133,6 +1139,7 @@
         "type": "object"
       },
       "ResetRequest": {
+        "additionalProperties": false,
         "properties": {
           "email": {
             "maxLength": 254,
@@ -1188,6 +1195,7 @@
         "type": "object"
       },
       "RunRequest": {
+        "additionalProperties": false,
         "properties": {
           "coded_span": {
             "anyOf": [
@@ -2257,6 +2265,7 @@
         "type": "object"
       },
       "VerificationRequest": {
+        "additionalProperties": false,
         "properties": {
           "next": {
             "anyOf": [

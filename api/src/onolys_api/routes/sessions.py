@@ -8,7 +8,7 @@ from uuid import uuid4
 
 from fastapi import APIRouter, Depends, Header, Query, Request, Response
 from onolys_miti.result import CodedSpan
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from onolys_api import config, logs
 from onolys_api.adapters.error_map import kind_for_code
@@ -55,6 +55,8 @@ User = Annotated[AuthUser, Depends(current_user)]
 
 
 class CreateSessionRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     coded_span: CodedSpan | None = Field(
         None, description="Half-open milliseconds or zero-based turn range; null codes all turns."
     )

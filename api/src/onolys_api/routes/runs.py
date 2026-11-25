@@ -16,7 +16,7 @@ from uuid import uuid4
 
 from fastapi import APIRouter, Depends, Path, Request, Response
 from onolys_miti.result import CodedSpan
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from onolys_api import logs
 from onolys_api.adapters.error_map import kind_for_code
@@ -58,6 +58,8 @@ RERUN_STATES = ("awaiting_input",)
 
 
 class RunRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     coded_span: CodedSpan | None = Field(
         None, description="Half-open milliseconds or zero-based turn range; null codes all turns."
     )

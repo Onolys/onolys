@@ -13,7 +13,7 @@ from typing import Annotated, Any
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, Request
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from onolys_api.auth.deps import AuthUser, current_user
 from onolys_api.errors import ApiError, ErrorDetail, ErrorResponse
@@ -36,6 +36,8 @@ INVALID = "The rating card is not valid (shape or length limits)."
 
 
 class RatingRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     final: bool = Field(description="`false` autosaves the draft; `true` submits a new revision")
     no_rating: bool = Field(False, description='With `final`: submit as a "no rating" revision')
     card: dict[str, Any] = Field(description="The rating card (`rating.schema.json`)")

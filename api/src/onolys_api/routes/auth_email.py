@@ -8,7 +8,7 @@ import logging
 from typing import Annotated
 
 from fastapi import APIRouter, BackgroundTasks, Depends, Request
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from onolys_api import logs
 from onolys_api.adapters.base import AdapterError
@@ -24,12 +24,16 @@ UnverifiedOkUser = Annotated[AuthUser, Depends(current_user_unverified_ok)]
 
 
 class VerificationRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     next: str | None = Field(
         None, max_length=512, description="Optional in-app path to continue to after verifying."
     )
 
 
 class ResetRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     email: str = Field(min_length=3, max_length=254)
 
 

@@ -11,7 +11,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, Request, Response
 from onolys_engine_core.transcript_v1 import TranscriptV1
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from onolys_api.auth.deps import AuthUser, current_user
 from onolys_api.errors import ApiError, ErrorResponse
@@ -43,6 +43,8 @@ class SpeakersView(BaseModel):
 
 
 class ConfirmRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     clinician_speaker: str = Field(min_length=1, max_length=200)
 
 
