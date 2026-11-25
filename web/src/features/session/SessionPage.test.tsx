@@ -390,6 +390,35 @@ describe("session page: failure cards (PRD R6)", () => {
     return { sid, card: await screen.findByRole("alert") };
   };
 
+  it("a failed session offers Delete (every kind), which confirms and returns to the list", async () => {
+    const sid = create();
+    const { router } = open(sid);
+    await ready();
+    act(() => mockEmitter.emit(sid, withKind(sid, "upstream_unavailable", { error_kind: "transient", retries_left: 2 })));
+    await screen.findByRole("alert");
+    await userEvent.click(screen.getByRole("button", { name: "Delete session" }));
+    await userEvent.click(screen.getByRole("button", { name: "Delete permanently" }));
+    await waitFor(() => expect(here(router)).toBe("/sessions"));
+  });
+
+  it("a permanently failed session also offers Delete", async () => {
+    const { card } = await show({ error_kind: "permanent_internal" }, "internal");
+    expect(card).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Delete session" })).toBeInTheDocument();
+  });
+
+  it("the in-progress steps view never offers Delete", async () => {
+    const sid = create();
+    toAwaiting(sid);
+    open(sid);
+    await ready();
+    for (const state of ["created", "validating", "transcribing", "awaiting_input", "running"] as const) {
+      act(() => mockEmitter.emit(sid, { ...failedDoc(sid, "x"), state, error_code: null }));
+      await screen.findByRole("list", { name: "Progress" });
+      expect(screen.queryByRole("button", { name: "Delete session" })).not.toBeInTheDocument();
+    }
+  });
+
   it("transient with retries left: message, not-counted sentence, Reference, disabled Retry (5)", async () => {
     const { sid, card } = await show({ error_kind: "transient", retries_left: 2, counted: false });
     expect(card).toHaveTextContent(/busy right now/i);
@@ -748,20 +777,34 @@ describe("session page: cancel (04-cancel R9)", () => {
     expect(await screen.findByText("Session cancelled. This counted toward your limit.")).toBeInTheDocument();
   });
 
-  it("the cancelled view has no deletion, rating, speaker gate, retry or cancel link", async () => {
+  it("the cancelled view offers Delete, and no rating, speaker gate, retry or cancel link", async () => {
     const sid = create();
     toAwaiting(sid);
     open(sid);
     await ready();
     await userEvent.click(confirmBtn(await confirm()));
     await screen.findByRole("heading", { name: "Cancelled" });
-    expect(screen.queryByRole("button", { name: "Delete session" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Delete session" })).toBeInTheDocument();
     for (const name of [/cancel session/i, /start/i, /retry/i, /submit/i, /confirm/i]) {
       expect(screen.queryByRole("button", { name })).not.toBeInTheDocument();
     }
     expect(screen.queryByRole("heading", { name: /rating|speaker/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("list", { name: "Progress" })).not.toBeInTheDocument();
     expect(screen.queryByText(/retry/i)).not.toBeInTheDocument();
+  });
+
+  it("deleting a cancelled session confirms, calls DELETE and returns to the list", async () => {
+    const sid = create();
+    toAwaiting(sid);
+    const { router } = open(sid);
+    await ready();
+    await userEvent.click(confirmBtn(await confirm()));
+    await screen.findByRole("heading", { name: "Cancelled" });
+    await userEvent.click(screen.getByRole("button", { name: "Delete session" }));
+    expect(screen.getByRole("alertdialog", { name: "Delete this session?" })).toBeVisible();
+    await userEvent.click(screen.getByRole("button", { name: "Delete permanently" }));
+    await waitFor(() => expect(here(router)).toBe("/sessions"));
+    expect(() => mockBackend.getSession(UID, sid)).toThrow();
   });
 
   it("an omitted counted shows no sentence", async () => {

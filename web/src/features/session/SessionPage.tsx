@@ -20,6 +20,7 @@ import { blockingPeriod, formatBlockingReset } from "../usage/usage";
 import { USAGE_KEY, useUsage } from "../usage/useUsage";
 import { CancelLink, isCancellable } from "./CancelLink";
 import { CancelledView } from "./CancelledView";
+import { DeleteSession } from "./DeleteSession";
 import { ErrorCard } from "./ErrorCard";
 import { RetryButton } from "./RetryButton";
 import { UploadFailedView } from "./UploadFailedView";
@@ -160,7 +161,10 @@ function SessionView({ id }: { id: string }) {
       <h1 className={H1}>{heading}</h1>
 
       {cancelled ? (
-        <CancelledView counted={cancelledCounted} />
+        <>
+          <CancelledView counted={cancelledCounted} />
+          <DeleteSession id={id} onBusyChange={(busy) => { quiet.current = busy; }} />
+        </>
       ) : null}
 
       {cancelled ? null : <div className="grid gap-1 font-semibold" role="status" aria-live="polite">
@@ -261,6 +265,7 @@ function SessionView({ id }: { id: string }) {
               )}
             </ErrorCard>
           ) : null}
+          {failure ? <DeleteSession id={id} onBusyChange={(busy) => { quiet.current = busy; }} /> : null}
 
           {retryError ? <ErrorCard code={retryError.code} reference={retryError.requestId} /> : null}
           {runError ? <ErrorCard code={runError.code} reference={runError.requestId} resetsAt={resetsAt} /> : null}
