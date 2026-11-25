@@ -177,6 +177,20 @@ class SessionCancel(BaseModel):
     at: datetime
 
 
+class EvalGold(BaseModel):
+    sha256: str
+    path: str
+
+
+class EvalSessionInfo(BaseModel):
+    """Eval provenance of a session (05 R3). Never part of a public view or the OpenAPI schema."""
+
+    dataset_id: str | None = None
+    dataset_session_id: str
+    source: str
+    gold: EvalGold | None = None
+
+
 class SessionDoc(Doc):
     uid: str
     title: str | None = None
@@ -207,6 +221,13 @@ class SessionDoc(Doc):
     stage_started_at: datetime | None = None  # entered this state; other writes never bump it
     latest_report_version: int | None = None
     discard_code: str | None = None  # tombstone of `discard_failed_upload` (state is `deleting`)
+    eval: EvalSessionInfo | None = None  # eval provenance; absent on prod sessions
+
+    def to_store(self) -> dict[str, Any]:
+        d = super().to_store()
+        if d.get("eval") is None:
+            d.pop("eval", None)  # a prod session document has no `eval` key at all
+        return d
 
 
 class SessionStatusDoc(Doc):

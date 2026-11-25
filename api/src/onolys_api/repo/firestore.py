@@ -800,6 +800,27 @@ class FirestoreRepo:
             key=lambda r: (r.started or utcnow(), r.run_id),
         )
 
+    def get_runs(self, uid: str, sid: str, run_ids: list[str]) -> list[RunDoc]:
+        """The requested runs of one session, in request order; absent ids are skipped."""
+        sref = self._session_ref(uid, sid)  # NotFoundError for a foreign/missing session
+        refs = [sref.collection("runs").document(r) for r in dict.fromkeys(run_ids)]
+        snaps = {s.id: s for s in self._client.get_all(refs)} if refs else {}
+        return [_load(RunDoc, snaps[r]) for r in dict.fromkeys(run_ids) if snaps[r].exists]
+
+    def delete_run_data(self, uid: str, sid: str, run_id: str) -> None:
+        """Delete one run's RunDoc, its ReportDoc (id == run id) and the report blob pointer's
+        object. Idempotent; the session, transcripts and other runs are untouched. Output blobs
+        under `{uid}/{sid}/runs/{run_id}/` are the eval caller's to delete."""
+        sref = self._session_ref(uid, sid)
+        rep_ref = sref.collection("reports").document(run_id)
+        snap = rep_ref.get()
+        if snap.exists:
+            pointer = (snap.to_dict() or {}).get("pointer")
+            if pointer:
+                self._blobs.delete(pointer["key"])
+            rep_ref.delete()
+        sref.collection("runs").document(run_id).delete()
+
     def get_run_by_id(self, uid: str, run_id: str) -> RunDoc:
         q = _uid_query(self._client.collection_group("runs"), uid)
         for snap in q.where(filter=FieldFilter("run_id", "==", run_id)).limit(1).stream():

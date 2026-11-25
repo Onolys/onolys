@@ -1221,3 +1221,72 @@ def test_discard_failed_upload_refuses_a_foreign_session(repo):
     with pytest.raises(NotFoundError):
         repo.discard_failed_upload("someone-else", sid, "audio_unreadable")
     assert repo.get_session(uid, sid)
+
+
+# ---- 05 Task 1: eval hooks (additive; prod never calls them) ----
+
+
+def _mk_run(uid, sid, run_id):
+    return RunDoc(
+        change_goal="", clinician_speaker="S1", language="en", transcript_sha256="h",
+        uid=uid, session_id=sid, run_id=run_id, started=datetime.now(UTC),
+    )  # fmt: skip
+
+
+def test_get_runs_returns_only_requested_ids(repo):
+    uid, sid = seed(repo)
+    for rid in ("ra", "rb", "rc"):
+        repo.create_run(uid, sid, rid, _mk_run(uid, sid, rid))
+    got = repo.get_runs(uid, sid, ["rc", "ra", "missing"])
+    assert [r.run_id for r in got] == ["rc", "ra"]  # request order; absent ids are skipped
+    assert repo.get_runs(uid, sid, []) == []
+    with pytest.raises(NotFoundError):
+        repo.get_runs(new_ids()[0], sid, ["ra"])  # foreign uid
+
+
+def test_delete_run_data_removes_run_report_and_pointer_only_for_that_run(repo, blobs):
+    uid, sid = seed(repo)
+    for rid in ("ra", "rb"):
+        repo.create_run(uid, sid, rid, _mk_run(uid, sid, rid))
+    big = {"blob": "y" * (MAX_INLINE_BYTES + 10)}
+    for v, rid in enumerate(("ra", "rb"), start=1):
+        repo.put_report(uid, sid, rid, ReportDoc(version=v, run_id=rid, report=big))
+    keys = {rid: repo.get_report(uid, sid, rid, resolve=False).pointer.key for rid in ("ra", "rb")}
+    assert all(blobs.exists(k) for k in keys.values())
+    repo.delete_run_data(uid, sid, "ra")
+    with pytest.raises(NotFoundError):
+        repo.get_run(uid, sid, "ra")
+    with pytest.raises(NotFoundError):
+        repo.get_report(uid, sid, "ra")
+    assert not blobs.exists(keys["ra"])
+    assert repo.get_run(uid, sid, "rb").run_id == "rb"  # other run untouched
+    assert repo.get_report(uid, sid, "rb").report == big and blobs.exists(keys["rb"])
+    repo.get_session(uid, sid)  # the session stays
+
+
+def test_delete_run_data_is_idempotent_and_handles_run_without_report(repo):
+    uid, sid = seed(repo)
+    repo.create_run(uid, sid, "ra", _mk_run(uid, sid, "ra"))
+    repo.delete_run_data(uid, sid, "ra")
+    repo.delete_run_data(uid, sid, "ra")  # resumable: second call is a no-op
+    repo.delete_run_data(uid, sid, "never-existed")
+    assert repo.list_runs(uid, sid) == []
+    with pytest.raises(NotFoundError):
+        repo.delete_run_data(new_ids()[0], sid, "ra")  # foreign uid
+
+
+def test_prod_session_stores_no_eval_key_and_eval_session_roundtrips(repo):
+    uid, sid = seed(repo)
+    assert "eval" not in SessionDoc(uid=uid).to_store()
+    assert repo.get_session(uid, sid).eval is None
+    from onolys_api.repo.models import EvalGold, EvalSessionInfo
+
+    info = EvalSessionInfo(
+        dataset_id="d", dataset_session_id="ds", source="dataset",
+        gold=EvalGold(sha256="ab", path="gold/ab.json"),
+    )  # fmt: skip
+    uid2, sid2 = new_ids()
+    repo.create_session(
+        uid2, sid2, SessionDoc(uid=uid2, eval=info), SessionStatusDoc(uid=uid2)
+    )
+    assert repo.get_session(uid2, sid2).eval == info

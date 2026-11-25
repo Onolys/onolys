@@ -590,6 +590,25 @@ class FakeRepo:
             key=lambda r: (r.started or utcnow(), r.run_id),
         )
 
+    def get_runs(self, uid: str, sid: str, run_ids: list[str]) -> list[RunDoc]:
+        self._own(uid, sid)
+        out = []
+        for r in dict.fromkeys(run_ids):
+            d = self._get(f"sessions/{sid}/runs/{r}")
+            if d is not None:
+                out.append(self._load(RunDoc, r, d))
+        return out
+
+    def delete_run_data(self, uid: str, sid: str, run_id: str) -> None:
+        self._own(uid, sid)
+        with self._claim_lock:
+            rep = self._get(f"sessions/{sid}/reports/{run_id}")
+            if rep is not None:
+                if rep.get("pointer"):
+                    self._blobs.delete(rep["pointer"]["key"])
+                del self._docs[f"sessions/{sid}/reports/{run_id}"]
+            self._docs.pop(f"sessions/{sid}/runs/{run_id}", None)
+
     def get_run_by_id(self, uid: str, run_id: str) -> RunDoc:
         for path, d in self._docs.items():
             parts = path.split("/")
