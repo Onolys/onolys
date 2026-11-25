@@ -47,7 +47,7 @@ for base in [Path('/app'), *site.glob('onolys_*')]:
 print('ok no admin backend, datasets, uploads, runs, fixtures or recordings in image')
 
 env = dict(ENV='staging', FIRESTORE_DATABASE='staging', EVAL_ALLOWED_EMAILS='test@example.com',
-           AUTH_PROJECT='demo-project', DATASETS_BUCKET='synthetic-test', EVAL_MODE='true',
+           AUTH_PROJECT='demo-project', GCP_PROJECT='demo-project', AUDIO_BUCKET='synthetic-audio', DATASETS_BUCKET='synthetic-test', EVAL_MODE='true',
            UID_HMAC_KEY='ci-hmac-key', REGION='us-central1', WORKER_URL='https://worker.test.run.app',
            TASKS_QUEUE='projects/demo-project/locations/us-central1/queues/eval-runs',
            TASKS_SA='tasks@demo-project.iam.gserviceaccount.com',
@@ -104,8 +104,9 @@ PY
 
 # Actual server process and HTTP anonymous gate, with dummy non-secret configuration.
 docker run -d --name "$NAME" -p "127.0.0.1:$PORT:8080" \
+  -e ENV=staging -e FIRESTORE_DATABASE=staging \
   -e EVAL_ALLOWED_EMAILS=test@example.com -e AUTH_PROJECT=demo-project \
-  -e DATASETS_BUCKET=synthetic-test -e EVAL_MODE=true -e UID_HMAC_KEY=ci-hmac-key -e REGION=us-central1 -e WORKER_URL=https://worker.test.run.app \
+  -e GCP_PROJECT=demo-project -e AUDIO_BUCKET=synthetic-audio -e DATASETS_BUCKET=synthetic-test -e EVAL_MODE=true -e UID_HMAC_KEY=ci-hmac-key -e REGION=us-central1 -e WORKER_URL=https://worker.test.run.app \
   -e TASKS_QUEUE=projects/demo-project/locations/us-central1/queues/eval-runs \
   -e TASKS_SA=tasks@demo-project.iam.gserviceaccount.com \
   -e SERVICE_URL=https://test.run.app -e PROD_ENGINE=miti -e DEFAULT_PRESET=default \
