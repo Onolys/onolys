@@ -1,0 +1,16 @@
+environment       = "staging"
+project           = "onolys-staging"
+hosting_site_id   = "onolys-staging-app"
+audio_bucket_name = "onolys-staging-audio"
+auth_project      = "onolys-staging"
+manage_identity   = true
+# Existing production workflow provenance resolver: reads staging only.
+cloud_run_reader_members = ["serviceAccount:deployer-staging@onolys.iam.gserviceaccount.com"]
+artifact_registry_reader_members = [
+  "serviceAccount:deployer-staging@onolys.iam.gserviceaccount.com",
+  "serviceAccount:deployer-prod@onolys.iam.gserviceaccount.com",
+  "serviceAccount:service-1054076260967@serverless-robot-prod.iam.gserviceaccount.com",
+]
+app_base_url = "https://onolys-staging-app.web.app"
+# Enable only after seeding resend-api-key-staging and validation:
+resend_secret_wired = false

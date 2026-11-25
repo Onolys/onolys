@@ -1,0 +1,2 @@
+bucket = "onolys-staging-tfstate"
+prefix = "environment"

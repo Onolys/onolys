@@ -1,0 +1,8 @@
+# REFERENCE ONLY: applies to the EXISTING legacy infra/ root, not isolated-environment/.
+# Production keeps project ID onolys (display name onolys-prod), existing resources
+# and state. Never clean-apply this file, move state, or re-create production.
+# Preserve ALL existing operator tfvars and deployed commit SHAs when reviewing.
+project = "onolys"
+region  = "us-central1"
+# Existing root contains staging/eval legacy definitions too: do not apply a full
+# legacy plan as a migration. Production root/state separation is a later review.

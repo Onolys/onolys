@@ -7,3 +7,5 @@ How is this implemented? Private implementation details.
 - [llm-client.md](llm-client.md): the one interface to every model call.
 - [logging-and-phi.md](logging-and-phi.md): what may be logged.
 - [infra-staging-first-apply.md](infra-staging-first-apply.md): notes from the first staging apply of the infrastructure.
+
+- [isolated-environments.md](isolated-environments.md): separate staging/eval project roots, state bootstrap, imports and rollout prerequisites.

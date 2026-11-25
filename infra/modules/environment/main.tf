@@ -20,7 +20,7 @@ resource "google_firestore_database" "db" {
 # --- Audio bucket (PRD R6) ---
 resource "google_storage_bucket" "audio" {
   project                     = var.project
-  name                        = "onolys-audio-${var.env}"
+  name                        = coalesce(var.audio_bucket_name, "onolys-audio-${var.env}")
   location                    = var.region
   uniform_bucket_level_access = true
   public_access_prevention    = "enforced"
@@ -247,4 +247,12 @@ resource "google_storage_bucket_iam_member" "stt_agent_viewer" {
   bucket = google_storage_bucket.audio.name
   role   = "roles/storage.objectViewer"
   member = "serviceAccount:${google_project_service_identity.speech.email}"
+  dynamic "condition" {
+    for_each = var.speech_object_prefix != null ? [var.speech_object_prefix] : []
+    content {
+      title       = "speech-audio-prefix"
+      description = "Speech reads only this environment's configured upload prefix"
+      expression  = "resource.name.startsWith('projects/_/buckets/${google_storage_bucket.audio.name}/objects/${condition.value}')"
+    }
+  }
 }

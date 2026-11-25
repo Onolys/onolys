@@ -10,7 +10,7 @@ locals {
     { name = "GOOGLE_CLOUD_PROJECT", value = var.project },
     { name = "REGION", value = var.region },
     { name = "FIRESTORE_DATABASE", value = var.database_id },
-    { name = "AUTH_PROJECT", value = var.project },
+    { name = "AUTH_PROJECT", value = coalesce(var.auth_project, var.project) },
     { name = "CORS_ORIGINS", value = join(",", var.cors_origins) },
     { name = "VOICE_PROVIDERS_FILE", value = "config/${local.runtime_env}/voice_providers.yaml" },
     { name = "ADAPTERS", value = "real" },

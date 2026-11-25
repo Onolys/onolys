@@ -99,6 +99,15 @@ def test_api_grants_identical_to_origin_main():
         cur = (MOD / rel).read_text()
         for t in GRANT_TYPES:
             o, c = blocks(old, t), blocks(cur, t)
+            # The optional prefix condition is absent for legacy defaults; compare
+            # the unchanged grant after validating the condition's explicit gate.
+            if rel == "main.tf" and t == "google_storage_bucket_iam_member":
+                for grants in (o, c):
+                    body = grants.get("stt_agent_viewer", "")
+                    if '\n  dynamic "condition"' in body:
+                        assert 'var.speech_object_prefix != null ? [var.speech_object_prefix] : []' in body
+                        assert "/objects/${condition.value}" in body
+                        grants["stt_agent_viewer"] = body.split('\n  dynamic "condition"')[0]
             o = {k: v for k, v in o.items() if k in c}  # grants retired on this branch drop out of the comparison
             assert o == {k: c.get(k) for k in o}, f"{rel}: {t} grants changed vs origin/main"
 
