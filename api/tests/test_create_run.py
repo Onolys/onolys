@@ -5,7 +5,9 @@ nothing; eval starts from report_ready/failed outside the caps; misuse raises; `
 # ruff: noqa: F811
 
 import logging
+import sys
 from types import SimpleNamespace
+from uuid import uuid4
 
 import pytest
 from test_first_run import (
@@ -23,6 +25,12 @@ from onolys_api.routes.runs import EvalDisabled, RunRequest, create_run
 
 pytestmark = pytest.mark.unit
 UID = "u-create-run"
+
+
+@pytest.fixture(autouse=True)
+def _unique_uid(monkeypatch):
+    """The emulator persists across tests: a shared uid leaks `active_runs` slots between them."""
+    monkeypatch.setattr(sys.modules[__name__], "UID", f"u-create-run-{uuid4().hex}")
 INFO = EvalRunInfo(
     eval_run_id="e1", combo_key="c", repeat=0, engine="miti",
     resolved_route={"litellm_id": "x/y"}, engine_version="v1",
@@ -99,7 +107,7 @@ def test_prod_run_doc_has_no_eval_key(repo):  # review M1: no `eval: null` on pr
 def test_first_run_doc_has_no_eval_key(repo):
     from test_first_run import set_flags
 
-    uid = "u-first-" + new_session.__name__
+    uid = f"u-first-{uuid4().hex}"
     sid = new_session(repo, uid, state="awaiting_input", ready=True)
     set_flags(repo, uid, sid, speaker_confirmed=True, clinician_speaker="S1", rating_submitted=True)
     from onolys_api.jobs.first_run import maybe_start_first_run
