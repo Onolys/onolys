@@ -1,14 +1,11 @@
 // @vitest-environment jsdom
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
-import { CompareView, History, RunView, SummaryView } from './Runs';
-import { ApiError, createEvalApi, type Compare, type RunDetail, type RunSummary } from './api';
+import { History, RunView } from './Runs';
+import { ApiError, createEvalApi, type RunDetail, type RunSummary } from './api';
 afterEach(() => { cleanup(); vi.useRealTimers(); });
-const ids = ['giving_information', 'persuade', 'persuade_with_permission', 'question', 'simple_reflection', 'complex_reflection', 'affirm', 'seeking_collaboration', 'emphasizing_autonomy', 'confront', 'cultivating_change_talk', 'softening_sustain_talk', 'partnership', 'empathy', 'reflection_question_ratio', 'pct_cr'];
-const mkAgg = (combo: string, label: string, mae: number | null, extra: Record<string, unknown> = {}) => ({ engine: 'miti', combo_key: combo, label, n: 2, failed: 0, within_1: { empathy: { n: 2, total: 4, fraction: .5 } }, usage: { input_tokens: 100, output_tokens: 20, calls: 3 }, cost_usd_est: .01, metrics: { n: 2, counts: { giving_information: { mae, mean_bias: 0, n: 2 } }, globals: { empathy: { mae, mean_bias: 0, n: 2, within_1: { n: 2, total: 4, fraction: .5 } } }, summaries: {} }, ...extra });
-const comparison = (human = true): Compare => ({ has_human: human, metrics: ids.map((id, i) => ({ id, label: id, group: i < 10 ? 'counts' : i < 14 ? 'globals' : 'summaries' })), sessions: [{ session_id: 's1', human: human ? Object.fromEntries(ids.map(id => [id, 2])) : null, cells: [{ engine: 'miti', combo_key: 'preset:default', label: 'preset: default (legacy)', n: 2, failed: 1, error_code: 'HTTP_500', unit_ids: ['u1', 'u2', 'u3'], values: Object.fromEntries(ids.map(id => [id, { mean: id === 'reflection_question_ratio' ? null : id === 'pct_cr' ? .75 : 2, min: 1, max: 3, n: id === 'reflection_question_ratio' ? 0 : 2 }])), ...(human ? { diff: { giving_information: 0 } } : {}), error: human ? { giving_information: { mae: 1.5, mean_bias: 0, n: 2 } } : null }] }], aggregates: human ? [mkAgg('preset:default', 'preset: default (legacy)', 1)] : [], notes: [] });
 const summary = (): RunSummary => ({ run_id: 'r1', status: 'done', created_at: '2026-11-23T10:00:00Z', input: { dataset_id: 'saved', session_ids: ['s1'] }, engines: ['human', 'miti'], presets: ['default'], selection: null, combos: null, legacy_selection: true, combo_keys: ['preset:default'], combo_labels: { 'preset:default': 'preset: default (legacy)' }, repeats: 3, total_units: 4, completed_units: 4, done_units: 3, failed_units: 1, cancelled_units: 0, usage: { input_tokens: 10, output_tokens: 4 }, cost_usd_est: .012, unpriced_units: 1, engine_versions: { miti: '1.2' }, engine_git_sha: { miti: 'abc123' }, resolved_presets: { default: { model: 'saved-model' } } });
-const detail = (status: RunDetail['status'] = 'done'): RunDetail => ({ ...summary(), status, units: [{ unit_id: 'u1', session_id: 's1', engine: 'miti', preset: 'default', repeat: 0, status: 'done', stage: 'saved' }, { unit_id: 'u3', session_id: 's1', engine: 'miti', preset: 'default', repeat: 2, status: 'failed' }], compare: comparison() });
+const detail = (status: RunDetail['status'] = 'done'): RunDetail => ({ ...summary(), status, units: [{ unit_id: 'u1', session_id: 's1', engine: 'miti', preset: 'default', repeat: 0, status: 'done', stage: 'saved' }, { unit_id: 'u3', session_id: 's1', engine: 'miti', preset: 'default', repeat: 2, status: 'failed' }] });
 it('Provenance shows the saved resolved combos and base preset', async () => {
  const run = { ...detail(), base_preset: 'configured-prod', resolved_combos: { 'claude/claude-sonnet-5-5/low': { litellm_id: 'saved-combo-model' } } };
  render(<RunView api={{ ...createEvalApi('', vi.fn()), run: vi.fn().mockResolvedValue(run) }} runId="r1" onRerun={vi.fn()} />);
@@ -16,43 +13,9 @@ it('Provenance shows the saved resolved combos and base preset', async () => {
  fireEvent.click(screen.getByRole('button', { name: 'Config' }));
  expect(screen.getByText(/saved-combo-model/)).toBeTruthy(); expect(screen.getByText(/"base_preset": "configured-prod"/)).toBeTruthy();
 });
-it('transposes: Human row first, metrics as columns, value + diff + session error, failures with code', () => {
- render(<CompareView compare={comparison()} />);
- const heads = screen.getAllByRole('columnheader').map(e => e.textContent);
- expect(heads).toHaveLength(17); expect(heads.slice(0, 3)).toEqual(['Engine / combo', 'giving_information', 'persuade']);
- const rows = screen.getAllByRole('row'); expect(rows).toHaveLength(3);
- expect(rows[1].textContent).toMatch(/^Human/); expect(rows[1].textContent).toContain('2, n=1');
- expect(rows[2].textContent).toContain('miti · preset: default (legacy)');
- expect(rows[2].textContent).toContain('1 failed'); expect(rows[2].textContent).toContain('HTTP_500');
- const cells = rows[2].querySelectorAll('td'); expect(cells[0].textContent).toContain('2 (1–3), n=2'); expect(cells[0].textContent).toContain('diff 0'); expect(cells[0].textContent).toContain('MAE 1.5');
- expect(rows[2].textContent).toContain('—, n=0'); expect(rows[2].textContent).toContain('75%');
- expect(screen.getByRole('table').closest('.table-scroll')).toBeTruthy();
-});
-it('omits Human row, diff and error without reference; pending Human shows n=0', () => {
- const view = render(<CompareView compare={comparison(false)} />); expect(screen.queryByText('Human')).toBeNull(); expect(screen.queryByText(/MAE/)).toBeNull(); expect(screen.queryByText(/diff/)).toBeNull(); expect(screen.queryByRole('tab', { name: 'Summary' })).toBeNull();
- const pending = comparison(); pending.sessions[0].human = null; view.rerender(<CompareView compare={pending} />); expect(screen.getAllByRole('row')[1].textContent).toContain('—, n=0');
-});
-it('selects sessions for signed differences', () => {
- const data = comparison(); data.sessions.push({...data.sessions[0], session_id:'s2', cells:[{...data.sessions[0].cells[0], diff:{giving_information:-3}}]}); render(<CompareView compare={data} />); fireEvent.change(screen.getByLabelText('Session'),{target:{value:'s2'}}); expect(screen.getByRole('table').textContent).toContain('diff -3');
-});
-it('Summary: sorts by any column, highlights best MAE per column, shows legacy label and globals within_1', () => {
- const data = comparison(); data.aggregates = [mkAgg('a/x', 'a/x', 2, { failed: 1 }), mkAgg('b/y', 'b/y', 1), mkAgg('preset:default', 'preset: default (legacy)', 3)];
- render(<SummaryView compare={data} />);
- const names = () => screen.getAllByRole('rowheader').map(e => e.textContent);
- expect(names()).toEqual(['miti · a/x', 'miti · b/y', 'miti · preset: default (legacy)']);
- const col = screen.getByRole('columnheader', { name: /giving_information/ }); expect(col.getAttribute('aria-sort')).toBe('none');
- fireEvent.click(screen.getByRole('button', { name: /giving_information/ }));
- expect(names()[0]).toBe('miti · b/y'); expect(col.getAttribute('aria-sort')).toBe('ascending');
- fireEvent.click(screen.getByRole('button', { name: /giving_information/ }));
- expect(names()[0]).toBe('miti · preset: default (legacy)'); expect(col.getAttribute('aria-sort')).toBe('descending');
- const best = document.querySelectorAll('td[data-best="true"]'); expect(best.length).toBeGreaterThan(0);
- const row = screen.getByRole('row', { name: /b\/y/ }); expect(row.querySelector('td[data-best="true"]')?.textContent).toContain('1');
- expect(screen.getByRole('row', { name: /a\/x/ }).querySelector('td[data-best="true"]')).toBeNull();
- expect(row.textContent).toContain('0.5'); expect(row.textContent).toContain('120'); expect(row.textContent).toContain('$0.0100');
-});
-it('shows Summary tab only with Human reference and switches to it', () => {
- render(<RunView api={{ ...createEvalApi('', vi.fn()), run: vi.fn().mockResolvedValue(detail()) }} runId="r1" onRerun={vi.fn()} />);
- return screen.findByRole('tab', { name: 'Summary' }).then(tab => { fireEvent.click(tab); expect(screen.getAllByRole('table').at(-1)?.textContent).toContain('preset: default (legacy)'); });
+it('does not render the removed embedded comparison or summary', async () => {
+ render(<RunView api={{...createEvalApi('', vi.fn()), run:vi.fn().mockResolvedValue(detail())}} runId="r1" onRerun={vi.fn()} />);
+ await screen.findByRole('heading', {name:'Run r1'}); expect(screen.queryByRole('tab', {name:'Summary'})).toBeNull(); expect(screen.queryByRole('heading', {name:'Compare'})).toBeNull();
 });
 it('polls at 3s, stops terminal, loads JSON lazily as escaped text and aborts unmount', async () => {
  vi.useFakeTimers(); const api = {...createEvalApi('',vi.fn()), run:vi.fn().mockResolvedValueOnce(detail('running')).mockResolvedValue(detail()), output:vi.fn().mockResolvedValue({text:'<img src=x onerror=alert(1)>'})}; const view=render(<RunView api={api} runId="r1" onRerun={vi.fn()}/>); await act(async()=>{}); expect(api.run).toHaveBeenCalledTimes(1); await act(async()=>{await vi.advanceTimersByTimeAsync(3000)}); expect(api.run).toHaveBeenCalledTimes(2); await act(async()=>{await vi.advanceTimersByTimeAsync(9000)}); expect(api.run).toHaveBeenCalledTimes(2); expect(api.output).not.toHaveBeenCalled(); fireEvent.click(screen.getByRole('button',{name:'View JSON u1'})); await act(async()=>{}); expect(api.output).toHaveBeenCalledWith('r1','u1',expect.any(AbortSignal)); expect(screen.getByText(/<img src=x/)).toBeTruthy(); expect(document.querySelector('img')).toBeNull(); const signal=api.run.mock.calls[0][1] as AbortSignal; view.unmount(); expect(signal.aborted).toBe(true);
@@ -206,15 +169,6 @@ it('history formats the run date for the locale instead of showing raw ISO', asy
   expect(await screen.findByText(new Date('2026-11-23T10:00:00Z').toLocaleString())).toBeTruthy();
   expect(screen.queryByText('2026-11-23T10:00:00Z')).toBeNull();
 });
-it('renders — for unlabeled human values and shows quality label column only when present', () => {
- const partial = comparison(); partial.sessions[0].human = { ...partial.sessions[0].human!, giving_information: null, empathy: null };
- const view = render(<CompareView compare={partial} />);
- expect(screen.queryByText('Quality label')).toBeNull();
- const human = screen.getAllByRole('row')[1].querySelectorAll('td'); expect(human[ids.indexOf('giving_information')].textContent).toBe('—, n=0'); expect(human[ids.indexOf('empathy')].textContent).toBe('—, n=0');
- partial.sessions[0].quality_label = 'high'; view.rerender(<CompareView compare={partial} />);
- expect(screen.getByRole('columnheader', { name: 'Quality label' })).toBeTruthy(); expect(screen.getAllByText('high').length).toBeGreaterThan(0);
-});
-
 it('history searches the complete saved configuration across cursor pages without fetching details', async () => {
  const remote = { ...summary(), run_id: 'remote', name: 'Evening', description: 'Rare metadata', selection: { models: ['Claude'], tiers: ['Sonnet'], efforts: ['high'] }, resolved_combos: { saved: { temperature: 0.12345 } } };
  const api = { ...createEvalApi('', vi.fn()), runs: vi.fn().mockResolvedValueOnce({ runs: [summary()], next_cursor: 'tail' }).mockResolvedValueOnce({ runs: [remote] }), run: vi.fn() };

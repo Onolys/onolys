@@ -1,0 +1,1201 @@
+{
+  "eval_run_id": "eval-lines",
+  "has_human": true,
+  "combos": [
+    {
+      "combo_key": "claude/synthetic-large/low",
+      "engine": "miti",
+      "model": null,
+      "tier": null,
+      "effort": "low"
+    },
+    {
+      "combo_key": "openai/synthetic-mid/low",
+      "engine": "oneshot:synthetic",
+      "model": null,
+      "tier": null,
+      "effort": "low"
+    }
+  ],
+  "coverage": {
+    "eval_status": "done",
+    "cancelled_at": null,
+    "runs_done": 8,
+    "runs_total": 8,
+    "runs_skipped": 0,
+    "skipped_providers": []
+  },
+  "excluded": [],
+  "globals": {
+    "cells": {
+      "cct": {
+        "claude/synthetic-large/low": {
+          "value": null,
+          "off": 0.0,
+          "bias": 0.0,
+          "n": 2,
+          "of": 2,
+          "repeats": 2,
+          "within_tolerance": true,
+          "best": true,
+          "na": null,
+          "observed": {
+            "min": 4,
+            "max": 4,
+            "n": 4
+          },
+          "buckets": {
+            "same": 1.0,
+            "off1": 0.0,
+            "off2plus": 0.0
+          },
+          "within_1": 1.0
+        },
+        "openai/synthetic-mid/low": {
+          "value": null,
+          "off": 0.0,
+          "bias": 0.0,
+          "n": 2,
+          "of": 2,
+          "repeats": 2,
+          "within_tolerance": true,
+          "best": true,
+          "na": null,
+          "observed": {
+            "min": 4,
+            "max": 4,
+            "n": 4
+          },
+          "buckets": {
+            "same": 1.0,
+            "off1": 0.0,
+            "off2plus": 0.0
+          },
+          "within_1": 1.0
+        }
+      },
+      "sst": {
+        "claude/synthetic-large/low": {
+          "value": null,
+          "off": 0.0,
+          "bias": 0.0,
+          "n": 2,
+          "of": 2,
+          "repeats": 2,
+          "within_tolerance": true,
+          "best": true,
+          "na": null,
+          "observed": {
+            "min": 4,
+            "max": 4,
+            "n": 4
+          },
+          "buckets": {
+            "same": 1.0,
+            "off1": 0.0,
+            "off2plus": 0.0
+          },
+          "within_1": 1.0
+        },
+        "openai/synthetic-mid/low": {
+          "value": null,
+          "off": 0.0,
+          "bias": 0.0,
+          "n": 2,
+          "of": 2,
+          "repeats": 2,
+          "within_tolerance": true,
+          "best": true,
+          "na": null,
+          "observed": {
+            "min": 4,
+            "max": 4,
+            "n": 4
+          },
+          "buckets": {
+            "same": 1.0,
+            "off1": 0.0,
+            "off2plus": 0.0
+          },
+          "within_1": 1.0
+        }
+      },
+      "partnership": {
+        "claude/synthetic-large/low": {
+          "value": null,
+          "off": 0.0,
+          "bias": 0.0,
+          "n": 2,
+          "of": 2,
+          "repeats": 2,
+          "within_tolerance": true,
+          "best": true,
+          "na": null,
+          "observed": {
+            "min": 4,
+            "max": 4,
+            "n": 4
+          },
+          "buckets": {
+            "same": 1.0,
+            "off1": 0.0,
+            "off2plus": 0.0
+          },
+          "within_1": 1.0
+        },
+        "openai/synthetic-mid/low": {
+          "value": null,
+          "off": 0.0,
+          "bias": 0.0,
+          "n": 2,
+          "of": 2,
+          "repeats": 2,
+          "within_tolerance": true,
+          "best": true,
+          "na": null,
+          "observed": {
+            "min": 4,
+            "max": 4,
+            "n": 4
+          },
+          "buckets": {
+            "same": 1.0,
+            "off1": 0.0,
+            "off2plus": 0.0
+          },
+          "within_1": 1.0
+        }
+      },
+      "empathy": {
+        "claude/synthetic-large/low": {
+          "value": null,
+          "off": 0.0,
+          "bias": 0.0,
+          "n": 2,
+          "of": 2,
+          "repeats": 2,
+          "within_tolerance": true,
+          "best": true,
+          "na": null,
+          "observed": {
+            "min": 4,
+            "max": 4,
+            "n": 4
+          },
+          "buckets": {
+            "same": 1.0,
+            "off1": 0.0,
+            "off2plus": 0.0
+          },
+          "within_1": 1.0
+        },
+        "openai/synthetic-mid/low": {
+          "value": null,
+          "off": 0.0,
+          "bias": 0.0,
+          "n": 2,
+          "of": 2,
+          "repeats": 2,
+          "within_tolerance": true,
+          "best": true,
+          "na": null,
+          "observed": {
+            "min": 4,
+            "max": 4,
+            "n": 4
+          },
+          "buckets": {
+            "same": 1.0,
+            "off1": 0.0,
+            "off2plus": 0.0
+          },
+          "within_1": 1.0
+        }
+      }
+    },
+    "dots": [
+      {
+        "session_id": "synthetic-s01",
+        "combo_key": "claude/synthetic-large/low",
+        "metric": "cct",
+        "human": 4,
+        "values": [
+          4,
+          4
+        ],
+        "n": 1,
+        "repeats": 2
+      },
+      {
+        "session_id": "synthetic-s01",
+        "combo_key": "claude/synthetic-large/low",
+        "metric": "sst",
+        "human": 4,
+        "values": [
+          4,
+          4
+        ],
+        "n": 1,
+        "repeats": 2
+      },
+      {
+        "session_id": "synthetic-s01",
+        "combo_key": "claude/synthetic-large/low",
+        "metric": "partnership",
+        "human": 4,
+        "values": [
+          4,
+          4
+        ],
+        "n": 1,
+        "repeats": 2
+      },
+      {
+        "session_id": "synthetic-s01",
+        "combo_key": "claude/synthetic-large/low",
+        "metric": "empathy",
+        "human": 4,
+        "values": [
+          4,
+          4
+        ],
+        "n": 1,
+        "repeats": 2
+      },
+      {
+        "session_id": "synthetic-s01",
+        "combo_key": "openai/synthetic-mid/low",
+        "metric": "cct",
+        "human": 4,
+        "values": [
+          4,
+          4
+        ],
+        "n": 1,
+        "repeats": 2
+      },
+      {
+        "session_id": "synthetic-s01",
+        "combo_key": "openai/synthetic-mid/low",
+        "metric": "sst",
+        "human": 4,
+        "values": [
+          4,
+          4
+        ],
+        "n": 1,
+        "repeats": 2
+      },
+      {
+        "session_id": "synthetic-s01",
+        "combo_key": "openai/synthetic-mid/low",
+        "metric": "partnership",
+        "human": 4,
+        "values": [
+          4,
+          4
+        ],
+        "n": 1,
+        "repeats": 2
+      },
+      {
+        "session_id": "synthetic-s01",
+        "combo_key": "openai/synthetic-mid/low",
+        "metric": "empathy",
+        "human": 4,
+        "values": [
+          4,
+          4
+        ],
+        "n": 1,
+        "repeats": 2
+      },
+      {
+        "session_id": "synthetic-s02",
+        "combo_key": "claude/synthetic-large/low",
+        "metric": "cct",
+        "human": 4,
+        "values": [
+          4,
+          4
+        ],
+        "n": 1,
+        "repeats": 2
+      },
+      {
+        "session_id": "synthetic-s02",
+        "combo_key": "claude/synthetic-large/low",
+        "metric": "sst",
+        "human": 4,
+        "values": [
+          4,
+          4
+        ],
+        "n": 1,
+        "repeats": 2
+      },
+      {
+        "session_id": "synthetic-s02",
+        "combo_key": "claude/synthetic-large/low",
+        "metric": "partnership",
+        "human": 4,
+        "values": [
+          4,
+          4
+        ],
+        "n": 1,
+        "repeats": 2
+      },
+      {
+        "session_id": "synthetic-s02",
+        "combo_key": "claude/synthetic-large/low",
+        "metric": "empathy",
+        "human": 4,
+        "values": [
+          4,
+          4
+        ],
+        "n": 1,
+        "repeats": 2
+      },
+      {
+        "session_id": "synthetic-s02",
+        "combo_key": "openai/synthetic-mid/low",
+        "metric": "cct",
+        "human": 4,
+        "values": [
+          4,
+          4
+        ],
+        "n": 1,
+        "repeats": 2
+      },
+      {
+        "session_id": "synthetic-s02",
+        "combo_key": "openai/synthetic-mid/low",
+        "metric": "sst",
+        "human": 4,
+        "values": [
+          4,
+          4
+        ],
+        "n": 1,
+        "repeats": 2
+      },
+      {
+        "session_id": "synthetic-s02",
+        "combo_key": "openai/synthetic-mid/low",
+        "metric": "partnership",
+        "human": 4,
+        "values": [
+          4,
+          4
+        ],
+        "n": 1,
+        "repeats": 2
+      },
+      {
+        "session_id": "synthetic-s02",
+        "combo_key": "openai/synthetic-mid/low",
+        "metric": "empathy",
+        "human": 4,
+        "values": [
+          4,
+          4
+        ],
+        "n": 1,
+        "repeats": 2
+      }
+    ]
+  },
+  "counts": {
+    "cells": {
+      "gi": {
+        "claude/synthetic-large/low": {
+          "value": 0.25,
+          "off": 0.25,
+          "bias": -0.25,
+          "n": 2,
+          "of": 2,
+          "repeats": 2,
+          "within_tolerance": true,
+          "best": false,
+          "na": null,
+          "observed": {
+            "min": 0,
+            "max": 1,
+            "n": 4
+          }
+        },
+        "openai/synthetic-mid/low": {
+          "value": 0.5,
+          "off": 0.0,
+          "bias": 0.0,
+          "n": 2,
+          "of": 2,
+          "repeats": 2,
+          "within_tolerance": true,
+          "best": true,
+          "na": null,
+          "observed": {
+            "min": 0,
+            "max": 1,
+            "n": 4
+          }
+        }
+      },
+      "persuade": {
+        "claude/synthetic-large/low": {
+          "value": 0.0,
+          "off": 0.0,
+          "bias": 0.0,
+          "n": 2,
+          "of": 2,
+          "repeats": 2,
+          "within_tolerance": true,
+          "best": true,
+          "na": null,
+          "observed": {
+            "min": 0,
+            "max": 0,
+            "n": 4
+          }
+        },
+        "openai/synthetic-mid/low": {
+          "value": 0.0,
+          "off": 0.0,
+          "bias": 0.0,
+          "n": 2,
+          "of": 2,
+          "repeats": 2,
+          "within_tolerance": true,
+          "best": true,
+          "na": null,
+          "observed": {
+            "min": 0,
+            "max": 0,
+            "n": 4
+          }
+        }
+      },
+      "persuade_permission": {
+        "claude/synthetic-large/low": {
+          "value": 0.0,
+          "off": 0.0,
+          "bias": 0.0,
+          "n": 2,
+          "of": 2,
+          "repeats": 2,
+          "within_tolerance": true,
+          "best": true,
+          "na": null,
+          "observed": {
+            "min": 0,
+            "max": 0,
+            "n": 4
+          }
+        },
+        "openai/synthetic-mid/low": {
+          "value": 0.0,
+          "off": 0.0,
+          "bias": 0.0,
+          "n": 2,
+          "of": 2,
+          "repeats": 2,
+          "within_tolerance": true,
+          "best": true,
+          "na": null,
+          "observed": {
+            "min": 0,
+            "max": 0,
+            "n": 4
+          }
+        }
+      },
+      "question": {
+        "claude/synthetic-large/low": {
+          "value": 1.5,
+          "off": 0.0,
+          "bias": 0.0,
+          "n": 2,
+          "of": 2,
+          "repeats": 2,
+          "within_tolerance": true,
+          "best": true,
+          "na": null,
+          "observed": {
+            "min": 1,
+            "max": 2,
+            "n": 4
+          }
+        },
+        "openai/synthetic-mid/low": {
+          "value": 1.5,
+          "off": 0.0,
+          "bias": 0.0,
+          "n": 2,
+          "of": 2,
+          "repeats": 2,
+          "within_tolerance": true,
+          "best": true,
+          "na": null,
+          "observed": {
+            "min": 1,
+            "max": 2,
+            "n": 4
+          }
+        }
+      },
+      "sr": {
+        "claude/synthetic-large/low": {
+          "value": 0.75,
+          "off": 0.25,
+          "bias": -0.25,
+          "n": 2,
+          "of": 2,
+          "repeats": 2,
+          "within_tolerance": true,
+          "best": false,
+          "na": null,
+          "observed": {
+            "min": 0,
+            "max": 1,
+            "n": 4
+          }
+        },
+        "openai/synthetic-mid/low": {
+          "value": 1.0,
+          "off": 0.0,
+          "bias": 0.0,
+          "n": 2,
+          "of": 2,
+          "repeats": 2,
+          "within_tolerance": true,
+          "best": true,
+          "na": null,
+          "observed": {
+            "min": 1,
+            "max": 1,
+            "n": 4
+          }
+        }
+      },
+      "cr": {
+        "claude/synthetic-large/low": {
+          "value": 1.25,
+          "off": 0.25,
+          "bias": 0.25,
+          "n": 2,
+          "of": 2,
+          "repeats": 2,
+          "within_tolerance": true,
+          "best": false,
+          "na": null,
+          "observed": {
+            "min": 1,
+            "max": 2,
+            "n": 4
+          }
+        },
+        "openai/synthetic-mid/low": {
+          "value": 1.0,
+          "off": 0.0,
+          "bias": 0.0,
+          "n": 2,
+          "of": 2,
+          "repeats": 2,
+          "within_tolerance": true,
+          "best": true,
+          "na": null,
+          "observed": {
+            "min": 1,
+            "max": 1,
+            "n": 4
+          }
+        }
+      },
+      "affirm": {
+        "claude/synthetic-large/low": {
+          "value": 0.25,
+          "off": 0.25,
+          "bias": -0.25,
+          "n": 2,
+          "of": 2,
+          "repeats": 2,
+          "within_tolerance": true,
+          "best": false,
+          "na": null,
+          "observed": {
+            "min": 0,
+            "max": 1,
+            "n": 4
+          }
+        },
+        "openai/synthetic-mid/low": {
+          "value": 0.5,
+          "off": 0.0,
+          "bias": 0.0,
+          "n": 2,
+          "of": 2,
+          "repeats": 2,
+          "within_tolerance": true,
+          "best": true,
+          "na": null,
+          "observed": {
+            "min": 0,
+            "max": 1,
+            "n": 4
+          }
+        }
+      },
+      "seek_collab": {
+        "claude/synthetic-large/low": {
+          "value": 0.0,
+          "off": 0.0,
+          "bias": 0.0,
+          "n": 2,
+          "of": 2,
+          "repeats": 2,
+          "within_tolerance": true,
+          "best": true,
+          "na": null,
+          "observed": {
+            "min": 0,
+            "max": 0,
+            "n": 4
+          }
+        },
+        "openai/synthetic-mid/low": {
+          "value": 0.0,
+          "off": 0.0,
+          "bias": 0.0,
+          "n": 2,
+          "of": 2,
+          "repeats": 2,
+          "within_tolerance": true,
+          "best": true,
+          "na": null,
+          "observed": {
+            "min": 0,
+            "max": 0,
+            "n": 4
+          }
+        }
+      },
+      "emphasize_autonomy": {
+        "claude/synthetic-large/low": {
+          "value": 0.0,
+          "off": 0.0,
+          "bias": 0.0,
+          "n": 2,
+          "of": 2,
+          "repeats": 2,
+          "within_tolerance": true,
+          "best": true,
+          "na": null,
+          "observed": {
+            "min": 0,
+            "max": 0,
+            "n": 4
+          }
+        },
+        "openai/synthetic-mid/low": {
+          "value": 0.0,
+          "off": 0.0,
+          "bias": 0.0,
+          "n": 2,
+          "of": 2,
+          "repeats": 2,
+          "within_tolerance": true,
+          "best": true,
+          "na": null,
+          "observed": {
+            "min": 0,
+            "max": 0,
+            "n": 4
+          }
+        }
+      },
+      "confront": {
+        "claude/synthetic-large/low": {
+          "value": 0.25,
+          "off": 0.25,
+          "bias": -0.25,
+          "n": 2,
+          "of": 2,
+          "repeats": 2,
+          "within_tolerance": true,
+          "best": false,
+          "na": null,
+          "observed": {
+            "min": 0,
+            "max": 1,
+            "n": 4
+          }
+        },
+        "openai/synthetic-mid/low": {
+          "value": 0.5,
+          "off": 0.0,
+          "bias": 0.0,
+          "n": 2,
+          "of": 2,
+          "repeats": 2,
+          "within_tolerance": true,
+          "best": true,
+          "na": null,
+          "observed": {
+            "min": 0,
+            "max": 1,
+            "n": 4
+          }
+        }
+      }
+    },
+    "totals": [
+      {
+        "session_id": "synthetic-s01",
+        "combo_key": "claude/synthetic-large/low",
+        "human": {
+          "affirm": 1,
+          "confront": 0,
+          "cr": 1,
+          "emphasize_autonomy": 0,
+          "gi": 1,
+          "persuade": 0,
+          "persuade_permission": 0,
+          "question": 2,
+          "seek_collab": 0,
+          "sr": 1
+        },
+        "values": [
+          {
+            "gi": 1,
+            "persuade": 0,
+            "persuade_permission": 0,
+            "question": 2,
+            "sr": 1,
+            "cr": 1,
+            "affirm": 0,
+            "seek_collab": 0,
+            "emphasize_autonomy": 0,
+            "confront": 0
+          },
+          {
+            "gi": 0,
+            "persuade": 0,
+            "persuade_permission": 0,
+            "question": 2,
+            "sr": 0,
+            "cr": 2,
+            "affirm": 1,
+            "seek_collab": 0,
+            "emphasize_autonomy": 0,
+            "confront": 0
+          }
+        ],
+        "n": 1,
+        "repeats": 2
+      },
+      {
+        "session_id": "synthetic-s01",
+        "combo_key": "openai/synthetic-mid/low",
+        "human": {
+          "affirm": 1,
+          "confront": 0,
+          "cr": 1,
+          "emphasize_autonomy": 0,
+          "gi": 1,
+          "persuade": 0,
+          "persuade_permission": 0,
+          "question": 2,
+          "seek_collab": 0,
+          "sr": 1
+        },
+        "values": [
+          {
+            "affirm": 1,
+            "confront": 0,
+            "cr": 1,
+            "emphasize_autonomy": 0,
+            "gi": 1,
+            "persuade": 0,
+            "persuade_permission": 0,
+            "question": 2,
+            "seek_collab": 0,
+            "sr": 1
+          },
+          {
+            "affirm": 1,
+            "confront": 0,
+            "cr": 1,
+            "emphasize_autonomy": 0,
+            "gi": 1,
+            "persuade": 0,
+            "persuade_permission": 0,
+            "question": 2,
+            "seek_collab": 0,
+            "sr": 1
+          }
+        ],
+        "n": 1,
+        "repeats": 2
+      },
+      {
+        "session_id": "synthetic-s02",
+        "combo_key": "claude/synthetic-large/low",
+        "human": {
+          "affirm": 0,
+          "confront": 1,
+          "cr": 1,
+          "emphasize_autonomy": 0,
+          "gi": 0,
+          "persuade": 0,
+          "persuade_permission": 0,
+          "question": 1,
+          "seek_collab": 0,
+          "sr": 1
+        },
+        "values": [
+          {
+            "gi": 0,
+            "persuade": 0,
+            "persuade_permission": 0,
+            "question": 1,
+            "sr": 1,
+            "cr": 1,
+            "affirm": 0,
+            "seek_collab": 0,
+            "emphasize_autonomy": 0,
+            "confront": 1
+          },
+          {
+            "gi": 0,
+            "persuade": 0,
+            "persuade_permission": 0,
+            "question": 1,
+            "sr": 1,
+            "cr": 1,
+            "affirm": 0,
+            "seek_collab": 0,
+            "emphasize_autonomy": 0,
+            "confront": 0
+          }
+        ],
+        "n": 1,
+        "repeats": 2
+      },
+      {
+        "session_id": "synthetic-s02",
+        "combo_key": "openai/synthetic-mid/low",
+        "human": {
+          "affirm": 0,
+          "confront": 1,
+          "cr": 1,
+          "emphasize_autonomy": 0,
+          "gi": 0,
+          "persuade": 0,
+          "persuade_permission": 0,
+          "question": 1,
+          "seek_collab": 0,
+          "sr": 1
+        },
+        "values": [
+          {
+            "affirm": 0,
+            "confront": 1,
+            "cr": 1,
+            "emphasize_autonomy": 0,
+            "gi": 0,
+            "persuade": 0,
+            "persuade_permission": 0,
+            "question": 1,
+            "seek_collab": 0,
+            "sr": 1
+          },
+          {
+            "affirm": 0,
+            "confront": 1,
+            "cr": 1,
+            "emphasize_autonomy": 0,
+            "gi": 0,
+            "persuade": 0,
+            "persuade_permission": 0,
+            "question": 1,
+            "seek_collab": 0,
+            "sr": 1
+          }
+        ],
+        "n": 1,
+        "repeats": 2
+      }
+    ],
+    "bias_pct": {
+      "gi": {
+        "claude/synthetic-large/low": {
+          "value": -50.0,
+          "n": 2,
+          "na": null
+        },
+        "openai/synthetic-mid/low": {
+          "value": 0.0,
+          "n": 2,
+          "na": null
+        }
+      },
+      "persuade": {
+        "claude/synthetic-large/low": {
+          "value": null,
+          "n": 2,
+          "na": {
+            "reason": "human count is zero"
+          }
+        },
+        "openai/synthetic-mid/low": {
+          "value": null,
+          "n": 2,
+          "na": {
+            "reason": "human count is zero"
+          }
+        }
+      },
+      "persuade_permission": {
+        "claude/synthetic-large/low": {
+          "value": null,
+          "n": 2,
+          "na": {
+            "reason": "human count is zero"
+          }
+        },
+        "openai/synthetic-mid/low": {
+          "value": null,
+          "n": 2,
+          "na": {
+            "reason": "human count is zero"
+          }
+        }
+      },
+      "question": {
+        "claude/synthetic-large/low": {
+          "value": 0.0,
+          "n": 2,
+          "na": null
+        },
+        "openai/synthetic-mid/low": {
+          "value": 0.0,
+          "n": 2,
+          "na": null
+        }
+      },
+      "sr": {
+        "claude/synthetic-large/low": {
+          "value": -25.0,
+          "n": 2,
+          "na": null
+        },
+        "openai/synthetic-mid/low": {
+          "value": 0.0,
+          "n": 2,
+          "na": null
+        }
+      },
+      "cr": {
+        "claude/synthetic-large/low": {
+          "value": 25.0,
+          "n": 2,
+          "na": null
+        },
+        "openai/synthetic-mid/low": {
+          "value": 0.0,
+          "n": 2,
+          "na": null
+        }
+      },
+      "affirm": {
+        "claude/synthetic-large/low": {
+          "value": -50.0,
+          "n": 2,
+          "na": null
+        },
+        "openai/synthetic-mid/low": {
+          "value": 0.0,
+          "n": 2,
+          "na": null
+        }
+      },
+      "seek_collab": {
+        "claude/synthetic-large/low": {
+          "value": null,
+          "n": 2,
+          "na": {
+            "reason": "human count is zero"
+          }
+        },
+        "openai/synthetic-mid/low": {
+          "value": null,
+          "n": 2,
+          "na": {
+            "reason": "human count is zero"
+          }
+        }
+      },
+      "emphasize_autonomy": {
+        "claude/synthetic-large/low": {
+          "value": null,
+          "n": 2,
+          "na": {
+            "reason": "human count is zero"
+          }
+        },
+        "openai/synthetic-mid/low": {
+          "value": null,
+          "n": 2,
+          "na": {
+            "reason": "human count is zero"
+          }
+        }
+      },
+      "confront": {
+        "claude/synthetic-large/low": {
+          "value": -50.0,
+          "n": 2,
+          "na": null
+        },
+        "openai/synthetic-mid/low": {
+          "value": 0.0,
+          "n": 2,
+          "na": null
+        }
+      }
+    }
+  },
+  "lines": {
+    "missing": null,
+    "codes_labeled": [
+      "gi",
+      "persuade",
+      "persuade_permission",
+      "question",
+      "sr",
+      "cr",
+      "affirm",
+      "seek_collab",
+      "emphasize_autonomy",
+      "confront"
+    ],
+    "dataset_notes": [],
+    "combos": {
+      "claude/synthetic-large/low": {
+        "lane": null,
+        "n": 2,
+        "repeats": 2,
+        "aligned": 9,
+        "per_code": {
+          "gi": {
+            "p": 1.0,
+            "r": 0.5,
+            "f1": 0.5
+          },
+          "persuade": {
+            "p": null,
+            "r": null,
+            "f1": null
+          },
+          "persuade_permission": {
+            "p": null,
+            "r": null,
+            "f1": null
+          },
+          "question": {
+            "p": 1.0,
+            "r": 1.0,
+            "f1": 1.0
+          },
+          "sr": {
+            "p": 1.0,
+            "r": 0.75,
+            "f1": 0.75
+          },
+          "cr": {
+            "p": 0.875,
+            "r": 1.0,
+            "f1": 0.9166666666666666
+          },
+          "affirm": {
+            "p": 1.0,
+            "r": 0.5,
+            "f1": 0.5
+          },
+          "seek_collab": {
+            "p": null,
+            "r": null,
+            "f1": null
+          },
+          "emphasize_autonomy": {
+            "p": null,
+            "r": null,
+            "f1": null
+          },
+          "confront": {
+            "p": 1.0,
+            "r": 0.5,
+            "f1": 0.5
+          }
+        },
+        "macro_f1": 0.7708333333333334,
+        "line_accuracy": 0.7875,
+        "confusion": {
+          "question": {
+            "question": 3.0
+          },
+          "sr": {
+            "sr": 1.5,
+            "cr": 0.5
+          },
+          "gi": {
+            "gi": 0.5,
+            "none": 0.5
+          },
+          "cr": {
+            "cr": 1.0
+          },
+          "confront": {
+            "confront": 0.5,
+            "none": 0.5
+          }
+        },
+        "multi": 1.0
+      },
+      "openai/synthetic-mid/low": {
+        "lane": "no line-level output",
+        "n": 0,
+        "repeats": 0,
+        "aligned": 0,
+        "per_code": {},
+        "macro_f1": null,
+        "line_accuracy": null,
+        "confusion": {},
+        "multi": 0
+      }
+    }
+  },
+  "rationale_counts": {
+    "gi": {
+      "claude/synthetic-large/low": 1
+    },
+    "question": {
+      "claude/synthetic-large/low": 6
+    },
+    "sr": {
+      "claude/synthetic-large/low": 3
+    },
+    "cr": {
+      "claude/synthetic-large/low": 5
+    },
+    "affirm": {
+      "claude/synthetic-large/low": 1
+    },
+    "confront": {
+      "claude/synthetic-large/low": 1
+    }
+  }
+}

@@ -1,3 +1,4 @@
+import { createCompareApi, type CompareApi } from './compare/compareApi';
 export type Mode = 'dataset' | 'upload';
 export type CodedSpan = { start_turn: number; end_turn: number } | { start_ms: number; end_ms: number };
 export interface EngineOption { id: string; label: string; engine: string; config?: string; prod: boolean; version?: string }
@@ -49,30 +50,9 @@ export interface RunUnit {
  unit_id: string; session_id: string; engine: string; combo?: Combo | null; combo_key?: string | null; preset?: string | null; repeat?: number | null;
  status: Exclude<RunStatus, 'partial' | 'deleting'> | 'waiting' | 'skipped'; stage?: string; error?: { code: string; message?: string } | string; output?: unknown;
 }
-export interface ErrorMetric { mae: number | null; mean_bias: number | null; n: number }
-export interface Aggregate {
- n: number; counts: Record<string, ErrorMetric>; summaries: Record<string, ErrorMetric>;
- globals: Record<string, ErrorMetric & { within_1: { n: number; total: number; fraction: number | null } }>;
-}
-export interface CompareCell {
- engine: string; combo_key: string; label: string; n: number; failed: number; error_code: string | null; unit_ids: string[];
- values: Record<string, { mean: number | null; min: number | null; max: number | null; n: number }>;
- diff?: Record<string, number | null>;
- error: Record<string, ErrorMetric> | null;
-}
-export interface CompareAggregate {
- engine: string; combo_key: string; label: string; n: number; failed: number;
- within_1: Record<string, { n: number; total: number; fraction: number | null }>;
- usage: { input_tokens: number; output_tokens: number; calls: number }; cost_usd_est: number | null; metrics: Aggregate;
-}
-export interface Compare {
- has_human: boolean; metrics: { id: string; group: 'counts' | 'globals' | 'summaries'; label: string }[];
- sessions: { session_id: string; human: Record<string, number | null> | null; quality_label?: 'high' | 'low' | null; cells: CompareCell[] }[];
- aggregates: CompareAggregate[]; notes: string[];
-}
-export interface RunDetail extends RunSummary { units: RunUnit[]; compare: Compare }
+export interface RunDetail extends RunSummary { units: RunUnit[] }
 export type RunSelection = Pick<RunInput, 'engines' | 'selection' | 'repeats' | 'name' | 'description'>;
-export interface EvalApi {
+export interface EvalApi extends CompareApi {
   me(): Promise<unknown>;
   runs(signal?: AbortSignal, cursor?: string): Promise<{ runs: RunSummary[]; next_cursor?: string | null }>;
   run(id: string, signal?: AbortSignal): Promise<RunDetail>;
@@ -100,7 +80,8 @@ export function errorText(body: unknown, status: number): string {
 }
 export class ApiError extends Error {
   readonly status: number;
-  constructor(message: string, status: number) { super(message); this.name = 'ApiError'; this.status = status; }
+  readonly code?: string;
+  constructor(message: string, status: number, code?: string) { super(message); this.name = 'ApiError'; this.status = status; this.code = code; }
 }
 export function createEvalApi(base: string, fetcher: typeof fetch, storageFetch: typeof fetch = (input, init) => fetch(input, init)): EvalApi {
   // Only retain pending attempts for this form object. Completed attempts can be collected.
@@ -109,13 +90,15 @@ export function createEvalApi(base: string, fetcher: typeof fetch, storageFetch:
     const response = await fetcher(`${base.replace(/\/$/, '')}/v1${path}`, init);
     if (!response.ok) {
       const body = await response.json().catch(() => null);
-      throw new ApiError(errorText(body, response.status), response.status);
+      const detail = body?.error ?? body?.detail;
+      throw new ApiError(errorText(body, response.status), response.status, typeof detail?.code === 'string' ? detail.code : undefined);
     }
     return response.json() as Promise<T>;
   };
   const json = (value: unknown): RequestInit => ({ method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(value) });
   const id = encodeURIComponent;
   return {
+    ...createCompareApi(request),
     me: () => request('/me'),
     runs: (signal, cursor) => request(`/runs${cursor ? `?cursor=${id(cursor)}` : ''}`, { signal }),
     run: (runId, signal) => request(`/runs/${id(runId)}`, { signal }),

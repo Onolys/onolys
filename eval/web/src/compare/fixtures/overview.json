@@ -1,0 +1,1195 @@
+{
+  "eval_run_id": "eval-lines",
+  "has_human": true,
+  "combos": [
+    {
+      "combo_key": "claude/synthetic-large/low",
+      "engine": "miti",
+      "model": null,
+      "tier": null,
+      "effort": "low"
+    },
+    {
+      "combo_key": "openai/synthetic-mid/low",
+      "engine": "oneshot:synthetic",
+      "model": null,
+      "tier": null,
+      "effort": "low"
+    }
+  ],
+  "coverage": {
+    "eval_status": "done",
+    "cancelled_at": null,
+    "runs_done": 8,
+    "runs_total": 8,
+    "runs_skipped": 0,
+    "skipped_providers": []
+  },
+  "excluded": [],
+  "header": {
+    "name": "Synthetic lines",
+    "dataset_id": "casaa-miti421-video2013",
+    "sessions": 2,
+    "repeats": 2,
+    "label_coverage": {
+      "counts": [
+        "gi",
+        "persuade",
+        "persuade_permission",
+        "question",
+        "sr",
+        "cr",
+        "affirm",
+        "seek_collab",
+        "emphasize_autonomy",
+        "confront"
+      ],
+      "globals": [
+        "cct",
+        "sst",
+        "partnership",
+        "empathy"
+      ],
+      "line_labels": true
+    },
+    "coverage": {
+      "eval_status": "done",
+      "cancelled_at": null,
+      "runs_done": 8,
+      "runs_total": 8,
+      "runs_skipped": 0,
+      "skipped_providers": []
+    }
+  },
+  "count_error": {
+    "claude/synthetic-large/low": {
+      "value": null,
+      "off": 1.25,
+      "bias": -0.75,
+      "n": 2,
+      "of": 2,
+      "repeats": 2,
+      "within_tolerance": null,
+      "best": false,
+      "na": null,
+      "codes_labeled": 10,
+      "codes_total": 10
+    },
+    "openai/synthetic-mid/low": {
+      "value": null,
+      "off": 0.0,
+      "bias": 0.0,
+      "n": 2,
+      "of": 2,
+      "repeats": 2,
+      "within_tolerance": null,
+      "best": true,
+      "na": null,
+      "codes_labeled": 10,
+      "codes_total": 10
+    }
+  },
+  "verdict": [
+    {
+      "text": "Lowest Count error: openai/synthetic-mid/low (0.0; 2 sessions).",
+      "claims": [
+        {
+          "metric": "count_error",
+          "combo": "openai/synthetic-mid/low",
+          "value": 0.0,
+          "n": 2
+        }
+      ]
+    }
+  ],
+  "leaderboard": [
+    {
+      "combo_key": "claude/synthetic-large/low",
+      "value": null,
+      "off": 1.25,
+      "bias": -0.75,
+      "n": 2,
+      "of": 2,
+      "repeats": 2,
+      "within_tolerance": null,
+      "best": false,
+      "na": null,
+      "codes_labeled": 10,
+      "codes_total": 10,
+      "time": {
+        "mean_seconds": 75.0,
+        "n": 4,
+        "retried_runs": 0
+      },
+      "cost": {
+        "total_usd": 0.2118,
+        "per_run_usd": 0.05295,
+        "n": 4,
+        "na": null
+      },
+      "failures": [],
+      "globals_within_1": {
+        "value": 1.0,
+        "n": 2,
+        "repeats": 2,
+        "best": true,
+        "na": null
+      },
+      "line_accuracy": {
+        "value": 0.7875,
+        "n": 2,
+        "repeats": 2,
+        "best": true,
+        "na": null
+      },
+      "macro_f1": {
+        "value": 0.7708333333333334,
+        "n": 2,
+        "repeats": 2,
+        "best": true,
+        "na": null
+      }
+    },
+    {
+      "combo_key": "openai/synthetic-mid/low",
+      "value": null,
+      "off": 0.0,
+      "bias": 0.0,
+      "n": 2,
+      "of": 2,
+      "repeats": 2,
+      "within_tolerance": null,
+      "best": true,
+      "na": null,
+      "codes_labeled": 10,
+      "codes_total": 10,
+      "time": {
+        "mean_seconds": 75.0,
+        "n": 4,
+        "retried_runs": 0
+      },
+      "cost": {
+        "total_usd": 0.06459999999999999,
+        "per_run_usd": 0.016149999999999998,
+        "n": 4,
+        "na": null
+      },
+      "failures": [],
+      "globals_within_1": {
+        "value": 1.0,
+        "n": 2,
+        "repeats": 2,
+        "best": true,
+        "na": null
+      },
+      "line_accuracy": {
+        "value": null,
+        "n": 0,
+        "repeats": 0,
+        "best": false,
+        "na": {
+          "reason": "no line-level output"
+        }
+      },
+      "macro_f1": {
+        "value": null,
+        "n": 0,
+        "repeats": 0,
+        "best": false,
+        "na": {
+          "reason": "no line-level output"
+        }
+      }
+    }
+  ],
+  "heatmap": {
+    "rows": [
+      {
+        "id": "gi",
+        "kind": "count"
+      },
+      {
+        "id": "persuade",
+        "kind": "count"
+      },
+      {
+        "id": "persuade_permission",
+        "kind": "count"
+      },
+      {
+        "id": "question",
+        "kind": "count"
+      },
+      {
+        "id": "sr",
+        "kind": "count"
+      },
+      {
+        "id": "cr",
+        "kind": "count"
+      },
+      {
+        "id": "affirm",
+        "kind": "count"
+      },
+      {
+        "id": "seek_collab",
+        "kind": "count"
+      },
+      {
+        "id": "emphasize_autonomy",
+        "kind": "count"
+      },
+      {
+        "id": "confront",
+        "kind": "count"
+      },
+      {
+        "id": "cct",
+        "kind": "global"
+      },
+      {
+        "id": "sst",
+        "kind": "global"
+      },
+      {
+        "id": "partnership",
+        "kind": "global"
+      },
+      {
+        "id": "empathy",
+        "kind": "global"
+      },
+      {
+        "id": "reflection_question_ratio",
+        "kind": "ratio"
+      },
+      {
+        "id": "pct_cr",
+        "kind": "ratio"
+      }
+    ],
+    "human": {
+      "gi": {
+        "min": 0,
+        "max": 1,
+        "n": 2,
+        "values": [
+          {
+            "session_id": "synthetic-s01",
+            "value": 1
+          },
+          {
+            "session_id": "synthetic-s02",
+            "value": 0
+          }
+        ]
+      },
+      "persuade": {
+        "min": 0,
+        "max": 0,
+        "n": 2,
+        "values": [
+          {
+            "session_id": "synthetic-s01",
+            "value": 0
+          },
+          {
+            "session_id": "synthetic-s02",
+            "value": 0
+          }
+        ]
+      },
+      "persuade_permission": {
+        "min": 0,
+        "max": 0,
+        "n": 2,
+        "values": [
+          {
+            "session_id": "synthetic-s01",
+            "value": 0
+          },
+          {
+            "session_id": "synthetic-s02",
+            "value": 0
+          }
+        ]
+      },
+      "question": {
+        "min": 1,
+        "max": 2,
+        "n": 2,
+        "values": [
+          {
+            "session_id": "synthetic-s01",
+            "value": 2
+          },
+          {
+            "session_id": "synthetic-s02",
+            "value": 1
+          }
+        ]
+      },
+      "sr": {
+        "min": 1,
+        "max": 1,
+        "n": 2,
+        "values": [
+          {
+            "session_id": "synthetic-s01",
+            "value": 1
+          },
+          {
+            "session_id": "synthetic-s02",
+            "value": 1
+          }
+        ]
+      },
+      "cr": {
+        "min": 1,
+        "max": 1,
+        "n": 2,
+        "values": [
+          {
+            "session_id": "synthetic-s01",
+            "value": 1
+          },
+          {
+            "session_id": "synthetic-s02",
+            "value": 1
+          }
+        ]
+      },
+      "affirm": {
+        "min": 0,
+        "max": 1,
+        "n": 2,
+        "values": [
+          {
+            "session_id": "synthetic-s01",
+            "value": 1
+          },
+          {
+            "session_id": "synthetic-s02",
+            "value": 0
+          }
+        ]
+      },
+      "seek_collab": {
+        "min": 0,
+        "max": 0,
+        "n": 2,
+        "values": [
+          {
+            "session_id": "synthetic-s01",
+            "value": 0
+          },
+          {
+            "session_id": "synthetic-s02",
+            "value": 0
+          }
+        ]
+      },
+      "emphasize_autonomy": {
+        "min": 0,
+        "max": 0,
+        "n": 2,
+        "values": [
+          {
+            "session_id": "synthetic-s01",
+            "value": 0
+          },
+          {
+            "session_id": "synthetic-s02",
+            "value": 0
+          }
+        ]
+      },
+      "confront": {
+        "min": 0,
+        "max": 1,
+        "n": 2,
+        "values": [
+          {
+            "session_id": "synthetic-s01",
+            "value": 0
+          },
+          {
+            "session_id": "synthetic-s02",
+            "value": 1
+          }
+        ]
+      },
+      "cct": {
+        "min": 4,
+        "max": 4,
+        "n": 2,
+        "values": [
+          {
+            "session_id": "synthetic-s01",
+            "value": 4
+          },
+          {
+            "session_id": "synthetic-s02",
+            "value": 4
+          }
+        ]
+      },
+      "sst": {
+        "min": 4,
+        "max": 4,
+        "n": 2,
+        "values": [
+          {
+            "session_id": "synthetic-s01",
+            "value": 4
+          },
+          {
+            "session_id": "synthetic-s02",
+            "value": 4
+          }
+        ]
+      },
+      "partnership": {
+        "min": 4,
+        "max": 4,
+        "n": 2,
+        "values": [
+          {
+            "session_id": "synthetic-s01",
+            "value": 4
+          },
+          {
+            "session_id": "synthetic-s02",
+            "value": 4
+          }
+        ]
+      },
+      "empathy": {
+        "min": 4,
+        "max": 4,
+        "n": 2,
+        "values": [
+          {
+            "session_id": "synthetic-s01",
+            "value": 4
+          },
+          {
+            "session_id": "synthetic-s02",
+            "value": 4
+          }
+        ]
+      },
+      "reflection_question_ratio": {
+        "min": 1.0,
+        "max": 2.0,
+        "n": 2,
+        "values": [
+          {
+            "session_id": "synthetic-s01",
+            "value": 1.0
+          },
+          {
+            "session_id": "synthetic-s02",
+            "value": 2.0
+          }
+        ]
+      },
+      "pct_cr": {
+        "min": 0.5,
+        "max": 0.5,
+        "n": 2,
+        "values": [
+          {
+            "session_id": "synthetic-s01",
+            "value": 0.5
+          },
+          {
+            "session_id": "synthetic-s02",
+            "value": 0.5
+          }
+        ]
+      }
+    },
+    "cells": {
+      "gi": {
+        "claude/synthetic-large/low": {
+          "value": 0.25,
+          "off": 0.25,
+          "bias": -0.25,
+          "n": 2,
+          "of": 2,
+          "repeats": 2,
+          "within_tolerance": true,
+          "best": false,
+          "na": null,
+          "observed": {
+            "min": 0,
+            "max": 1,
+            "n": 4
+          }
+        },
+        "openai/synthetic-mid/low": {
+          "value": 0.5,
+          "off": 0.0,
+          "bias": 0.0,
+          "n": 2,
+          "of": 2,
+          "repeats": 2,
+          "within_tolerance": true,
+          "best": true,
+          "na": null,
+          "observed": {
+            "min": 0,
+            "max": 1,
+            "n": 4
+          }
+        }
+      },
+      "persuade": {
+        "claude/synthetic-large/low": {
+          "value": 0.0,
+          "off": 0.0,
+          "bias": 0.0,
+          "n": 2,
+          "of": 2,
+          "repeats": 2,
+          "within_tolerance": true,
+          "best": true,
+          "na": null,
+          "observed": {
+            "min": 0,
+            "max": 0,
+            "n": 4
+          }
+        },
+        "openai/synthetic-mid/low": {
+          "value": 0.0,
+          "off": 0.0,
+          "bias": 0.0,
+          "n": 2,
+          "of": 2,
+          "repeats": 2,
+          "within_tolerance": true,
+          "best": true,
+          "na": null,
+          "observed": {
+            "min": 0,
+            "max": 0,
+            "n": 4
+          }
+        }
+      },
+      "persuade_permission": {
+        "claude/synthetic-large/low": {
+          "value": 0.0,
+          "off": 0.0,
+          "bias": 0.0,
+          "n": 2,
+          "of": 2,
+          "repeats": 2,
+          "within_tolerance": true,
+          "best": true,
+          "na": null,
+          "observed": {
+            "min": 0,
+            "max": 0,
+            "n": 4
+          }
+        },
+        "openai/synthetic-mid/low": {
+          "value": 0.0,
+          "off": 0.0,
+          "bias": 0.0,
+          "n": 2,
+          "of": 2,
+          "repeats": 2,
+          "within_tolerance": true,
+          "best": true,
+          "na": null,
+          "observed": {
+            "min": 0,
+            "max": 0,
+            "n": 4
+          }
+        }
+      },
+      "question": {
+        "claude/synthetic-large/low": {
+          "value": 1.5,
+          "off": 0.0,
+          "bias": 0.0,
+          "n": 2,
+          "of": 2,
+          "repeats": 2,
+          "within_tolerance": true,
+          "best": true,
+          "na": null,
+          "observed": {
+            "min": 1,
+            "max": 2,
+            "n": 4
+          }
+        },
+        "openai/synthetic-mid/low": {
+          "value": 1.5,
+          "off": 0.0,
+          "bias": 0.0,
+          "n": 2,
+          "of": 2,
+          "repeats": 2,
+          "within_tolerance": true,
+          "best": true,
+          "na": null,
+          "observed": {
+            "min": 1,
+            "max": 2,
+            "n": 4
+          }
+        }
+      },
+      "sr": {
+        "claude/synthetic-large/low": {
+          "value": 0.75,
+          "off": 0.25,
+          "bias": -0.25,
+          "n": 2,
+          "of": 2,
+          "repeats": 2,
+          "within_tolerance": true,
+          "best": false,
+          "na": null,
+          "observed": {
+            "min": 0,
+            "max": 1,
+            "n": 4
+          }
+        },
+        "openai/synthetic-mid/low": {
+          "value": 1.0,
+          "off": 0.0,
+          "bias": 0.0,
+          "n": 2,
+          "of": 2,
+          "repeats": 2,
+          "within_tolerance": true,
+          "best": true,
+          "na": null,
+          "observed": {
+            "min": 1,
+            "max": 1,
+            "n": 4
+          }
+        }
+      },
+      "cr": {
+        "claude/synthetic-large/low": {
+          "value": 1.25,
+          "off": 0.25,
+          "bias": 0.25,
+          "n": 2,
+          "of": 2,
+          "repeats": 2,
+          "within_tolerance": true,
+          "best": false,
+          "na": null,
+          "observed": {
+            "min": 1,
+            "max": 2,
+            "n": 4
+          }
+        },
+        "openai/synthetic-mid/low": {
+          "value": 1.0,
+          "off": 0.0,
+          "bias": 0.0,
+          "n": 2,
+          "of": 2,
+          "repeats": 2,
+          "within_tolerance": true,
+          "best": true,
+          "na": null,
+          "observed": {
+            "min": 1,
+            "max": 1,
+            "n": 4
+          }
+        }
+      },
+      "affirm": {
+        "claude/synthetic-large/low": {
+          "value": 0.25,
+          "off": 0.25,
+          "bias": -0.25,
+          "n": 2,
+          "of": 2,
+          "repeats": 2,
+          "within_tolerance": true,
+          "best": false,
+          "na": null,
+          "observed": {
+            "min": 0,
+            "max": 1,
+            "n": 4
+          }
+        },
+        "openai/synthetic-mid/low": {
+          "value": 0.5,
+          "off": 0.0,
+          "bias": 0.0,
+          "n": 2,
+          "of": 2,
+          "repeats": 2,
+          "within_tolerance": true,
+          "best": true,
+          "na": null,
+          "observed": {
+            "min": 0,
+            "max": 1,
+            "n": 4
+          }
+        }
+      },
+      "seek_collab": {
+        "claude/synthetic-large/low": {
+          "value": 0.0,
+          "off": 0.0,
+          "bias": 0.0,
+          "n": 2,
+          "of": 2,
+          "repeats": 2,
+          "within_tolerance": true,
+          "best": true,
+          "na": null,
+          "observed": {
+            "min": 0,
+            "max": 0,
+            "n": 4
+          }
+        },
+        "openai/synthetic-mid/low": {
+          "value": 0.0,
+          "off": 0.0,
+          "bias": 0.0,
+          "n": 2,
+          "of": 2,
+          "repeats": 2,
+          "within_tolerance": true,
+          "best": true,
+          "na": null,
+          "observed": {
+            "min": 0,
+            "max": 0,
+            "n": 4
+          }
+        }
+      },
+      "emphasize_autonomy": {
+        "claude/synthetic-large/low": {
+          "value": 0.0,
+          "off": 0.0,
+          "bias": 0.0,
+          "n": 2,
+          "of": 2,
+          "repeats": 2,
+          "within_tolerance": true,
+          "best": true,
+          "na": null,
+          "observed": {
+            "min": 0,
+            "max": 0,
+            "n": 4
+          }
+        },
+        "openai/synthetic-mid/low": {
+          "value": 0.0,
+          "off": 0.0,
+          "bias": 0.0,
+          "n": 2,
+          "of": 2,
+          "repeats": 2,
+          "within_tolerance": true,
+          "best": true,
+          "na": null,
+          "observed": {
+            "min": 0,
+            "max": 0,
+            "n": 4
+          }
+        }
+      },
+      "confront": {
+        "claude/synthetic-large/low": {
+          "value": 0.25,
+          "off": 0.25,
+          "bias": -0.25,
+          "n": 2,
+          "of": 2,
+          "repeats": 2,
+          "within_tolerance": true,
+          "best": false,
+          "na": null,
+          "observed": {
+            "min": 0,
+            "max": 1,
+            "n": 4
+          }
+        },
+        "openai/synthetic-mid/low": {
+          "value": 0.5,
+          "off": 0.0,
+          "bias": 0.0,
+          "n": 2,
+          "of": 2,
+          "repeats": 2,
+          "within_tolerance": true,
+          "best": true,
+          "na": null,
+          "observed": {
+            "min": 0,
+            "max": 1,
+            "n": 4
+          }
+        }
+      },
+      "cct": {
+        "claude/synthetic-large/low": {
+          "value": null,
+          "off": 0.0,
+          "bias": 0.0,
+          "n": 2,
+          "of": 2,
+          "repeats": 2,
+          "within_tolerance": true,
+          "best": true,
+          "na": null,
+          "observed": {
+            "min": 4,
+            "max": 4,
+            "n": 4
+          },
+          "buckets": {
+            "same": 1.0,
+            "off1": 0.0,
+            "off2plus": 0.0
+          },
+          "within_1": 1.0
+        },
+        "openai/synthetic-mid/low": {
+          "value": null,
+          "off": 0.0,
+          "bias": 0.0,
+          "n": 2,
+          "of": 2,
+          "repeats": 2,
+          "within_tolerance": true,
+          "best": true,
+          "na": null,
+          "observed": {
+            "min": 4,
+            "max": 4,
+            "n": 4
+          },
+          "buckets": {
+            "same": 1.0,
+            "off1": 0.0,
+            "off2plus": 0.0
+          },
+          "within_1": 1.0
+        }
+      },
+      "sst": {
+        "claude/synthetic-large/low": {
+          "value": null,
+          "off": 0.0,
+          "bias": 0.0,
+          "n": 2,
+          "of": 2,
+          "repeats": 2,
+          "within_tolerance": true,
+          "best": true,
+          "na": null,
+          "observed": {
+            "min": 4,
+            "max": 4,
+            "n": 4
+          },
+          "buckets": {
+            "same": 1.0,
+            "off1": 0.0,
+            "off2plus": 0.0
+          },
+          "within_1": 1.0
+        },
+        "openai/synthetic-mid/low": {
+          "value": null,
+          "off": 0.0,
+          "bias": 0.0,
+          "n": 2,
+          "of": 2,
+          "repeats": 2,
+          "within_tolerance": true,
+          "best": true,
+          "na": null,
+          "observed": {
+            "min": 4,
+            "max": 4,
+            "n": 4
+          },
+          "buckets": {
+            "same": 1.0,
+            "off1": 0.0,
+            "off2plus": 0.0
+          },
+          "within_1": 1.0
+        }
+      },
+      "partnership": {
+        "claude/synthetic-large/low": {
+          "value": null,
+          "off": 0.0,
+          "bias": 0.0,
+          "n": 2,
+          "of": 2,
+          "repeats": 2,
+          "within_tolerance": true,
+          "best": true,
+          "na": null,
+          "observed": {
+            "min": 4,
+            "max": 4,
+            "n": 4
+          },
+          "buckets": {
+            "same": 1.0,
+            "off1": 0.0,
+            "off2plus": 0.0
+          },
+          "within_1": 1.0
+        },
+        "openai/synthetic-mid/low": {
+          "value": null,
+          "off": 0.0,
+          "bias": 0.0,
+          "n": 2,
+          "of": 2,
+          "repeats": 2,
+          "within_tolerance": true,
+          "best": true,
+          "na": null,
+          "observed": {
+            "min": 4,
+            "max": 4,
+            "n": 4
+          },
+          "buckets": {
+            "same": 1.0,
+            "off1": 0.0,
+            "off2plus": 0.0
+          },
+          "within_1": 1.0
+        }
+      },
+      "empathy": {
+        "claude/synthetic-large/low": {
+          "value": null,
+          "off": 0.0,
+          "bias": 0.0,
+          "n": 2,
+          "of": 2,
+          "repeats": 2,
+          "within_tolerance": true,
+          "best": true,
+          "na": null,
+          "observed": {
+            "min": 4,
+            "max": 4,
+            "n": 4
+          },
+          "buckets": {
+            "same": 1.0,
+            "off1": 0.0,
+            "off2plus": 0.0
+          },
+          "within_1": 1.0
+        },
+        "openai/synthetic-mid/low": {
+          "value": null,
+          "off": 0.0,
+          "bias": 0.0,
+          "n": 2,
+          "of": 2,
+          "repeats": 2,
+          "within_tolerance": true,
+          "best": true,
+          "na": null,
+          "observed": {
+            "min": 4,
+            "max": 4,
+            "n": 4
+          },
+          "buckets": {
+            "same": 1.0,
+            "off1": 0.0,
+            "off2plus": 0.0
+          },
+          "within_1": 1.0
+        }
+      },
+      "reflection_question_ratio": {
+        "claude/synthetic-large/low": {
+          "value": 1.5,
+          "off": 0.0,
+          "bias": 0.0,
+          "n": 2,
+          "of": 2,
+          "repeats": 2,
+          "within_tolerance": null,
+          "best": true,
+          "na": null,
+          "observed": {
+            "min": 1.0,
+            "max": 2.0,
+            "n": 4
+          }
+        },
+        "openai/synthetic-mid/low": {
+          "value": 1.5,
+          "off": 0.0,
+          "bias": 0.0,
+          "n": 2,
+          "of": 2,
+          "repeats": 2,
+          "within_tolerance": null,
+          "best": true,
+          "na": null,
+          "observed": {
+            "min": 1.0,
+            "max": 2.0,
+            "n": 4
+          }
+        }
+      },
+      "pct_cr": {
+        "claude/synthetic-large/low": {
+          "value": 0.625,
+          "off": 0.125,
+          "bias": 0.125,
+          "n": 2,
+          "of": 2,
+          "repeats": 2,
+          "within_tolerance": null,
+          "best": false,
+          "na": null,
+          "observed": {
+            "min": 0.5,
+            "max": 1.0,
+            "n": 4
+          }
+        },
+        "openai/synthetic-mid/low": {
+          "value": 0.5,
+          "off": 0.0,
+          "bias": 0.0,
+          "n": 2,
+          "of": 2,
+          "repeats": 2,
+          "within_tolerance": null,
+          "best": true,
+          "na": null,
+          "observed": {
+            "min": 0.5,
+            "max": 0.5,
+            "n": 4
+          }
+        }
+      }
+    }
+  },
+  "cohorts": {
+    "gi": {
+      "paired": 2,
+      "of": 2
+    },
+    "persuade": {
+      "paired": 2,
+      "of": 2
+    },
+    "persuade_permission": {
+      "paired": 2,
+      "of": 2
+    },
+    "question": {
+      "paired": 2,
+      "of": 2
+    },
+    "sr": {
+      "paired": 2,
+      "of": 2
+    },
+    "cr": {
+      "paired": 2,
+      "of": 2
+    },
+    "affirm": {
+      "paired": 2,
+      "of": 2
+    },
+    "seek_collab": {
+      "paired": 2,
+      "of": 2
+    },
+    "emphasize_autonomy": {
+      "paired": 2,
+      "of": 2
+    },
+    "confront": {
+      "paired": 2,
+      "of": 2
+    },
+    "cct": {
+      "paired": 2,
+      "of": 2
+    },
+    "sst": {
+      "paired": 2,
+      "of": 2
+    },
+    "partnership": {
+      "paired": 2,
+      "of": 2
+    },
+    "empathy": {
+      "paired": 2,
+      "of": 2
+    },
+    "technical": {
+      "paired": 2,
+      "of": 2
+    },
+    "relational": {
+      "paired": 2,
+      "of": 2
+    },
+    "pct_cr": {
+      "paired": 2,
+      "of": 2
+    },
+    "reflection_question_ratio": {
+      "paired": 2,
+      "of": 2
+    },
+    "total_mia": {
+      "paired": 2,
+      "of": 2
+    },
+    "total_mina": {
+      "paired": 2,
+      "of": 2
+    }
+  },
+  "footnotes": [
+    "Sessions have equal weight; repeats are averaged within each session.",
+    "Started resets on re-claim; retried_runs counts retried cells."
+  ]
+}

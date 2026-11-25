@@ -1,0 +1,332 @@
+{
+  "eval_run_id": "eval-lines",
+  "has_human": true,
+  "combos": [
+    {
+      "combo_key": "claude/synthetic-large/low",
+      "engine": "miti",
+      "model": null,
+      "tier": null,
+      "effort": "low"
+    },
+    {
+      "combo_key": "openai/synthetic-mid/low",
+      "engine": "oneshot:synthetic",
+      "model": null,
+      "tier": null,
+      "effort": "low"
+    }
+  ],
+  "coverage": {
+    "eval_status": "done",
+    "cancelled_at": null,
+    "runs_done": 8,
+    "runs_total": 8,
+    "runs_skipped": 0,
+    "skipped_providers": []
+  },
+  "excluded": [],
+  "session_id": "synthetic-s01",
+  "turns": [
+    {
+      "id": "t2",
+      "speaker": "B",
+      "is_clinician": false,
+      "text": "Synthetic client turn 2.",
+      "start_ms": 10000,
+      "end_ms": 19000
+    },
+    {
+      "id": "t3",
+      "speaker": "A",
+      "is_clinician": true,
+      "text": "Synthetic clinician turn 3.",
+      "start_ms": 20000,
+      "end_ms": 29000
+    },
+    {
+      "id": "t4",
+      "speaker": "B",
+      "is_clinician": false,
+      "text": "Synthetic client turn 4.",
+      "start_ms": 30000,
+      "end_ms": 39000
+    },
+    {
+      "id": "t5",
+      "speaker": "A",
+      "is_clinician": true,
+      "text": "Synthetic clinician turn 5.",
+      "start_ms": 40000,
+      "end_ms": 49000
+    },
+    {
+      "id": "t6",
+      "speaker": "B",
+      "is_clinician": false,
+      "text": "Synthetic client turn 6.",
+      "start_ms": 50000,
+      "end_ms": 59000
+    },
+    {
+      "id": "t7",
+      "speaker": "A",
+      "is_clinician": true,
+      "text": "Synthetic clinician turn 7.",
+      "start_ms": 60000,
+      "end_ms": 69000
+    },
+    {
+      "id": "t8",
+      "speaker": "B",
+      "is_clinician": false,
+      "text": "Synthetic client turn 8.",
+      "start_ms": 70000,
+      "end_ms": 79000
+    },
+    {
+      "id": "t9",
+      "speaker": "A",
+      "is_clinician": true,
+      "text": "Synthetic clinician turn 9.",
+      "start_ms": 80000,
+      "end_ms": 89000
+    },
+    {
+      "id": "t10",
+      "speaker": "B",
+      "is_clinician": false,
+      "text": "Synthetic client turn 10.",
+      "start_ms": 90000,
+      "end_ms": 99000
+    },
+    {
+      "id": "t11",
+      "speaker": "A",
+      "is_clinician": true,
+      "text": "Synthetic clinician turn 11.",
+      "start_ms": 100000,
+      "end_ms": 109000
+    },
+    {
+      "id": "t12",
+      "speaker": "B",
+      "is_clinician": false,
+      "text": "Synthetic client turn 12.",
+      "start_ms": 110000,
+      "end_ms": 119000
+    }
+  ],
+  "gold": {
+    "coded_span": {
+      "start_turn": 1,
+      "end_turn": 12
+    },
+    "counts": {
+      "affirm": 1,
+      "confront": 0,
+      "cr": 1,
+      "emphasize_autonomy": 0,
+      "gi": 1,
+      "persuade": 0,
+      "persuade_permission": 0,
+      "question": 2,
+      "seek_collab": 0,
+      "sr": 1
+    },
+    "globals": {
+      "cct": 4,
+      "empathy": 4,
+      "partnership": 4,
+      "sst": 4
+    },
+    "quality_label": null,
+    "utterance_codes": [
+      {
+        "turn_id": "t3",
+        "codes": [
+          "question"
+        ],
+        "note": null
+      },
+      {
+        "turn_id": "t5",
+        "codes": [
+          "sr"
+        ],
+        "note": null
+      },
+      {
+        "turn_id": "t7",
+        "codes": [
+          "cr",
+          "affirm"
+        ],
+        "note": null
+      },
+      {
+        "turn_id": "t9",
+        "codes": [
+          "question"
+        ],
+        "note": null
+      },
+      {
+        "turn_id": "t11",
+        "codes": [
+          "gi"
+        ],
+        "note": null
+      }
+    ]
+  },
+  "missing": null,
+  "lanes": {
+    "human": {
+      "t3": [
+        "question"
+      ],
+      "t5": [
+        "sr"
+      ],
+      "t7": [
+        "affirm",
+        "cr"
+      ],
+      "t9": [
+        "question"
+      ],
+      "t11": [
+        "gi"
+      ]
+    },
+    "claude/synthetic-large/low": {
+      "missing": null,
+      "n": 1,
+      "repeats": 2,
+      "turns": {
+        "t2": [
+          [],
+          []
+        ],
+        "t3": [
+          [
+            "question"
+          ],
+          [
+            "question"
+          ]
+        ],
+        "t4": [
+          [],
+          []
+        ],
+        "t5": [
+          [
+            "sr"
+          ],
+          [
+            "cr"
+          ]
+        ],
+        "t6": [
+          [],
+          []
+        ],
+        "t7": [
+          [
+            "cr"
+          ],
+          [
+            "affirm",
+            "cr"
+          ]
+        ],
+        "t8": [
+          [],
+          []
+        ],
+        "t9": [
+          [
+            "question"
+          ],
+          [
+            "question"
+          ]
+        ],
+        "t10": [
+          [],
+          []
+        ],
+        "t11": [
+          [
+            "gi"
+          ],
+          []
+        ],
+        "t12": [
+          [],
+          []
+        ]
+      }
+    },
+    "openai/synthetic-mid/low": {
+      "missing": "no line-level output",
+      "n": 1,
+      "repeats": 2,
+      "turns": {}
+    }
+  },
+  "disagreement": {
+    "t2": false,
+    "t3": false,
+    "t4": false,
+    "t5": true,
+    "t6": false,
+    "t7": true,
+    "t8": false,
+    "t9": false,
+    "t10": false,
+    "t11": true,
+    "t12": false
+  },
+  "globals": {
+    "human": {
+      "cct": 4,
+      "empathy": 4,
+      "partnership": 4,
+      "sst": 4
+    },
+    "combos": {
+      "claude/synthetic-large/low": [
+        {
+          "cct": 4,
+          "sst": 4,
+          "partnership": 4,
+          "empathy": 4
+        },
+        {
+          "cct": 4,
+          "sst": 4,
+          "partnership": 4,
+          "empathy": 4
+        }
+      ],
+      "openai/synthetic-mid/low": [
+        {
+          "cct": 4,
+          "empathy": 4,
+          "partnership": 4,
+          "sst": 4
+        },
+        {
+          "cct": 4,
+          "empathy": 4,
+          "partnership": 4,
+          "sst": 4
+        }
+      ]
+    }
+  },
+  "dataset_notes": []
+}

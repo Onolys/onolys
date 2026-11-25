@@ -6,6 +6,7 @@ import { PublicOnly, RequireVerified } from '@prod-auth/guards';
 import { Login } from '@prod-auth/pages/Login';
 import type { AuthService } from '@prod-auth/types';
 import { createEvalApi, type RunSummary } from './api';
+import { buildCompareUrl, type CompareUrlState } from './compare/compareUrl';
 import { History, RunView } from './Runs';
 import { getConfig } from './config';
 import { NewRun } from './NewRun';
@@ -15,6 +16,13 @@ import { createAuthFetch } from './transport/authFetch';
 import './app.css';
 import { Button } from '@onolys/ui';
 
+/** Query navigation shared by run links and Compare drill-downs. */
+export function navigateEval(state: CompareUrlState, saved?: RunSummary) {
+  const url = new URL(window.location.href);
+  url.search = buildCompareUrl(state, url.searchParams);
+  window.history.pushState(saved ? { initialRun: saved } : {}, '', url);
+  window.dispatchEvent(new PopStateEvent('popstate'));
+}
 const browserFetch: typeof fetch = (input, init) => fetch(input, init);
 /** Prod-app pages the Login links to; they are not mounted here, accounts are made and verified in the prod app. */
 const PROD_ONLY_PATHS = ['/signup', '/forgot-password', '/verify-email', '/auth/action'];
@@ -48,14 +56,7 @@ function AllowedApp({ baseFetch }: { baseFetch: typeof fetch }) {
   const [initialRun, setInitialRun] = useState<RunSummary | undefined>(() => window.history.state?.initialRun);
   const runId = location.get('run');
   const navigate = (id?: string, history = false, saved?: RunSummary) => {
-    const url = new URL(window.location.href);
-    url.searchParams.delete('run'); url.searchParams.delete('view');
-    if (id) url.searchParams.set('run', id);
-    else if (history) url.searchParams.set('view', 'history');
-    window.history.pushState(saved ? { initialRun: saved } : {}, '', url);
-    window.dispatchEvent(new PopStateEvent('popstate'));
-    setInitialRun(saved);
-    setLocation(url.searchParams);
+    navigateEval({run:id,view:id ? 'run' : history ? 'history' : 'new'}, saved);
   };
   const rerun = (run: RunSummary) => navigate(undefined, false, run);
   useEffect(() => {

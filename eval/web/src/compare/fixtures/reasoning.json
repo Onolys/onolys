@@ -1,0 +1,524 @@
+{
+  "eval_run_id": "eval-lines",
+  "has_human": true,
+  "combos": [
+    {
+      "combo_key": "claude/synthetic-large/low",
+      "engine": "miti",
+      "model": null,
+      "tier": null,
+      "effort": "low"
+    },
+    {
+      "combo_key": "openai/synthetic-mid/low",
+      "engine": "oneshot:synthetic",
+      "model": null,
+      "tier": null,
+      "effort": "low"
+    }
+  ],
+  "coverage": {
+    "eval_status": "done",
+    "cancelled_at": null,
+    "runs_done": 8,
+    "runs_total": 8,
+    "runs_skipped": 0,
+    "skipped_providers": []
+  },
+  "excluded": [],
+  "groups": [
+    {
+      "code": "gi",
+      "snippets": [
+        {
+          "session_id": "synthetic-s01",
+          "combo_key": "claude/synthetic-large/low",
+          "repeat": 1,
+          "turn_id": "t11",
+          "quote": "Synthetic clinician turn 11.",
+          "quote_verified": true,
+          "rationale": "Synthetic rationale for gi at t11.",
+          "withheld": false
+        }
+      ]
+    },
+    {
+      "code": "question",
+      "snippets": [
+        {
+          "session_id": "synthetic-s01",
+          "combo_key": "claude/synthetic-large/low",
+          "repeat": 1,
+          "turn_id": "t3",
+          "quote": "Synthetic clinician turn 3.",
+          "quote_verified": true,
+          "rationale": "",
+          "withheld": true
+        },
+        {
+          "session_id": "synthetic-s01",
+          "combo_key": "claude/synthetic-large/low",
+          "repeat": 1,
+          "turn_id": "t9",
+          "quote": "Synthetic clinician turn 9.",
+          "quote_verified": true,
+          "rationale": "Synthetic rationale for question at t9.",
+          "withheld": false
+        },
+        {
+          "session_id": "synthetic-s01",
+          "combo_key": "claude/synthetic-large/low",
+          "repeat": 2,
+          "turn_id": "t3",
+          "quote": "Synthetic clinician turn 3.",
+          "quote_verified": true,
+          "rationale": "Synthetic rationale for question at t3.",
+          "withheld": false
+        },
+        {
+          "session_id": "synthetic-s01",
+          "combo_key": "claude/synthetic-large/low",
+          "repeat": 2,
+          "turn_id": "t9",
+          "quote": "Synthetic clinician turn 9.",
+          "quote_verified": true,
+          "rationale": "Synthetic rationale for question at t9.",
+          "withheld": false
+        },
+        {
+          "session_id": "synthetic-s02",
+          "combo_key": "claude/synthetic-large/low",
+          "repeat": 1,
+          "turn_id": "t1",
+          "quote": "Synthetic clinician turn 1.",
+          "quote_verified": true,
+          "rationale": "Synthetic rationale for question at t1.",
+          "withheld": false
+        },
+        {
+          "session_id": "synthetic-s02",
+          "combo_key": "claude/synthetic-large/low",
+          "repeat": 2,
+          "turn_id": "t1",
+          "quote": "Synthetic clinician turn 1.",
+          "quote_verified": true,
+          "rationale": "Synthetic rationale for question at t1.",
+          "withheld": false
+        }
+      ]
+    },
+    {
+      "code": "sr",
+      "snippets": [
+        {
+          "session_id": "synthetic-s01",
+          "combo_key": "claude/synthetic-large/low",
+          "repeat": 1,
+          "turn_id": "t5",
+          "quote": "Synthetic clinician turn 5.",
+          "quote_verified": true,
+          "rationale": "Synthetic rationale for sr at t5.",
+          "withheld": false
+        },
+        {
+          "session_id": "synthetic-s02",
+          "combo_key": "claude/synthetic-large/low",
+          "repeat": 1,
+          "turn_id": "t3",
+          "quote": "Synthetic clinician turn 3.",
+          "quote_verified": true,
+          "rationale": "Synthetic rationale for sr at t3.",
+          "withheld": false
+        },
+        {
+          "session_id": "synthetic-s02",
+          "combo_key": "claude/synthetic-large/low",
+          "repeat": 2,
+          "turn_id": "t3",
+          "quote": "Synthetic clinician turn 3.",
+          "quote_verified": true,
+          "rationale": "Synthetic rationale for sr at t3.",
+          "withheld": false
+        }
+      ]
+    },
+    {
+      "code": "cr",
+      "snippets": [
+        {
+          "session_id": "synthetic-s01",
+          "combo_key": "claude/synthetic-large/low",
+          "repeat": 1,
+          "turn_id": "t7",
+          "quote": "Synthetic clinician turn 7.",
+          "quote_verified": true,
+          "rationale": "Synthetic rationale for cr at t7.",
+          "withheld": false
+        },
+        {
+          "session_id": "synthetic-s01",
+          "combo_key": "claude/synthetic-large/low",
+          "repeat": 2,
+          "turn_id": "t5",
+          "quote": "Synthetic clinician turn 5.",
+          "quote_verified": true,
+          "rationale": "Synthetic rationale for cr at t5.",
+          "withheld": false
+        },
+        {
+          "session_id": "synthetic-s01",
+          "combo_key": "claude/synthetic-large/low",
+          "repeat": 2,
+          "turn_id": "t7",
+          "quote": "Synthetic clinician turn 7.",
+          "quote_verified": true,
+          "rationale": "Synthetic rationale for cr at t7.",
+          "withheld": false
+        },
+        {
+          "session_id": "synthetic-s02",
+          "combo_key": "claude/synthetic-large/low",
+          "repeat": 1,
+          "turn_id": "t5",
+          "quote": "Synthetic clinician turn 5.",
+          "quote_verified": true,
+          "rationale": "Synthetic rationale for cr at t5.",
+          "withheld": false
+        },
+        {
+          "session_id": "synthetic-s02",
+          "combo_key": "claude/synthetic-large/low",
+          "repeat": 2,
+          "turn_id": "t5",
+          "quote": "Synthetic clinician turn 5.",
+          "quote_verified": true,
+          "rationale": "Synthetic rationale for cr at t5.",
+          "withheld": false
+        }
+      ]
+    },
+    {
+      "code": "cct",
+      "snippets": [
+        {
+          "session_id": "synthetic-s01",
+          "combo_key": "claude/synthetic-large/low",
+          "repeat": 1,
+          "rationale": "Synthetic reason for cct score 4.",
+          "withheld": false,
+          "evidence": [
+            {
+              "turn_id": "t2",
+              "quote": "Synthetic client turn 2."
+            },
+            {
+              "turn_id": "t3",
+              "quote": "Synthetic clinician turn 3."
+            }
+          ]
+        },
+        {
+          "session_id": "synthetic-s01",
+          "combo_key": "claude/synthetic-large/low",
+          "repeat": 2,
+          "rationale": "Synthetic reason for cct score 4.",
+          "withheld": false,
+          "evidence": [
+            {
+              "turn_id": "t2",
+              "quote": "Synthetic client turn 2."
+            },
+            {
+              "turn_id": "t3",
+              "quote": "Synthetic clinician turn 3."
+            }
+          ]
+        },
+        {
+          "session_id": "synthetic-s02",
+          "combo_key": "claude/synthetic-large/low",
+          "repeat": 1,
+          "rationale": "Synthetic reason for cct score 4.",
+          "withheld": false,
+          "evidence": [
+            {
+              "turn_id": "t1",
+              "quote": "Synthetic clinician turn 1."
+            },
+            {
+              "turn_id": "t2",
+              "quote": "Synthetic client turn 2."
+            }
+          ]
+        },
+        {
+          "session_id": "synthetic-s02",
+          "combo_key": "claude/synthetic-large/low",
+          "repeat": 2,
+          "rationale": "Synthetic reason for cct score 4.",
+          "withheld": false,
+          "evidence": [
+            {
+              "turn_id": "t1",
+              "quote": "Synthetic clinician turn 1."
+            },
+            {
+              "turn_id": "t2",
+              "quote": "Synthetic client turn 2."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "sst",
+      "snippets": [
+        {
+          "session_id": "synthetic-s01",
+          "combo_key": "claude/synthetic-large/low",
+          "repeat": 1,
+          "rationale": "Synthetic reason for sst score 4.",
+          "withheld": false,
+          "evidence": [
+            {
+              "turn_id": "t2",
+              "quote": "Synthetic client turn 2."
+            },
+            {
+              "turn_id": "t3",
+              "quote": "Synthetic clinician turn 3."
+            }
+          ]
+        },
+        {
+          "session_id": "synthetic-s01",
+          "combo_key": "claude/synthetic-large/low",
+          "repeat": 2,
+          "rationale": "Synthetic reason for sst score 4.",
+          "withheld": false,
+          "evidence": [
+            {
+              "turn_id": "t2",
+              "quote": "Synthetic client turn 2."
+            },
+            {
+              "turn_id": "t3",
+              "quote": "Synthetic clinician turn 3."
+            }
+          ]
+        },
+        {
+          "session_id": "synthetic-s02",
+          "combo_key": "claude/synthetic-large/low",
+          "repeat": 1,
+          "rationale": "Synthetic reason for sst score 4.",
+          "withheld": false,
+          "evidence": [
+            {
+              "turn_id": "t1",
+              "quote": "Synthetic clinician turn 1."
+            },
+            {
+              "turn_id": "t2",
+              "quote": "Synthetic client turn 2."
+            }
+          ]
+        },
+        {
+          "session_id": "synthetic-s02",
+          "combo_key": "claude/synthetic-large/low",
+          "repeat": 2,
+          "rationale": "Synthetic reason for sst score 4.",
+          "withheld": false,
+          "evidence": [
+            {
+              "turn_id": "t1",
+              "quote": "Synthetic clinician turn 1."
+            },
+            {
+              "turn_id": "t2",
+              "quote": "Synthetic client turn 2."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "partnership",
+      "snippets": [
+        {
+          "session_id": "synthetic-s01",
+          "combo_key": "claude/synthetic-large/low",
+          "repeat": 1,
+          "rationale": "Synthetic reason for partnership score 4.",
+          "withheld": false,
+          "evidence": [
+            {
+              "turn_id": "t2",
+              "quote": "Synthetic client turn 2."
+            },
+            {
+              "turn_id": "t3",
+              "quote": "Synthetic clinician turn 3."
+            }
+          ]
+        },
+        {
+          "session_id": "synthetic-s01",
+          "combo_key": "claude/synthetic-large/low",
+          "repeat": 2,
+          "rationale": "Synthetic reason for partnership score 4.",
+          "withheld": false,
+          "evidence": [
+            {
+              "turn_id": "t2",
+              "quote": "Synthetic client turn 2."
+            },
+            {
+              "turn_id": "t3",
+              "quote": "Synthetic clinician turn 3."
+            }
+          ]
+        },
+        {
+          "session_id": "synthetic-s02",
+          "combo_key": "claude/synthetic-large/low",
+          "repeat": 1,
+          "rationale": "Synthetic reason for partnership score 4.",
+          "withheld": false,
+          "evidence": [
+            {
+              "turn_id": "t1",
+              "quote": "Synthetic clinician turn 1."
+            },
+            {
+              "turn_id": "t2",
+              "quote": "Synthetic client turn 2."
+            }
+          ]
+        },
+        {
+          "session_id": "synthetic-s02",
+          "combo_key": "claude/synthetic-large/low",
+          "repeat": 2,
+          "rationale": "Synthetic reason for partnership score 4.",
+          "withheld": false,
+          "evidence": [
+            {
+              "turn_id": "t1",
+              "quote": "Synthetic clinician turn 1."
+            },
+            {
+              "turn_id": "t2",
+              "quote": "Synthetic client turn 2."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "empathy",
+      "snippets": [
+        {
+          "session_id": "synthetic-s01",
+          "combo_key": "claude/synthetic-large/low",
+          "repeat": 1,
+          "rationale": "Synthetic reason for empathy score 4.",
+          "withheld": false,
+          "evidence": [
+            {
+              "turn_id": "t2",
+              "quote": "Synthetic client turn 2."
+            },
+            {
+              "turn_id": "t3",
+              "quote": "Synthetic clinician turn 3."
+            }
+          ]
+        },
+        {
+          "session_id": "synthetic-s01",
+          "combo_key": "claude/synthetic-large/low",
+          "repeat": 2,
+          "rationale": "Synthetic reason for empathy score 4.",
+          "withheld": false,
+          "evidence": [
+            {
+              "turn_id": "t2",
+              "quote": "Synthetic client turn 2."
+            },
+            {
+              "turn_id": "t3",
+              "quote": "Synthetic clinician turn 3."
+            }
+          ]
+        },
+        {
+          "session_id": "synthetic-s02",
+          "combo_key": "claude/synthetic-large/low",
+          "repeat": 1,
+          "rationale": "Synthetic reason for empathy score 4.",
+          "withheld": false,
+          "evidence": [
+            {
+              "turn_id": "t1",
+              "quote": "Synthetic clinician turn 1."
+            },
+            {
+              "turn_id": "t2",
+              "quote": "Synthetic client turn 2."
+            }
+          ]
+        },
+        {
+          "session_id": "synthetic-s02",
+          "combo_key": "claude/synthetic-large/low",
+          "repeat": 2,
+          "rationale": "Synthetic reason for empathy score 4.",
+          "withheld": false,
+          "evidence": [
+            {
+              "turn_id": "t1",
+              "quote": "Synthetic clinician turn 1."
+            },
+            {
+              "turn_id": "t2",
+              "quote": "Synthetic client turn 2."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "affirm",
+      "snippets": [
+        {
+          "session_id": "synthetic-s01",
+          "combo_key": "claude/synthetic-large/low",
+          "repeat": 2,
+          "turn_id": "t7",
+          "quote": "Synthetic clinician turn 7.",
+          "quote_verified": true,
+          "rationale": "Synthetic rationale for affirm at t7.",
+          "withheld": false
+        }
+      ]
+    },
+    {
+      "code": "confront",
+      "snippets": [
+        {
+          "session_id": "synthetic-s02",
+          "combo_key": "claude/synthetic-large/low",
+          "repeat": 1,
+          "turn_id": "t7",
+          "quote": "Synthetic clinician turn 7.",
+          "quote_verified": true,
+          "rationale": "Synthetic rationale for confront at t7.",
+          "withheld": false
+        }
+      ]
+    }
+  ],
+  "next_cursor": null
+}

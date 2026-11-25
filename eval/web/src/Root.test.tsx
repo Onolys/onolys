@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
-import { Root } from './Root';
+import { navigateEval, Root } from './Root';
 import { createFakeAuthService } from '@prod-auth/fakeService';
 
 afterEach(() => { cleanup(); window.history.replaceState({}, '', '/'); });
@@ -44,12 +44,11 @@ it('restores an existing backend run from its URL after reload and handles brows
     return new Response(JSON.stringify(path.endsWith('/me') ? {} : path.includes('/runs/') ? {
       run_id: 'saved/run', status: 'done', completed_units: 0, total_units: 0, failed_units: 0, cancelled_units: 0,
       usage: { input_tokens: 0, output_tokens: 0 }, cost_usd_est: 0, unpriced_units: 0, units: [],
-      input: { upload_id: 'saved-upload' }, compare: { has_human: false, metrics: [], sessions: [], aggregates: [], notes: [] },
+      input: { upload_id: 'saved-upload' },
     } : { runs: [] }));
   });
   const view = render(<Root service={fake('a@example.com')} baseFetch={baseFetch} />);
   expect(await screen.findByRole('heading', { name: 'Run saved/run' })).toBeTruthy();
-  await screen.findByText('Comparison will appear when units are available.');
   expect(baseFetch.mock.calls.some(call => String(call[0]).endsWith('/v1/runs/saved%2Frun'))).toBe(true);
   expect(baseFetch.mock.calls.some(call => String(call[0]).includes('/datasets'))).toBe(false);
   window.history.pushState({}, '', '/?view=history');
@@ -97,4 +96,11 @@ it('signed-out login page is the prod login and still never calls the API', asyn
   await screen.findByRole('heading', { name: 'Log in' });
   expect(window.location.pathname).toBe('/login');
   expect(baseFetch).not.toHaveBeenCalled();
+});
+
+it('preserves compare drill-down state during pushState navigation', () => {
+ navigateEval({run:'saved/run', view:'compare', tab:'lines', combos:['miti|m/t/e'], session:'s1', turn:'t3', only:'disagree'});
+ expect(new URLSearchParams(window.location.search).get('view')).toBe('compare');
+ expect(new URLSearchParams(window.location.search).get('session')).toBe('s1');
+ expect(new URLSearchParams(window.location.search).get('combos')).toBe('miti|m/t/e');
 });

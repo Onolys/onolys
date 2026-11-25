@@ -42,10 +42,6 @@ pre { white-space: pre-wrap; overflow-wrap: anywhere; max-width: 100%; font-size
 .unit { background: white; border: 1px solid #cad8d1; border-radius: .65rem; padding: 1rem; min-width: 0; }
 .unit h3 { font-size: 1rem; }
 summary { cursor: pointer; padding: .5rem 0; }
-table.matrix th[scope=row] { position: sticky; left: 0; background: #e7eeea; z-index: 1; min-width: 12rem; }
-table.matrix .sub { display: block; color: #4a625b; }
-table.matrix .failed { display: block; color: #ac3b29; font-weight: 600; }
-td.best { background: #d6efe0; font-weight: 700; }
 button.sort { background: none; color: inherit; padding: 0; margin: 0; font-weight: 700; text-align: left; }
 th[aria-sort=ascending] button.sort::after { content: " \25B2"; }
 th[aria-sort=descending] button.sort::after { content: " \25BC"; }
