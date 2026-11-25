@@ -115,6 +115,8 @@ class WorkflowTests(unittest.TestCase):
         web = str(workflow['jobs']['web'])
         self.assertIn('release_target.py hosting web/firebase.json', web)
         self.assertIn('hosting:app-staging', web)
+        frontend = next(step for step in workflow['jobs']['web']['steps'] if step.get('working-directory') == 'web')
+        self.assertEqual(frontend['env']['VITE_APP_HOSTS'], "${{ vars.STAGING_GCP_PROJECT && 'onolys-staging-app.web.app' || '' }}")
         steps = workflow['jobs']['web']['steps']
         setup = next(i for i, step in enumerate(steps) if step.get('uses', '').startswith('google-github-actions/setup-gcloud@'))
         voice = next(i for i, step in enumerate(steps) if 'release_target.py voice' in step.get('run', ''))
