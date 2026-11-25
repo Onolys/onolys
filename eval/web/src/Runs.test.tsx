@@ -222,7 +222,7 @@ it('automatically drains every history page for a filter and aborts the active p
  await screen.findByRole('link', { name: 'saved' });
  fireEvent.change(screen.getByLabelText('Filter Status'), { target: { value: 'DONE' } });
  await screen.findByText('Loading full history for search, filters and sorting…');
- await act(async () => { await new Promise(resolve => setTimeout(resolve, 20)); });
+ await waitFor(() => expect(runs).toHaveBeenCalledTimes(3));
  expect(runs.mock.calls.map(call => call[1])).toEqual([undefined, 'p2', 'p3']);
  view.unmount(); expect(pageSignal?.aborted).toBe(true);
 });
