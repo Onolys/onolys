@@ -3,7 +3,7 @@
 `POST /internal/tasks/tick {eval_run_id, n}` runs one scheduling round for one eval run:
 
 1. enqueue tick n+1 BEFORE any work (a crash cannot end the chain), then atomically lease
-   the group and advance `tick_seq`; competing ticks retry until release or lease recovery;
+   the group and advance `tick_seq`; competing ticks queue a durable lease-recovery timer;
    every snapshot write and RunDoc admission is fenced by the lease token;
 2. fold terminal RunDocs of active sessions into the group doc, release their provider slots;
 3. classify failures (`internal_error` -> one retry; everything else stays failed);
@@ -17,6 +17,7 @@ provider breaker (`_record_outcome`). Cancel (R7): `_cancel_cells`.
 
 import hashlib
 import logging
+import math
 import random
 from copy import deepcopy
 from datetime import UTC, datetime, timedelta
@@ -27,6 +28,7 @@ from uuid import uuid4
 from fastapi import APIRouter, HTTPException, Request
 from onolys_api.engines import eval_snapshot
 from onolys_api.errors import ApiError
+from onolys_api.repo.base import NotFoundError
 from onolys_api.repo.models import EvalRunInfo
 from onolys_api.routes.runs import EvalDisabled
 from onolys_api.routes.runs import RunRequest as ApiRunRequest
@@ -224,9 +226,14 @@ def _fail_cell(doc: dict, entry: dict, cell: dict, cells: list[dict], code: str)
     _advance(entry, cells)
 
 
-def _isolated(services, doc: dict, sid: str, cells: list[dict], handler):
+def _isolated(
+    services, doc: dict, sid: str, cells: list[dict], handler, *,
+    clear_errors=True, preserve_active=False,
+):
     """Run one cell's handler (R6c): an unexpected exception is logged (cell key, no payload),
-    its partial changes are rolled back, and after 3 consecutive errors only that cell fails."""
+    its partial changes are rolled back, and after 3 consecutive errors only that cell fails.
+    Uncertain active-run reads retain their ref/slot until an actual outcome can be read.
+    """
     entry = doc["sessions"][sid]
     cell = cells[entry["cursor"]]
     key = cell_key(sid, cell)
@@ -235,15 +242,19 @@ def _isolated(services, doc: dict, sid: str, cells: list[dict], handler):
         result = handler()
     except (EvalDisabled, TickOwnershipLost):
         raise
-    except Exception:
+    except Exception as error:
         doc.update(backup)
         logger.exception("tick_cell_error", extra={"cell": key})
         wait = doc["cells_wait"].setdefault(key, {"internal_retries": 0})
         wait["handler_errors"] = wait.get("handler_errors", 0) + 1
-        if wait["handler_errors"] >= HANDLER_ERROR_LIMIT:
-            _fail_cell(doc, doc["sessions"][sid], cell, cells, "scheduler_error")
+        entry = doc["sessions"][sid]
+        can_fail = (
+            not preserve_active or not entry["active_run_id"] or isinstance(error, NotFoundError)
+        )
+        if wait["handler_errors"] >= HANDLER_ERROR_LIMIT and can_fail:
+            _fail_cell(doc, entry, cell, cells, "scheduler_error")
         return None
-    if key in doc["cells_wait"]:
+    if clear_errors and key in doc["cells_wait"]:
         doc["cells_wait"][key].pop("handler_errors", None)
     return result
 
@@ -439,21 +450,24 @@ def _record_started(entry, cell, run_id, attempt):
     entry["state"] = "running"
 
 
-def _recover_created(services, eval_run_id, doc, cells):
-    """Adopt creation-before-save crashes BEFORE cancellation can mark these cells unstarted.
+def _inspect_session(services, eval_run_id, doc, sid, cells):
+    """Read once and adopt creation-before-save crashes before cancellation marks cells.
 
-    The newly claimed tick token fences any late starts by the old owner. Consequently all
-    previously admitted RunDocs are visible here, including when cancellation is already set.
-    Their slots remain claimed until their terminal outcomes have been folded and saved.
+    The new token fences late starts by the old owner. A missing parent/run can fail this
+    cell after bounded isolation; an uncertain read must preserve a known active run/slot.
     """
-    for sid, entry in doc["sessions"].items():
-        if entry["active_run_id"] or entry["cursor"] >= len(cells):
-            continue
-        cell = cells[entry["cursor"]]
-        attempt = len(_cell_refs(entry, cell))
-        run_id = run_id_for(eval_run_id, sid, cell, attempt)
-        if services.repo.get_runs(services.config.eval_owner_uid, sid, [run_id]):
-            _record_started(entry, cell, run_id, attempt)
+    entry = doc["sessions"][sid]
+    cell = cells[entry["cursor"]]
+    attempt = len(_cell_refs(entry, cell))
+    run_id = entry["active_run_id"] or run_id_for(eval_run_id, sid, cell, attempt)
+    runs = services.repo.get_runs(services.config.eval_owner_uid, sid, [run_id])
+    if not runs:
+        if entry["active_run_id"]:
+            raise NotFoundError()
+        return None
+    if not entry["active_run_id"]:
+        _record_started(entry, cell, run_id, attempt)
+    return runs[0]
 
 
 def _holder_dead(services, owner_doc: dict | None, run_id: str) -> bool:
@@ -466,6 +480,11 @@ def _holder_dead(services, owner_doc: dict | None, run_id: str) -> bool:
                 continue
             if ref["status"] in RUN_TERMINAL:
                 return True
+            if sid in owner_doc.get("_unreadable_sessions", set()):
+                return False  # unknown outcome: preserve this valid active ref and capacity
+            checked = owner_doc.get("_checked_runs", {})
+            if run_id in checked:
+                return checked[run_id].status in RUN_TERMINAL
             runs = services.repo.get_runs(services.config.eval_owner_uid, sid, [run_id])
             return bool(runs) and runs[0].status in RUN_TERMINAL
     return False  # claimed but not recorded yet: its eval run's next tick resolves it
@@ -476,8 +495,15 @@ def sweep_slots(services, doc: dict, eval_run_id: str) -> None:
     repository = services.repository
     for provider in sorted({provider_of(doc, c) for c in plan_cells(doc)}):
         for run_id, owner in repository.get_slots(provider).get("holders", {}).items():
-            owner_doc = doc if owner == eval_run_id else repository.get_run(owner)
-            if _holder_dead(services, owner_doc, run_id):
+            try:
+                owner_doc = doc if owner == eval_run_id else repository.get_run(owner)
+                dead = _holder_dead(services, owner_doc, run_id)
+            except NotFoundError:
+                dead = True  # the owning session was removed: no RunDoc can still be active
+            except Exception:
+                logger.exception("tick_slot_lookup_error", extra={"run_id": run_id})
+                continue  # one unreadable holder must not stop unrelated providers/sessions
+            if dead:
                 repository.release_slot(provider, run_id)
 
 
@@ -487,13 +513,13 @@ def _rollup(doc: dict) -> None:
     # Public counters include the auto-completed Human gold refs. Status describes AI work.
     human = len(doc["sessions"]) if "human" in doc["engines"] else 0
     done = doc["done_units"] - human
-    if done == doc["total_units"] - human:
+    if doc.get("cancel_requested"):
+        doc["status"] = "partial" if done else "cancelled"
+    elif done == doc["total_units"] - human:
         doc["status"] = "done"
     elif done:
         doc["status"] = "partial"
-    elif doc["cancelled_units"] and not doc["skipped_units"] and (
-        doc.get("cancel_requested") or not doc["failed_units"]
-    ):
+    elif doc["cancelled_units"] and not doc["skipped_units"] and not doc["failed_units"]:
         doc["status"] = "cancelled"  # R7: no run done, even if in-flight ones failed
     else:
         doc["status"] = "failed"
@@ -506,6 +532,8 @@ def _cancel_cells(doc: dict, cells: list[dict]) -> None:
     `skipped_idx` so the cursor steps over them, and never reach `_record_outcome` (breaker).
     Idempotent: a second pass finds nothing left to mark."""
     for sid, entry in doc["sessions"].items():
+        if sid in doc.get("_unreadable_sessions", set()):
+            continue  # recovery could not establish whether this cell already started
         gone = set(entry.setdefault("skipped_idx", []))
         start = entry["cursor"] + (1 if entry["active_run_id"] else 0)
         for idx in range(start, len(cells)):
@@ -547,22 +575,49 @@ def _save(services, eval_run_id: str, doc: dict) -> None:
         raise TickOwnershipLost()
 
 
-def run_tick(services, eval_run_id: str, n: int) -> str:
-    """One scheduling round. Busy deliveries retry, so a slow/crashed owner cannot end the chain."""
+def _defer_busy_tick(services, eval_run_id, doc):
+    """Durably continue past the queue's two-attempt budget before acknowledging busy work.
+
+    One named timer per live owner fires after its lease, even if that owner dies. If a
+    successor arrives before its predecessor claimed ownership, use a short timed probe.
+    Recovery resolves the CURRENT sequence on delivery, avoiding an already-consumed task id.
+    """
+    now = _now()
+    lease = _parse(doc.get("tick_lease_until"))
+    if doc.get("tick_owner") and lease and lease > now:
+        delay = math.ceil((lease - now).total_seconds()) + 1
+        suffix = doc["tick_owner"]
+    else:
+        delay = TICK_DELAY_S
+        suffix = str(int(now.timestamp() * 1_000_000))
+    services.queue.enqueue(
+        "tick", {"eval_run_id": eval_run_id, "n": doc["tick_seq"],
+                 "recover": True, "resume_key": suffix},
+        delay_seconds=delay, task_id=f"{eval_run_id}-tick-recover-{suffix}",
+    )
+    return "busy"
+
+
+def run_tick(services, eval_run_id: str, n: int, *, continuation_key: str | None = None) -> str:
+    """One round; busy delivery queues a durable timer beyond the current owner's lease."""
     repository = services.repository
     doc = repository.get_run(eval_run_id)
     if doc is None or doc.get("status") not in ACTIVE:
         return "noop"
     if doc.get("tick_seq") != n:
         # Its predecessor enqueues first and may not yet have advanced the sequence.
-        return "busy" if n == doc.get("tick_seq", 0) + 1 else "noop"
+        if n == doc.get("tick_seq", 0) + 1:
+            return _defer_busy_tick(services, eval_run_id, doc)
+        return "noop"
     lease_until = _parse(doc.get("tick_lease_until"))
     if doc.get("tick_owner") and lease_until and lease_until > _now():
-        return "busy"  # do not enqueue n+1 until this tick can actually own the group
+        return _defer_busy_tick(services, eval_run_id, doc)
+    # Recovery needs a distinct successor name: its normal name may already be consumed.
+    suffix = f"-resume-{continuation_key}" if continuation_key else ""
     # Queue first: enqueue failure leaves both sequence and ownership untouched.
     services.queue.enqueue(
         "tick", {"eval_run_id": eval_run_id, "n": n + 1}, delay_seconds=TICK_DELAY_S,
-        task_id=f"{eval_run_id}-tick-{n + 1}",
+        task_id=f"{eval_run_id}-tick-{n + 1}{suffix}",
     )
     owner = uuid4().hex
     now = _now()
@@ -570,6 +625,8 @@ def run_tick(services, eval_run_id: str, n: int) -> str:
         eval_run_id, n, now.isoformat(), owner, (now + timedelta(seconds=TICK_LEASE_S)).isoformat(),
     )
     if claimed != "claimed":
+        if claimed == "busy":
+            return _defer_busy_tick(services, eval_run_id, repository.get_run(eval_run_id) or doc)
         return claimed
     doc = repository.get_run(eval_run_id)
     doc["_tick_owner"] = owner
@@ -596,19 +653,37 @@ def _cancel_latest(services, eval_run_id, doc, cells):
 
 def _run_owned_tick(services, eval_run_id, doc):
     cells = plan_cells(doc)
-    _recover_created(services, eval_run_id, doc, cells)
-    sessions = doc["sessions"]
     if doc["status"] == "queued":
         doc["status"] = "running"
 
-    # (2)+(3) fold terminal runs, then free their slots (after the doc is saved)
+    # Inspect each cell in isolation before sorting terminal outcomes by ended time. Failed
+    # lookups skip all later handling of that session this tick (one error budget increment).
     terminal = []
-    for sid, entry in sessions.items():
-        if entry["active_run_id"]:
-            uid = services.config.eval_owner_uid
-            runs = services.repo.get_runs(uid, sid, [entry["active_run_id"]])
-            if runs and runs[0].status in RUN_TERMINAL:
-                terminal.append((runs[0].ended or _now(), sid, runs[0]))
+    unreadable = doc["_unreadable_sessions"] = set()
+    checked = doc["_checked_runs"] = {}
+    for sid in doc["sessions"]:
+        entry = doc["sessions"][sid]
+        if entry["cursor"] >= len(cells):
+            continue
+        result = []
+        _isolated(
+            services, doc, sid, cells,
+            lambda sid=sid, result=result: result.append(
+                _inspect_session(services, eval_run_id, doc, sid, cells)
+            ),
+            clear_errors=False, preserve_active=True,
+        )
+        if not result:
+            unreadable.add(sid)
+            continue
+        run = result[0]
+        if run is not None:
+            checked[run.run_id] = run
+            if run.status in RUN_TERMINAL:
+                terminal.append((run.ended or _now(), sid, run))
+            else:
+                cell = cells[doc["sessions"][sid]["cursor"]]
+                doc["cells_wait"].get(cell_key(sid, cell), {}).pop("handler_errors", None)
     for _, sid, run in sorted(terminal, key=lambda item: (item[0], item[1])):  # by `ended`
         fold = partial(_fold_session, services, doc, sid, cells, run)
         _isolated(services, doc, sid, cells, fold)
@@ -620,7 +695,7 @@ def _run_owned_tick(services, eval_run_id, doc):
         if _cancel_latest(services, eval_run_id, doc, cells):
             break
         entry = doc["sessions"][sid]
-        if entry["active_run_id"] or entry["cursor"] >= len(cells):
+        if sid in unreadable or entry["active_run_id"] or entry["cursor"] >= len(cells):
             continue
         fill = partial(_fill_session, services, doc, eval_run_id, sid, cells)
         if _isolated(services, doc, sid, cells, fill):
@@ -658,6 +733,14 @@ def tick_task(request: Request, body: dict):
     eval_run_id, n = body.get("eval_run_id"), body.get("n")
     if not isinstance(eval_run_id, str) or not eval_run_id or not isinstance(n, int) or n < 1:
         raise HTTPException(422, "An eval run id and tick number are required.")
-    if run_tick(request.app.state.services, eval_run_id, n) == "busy":
-        raise HTTPException(503, "A previous scheduling round still owns this eval run.")
+    services = request.app.state.services
+    if body.get("recover") is True:
+        doc = services.repository.get_run(eval_run_id)
+        if doc is None or doc.get("status") not in ACTIVE:
+            return {"status": "ok"}
+        n = doc["tick_seq"]
+    run_tick(
+        services, eval_run_id, n,
+        continuation_key=body.get("resume_key") if body.get("recover") is True else None,
+    )  # busy work has queued its own durable recovery timer
     return {"status": "ok"}

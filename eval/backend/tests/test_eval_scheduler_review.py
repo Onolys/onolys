@@ -133,7 +133,9 @@ def test_busy_next_tick_does_not_enqueue_a_successor_early(env, monkeypatch):
     def overlap(*args):
         before = len(env.queue.tasks)
         assert sched.run_tick(env, rid, 2) == "busy"
-        assert len(env.queue.tasks) == before
+        added = env.queue.tasks[before:]
+        assert len(added) == 1 and added[0]["payload"]["recover"] is True
+        assert added[0]["payload"]["n"] == 2
         return real(*args)
 
     monkeypatch.setattr(sched, "_create", overlap)
@@ -145,7 +147,7 @@ def test_successor_delivered_before_predecessor_claim_retries(env, monkeypatch):
     real = env.queue.enqueue
 
     def enqueue(kind, payload, **kwargs):
-        if payload.get("n") == 2:
+        if kwargs.get("task_id") == f"{rid}-tick-2":
             assert sched.run_tick(env, rid, 2) == "busy"
         return real(kind, payload, **kwargs)
 
@@ -214,4 +216,4 @@ def test_cancel_after_create_before_ref_save_adopts_in_flight_work(env, monkeypa
     assert len(active_runs(env)) == 1
     assert len(env.repository.get_slots("anthropic")["holders"]) == 1
     drive(env, [rid])
-    assert env.repository.get_run(rid)["status"] == "done"
+    assert env.repository.get_run(rid)["status"] == "partial"

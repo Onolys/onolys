@@ -20,6 +20,16 @@ def _utc_iso():
     return datetime.now(UTC).isoformat()
 
 
+def _respect_cancel(saved, updates):
+    """Cancellation and terminal save share a transaction: accepted cancellation wins R7."""
+    terminal = {'done', 'partial', 'failed', 'cancelled'}
+    if saved.get('cancel_requested') and updates.get('status') in terminal:
+        human = len(saved['sessions']) if 'human' in saved['engines'] else 0
+        status = 'partial' if updates['done_units'] > human else 'cancelled'
+        return {**updates, 'status': status}
+    return updates
+
+
 class EvalRepository(Protocol):
     def create_upload(self, upload_id: str, data: Record) -> None: ...
     def get_upload(self, upload_id: str) -> Record | None: ...
@@ -183,7 +193,7 @@ class InMemoryEvalRepository:
         with self._lock:
             if not self._owns_tick(run_id, owner):
                 return False
-            self.update_run(run_id, updates)
+            self.update_run(run_id, _respect_cancel(self._runs[run_id], updates))
             return True
 
     def release_tick(self, run_id, owner):
@@ -390,7 +400,7 @@ class FirestoreEvalRepository:
             run = ref.get(transaction=transaction).to_dict() or {}
             if run.get('tick_owner') != owner or run.get('status') not in _CANCELLABLE:
                 return False
-            transaction.update(ref, updates)
+            transaction.update(ref, _respect_cancel(run, updates))
             return True
 
         return save(self.client.transaction())
