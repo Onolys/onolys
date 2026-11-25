@@ -12,6 +12,8 @@ from onolys_engine_core.json_logging import configure_logging
 from onolys_eval_backend.allowlist import ClaimsVerifier
 from onolys_eval_backend.auth import EvalAuthMiddleware, TokenVerifier
 from onolys_eval_backend.catalog import router as catalog_router
+from onolys_eval_backend.compare_cache import CompareCache
+from onolys_eval_backend.compare_routes import router as compare_router
 from onolys_eval_backend.config import EvalConfig
 from onolys_eval_backend.eval_delete import router as delete_router
 from onolys_eval_backend.eval_scheduler import router as scheduler_router
@@ -48,6 +50,8 @@ def create_app(
     app.state.config = config
     app.state.catalog = EvalServices(config)
     app.state.services = services if services is not None else app.state.catalog
+    app.state.compare_cache = CompareCache()
+    app.include_router(compare_router)
     app.include_router(catalog_router)
     app.include_router(uploads_router)
     app.include_router(runs_router)

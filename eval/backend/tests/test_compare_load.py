@@ -173,3 +173,25 @@ def test_service_source_normalizes_sp05_group_and_resolves_saved_gold(monkeypatc
     assert reads == [f"gold/{sha}.json"]
     with pytest.raises(GoldHashMismatch):
         source.gold("../../outside")
+
+
+def test_service_source_separates_engine_cross_product(monkeypatch):
+    from types import SimpleNamespace
+
+    from onolys_eval_backend import compare_load
+
+    raw = {"status": "done", "sessions": {"s": {}}, "repeats": 1,
+           "combos": [{"model": "m", "tier": "t", "effort": "low"}],
+           "engines": ["miti", "oneshot:miti"],
+           "saved_config": {"resolved_combos": {"m/t/low": {"litellm_id": "p/m"}}}}
+    monkeypatch.setattr(compare_load.eval_view, "list_cells", lambda *args: [
+        {"sid": "s", "engine": e, "combo_key": "m/t/low", "repeat": 1, "attempt": 0,
+         "run_id": e, "status": "done"} for e in raw["engines"]])
+    services = SimpleNamespace(config=SimpleNamespace(eval_owner_uid="owner"),
+                               repository=SimpleNamespace(get_run=lambda _: raw))
+    source = compare_load.ServiceEvalRunSource(services)
+    group = source.eval_run("r")
+    assert len(group["combos"]) == 2
+    assert len({c["combo_key"] for c in group["combos"]}) == 2
+    from onolys_eval.summary.operations import final_attempts
+    assert len(final_attempts(source.cells("r"))) == 2

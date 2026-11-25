@@ -64,8 +64,8 @@ class ServiceEvalRunSource:
         combos = {}
         resolved = (doc.get("saved_config") or {}).get("resolved_combos") or {}
         for cell in plan_cells(doc):
-            ck = cell["combo_key"]
-            route = resolved.get(ck) or {}
+            ck = f"{cell['engine']}|{cell['combo_key']}"
+            route = resolved.get(cell["combo_key"]) or {}
             model = route.get("litellm_id", "")
             combos[ck] = {**cell["combo"], "combo_key": ck, "engine": cell["engine"],
                           "litellm_id": model, "provider": model.split("/")[0]}
@@ -81,8 +81,10 @@ class ServiceEvalRunSource:
         if eval_run_id not in self._groups:
             self.eval_run(eval_run_id)
         if eval_run_id not in self._cells:
-            self._cells[eval_run_id] = eval_view.list_cells(
-                self.services, eval_run_id, self._groups[eval_run_id])
+            self._cells[eval_run_id] = [
+                {**c, "combo_key": f"{c['engine']}|{c['combo_key']}"} if c.get("engine") else c
+                for c in eval_view.list_cells(
+                    self.services, eval_run_id, self._groups[eval_run_id])]
         return self._cells[eval_run_id]
 
     def _read(self, method, *args):
