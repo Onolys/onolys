@@ -1208,6 +1208,7 @@ class FirestoreRepo:
         code_version: str, start_progress: int, allowed_states: tuple[str, ...],
         n_runs: int | None, preset: str | None, coded_span: dict | None = None,
         retry_max: int | None = None, eval: EvalRunInfo | None = None,  # noqa: A002
+        eval_guard: str | None = None,
     ) -> StartOutcome:  # fmt: skip
         if eval is not None:  # SP04 R3: an eval run may start on any ready session
             allowed_states = (
@@ -1224,6 +1225,14 @@ class FirestoreRepo:
 
         @firestore.transactional
         def txn_fn(txn) -> StartOutcome:
+            if eval_guard is not None:
+                if eval is None:
+                    raise ValueError("eval_guard requires eval provenance")
+                group_ref = self._top("eval_runs", eval.eval_run_id)
+                group = group_ref.get(transaction=txn).to_dict() or {}
+                if (group.get("tick_owner") != eval_guard or group.get("cancel_requested")
+                        or group.get("status") not in ("queued", "running")):
+                    return "not_ready"
             snap = sref.get(transaction=txn)
             sess = snap.to_dict() or {}
             if not snap.exists or sess.get("uid") != uid:

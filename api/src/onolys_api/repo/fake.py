@@ -906,6 +906,7 @@ class FakeRepo:
         code_version: str, start_progress: int, allowed_states: tuple[str, ...],
         n_runs: int | None, preset: str | None, coded_span: dict | None = None,
         retry_max: int | None = None, eval: EvalRunInfo | None = None,  # noqa: A002
+        eval_guard: str | None = None,
     ) -> StartOutcome:  # fmt: skip
         if eval is not None:  # SP04 R3: an eval run may start on any ready session
             allowed_states = (
@@ -913,6 +914,13 @@ class FakeRepo:
                 *(x for x in ("report_ready", "failed") if x not in allowed_states),
             )
         with self._claim_lock:  # the fake's "transaction"
+            if eval_guard is not None:
+                if eval is None:
+                    raise ValueError("eval_guard requires eval provenance")
+                group = self._get(f"eval_runs/{eval.eval_run_id}") or {}
+                if (group.get("tick_owner") != eval_guard or group.get("cancel_requested")
+                        or group.get("status") not in ("queued", "running")):
+                    return "not_ready"
             sess = self._owned(f"sessions/{sid}", uid)
             assert sess is not None
             if sess.get("state") not in allowed_states or not (

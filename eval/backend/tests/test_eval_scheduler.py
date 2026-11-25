@@ -193,7 +193,7 @@ def test_stale_or_duplicate_ticks_are_noops(env):
     assert run_tick(env, rid, 1) == "noop"  # redelivery of tick 1: tick_seq is already 2
     assert len(all_runs(env)) == created == 1
     # the compare-and-set alone also refuses a second winner for the same n
-    assert env.repository.advance_tick(rid, 1, "x") is False
+    assert env.repository.claim_tick(rid, 1, "x", "owner", "z") == "noop"
 
 
 def test_two_eval_runs_on_two_providers_never_exceed_the_cap(env):

@@ -99,3 +99,56 @@ def test_eval_start_still_refuses_a_sha_mismatch(repo):
     repo.update_session(uid, sid, {"state": "report_ready"}, status={"state": "report_ready"})
     repo.update_run(uid, sid, "r1", {"transcript_sha256": "different"})
     assert start(repo, uid, sid, "r2", eval=INFO) == "not_ready"
+
+
+@pytest.mark.parametrize("guard_state", ["current", "cancelled", "stale", "terminal", "missing"])
+def test_scheduler_guard_is_checked_in_start_transaction(repo, guard_state):
+    uid, sid = ready(repo, "report_ready")
+    group_id = uuid.uuid4().hex
+    info = INFO.model_copy(update={"eval_run_id": group_id})
+    group = {"tick_owner": "current", "status": "running", "cancel_requested": False}
+    if guard_state == "cancelled":
+        group["cancel_requested"] = True
+    elif guard_state == "stale":
+        group["tick_owner"] = "replacement"
+    elif guard_state == "terminal":
+        group["status"] = "cancelled"
+    if guard_state != "missing":
+        if hasattr(repo, "_put"):
+            repo._put(f"eval_runs/{group_id}", group)
+        else:
+            repo._top("eval_runs", group_id).set(group)
+    try:
+        outcome = start(repo, uid, sid, eval=info, eval_guard="current")
+        assert outcome == ("started" if guard_state == "current" else "not_ready")
+        assert repo.get_session(uid, sid).state == (
+            "running" if guard_state == "current" else "report_ready"
+        )
+        assert len(repo.list_runs(uid, sid)) == int(guard_state == "current")
+        assert user_counters(repo, uid, DATE) == (int(guard_state == "current"), 0)
+    finally:
+        if not hasattr(repo, "_put"):
+            repo._top("eval_runs", group_id).delete()
+
+
+def test_firestore_scheduler_guard_reads_group_in_run_transaction(monkeypatch):
+    """No emulator: assert the real Firestore adapter uses the RunDoc transaction for its gate."""
+    from unittest.mock import Mock
+
+    from google.cloud import firestore
+
+    from onolys_api.repo.firestore import FirestoreRepo
+
+    repo = FirestoreRepo(Mock(), Mock())
+    session_ref, group_ref, transaction = Mock(), Mock(), Mock()
+    group_ref.get.return_value.to_dict.return_value = {
+        "tick_owner": "owner", "status": "running", "cancel_requested": True,
+    }
+    monkeypatch.setattr(firestore, "transactional", lambda fn: fn)
+    monkeypatch.setattr(repo, "_session_ref", lambda *a: session_ref)
+    monkeypatch.setattr(repo, "_top", lambda name, key: group_ref if name == "eval_runs" else Mock())
+    monkeypatch.setattr(repo, "_contended", lambda fn, uid: fn(transaction))
+    assert start(repo, "u", "s", eval=INFO, eval_guard="owner") == "not_ready"
+    group_ref.get.assert_called_once_with(transaction=transaction)
+    session_ref.get.assert_not_called()
+    transaction.create.assert_not_called()

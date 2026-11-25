@@ -37,11 +37,18 @@ class EvalRepository(Protocol):
     def update_run(self, run_id: str, updates: Record) -> None: ...
     def cancel_run(self, run_id: str, at: str | None = None) -> bool: ...
     # Scheduler (05 R6): the `eval_slots/{provider}` doc, `{holders: {run_id: eval_run_id}}`.
-    def claim_slot(self, provider: str, run_id: str, eval_run_id: str, cap: int) -> bool: ...
-    def release_slot(self, provider: str, run_id: str) -> None: ...
+    def claim_slot(
+        self, provider: str, run_id: str, eval_run_id: str, cap: int, *, owner=None
+    ) -> bool: ...
+    def release_slot(
+        self, provider: str, run_id: str, *, eval_run_id=None, owner=None
+    ) -> None: ...
     def get_slots(self, provider: str) -> Record: ...
     def update_slot(self, provider: str, fields: Record) -> None: ...
-    def advance_tick(self, run_id: str, n: int, at: str) -> bool: ...
+    def claim_tick(self, run_id: str, n: int, at: str, owner: str, until: str) -> str: ...
+    def save_tick(self, run_id: str, owner: str, updates: Record) -> bool: ...
+    def release_tick(self, run_id: str, owner: str) -> None: ...
+    def admit_start(self, repo, eval_run_id: str, owner: str, *args, **kwargs): ...
 
 
 class InMemoryEvalRepository:
@@ -128,8 +135,11 @@ class InMemoryEvalRepository:
             return True
 
     # The lock is the in-memory equivalent of a Firestore transaction: read, decide, write.
-    def claim_slot(self, provider, run_id, eval_run_id, cap):
+    def claim_slot(self, provider, run_id, eval_run_id, cap, *, owner=None):
         with self._lock:
+            if owner and (not self._owns_tick(eval_run_id, owner)
+                          or self._runs[eval_run_id].get('cancel_requested')):
+                return False
             holders = self._slots.setdefault(provider, {}).setdefault('holders', {})
             if run_id in holders:
                 return True  # idempotent: a re-claim after a crash is the same slot
@@ -138,8 +148,10 @@ class InMemoryEvalRepository:
             holders[run_id] = eval_run_id
             return True
 
-    def release_slot(self, provider, run_id):
+    def release_slot(self, provider, run_id, *, eval_run_id=None, owner=None):
         with self._lock:
+            if owner and not self._owns_tick(eval_run_id, owner):
+                return
             self._slots.get(provider, {}).get('holders', {}).pop(run_id, None)
 
     def get_slots(self, provider):
@@ -152,14 +164,41 @@ class InMemoryEvalRepository:
             self._slots.setdefault(provider, {}).setdefault('holders', {})
             self._slots[provider].update(deepcopy(fields))
 
-    def advance_tick(self, run_id, n, at):
-        """Compare-and-set `tick_seq` n -> n+1: of duplicate deliveries of tick n only one wins."""
+    def _owns_tick(self, run_id, owner):
+        run = self._runs.get(run_id) or {}
+        return run.get('tick_owner') == owner and run.get('status') in _CANCELLABLE
+
+    def claim_tick(self, run_id, n, at, owner, until):
+        """Advance the chain only while exclusively owning the scheduling round."""
         with self._lock:
             run = self._runs.get(run_id)
-            if run is None or run.get('tick_seq') != n:
+            if run is None or run.get('status') not in _CANCELLABLE or run.get('tick_seq') != n:
+                return 'noop'
+            if run.get('tick_owner') and run.get('tick_lease_until', '') > at:
+                return 'busy'
+            run.update(tick_seq=n + 1, last_tick_at=at, tick_owner=owner, tick_lease_until=until)
+            return 'claimed'
+
+    def save_tick(self, run_id, owner, updates):
+        with self._lock:
+            if not self._owns_tick(run_id, owner):
                 return False
-            run.update({'tick_seq': n + 1, 'last_tick_at': at})
+            self.update_run(run_id, updates)
             return True
+
+    def release_tick(self, run_id, owner):
+        with self._lock:
+            run = self._runs.get(run_id)
+            if run and run.get('tick_owner') == owner:
+                run.update(tick_owner=None, tick_lease_until=None)
+
+    def admit_start(self, repo, eval_run_id, owner, *args, **kwargs):
+        # Shares the cancellation/lease lock until the fake's actual RunDoc transaction ends.
+        with self._lock:
+            if (not self._owns_tick(eval_run_id, owner)
+                    or self._runs[eval_run_id].get('cancel_requested')):
+                return 'not_ready'
+            return repo.start_run(*args, **kwargs)
 
 
 class FirestoreEvalRepository:
@@ -272,13 +311,18 @@ class FirestoreEvalRepository:
 
         return cancel(self.client.transaction())
 
-    def claim_slot(self, provider, run_id, eval_run_id, cap):
+    def claim_slot(self, provider, run_id, eval_run_id, cap, *, owner=None):
         from google.cloud import firestore
 
         ref = self.slots.document(provider)
 
         @firestore.transactional
         def claim(transaction):
+            if owner:
+                run = self.runs.document(eval_run_id).get(transaction=transaction).to_dict() or {}
+                if (run.get('tick_owner') != owner or run.get('cancel_requested')
+                        or run.get('status') not in _CANCELLABLE):
+                    return False
             snapshot = ref.get(transaction=transaction)
             holders = (snapshot.to_dict() or {}).get('holders', {}) if snapshot.exists else {}
             if run_id in holders:
@@ -293,14 +337,22 @@ class FirestoreEvalRepository:
 
         return claim(self.client.transaction())
 
-    def release_slot(self, provider, run_id):
-        from google.api_core.exceptions import NotFound
+    def release_slot(self, provider, run_id, *, eval_run_id=None, owner=None):
         from google.cloud import firestore
 
-        try:
-            self.slots.document(provider).update({f'holders.{run_id}': firestore.DELETE_FIELD})
-        except NotFound:
-            pass
+        ref = self.slots.document(provider)
+
+        @firestore.transactional
+        def release(transaction):
+            if owner:
+                run = self.runs.document(eval_run_id).get(transaction=transaction).to_dict() or {}
+                if run.get('tick_owner') != owner or run.get('status') not in _CANCELLABLE:
+                    return
+            snapshot = ref.get(transaction=transaction)
+            if snapshot.exists:
+                transaction.update(ref, {f'holders.{run_id}': firestore.DELETE_FIELD})
+
+        release(self.client.transaction())
 
     def get_slots(self, provider):
         return self._read(self.slots.document(provider)) or {'holders': {}}
@@ -308,17 +360,54 @@ class FirestoreEvalRepository:
     def update_slot(self, provider, fields):
         self.slots.document(provider).set(fields, merge=True)
 
-    def advance_tick(self, run_id, n, at):
+    def claim_tick(self, run_id, n, at, owner, until):
         from google.cloud import firestore
 
         ref = self.runs.document(run_id)
 
         @firestore.transactional
-        def advance(transaction):
-            snapshot = ref.get(transaction=transaction)
-            if not snapshot.exists or snapshot.to_dict().get('tick_seq') != n:
+        def claim(transaction):
+            run = ref.get(transaction=transaction).to_dict() or {}
+            if run.get('status') not in _CANCELLABLE or run.get('tick_seq') != n:
+                return 'noop'
+            if run.get('tick_owner') and run.get('tick_lease_until', '') > at:
+                return 'busy'
+            transaction.update(ref, {
+                'tick_seq': n + 1, 'last_tick_at': at,
+                'tick_owner': owner, 'tick_lease_until': until,
+            })
+            return 'claimed'
+
+        return claim(self.client.transaction())
+
+    def save_tick(self, run_id, owner, updates):
+        from google.cloud import firestore
+
+        ref = self.runs.document(run_id)
+
+        @firestore.transactional
+        def save(transaction):
+            run = ref.get(transaction=transaction).to_dict() or {}
+            if run.get('tick_owner') != owner or run.get('status') not in _CANCELLABLE:
                 return False
-            transaction.update(ref, {'tick_seq': n + 1, 'last_tick_at': at})
+            transaction.update(ref, updates)
             return True
 
-        return advance(self.client.transaction())
+        return save(self.client.transaction())
+
+    def release_tick(self, run_id, owner):
+        from google.cloud import firestore
+
+        ref = self.runs.document(run_id)
+
+        @firestore.transactional
+        def release(transaction):
+            run = ref.get(transaction=transaction).to_dict() or {}
+            if run.get('tick_owner') == owner:
+                transaction.update(ref, {'tick_owner': None, 'tick_lease_until': None})
+
+        release(self.client.transaction())
+
+    def admit_start(self, repo, eval_run_id, owner, *args, **kwargs):
+        # The guard is read in the SAME Firestore transaction that creates the RunDoc.
+        return repo.start_run(*args, **kwargs, eval_guard=owner)
