@@ -24,7 +24,8 @@ def base():
 
 
 def test_caps_table():
-    assert EFFORT_OUTPUT_CAP == {"none": 16000, "low": 16000, "medium": 32000, "high": 48000, "xhigh": 64000, "max": 64000}
+    # Ceiling for every effort is the model's own max output (clamped in combo_routes); never below 64000.
+    assert set(EFFORT_OUTPUT_CAP.values()) == {128000}
 
 
 def test_claude_snapshot(base):
@@ -37,8 +38,8 @@ def test_claude_snapshot(base):
         assert r.caching_mode == "anthropic_ephemeral"
         assert r.supports_temperature is False
         assert r.context_tokens == 1_000_000
-        assert r.max_output_tokens == 48000
-        assert r.timeout_s == 300
+        assert r.max_output_tokens == 128000  # the model's own max
+        assert r.timeout_s == 600  # scales with the cap: 300 s per 64000 tokens
         assert r.extra_params["reasoning_effort"] == "high"
     mid = out["mid"]
     assert mid.structured_output_mode == "json_schema"
@@ -48,15 +49,15 @@ def test_claude_snapshot(base):
 
 def test_gemini_snapshot(base):
     model = find_model(load_models(MODELS), "gemini", "gemini-4-neon")
-    out = combo_routes(base, model, "gemini-4-neon", "max")  # cap 64000 < 65536
-    assert out["mid"].max_output_tokens == 64000
+    out = combo_routes(base, model, "gemini-4-neon", "max")  # the model's max, 65536
+    assert out["mid"].max_output_tokens == 65536
     out = combo_routes(base, model, "gemini-4-neon", "low")
     r = out["cheap"]
     assert r.litellm_id == "gemini/gemini-4-neon"
     assert r.api_key_env == "GEMINI_API_KEY"
     assert r.caching_mode == "provider_implicit"
     assert r.context_tokens == 1048576
-    assert r.max_output_tokens == 16000
+    assert r.max_output_tokens == 65536
 
 
 def test_cap_bounded_by_model_max(base):

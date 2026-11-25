@@ -11,9 +11,9 @@ cheap: &gemini
   structured_output_mode: json_object
   caching_mode: provider_implicit
   supports_temperature: false
-  max_output_tokens: 16000
+  max_output_tokens: 64000
   context_tokens: 1000000
-  timeout_s: 180
+  timeout_s: 300
   max_concurrency: 8
   max_retries: 3
   backoff_s: 2
@@ -40,9 +40,9 @@ presets:
         structured_output_mode: json_object
         caching_mode: anthropic_ephemeral
         supports_temperature: false
-        max_output_tokens: 16000
+        max_output_tokens: 64000
         context_tokens: 1000000
-        timeout_s: 180
+        timeout_s: 300
         max_concurrency: 8
         max_retries: 3
         backoff_s: 2

@@ -21,7 +21,7 @@ def test_staging_text_routes_use_claude_low_and_keep_gemini_baseline():
         assert route.caching_mode == "anthropic_ephemeral"
         assert route.extra_params == {"reasoning_effort": "low"}
         assert route.supports_temperature is False
-        assert route.max_output_tokens == 16000
+        assert route.max_output_tokens == 64000
     assert routes["oneshot"].litellm_id == "gemini/gemini-4-neon"
     assert routes["oneshot"].max_output_tokens == 4096
     broken, _ = resolve_preset("test-broken-tiers", registry, {})

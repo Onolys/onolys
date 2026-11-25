@@ -144,7 +144,7 @@ def _apply_effort(raw: dict[str, dict], effort: str, entries: dict[str, Model]) 
         base_cap = entry.get("max_output_tokens", Route.max_output_tokens)
         if cap > base_cap:
             entry["max_output_tokens"] = cap
-            entry["timeout_s"] = max(entry.get("timeout_s", Route.timeout_s), COMBO_TIMEOUT_S)
+            entry["timeout_s"] = max(entry.get("timeout_s", Route.timeout_s), output_timeout_s(cap))
 
 
 def _apply_env(
@@ -287,11 +287,19 @@ def check_api_keys(routes: dict[str, Route], env: dict[str, str] | None = None) 
         raise ConfigError("LLM API key environment variable not set: " + "; ".join(parts))
 
 
-# Application budgets (including reasoning), bounded again by each model's output limit.
+# Application budgets (including reasoning), bounded again by each model's output limit: every
+# effort gets the model's own max output (all current models allow >= 64000), since thinking tokens
+# count against the cap and a truncated answer is a permanent LLMBadOutput.
 EFFORT_OUTPUT_CAP = {
-    "none": 16000, "low": 16000, "medium": 32000, "high": 48000, "xhigh": 64000, "max": 64000
+    "none": 128000, "low": 128000, "medium": 128000, "high": 128000, "xhigh": 128000, "max": 128000
 }
-COMBO_TIMEOUT_S = 300
+COMBO_TIMEOUT_S = 300  # per 64000 output tokens
+_TIMEOUT_TOKENS = 64000
+
+
+def output_timeout_s(max_output_tokens: int) -> float:
+    """Timeout for a route with this output cap: COMBO_TIMEOUT_S per 64000 tokens, never less."""
+    return max(COMBO_TIMEOUT_S, COMBO_TIMEOUT_S * max_output_tokens / _TIMEOUT_TOKENS)
 
 
 def effort_output_cap(model: Model, effort: str) -> int:
@@ -318,7 +326,7 @@ def combo_routes(base: dict[str, Route], model: Model, tier: str, effort: str) -
             supports_temperature=model.supports_temperature,
             context_tokens=model.context_tokens,
             max_output_tokens=cap,
-            timeout_s=COMBO_TIMEOUT_S,
+            timeout_s=output_timeout_s(cap),
             extra_params=extra,
         )
     return out

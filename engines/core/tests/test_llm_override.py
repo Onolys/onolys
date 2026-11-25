@@ -7,9 +7,9 @@ import pytest
 from onolys_engine_core.errors import ConfigError
 from onolys_engine_core.llm.models import load_models
 from onolys_engine_core.llm.routes import (
-    COMBO_TIMEOUT_S,
     EFFORT_OUTPUT_CAP,
     load_registry,
+    output_timeout_s,
     resolve_preset,
 )
 
@@ -87,8 +87,25 @@ def test_high_effort_raises_output_cap_and_timeout(baseline):
         for name in TEXT:
             want = EFFORT_OUTPUT_CAP[effort]
             assert r[name].max_output_tokens == min(want, MODEL_MAX[r[name].litellm_id])
-            assert r[name].max_output_tokens > baseline[name].max_output_tokens
-            assert r[name].timeout_s == COMBO_TIMEOUT_S
+            assert r[name].max_output_tokens >= baseline[name].max_output_tokens
+            assert r[name].timeout_s == output_timeout_s(r[name].max_output_tokens)
+
+
+def test_default_staging_text_routes_have_at_least_64000_cap(baseline):
+    for name in TEXT:
+        assert 64000 <= baseline[name].max_output_tokens <= MODEL_MAX[baseline[name].litellm_id]
+        assert baseline[name].timeout_s >= 300
+
+
+@pytest.mark.parametrize("effort", ["none", "low", "medium", "high"])
+def test_every_effort_uses_the_models_own_max_output(effort):
+    if effort == "none":
+        env = {"LLM_PROVIDER": "openai", "LLM_MODEL": "gpt-6.1-terra", "LLM_EFFORT": effort}
+    else:
+        env = {"LLM_EFFORT": effort}
+    r = routes(env)
+    for name in TEXT:
+        assert r[name].max_output_tokens == MODEL_MAX[r[name].litellm_id]
 
 
 @pytest.mark.parametrize("effort", ["low", "medium"])
