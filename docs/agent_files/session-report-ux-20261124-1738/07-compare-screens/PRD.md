@@ -1,0 +1,119 @@
+---
+status: draft
+summary: Four read-only Compare screens (Overview, Deep dive, More analysis, Line view) in eval/web, fed by SP06 endpoints, drawn with hand-rolled SVG/CSS (no chart library), reached from History and run detail, replacing the old embedded Compare/Summary tables.
+date: 2026-11-25
+---
+# PRD: SP07 Compare screens
+
+Repo/branch: Onolys/iaudit / `session-report-ux` · Depends on: SP06 (endpoints and payload shapes; SP05 owns the URL prefix) · Owns (files): new `eval/web/src/compare/` (`CompareApp.tsx`, `Overview.tsx`, `DeepDive.tsx`, `MoreAnalysis.tsx`, `LineView.tsx`, `charts/*.tsx`, `compareApi.ts`, `compareUrl.ts`, `compare.css`, `*.test.tsx`, `fixtures/`); edits to `Root.tsx`, `Runs.tsx`, `api.ts`, `app.css`, `Runs.test.tsx`, `Root.test.tsx`, `eval/web/README.md`. No backend edits.
+
+## TL;DR
+Today a finished run shows one wide per-unit table and a MAE "Summary" tab inside run detail. SP07 replaces it with a separate Compare area that answers three questions in order: which combo is closest to human (Overview), where and why (Deep dive, More analysis), and what happened on this line (Line view). The UI only renders SP06 payloads: it computes no metric, picks no winner, and prints every text verbatim from saved data. Charts are small hand-drawn SVG/CSS pieces, so the bundle does not grow.
+
+## Problem
+| Gap | Evidence |
+|---|---|
+| Compare is a per-session table plus MAE summary embedded in run detail; no leaderboard, heatmap, line view, n or cohort | [verified: `eval/web/src/Runs.tsx:71-123,192`] |
+| It consumes `RunDetail.compare`, a shape SP06 removes | [verified: `api.ts:57-73`; SP06 Owns `read_runs.py` compare key] |
+| No route to Compare from History; no deep links between levels | [verified: `Root.tsx` handles only `?run=` and `?view=history`] |
+
+## Goals / Non-Goals
+**Goals:** the approved Overview, Deep dive, More analysis and Line view; linked drill-down; honest empty and partial states; 320-1,280 px, keyboard and screen-reader usable; offline fixture tests.
+**Non-goals:** any calculation or wording of verdicts (SP06); run creation, rerun, delete (SP04/05); cross-run compare; composite score; export; editing labels; prompt versioning.
+
+## Requirements
+
+**Entry and shell**
+- History rows and run detail get a "Compare" link (real `<a href>`, plain click uses the app's pushState navigation like the existing run link). Enabled for `done` and `partial` runs; for `queued/running/failed/cancelled` it is replaced by status text ("Compare opens when the run has finished results"). A running run's Compare is not offered (SP06 caches running runs for 10 s only).
+- Compare header: run name, "N sessions, R repeats", label coverage ("Human labels: all counts, 4 globals" from `label_coverage`), a Back to run link, and a four-tab bar (Overview, Deep dive, More analysis, Line view). Tabs use `role=tablist` with arrow-key navigation; the selected tab is in the URL.
+- Combo legend shared by all tabs: short labels A, B, C... mapped to provider/model/tier/effort exactly as `combo_labels` gives. Label letters follow the API order and never change between tabs.
+- Every chart has a short "How to read" caption directly under it (fixed UI copy, plain words, one to three sentences) and a table twin (visually-hidden or toggle) so colour and shape are never the only signal.
+
+**1. Overview** (SP06 `/compare/overview`)
+- Verdict line: render `verdict.text` clauses as given; show each clause's n via `claims`; no client rewording. If absent or `has_human=false`: "No human reference in this run" and the screen shows only the operational columns (failures, cost, time) with no error columns.
+- Sortable leaderboard (default Count error ascending; click or Enter/Space on a column header, `aria-sort`): Count error, Globals within +-1, Line match accuracy, Line match macro F1, Fails, Cost, Time. Best per column marked with a star and the word "best" (not colour only). Cells show value plus `n of cohort` ("11 paired of 12"); n/a cells show the API's reason text.
+- Heatmap: first column Human (raw values), then one compact column per combo (A, B, C), frozen row labels, horizontal scroll past 8 combos, legend beside. Rows in order: 10 codes, 4 globals, R:Q, %CR. Big number = `value`; small = `off` and signed `bias` ("off 0.9 · +0.4"). Green fill when `within_tolerance` (0.6 lines / 0.4 points); outline when `best`; `n` printed in every cell; a 1-session cell looks like any other except its visible `n=1`. Signed numbers keep their sign; colour encodes size only. Globals: `value` is null, so the cell headline is `off` ("off 0.5"), per-interview ratings are one click away. R:Q and %CR: no green (tolerance null), best outline still shown. n/a cell: text "n/a" plus the API reason, never blank or 0.
+- Click or Enter on a heatmap cell opens Deep dive scrolled to that row, with that combo preselected. Click on a combo letter selects it in Deep dive.
+- Footnotes from the API (`footnotes`: retried-run time note, excluded sessions) printed verbatim under the table.
+
+**2. Deep dive** (SP06 `/compare/deep-dive`)
+- Picker: Human is fixed; default selection top 3 combos by Count error (the API orders), checkbox list to add or remove any combo; the choice is in the URL (`combos=`). Changing it re-fetches, because SP06 computes cohorts over the requested set; the cohort line ("paired X of Y") updates.
+- Globals: per global, a dot chart, one row per interview, Human dot plus one dot per selected combo (shape and letter differ, not just colour), with average miss and within +-1 beside it; plus same / off-by-1 / off-by-2+ stacked bars per combo.
+- Counts: per code grouped bars (Human next to each combo) and a bias word from `bias_pct` ("over-counts by 12%"), or "n/a" with reason.
+- Per-line agreement (hidden with the exact message "no line-level output (human / <combo> / both)" naming the missing side from `missing`): precision / recall / F1 table per code per combo with `codes_labeled` of 10 printed; confusion grid for one combo at a time via a switch, plus the `multi` bucket as its own labelled cell/row so totals match. Clicking a grid cell or a bucket bar opens Line view filtered to that human code and combo code (`code=`, `combo=`, `only=disagree`, session = first session with such lines, session list shown).
+- Reasoning roll-up: per code, panel per combo, count from the payload; snippets load on demand through `/compare/reasoning` (50 per page, "Load more"), verbatim; `""` shows "withheld". Human column shows counts and any gold note present.
+
+**3. More analysis** (SP06 `/compare/analysis`)
+- Cost vs accuracy frontier: scatter, x cost per run, y Count error; frontier combos joined by a line; unpriced combos listed under the chart with their reason, not plotted.
+- Human-vs-human baseline: card showing the API's text ("n/a - needs a second human coder, not in this dataset") in every current dataset; never a number.
+- Reliability table: same MITI level, repeat agreement, failures, time (n/a text from the API).
+- Head-to-head: matrix of "X closer than Y on N of M sessions" plus ties.
+- Interviews x combos grid: session Count error cells with `repeats`; row header links to that session's Line view.
+- Error vs length: scatter per (session, combo), x turns, y Count error (words as a toggle).
+
+**4. Line view** (SP06 `/compare/sessions/{sid}/lines`, `.../lines/{turn_id}`)
+- Session picker (from `cohorts`/session list); transcript turns with speaker and text exactly as returned, lanes Human + selected combos. Past 5 combos each line collapses to chips of only the disagreeing combos plus "+N agree", expandable per line. A turn without a human label shows a blank human lane cell, not "none".
+- Filters: only disagreements, by code, by combo (all in URL). Disagreeing lines are highlighted with a mark (symbol, not colour alone).
+- Click or Enter on a line opens a dialog (focus trapped, Esc closes, focus returns): line text, human code (+ note), each combo's code, its rationale verbatim, "k of r repeats agree".
+- Per-session globals table below: human vs each combo rating, the combo's reason, and cited evidence lines.
+- Engines with no line output: lane reads "no line-level output" and stays empty. No human line labels: whole view replaced by "no line-level output (human)".
+
+**Empty, partial, error states** (all screens)
+| State | Behaviour |
+|---|---|
+| Loading | `role=status` "Loading ..." per tab; skeleton not required |
+| Request failed | `role=alert` with message and Retry, tab-local (other tabs keep working) |
+| 404 | "Run not found" with link to History |
+| 409 `transcript_changed` | Line view only: "The saved transcript changed since this run; lines cannot be shown." |
+| `has_human=false` | Overview operational-only; Deep dive, line parts and "More analysis" error charts show "no human reference" |
+| Partial labels (e.g. AnnoMI) | Per-cell n/a with the API reason; `codes_labeled` shown |
+| Combo with failed runs | Shown in the cohort line and Fails column; excluded values say why |
+
+## Architecture
+**Routes.** Root keeps its history/pushState query-param navigation (no router added). New params: `?run=<id>&view=compare&tab=overview|deep|more|lines` plus `combos`, `code`, `metric`, `session`, `turn`, `only`. `compareUrl.ts` parses and builds these (pure, tested); `Root.navigate` stops deleting `view` when `view=compare`. Browser back works between tabs and drill-downs; pasted links restore state.
+
+**Components.** `CompareApp` (header, tabs, legend, URL state) -> one component per tab -> chart components (`Heatmap`, `DotRows`, `StackedBars`, `GroupedBars`, `ConfusionGrid`, `Scatter`, `LaneTable`), each pure props-in/markup-out, each with a table twin. Existing UI kit `@onolys/ui` Button/Input/Dialog are reused; existing `.table-scroll` and sticky-row-label pattern are reused (`app.css:35,45`).
+
+**Data fetching.** `compareApi.ts` adds typed functions to `createEvalApi` using the existing authenticated `request`, with `AbortController` per call [verified: `Runs.tsx` poll pattern]. One fetch per tab on first open, cached in `CompareApp` state keyed by `(tab, combos)`; reasoning snippets and line popups are fetched on demand. All responses are validated shallowly (required keys, number-or-null); unknown shape shows the tab-local error instead of rendering guesses. No client-side metric maths, sorting of leaderboard only.
+
+**Chart approach: hand-rolled SVG + CSS grid, no library.** `package.json` has no chart dependency [verified]; the charts needed are bars, dots, a grid and two scatters. A library (e.g. Recharts, ~100+ kB gzip plus d3 parts) would add weight, harder keyboard focus and table-twin control, and styling that fights Tailwind 4 theme tokens. Hand-rolled SVG gives exact keyboard/ARIA control, deterministic jsdom tests (text and attributes), and zero new dependency or supply-chain risk. Cost: more code; mitigated by sharing one scale helper and one legend component.
+
+**Responsive.** Heatmap, grids and tables sit in `.table-scroll` regions (`tabindex=0`, labelled) with sticky row labels; below 760 px charts reflow to one column and the leaderboard becomes stacked cards (same `data-label` pattern as `history-table`, `runs.css:22-39`). Lines wrap with `overflow-wrap: anywhere`.
+
+**Removed** (listed so nothing lingers): `CompareView`, `SummaryView`, `sortValue`, the Compare tab bar and its call in `RunView` (`Runs.tsx:62-123,192`); types `CompareCell`, `CompareAggregate`, `Compare`, `ErrorMetric`/`Aggregate` if unused, and `RunDetail.compare` (`api.ts:57-73`); `table.matrix` CSS (`app.css:45-47`) if unused after removal; tests that render `CompareView`/`SummaryView` (`Runs.test.tsx:20-40,211-214`) and the `compare:` fixture key (`Root.test.tsx:47`); README line about "comparison screens attach at that boundary". Unit progress table, Config dialog, cancel and rerun stay unchanged.
+
+## Decisions
+| # | Decision | Choice | Alternatives | Why |
+|---|---|---|---|---|
+| 1 | Charts | Hand-rolled SVG/CSS | Recharts / visx | No chart dep today; simple chart set; a11y and test control |
+| 2 | Routing | Extend query params, no router | Add react-router | Matches existing app; deep links need only params |
+| 3 | Tabs vs one long page | Four tabs, URL-addressed | Scroll page | Heavy payloads load per tab; matches SP06 endpoints |
+| 4 | Compare page vs run detail | Separate `view=compare` page | Keep inside run detail | Run detail stays a progress page; Compare gets room |
+| 5 | Deep-dive subset | Refetch on picker change | Slice Overview data | SP06 cohort is over requested set |
+| 6 | Cell display | Value big, `off` + bias small | One number | Owner-approved mockup |
+| 7 | Metric logic | None in UI | Derive in client | One source of truth (SP06) |
+
+## Risks / Open Questions
+- [RESOLVED: confirm SP06] Heatmap globals `value=null`: show `off` as headline ("off 0.5"), per-interview ratings only in Deep dive.
+- [RESOLVED: confirm SP06] R:Q / %CR `within_tolerance=null`: never green; `best` outline still shown, legend says "no tolerance set for ratios".
+- [OPEN] Line view session list for a cell/bar drill-down: which session opens first? Default: the session with the most matching lines, session picker shown with counts.
+- [OPEN] Viewport verification: jsdom cannot lay out, so 320-1,280 px "no overflow" cannot be asserted in unit tests. Default: unit tests assert structure (scroll regions, no fixed widths); a recorded browser check at 320, 768, 1,280 px on the fixture run before ship.
+- [OPEN] Verdict text styling for long clauses. Default: plain paragraph, claims as small "n=" tags.
+- [OPEN] Endpoint prefix (SP05). Default: `/v1/eval-runs/{id}/compare/*`, the client reads it from one constant.
+- [OPEN] Combo letter assignment past 26 combos (499 units allow it). Default: A..Z then AA, AB.
+- [DEFERRED] Export/print, cross-run compare, saved views.
+
+## Acceptance Criteria
+Fixture-driven (`eval/web/src/compare/fixtures/`, copies of SP06 payload shapes; fake fetch; no network; existing `vitest` + jsdom).
+- History and run detail show a Compare link for done/partial runs, none for running/failed; link opens `view=compare&tab=overview`; run detail has no embedded compare table.
+- Overview: leaderboard sorts on header click/keyboard with `aria-sort`; best cells show star plus "best"; every heatmap cell contains its `n`; `n=1` cell is coloured like others; off 0.6 (lines) and 0.4 (points) render green, 0.61 and 0.41 do not; globals show `off` headline; R:Q has no green; n/a cells show the API reason, never blank or 0; signed bias renders with its sign.
+- Heatmap Human column first, row labels sticky, 9 combos create a horizontal scroll region.
+- Cell click lands on Deep dive with that code row and combo selected (URL asserts).
+- Deep dive defaults to 3 combos, picker adds a 4th and triggers a refetch with `combos=`; confusion grid totals plus `multi` equal aligned lines; cell click opens Line view with `code`/`combo`/`only` set.
+- Missing line output renders "no line-level output (human)", "(<combo>)" and "(both)" in the three cases; no line chart rendered.
+- Line view: 6 combos collapse to chips + "+N agree"; blank human cell is not "none"; popup shows verbatim text, rationale (`""` -> "withheld"), "2 of 3 repeats agree"; Esc closes and returns focus; transcript text is never altered (string equality with fixture).
+- More analysis: baseline shows the API's n/a text; unpriced combo listed, not plotted; frontier points match the payload flags.
+- States: loading, tab-local error with Retry, 404, `transcript_changed`, `has_human=false`, partial labels each have a test.
+- Accessibility: tabs arrow-navigable; every chart has a "How to read" caption and a table twin; axe-style lint (`jsx-a11y`) passes; no information by colour alone (marks/words present).
+- Viewport: recorded check at 320, 768, 1,280 px shows no page-level horizontal scroll (only labelled scroll regions).
+- `npm run typecheck`, `lint`, `test`, `build` pass; bundle size delta recorded in the PR (expected small, no new dependency).
