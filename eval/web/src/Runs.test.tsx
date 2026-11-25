@@ -2,7 +2,7 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
 import { CompareView, History, RunView, SummaryView } from './Runs';
-import { createEvalApi, type Compare, type RunDetail, type RunSummary } from './api';
+import { ApiError, createEvalApi, type Compare, type RunDetail, type RunSummary } from './api';
 afterEach(() => { cleanup(); vi.useRealTimers(); });
 const ids = ['giving_information', 'persuade', 'persuade_with_permission', 'question', 'simple_reflection', 'complex_reflection', 'affirm', 'seeking_collaboration', 'emphasizing_autonomy', 'confront', 'cultivating_change_talk', 'softening_sustain_talk', 'partnership', 'empathy', 'reflection_question_ratio', 'pct_cr'];
 const mkAgg = (combo: string, label: string, mae: number | null, extra: Record<string, unknown> = {}) => ({ engine: 'miti', combo_key: combo, label, n: 2, failed: 0, within_1: { empathy: { n: 2, total: 4, fraction: .5 } }, usage: { input_tokens: 100, output_tokens: 20, calls: 3 }, cost_usd_est: .01, metrics: { n: 2, counts: { giving_information: { mae, mean_bias: 0, n: 2 } }, globals: { empathy: { mae, mean_bias: 0, n: 2, within_1: { n: 2, total: 4, fraction: .5 } } }, summaries: {} }, ...extra });
@@ -340,4 +340,50 @@ it('labels a Human unit as Once while model attempts use the configured repeat c
  const row = screen.getByRole('button', { name: 'View JSON human' }).closest('tr')!;
  expect(within(row).getByRole('cell', { name: 'Once' })).toBeTruthy();
  expect(screen.getByRole('table', { name: /Each unit/ }).textContent).toContain('3 / 3');
+});
+const openActions = async (name = 'saved') => {
+ await screen.findByRole('link', { name });
+ fireEvent.keyDown(screen.getByRole('button', { name: `Actions for ${name}` }), { key: 'Enter' });
+};
+it('Delete is enabled for terminal runs and disabled while active or deleting', async () => {
+ for (const [status, enabled] of [['done', true], ['partial', true], ['failed', true], ['cancelled', true], ['queued', false], ['running', false], ['deleting', false]] as const) {
+  const api = { ...createEvalApi('', vi.fn()), runs: vi.fn().mockResolvedValue({ runs: [{ ...summary(), status }] }) };
+  const view = render(<History api={api} onOpen={vi.fn()} onRerun={vi.fn()} />);
+  await openActions();
+  const item = await screen.findByRole('menuitem', { name: 'Delete' });
+  expect(item.getAttribute('aria-disabled') === 'true' || item.hasAttribute('data-disabled')).toBe(!enabled);
+  view.unmount();
+ }
+});
+it('Delete confirm states counts and what stays, posts the run id, then shows deleting', async () => {
+ const deleteRun = vi.fn().mockResolvedValue({ run_id: 'r1', status: 'deleting' });
+ const api = { ...createEvalApi('', vi.fn()), runs: vi.fn().mockResolvedValue({ runs: [summary()] }), deleteRun };
+ render(<History api={api} onOpen={vi.fn()} onRerun={vi.fn()} />);
+ await openActions();
+ fireEvent.click(await screen.findByRole('menuitem', { name: 'Delete' }));
+ const dialog = await screen.findByRole('dialog', { name: /Delete run/ });
+ expect(dialog.textContent).toContain('4 runs, 3 reports, 3 output files; datasets, gold and sessions stay');
+ expect(deleteRun).not.toHaveBeenCalled();
+ fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+ expect(deleteRun).not.toHaveBeenCalled();
+ await openActions();
+ fireEvent.click(await screen.findByRole('menuitem', { name: 'Delete' }));
+ fireEvent.click(within(await screen.findByRole('dialog', { name: /Delete run/ })).getByRole('button', { name: 'Delete' }));
+ await waitFor(() => expect(deleteRun).toHaveBeenCalledExactlyOnceWith('r1'));
+ await waitFor(() => expect(screen.getByText('deleting')).toBeTruthy());
+});
+it('Delete shows a run_active refusal and keeps the row', async () => {
+ const deleteRun = vi.fn().mockRejectedValue(new ApiError('Run is still active.', 409));
+ const api = { ...createEvalApi('', vi.fn()), runs: vi.fn().mockResolvedValue({ runs: [summary()] }), deleteRun };
+ render(<History api={api} onOpen={vi.fn()} onRerun={vi.fn()} />);
+ await openActions();
+ fireEvent.click(await screen.findByRole('menuitem', { name: 'Delete' }));
+ fireEvent.click(within(await screen.findByRole('dialog', { name: /Delete run/ })).getByRole('button', { name: 'Delete' }));
+ expect((await screen.findByRole('alert')).textContent).toContain('Run is still active.');
+ expect(screen.getByText('done')).toBeTruthy();
+});
+it('deleteRun posts confirm_run_id to /runs/{id}/delete', async () => {
+ const fetcher = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ run_id: 'r 1', status: 'deleting' }) });
+ await createEvalApi('https://x', fetcher as unknown as typeof fetch).deleteRun('r 1');
+ expect(fetcher).toHaveBeenCalledWith('https://x/v1/runs/r%201/delete', expect.objectContaining({ method: 'POST', body: JSON.stringify({ confirm_run_id: 'r 1' }) }));
 });

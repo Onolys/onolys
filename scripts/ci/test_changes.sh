@@ -102,6 +102,9 @@ run false "core=false oneshot=true miti=false api=true eval=false eval-backend=t
 run false "core=false oneshot=false miti=false api=false eval=true eval-backend=true eval-web=false frontend=false web=false infra=false" eval/core/src/onolys_eval/adapters.py
 run false "core=true oneshot=true miti=true api=true eval=true eval-backend=true eval-web=false frontend=false web=false infra=false" engines/core/src/context.py
 run false "core=false oneshot=false miti=true api=true eval=true eval-backend=true eval-web=false frontend=false web=false infra=false" engines/miti/src/engine.py
+# eval-backend imports onolys_api (image copies api/src): api changes run it; eval-web changes do not.
+run false "core=false oneshot=false miti=false api=true eval=false eval-backend=true eval-web=false frontend=false web=false infra=false" api/src/onolys_api/app.py
+run false "core=false oneshot=false miti=false api=false eval=false eval-backend=false eval-web=true frontend=false web=false infra=false" eval/web/src/Runs.tsx
 run false "core=false oneshot=true miti=false api=true eval=false eval-backend=true eval-web=false frontend=false web=false infra=false" config/staging/routes.yaml
 run false "core=false oneshot=false miti=false api=false eval=false eval-backend=true eval-web=false frontend=false web=false infra=false" protocols/miti/pack.yaml
 run false "core=false oneshot=false miti=false api=false eval=false eval-backend=true eval-web=false frontend=false web=false infra=false" .dockerignore

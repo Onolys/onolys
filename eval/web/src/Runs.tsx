@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState } from 'react';
-import { Badge, Button, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, Input } from '@onolys/ui';
+import { Badge, Button, Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, Input } from '@onolys/ui';
 import { ApiError } from './api';
 import { RunConfigDialog, savedConfiguration } from './RunConfigDialog';
 import './runs.css';
@@ -7,6 +7,7 @@ import type { Compare, CompareAggregate, ErrorMetric, EvalApi, RunDetail, RunSum
 
 const errorMessage = (error: unknown) => error instanceof Error ? error.message : 'Could not load run. Please try again.';
 const terminal = (status: string) => !['queued', 'running'].includes(status);
+const deletable = (status: string) => ['done', 'partial', 'failed', 'cancelled'].includes(status);
 const number = (value: number | null | undefined, metric = '') => value == null ? '—' : metric === 'pct_cr' ? `${Number((value * 100).toFixed(2))}%` : String(Number(value.toFixed(3)));
 const statusLabel = (run: RunSummary, cancelRequested = false) => cancelRequested && !terminal(run.status) ? 'cancelling' : run.status;
 const dateText = (iso: string) => { const date = new Date(iso); return Number.isNaN(date.getTime()) ? iso : date.toLocaleString(); };
@@ -20,13 +21,13 @@ const inputName = (run: RunSummary) => 'dataset_id' in run.input ? run.input.dat
 function Usage({ run }: { run: RunSummary }) {
   return <p>{run.usage.input_tokens} input tokens · {run.usage.output_tokens} output tokens · {run.cost_usd_est == null ? '—' : `~$${run.cost_usd_est.toFixed(4)}`} estimate; STT excluded.{run.unpriced_units > 0 && ` ${run.unpriced_units} unpriced unit(s); estimate is incomplete.`}</p>;
 }
-function RunActions({ run, onRerun, onConfig }: { run: RunSummary; onRerun: (run: RunSummary) => void; onConfig: (run: RunSummary, trigger: HTMLElement | null) => void }) {
+function RunActions({ run, onRerun, onConfig, onDelete }: { run: RunSummary; onRerun: (run: RunSummary) => void; onDelete: (run: RunSummary) => void; onConfig: (run: RunSummary, trigger: HTMLElement | null) => void }) {
   const trigger = useRef<HTMLButtonElement>(null);
   const openingConfig = useRef(false);
   return <DropdownMenu><DropdownMenuTrigger asChild><Button ref={trigger} variant="ghost" size="icon" aria-label={`Actions for ${run.name || inputName(run)}`}>⋮</Button></DropdownMenuTrigger>
     <DropdownMenuContent align="end" onCloseAutoFocus={event => {
       if (openingConfig.current) { event.preventDefault(); openingConfig.current = false; }
-    }}><DropdownMenuItem onSelect={() => onRerun(run)}>Rerun</DropdownMenuItem><DropdownMenuItem onSelect={() => { openingConfig.current = true; onConfig(run, trigger.current); }}>Config</DropdownMenuItem></DropdownMenuContent>
+    }}><DropdownMenuItem onSelect={() => onRerun(run)}>Rerun</DropdownMenuItem><DropdownMenuItem onSelect={() => { openingConfig.current = true; onConfig(run, trigger.current); }}>Config</DropdownMenuItem><DropdownMenuItem disabled={!deletable(run.status)} onSelect={() => onDelete(run)}>Delete</DropdownMenuItem></DropdownMenuContent>
   </DropdownMenu>;
 }
 const historyColumns = ['Date', 'Dataset', 'Status', 'Engines', 'Models', 'Tiers', 'Efforts'] as const;
@@ -207,6 +208,9 @@ export function History({ api, onOpen, onRerun }: { api: EvalApi; onOpen: (id: s
   const [sort, setSort] = useState<{ column: HistoryColumn; dir: 'ascending' | 'descending' } | null>(null);
   const [configuration, setConfiguration] = useState<RunSummary | null>(null);
   const configTrigger = useRef<HTMLElement | null>(null);
+  const [toDelete, setToDelete] = useState<RunSummary | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState('');
   const filterId = useId();
   const exhaustive = Boolean(query.trim() || from || to || sort || Object.values(filters).some(Boolean));
   if (source !== api) {
@@ -240,6 +244,17 @@ export function History({ api, onOpen, onRerun }: { api: EvalApi; onOpen: (id: s
     const comparison = sort.column === 'Date' ? a.created_at.localeCompare(b.created_at) : columnValue(a, sort.column).localeCompare(columnValue(b, sort.column), undefined, { numeric: true, sensitivity: 'base' });
     return sort.dir === 'ascending' ? comparison : -comparison;
   });
+  const confirmDelete = async () => {
+    if (!toDelete || deleting) return;
+    setDeleting(true); setDeleteError('');
+    try {
+      await api.deleteRun(toDelete.run_id);
+      const id = toDelete.run_id;
+      setRuns(previous => previous?.map(run => run.run_id === id ? { ...run, status: 'deleting' } : run));
+      setToDelete(null);
+    } catch (e) { setDeleteError(errorMessage(e)); }
+    setDeleting(false);
+  };
   const toggle = (column: HistoryColumn) => setSort(previous => ({ column, dir: previous?.column === column && previous.dir === 'ascending' ? 'descending' : 'ascending' }));
   return <section className="history"><h1>History</h1>
     <label htmlFor={`${filterId}-search`} className="history-search">Search history<Input id={`${filterId}-search`} type="search" value={query} onChange={event => setQuery(event.target.value)} placeholder="Search saved settings, names, descriptions…" /></label>
@@ -253,11 +268,19 @@ export function History({ api, onOpen, onRerun }: { api: EvalApi; onOpen: (id: s
         <tbody>{visible.map(run => <tr key={run.run_id}>{historyColumns.map(column => <td key={column} data-label={column}>{column === 'Dataset' ? <a href={`?run=${encodeURIComponent(run.run_id)}`} onClick={event => {
           if (event.button === 0 && !event.ctrlKey && !event.metaKey && !event.shiftKey && !event.altKey) { event.preventDefault(); onOpen(run.run_id); }
         }}>{inputName(run)}</a> : column === 'Date' ? <time dateTime={run.created_at}>{dateText(run.created_at)}</time> : column === 'Status' ? <Badge variant="outline" className="max-w-full whitespace-normal">{columnValue(run, column)}</Badge> : columnValue(run, column)}</td>)}
-          <td className="history-actions" data-label="Actions"><RunActions run={run} onRerun={onRerun} onConfig={(saved, trigger) => { configTrigger.current = trigger; setConfiguration(saved); }} /></td></tr>)}</tbody>
+          <td className="history-actions" data-label="Actions"><RunActions run={run} onRerun={onRerun} onConfig={(saved, trigger) => { configTrigger.current = trigger; setConfiguration(saved); }} onDelete={target => { setDeleteError(''); setToDelete(target); }} /></td></tr>)}</tbody>
       </table>{visible.length === 0 && <p>No runs match these filters.</p>}</>}
     {loading && <p role="status">{exhaustive ? 'Loading full history for search, filters and sorting…' : 'Loading history…'}</p>}
     {nextCursor && !error && <Button disabled={loading} onClick={() => { setLoading(true); setCursor(nextCursor); }}>Load more</Button>}
     {exhaustive && !loading && !nextCursor && !error && <p role="status">All {runs?.length ?? 0} saved runs searched.</p>}
     <RunConfigDialog returnFocus={configTrigger} run={configuration} onClose={() => setConfiguration(null)} />
+    <Dialog open={toDelete !== null} onOpenChange={open => { if (!open && !deleting) setToDelete(null); }}>
+      <DialogContent>
+        <DialogHeader><DialogTitle>Delete run {toDelete?.name || (toDelete ? inputName(toDelete) : '')}?</DialogTitle>
+          <DialogDescription>{toDelete && `${toDelete.total_units} runs, ${toDelete.done_units} reports, ${toDelete.done_units} output files; datasets, gold and sessions stay. This cannot be undone.`}</DialogDescription></DialogHeader>
+        {deleteError && <div role="alert">{deleteError}</div>}
+        <DialogFooter><Button variant="ghost" disabled={deleting} onClick={() => setToDelete(null)}>Cancel</Button><Button variant="destructive" disabled={deleting} onClick={() => void confirmDelete()}>Delete</Button></DialogFooter>
+      </DialogContent>
+    </Dialog>
   </section>;
 }

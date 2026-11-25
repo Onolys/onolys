@@ -35,10 +35,10 @@ export interface RunInput {
   language?: string;
   coded_span?: CodedSpan;
 }
-export type RunStatus = 'queued' | 'running' | 'done' | 'partial' | 'failed' | 'cancelled';
+export type RunStatus = 'queued' | 'running' | 'done' | 'partial' | 'failed' | 'cancelled' | 'deleting';
 export interface RunSummary extends Omit<RunInput, 'selection'> {
  selection: Selection | null; combos: Combo[] | null; legacy_selection: boolean; combo_keys: string[]; combo_labels: Record<string, string>; presets?: string[];
- run_id: string; status: RunStatus; created_at: string; cancel_requested?: boolean;
+ run_id: string; status: RunStatus; created_at: string; cancel_requested?: boolean; cancelled_at?: string | null; skipped_units?: number; provider_skips?: { provider: string; after_failures: number; skipped_cells: number; skipped_at: string }[];
  total_units: number; completed_units: number; done_units: number; failed_units: number; cancelled_units: number;
  usage: { input_tokens: number; output_tokens: number; cost_usd?: number | null; calls?: number };
  cost_usd_est: number | null; unpriced_units: number;
@@ -47,7 +47,7 @@ export interface RunSummary extends Omit<RunInput, 'selection'> {
 }
 export interface RunUnit {
  unit_id: string; session_id: string; engine: string; combo?: Combo | null; combo_key?: string | null; preset?: string | null; repeat?: number | null;
- status: Exclude<RunStatus, 'partial'>; stage?: string; error?: { code: string; message?: string } | string; output?: unknown;
+ status: Exclude<RunStatus, 'partial' | 'deleting'> | 'waiting' | 'skipped'; stage?: string; error?: { code: string; message?: string } | string; output?: unknown;
 }
 export interface ErrorMetric { mae: number | null; mean_bias: number | null; n: number }
 export interface Aggregate {
@@ -77,7 +77,8 @@ export interface EvalApi {
   runs(signal?: AbortSignal, cursor?: string): Promise<{ runs: RunSummary[]; next_cursor?: string | null }>;
   run(id: string, signal?: AbortSignal): Promise<RunDetail>;
   output(runId: string, unitId: string, signal?: AbortSignal): Promise<unknown>;
-  cancel(id: string): Promise<{ run_id: string; status: RunStatus }>;
+  cancel(id: string): Promise<{ run_id: string; status: RunStatus; cancelled_at?: string | null }>;
+  deleteRun(id: string): Promise<{ run_id: string; status: RunStatus }>;
   rerun(id: string, selection: RunSelection): Promise<{ run_id: string; status: string }>;
   options(mode: Mode, uploadId?: string): Promise<Options>;
   datasets(): Promise<{ datasets: DatasetMetadata[] }>;
@@ -120,6 +121,7 @@ export function createEvalApi(base: string, fetcher: typeof fetch, storageFetch:
     run: (runId, signal) => request(`/runs/${id(runId)}`, { signal }),
     output: (runId, unitId, signal) => request(`/runs/${id(runId)}/units/${id(unitId)}/output`, { signal }),
     cancel: runId => request(`/runs/${id(runId)}/cancel`, json({})),
+    deleteRun: runId => request(`/runs/${id(runId)}/delete`, json({ confirm_run_id: runId })),
     rerun: (runId, selection) => request(`/runs/${id(runId)}/rerun`, json(selection)),
     options: (mode, uploadId) => request(`/options?mode=${mode}${uploadId ? `&upload_id=${id(uploadId)}` : ''}`),
     datasets: () => request('/datasets'),
