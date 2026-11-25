@@ -57,3 +57,10 @@ class PriceBook:
         cost = (usage.get('input_tokens', 0) * rates[0]
                 + usage.get('output_tokens', 0) * rates[1]) / 1_000_000
         return CostEstimate(cost, True, entry.get('source'), str(entry.get('rate_as_of', '')))
+
+
+def estimate_route_cost(prices: PriceBook, run_doc: Mapping) -> CostEstimate:
+    """Price saved usage with this RunDoc's pinned route; provider cost (even 0) wins."""
+    usage = (run_doc.get('run_info') or {}).get('usage') or {}
+    route = ((run_doc.get('eval') or {}).get('resolved_route') or {})
+    return prices.estimate(usage, route.get('litellm_id', ''))
