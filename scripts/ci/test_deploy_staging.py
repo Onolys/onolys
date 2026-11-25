@@ -42,3 +42,19 @@ assert ev["with"]["image"] == jobs["deploy-worker"]["with"]["image"] == "${{ nee
 assert "build" in ev["needs"] and "deploy-worker" in ev["needs"]
 assert "env_vars" not in ev["with"], "Terraform owns eval runtime settings; image-only deploy"
 print("ok   staging LLM guard precedes all environment side effects and supplies API/worker")
+
+# A single top-level lock covers worker plus eval backend/site/rules; no independent release can revert either half.
+assert workflow["concurrency"] == {"group": "deploy-staging", "cancel-in-progress": False}
+release = jobs["deploy-eval"]
+assert release["uses"] == "./.github/workflows/deploy-eval.yml"
+assert set(release["needs"]) == {"build", "deploy-worker-eval"}
+assert release["with"] == {"sha": "${{ needs.build.outputs.sha }}"}
+assert release["secrets"] == "inherit"
+verify_index = next(i for i, step in enumerate(steps) if step.get("id") == "release")
+checkout_index = next(i for i, step in enumerate(steps) if step.get("uses", "").startswith("actions/checkout@"))
+assert checkout_index < verify_index < auth_index
+assert build["permissions"]["actions"] == "read"
+assert steps[verify_index]["uses"] == "actions/github-script@v7"
+assert "verify_staging_release.cjs" in steps[verify_index]["with"]["script"]
+assert steps[verify_index]["env"]["RELEASE_SHA"] == "${{ steps.vars.outputs.sha }}"
+print("ok   one release lock and tested SHA cover both eval runtime revisions")

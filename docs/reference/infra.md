@@ -179,7 +179,13 @@ Activate in this order:
 
 Offline guards: `python3 -m pytest infra/scripts/test_nightly_gemini_secret.py -q`, `python3 scripts/ci/check_no_llm_keys_in_pr_workflows.py`, `actionlint .github/workflows/nightly.yml`, and Terraform `fmt -check` / `validate`. These validate configuration, not live IAM propagation; the trusted-main Nightly run completes activation.
 
-Workflows: `deploy-staging.yml` runs after the `CI` workflow succeeds on `main` (also manual). `deploy-prod.yml` is manual (`workflow_dispatch`, input `sha` or `version`) or on a `v*` tag. `deploy-eval.yml` deploys the eval backend (`onolys-eval-backend-eval`), Firestore rules/indexes (`firestore:eval`) and the eval site; `_deploy-cloudrun.yml` also accepts `env: eval` (deployer-staging) for `onolys-worker-eval`. `nightly.yml` runs 06:17 UTC daily.
+Workflows: `deploy-staging.yml` runs after the `CI` workflow succeeds on `main` (also manual). Before cloud authentication, automatic and manual releases verify that the SHA is still current `main` and has successful push CI in this repository. A stale queued run fails rather than rolling back a newer release. `deploy-prod.yml` is manual (`workflow_dispatch`, input `sha` or `version`) or on a `v*` tag. `nightly.yml` runs 06:17 UTC daily.
+
+Eval releases are part of that same serialized staging workflow. It deploys `onolys-worker-eval` with the **exact staging worker image digest**, then calls `deploy-eval.yml` with the same tested SHA to build/deploy the eval backend (`onolys-eval-backend-eval`), Firestore rules/indexes (`firestore:eval`) and the eval site. Every checkout, backend image provenance and both runtime `GIT_SHA` values use that SHA; the backend deploy explicitly updates `GIT_SHA`, replacing Terraform's bootstrap value. There is no path gate or independent eval push/manual trigger. The staging concurrency lock remains held until the called workflow finishes, so another release cannot move either side independently.
+
+To release eval manually, dispatch **deploy-staging on `main` after its push CI succeeds**; this releases the worker and backend together. Do not dispatch or rerun an old independent eval workflow. During the first transition, wait for or cancel any runs started under the previous deployment definitions before starting the coordinated release: changing a workflow cannot retroactively lock an already running historical definition. Deployment is sequential, so in-flight evals can still fail the strict code-drift check while revisions change. If a deployment fails between services, correct the failure and dispatch staging again on current CI-green `main` to restore the pair. This does not weaken the worker's drift guard.
+
+The eval backend's `api-eval` service account starts and polls Speech-to-Text operations for dataset audio. It receives `roles/speech.client` only when the eval backend is enabled in `env=eval`; staging/prod API grants remain unchanged. The existing worker Speech grants remain in place.
 
 ## Operating Terraform
 
@@ -191,7 +197,7 @@ cd infra && terraform init && terraform plan     # add -lock=false for a read-on
 terraform apply
 ```
 
-No `gcloud` needed; the providers use `user_project_override` with billing project `onolys`. `terraform plan/apply` is manual (no CI apply). Cloud Run images and `GIT_SHA` belong to CI: after a CI deploy `plan` may show `GIT_SHA` drift; apply with `-var 'git_sha={staging="<staging sha>",prod="<prod sha>"}'` (root map var, one value per env) to keep it quiet. CI-set labels: `commit-sha`, `managed-by` (service + template) and `goog-terraform-provisioned` (template) are ignored via `lifecycle`.
+No `gcloud` needed; the providers use `user_project_override` with billing project `onolys`. `terraform plan/apply` is manual (no CI apply). Cloud Run images and `GIT_SHA` belong to CI: after a CI deploy `plan` may show `GIT_SHA` drift; apply with `-var 'git_sha={staging="<staging sha>",prod="<prod sha>"}' -var 'eval_git_sha=<eval sha>'` (one value per environment) to keep it quiet. CI-set labels: `commit-sha`, `managed-by` (service + template) and `goog-terraform-provisioned` (template) are ignored via `lifecycle`.
 
 After a CI pinned api deploy (`pin_traffic`, revision named `<service>-<sha7>-<run>-<attempt>`), the next plan shows a harmless `template.revision -> null` on the api (it is deliberately not in `ignore_changes`, otherwise apply fails with 409 "Revision ... with different configuration already exists"); Cloud Run then auto-names the new revision.
 

@@ -10,25 +10,25 @@ from pathlib import Path
 wf = Path('.github/workflows/deploy-eval.yml')
 assert wf.is_file(), 'deploy-eval.yml missing'
 s = wf.read_text()
-for required in ['branches: [main]', 'workflow_dispatch:', 'environment: staging',
+for required in ['workflow_call:', 'environment: staging',
                  'file: eval/backend/Dockerfile', 'steps.push.outputs.digest',
-                 'GIT_SHA=${{ github.sha }}', 'google-github-actions/auth@v2',
+                 'GIT_SHA=${{ inputs.sha }}', 'google-github-actions/auth@v2',
                  'google-github-actions/deploy-cloudrun@v2', 'skip_default_labels: true', 'id-token: write',
                  'onolys-eval-backend-eval', 'eval-staging', 'onolys-eval-staging',
                  'VITE_EVAL_API_URL:', 'vars.PROD_VITE_FIREBASE_API_KEY',
                  'vars.PROD_VITE_FIREBASE_APP_ID', 'VITE_FIREBASE_AUTH_DOMAIN: eval.onolys.com',
                  'firestore:eval', 'working-directory: web', 'VITE_APP_URL:',
                  'set_eval_origin.sh', 'test_eval_image.sh', '/v1/me', '401',
-                 'content-security-policy:', 'cancel-in-progress: false',
+                 'content-security-policy:',
                  'hosting:eval-staging']:
     assert required in s, f'missing workflow contract: {required}'
-for path in ['eval/**', 'engines/**', 'config/**', 'api/pyproject.toml',
-             'pyproject.toml', 'uv.lock', '.firebaserc', 'api/src/**', 'web/src/auth/**',
-             'web/src/api/**', 'web/src/components/classes.ts', 'web/package-lock.json',
-             'scripts/ci/*eval*', '.github/workflows/deploy-eval.yml']:
-    assert f'"{path}"' in s, f'missing deploy input {path}'
+assert 'workflow_dispatch:' not in s and '\n  push:' not in s, 'eval must release only inside the staging lock'
+assert 'concurrency:' not in s, 'caller holds the release lock through the reusable workflow'
+assert 'env_vars: GIT_SHA=${{ inputs.sha }}' in s, 'runtime env must replace Terraform bootstrap SHA'
+assert s.count('ref: ${{ inputs.sha }}') == 3, 'build, site and Firestore checkout must pin the worker SHA'
+assert 'github.sha' not in s, 'workflow_run default ref is not the tested commit'
 for forbidden in ['DEPLOYER_PROD_SA', 'credentials_json', 'service_account_key',
-                  'environment: production', 'update_env_vars:', '_deploy-cloudrun.yml']:
+                  'environment: production', '_deploy-cloudrun.yml']:
     assert forbidden not in s, f'forbidden workflow config: {forbidden}'
 img = Path('scripts/ci/test_eval_image.sh').read_text()
 run = img[img.index('docker run -d'):]
@@ -43,7 +43,7 @@ assert len(ev) == 1 and ev[0]['rules'] == 'firestore.rules' and ev[0]['indexes']
 dc = Path('.github/workflows/_deploy-cloudrun.yml').read_text()
 assert 'staging|prod|eval' in dc and "inputs.env == 'prod' && vars.DEPLOYER_PROD_SA || vars.DEPLOYER_STAGING_SA" in dc
 assert "inputs.env == 'prod' && 'production' || 'staging'" in dc
-print('ok staging-only WIF workflow, digest image, image provenance, image-only deploy and smoke')
+print('ok staging-only WIF workflow, digest image, image provenance, SHA-coordinated deploy and smoke')
 docker = Path('eval/backend/Dockerfile').read_text()
 for member in ['engines/core', 'engines/miti', 'engines/oneshot', 'api',
                'eval/core', 'eval/backend']:
@@ -101,6 +101,7 @@ if bash scripts/ci/set_eval_origin.sh https://x.run.app "$T/missing.json" >/dev/
   echo 'FAIL accepted missing placeholder' >&2; exit 1
 fi
 echo 'ok malformed/local origins and missing placeholder rejected'
+node --test scripts/ci/test_verify_staging_release.cjs
 if command -v actionlint >/dev/null 2>&1; then
   actionlint .github/workflows/deploy-eval.yml
   echo 'ok actionlint'

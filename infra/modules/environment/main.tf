@@ -227,6 +227,15 @@ resource "google_project_iam_member" "worker_speech_client" {
   member  = "serviceAccount:${google_service_account.worker.email}"
 }
 
+# Eval backend starts and polls transcription before it schedules coding runs.
+# Public staging/prod APIs continue to delegate Speech calls to their workers.
+resource "google_project_iam_member" "eval_backend_speech_client" {
+  count   = var.eval_backend_enabled && var.env == "eval" ? 1 : 0
+  project = var.project
+  role    = "roles/speech.client"
+  member  = "serviceAccount:${google_service_account.api.email}"
+}
+
 # Speech-to-Text service agent reads audio from the bucket (PRD R9, RESOLVED yes).
 resource "google_project_service_identity" "speech" {
   provider = google-beta

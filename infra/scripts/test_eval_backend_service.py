@@ -101,3 +101,14 @@ def test_secret_shells_cover_eval_needs():
 def test_outputs():
     assert "one(google_cloud_run_v2_service.eval_backend[*].name)" in OUTPUTS
     assert "one(google_cloud_run_v2_service.eval_backend[*].uri)" in OUTPUTS
+
+
+def test_backend_can_transcribe_audio_only_in_eval():
+    grant = block(MODMAIN, "google_project_iam_member", "eval_backend_speech_client")
+    assert re.search(r"count\s*=\s*var\.eval_backend_enabled && var\.env == \"eval\" \? 1 : 0", grant)
+    assert 'role    = "roles/speech.client"' in grant
+    assert 'member  = "serviceAccount:${google_service_account.api.email}"' in grant
+    assert 'project = var.project' in grant
+    for name in ("staging", "prod"):
+        instance = re.search(r'module "%s" \{(.*?)\n\}' % name, MAIN, re.S).group(1)
+        assert "eval_backend_enabled" not in instance
