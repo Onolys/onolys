@@ -50,7 +50,7 @@ export interface RunUnit {
  unit_id: string; session_id: string; engine: string; combo?: Combo | null; combo_key?: string | null; preset?: string | null; repeat?: number | null;
  status: Exclude<RunStatus, 'partial' | 'deleting'> | 'waiting' | 'skipped'; stage?: string; error?: { code: string; message?: string } | string; output?: unknown;
 }
-export interface RunDetail extends RunSummary { units: RunUnit[] }
+export interface RunDetail extends RunSummary { units: RunUnit[]; provider_cooldowns?: { provider: string; cooldown_until: string }[] }
 export type RunSelection = Pick<RunInput, 'engines' | 'selection' | 'repeats' | 'name' | 'description'>;
 export interface EvalApi extends CompareApi {
   me(): Promise<unknown>;

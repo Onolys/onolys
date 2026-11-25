@@ -2,6 +2,7 @@ import { useEffect, useId, useRef, useState } from 'react';
 import { Badge, Button, Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, Input } from '@onolys/ui';
 import { ApiError } from './api';
 import { CancelRunDialog, CancellationNote, canCancelRun, isActiveRun, mergeRunStatus } from './CancelRunDialog';
+import { PartialBadge, ProviderSkipNotices, partialStatusText, providerName } from './RunStatus';
 import { RunConfigDialog, savedConfiguration } from './RunConfigDialog';
 import './runs.css';
 import type { EvalApi, RunDetail, RunSummary, RunUnit } from './api';
@@ -9,7 +10,7 @@ import type { EvalApi, RunDetail, RunSummary, RunUnit } from './api';
 const errorMessage = (error: unknown) => error instanceof Error ? error.message : 'Could not load run. Please try again.';
 const terminal = (status: string) => !['queued', 'running'].includes(status);
 const deletable = (status: string) => ['done', 'partial', 'failed', 'cancelled'].includes(status);
-const statusLabel = (run: RunSummary, cancelRequested = false) => cancelRequested && !terminal(run.status) ? 'cancelling' : run.status;
+const statusLabel = (run: RunSummary, cancelRequested = false) => cancelRequested && !terminal(run.status) ? 'cancelling' : partialStatusText(run) ?? (run.status === 'cancelled' ? 'Cancelled — no runs completed' : run.status);
 const dateText = (iso: string) => { const date = new Date(iso); return Number.isNaN(date.getTime()) ? iso : date.toLocaleString(); };
 const localDate = (iso: string) => {
   const date = new Date(iso);
@@ -106,21 +107,23 @@ export function RunView({ api, runId, onRerun }: { api: EvalApi; runId: string; 
     void poll(); return halt;
   }, [api, runId, attempt]);
   const cancelRequested = run?.cancel_requested === true;
-  return <section className="run-detail"><h1>Run {run?.name || runId}</h1>{error && <div role="alert">{error}{!missing && run && !terminal(run.status) && ' Still trying to refresh.'}<button onClick={() => { setError(''); setMissing(false); setAttempt(n => n + 1); }}>Retry run status</button></div>}
+  return <section className="run-detail"><div className="unit-section-heading"><h1>Run {run?.name || runId}</h1>{run && <PartialBadge run={run} />}</div>{error && <div role="alert">{error}{!missing && run && !terminal(run.status) && ' Still trying to refresh.'}<button onClick={() => { setError(''); setMissing(false); setAttempt(n => n + 1); }}>Retry run status</button></div>}
     {!run ? (!error && <p role="status">Loading run…</p>) : <>
-      <p role="status">{statusLabel(run, cancelRequested)} · {run.completed_units}/{run.total_units} units complete · {run.failed_units} failed · {run.cancelled_units} cancelled</p>
+      <p role="status">{run.status === 'partial' ? 'partial' : statusLabel(run, cancelRequested)} · {run.done_units}/{run.total_units} runs done · {run.failed_units} failed · {run.cancelled_units} cancelled</p>
       <CancellationNote run={run} />
       {canCancelRun(run) && <Button onClick={event => { cancelTrigger.current = event.currentTarget; setToCancel(run); }}>Cancel run</Button>}
       <button onClick={() => onRerun(run)}>Rerun with different engines/presets</button>
       <Button variant="outline" onClick={event => { configTrigger.current = event.currentTarget; setConfiguration(run); }}>Config</Button>
       {run.description && <p>{run.description}</p>}<Usage run={run} />
-      <div className="unit-section-heading"><h2>Unit progress</h2><span>{run.completed_units}/{run.total_units} complete · {run.repeats} {run.repeats === 1 ? 'attempt' : 'attempts'} per cell</span></div>
+      <ProviderSkipNotices skips={run.provider_skips} />
+      {run.provider_cooldowns?.map(cooldown => <p key={cooldown.provider}>{providerName(cooldown.provider)} is busy — waiting to retry</p>)}
+      <div className="unit-section-heading"><h2>Unit progress</h2><span>{run.done_units}/{run.total_units} runs done · {run.repeats} {run.repeats === 1 ? 'attempt' : 'attempts'} per cell</span></div>
       <div className="unit-table-scroll" role="region" aria-label="Unit progress"><table className="units-table"><caption>Each unit is one session × engine × model/tier/effort × attempt. Repeated model attempts run the same settings independently. Human reference is included once per session.</caption>
         <thead><tr>{['Session', 'Engine', 'Model', 'Tier', 'Effort', 'Attempt', 'Status', 'Stage', 'Output / error'].map(label => <th scope="col" key={label}>{label}</th>)}</tr></thead>
         <tbody>{run.units.map(unit => { const combo = unit.combo ?? comboFields(run, unit.combo_key ?? unit.preset); return <tr key={unit.unit_id}>
           <td data-label="Session">{unit.session_id}</td><td data-label="Engine">{unit.engine}</td><td data-label="Model">{combo.model || '—'}</td><td data-label="Tier">{combo.tier || '—'}</td><td data-label="Effort">{combo.effort || '—'}</td>
           <td data-label="Attempt">{unit.engine === 'human' ? 'Once' : unit.repeat == null ? '—' : `${unit.repeat + 1} / ${run.repeats}`}</td><td data-label="Status">{unit.status}</td><td data-label="Stage">{unit.stage || '—'}</td>
-          <td data-label="Output / error">{unit.error && <p role="alert">{typeof unit.error === 'string' ? unit.error : `${unit.error.code}${unit.error.message ? `: ${unit.error.message}` : ''}`}</p>}{unit.status === 'done' ? <UnitOutput api={api} runId={runId} unit={unit} /> : !unit.error && '—'}</td>
+          <td data-label="Output / error">{unit.status === 'skipped' ? <>n/a{unit.error && ` — ${typeof unit.error === 'string' ? unit.error : unit.error.message ?? unit.error.code}`}</> : <>{unit.error && <p role="alert">{typeof unit.error === 'string' ? unit.error : `${unit.error.code}${unit.error.message ? `: ${unit.error.message}` : ''}`}</p>}{unit.status === 'done' ? <UnitOutput api={api} runId={runId} unit={unit} /> : !unit.error && '—'}</>}</td>
         </tr>; })}</tbody></table></div>
     </>}<CancelRunDialog api={api} run={toCancel} returnFocus={cancelTrigger} onClose={() => setToCancel(null)} onUpdated={fresh => { if (!isActiveRun(fresh)) stop.current(); setRun(fresh); }} /><RunConfigDialog returnFocus={configTrigger} run={configuration} onClose={() => setConfiguration(null)} />
   </section>;
@@ -218,7 +221,7 @@ export function History({ api, onOpen, onRerun }: { api: EvalApi; onOpen: (id: s
       <table className="history-table"><thead><tr>{historyColumns.map(column => <th scope="col" key={column} aria-sort={sort?.column === column ? sort.dir : 'none'}><button type="button" className="sort" onClick={() => toggle(column)}>{column}</button></th>)}<th scope="col"><span className="sr-only">Actions</span></th></tr></thead>
         <tbody>{visible.map(run => <tr key={run.run_id}>{historyColumns.map(column => <td key={column} data-label={column}>{column === 'Dataset' ? <a href={`?run=${encodeURIComponent(run.run_id)}`} onClick={event => {
           if (event.button === 0 && !event.ctrlKey && !event.metaKey && !event.shiftKey && !event.altKey) { event.preventDefault(); onOpen(run.run_id); }
-        }}>{inputName(run)}</a> : column === 'Date' ? <time dateTime={run.created_at}>{dateText(run.created_at)}</time> : column === 'Status' ? <><Badge variant="outline" className="max-w-full whitespace-normal">{columnValue(run, column)}</Badge><CancellationNote run={run} /></> : columnValue(run, column)}</td>)}
+        }}>{inputName(run)}</a> : column === 'Date' ? <time dateTime={run.created_at}>{dateText(run.created_at)}</time> : column === 'Status' ? <div>{run.status === 'partial' ? <PartialBadge run={run} /> : <Badge variant="outline" className="max-w-full whitespace-normal">{columnValue(run, column)}</Badge>}{isActiveRun(run) && <p>{run.done_units} of {run.total_units} runs done</p>}<CancellationNote run={run} /><ProviderSkipNotices skips={run.provider_skips} short /></div> : columnValue(run, column)}</td>)}
           <td className="history-actions" data-label="Actions"><RunActions run={run} onCancel={(saved, trigger) => { cancelTrigger.current = trigger; setToCancel(saved); }} onRerun={onRerun} onConfig={(saved, trigger) => { configTrigger.current = trigger; setConfiguration(saved); }} onDelete={target => { setDeleteError(''); setToDelete(target); }} /></td></tr>)}</tbody>
       </table>{visible.length === 0 && <p>No runs match these filters.</p>}</>}
     {loading && <p role="status">{exhaustive ? 'Loading full history for search, filters and sorting…' : 'Loading history…'}</p>}

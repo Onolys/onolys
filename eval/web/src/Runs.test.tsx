@@ -46,7 +46,7 @@ it.each([null, false, 0, ''])('renders inline JSON %j without fetching', async o
 });
 it('refreshes terminal cancellation details before stopping polling', async () => {
   vi.useFakeTimers();
-  const cancelled = { ...detail('cancelled'), completed_units: 4, cancelled_units: 2, units: [{ ...detail().units[0], unit_id: 'cancelled-unit', status: 'cancelled' as const }] };
+  const cancelled = { ...detail('cancelled'), done_units: 0, completed_units: 4, cancelled_units: 2, units: [{ ...detail().units[0], unit_id: 'cancelled-unit', status: 'cancelled' as const }] };
   const api = { ...createEvalApi('', vi.fn()), run: vi.fn().mockResolvedValueOnce(detail('running')).mockResolvedValue(cancelled), cancel: vi.fn().mockResolvedValue({ run_id: 'r1', status: 'cancelled' }) };
   render(<RunView api={api} runId="r1" onRerun={vi.fn()} />);
   await act(async () => {});
@@ -55,7 +55,7 @@ it('refreshes terminal cancellation details before stopping polling', async () =
   await act(async () => {});
   expect(api.cancel).toHaveBeenCalledWith('r1');
   expect(api.run).toHaveBeenCalledTimes(2);
-  expect(screen.getByText('cancelled · 4/4 units complete · 1 failed · 2 cancelled')).toBeTruthy();
+  expect(screen.getByText('Cancelled — no runs completed · 0/4 runs done · 1 failed · 2 cancelled')).toBeTruthy();
   expect(screen.queryByRole('button', { name: 'View JSON u1' })).toBeNull();
   await act(async () => { await vi.advanceTimersByTimeAsync(6000); });
   expect(api.run).toHaveBeenCalledTimes(2);
@@ -74,7 +74,7 @@ it('keeps polling after cancellation while in-flight work runs, then shows final
   expect(api.run).toHaveBeenCalledTimes(2);
   await act(async () => { await vi.advanceTimersByTimeAsync(3000); });
   expect(api.run).toHaveBeenCalledTimes(3);
-  expect(screen.getByText('done · 4/4 units complete · 1 failed · 0 cancelled')).toBeTruthy();
+  expect(screen.getByText('done · 3/4 runs done · 1 failed · 0 cancelled')).toBeTruthy();
   expect(screen.getByRole('button', { name: 'View JSON u1' })).toBeTruthy();
   expect(screen.getByText(/~\$0.2500/)).toBeTruthy();
   await act(async () => { await vi.advanceTimersByTimeAsync(9000); });
