@@ -9,6 +9,7 @@ session to `running` (clears the cap error) and enqueues the `run` task; the wor
 `preset` changes LLM routes only: the transcript and its STT are reused.
 """
 
+import logging
 from datetime import datetime
 from typing import Annotated, Any
 from uuid import uuid4
@@ -36,6 +37,7 @@ from onolys_api.presets import UnknownPreset
 from onolys_api.repo.base import NotFoundError
 from onolys_api.repo.limits import LimitDefaults
 from onolys_api.repo.models import (
+    EvalRunInfo,
     OutputValidation,
     RunDoc,
     SessionDoc,
@@ -45,6 +47,7 @@ from onolys_api.repo.models import (
 )
 from onolys_api.routes.ids import ResourceId
 
+_log = logging.getLogger(__name__)
 ERRORS = {"default": {"model": ErrorResponse, "description": "Error"}}
 router = APIRouter(prefix="/sessions/{id}", tags=["runs"], responses=ERRORS)
 runs_router = APIRouter(tags=["runs"], responses=ERRORS)
@@ -122,11 +125,15 @@ def _view(r: RunDoc) -> RunView:
     )  # fmt: skip
 
 
-def _open_session(request: Request, user: AuthUser, id: str) -> SessionDoc:
-    s = request.app.state.repo.get_session(user.uid, id)
+def _open(repo, uid: str, id: str) -> SessionDoc:
+    s = repo.get_session(uid, id)
     if s.state == "deleting":
         raise NotFoundError()
     return s
+
+
+def _open_session(request: Request, user: AuthUser, id: str) -> SessionDoc:
+    return _open(request.app.state.repo, user.uid, id)
 
 
 @router.post(
@@ -151,20 +158,51 @@ def start_run(
     return begin_run(request, user, id, body or RunRequest(), retry_max=None)
 
 
+class EvalDisabled(Exception):
+    """`create_run(is_eval=True)` while `EVAL_MODE` is off. Internal: never a public error code."""
+
+
 def begin_run(
     request: Request, user: AuthUser, id: str, body: RunRequest, retry_max: int | None
 ) -> RunStarted:
-    """Start a run: `POST /runs` (`retry_max=None`) or the run branch of `POST /sessions/{id}/retry`
-    (`retry_max` = the cap). A retry re-runs the SAME submission (the failed run's preset, n_runs
-    and span) as a new run id; it reserves a unit like a fresh start (429 at a cap), and the repo
-    transaction counts the retry only when the run starts."""
-    app = request.app
-    repo, uid = app.state.repo, user.uid
-    s = _open_session(request, user, id)
+    """Public entry (`POST /runs`, retry): always a prod run."""
+    return create_run(
+        request.app, user.uid, id, body, retry_max=retry_max,
+        request_id=getattr(request.state, "request_id", None),
+    )  # fmt: skip
+
+
+def create_run(
+    app, uid: str, id: str, body: RunRequest, *, is_eval: bool = False,
+    eval_spec: EvalRunInfo | None = None, retry_max: int | None = None,
+    run_id: str | None = None, request_id: str | None = None,
+) -> RunStarted:  # fmt: skip
+    """The one place runs are created: `POST /runs` (`retry_max=None`) or the run branch of
+    `POST /sessions/{id}/retry` (`retry_max` = the cap). A retry re-runs the SAME submission (the
+    failed run's preset, n_runs and span) as a new run id; it reserves a unit like a fresh start
+    (429 at a cap), and the repo transaction counts the retry only when the run starts.
+
+    `is_eval=True` (internal callers only) needs `settings.eval_mode` (else `EvalDisabled`, nothing
+    written) and an `eval_spec`; it skips the final-report guard and may start from
+    `report_ready`/`failed`. `app` only needs `.state` (repo, settings, presets, queue), so a
+    caller outside a request may pass `SimpleNamespace(state=...)`. `run_id` is optional and
+    caller-supplied (deterministic ids); default is a fresh one."""
+    if eval_spec is not None and not is_eval:
+        raise ValueError("eval_spec requires is_eval=True")
+    if is_eval:
+        if not app.state.settings.eval_mode:
+            _log.warning("eval_disabled")
+            raise EvalDisabled()
+        if eval_spec is None or retry_max is not None:
+            raise ValueError("is_eval=True needs eval_spec and no retry_max")
+    repo = app.state.repo
+    s = _open(repo, uid, id)
     retry = retry_max is not None
-    if has_final_report(repo, uid, id, s.state):
+    if not is_eval and has_final_report(repo, uid, id, s.state):
         raise rating_final()
     allowed = ("failed",) if retry else RERUN_STATES
+    if is_eval:
+        allowed = (*RERUN_STATES, "report_ready", "failed")
     if s.state not in allowed or not (
         s.transcript_ready and s.speaker_confirmed and s.clinician_speaker
     ):
@@ -188,7 +226,7 @@ def begin_run(
         raise invalid_state()
     validate_coded_input(transcript, span)
     settings = app.state.settings
-    run_id = uuid4().hex
+    run_id = run_id or uuid4().hex
     date = caps.utc_date()
     # One transaction: state check, cap reservation, run creation, first_run_id and `running`.
     # The loser of a race gets 409 and holds no slot.
@@ -198,7 +236,7 @@ def begin_run(
             uid, id, run_id, date, LimitDefaults.from_settings(settings),
             settings.max_active_runs, settings.git_sha, RUN_START_PROGRESS, allowed, n_runs,
             preset, coded_span=span.model_dump(exclude_none=True) if span else None,
-            retry_max=retry_max,
+            retry_max=retry_max, eval=eval_spec,
         ),
     )  # fmt: skip
     if outcome == "not_ready":
@@ -214,14 +252,14 @@ def begin_run(
         queue.enqueue(
             TaskPayload(
                 kind="run", uid=uid, sid=id, run_id=run_id,
-                request_id=getattr(request.state, "request_id", None),
+                request_id=request_id,
             )
         )  # fmt: skip
     except Exception as e:
         logs.failed(
             "run_failed", session_id=id, run_id=run_id, step="run",
             error_code="upstream_unavailable", exc_class=type(e).__name__,
-            request_id=getattr(request.state, "request_id", None),
+            request_id=request_id,
         )  # fmt: skip
         _compensate(repo, uid, id, run_id, date)
         advance(
