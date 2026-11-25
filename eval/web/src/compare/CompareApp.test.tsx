@@ -67,5 +67,5 @@ it('retries an overview failure and keeps exact saved combo labels with distinct
  render(<CompareApp api={client} runId="r1" state={state()} navigate={vi.fn()}/>);
  expect((await screen.findByRole('alert')).textContent).toContain('temporary');
  fireEvent.click(screen.getByRole('button',{name:'Retry'}));
- expect(await screen.findByText('miti · Saved model / tier / effort')).toBeTruthy();expect(client.run).toHaveBeenCalledTimes(1);
+ expect(await screen.findByText('miti · Saved model / tier / effort',{selector:'dd'})).toBeTruthy();expect(client.run).toHaveBeenCalledTimes(1);
 });
