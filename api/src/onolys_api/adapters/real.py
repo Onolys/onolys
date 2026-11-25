@@ -18,6 +18,7 @@ to `internal_error`, not retryable, and the worker logs the class, never the mes
 """
 
 import json
+import os
 import threading
 import time
 from collections.abc import Callable, Mapping
@@ -25,9 +26,10 @@ from typing import Any
 from urllib.parse import parse_qs, urlsplit
 
 from onolys_engine_core.context import RunContext
-from onolys_engine_core.errors import ConfigError
+from onolys_engine_core.errors import ConfigError, InputError
 from onolys_engine_core.llm import LiteLLMClient, LLMConfig, MetricsCollector
-from onolys_engine_core.llm.routes import resolve_preset
+from onolys_engine_core.llm.models import load_models, models_path
+from onolys_engine_core.llm.routes import EFFORT_OUTPUT_CAP, combo_routes, resolve_preset
 from onolys_engine_core.registry import EngineRegistry
 from onolys_engine_core.transcript import Transcript
 from onolys_engine_core.validated_run import run_validated
@@ -40,7 +42,7 @@ from onolys_miti.voice.gemini_live_vertex import GeminiLiveVertex
 
 from onolys_api.adapters.base import AdapterError, AuthAccount, EvaluationOutput, ProgressCb
 from onolys_api.config import Settings
-from onolys_api.engines import build_engine_registry
+from onolys_api.engines import build_engine_registry, resolve_engine
 
 SttFactory = Callable[[], SttAdapter]
 
@@ -109,11 +111,24 @@ class RealVoice:
 RUN_DEADLINE_S = 8 * 60  # the whole evaluation; a shorter ctx.deadline (task budget) wins
 _ENGINE_PARAMS = (
     "change_goal", "seed", "language", "n_runs", "preset", "code_version", "stt_run", "coded_span",
+    "config",
 )
 
 
 def _llm_from_routes(routes: dict) -> Any:
     return LiteLLMClient(LLMConfig(routes=routes))
+
+
+def _override_routes(settings: Settings, base: dict, override: Mapping[str, Any]) -> dict:
+    """Eval only: the preset's routes re-pointed at one (model, tier, effort) combo."""
+    models = load_models(models_path(os.environ, settings.routes_file or None))
+    model = models.get(override.get("model"))
+    if model is None or override.get("tier") not in model.tiers:
+        raise InputError("Unknown eval model or tier.")
+    effort = override.get("effort")
+    if effort not in EFFORT_OUTPUT_CAP or effort not in model.tiers[override["tier"]].efforts:
+        raise InputError("Unknown eval effort.")
+    return combo_routes(base, model, override["tier"], effort)
 
 
 class RealEvaluation:
@@ -141,8 +156,16 @@ class RealEvaluation:
         params: dict[str, Any],
         progress_cb: ProgressCb | None = None,
     ) -> EvaluationOutput:
-        engine = self._registry.get(self._settings.prod_engine)
+        engine_id = override = None
+        if self._settings.eval_mode:  # engine/route_override exist only for eval runs
+            engine_id, override = params.get("engine"), params.get("route_override")
+        if engine_id:
+            engine = resolve_engine(self._settings, engine_id, self._registry)
+        else:
+            engine = self._registry.get(self._settings.prod_engine)
         routes, _ = resolve_preset(params.get("preset"))  # unknown preset: InputError
+        if override:
+            routes = _override_routes(self._settings, routes, override)
         deadline = time.monotonic() + RUN_DEADLINE_S
         if ctx.deadline is not None:
             deadline = min(deadline, ctx.deadline)
@@ -154,7 +177,13 @@ class RealEvaluation:
             request_id=ctx.request_id,
             deadline=deadline,
         )
-        engine_params = {k: params.get(k) for k in _ENGINE_PARAMS if k != "stt_run" or k in params}
+        engine_params = {
+            k: params.get(k)
+            for k in _ENGINE_PARAMS
+            if k not in ("stt_run", "config") or k in params
+        }
+        if engine_id and engine_id.startswith("oneshot:"):
+            engine_params["config"] = engine_id.split(":", 1)[1]
         engine_params["speaker_map"] = dict(speaker_map)
         out = await run_validated(engine, rctx, transcript, engine_params, progress_cb)
         payload = out.model_dump(mode="json")
