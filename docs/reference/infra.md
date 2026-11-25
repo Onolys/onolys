@@ -8,6 +8,8 @@ Everything here was checked on 2026-11-20 against `terraform output`, `terraform
 
 One GCP project (`onolys`, number `1054076260967`), region `us-central1`, two environments (`staging`, `prod`) in one Terraform root (`infra/`, state in `gs://onolys-tfstate`, prefix `infra`, Terraform `1.9.8`). Staging and prod are isolated by Firestore database, bucket, queue, service accounts and secrets. One Identity Platform user pool serves both.
 
+> **Per-environment projects.** Production stays in `onolys` and in this legacy root. Staging (`onolys-staging`, `904020682480`) and eval (`onolys-eval`, `976672392004`) are moving to their own projects through the separate `infra/isolated-environment/` root, activated by the GitHub vars `STAGING_GCP_PROJECT` / `EVAL_GCP_PROJECT`. Until activation, and for everything this page describes about `*-staging` and eval resources in `onolys`, the legacy layout applies; the old `*-staging` / `*-eval` secrets in `onolys` have been deleted by the owner. See [isolated environments](../implementation/isolated-environments.md).
+
 ```
 Browser -> Hosting site (onolys-app) -> /v1/** rewrite -> Cloud Run onolys-api-prod -> Firestore (default), GCS, Cloud Tasks
 Cloud Tasks steps-prod -(OIDC)-> onolys-worker-prod -> STT (location us) + Gemini API (Anthropic API for the `claude` preset)

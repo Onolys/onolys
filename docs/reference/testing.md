@@ -116,9 +116,9 @@ Staging PR previews (Hosting channels on `onolys-app-staging`) need their host i
 python3 infra/scripts/identity-config.py --domains-only --add-domain <channel-host>
 ```
 
-- Auth: ADC for project `onolys` (the staging deployer SA needs Identity Platform admin: `roles/firebaseauth.admin`).
+- Auth: ADC for the Identity Platform project that owns the app's sign-in (`onolys`, shared with prod, and the issuer for eval; isolated staging uses its own `onolys-staging` once `STAGING_GCP_PROJECT` is set, so use that project's config instead). The staging deployer SA needs Identity Platform admin: `roles/firebaseauth.admin`.
 - Idempotent and add-only (union with the live list; it never removes). Terraform ignores `authorized_domains` drift, so added hosts are not pruned on apply.
-- Hosts accumulate (limit 1000); prune closed-PR hosts occasionally by PATCHing `authorizedDomains` on `https://identitytoolkit.googleapis.com/admin/v2/projects/onolys/config`.
+- Hosts accumulate (limit 1000); prune closed-PR hosts occasionally by PATCHing `authorizedDomains` on `https://identitytoolkit.googleapis.com/admin/v2/projects/onolys/config` (PR previews run only while staging is legacy; they pause once `STAGING_GCP_PROJECT` is set).
 
 ## Preview acceptance (SP00 task 9), measured 2026-11-21
 
