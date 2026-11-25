@@ -22,7 +22,7 @@ Token totals are input plus output tokens. `~$` is an estimate, using provider-r
 
 ## HTTP API
 
-The API base is `https://onolys-eval-backend-staging-1054076260967.us-central1.run.app`. Public application endpoints require `Authorization: Bearer <Firebase ID token>`; anonymous requests return 401 and unverified or non-allowlisted identities return 403. Tokens must belong to Firebase project `onolys`. Browser access is restricted to the configured evaluation origins.
+The API base is `https://onolys-eval-backend-eval-1054076260967.us-central1.run.app`. Public application endpoints require `Authorization: Bearer <Firebase ID token>`; anonymous requests return 401 and unverified or non-allowlisted identities return 403. Tokens must belong to Firebase project `onolys`. Browser access is restricted to the configured evaluation origins.
 
 | Method | Path | Purpose |
 |---|---|---|

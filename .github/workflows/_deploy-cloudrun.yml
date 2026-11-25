@@ -10,7 +10,7 @@ on:
   workflow_call:
     inputs:
       env:
-        description: staging | prod
+        description: staging | prod | eval (eval deploys as deployer-staging, in the `staging` GitHub environment)
         required: true
         type: string
       service:
@@ -73,7 +73,7 @@ jobs:
           IMAGE: ${{ inputs.image }}
           ENV_NAME: ${{ inputs.env }}
         run: |
-          case "$ENV_NAME" in staging|prod) ;; *) echo "env must be staging or prod" >&2; exit 1 ;; esac
+          case "$ENV_NAME" in staging|prod|eval) ;; *) echo "env must be staging, prod or eval" >&2; exit 1 ;; esac
           case "$IMAGE" in *@sha256:*) ;; *) echo "image must be pinned by digest (@sha256:...)" >&2; exit 1 ;; esac
       - uses: google-github-actions/auth@v2
         with:

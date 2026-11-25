@@ -160,7 +160,7 @@ Environments: create `production` with Tejit as required reviewer (all prod jobs
 | `STAGING_VITE_FIREBASE_API_KEY`, `_AUTH_DOMAIN`, `_APP_ID`, `_STORAGE_BUCKET`, `_MESSAGING_SENDER_ID` | deploy-staging (web build) | `web_env_staging` keys `VITE_FIREBASE_*` (same names without the `STAGING_` prefix) |
 | `PROD_VITE_FIREBASE_API_KEY`, `_AUTH_DOMAIN`, `_APP_ID`, `_STORAGE_BUCKET`, `_MESSAGING_SENDER_ID` | deploy-prod (web build) | `web_env_prod` keys |
 | `STAGING_VITE_CONTACT_EMAIL`, `PROD_VITE_CONTACT_EMAIL` | optional, web build | owner's contact address |
-| eval web build vars | deploy-eval | `web_env_eval`; variable names are set in `deploy-eval.yml` |
+| eval web build vars | deploy-eval | none new: reuses `PROD_VITE_FIREBASE_API_KEY` and `PROD_VITE_FIREBASE_APP_ID`; auth domain `eval.onolys.com` is literal in `deploy-eval.yml` (`web_env_eval` is for local builds). The old `ADMIN_STAGING_VITE_FIREBASE_*` variables are unused and can be deleted |
 
 `VITE_FIREBASE_PROJECT_ID` is taken from `GCP_PROJECT`/`onolys` in the workflow; `VITE_FIRESTORE_DATABASE` is hard-coded per workflow (see Terraform outputs).
 
@@ -179,7 +179,7 @@ Activate in this order:
 
 Offline guards: `python3 -m pytest infra/scripts/test_nightly_gemini_secret.py -q`, `python3 scripts/ci/check_no_llm_keys_in_pr_workflows.py`, `actionlint .github/workflows/nightly.yml`, and Terraform `fmt -check` / `validate`. These validate configuration, not live IAM propagation; the trusted-main Nightly run completes activation.
 
-Workflows: `deploy-staging.yml` runs after the `CI` workflow succeeds on `main` (also manual). `deploy-prod.yml` is manual (`workflow_dispatch`, input `sha` or `version`) or on a `v*` tag. `deploy-eval.yml` deploys the staging evaluation backend and site. `nightly.yml` runs 06:17 UTC daily.
+Workflows: `deploy-staging.yml` runs after the `CI` workflow succeeds on `main` (also manual). `deploy-prod.yml` is manual (`workflow_dispatch`, input `sha` or `version`) or on a `v*` tag. `deploy-eval.yml` deploys the eval backend (`onolys-eval-backend-eval`), Firestore rules/indexes (`firestore:eval`) and the eval site; `_deploy-cloudrun.yml` also accepts `env: eval` (deployer-staging) for `onolys-worker-eval`. `nightly.yml` runs 06:17 UTC daily.
 
 ## Operating Terraform
 

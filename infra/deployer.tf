@@ -142,6 +142,48 @@ resource "google_project_iam_member" "deployer_staging_rules_admin" {
   member  = local.deployer_staging_member
 }
 
+# Firestore indexes of the `eval` database (rules are project level above).
+resource "google_project_iam_member" "deployer_staging_eval_index_admin" {
+  project = var.project
+  role    = "roles/datastore.indexAdmin"
+  member  = local.deployer_staging_member
+
+  condition {
+    title       = "firestore-eval-only"
+    description = "Only the eval database"
+    expression  = "resource.name.startsWith(\"${module.eval.firestore_db_resource}\")"
+  }
+}
+
+# --- Eval environment (03-eval R8): worker-eval takes the staging image digest, eval-backend its own image ---
+locals {
+  eval_services = {
+    worker  = module.eval.worker_service_name
+    backend = module.eval.eval_backend_service_name
+  }
+  # The eval backend runs as the module's api SA.
+  eval_runtime_sas = {
+    api    = module.eval.api_sa_email
+    worker = module.eval.worker_sa_email
+  }
+}
+
+resource "google_cloud_run_v2_service_iam_member" "deployer_eval_developer" {
+  for_each = local.eval_services
+  project  = var.project
+  location = var.region
+  name     = each.value
+  role     = "roles/run.developer"
+  member   = local.deployer_staging_member
+}
+
+resource "google_service_account_iam_member" "deployer_eval_runtime_user" {
+  for_each           = local.eval_runtime_sas
+  service_account_id = "projects/${var.project}/serviceAccounts/${each.value}"
+  role               = "roles/iam.serviceAccountUser"
+  member             = local.deployer_staging_member
+}
+
 # --- PR previews (SP00 R3, PRD R13) ---
 # A preview is a no-traffic TAGGED REVISION (tag `pr-<N>`) on the existing staging API service, so it needs no grant
 # beyond `roles/run.developer` on the staging services (deployer_staging_developer above) and actAs on `api-staging`

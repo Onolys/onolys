@@ -1,6 +1,6 @@
 name: deploy-eval
 
-# Staging only. Terraform owns runtime settings/CORS/secrets/task audience.
+# Eval environment (deployer-staging WIF). Terraform owns runtime settings/CORS/secrets/task audience.
 # The image embeds provenance; deployment changes only the pinned image.
 on:
   push:
@@ -14,6 +14,9 @@ on:
       - "uv.lock"
       - ".dockerignore"
       - ".firebaserc"
+      - "firebase.json"
+      - "firestore.rules"
+      - "api/firestore.indexes.json"
       - "scripts/ci/*eval*"
       - ".github/workflows/deploy-eval.yml"
   workflow_dispatch:
@@ -93,7 +96,7 @@ jobs:
         with:
           project_id: ${{ env.PROJECT }}
           region: ${{ env.REGION }}
-          service: onolys-eval-backend-staging
+          service: onolys-eval-backend-eval
           image: ${{ needs.build.outputs.image }}
           skip_default_labels: true
 
@@ -111,15 +114,21 @@ jobs:
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: eval/web/package-lock.json
-      - name: Build eval SPA with deployed API URL and existing Firebase app
+          cache-dependency-path: |
+            eval/web/package-lock.json
+            web/package-lock.json
+      - name: Install prod web deps (eval/web typechecks web/src/auth)
+        working-directory: web
+        run: npm ci
+      - name: Build eval SPA with deployed API URL and the prod Firebase app
         working-directory: eval/web
         env:
           VITE_EVAL_API_URL: ${{ needs.deploy-backend.outputs.url }}
           VITE_FIREBASE_PROJECT_ID: ${{ env.PROJECT }}
-          VITE_FIREBASE_API_KEY: ${{ vars.ADMIN_STAGING_VITE_FIREBASE_API_KEY }}
-          VITE_FIREBASE_AUTH_DOMAIN: ${{ vars.ADMIN_STAGING_VITE_FIREBASE_AUTH_DOMAIN }}
-          VITE_FIREBASE_APP_ID: ${{ vars.ADMIN_STAGING_VITE_FIREBASE_APP_ID }}
+          VITE_FIREBASE_API_KEY: ${{ vars.PROD_VITE_FIREBASE_API_KEY }}
+          VITE_FIREBASE_AUTH_DOMAIN: eval.onolys.com
+          VITE_FIREBASE_APP_ID: ${{ vars.PROD_VITE_FIREBASE_APP_ID }}
+          VITE_APP_URL: https://app.onolys.com
         run: |
           for v in VITE_EVAL_API_URL VITE_FIREBASE_API_KEY VITE_FIREBASE_AUTH_DOMAIN VITE_FIREBASE_APP_ID; do
             [ -n "${!v}" ] || { echo "missing build variable $v" >&2; exit 1; }
@@ -137,8 +146,28 @@ jobs:
       - name: Deploy only eval-staging Hosting
         run: npx --yes firebase-tools@${{ env.FIREBASE_TOOLS_VERSION }} deploy --config eval/web/firebase.json --only "hosting:eval-staging" --project "$PROJECT" --non-interactive
 
+  firestore:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: staging
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.WIF_PROVIDER }}
+          service_account: ${{ vars.DEPLOYER_STAGING_SA }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Deploy rules and indexes to the eval database only
+        run: npx --yes firebase-tools@${{ env.FIREBASE_TOOLS_VERSION }} deploy --only firestore:eval --project "$PROJECT" --non-interactive
+
   smoke:
-    needs: [deploy-backend, site]
+    needs: [deploy-backend, site, firestore]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
