@@ -270,7 +270,7 @@ Cloud Run cannot start revisions whose `latest` secret references have no enable
    terraform apply eval-secret-shells.tfplan
    ```
 
-   Keep `infra/eval-allowlist-import.tf` through the successful first apply: it imports the existing allowlist shell rather than trying to recreate it. Confirm the plan preserves that secret and its enabled value; do not rotate it as part of provisioning.
+   The one-time allowlist import was removed because its source secret in `onolys` was deleted; the plan creates a fresh `eval-allowed-emails-eval` shell. Seed the allowlist value separately (see seed-secrets `--allowlist`); isolated eval lives in `onolys-eval`.
 
 2. From the repository root, securely load the configured eval provider keys into the environment, then run `python3 infra/scripts/seed-secrets.py --env eval`. The helper generates the eval UID HMAC value when missing and seeds the default Gemini/Anthropic mappings. Supply repeated `--map ENVVAR=base-id` flags instead when the operator's `eval_llm_secrets` or `stt_secrets` has additional or different configured keys (the flags replace the default map). Verify enabled version metadata for all referenced secrets, including the existing allowlist. Do not put secret values in command arguments, tfvars, plans or git.
 

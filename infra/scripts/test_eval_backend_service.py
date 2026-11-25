@@ -75,14 +75,6 @@ def test_allowlist_secret_shell_and_iam():
     assert "google_service_account.api.email" in i
 
 
-def test_import_block_active_and_matches_resource():
-    text = (INFRA / "eval-allowlist-import.tf").read_text()
-    live = [ln for ln in text.splitlines() if not ln.lstrip().startswith("#")]
-    assert any(ln.startswith("import {") for ln in live)
-    assert any(ln.strip() == "to = module.eval.google_secret_manager_secret.eval_allowed_emails[0]" for ln in live)
-    assert "delete" in text.lower() and "first apply" in text.lower()
-
-
 def test_dispatch_cap_covers_providers_plus_headroom():
     dflt = lambda n: int(re.search(r'variable "%s" \{.*?default\s*=\s*(\d+)' % n, ROOT_VARS, re.S).group(1))
     cap = dflt("eval_worker_concurrency") * dflt("eval_worker_max_instances")
