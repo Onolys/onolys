@@ -1,5 +1,5 @@
 ---
-status: draft
+status: done
 summary: 11 tasks to rebuild the eval backend on the prod pipeline (shared sessions, RunDoc per cell, tick scheduler with provider cap/backoff/breaker, cancel, delete, view adapter, web Delete, CI)
 date: 2026-11-25
 ---
@@ -8,17 +8,17 @@ Source of truth: docs/agent_files/session-report-ux-20261124-1738/05-eval-backen
 
 | # | Task | Depends on | Status |
 |---|---|---|---|
-| 1 | Prod-side additive hooks | - | todo |
-| 2 | Eval config, services, auth wiring | 1 | todo |
-| 3 | Session import and gold copy | 1, 2 | todo |
-| 4 | Grouping doc and create/rerun | 2, 3 | todo |
-| 5 | Tick scheduler core | 1, 4 | todo |
-| 6 | Overload backoff, isolation, breaker | 5 | todo |
-| 7 | Cancel rework | 5, 6 | todo |
-| 8 | Delete flow | 4, 5 | todo |
-| 9 | View adapter and read endpoints | 4, 5 | todo |
-| 10 | Remove old eval engine | 5, 7, 8, 9 | todo |
-| 11 | Web Delete and CI/image wiring | 8, 9, 10 | todo |
+| 1 | Prod-side additive hooks | - | done |
+| 2 | Eval config, services, auth wiring | 1 | done |
+| 3 | Session import and gold copy | 1, 2 | done |
+| 4 | Grouping doc and create/rerun | 2, 3 | done |
+| 5 | Tick scheduler core | 1, 4 | done |
+| 6 | Overload backoff, isolation, breaker | 5 | done |
+| 7 | Cancel rework | 5, 6 | done |
+| 8 | Delete flow | 4, 5 | done |
+| 9 | View adapter and read endpoints | 4, 5 | done |
+| 10 | Remove old eval engine | 5, 7, 8, 9 | done |
+| 11 | Web Delete and CI/image wiring | 8, 9, 10 | done |
 
 ## Task 1 — Prod-side additive hooks
 What it is / what it means: Small additive changes in the api package that eval needs, without changing prod behaviour (Decisions 1, 3, 6; R3, R8).
@@ -79,3 +79,7 @@ Done when: vitest covers Delete enablement, confirm text and `deleting` label, o
 - Terraform plan/apply and deploy (SP03); first live eval (one small run end to end) in the `eval` environment.
 - Set spend limits in Anthropic Console and Google Cloud console.
 - Review copied allowlist emails (SP03); confirm SP03 env: `DATASETS_BUCKET`, `EVAL_MAX_PER_PROVIDER`, `EVAL_OWNER_UID`, api platform env, Speech agent read grant on `eval-uploads/`.
+
+## Completion evidence — 2026-11-25
+
+All 11 tasks done; scheduler fixes `53d0329`, `10271ca`; recorded offline verification **89 passed, 1 deselected**. Independent re-review PASS. See [code evidence](code-2026-11-25-0300.md) and [final review](review-2026-11-25-0300.md). Full-branch review and shipping remain pending.

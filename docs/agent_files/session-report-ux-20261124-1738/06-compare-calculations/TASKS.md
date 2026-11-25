@@ -1,5 +1,5 @@
 ---
-status: draft
+status: done
 summary: Pure session-balanced compare calculations in eval/core, loaders and cache and read endpoints in eval/backend, removal of build_compare, offline fixtures and tests.
 date: 2026-11-25
 ---
@@ -8,15 +8,15 @@ Source of truth: docs/agent_files/session-report-ux-20261124-1738/06-compare-cal
 
 | # | Task | Depends on | Status |
 |---|---|---|---|
-| 1 | Synthetic fixtures and fake source | - | todo |
-| 2 | Projections: report parsing, gold, transcript | 1 | todo |
-| 3 | Session-balanced counts, globals, cohorts, cells | 2 | todo |
-| 4 | Line alignment, P/R/F1, confusion | 2 | todo |
-| 5 | Cost, time, partial/excluded, coverage | 3 | todo |
-| 6 | More-analysis calculations and verdict | 3, 4, 5 | todo |
-| 7 | Loader, cache, price helper | 2, 5 | todo |
-| 8 | Compare routes and payload shaping | 6, 7 | todo |
-| 9 | Remove build_compare, CI check, timing test | 8 | todo |
+| 1 | Synthetic fixtures and fake source | - | done |
+| 2 | Projections: report parsing, gold, transcript | 1 | done |
+| 3 | Session-balanced counts, globals, cohorts, cells | 2 | done |
+| 4 | Line alignment, P/R/F1, confusion | 2 | done |
+| 5 | Cost, time, partial/excluded, coverage | 3 | done |
+| 6 | More-analysis calculations and verdict | 3, 4, 5 | done |
+| 7 | Loader, cache, price helper | 2, 5 | done |
+| 8 | Compare routes and payload shaping | 6, 7 | done |
+| 9 | Remove build_compare, CI check, timing test | 8 | done |
 
 ## Task 1 — Synthetic fixtures and fake source
 What it is: shared offline test data. Traces to Acceptance Criteria (all offline) and Decision 1.
@@ -66,3 +66,7 @@ Done when: `eval/core/tests/test_summary_*.py` and `eval/backend/tests` pass off
 ## Owner steps (not tasks)
 - After deploy, measure cold load on a real eval run; materialise the projection only if it exceeds 5 s.
 - Run the first live eval; agents run no live runs, deploys or terraform.
+
+## Completion evidence — 2026-11-25
+
+All 9 tasks done through `4bb66ea`, including Task 5 `0086e6f`; review fixes `4054a98`; recorded fix verification **32 + 42 passed**. Independent re-review PASS. See [code evidence](code-2026-11-25-0300.md) and [final review](review-2026-11-25-0300.md). Full-branch review and shipping remain pending.
