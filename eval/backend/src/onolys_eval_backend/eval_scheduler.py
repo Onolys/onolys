@@ -442,6 +442,11 @@ def _fill_session(services, doc: dict, eval_run_id: str, sid: str, cells: list[d
 
 
 def _record_started(entry, cell, run_id, attempt):
+    identity = (cell["engine"], cell["combo_key"], cell["repeat"])
+    for old in entry["runs"]:  # a retry supersedes the attempt that was waiting: it failed
+        same = (old["engine"], old["combo_key"], old["repeat"]) == identity
+        if old["status"] == "waiting" and same:
+            old["status"] = "failed"
     entry["runs"].append({
         "run_id": run_id, "combo_key": cell["combo_key"], "engine": cell["engine"],
         "repeat": cell["repeat"], "attempt": attempt, "status": "running",
@@ -541,8 +546,11 @@ def _cancel_cells(doc: dict, cells: list[dict]) -> None:
                 continue
             cell = cells[idx]
             identity = (cell["engine"], cell["combo_key"], cell["repeat"])
-            waiting = next((r for r in entry["runs"] if r["status"] == "waiting"
-                            and (r["engine"], r["combo_key"], r["repeat"]) == identity), None)
+            waiting = max(
+                (r for r in entry["runs"] if r["status"] == "waiting"
+                 and (r["engine"], r["combo_key"], r["repeat"]) == identity),
+                key=lambda r: r.get("attempt", 0), default=None,
+            )  # the newest waiting attempt is the cell's current ref
             if waiting is not None:
                 waiting.update(status="cancelled", error="cancelled")
             else:
