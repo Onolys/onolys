@@ -54,9 +54,9 @@ INFRA_EXTRA_RE='^(eval/auth/|pyproject\.toml$|uv\.lock$)'
 DEPS=(
   "oneshot:core"
   "miti:core"
-  "api:core miti"
+  "api:core miti oneshot"
   "eval:core miti"
-  "eval-backend:admin-auth core miti oneshot eval"
+  "eval-backend:api core miti oneshot eval"
 )
 
 mapfile -t FILES

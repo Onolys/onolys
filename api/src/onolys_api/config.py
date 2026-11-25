@@ -67,6 +67,17 @@ def _bool(e: Mapping[str, str], name: str, default: bool) -> bool:
     raise ConfigError(f"{name} must be true or false")
 
 
+def _strict_bool(e: Mapping[str, str], name: str, default: bool) -> bool:
+    raw = e.get(name)
+    if raw is None:
+        return default
+    if raw == "true":
+        return True
+    if raw == "false":
+        return False
+    raise ConfigError(f"{name} must be true or false")
+
+
 # user-visible retries of a transient failure (03-failure-policy R4): the one source, no env
 MAX_SESSION_RETRIES = 3
 
@@ -93,6 +104,7 @@ class Settings:
     routes_file: str = ""
     default_preset: str = ""
     prod_engine: str = "miti"
+    eval_mode: bool = False  # EVAL_MODE: the one switch for everything eval (04-eval-run-path R6)
     # Presets beyond the default that users may pick (FX43): empty in prod unless the owner opts in
     extra_presets: tuple[str, ...] = ()
     git_sha: str = "dev"
@@ -165,6 +177,7 @@ class Settings:
             routes_file=e.get("ROUTES_FILE", ""),
             default_preset=e.get("DEFAULT_PRESET", ""),
             prod_engine=e.get("PROD_ENGINE", cls.prod_engine),
+            eval_mode=_strict_bool(e, "EVAL_MODE", cls.eval_mode),
             extra_presets=tuple(
                 p.strip() for p in e.get("ENABLED_EXTRA_PRESETS", "").split(",") if p.strip()
             ),
