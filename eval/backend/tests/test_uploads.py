@@ -179,7 +179,7 @@ def test_audio_start_poll_complete_and_terminal_redelivery(services):
 
     assert task().status_code == 200
     assert len(services.stt.starts) == 1 and services.stt.polls == []
-    assert services.stt.starts[0][0].uri == f"gs://eval-test/uploads/{uid}/input.wav"
+    assert services.stt.starts[0][0].uri == f"gs://audio-eval-test/uploads/{uid}/input.wav"
     assert services.queue.tasks[-1] == ("transcribe", {"upload_id": uid}, 15)
     assert task().status_code == 200
     assert len(services.stt.starts) == 1 and services.stt.polls == ["opaque-handle"]
@@ -548,7 +548,7 @@ def test_direct_audio_upload_signed_url_then_complete_enqueues_transcription(ser
     again = c.post(f"/v1/uploads/{uid}/complete", headers=AUTH)  # idempotent
     assert again.status_code == 200 and len(services.queue.tasks) == 1
     assert c.post("/internal/tasks/transcribe", headers=AUTH, json={"upload_id": uid}).status_code == 200
-    assert services.stt.starts[0][0].uri == f"gs://eval-test/{path}"
+    assert services.stt.starts[0][0].uri == f"gs://audio-eval-test/{path}"
 
 
 def test_direct_audio_upload_rejects_wrong_bytes_and_bad_requests(services):

@@ -280,7 +280,7 @@ def test_production_cloud_adapters_use_explicit_project_and_staging_database(mon
     assert services.repository.uploads == "eval_uploads"
     assert services.bucket is services.bucket and services.repository is services.repository
     assert calls == [
-        ("storage", {"project": "onolys-test"}), ("bucket", "eval-test"),
+        ("storage", {"project": "onolys-test"}), ("bucket", "audio-eval-test"),
         ("firestore", {"project": "onolys-test", "database": "staging"}),
         ("collection", "eval_uploads"), ("collection", "eval_runs"),
     ]

@@ -5,6 +5,7 @@ import os
 from functools import cached_property
 from pathlib import Path
 
+from onolys_api.factory import build_blobs, build_repo
 from onolys_engine_core.engine import Engine
 from onolys_engine_core.errors import InputError
 from onolys_engine_core.llm.models import Model, load_models, models_path
@@ -18,8 +19,16 @@ from onolys_eval_backend.storage import Bucket, GCSBucket
 
 
 class EvalServices:
-    def __init__(self, config: EvalConfig, *, queue=None, stt_factory=None):
+    def __init__(
+        self, config: EvalConfig, *, queue=None, stt_factory=None, blobs=None, repo=None,
+        run_queue=None,
+    ):
         self.config = config
+        self._blobs = blobs
+        self._repo = repo
+        self._owner_ensured = False
+        if run_queue is not None:
+            self.run_queue = run_queue
         if queue is not None:
             self.queue = queue
         if stt_factory is not None:
@@ -33,8 +42,47 @@ class EvalServices:
     def prices(self) -> PriceBook:
         return PriceBook.from_yaml()
 
+    @property
+    def settings(self):
+        return self.config.settings
+
+    @property
+    def blobs(self):
+        """The api's own BlobStore (AUDIO_BUCKET)."""
+        if self._blobs is None:
+            self._blobs = build_blobs(self.settings)
+        return self._blobs
+
+    @property
+    def repo(self):
+        """The api's own Repo; the single eval owner uid is ensured on first use, once."""
+        if self._repo is None:
+            self._repo = build_repo(self.settings, self.blobs)
+        if not self._owner_ensured:
+            self._repo.ensure_user(self.config.eval_owner_uid)
+            self._owner_ensured = True
+        return self._repo
+
+    @cached_property
+    def run_queue(self):
+        """The api's own CloudTasksQueue: run tasks go to WORKER_URL/tasks/run."""
+        from onolys_api.jobs.queue import CloudTasksQueue as ApiCloudTasksQueue
+
+        return ApiCloudTasksQueue(self.settings)
+
+    @cached_property
+    def datasets(self) -> Bucket:
+        """Read-only datasets bucket."""
+        from google.cloud import storage
+
+        return GCSBucket(
+            storage.Client(project=self.config.project).bucket(self.config.datasets_bucket)
+        )
+
     @cached_property
     def bucket(self) -> Bucket:
+        # Shim until the old unit engine goes (05 Task 10): it reads datasets/ and writes
+        # uploads/ and outputs. EVAL_BUCKET is gone; it now uses the api's AUDIO_BUCKET.
         from google.cloud import storage
 
         return GCSBucket(storage.Client(project=self.config.project).bucket(self.config.bucket))
