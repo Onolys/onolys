@@ -361,8 +361,13 @@ class FakeEmailSender:
     def __init__(self) -> None:
         self.messages: list[dict[str, str]] = []
 
-    def send(self, to: str, subject: str, html: str, text: str) -> None:
-        self.messages.append({"to": to, "subject": subject, "html": html, "text": text})
+    def send(
+        self, to: str, subject: str, html: str, text: str, idempotency_key: str | None = None
+    ) -> None:
+        message = {"to": to, "subject": subject, "html": html, "text": text}
+        if idempotency_key:
+            message["idempotency_key"] = idempotency_key
+        self.messages.append(message)
 
 
 class FakeAuthLinks:

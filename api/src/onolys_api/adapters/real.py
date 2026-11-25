@@ -180,7 +180,9 @@ class RealEvaluation:
 
 
 class UnconfiguredEmailSender:
-    def send(self, to: str, subject: str, html: str, text: str) -> None:
+    def send(
+        self, to: str, subject: str, html: str, text: str, idempotency_key: str | None = None
+    ) -> None:
         raise AdapterError("email_unconfigured")
 
 
@@ -191,13 +193,18 @@ class ResendEmailSender:
         self._api_key = api_key
         self._sender = sender
 
-    def send(self, to: str, subject: str, html: str, text: str) -> None:
+    def send(
+        self, to: str, subject: str, html: str, text: str, idempotency_key: str | None = None
+    ) -> None:
         import requests
 
+        headers = {"Authorization": f"Bearer {self._api_key}"}
+        if idempotency_key:  # a retried delivery of the same task must not email twice
+            headers["Idempotency-Key"] = idempotency_key
         try:
             response = requests.post(
                 "https://api.resend.com/emails",
-                headers={"Authorization": f"Bearer {self._api_key}"},
+                headers=headers,
                 json={
                     "from": self._sender,
                     "to": [to],

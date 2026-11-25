@@ -15,6 +15,7 @@ from onolys_api.adapters.base import AdapterError
 from onolys_api.auth.deps import AuthUser, current_user_unverified_ok
 from onolys_api.email.rate import client_ip
 from onolys_api.errors import ApiError, ErrorResponse
+from onolys_api.jobs.queue import task_name
 from onolys_api.jobs.reset_email import reset_payload
 
 ERRORS = {"default": {"model": ErrorResponse, "description": "Error"}}
@@ -94,10 +95,10 @@ def send_verification(request: Request, body: VerificationRequest, user: Unverif
     return Empty()
 
 
-def _send_reset(service, email: str) -> None:
+def _send_reset(service, email: str, idempotency_key: str | None = None) -> None:
     """In-process fallback (no queue, or enqueue failed): runs after the 202, only logged."""
     try:
-        sent = service.send_password_reset(email)
+        sent = service.send_password_reset(email, idempotency_key=idempotency_key)
     except Exception as exc:
         logs.emit("auth_email", logging.ERROR, email_kind="reset", exc_class=type(exc).__name__,
                   **(_failure_fields(exc) if isinstance(exc, AdapterError)
@@ -125,19 +126,19 @@ def send_password_reset(request: Request, body: ResetRequest, background: Backgr
     if not limiter.check_reset(body.email, ip):
         logs.emit("auth_email", logging.WARNING, email_kind="reset", outcome="rate_limited")
         return Empty()
-    queue = getattr(request.app.state, "queue", None)
+    state = request.app.state
+    payload = reset_payload(
+        state.settings, body.email, getattr(request.state, "request_id", None), state.clock()
+    )
+    queue = getattr(state, "queue", None)
     if queue is not None:  # durable: enqueued before the 202, sent by the worker with a retry (M-5)
         try:
-            state = request.app.state
-            queue.enqueue(
-                reset_payload(
-                    state.settings, body.email, getattr(request.state, "request_id", None),
-                    state.clock(),
-                )
-            )
+            queue.enqueue(payload)
             return Empty()
         except Exception as exc:  # noqa: BLE001 - never leak "known account" through a 5xx
             logs.emit("auth_email", logging.ERROR, email_kind="reset", outcome="enqueue_failed",
                       exc_class=type(exc).__name__)  # fmt: skip
-    background.add_task(_send_reset, service, body.email)  # no queue (local) or queue down
+    # No queue (local) or queue down. Same key as the task: a timed-out-but-landed create_task
+    # cannot double-send.
+    background.add_task(_send_reset, service, body.email, task_name(payload))
     return Empty()

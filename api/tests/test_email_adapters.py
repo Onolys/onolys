@@ -34,6 +34,28 @@ def test_unconfigured_sender():
         UnconfiguredEmailSender().send("person@example.com", "subject", "html", "text")
 
 
+def test_resend_sends_idempotency_key_header(monkeypatch):
+    from onolys_api.adapters.real import ResendEmailSender
+
+    post = Mock(return_value=SimpleNamespace(status_code=202))
+    monkeypatch.setattr(requests, "post", post)
+    ResendEmailSender("key", "sender").send(
+        "person@example.com", "subject", "html", "text", idempotency_key="reset-abc-7"
+    )
+    assert post.call_args.kwargs["headers"] == {
+        "Authorization": "Bearer key",
+        "Idempotency-Key": "reset-abc-7",
+    }
+
+
+def test_fake_records_idempotency_key():
+    from onolys_api.adapters.fake import FakeEmailSender
+
+    fake = FakeEmailSender()
+    fake.send("a@example.com", "s", "h", "t", idempotency_key="k1")
+    assert fake.messages[0]["idempotency_key"] == "k1"
+
+
 def test_resend_request_shape(monkeypatch):
     from onolys_api.adapters.real import ResendEmailSender
 

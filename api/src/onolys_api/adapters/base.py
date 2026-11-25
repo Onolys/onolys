@@ -88,7 +88,9 @@ class Voice(Protocol):
 class EmailSender(Protocol):
     """Transactional email delivery; failures contain safe codes only."""
 
-    def send(self, to: str, subject: str, html: str, text: str) -> None: ...
+    def send(
+        self, to: str, subject: str, html: str, text: str, idempotency_key: str | None = None
+    ) -> None: ...
 
 
 @dataclass(frozen=True)
