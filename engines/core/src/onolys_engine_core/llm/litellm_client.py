@@ -27,6 +27,9 @@ from .schema import to_provider_schema
 from .types import LLMRequest, LLMResult, MetricsCollector, Usage
 
 RETRY_MARGIN_S = 1.0
+# Least time worth starting an attempt (or a retry) with under a run deadline. Route timeouts
+# (300 s+ for large output caps) can exceed the whole deadline, so a retry needs only this much.
+MIN_ATTEMPT_S = 60.0
 MAX_CACHE_PREFIXES = 2
 # Errors that retrying cannot fix.
 _NO_RETRY = ("AuthenticationError", "PermissionDeniedError", "NotFoundError", "BadRequestError")
@@ -263,10 +266,18 @@ class LiteLLMClient:
         kwargs.update(route.extra_params)  # provider quirks live in the route, not in code
         return kwargs
 
+    @staticmethod
+    def _attempt_timeout(req: LLMRequest, timeout_s: float) -> float:
+        """The route timeout, clamped to what is left of the run deadline (no deadline: as is)."""
+        if req.deadline is None:
+            return timeout_s
+        return max(1.0, min(timeout_s, req.deadline - time.monotonic() - RETRY_MARGIN_S))
+
     def _can_retry(self, req: LLMRequest, timeout_s: float) -> bool:
         if req.deadline is None:
             return True
-        return req.deadline - time.monotonic() >= timeout_s + RETRY_MARGIN_S
+        window = min(timeout_s, MIN_ATTEMPT_S)
+        return req.deadline - time.monotonic() >= window + RETRY_MARGIN_S
 
     async def complete_json(
         self, req: LLMRequest, metrics: MetricsCollector | None = None
@@ -375,6 +386,7 @@ class LiteLLMClient:
         self, req: LLMRequest, route: Route, timeout_s: float, account: Callable[[Usage], None]
     ):
         async with self._sem(req.tier):
+            timeout_s = self._attempt_timeout(req, timeout_s)  # after any semaphore wait
             try:
                 async with asyncio.timeout(timeout_s):
                     resp = await self._call()(**self._kwargs(req, timeout_s))
