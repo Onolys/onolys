@@ -26,7 +26,11 @@ minimal subset the compare code reads (behaviours, globals, instances), not the 
 | no_completed | no done run (failed + cancelled) |
 | running | not finished (done, running, queued) |
 
-`builder.scale()` generates 498 runs in memory (not committed) for size/timing tests.
+`builder.scale()` generates 498 runs in memory (not committed). The backend size/timing test
+uses `builder.scale(n_sessions=499, combos=("A",))` for exactly 499 saved runs, checks the
+overview stays below 1.5 MB without rationale text, verifies the projection cache hit, and
+prints cold compute time against an advisory 5 second offline budget. Real cold loading
+after deployment remains an owner measurement.
 `fakes.py` has `FakeEvalRunSource` (implements `onolys_eval.summary.source.EvalRunSource`) and
 `FakePriceBook` (mirrors the backend `PriceBook.estimate`; unknown model -> `cost_usd` None).
 Tests import them as `compare.fakes` (see `eval/core/tests/conftest.py`).

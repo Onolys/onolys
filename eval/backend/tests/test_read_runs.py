@@ -8,14 +8,12 @@ from datetime import timedelta
 import pytest
 from onolys_api.repo.models import ReportDoc, RunDoc, utcnow
 from onolys_eval._formulas import compute_summaries
-from onolys_eval.gold import COUNT_IDS, GLOBAL_IDS
-from onolys_eval.metrics import Scores, aggregate, compare
+from onolys_eval.metrics import Scores
 from test_app import AUTH, client
 from test_runs import SEL2, start
 from test_uploads import gold
 
 from onolys_eval_backend import eval_view
-from onolys_eval_backend.read_runs import build_compare
 
 pytest_plugins = ["test_runs"]
 
@@ -204,38 +202,6 @@ def test_output_rejects_unknown_foreign_and_malformed_units(services):
         assert c.get("/v1/runs" + suffix, headers=AUTH).status_code == 404
 
 
-def test_compare_repeats_equal_core_unit_aggregate(services):
-    services.datasets.write_json(
-        "datasets/synthetic/one/gold.json", gold_with(question=2, sr=1, cr=1))
-    c = client(services=services)
-    rid, by = make_run(c, repeats=3)
-    sid = by["one"]
-    low, high = scores(question=0, sr=0, cr=0), scores(question=4, sr=2, cr=2)
-    done(services, rid, sid, LOW, low, 0)
-    done(services, rid, sid, LOW, high, 1)
-    put_run(services, rid, sid, LOW, 2, status="failed", error="internal_error")
-    body = detail(c, rid)
-    result = body["compare"]
-    assert result["has_human"] is True and len(result["metrics"]) == 16
-    assert [m["id"] for m in result["metrics"]][-2:] == ["reflection_question_ratio", "pct_cr"]
-    session = result["sessions"][0]
-    assert session["session_id"] == "one" and session["human"]["pct_cr"] == 0.5
-    cell = session["cells"][0]
-    assert cell["n"] == 2 and cell["failed"] == 1 and len(cell["unit_ids"]) == 3
-    assert cell["values"]["question"] == {"mean": 2, "min": 0, "max": 4, "n": 2}
-    assert cell["values"]["pct_cr"] == {"mean": 0.5, "min": 0.5, "max": 0.5, "n": 1}
-    assert cell["diff"]["question"] == 0
-    human = scores(question=2, sr=1, cr=1)
-    expected = aggregate(
-        [compare(Scores.model_validate(human), Scores.model_validate(s)) for s in [low, high]]
-    )
-    (agg,) = result["aggregates"]
-    assert agg["engine"] == "miti" and agg["combo_key"] == LOW and "preset" not in agg
-    assert agg["metrics"] == expected and expected["counts"]["question"]["mae"] == 2
-    assert any("consensus" in note for note in result["notes"])
-    assert cell["error_code"] == "internal_error"
-
-
 def two_session_services(services):
     source = services.datasets.read_json("datasets/synthetic/manifest.json")
     source["sessions"].append({**deepcopy(source["sessions"][0]), "session_id": "two"})
@@ -243,73 +209,6 @@ def two_session_services(services):
     other = services.datasets.read_json("datasets/synthetic/one/transcript.json")
     other["turns"][0]["text"] = "a distinct opening " + "actual speech " * 30
     services.datasets.write_json("datasets/synthetic/two/transcript.json", other)
-
-
-def test_matrix_two_sessions_three_combos_hand_computed(services):
-    two_session_services(services)
-    services.datasets.write_json("datasets/synthetic/one/gold.json", gold_with("one", question=2))
-    services.datasets.write_json("datasets/synthetic/two/gold.json", gold_with("two", question=4))
-    c = client(services=services)
-    sel = {"models": ["claude"], "tiers": ["claude-sonnet-5-5"], "efforts": ["low", "medium", "high"]}
-    rid, by = make_run(
-        c, input={"dataset_id": "synthetic", "session_ids": ["one", "two"]}, selection=sel)
-    one, two = by["one"], by["two"]
-    g = GLOBAL_IDS[0]
-    low_one = scores(question=4)
-    low_one["globals"] = {**low_one["globals"], g: 5}
-    med_one = scores(question=1)
-    med_one["globals"] = {**med_one["globals"], g: 4}
-    done(services, rid, one, LOW, low_one, usage={
-        "input_tokens": 10, "output_tokens": 5, "calls": 1, "cost_usd": 0.5})
-    done(services, rid, one, MED, med_one)
-    put_run(services, rid, one, HIGH, status="failed", error="rate_limited",
-            usage={"input_tokens": 7, "output_tokens": 1, "calls": 1, "cost_usd": 0.0})
-    done(services, rid, two, LOW, scores(question=4), usage={
-        "input_tokens": 20, "output_tokens": 10, "calls": 1, "cost_usd": 0.25})
-    done(services, rid, two, MED, scores(question=0))
-    done(services, rid, two, HIGH, scores(question=6))
-    body = detail(c, rid)
-    result = body["compare"]
-    s_one, s_two = result["sessions"]
-    assert (s_one["session_id"], s_two["session_id"]) == ("one", "two")
-    cells = {x["combo_key"]: x for x in s_one["cells"]}
-    assert list(cells) == [LOW, MED, HIGH] and all(x["engine"] == "miti" for x in cells.values())
-    q = cells[LOW]["error"]["question"]
-    assert (q["mae"], q["mean_bias"], q["n"]) == (2, 2, 1)
-    assert cells[LOW]["error"][g]["mae"] == 2
-    assert cells[MED]["error"]["question"]["mean_bias"] == -1
-    assert cells[HIGH]["error"] is None and cells[HIGH]["failed"] == 1 and cells[HIGH]["n"] == 0
-    assert cells[HIGH]["error_code"] == "rate_limited" and cells[LOW]["error_code"] is None
-    cells2 = {x["combo_key"]: x for x in s_two["cells"]}
-    assert cells2[LOW]["error"]["question"] == {"mae": 0, "mean_bias": 0, "n": 1}
-    assert cells2[MED]["error"]["question"]["mae"] == 4
-    assert cells2[HIGH]["error"]["question"]["mean_bias"] == 2
-    aggs = {a["combo_key"]: a for a in result["aggregates"]}
-    assert list(aggs) == [LOW, MED, HIGH]
-    assert aggs[LOW]["metrics"]["counts"]["question"]["mae"] == 1
-    assert aggs[MED]["metrics"]["counts"]["question"]["mae"] == 2.5
-    assert aggs[MED]["metrics"]["counts"]["question"]["mean_bias"] == -2.5
-    assert [aggs[k]["n"] for k in (LOW, MED, HIGH)] == [2, 2, 1]
-    assert [aggs[k]["failed"] for k in (LOW, MED, HIGH)] == [0, 0, 1]
-    assert aggs[LOW]["within_1"][g] == {"n": 1, "total": 2, "fraction": 0.5}
-    assert aggs[LOW]["usage"] == {"input_tokens": 30, "output_tokens": 15, "calls": 2}
-    assert aggs[LOW]["cost_usd_est"] == 0.75
-    assert aggs[HIGH]["usage"]["input_tokens"] == 7 and aggs[HIGH]["cost_usd_est"] == 0
-    assert body["legacy_selection"] is False and body["combo_keys"] == [LOW, MED, HIGH]
-    assert body["selection"] == sel
-
-
-def test_no_human_has_no_diffs_or_errors(services):
-    services.datasets.delete("datasets/synthetic/one/gold.json")
-    c = client(services=services)
-    rid, by = make_run(c, engines=["miti"], repeats=3)
-    done(services, rid, by["one"], LOW, scores(question=0, sr=1, cr=1))
-    put_run(services, rid, by["one"], LOW, 1, status="failed", error="internal_error")
-    result = detail(c, rid)["compare"]
-    assert result["has_human"] is False and result["aggregates"] == []
-    session = result["sessions"][0]
-    assert session["human"] is None and "diff" not in session["cells"][0]
-    assert session["cells"][0]["values"]["pct_cr"]["n"] == 1
 
 
 def test_final_attempt_is_highest_and_earlier_failures_stay_listed(services):
@@ -324,9 +223,6 @@ def test_final_attempt_is_highest_and_earlier_failures_stay_listed(services):
     assert [(u["unit_id"], u["attempt"], u["status"]) for u in ai] == [
         (first, 0, "failed"), (second, 1, "done")]
     assert [u["final"] for u in ai] == [False, True]
-    cell = body["compare"]["sessions"][0]["cells"][0]
-    assert cell["unit_ids"] == [second] and cell["n"] == 1 and cell["failed"] == 0
-    assert body["compare"]["aggregates"][0]["failed"] == 0
     cells = eval_view.list_cells(c.app.state.services, rid)
     assert [(x["attempt"], x["status"], x["run_id"]) for x in cells] == [
         (0, "failed", first), (1, "done", second)]
@@ -346,7 +242,7 @@ def test_live_status_then_final_status_without_any_earlier_get(services):
     assert services.repository.get_run(rid)["sessions"][sid]["runs"][0]["status"] == "running"
     final = detail(c, rid)
     assert units_of(final, engine="miti")[0]["status"] == "done"
-    assert final["compare"]["sessions"][0]["cells"][0]["values"]["question"]["mean"] == 3
+    assert units_of(final, engine="miti")[0]["scores"]["counts"]["question"] == 3
 
 
 def test_waiting_skipped_and_unstarted_cells(services):
@@ -386,8 +282,7 @@ def test_done_run_with_unreadable_report_is_listed_without_scores(services):
     put_run(services, rid, by["one"], LOW, report={"behaviours": "broken"})
     body = detail(c, rid)
     assert units_of(body, engine="miti")[0]["status"] == "done"
-    cell = body["compare"]["sessions"][0]["cells"][0]
-    assert cell["n"] == 0
+    assert units_of(body, engine="miti")[0]["scores"] is None
 
 
 def test_list_cells_shape_order_and_loaders(services):
@@ -416,55 +311,6 @@ def test_list_cells_shape_order_and_loaders(services):
     assert eval_view.load_report(svc, cells[1]) is None  # not started: no report
     assert eval_view.load_gold(svc, by["one"])["counts"] == gold()["counts"]
     assert eval_view.load_gold(svc, "unknown") is None
-
-
-def test_legacy_build_compare_is_unchanged_for_a_unit_fixture():
-    """The legacy builder is fed legacy-shaped units; its output for a fixed fixture is pinned."""
-    run = {"engines": ["human", "miti"], "input": {"session_ids": ["one"]},
-           "combos": [{"model": "claude", "tier": "claude-sonnet-5-5", "effort": "low"}]}
-    human = {"session_id": "one", "engine": "human", "status": "done", "combo_key": None,
-             "scores": {"counts": scores(question=2)["counts"], "globals": scores()["globals"],
-                        "quality_label": None}}
-    ai = {"session_id": "one", "engine": "miti", "status": "done", "combo_key": LOW,
-          "scores": scores(question=4), "run_info": {"usage": {"input_tokens": 3}},
-          "cost_usd_est": 0.5}
-    result = build_compare(run, {"h": human, "a": ai})
-    (cell,) = result["sessions"][0]["cells"]
-    assert cell["unit_ids"] == ["a"] and cell["n"] == 1
-    assert cell["values"]["question"] == {"mean": 4, "min": 4, "max": 4, "n": 1}
-    assert cell["diff"]["question"] == 2 and cell["error"]["question"]["mae"] == 2
-    assert result["aggregates"][0]["cost_usd_est"] == 0.5
-    assert result["aggregates"][0]["usage"]["input_tokens"] == 3
-    assert [m["id"] for m in result["metrics"]] == [*COUNT_IDS, *GLOBAL_IDS, "reflection_question_ratio", "pct_cr"]
-
-
-def test_view_compare_matches_legacy_builder_on_the_same_scores(services):
-    services.datasets.write_json("datasets/synthetic/one/gold.json", gold_with(question=2))
-    c = client(services=services)
-    rid, by = make_run(c)
-    done(services, rid, by["one"], LOW, scores(question=4))
-    via_view = detail(c, rid)["compare"]
-    run = services.repository.get_run(rid)
-    units = {
-        "h": {"session_id": "one", "engine": "human", "status": "done", "combo_key": None,
-              "scores": {"counts": gold_with(question=2)["counts"], "globals": gold()["globals"]}},
-        "a": {"session_id": "one", "engine": "miti", "status": "done", "combo_key": LOW,
-              "scores": scores(question=4), "run_info": {"usage": {}}, "cost_usd_est": 0},
-    }
-    direct = build_compare(run, units)
-    strip = lambda r: {k: v for k, v in r.items() if k != "sessions"}  # noqa: E731
-    assert strip(via_view)["aggregates"][0]["metrics"] == strip(direct)["aggregates"][0]["metrics"]
-    assert via_view["sessions"][0]["cells"][0]["values"] == direct["sessions"][0]["cells"][0]["values"]
-
-
-def test_partial_human_scores_leave_missing_metrics_null():
-    from onolys_eval.metrics import PartialScores
-
-    from onolys_eval_backend.read_runs import _values
-
-    values = _values(PartialScores(counts={"question": 3, "cr": 1, "sr": 1}, quality_label="low"))
-    assert values["question"] == 3 and values["gi"] is None and values["cct"] is None
-    assert values["pct_cr"] == .5 and values["reflection_question_ratio"] == 2 / 3
 
 
 def test_history_provenance_and_private_snapshot_paths(services):
@@ -535,3 +381,9 @@ def test_factory_prices_are_lazy_without_cloud(services):
     assert "prices" not in factory.__dict__
     assert isinstance(factory.prices, PriceBook)
     assert "audio_bucket" not in factory.__dict__ and "repository" not in factory.__dict__
+
+
+def test_detail_defers_compare_to_dedicated_routes(services):
+    c = client(services=services)
+    rid, _ = make_run(c)
+    assert "compare" not in detail(c, rid)

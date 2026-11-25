@@ -159,11 +159,15 @@ def overview(request: Request, eval_run_id: str, combos: str | None = None):
                 values.append({"session_id": session.session_id, "value": raw[metric]})
         row["values"] = values
     count_error = m.cells["count_error"]
+    quality = _leaderboard_quality(v)
+    heatmap_rows = (*COUNT_IDS, *GLOBAL_IDS, "reflection_question_ratio", "pct_cr")
     return {**v.common, "header": header, "count_error": count_error,
             "verdict": build_verdict({"count_error": count_error, "skipped_combos": v.skipped}),
-            "leaderboard": [{"combo_key": key, **count_error[key], **v.ops[key]} for key in v.keys],
-            "heatmap": {"rows": [{"id": key, "kind": kind(key)} for key in m.cells],
-                        "human": m.human, "cells": m.cells},
+            "leaderboard": [{"combo_key": key, **count_error[key], **v.ops[key],
+                             **quality[key]} for key in v.keys],
+            "heatmap": {"rows": [{"id": key, "kind": kind(key)} for key in heatmap_rows],
+                        "human": {k: m.human[k] for k in heatmap_rows},
+                        "cells": {k: m.cells[k] for k in heatmap_rows}},
             "cohorts": m.cohorts,
             "footnotes": ["Sessions have equal weight; repeats are averaged within each session.",
                           "Started resets on re-claim; retried_runs counts retried cells."]}
@@ -181,6 +185,49 @@ def _line_metrics(v):
                       "aligned": c.aligned, "per_code": c.per_code, "macro_f1": c.macro_f1,
                       "line_accuracy": c.line_accuracy, "confusion": c.confusion, "multi": c.multi}
                 for key, c in result.combos.items()}}
+
+
+def _quality_cell(value, n, repeats, reason):
+    return {"value": value, "n": n if value is not None else 0, "repeats": repeats,
+            "best": False, "na": {"reason": reason} if value is None else None}
+
+
+def _leaderboard_quality(v):
+    """Session-balanced within-one share and line scores; larger is better for these cells."""
+    lines = _line_metrics(v)
+    active = [k for k in v.keys if k not in v.skipped]
+    paired = [s for s in v.sessions if s.human.globals and all(s.runs.get(k) for k in active)]
+    result = {}
+    for key in v.keys:
+        skipped = key in v.skipped
+        shares = []
+        repeats = 0
+        if not skipped:
+            for session in paired:
+                runs = session.runs[key]
+                repeats = max(repeats, len(runs))
+                shares.append(sum(abs(run.globals[metric] - human) <= 1
+                                  for metric, human in session.human.globals.items()
+                                  for run in runs) / (len(session.human.globals) * len(runs)))
+        reason = "skipped: provider unavailable" if skipped else "not labeled in this dataset"
+        if not paired and any(s.human.globals for s in v.sessions) and not skipped:
+            reason = "no paired sessions"
+        result[key] = {"globals_within_1": _quality_cell(
+            sum(shares) / len(shares) if shares else None, len(shares), repeats, reason)}
+        line = lines["combos"].get(key, {})
+        line_reason = "skipped: provider unavailable" if skipped else (
+            "no human line labels" if lines["missing"] else
+            line.get("lane") or "no aligned clinician turns")
+        for metric in ("line_accuracy", "macro_f1"):
+            result[key][metric] = _quality_cell(line.get(metric), line.get("n", 0),
+                                                line.get("repeats", 0), line_reason)
+    for metric in ("globals_within_1", "line_accuracy", "macro_f1"):
+        values = [row[metric]["value"] for row in result.values()
+                  if row[metric]["value"] is not None]
+        if values:
+            for row in result.values():
+                row[metric]["best"] = row[metric]["value"] == max(values)
+    return result
 
 
 @router.get("/deep-dive")

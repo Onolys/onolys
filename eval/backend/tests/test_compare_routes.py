@@ -150,3 +150,58 @@ def test_filtered_cohort_uses_requested_combos(routes):
     best_key = scenario["eval_run"]["combos"][0]["combo_key"]
     one = c.get(base + "/overview", params={"combos": best_key}, headers=AUTH).json()
     assert one["count_error"][best_key]["n"] >= all_data["count_error"][best_key]["n"]
+
+
+def test_overview_quality_cells_are_server_calculated_and_heatmap_is_bounded(routes):
+    scenario, _, c, base = routes("lines")
+    data = c.get(base + "/overview", headers=AUTH).json()
+    assert len(data["heatmap"]["rows"]) == 16
+    assert "count_error" not in data["heatmap"]["cells"]
+    for row in data["leaderboard"]:
+        for metric in ("globals_within_1", "line_accuracy", "macro_f1"):
+            assert {"value", "n", "best", "na"} <= row[metric].keys()
+        if row["combo_key"] == scenario["eval_run"]["combos"][0]["combo_key"]:
+            assert row["line_accuracy"]["value"] is not None
+            assert row["line_accuracy"]["n"] > 0
+        if row["combo_key"] == scenario["eval_run"]["combos"][1]["combo_key"]:
+            assert row["line_accuracy"]["na"]["reason"] == "no line-level output"
+    assert any(row["line_accuracy"]["best"] for row in data["leaderboard"])
+
+
+def test_skipped_combo_has_no_best_quality_cell(routes):
+    _, _, c, base = routes("provider_skipped")
+    data = c.get(base + "/overview", headers=AUTH).json()
+    for row in data["leaderboard"]:
+        if row["na"] and "skipped" in row["na"]["reason"]:
+            assert all(not row[k]["best"] and row[k]["value"] is None
+                       for k in ("globals_within_1", "line_accuracy", "macro_f1"))
+
+
+def test_overview_quality_matches_deep_dive_values(routes):
+    _, _, c, base = routes("lines")
+    overview = c.get(base + "/overview", headers=AUTH).json()
+    deep = c.get(base + "/deep-dive", headers=AUTH).json()
+    for row in overview["leaderboard"]:
+        key = row["combo_key"]
+        line = deep["lines"]["combos"][key]
+        for metric in ("line_accuracy", "macro_f1"):
+            assert row[metric]["value"] == line[metric]
+        global_values = [cell[key]["within_1"] for cell in deep["globals"]["cells"].values()]
+        assert row["globals_within_1"]["value"] == pytest.approx(sum(global_values) / 4)
+
+
+def test_unparseable_latest_attempt_excluded_and_not_replaced_by_earlier_done(routes):
+    from copy import deepcopy
+
+    scenario, _, c, base = routes()
+    old = scenario["cells"][0]
+    new = deepcopy(old)
+    new.update(attempt=1, run_id="latest-broken", ended="2026-11-21T10:32:10Z")
+    scenario["cells"].append(new)
+    scenario["run_docs"]["latest-broken"] = deepcopy(scenario["run_docs"][old["run_id"]])
+    scenario["reports"]["latest-broken"] = {"report": {}}
+    data = c.get(base + "/overview", headers=AUTH).json()
+    assert any(e["reason"] == "unparseable" for e in data["excluded"])
+    assert data["coverage"]["runs_done"] == 11
+    row = next(r for r in data["leaderboard"] if r["combo_key"] == old["combo_key"])
+    assert {"code": "unparseable", "count": 1} in row["failures"]
