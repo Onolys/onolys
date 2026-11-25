@@ -24,7 +24,7 @@ def base():
 
 
 def test_caps_table():
-    assert EFFORT_OUTPUT_CAP == {"low": 16000, "medium": 32000, "high": 48000, "max": 64000}
+    assert EFFORT_OUTPUT_CAP == {"none": 16000, "low": 16000, "medium": 32000, "high": 48000, "xhigh": 64000, "max": 64000}
 
 
 def test_claude_snapshot(base):
@@ -76,3 +76,21 @@ def test_effort_output_cap_covers_exactly_the_allowed_efforts():
     from onolys_engine_core.llm.models import _EFFORTS
 
     assert set(EFFORT_OUTPUT_CAP) == set(_EFFORTS)
+
+
+@pytest.mark.parametrize("tier,effort", [
+    (tier, effort)
+    for tier in ("gpt-6.1-sol", "gpt-6.1-terra", "gpt-6-luna")
+    for effort in ("none", "low", "medium", "high", "xhigh", "max")
+    if (tier, effort) != ("gpt-6.1-sol", "none")
+])
+def test_openai_combo_routes_preserve_explicit_effort_and_provider_caps(base, tier, effort):
+    model = load_models(MODELS)["openai"]
+    out = combo_routes(base, model, tier, effort)
+    for route in out.values():
+        assert route.litellm_id == f"openai/{tier}"
+        assert route.api_key_env == "OPENAI_API_KEY"
+        assert route.extra_params["reasoning_effort"] == effort
+        assert route.max_output_tokens == min(128000, EFFORT_OUTPUT_CAP[effort])
+        assert route.context_tokens == 1050000
+        assert route.supports_temperature is False

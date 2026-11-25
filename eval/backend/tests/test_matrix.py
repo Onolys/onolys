@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 from test_app import AUTH, client
-from test_runs import services, start
+from test_runs import eval_routes, services, start
 
 from onolys_eval_backend.matrix import RunTooLarge, SelectionError, plan_units, validate_selection
 
@@ -107,3 +107,22 @@ def test_rerun_dataset_adds_human_and_rejects_legacy(services):
     legacy = c.post(f"/v1/runs/{rid}/rerun", headers=AUTH,
                     json={"engines": ["miti"], "presets": ["other"], "repeats": 1})
     assert legacy.status_code == 422
+
+
+def test_openai_full_matrix_pins_routes_and_drops_only_sol_none(services):
+    selection = {
+        "models": ["openai"], "tiers": ["gpt-6.1-sol", "gpt-6.1-terra", "gpt-6-luna"],
+        "efforts": ["none", "low", "medium", "high", "xhigh", "max"],
+    }
+    response = start(client(services=services), selection=selection)
+    assert response.status_code == 200, response.text
+    doc = services.repository.get_run(response.json()["run_id"])
+    assert len(doc["combos"]) == 17
+    assert all(combo["model"] == "openai" for combo in doc["combos"])
+    assert not any(c["tier"] == "gpt-6.1-sol" and c["effort"] == "none" for c in doc["combos"])
+    resolved = doc["saved_config"]["resolved_combos"]
+    assert len(resolved) == 17
+    for key, item in resolved.items():
+        assert item["litellm_id"].startswith("openai/gpt-6")
+        assert item["context_tokens"] == 1050000
+        assert item["effort"] == key.rsplit("/", 1)[1]

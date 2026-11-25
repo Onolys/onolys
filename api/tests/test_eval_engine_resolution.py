@@ -146,3 +146,26 @@ async def test_oneshot_miti_stores_report_and_gets_config():
         oe.OneshotEngine.run = orig
     assert out.report == {"ok": 1}
     assert seen["config"] == "miti"
+
+
+@pytest.mark.parametrize("tier,effort", [
+    (tier, effort)
+    for tier in ("gpt-6.1-sol", "gpt-6.1-terra", "gpt-6-luna")
+    for effort in ("none", "low", "medium", "high", "xhigh", "max")
+    if (tier, effort) != ("gpt-6.1-sol", "none")
+])
+async def test_openai_eval_override_reaches_real_engine_factory(tier, effort):
+    from onolys_api.engines import eval_snapshot
+
+    seen, engine = [], Engine()
+    override = {"provider": "openai", "model": "openai", "tier": tier, "effort": effort}
+    await evaluation(engine, True, seen).run(
+        ctx(), tr(), {}, {**PARAMS, "route_override": override}
+    )
+    for route in seen[0].values():
+        assert route.litellm_id == f"openai/{tier}"
+        assert route.api_key_env == "OPENAI_API_KEY"
+        assert route.extra_params["reasoning_effort"] == effort
+    snapshot, _ = eval_snapshot(Settings(eval_mode=True), "default", "miti", override)
+    assert snapshot["litellm_id"] == f"openai/{tier}" and snapshot["effort"] == effort
+    assert snapshot["context_tokens"] == 1050000

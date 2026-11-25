@@ -9,7 +9,7 @@ import yaml
 
 from onolys_engine_core.errors import ConfigError
 
-_EFFORTS = {"low", "medium", "high", "max"}
+_EFFORTS = {"none", "low", "medium", "high", "xhigh", "max"}
 _CACHING = {"none", "provider_implicit", "anthropic_ephemeral"}
 
 

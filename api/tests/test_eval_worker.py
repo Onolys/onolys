@@ -106,7 +106,13 @@ async def test_prod_params_unchanged_and_eval_params_added(mk):
     assert prod.seen["n_runs"] == 3
 
 
-async def test_override_reaches_real_evaluation(mk, monkeypatch):
+@pytest.mark.parametrize("override,expected_id,effort", [
+    (OVERRIDE, "anthropic/claude-sonnet-5-5", "high"),
+    ({"provider": "openai", "model": "openai", "tier": "gpt-6.1-sol", "effort": "xhigh"}, "openai/gpt-6.1-sol", "xhigh"),
+    ({"provider": "openai", "model": "openai", "tier": "gpt-6.1-terra", "effort": "none"}, "openai/gpt-6.1-terra", "none"),
+    ({"provider": "openai", "model": "openai", "tier": "gpt-6-luna", "effort": "max"}, "openai/gpt-6-luna", "max"),
+])
+async def test_override_reaches_real_evaluation(mk, monkeypatch, override, expected_id, effort):
     monkeypatch.setenv("MODELS_FILE", str(Path(__file__).resolve().parents[2] / "config" / "models.yaml"))
     seen = {}
 
@@ -118,11 +124,11 @@ async def test_override_reaches_real_evaluation(mk, monkeypatch):
     real = RealEvaluation(s, llm_factory=factory)
     env.app.state.adapters = Adapters(stt=env.stt, evaluation=real)
     sid = await env.start()
-    start_eval(env, s, sid, override=OVERRIDE)
+    start_eval(env, s, sid, override=override)
     env.drain()
     route = next(iter(seen["routes"].values()))
-    assert route.litellm_id == "anthropic/claude-sonnet-5-5"
-    assert route.extra_params["reasoning_effort"] == "high"
+    assert route.litellm_id == expected_id
+    assert route.extra_params["reasoning_effort"] == effort
 
 
 async def test_block_with_eval_mode_off_fails_internal_error(mk, caplog):

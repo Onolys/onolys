@@ -281,7 +281,10 @@ def check_api_keys(routes: dict[str, Route], env: dict[str, str] | None = None) 
         raise ConfigError("LLM API key environment variable not set: " + "; ".join(parts))
 
 
-EFFORT_OUTPUT_CAP = {"low": 16000, "medium": 32000, "high": 48000, "max": 64000}
+# Application budgets (including reasoning), bounded again by each model's output limit.
+EFFORT_OUTPUT_CAP = {
+    "none": 16000, "low": 16000, "medium": 32000, "high": 48000, "xhigh": 64000, "max": 64000
+}
 COMBO_TIMEOUT_S = 300
 
 

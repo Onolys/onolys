@@ -89,7 +89,7 @@ def test_options_models_match_models_yaml(services):
         for m in load_models(MODELS_YAML).values()
     ]
     assert data["models"] == expected
-    assert [m["id"] for m in data["models"]] == ["claude", "gemini"]
+    assert [m["id"] for m in data["models"]] == ["claude", "gemini", "openai"]
     assert "presets" not in data
 
 

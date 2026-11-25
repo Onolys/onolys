@@ -165,3 +165,14 @@ def test_firestore_pagination_survives_deleted_cursor():
         for doc in repo.runs.stream():
             doc.reference.delete()
         client.close()
+
+
+@pytest.mark.parametrize("model,input_rate,output_rate", [
+    ("gpt-6.1-sol", 2, 10), ("gpt-6.1-terra", 1, 5), ("gpt-6-luna", 0.1, 0.5),
+])
+def test_openai_fallback_rates_have_official_source_and_snapshot(model, input_rate, output_rate):
+    prices = PriceBook.from_yaml()
+    cost = prices.estimate({"input_tokens": 1000000, "output_tokens": 1000000}, f"openai/{model}")
+    assert cost.cost_usd == pytest.approx(input_rate + output_rate)
+    assert cost.is_estimate is True and cost.rate_as_of == "2026-11-25"
+    assert cost.source.startswith(f"https://developers.openai.com/api/docs/models/{model}")

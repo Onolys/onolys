@@ -115,7 +115,7 @@ def test_missing_or_invalid_yaml_is_config_error(tmp_path):
 
 def test_real_config_matches_model_picker_brief():
     models = load_models(Path(__file__).resolve().parents[3] / "config" / "models.yaml")
-    assert set(models) == {"claude", "gemini"}
+    assert set(models) == {"claude", "gemini", "openai"}
     claude = models["claude"]
     assert (claude.label, claude.provider, claude.api_key_env) == ("Claude", "anthropic", "ANTHROPIC_API_KEY")
     assert (claude.context_tokens, claude.max_output_tokens, claude.supports_temperature) == (1000000, 128000, False)
@@ -132,4 +132,16 @@ def test_real_config_matches_model_picker_brief():
     assert {k: (t.efforts, t.default_effort) for k, t in gemini.tiers.items()} == {
         f"gemini-4-{name}": (("low", "medium", "high"), default)
         for name, default in [("carbon", "medium"), ("neon", "high"), ("hydrogen", "high"), ("argon", "medium")]
+    }
+
+
+def test_openai_catalog_supported_efforts_and_limits():
+    model = load_models(Path(__file__).resolve().parents[3] / "config/models.yaml")["openai"]
+    assert (model.label, model.provider, model.api_key_env) == ("OpenAI", "openai", "OPENAI_API_KEY")
+    assert (model.context_tokens, model.max_output_tokens) == (1050000, 128000)
+    assert model.supports_temperature is False and model.caching_mode == "provider_implicit"
+    assert {k: (t.efforts, t.default_effort) for k, t in model.tiers.items()} == {
+        "gpt-6.1-sol": (("low", "medium", "high", "xhigh", "max"), "medium"),
+        "gpt-6.1-terra": (("none", "low", "medium", "high", "xhigh", "max"), "medium"),
+        "gpt-6-luna": (("none", "low", "medium", "high", "xhigh", "max"), "medium"),
     }

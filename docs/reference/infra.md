@@ -285,17 +285,47 @@ EVAL_ALLOWED_EMAILS="a@x.com,b@y.com" python3 infra/scripts/seed-secrets.py --en
 Which provider, model and reasoning effort the text routes (evaluation LLM calls) use, and where to change them.
 
 - **Default:** `config/{env}/routes.yaml` (baked into the image). Staging routes point at Claude (`anthropic/claude-sonnet-5-5`); prod is unchanged.
-- **Override (staging):** set GitHub repo variables (Settings > Secrets and variables > Actions > Variables) `LLM_PROVIDER` (`anthropic` or `gemini`) and `LLM_MODEL` (a tier id listed in `config/models.yaml`, e.g. `claude-sonnet-5-5`, `gemini-4-neon`), then re-run `deploy-staging` (or push to `main`). Set both or neither. Optionally set `LLM_EFFORT` to an exact lowercase effort supported by every effective text tier (`low`, `medium`, `high`, or `max` where supported). Effort may be set independently of provider/model; empty values preserve the route defaults. `deploy-staging.yml` validates all three using the runtime loader before cloud authentication, image publishing or deployment, and passes only validated values to the api and worker services. Invalid pairs, unsupported efforts, whitespace and separators fail this preflight. Runtime loading also rejects invalid configuration (the api loads routes at startup but does not need provider keys). The voice relay does not load these routes.
+- **Override (staging):** set GitHub repo variables (Settings > Secrets and variables > Actions > Variables) `LLM_PROVIDER` (`anthropic`, `gemini`, or `openai`) and `LLM_MODEL` (a tier id listed in `config/models.yaml`, e.g. `claude-sonnet-5-5`, `gemini-4-neon`, `gpt-6.1-sol`), then re-run `deploy-staging` (or push to `main`). Set both or neither. Optionally set `LLM_EFFORT` to an exact lowercase effort supported by every effective text tier (`none`, `low`, `medium`, `high`, `xhigh`, or `max` where supported). Effort may be set independently of provider/model; empty values preserve the route defaults. `deploy-staging.yml` validates all three using the runtime loader before cloud authentication, image publishing or deployment, and passes only validated values to the api and worker services. Invalid pairs, unsupported efforts, whitespace and separators fail this preflight. Runtime loading also rejects invalid configuration (the api loads routes at startup but does not need provider keys). The voice relay does not load these routes.
 - **Precedence (low to high):** `routes.yaml` < `MITI_MODEL_*` < `LLM_PROVIDER`/`LLM_MODEL` < `LLM_EFFORT` < preset overlay. Only concrete text routes are rewritten; aliases follow their target. Effort changes `extra_params.reasoning_effort`, preserving other extra parameters and token caps. Neither override changes `oneshot`; presets apply last.
 - **models.yaml:** the override reads `config/models.yaml`, found at `<ROUTES_FILE dir>/../models.yaml` (`/app/config/models.yaml` in the images; `MODELS_FILE` overrides the path). It is shipped in the api/worker image (`COPY config /app/config`) and the eval backend image (whitelisted in `eval/backend/Dockerfile.dockerignore`). `scripts/ci/check_config.sh` fails the build if it is missing in the repo or image.
 - **Secret names:** `anthropic-api-key-staging` mounted as `ANTHROPIC_API_KEY` and `gemini-api-key-staging` as `GEMINI_API_KEY` on the worker (Terraform `llm_secrets`; prod uses `-prod`). Nothing to add in Terraform to switch between the two. The worker fails at startup if the key for the selected provider is missing.
 - **Rollback (back to Gemini):** set `LLM_PROVIDER=gemini` and `LLM_MODEL=gemini-4-neon`, clear `LLM_EFFORT` or select a supported Gemini effort, then re-run `deploy-staging`. To drop all overrides, clear all three variables and re-run the deploy; routes.yaml applies again.
 - **Terraform drift:** `LLM_PROVIDER`, `LLM_MODEL` and `LLM_EFFORT` are set only by CI, not by Terraform. A `terraform apply` on the staging services rewrites the env and removes them (the routes.yaml default applies until the next deploy). After any apply, re-run `deploy-staging` to restore the overrides. Same drift pattern as `GIT_SHA` above.
-- **Eval service:** unchanged; it reads routes from its image config and has no `LLM_*` env (`deploy-eval`/Terraform not touched). It still ships `models.yaml` so an override can be added later.
+- **Eval service:** the per-run picker reads `models.yaml`; selecting OpenAI resolves `openai/<tier>` through the existing LiteLLM client. Runtime keys must be mounted before executing that provider. It does not require a GitHub Actions secret.
+
+### OpenAI runtime opt-in
+
+`config/models.yaml` includes `gpt-6.1-sol` (low, medium, high, xhigh, max),
+`gpt-6.1-terra` and `gpt-6-luna` (none, low, medium, high, xhigh, max).
+Their picker default is medium. The existing route defaults remain active until a
+per-run selection or deployment override is made. For a staging override, use
+`LLM_PROVIDER=openai`, `LLM_MODEL=gpt-6.1-sol`, `LLM_EFFORT=medium` (or another supported
+combination). Empty `LLM_EFFORT` preserves the route's current effort, rather than
+selecting the catalog default.
+
+Owner setup before live OpenAI execution: provide an existing Secret Manager secret
+version and extend the environment's runtime secret map with `OPENAI_API_KEY`.
+For the eval instance, a local tfvars override is:
+
+```hcl
+eval_llm_secrets = {
+  GEMINI_API_KEY    = "gemini-api-key"
+  ANTHROPIC_API_KEY = "anthropic-api-key"
+  OPENAI_API_KEY    = "openai-api-key"
+}
+```
+
+The existing module adds the `-eval` suffix and mounts the value on the eval worker;
+use `llm_secrets` for staging/prod (`-staging`/`-prod`). Keep the existing entries.
+Follow the secret-shell, seed and deployment sequence below. Supply secret values
+through the secure runtime provisioning process; do not put them in tfvars, Git,
+CI variables, logs or examples. The committed maps deliberately retain their current
+defaults so deployment does not depend on a new, unpopulated secret.
+
 
 ## Adding an LLM or STT provider
 
-1. **tfvars line.** The committed default already holds the two shipped providers (`GEMINI_API_KEY = "gemini-api-key"` for the evaluation routes, `ANTHROPIC_API_KEY = "anthropic-api-key"` for the `claude` preset). For a further provider, in a `terraform.tfvars` (local, not committed) extend the map, keeping the default entries (shown here with a hypothetical `OPENAI_API_KEY`):
+1. **tfvars line.** The committed default already holds the two shipped providers (`GEMINI_API_KEY = "gemini-api-key"` for the evaluation routes, `ANTHROPIC_API_KEY = "anthropic-api-key"` for the `claude` preset). For a further provider, in a `terraform.tfvars` (local, not committed) extend the map, keeping the default entries (shown here with the optional `OPENAI_API_KEY`):
    ```hcl
    llm_secrets = {
      GEMINI_API_KEY    = "gemini-api-key"
