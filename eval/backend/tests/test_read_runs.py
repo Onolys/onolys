@@ -127,9 +127,9 @@ def test_summary_and_detail_carry_new_group_fields(services):
 
 
 def test_missing_new_fields_are_tolerated(services):
-    services.repository.create_run(
+    services.repository.create_group(
         "old", {"created_at": "2026-01-01T00:00:00+00:00", "input": {}, "engines": [],
-                "sessions": {}}, {})
+                "sessions": {}})
     c = client(services=services)
     (summary,) = c.get("/v1/runs", headers=AUTH).json()["runs"]
     assert summary["cancelled_at"] is None and summary["skipped_units"] == 0
@@ -205,7 +205,7 @@ def test_output_rejects_unknown_foreign_and_malformed_units(services):
 
 
 def test_compare_repeats_equal_core_unit_aggregate(services):
-    services.bucket.write_json(
+    services.datasets.write_json(
         "datasets/synthetic/one/gold.json", gold_with(question=2, sr=1, cr=1))
     c = client(services=services)
     rid, by = make_run(c, repeats=3)
@@ -237,18 +237,18 @@ def test_compare_repeats_equal_core_unit_aggregate(services):
 
 
 def two_session_services(services):
-    source = services.bucket.read_json("datasets/synthetic/manifest.json")
+    source = services.datasets.read_json("datasets/synthetic/manifest.json")
     source["sessions"].append({**deepcopy(source["sessions"][0]), "session_id": "two"})
-    services.bucket.write_json("datasets/synthetic/manifest.json", source)
-    other = services.bucket.read_json("datasets/synthetic/one/transcript.json")
+    services.datasets.write_json("datasets/synthetic/manifest.json", source)
+    other = services.datasets.read_json("datasets/synthetic/one/transcript.json")
     other["turns"][0]["text"] = "a distinct opening " + "actual speech " * 30
-    services.bucket.write_json("datasets/synthetic/two/transcript.json", other)
+    services.datasets.write_json("datasets/synthetic/two/transcript.json", other)
 
 
 def test_matrix_two_sessions_three_combos_hand_computed(services):
     two_session_services(services)
-    services.bucket.write_json("datasets/synthetic/one/gold.json", gold_with("one", question=2))
-    services.bucket.write_json("datasets/synthetic/two/gold.json", gold_with("two", question=4))
+    services.datasets.write_json("datasets/synthetic/one/gold.json", gold_with("one", question=2))
+    services.datasets.write_json("datasets/synthetic/two/gold.json", gold_with("two", question=4))
     c = client(services=services)
     sel = {"models": ["claude"], "tiers": ["claude-sonnet-5-5"], "efforts": ["low", "medium", "high"]}
     rid, by = make_run(
@@ -300,7 +300,7 @@ def test_matrix_two_sessions_three_combos_hand_computed(services):
 
 
 def test_no_human_has_no_diffs_or_errors(services):
-    services.bucket.delete("datasets/synthetic/one/gold.json")
+    services.datasets.delete("datasets/synthetic/one/gold.json")
     c = client(services=services)
     rid, by = make_run(c, engines=["miti"], repeats=3)
     done(services, rid, by["one"], LOW, scores(question=0, sr=1, cr=1))
@@ -313,7 +313,7 @@ def test_no_human_has_no_diffs_or_errors(services):
 
 
 def test_final_attempt_is_highest_and_earlier_failures_stay_listed(services):
-    services.bucket.write_json("datasets/synthetic/one/gold.json", gold_with(question=2))
+    services.datasets.write_json("datasets/synthetic/one/gold.json", gold_with(question=2))
     c = client(services=services)
     rid, by = make_run(c, engines=["miti"])
     sid = by["one"]
@@ -392,7 +392,7 @@ def test_done_run_with_unreadable_report_is_listed_without_scores(services):
 
 def test_list_cells_shape_order_and_loaders(services):
     two_session_services(services)
-    services.bucket.write_json("datasets/synthetic/two/gold.json", gold_with("two"))
+    services.datasets.write_json("datasets/synthetic/two/gold.json", gold_with("two"))
     c = client(services=services)
     rid, by = make_run(
         c, input={"dataset_id": "synthetic", "session_ids": ["two", "one"]}, selection=SEL2)
@@ -439,7 +439,7 @@ def test_legacy_build_compare_is_unchanged_for_a_unit_fixture():
 
 
 def test_view_compare_matches_legacy_builder_on_the_same_scores(services):
-    services.bucket.write_json("datasets/synthetic/one/gold.json", gold_with(question=2))
+    services.datasets.write_json("datasets/synthetic/one/gold.json", gold_with(question=2))
     c = client(services=services)
     rid, by = make_run(c)
     done(services, rid, by["one"], LOW, scores(question=4))
@@ -493,10 +493,9 @@ def test_history_provenance_and_private_snapshot_paths(services):
 def test_history_paginates_past_default_cap_with_stable_cursor(services):
     repository = services.repository
     for i in range(7):
-        repository.create_run(
+        repository.create_group(
             f"r{i}",
             {"created_at": f"2026-01-01T00:00:0{i}+00:00", "input": {}, "engines": []},
-            {},
         )
     c = client(services=services)
     seen, cursor = [], None
@@ -535,4 +534,4 @@ def test_factory_prices_are_lazy_without_cloud(services):
     factory = EvalServices(EvalConfig.from_env(ENV))
     assert "prices" not in factory.__dict__
     assert isinstance(factory.prices, PriceBook)
-    assert "bucket" not in factory.__dict__ and "repository" not in factory.__dict__
+    assert "audio_bucket" not in factory.__dict__ and "repository" not in factory.__dict__

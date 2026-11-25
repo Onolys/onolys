@@ -1,20 +1,16 @@
-"""Server-only eval persistence, including atomic run/unit mutation primitives.
+"""Server-only eval persistence, including atomic upload, run and slot primitives.
 
 Records are JSON-compatible mappings so engine provenance, typed Scores/run_info
 serialized with model_dump(mode='json'), stages and future provider metadata survive
 unchanged. Routers own input validation and executors own state-machine decisions.
 """
 
-from collections.abc import Callable, Mapping
 from copy import deepcopy
 from datetime import UTC, datetime
 from threading import RLock
 from typing import Protocol
 
 Record = dict
-# None aborts without writes. Otherwise patch run and unit together. Firestore may
-# retry callbacks: they must be pure, with no bucket writes, LLM calls or enqueues.
-UnitMutation = Callable[[Record, Record], tuple[Record, Record] | None]
 
 
 _CANCELLABLE = {'queued', 'running'}
@@ -31,7 +27,6 @@ class EvalRepository(Protocol):
     def transition_upload(
         self, upload_id: str, expected: str, updates: Record, *, match: Record | None = None
     ) -> bool: ...
-    def create_run(self, run_id: str, data: Record, units: Mapping[str, Record]) -> None: ...
     def create_group(self, run_id: str, data: Record) -> None: ...
     def get_run(self, run_id: str) -> Record | None: ...
     def delete_run(self, run_id: str) -> None: ...
@@ -39,11 +34,7 @@ class EvalRepository(Protocol):
     def list_runs_page(
         self, limit: int = 100, after: tuple[str, str] | None = None
     ) -> tuple[dict[str, Record], bool]: ...
-    def get_unit(self, run_id: str, unit_id: str) -> Record | None: ...
-    def list_units(self, run_id: str) -> dict[str, Record]: ...
     def update_run(self, run_id: str, updates: Record) -> None: ...
-    def update_unit(self, run_id: str, unit_id: str, updates: Record) -> None: ...
-    def transact_unit(self, run_id: str, unit_id: str, mutate: UnitMutation) -> bool: ...
     def cancel_run(self, run_id: str, at: str | None = None) -> bool: ...
     # Scheduler (05 R6): the `eval_slots/{provider}` doc, `{holders: {run_id: eval_run_id}}`.
     def claim_slot(self, provider: str, run_id: str, eval_run_id: str, cap: int) -> bool: ...
@@ -59,7 +50,6 @@ class InMemoryEvalRepository:
     def __init__(self):
         self._uploads: dict[str, Record] = {}
         self._runs: dict[str, Record] = {}
-        self._units: dict[str, dict[str, Record]] = {}
         self._slots: dict[str, Record] = {}
         self._lock = RLock()
 
@@ -85,13 +75,6 @@ class InMemoryEvalRepository:
                 return False
             saved.update(deepcopy(updates))
             return True
-
-    def create_run(self, run_id, data, units):
-        with self._lock:
-            if run_id in self._runs:
-                raise ValueError('Run already exists')
-            self._runs[run_id] = deepcopy(data)
-            self._units[run_id] = deepcopy(dict(units))
 
     def create_group(self, run_id, data):
         """The rollup doc alone (05 R4): refs are embedded, there is no units subcollection."""
@@ -128,34 +111,9 @@ class InMemoryEvalRepository:
             page = rows[:limit]
             return {rid: deepcopy(self._runs[rid]) for _, rid in page}, len(rows) > limit
 
-    def get_unit(self, run_id, unit_id):
-        with self._lock:
-            return deepcopy(self._units.get(run_id, {}).get(unit_id))
-
-    def list_units(self, run_id):
-        with self._lock:
-            return deepcopy(self._units.get(run_id, {}))
-
     def update_run(self, run_id, updates):
         with self._lock:
             self._runs[run_id].update(deepcopy(updates))
-
-    def update_unit(self, run_id, unit_id, updates):
-        with self._lock:
-            self._units[run_id][unit_id].update(deepcopy(updates))
-
-    def transact_unit(self, run_id, unit_id, mutate):
-        with self._lock:
-            run, unit = self.get_run(run_id), self.get_unit(run_id, unit_id)
-            if run is None or unit is None:
-                return False
-            changes = mutate(run, unit)
-            if changes is None:
-                return False
-            run_updates, unit_updates = deepcopy(changes)
-            self._runs[run_id].update(run_updates)
-            self._units[run_id][unit_id].update(unit_updates)
-            return True
 
     def cancel_run(self, run_id, at=None):
         """Flags only (the tick marks cells). Idempotent; `cancelled_at` set once; no-op if over."""
@@ -251,20 +209,6 @@ class FirestoreEvalRepository:
 
         return apply(self.client.transaction())
 
-    def create_run(self, run_id, data, units):
-        # One atomic commit avoids publishing a run with missing units.
-        from google.api_core.exceptions import AlreadyExists
-
-        ref = self.runs.document(run_id)
-        batch = self.client.batch()
-        batch.create(ref, data)
-        for unit_id, unit in units.items():
-            batch.create(ref.collection('units').document(unit_id), unit)
-        try:
-            batch.commit()
-        except AlreadyExists as exc:
-            raise ValueError('Run already exists') from exc
-
     def create_group(self, run_id, data):
         from google.api_core.exceptions import AlreadyExists
 
@@ -298,16 +242,6 @@ class FirestoreEvalRepository:
         docs = list(query.limit(limit + 1).stream())
         return {doc.id: doc.to_dict() for doc in docs[:limit]}, len(docs) > limit
 
-    def _unit(self, run_id, unit_id):
-        return self.runs.document(run_id).collection('units').document(unit_id)
-
-    def get_unit(self, run_id, unit_id):
-        return self._read(self._unit(run_id, unit_id))
-
-    def list_units(self, run_id):
-        return {doc.id: doc.to_dict()
-                for doc in self.runs.document(run_id).collection('units').stream()}
-
     @staticmethod
     def _update(ref, updates):
         from google.api_core.exceptions import NotFound
@@ -319,33 +253,6 @@ class FirestoreEvalRepository:
 
     def update_run(self, run_id, updates):
         self._update(self.runs.document(run_id), updates)
-
-    def update_unit(self, run_id, unit_id, updates):
-        self._update(self._unit(run_id, unit_id), updates)
-
-    def transact_unit(self, run_id, unit_id, mutate):
-        from google.cloud import firestore
-
-        run_ref, unit_ref = self.runs.document(run_id), self._unit(run_id, unit_id)
-
-        @firestore.transactional
-        def apply(transaction):
-            # All reads precede writes, as required by Firestore transactions.
-            run = run_ref.get(transaction=transaction)
-            unit = unit_ref.get(transaction=transaction)
-            if not run.exists or not unit.exists:
-                return False
-            changes = mutate(run.to_dict(), unit.to_dict())
-            if changes is None:
-                return False
-            run_updates, unit_updates = changes
-            if run_updates:
-                transaction.update(run_ref, run_updates)
-            if unit_updates:
-                transaction.update(unit_ref, unit_updates)
-            return True
-
-        return apply(self.client.transaction())
 
     def cancel_run(self, run_id, at=None):
         from google.cloud import firestore

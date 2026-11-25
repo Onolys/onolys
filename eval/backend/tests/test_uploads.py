@@ -71,7 +71,7 @@ class Stt:
 @pytest.fixture
 def services():
     return SimpleNamespace(
-        bucket=InMemoryBucket(),
+        audio_bucket=InMemoryBucket(),
         repository=InMemoryEvalRepository(),
         queue=Queue(),
         stt=Stt(),
@@ -106,7 +106,7 @@ def test_transcripts_persist_v1_and_infer_roles(services, name, mime, data):
     saved = services.repository.get_upload(body["upload_id"])
     assert saved["created_by"] == "alice@example.com"
     assert saved["change_goal"] == "test goal"
-    actual = services.bucket.read_json(saved["transcript_path"])
+    actual = services.audio_bucket.read_json(saved["transcript_path"])
     assert actual["turns"][0]["role"] == "clinician"
     assert services.queue.tasks == []
     assert c.get(f"/v1/uploads/{body['upload_id']}", headers=AUTH).json() == body
@@ -121,7 +121,7 @@ def test_unknown_speakers_need_observed_pick(services):
     assert c.post(path, headers=AUTH, json={"clinician_speaker": "invented"}).status_code == 422
     assert c.post(path, headers=AUTH, json={"clinician_speaker": "T"}).json()["status"] == "ready"
     saved = services.repository.get_upload(body["upload_id"])
-    assert services.bucket.read_json(saved["transcript_path"])["turns"][1]["role"] == "client"
+    assert services.audio_bucket.read_json(saved["transcript_path"])["turns"][1]["role"] == "client"
 
 
 @pytest.mark.parametrize(
@@ -137,7 +137,7 @@ def test_invalid_upload_has_no_writes(services, name, mime, data, extra, status)
     response = upload(client(services=services), name, data, mime, data=extra)
     assert response.status_code == status
     assert "secret" not in response.text
-    assert services.bucket.list("") == [] and services.queue.tasks == []
+    assert services.audio_bucket.list("") == [] and services.queue.tasks == []
 
 
 def test_bad_gold_before_any_write(services):
@@ -151,7 +151,7 @@ def test_bad_gold_before_any_write(services):
         },
     )
     assert response.status_code == 422 and "secret" not in response.text
-    assert services.bucket.list("") == [] and services.queue.tasks == []
+    assert services.audio_bucket.list("") == [] and services.queue.tasks == []
 
 
 def test_body_and_file_limits(services, monkeypatch):
@@ -160,11 +160,11 @@ def test_body_and_file_limits(services, monkeypatch):
     monkeypatch.setattr(uploads, "MAX_BODY_BYTES", 100)
     response = upload(client(services=services))
     assert response.status_code == 413
-    assert services.bucket.list("") == []
+    assert services.audio_bucket.list("") == []
     monkeypatch.setattr(uploads, "MAX_BODY_BYTES", 100000)
     monkeypatch.setattr(uploads, "MAX_TRANSCRIPT_BYTES", 10)
     assert upload(client(services=services)).status_code == 413
-    assert services.bucket.list("") == []
+    assert services.audio_bucket.list("") == []
 
 
 def test_audio_start_poll_complete_and_terminal_redelivery(services):
@@ -187,7 +187,7 @@ def test_audio_start_poll_complete_and_terminal_redelivery(services):
     assert task().status_code == 200
     saved = services.repository.get_upload(uid)
     assert saved["status"] == "awaiting_speakers" and saved["stt_run"]["provider"] == "fake"
-    actual = services.bucket.read_json(saved["transcript_path"])
+    actual = services.audio_bucket.read_json(saved["transcript_path"])
     assert "run" not in actual and "provider" not in actual
     assert actual["turns"][0]["text"] == transcript()["turns"][0]["text"]
     before = len(services.queue.tasks)
@@ -275,12 +275,12 @@ def test_gold_validates_ids_and_span_before_writes(services, invalid):
     )
     if invalid:
         assert response.status_code == 422
-        assert services.bucket.list("") == []
+        assert services.audio_bucket.list("") == []
     else:
         assert response.status_code == 200
         assert response.json()["has_gold"] is True
         saved = services.repository.get_upload(response.json()["upload_id"])
-        assert services.bucket.read_json(saved["gold_path"])["schema"] == "gold.v1"
+        assert services.audio_bucket.read_json(saved["gold_path"])["schema"] == "gold.v1"
 
 
 def test_queue_failure_retries_persisted_stt_handle(services):
@@ -367,7 +367,7 @@ def test_streamed_body_limit_without_content_length(services, monkeypatch):
         content=iter(chunks),
     )
     assert response.status_code == 413
-    assert services.bucket.list("") == []
+    assert services.audio_bucket.list("") == []
 
 
 def test_named_text_speakers_and_explicit_span(services):
@@ -541,7 +541,7 @@ def test_direct_audio_upload_signed_url_then_complete_enqueues_transcription(ser
     path = f"eval-uploads/{uid}/input.wav"
     # Not uploaded yet.
     assert c.post(f"/v1/uploads/{uid}/complete", headers=AUTH).status_code == 409
-    services.bucket.write_bytes(path, b"RIFF\x00\x00\x00\x00WAVEdata", content_type="audio/wav")
+    services.audio_bucket.write_bytes(path, b"RIFF\x00\x00\x00\x00WAVEdata", content_type="audio/wav")
     done = c.post(f"/v1/uploads/{uid}/complete", headers=AUTH)
     assert done.status_code == 200 and done.json()["status"] == "transcribing"
     assert services.queue.tasks == [("transcribe", {"upload_id": uid}, 0)]
@@ -554,7 +554,7 @@ def test_direct_audio_upload_signed_url_then_complete_enqueues_transcription(ser
 def test_direct_audio_upload_rejects_wrong_bytes_and_bad_requests(services):
     c = client(services=services)
     uid = start_direct(c).json()["upload_id"]
-    services.bucket.write_bytes(
+    services.audio_bucket.write_bytes(
         f"eval-uploads/{uid}/input.wav", b"not audio at all....", content_type="audio/wav"
     )
     assert c.post(f"/v1/uploads/{uid}/complete", headers=AUTH).status_code == 422
@@ -578,14 +578,14 @@ def test_slow_storage_does_not_block_other_requests(services):
     from onolys_eval_backend import create_app
 
     entered, release = threading.Event(), threading.Event()
-    original = services.bucket.write_bytes
+    original = services.audio_bucket.write_bytes
 
     def slow(*args, **kwargs):
         entered.set()
         assert release.wait(5)
         return original(*args, **kwargs)
 
-    services.bucket.write_bytes = slow
+    services.audio_bucket.write_bytes = slow
     app = create_app(
         ENV, services=services, task_verifier=Verifier(TASK_CLAIMS),
         verifier=Verifier({"email": "alice@example.com", "email_verified": True}),
@@ -615,7 +615,7 @@ def test_slow_storage_does_not_block_other_requests(services):
 def test_direct_completion_retries_failed_enqueue_without_losing_work(services):
     c = client(services=services)
     uid = start_direct(c).json()["upload_id"]
-    services.bucket.write_bytes(f"eval-uploads/{uid}/input.wav", b"RIFF1234WAVEdata", content_type="audio/wav")
+    services.audio_bucket.write_bytes(f"eval-uploads/{uid}/input.wav", b"RIFF1234WAVEdata", content_type="audio/wav")
     enqueue = services.queue.enqueue
 
     def unavailable(*args, **kwargs):
@@ -632,7 +632,7 @@ def test_direct_completion_retries_failed_enqueue_without_losing_work(services):
 def test_direct_completion_recovers_after_accepted_task_record_failure(services):
     c = client(services=services)
     uid = start_direct(c).json()["upload_id"]
-    services.bucket.write_bytes(f"eval-uploads/{uid}/input.wav", b"RIFF1234WAVEdata", content_type="audio/wav")
+    services.audio_bucket.write_bytes(f"eval-uploads/{uid}/input.wav", b"RIFF1234WAVEdata", content_type="audio/wav")
     update = services.repository.update_upload
 
     def crash_record(upload_id, patch):
@@ -652,16 +652,16 @@ def test_direct_completion_recovers_after_accepted_task_record_failure(services)
 def test_delayed_second_completion_does_not_regress_finished_transcription(services):
     c = client(services=services)
     uid = start_direct(c).json()["upload_id"]
-    services.bucket.write_bytes(f"eval-uploads/{uid}/input.wav", b"RIFF1234WAVEdata", content_type="audio/wav")
-    size = services.bucket.size
+    services.audio_bucket.write_bytes(f"eval-uploads/{uid}/input.wav", b"RIFF1234WAVEdata", content_type="audio/wav")
+    size = services.audio_bucket.size
 
     def second_completes_first(path):
-        services.bucket.size = size
+        services.audio_bucket.size = size
         assert c.post(f"/v1/uploads/{uid}/complete", headers=AUTH).status_code == 200
         services.repository.update_upload(uid, {"status": "ready"})
         return size(path)
 
-    services.bucket.size = second_completes_first
+    services.audio_bucket.size = second_completes_first
     response = c.post(f"/v1/uploads/{uid}/complete", headers=AUTH)
     assert response.json()["status"] == "ready"
     assert services.repository.get_upload(uid)["status"] == "ready"

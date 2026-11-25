@@ -35,7 +35,7 @@ def manifest():
 @pytest.fixture
 def services():
     return SimpleNamespace(
-        bucket=InMemoryBucket(), datasets=InMemoryBucket(), repository=InMemoryEvalRepository(),
+        audio_bucket=InMemoryBucket(), datasets=InMemoryBucket(), repository=InMemoryEvalRepository(),
         models=load_models(MODELS_YAML),
         routes=RouteRegistry({
             "oneshot": {"litellm_id": "synthetic/model"},
@@ -153,7 +153,7 @@ def test_dataset_list_detail_and_gold_presence(services):
     services.datasets.write_json("datasets/synthetic/manifest.json", source)
     services.datasets.write_json("datasets/synthetic/one/gold.json", {})
     services.datasets.write_json("datasets/ignored/nested/manifest.json", source)
-    services.bucket.write_json("eval-uploads/ignored/manifest.json", source)
+    services.audio_bucket.write_json("eval-uploads/ignored/manifest.json", source)
     c = client(services)
     response = c.get("/v1/datasets", headers=AUTH)
     assert response.status_code == 200
@@ -212,10 +212,9 @@ def test_default_composition_is_lazy_but_usable_without_cloud(tmp_path, monkeypa
     assert c.app.state.services is not None
     assert c.get("/v1/datasets").status_code == 401
     assert c.get("/v1/options?mode=dataset", headers=AUTH).status_code == 200
-    engine = c.app.state.services.engine("oneshot:miti")
-    assert engine.name == "oneshot"
-    assert c.app.state.services.engine("oneshot:miti") is engine
-    assert engine.output_schema()["$id"]
+    registry = c.app.state.services.registry
+    assert c.app.state.services.registry is registry
+    assert registry.get("oneshot").output_schema()["$id"]
 
 
 def test_bucket_failures_never_expose_details(services):
@@ -276,15 +275,17 @@ def test_production_cloud_adapters_use_explicit_project_and_staging_database(mon
     monkeypatch.setattr(firestore, "Client", FirestoreClient)
     services = EvalServices(EvalConfig.from_env(ENV))
     assert calls == []
-    assert services.bucket.bucket == "bucket-object"
+    assert services.audio_bucket.bucket == "bucket-object"
     assert services.datasets.bucket == "bucket-object"
     assert services.repository.uploads == "eval_uploads"
-    assert services.bucket is services.bucket and services.repository is services.repository
+    assert services.audio_bucket is services.audio_bucket
+    assert services.repository is services.repository
     assert calls == [
         ("storage", {"project": "onolys-test"}), ("bucket", "audio-eval-test"),
         ("storage", {"project": "onolys-test"}), ("bucket", "datasets-test"),
         ("firestore", {"project": "onolys-test", "database": "staging"}),
         ("collection", "eval_uploads"), ("collection", "eval_runs"),
+        ("collection", "eval_slots"),
     ]
 
 

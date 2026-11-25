@@ -1,5 +1,7 @@
 """Auth boundary tests exercise the actual ASGI middleware, without cloud access."""
 
+from dataclasses import replace
+
 import pytest
 from fastapi.testclient import TestClient
 from onolys_api.auth.idtoken import EmailNotVerified, InvalidToken
@@ -174,19 +176,19 @@ def test_internal_requires_token_even_with_cloudtasks_headers(route):
     ],
 )
 def test_internal_checks_all_identity_claims(claims):
-    response = client(task_claims=claims).post("/internal/tasks/unit", headers=AUTH)
+    response = client(task_claims=claims).post("/internal/tasks/tick", headers=AUTH)
     assert response.status_code == 403
     assert response.json()["error"]["code"] == "forbidden"
 
 
 def test_internal_invalid_token():
     assert (
-        client().post("/internal/tasks/unit", headers={"Authorization": "Bearer bad"}).status_code
+        client().post("/internal/tasks/tick", headers={"Authorization": "Bearer bad"}).status_code
         == 401
     )
 
 
-@pytest.mark.parametrize("route,status", [("unit", 422), ("transcribe", 422)])
+@pytest.mark.parametrize("route,status", [("tick", 422), ("delete", 422), ("transcribe", 422)])
 def test_task_identity_passes_without_allowlist_membership(route, status):
     assert client().post(f"/internal/tasks/{route}", headers=AUTH).status_code == status
 
@@ -210,7 +212,7 @@ def test_cors_outermost_for_preflight_and_denials():
             },
         )
         assert response.status_code == 200
-        for path in ("/v1/me", "/internal/tasks/unit"):
+        for path in ("/v1/me", "/internal/tasks/tick"):
             response = c.get(path, headers={"Origin": "https://eval.example"})
             assert response.status_code == 401
             assert response.headers["access-control-allow-origin"] == "https://eval.example"
@@ -339,7 +341,7 @@ def test_task_verifier_upstream_failure_is_not_an_auth_bypass(task_keys):
             raise UpstreamUnavailable
 
     with TestClient(create_app(ENV, task_verifier=Unavailable())) as c:
-        assert c.post("/internal/tasks/unit", headers=AUTH).status_code == 503
+        assert c.post("/internal/tasks/tick", headers=AUTH).status_code == 503
 
 
 def test_task_verification_runs_outside_event_loop():
@@ -364,7 +366,7 @@ def test_task_verification_runs_outside_event_loop():
         await middleware(
             {
                 "type": "http",
-                "path": "/internal/tasks/unit",
+                "path": "/internal/tasks/tick",
                 "headers": [(b"authorization", b"Bearer valid")],
             },
             None,
@@ -394,7 +396,7 @@ def test_eval_config_defaults_and_overrides():
     )
     assert (config.overload_max_wait_s, config.internal_retries) == (300, 1)
     assert config.settings.eval_mode is True
-    assert config.bucket == ENV["AUDIO_BUCKET"]  # shim for the old engine until Task 10
+    assert config.audio_bucket == ENV["AUDIO_BUCKET"]  # uploads only; datasets_bucket is separate
     over = EvalConfig.from_env(
         {
             **ENV,
@@ -409,6 +411,14 @@ def test_eval_config_defaults_and_overrides():
         "owner-x", 3, 2
     )
     assert (over.overload_max_wait_s, over.internal_retries) == (60, 0)
+
+
+def test_audio_bucket_fails_closed_without_falling_back_to_datasets():
+    config = EvalConfig.from_env(ENV)
+    config = replace(config, settings=replace(config.settings, audio_bucket=""))
+    assert config.datasets_bucket
+    with pytest.raises(ConfigError):
+        _ = config.audio_bucket
 
 
 @pytest.mark.parametrize("name", ["EVAL_MAX_PER_PROVIDER", "EVAL_PROVIDER_FAIL_LIMIT"])

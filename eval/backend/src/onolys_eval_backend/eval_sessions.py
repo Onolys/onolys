@@ -31,7 +31,7 @@ class SessionImportError(ValueError):
 
 
 def canonical_sha256(obj) -> str:
-    """Same bytes as the old `runs._hash` and prod `transcript_sha256`."""
+    """Canonical JSON sha256, identical to prod `transcript_sha256`."""
     return hashlib.sha256(
         json.dumps(obj, sort_keys=True, ensure_ascii=False, separators=(",", ":")).encode()
     ).hexdigest()
@@ -51,7 +51,7 @@ class SessionSource:
 
 
 def _reader(services, source: SessionSource):
-    return services.datasets if source.source == "dataset" else services.bucket
+    return services.datasets if source.source == "dataset" else services.audio_bucket
 
 
 def ensure_session(services, source: SessionSource) -> str:

@@ -99,7 +99,7 @@ def test_handler_removes_everything_of_this_run_and_keeps_the_rest(env):
     seed(env, a)
     seed(env, b)
     session_ids = {sid for sid, _ in all_runs(env)}
-    env.bucket.write_json("gold/abc.json", {"x": 1})
+    env.audio_bucket.write_json("gold/abc.json", {"x": 1})
     before_b = present(env, b)
     assert all(before_b) and all(present(env, a))
     a_ids = refs(env, a)
@@ -116,7 +116,7 @@ def test_handler_removes_everything_of_this_run_and_keeps_the_rest(env):
     assert len(after_b[1]) == len(before_b[1]) and sorted(after_b[2]) == sorted(before_b[2])
     assert {sid for sid, _ in all_runs(env)} == session_ids  # sessions stay
     assert env.repo.get_session(UID, sorted(session_ids)[0]) is not None
-    assert env.bucket.read_json("gold/abc.json") == {"x": 1}
+    assert env.audio_bucket.read_json("gold/abc.json") == {"x": 1}
     assert env.repository.get_run(b)["status"] == "done"
 
 

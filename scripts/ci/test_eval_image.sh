@@ -65,8 +65,8 @@ services = app.state.catalog
 infos = services.registry.engines()
 assert {info.name for info in infos} == {'miti', 'oneshot'}
 assert all(info.version for info in infos)
-assert services.engine('miti').output_schema()
-assert services.engine('oneshot:miti').output_schema()
+assert services.registry.get('miti').output_schema()
+assert services.registry.get('oneshot').output_schema()
 assert services.routes and services.prices
 print('ok installed engine versions, MITI schemas/pack, prices and staging routes load')
 

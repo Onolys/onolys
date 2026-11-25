@@ -13,10 +13,10 @@ from onolys_engine_core.transcript_input import validate_transcript_input
 from test_uploads import gold, transcript
 
 from onolys_eval_backend.eval_sessions import SessionSource, canonical_sha256, ensure_session
-from onolys_eval_backend.runs import _hash
 from onolys_eval_backend.storage import InMemoryBucket
 
 UID = "eval-owner"
+EXPECTED_SHA = "2607ec09402b875e01687566f21819b7459b03aab9f406f6f4927824b07e8c0a"
 
 
 @pytest.fixture
@@ -28,7 +28,7 @@ def env():
     datasets.write_json("datasets/synthetic/one/transcript.json", transcript())
     datasets.write_json("datasets/synthetic/one/gold.json", gold())
     return SimpleNamespace(
-        blobs=blobs, repo=repo, datasets=datasets, bucket=InMemoryBucket(),
+        blobs=blobs, repo=repo, datasets=datasets, audio_bucket=InMemoryBucket(),
         config=SimpleNamespace(eval_owner_uid=UID, default_preset="configured-prod"),
     )
 
@@ -47,9 +47,10 @@ def n_sessions(env):
     return len([p for p in env.repo._docs if p.startswith("sessions/") and p.count("/") == 1])
 
 
-def test_canonical_sha256_matches_old_hash_and_prod_transcript_hash():
+def test_canonical_sha256_is_canonical_json_and_matches_prod_transcript_hash():
     data = {"b": "é", "a": [1, {"z": None}]}
-    assert canonical_sha256(data) == _hash(data)
+    # Literal digest of '{"a":[1,{"z":null}],"b":"é"}' (sorted keys, UTF-8, no spaces).
+    assert canonical_sha256(data) == EXPECTED_SHA
     assert canonical_sha256(data) == hashlib.sha256(
         json.dumps(data, sort_keys=True, ensure_ascii=False, separators=(",", ":")).encode()
     ).hexdigest()
@@ -115,7 +116,7 @@ def test_no_gold_and_invalid_gold(env):
 
 
 def test_upload_source_reads_upload_bucket(env):
-    env.bucket.write_json("eval-uploads/u1/transcript.json", transcript())
+    env.audio_bucket.write_json("eval-uploads/u1/transcript.json", transcript())
     sid = ensure_session(env, src(
         dataset_id=None, dataset_session_id="u1", source="upload", gold_path=None,
         transcript_path="eval-uploads/u1/transcript.json",

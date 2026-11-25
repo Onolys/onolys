@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 from test_app import AUTH, client
-from test_runs import lstart, services, start
+from test_runs import services, start
 
 from onolys_eval_backend.matrix import RunTooLarge, SelectionError, plan_units, validate_selection
 
@@ -74,7 +74,6 @@ def test_dataset_without_human_gets_human_counted_and_echo(services):
     assert (doc["total_units"], doc["completed_units"], doc["done_units"]) == (3, 1, 1)
     assert {c["model"] + "/" + c["tier"] + "/" + c["effort"] for c in doc["combos"]} == {
         "claude/claude-sonnet-5-5/low", "claude/claude-sonnet-5-5/high"}
-    assert services.repository.list_units(body["run_id"]) == {}
 
 
 def test_specific_422_message_and_no_writes(services):

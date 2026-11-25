@@ -1,12 +1,10 @@
 """Lazy production composition; constructing an app never loads cloud credentials."""
 
-import asyncio
 import os
 from functools import cached_property
 from pathlib import Path
 
 from onolys_api.factory import build_blobs, build_repo
-from onolys_engine_core.engine import Engine
 from onolys_engine_core.errors import InputError
 from onolys_engine_core.llm.models import Model, load_models, models_path
 from onolys_engine_core.llm.routes import RouteRegistry, load_registry
@@ -33,10 +31,6 @@ class EvalServices:
             self.queue = queue
         if stt_factory is not None:
             self.stt_factory = stt_factory
-
-    async def sleep(self, seconds: float) -> None:
-        """Injectable backoff sleep for unit retries (tests replace it)."""
-        await asyncio.sleep(seconds)
 
     @cached_property
     def prices(self) -> PriceBook:
@@ -80,12 +74,13 @@ class EvalServices:
         )
 
     @cached_property
-    def bucket(self) -> Bucket:
-        # Shim until the old unit engine goes (05 Task 10): it reads datasets/ and writes
-        # uploads/ and outputs. EVAL_BUCKET is gone; it now uses the api's AUDIO_BUCKET.
+    def audio_bucket(self) -> Bucket:
+        """The api AUDIO_BUCKET: eval uploads and upload-session reads (not datasets)."""
         from google.cloud import storage
 
-        return GCSBucket(storage.Client(project=self.config.project).bucket(self.config.bucket))
+        return GCSBucket(
+            storage.Client(project=self.config.project).bucket(self.config.audio_bucket)
+        )
 
     @cached_property
     def repository(self) -> EvalRepository:
@@ -115,27 +110,6 @@ class EvalServices:
         registry.register(MitiEngine())
         registry.register(OneshotEngine(config="miti"))
         return registry
-
-    @cached_property
-    def _bound_engines(self) -> dict[str, Engine]:
-        from onolys_oneshot.engine import OneshotEngine
-
-        engines = {}
-        for info in self.registry.engines():
-            if info.variants:
-                for variant in info.variants:
-                    # The only variant engine in eval is the immutable config-bound one-shot.
-                    engines[f"{info.name}:{variant.id}"] = OneshotEngine(config=variant.id)
-            else:
-                engines[info.name] = self.registry.get(info.name)
-        return engines
-
-    def engine(self, engine_id: str) -> Engine:
-        """Resolve selectable IDs to an engine whose schema is already variant-bound."""
-        try:
-            return self._bound_engines[engine_id]
-        except KeyError:
-            raise InputError("Unknown eval engine.") from None
 
     @cached_property
     def queue(self):

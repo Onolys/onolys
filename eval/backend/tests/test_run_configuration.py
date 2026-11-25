@@ -89,12 +89,12 @@ def test_unavailable_saved_configuration_rejects_before_writes(services, change,
             runs, "eval_snapshot",
             lambda *a: ({**real(*a)[0], "supports_temperature": True}, real(*a)[1]),
         )
-    before = (services.bucket.list(""), len(services.queue.tasks), len(services.repository.list_runs()))
+    before = (services.audio_bucket.list(""), len(services.queue.tasks), len(services.repository.list_runs()))
     response = rerun(c, rid)
     assert response.status_code == 409, response.text
     assert "configuration" in response.json()["detail"].lower()
     assert "new run" in response.json()["detail"].lower()
-    assert before == (services.bucket.list(""), len(services.queue.tasks), len(services.repository.list_runs()))
+    assert before == (services.audio_bucket.list(""), len(services.queue.tasks), len(services.repository.list_runs()))
 
 
 def test_older_run_without_saved_metadata_or_resolution_can_rerun(services):

@@ -1,5 +1,4 @@
 import json
-from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import pytest
@@ -7,30 +6,15 @@ from onolys_engine_core.engine import RunUsage
 
 from onolys_eval_backend.costs import PriceBook
 from onolys_eval_backend.repository import InMemoryEvalRepository
-from onolys_eval_backend.storage import (
-    INLINE_OUTPUT_LIMIT,
-    InMemoryBucket,
-    load_output,
-    store_output,
-)
+from onolys_eval_backend.storage import InMemoryBucket
 
 
-def test_bucket_layout_and_output_boundary():
+def test_bucket_layout():
     bucket = InMemoryBucket()
     bucket.write_json('datasets/reference/s1/transcript.json', {'turns': []})
     bucket.write_bytes('uploads/u/input.txt', b'Client: hi', content_type='text/plain')
     assert bucket.read_json('datasets/reference/s1/transcript.json') == {'turns': []}
     assert bucket.list('datasets/') == ['datasets/reference/s1/transcript.json']
-    # UTF-8 serialized size, rather than character count, controls the limit.
-    small = {'text': 'x' * (INLINE_OUTPUT_LIMIT - len(b'{"text":""}'))}
-    assert len(json.dumps(small, separators=(',', ':')).encode()) == INLINE_OUTPUT_LIMIT
-    inline = store_output(bucket, 'r', 's', small)
-    assert inline == {'output': small, 'output_ref': None}
-    large = {'text': 'é' * INLINE_OUTPUT_LIMIT}
-    spilled = store_output(bucket, 'r', 'l', large)
-    assert spilled == {'output': None, 'output_ref': 'runs/r/l.json'}
-    assert load_output(bucket, spilled) == large
-    assert load_output(bucket, inline) == small
     with pytest.raises(FileNotFoundError):
         bucket.read_bytes('missing')
 
@@ -45,47 +29,26 @@ def test_repository_roundtrip_and_isolation():
     assert repo.get_upload('u')['status'] == 'ready'
     run = {'input': {'upload_id': 'u'}, 'created_at': '2026-11-23T00:00:00Z',
            'engine_git_shas': {'miti': 'sha'}, 'engine_versions': {'miti': '1'},
-           'resolved_models': {'default': {'mid': 'model'}}, 'status': 'queued'}
-    unit = {'session': 'u', 'engine': 'miti', 'preset': 'default', 'repeat': 0,
-            'status': 'queued', 'stage': None, 'error_code': None, 'scores': None,
-            'run_info': {'usage': {'input_tokens': 10}}, 'output': {'ok': True}}
-    repo.create_run('r', run, {'one': unit})
-    repo.create_run('newer', {**run, 'created_at': '2026-11-24T00:00:00Z'}, {})
+           'status': 'queued', 'usage': {'input_tokens': 10}}
+    repo.create_group('r', run)
+    repo.create_group('newer', {**run, 'created_at': '2026-11-24T00:00:00Z'})
     assert repo.get_run('r') == run
-    assert repo.get_unit('r', 'one') == unit
-    assert repo.list_units('r') == {'one': unit}
     assert list(repo.list_runs(limit=1)) == ['newer']
-    unit['run_info']['usage']['input_tokens'] = 900
-    assert repo.get_unit('r', 'one')['run_info']['usage']['input_tokens'] == 10
+    run['usage']['input_tokens'] = 900
+    assert repo.get_run('r')['usage']['input_tokens'] == 10
     with pytest.raises(ValueError):
-        repo.create_run('r', {}, {})
-    with pytest.raises(KeyError):
-        repo.update_unit('r', 'absent', {'status': 'done'})
+        repo.create_group('r', {})
+    repo.delete_run('r')
+    repo.delete_run('r')  # idempotent
+    assert repo.get_run('r') is None
 
 
-def test_atomic_transaction_supports_claim_and_finalization():
+def test_cancel_run_sets_flags_once_and_ignores_terminal_runs():
     repo = InMemoryEvalRepository()
-    repo.create_run('r', {'status': 'queued', 'completed_units': 0}, {'u': {'status': 'queued'}})
-
-    def claim(_):
-        def mutate(run, unit):
-            if run.get('cancel_requested') or unit['status'] != 'queued':
-                return None
-            return ({'status': 'running'}, {'status': 'running'})
-        return repo.transact_unit('r', 'u', mutate)
-
-    with ThreadPoolExecutor(max_workers=8) as pool:
-        assert sum(pool.map(claim, range(30))) == 1
-    def finish(run, unit):
-        assert unit['status'] == 'running'
-        return ({'status': 'done', 'completed_units': run['completed_units'] + 1},
-                {'status': 'done', 'scores': {'counts': {}}})
-    assert repo.transact_unit('r', 'u', finish)
-    assert repo.get_run('r')['completed_units'] == 1
-    assert repo.get_unit('r', 'u')['status'] == 'done'
-    assert repo.cancel_run('r')  # terminal (done): found, but a no-op
-    assert 'cancel_requested' not in repo.get_run('r')
-    repo.create_run('live', {'status': 'running'}, {})
+    repo.create_group('done', {'status': 'done'})
+    assert repo.cancel_run('done')  # found, but a no-op
+    assert 'cancel_requested' not in repo.get_run('done')
+    repo.create_group('live', {'status': 'running'})
     assert repo.cancel_run('live', at='T') and repo.cancel_run('live', at='later')
     assert repo.get_run('live')['cancel_requested'] is True
     assert repo.get_run('live')['cancelled_at'] == 'T'  # set once
@@ -148,51 +111,6 @@ def test_gcs_adapter_uses_injected_bucket():
         bucket.read_bytes('missing')
 
 
-def test_firestore_adapter_transaction_reads_both_before_writing(monkeypatch):
-    from unittest.mock import Mock
-
-    from google.cloud import firestore
-
-    from onolys_eval_backend.repository import FirestoreEvalRepository
-
-    # Exercise repository transaction body without credentials or RPCs. The SDK's
-    # decorator supplies retries in production; this test checks our read/write order.
-    monkeypatch.setattr(firestore, 'transactional', lambda fn: fn)
-    client = Mock()
-    run_ref = client.collection.return_value.document.return_value
-    unit_ref = run_ref.collection.return_value.document.return_value
-    run_ref.get.return_value = Mock(exists=True)
-    run_ref.get.return_value.to_dict.return_value = {'completed_units': 0}
-    unit_ref.get.return_value = Mock(exists=True)
-    unit_ref.get.return_value.to_dict.return_value = {'status': 'running'}
-    transaction = client.transaction.return_value
-    events = []
-    run_ref.get.side_effect = lambda **kw: events.append('run_read') or run_ref.get.return_value
-    unit_ref.get.side_effect = lambda **kw: events.append('unit_read') or unit_ref.get.return_value
-    transaction.update.side_effect = lambda ref, patch: events.append(('write', patch))
-    repo = FirestoreEvalRepository(client)
-    assert repo.transact_unit('r', 'u', lambda run, unit: (
-        {'completed_units': run['completed_units'] + 1}, {'status': 'done'}))
-    assert events == ['run_read', 'unit_read', ('write', {'completed_units': 1}),
-                      ('write', {'status': 'done'})]
-    events.clear()
-    assert not repo.transact_unit('r', 'u', lambda run, unit: None)
-    assert events == ['run_read', 'unit_read']
-    repo.create_run('r', {'status': 'queued'}, {'u': {'status': 'queued'}})
-    assert client.batch.return_value.create.call_count == 2
-    client.batch.return_value.commit.assert_called_once_with()
-
-
-def test_attempt_output_paths_keep_reclaimed_results_independent(monkeypatch):
-    from onolys_eval_backend import storage
-
-    monkeypatch.setattr(storage, "INLINE_OUTPUT_LIMIT", 1)
-    bucket = InMemoryBucket()
-    current = store_output(bucket, "run", "unit", {"result": "current"}, attempt="new")
-    store_output(bucket, "run", "unit", {"result": "stale"}, attempt="old")
-    assert load_output(bucket, current) == {"result": "current"}
-
-
 def test_named_queue_task_deduplicates_accepted_retry():
     from types import SimpleNamespace
 
@@ -216,14 +134,13 @@ def test_named_queue_task_deduplicates_accepted_retry():
 
 
 @pytest.mark.live
-def test_firestore_pagination_survives_deleted_cursor_and_fences_completion():
+def test_firestore_pagination_survives_deleted_cursor():
     import os
     from uuid import uuid4
 
     from google.cloud import firestore
 
     from onolys_eval_backend.repository import FirestoreEvalRepository
-    from onolys_eval_backend.runs import finish_unit
 
     if not os.environ.get("FIRESTORE_EMULATOR_HOST"):
         pytest.skip("Firestore emulator required")
@@ -238,22 +155,13 @@ def test_firestore_pagination_survives_deleted_cursor_and_fences_completion():
         assert repo.get_upload(upload_id)["status"] == "transcribing"
         repo.uploads.document(upload_id).delete()
         for rid in ("a", "b", "c"):
-            repo.create_run(rid, {"created_at": "2026-01-01", "completed_units": 0,
-                                 "total_units": 1, "done_units": 0, "failed_units": 0,
-                                 "cancelled_units": 0, "usage": {}, "cost_usd_est": 0},
-                            {"u": {"status": "running", "lease_owner": "new"}})
+            repo.create_group(rid, {"created_at": "2026-01-01", "status": "running"})
         page, more = repo.list_runs_page(1)
         assert list(page) == ["c"] and more
         repo.runs.document("c").delete()
         page, more = repo.list_runs_page(1, ("2026-01-01", "c"))
         assert list(page) == ["b"] and more
-        assert not finish_unit(repo, "a", "u", {"status": "done"}, owner="old")
-        assert finish_unit(repo, "a", "u", {"status": "done"}, owner="new")
-        assert not finish_unit(repo, "a", "u", {"status": "done"}, owner="new")
-        assert repo.get_run("a")["completed_units"] == 1
     finally:
         for doc in repo.runs.stream():
-            for unit in doc.reference.collection("units").stream():
-                unit.reference.delete()
             doc.reference.delete()
         client.close()

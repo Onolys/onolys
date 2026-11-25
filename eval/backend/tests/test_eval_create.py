@@ -42,7 +42,7 @@ def test_create_response_shape_and_group_doc_without_run_docs(services):
     assert doc["saved_config"]["base_preset"] == "configured-prod"
     assert set(doc["saved_config"]["resolved_combos"]) == {
         "claude/claude-sonnet-5-5/low", "claude/claude-sonnet-5-5/high"}
-    assert "input_ref" not in doc and services.repository.list_units(rid) == {}
+    assert "input_ref" not in doc
     ((sid, entry),) = doc["sessions"].items()
     assert len(sid) == 32 and entry["dataset_session_id"] == "one" and entry["runs"] == []
     assert (entry["order"], entry["cursor"], entry["active_run_id"]) == (0, 0, None)
@@ -57,7 +57,7 @@ def test_human_auto_added_only_when_every_session_has_gold(services):
     c = client(services=services)
     rid = start(c, engines=["miti"]).json()["run_id"]
     assert services.repository.get_run(rid)["engines"] == ["miti", "human"]
-    services.bucket.write_json("datasets/synthetic/manifest.json", _two_sessions(services))
+    services.datasets.write_json("datasets/synthetic/manifest.json", _two_sessions(services))
     # session "two" has no gold: Human is not added
     rid2 = start(c, engines=["miti"], input={"dataset_id": "synthetic",
                                               "session_ids": ["one", "two"]}).json()["run_id"]
@@ -80,7 +80,7 @@ def _two_sessions(services):
     m = manifest()
     m["sessions"][0]["coded_span"]["end_turn"] = 2
     m["sessions"].append({**m["sessions"][0], "session_id": "two", "title": "Two"})
-    services.bucket.write_json("datasets/synthetic/two/transcript.json", transcript())
+    services.datasets.write_json("datasets/synthetic/two/transcript.json", transcript())
     return m
 
 
@@ -213,8 +213,8 @@ def test_rerun_does_not_read_dataset_sources_again(services):
     c = client(services=services)
     rid = start(c).json()["run_id"]
     # The pinned prod session is immutable: the dataset may be edited or removed afterwards.
-    for path in list(services.bucket.list("datasets/")):
-        services.bucket.delete(path)
+    for path in list(services.datasets.list("datasets/")):
+        services.datasets.delete(path)
     r = rerun(c, rid)
     assert r.status_code == 200, r.text
     assert len(sessions_of(services)) == 1

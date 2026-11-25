@@ -286,18 +286,18 @@ async def upload(request: Request):
             saved["transcribing_since"] = _now().isoformat()
         # Blocking client calls run off the event loop so other requests keep flowing.
         await asyncio.to_thread(
-            services.bucket.write_bytes, saved["input_path"], raw,
+            services.audio_bucket.write_bytes, saved["input_path"], raw,
             content_type=saved["content_type"]
         )
         if gold:
             await asyncio.to_thread(
-                services.bucket.write_json,
+                services.audio_bucket.write_json,
                 saved["gold_path"],
                 gold.model_dump(mode="json", by_alias=True),
             )
         if transcript:
             await asyncio.to_thread(
-                services.bucket.write_json,
+                services.audio_bucket.write_json,
                 saved["transcript_path"],
                 transcript.model_dump(mode="json"),
             )
@@ -393,7 +393,7 @@ async def start_audio_upload(request: Request):
         "stt_params": params.model_dump(mode="json"),
     }
     target = await asyncio.to_thread(
-        services.bucket.signed_upload_url,
+        services.audio_bucket.signed_upload_url,
         saved["input_path"],
         content_type,
         expires_s=SIGNED_URL_TTL_S,
@@ -401,7 +401,7 @@ async def start_audio_upload(request: Request):
     )
     if gold:
         await asyncio.to_thread(
-            services.bucket.write_json, saved["gold_path"],
+            services.audio_bucket.write_json, saved["gold_path"],
             gold.model_dump(mode="json", by_alias=True)
         )
     await asyncio.to_thread(services.repository.create_upload, uid, saved)
@@ -432,13 +432,13 @@ async def complete_audio_upload(upload_id: str, request: Request):
             return response(upload_id, saved)
         error(409, "upload_not_ready", "This upload cannot be completed.")
     services = bundle(request)
-    size = await asyncio.to_thread(services.bucket.size, saved["input_path"])
+    size = await asyncio.to_thread(services.audio_bucket.size, saved["input_path"])
     if size is None:
         error(409, "upload_missing", "The recording has not been uploaded yet.")
     ext = Path(saved["input_path"]).suffix
     head = b""
     if 0 < size <= MAX_AUDIO_BYTES:
-        head = await asyncio.to_thread(services.bucket.read_head, saved["input_path"], 16)
+        head = await asyncio.to_thread(services.audio_bucket.read_head, saved["input_path"], 16)
     if not 0 < size <= MAX_AUDIO_BYTES or not audio_matches(ext, head):
         failed = {
             "status": "failed",
@@ -492,7 +492,7 @@ async def pick_speaker(upload_id: str, request: Request):
         error(422, "speaker_invalid", "Choose an observed speaker.")
     services = bundle(request)
     transcript = validate_transcript_input(
-        await asyncio.to_thread(services.bucket.read_json, saved["transcript_path"])
+        await asyncio.to_thread(services.audio_bucket.read_json, saved["transcript_path"])
     )
     transcript = transcript.model_copy(
         update={
@@ -506,7 +506,7 @@ async def pick_speaker(upload_id: str, request: Request):
     )
     metadata = transcript_metadata(transcript)
     await asyncio.to_thread(
-        services.bucket.write_json,
+        services.audio_bucket.write_json,
         path := f"eval-uploads/{upload_id}/transcripts/{uuid4().hex}.json",
         transcript.model_dump(mode="json"),
     )
@@ -518,7 +518,7 @@ async def pick_speaker(upload_id: str, request: Request):
     )
     if changed:
         return response(upload_id, {**saved, **metadata})
-    await _discard_candidate(services.bucket, path)
+    await _discard_candidate(services.audio_bucket, path)
     current = await read_upload(request, upload_id)
     if current["status"] == "ready" and current.get("clinician_speaker") == speaker:
         return response(upload_id, current)
@@ -565,7 +565,7 @@ async def transcribe_task(request: Request):
             saved = {**saved, **claim}
             handle = await adapter.start(
                 AudioRef(
-                    uri=f"gs://{request.app.state.config.bucket}/{saved['input_path']}",
+                    uri=f"gs://{request.app.state.config.audio_bucket}/{saved['input_path']}",
                     mime=saved["content_type"],
                 ),
                 params,
@@ -582,13 +582,15 @@ async def transcribe_task(request: Request):
                 if saved["has_gold"]:
                     validate_gold(
                         Gold.model_validate(
-                            await asyncio.to_thread(services.bucket.read_json, saved["gold_path"])
+                            await asyncio.to_thread(
+                                services.audio_bucket.read_json, saved["gold_path"]
+                            )
                         ),
                         transcript,
                     )
                 metadata = transcript_metadata(transcript)
                 await asyncio.to_thread(
-                    services.bucket.write_json,
+                    services.audio_bucket.write_json,
                     path := f"eval-uploads/{uid}/transcripts/{uuid4().hex}.json",
                     transcript.model_dump(mode="json"),
                 )
@@ -598,7 +600,7 @@ async def transcribe_task(request: Request):
                      "stt_run": complete.run.model_dump(mode="json")},
                 )
                 if not changed:
-                    await _discard_candidate(services.bucket, path)
+                    await _discard_candidate(services.audio_bucket, path)
                 return {"status": "ok"}
     except Exception:
         await _transcribe_transition(

@@ -1,12 +1,9 @@
 """Private eval bucket adapters. Clients are supplied, never created at import time."""
 
 import json
-from copy import deepcopy
 from datetime import timedelta
 from threading import RLock
 from typing import Any, Protocol
-
-INLINE_OUTPUT_LIMIT = 500_000
 
 
 class Bucket(Protocol):
@@ -139,23 +136,3 @@ class InMemoryBucket(_JSONBucket):
 
     def read_head(self, path, n):
         return self.read_bytes(path)[:n]
-
-
-def store_output(
-    bucket: Bucket, run_id: str, unit_id: str, output: dict, *, attempt: str | None = None
-) -> dict:
-    """Store JSON inline through 500 KB, spilling larger UTF-8 payloads to SP2 layout."""
-    data = _encode(output)
-    if len(data) <= INLINE_OUTPUT_LIMIT:
-        return {'output': deepcopy(output), 'output_ref': None}
-    # Attempts write separate objects: a superseded owner cannot overwrite the winner.
-    path = (f'runs/{run_id}/{unit_id}/{attempt}.json' if attempt
-            else f'runs/{run_id}/{unit_id}.json')
-    bucket.write_bytes(path, data, content_type='application/json')
-    return {'output': None, 'output_ref': path}
-
-
-def load_output(bucket: Bucket, unit: dict) -> dict | None:
-    if unit.get('output_ref'):
-        return bucket.read_json(unit['output_ref'])
-    return deepcopy(unit.get('output'))

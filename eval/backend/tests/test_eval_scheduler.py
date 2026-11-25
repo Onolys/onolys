@@ -56,9 +56,9 @@ def add_sessions(services, *names):
         m["sessions"].append({**base, "session_id": name, "title": name.title()})
         data = transcript()
         data["turns"][0]["text"] = f"unique opening for {name} " + "actual speech " * 30  # distinct content => distinct sid
-        services.bucket.write_json(f"datasets/synthetic/{name}/transcript.json", data)
-    services.bucket.write_json("datasets/synthetic/manifest.json", m)
-    services.bucket.delete("datasets/synthetic/one/gold.json")  # no gold => no auto Human unit
+        services.datasets.write_json(f"datasets/synthetic/{name}/transcript.json", data)
+    services.datasets.write_json("datasets/synthetic/manifest.json", m)
+    services.datasets.delete("datasets/synthetic/one/gold.json")  # no gold => no auto Human unit
 
 
 def create(env, sessions, *, selection=SEL2, repeats=2, engines=("miti",)):

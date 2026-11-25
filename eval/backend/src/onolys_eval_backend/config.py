@@ -58,12 +58,14 @@ class EvalConfig:
     internal_retries: int = 1
 
     @property
-    def bucket(self) -> str:
-        """Shim for the old unit engine/uploads (removed in 05 Task 10): the api AUDIO_BUCKET.
+    def audio_bucket(self) -> str:
+        """The api AUDIO_BUCKET: eval uploads (`eval-uploads/`) and upload-session reads.
 
-        EVAL_BUCKET no longer exists; the datasets bucket is `datasets_bucket`.
+        Datasets never come from here (`datasets_bucket`); fails closed when unset.
         """
-        return self.settings.audio_bucket or self.datasets_bucket
+        if not self.settings.audio_bucket:
+            raise ConfigError("AUDIO_BUCKET is required")
+        return self.settings.audio_bucket
 
     @classmethod
     def from_env(cls, env: Mapping[str, str]) -> "EvalConfig":
