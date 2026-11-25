@@ -1,0 +1,14 @@
+.more-analysis { min-width: 0; max-width: 100%; }
+.more-analysis svg { display: block; width: 100%; height: auto; max-height: 30rem; overflow: visible; }
+.more-analysis svg text { fill: currentColor; font-size: 12px; }
+.more-analysis circle { fill: currentColor; }
+.more-analysis circle[data-frontier="true"] { stroke: currentColor; stroke-width: 2; fill: var(--color-background, white); }
+.more-analysis-axes path { stroke: currentColor; fill: none; }
+.more-analysis-frontier { fill: none; stroke: currentColor; stroke-width: 2; }
+.more-analysis .table-scroll { overflow-x: auto; max-width: 100%; }
+.more-analysis table { width: 100%; }
+.more-analysis th, .more-analysis td { padding: .5rem; text-align: start; vertical-align: top; overflow-wrap: anywhere; }
+.more-analysis th[scope="row"] { position: sticky; left: 0; background: var(--color-background, white); }
+.more-analysis [role="group"] { display: flex; flex-wrap: wrap; gap: .5rem; }
+.more-analysis [aria-pressed="true"] { font-weight: bold; text-decoration: underline; }
+@media (max-width: 760px) { .more-analysis .table-scroll table { min-width: 36rem; } }
