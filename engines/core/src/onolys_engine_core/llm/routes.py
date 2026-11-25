@@ -139,6 +139,12 @@ def _apply_effort(raw: dict[str, dict], effort: str, entries: dict[str, Model]) 
                 f"({provider}/{tier}); expected one of {allowed}"
             )
         entry["extra_params"] = {**entry.get("extra_params", {}), "reasoning_effort": effort}
+        # Thinking tokens count against the output cap: raise (never lower) cap and timeout.
+        cap = effort_output_cap(model, effort)
+        base_cap = entry.get("max_output_tokens", Route.max_output_tokens)
+        if cap > base_cap:
+            entry["max_output_tokens"] = cap
+            entry["timeout_s"] = max(entry.get("timeout_s", Route.timeout_s), COMBO_TIMEOUT_S)
 
 
 def _apply_env(
@@ -288,13 +294,18 @@ EFFORT_OUTPUT_CAP = {
 COMBO_TIMEOUT_S = 300
 
 
+def effort_output_cap(model: Model, effort: str) -> int:
+    """Output budget (incl. reasoning) for `effort`: min(model max, EFFORT_OUTPUT_CAP[effort])."""
+    return min(model.max_output_tokens, EFFORT_OUTPUT_CAP[effort])
+
+
 def combo_routes(base: dict[str, Route], model: Model, tier: str, effort: str) -> dict[str, Route]:
     """Pure: every route of `base` re-pointed at one (model, tier, effort) combo (PRD R6, D2, D9).
 
     `model` is the models.yaml block owning `tier`. Structured-output mode, concurrency and
     retries are inherited; output cap is min(model max, EFFORT_OUTPUT_CAP[effort]).
     """
-    cap = min(model.max_output_tokens, EFFORT_OUTPUT_CAP[effort])
+    cap = effort_output_cap(model, effort)
     out = {}
     for name, r in base.items():
         extra = {k: v for k, v in r.extra_params.items() if k != "reasoning_effort"}

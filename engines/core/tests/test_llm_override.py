@@ -5,7 +5,13 @@ from pathlib import Path
 import pytest
 
 from onolys_engine_core.errors import ConfigError
-from onolys_engine_core.llm.routes import load_registry, resolve_preset
+from onolys_engine_core.llm.models import load_models
+from onolys_engine_core.llm.routes import (
+    COMBO_TIMEOUT_S,
+    EFFORT_OUTPUT_CAP,
+    load_registry,
+    resolve_preset,
+)
 
 pytestmark = pytest.mark.unit
 
@@ -14,6 +20,11 @@ STAGING = ROOT / "config/staging/routes.yaml"
 TEXT = ("cheap", "mid", "strong", "miti_code", "miti_globals", "tips")
 CLAUDE = "anthropic/claude-sonnet-5-5"
 GEMINI = "gemini/gemini-4-neon"
+MODEL_MAX = {
+    f"{m.provider}/{t}": m.max_output_tokens
+    for m in load_models(ROOT / "config/models.yaml").values()
+    for t in m.tiers
+}
 
 
 def routes(env, preset="default"):
@@ -70,6 +81,24 @@ def test_gemini_override(baseline):
     assert r["oneshot"] == baseline["oneshot"]
 
 
+def test_high_effort_raises_output_cap_and_timeout(baseline):
+    for effort in ("high", "max"):
+        r = routes({"LLM_EFFORT": effort})
+        for name in TEXT:
+            want = EFFORT_OUTPUT_CAP[effort]
+            assert r[name].max_output_tokens == min(want, MODEL_MAX[r[name].litellm_id])
+            assert r[name].max_output_tokens > baseline[name].max_output_tokens
+            assert r[name].timeout_s == COMBO_TIMEOUT_S
+
+
+@pytest.mark.parametrize("effort", ["low", "medium"])
+def test_low_effort_never_lowers_cap(effort, baseline):
+    r = routes({"LLM_EFFORT": effort})
+    for name in TEXT:
+        assert r[name].max_output_tokens >= baseline[name].max_output_tokens
+        assert r[name].timeout_s >= baseline[name].timeout_s
+
+
 def test_anthropic_override_and_oneshot_untouched(baseline):
     r = routes({"LLM_PROVIDER": "anthropic", "LLM_MODEL": "claude-haiku-5-5"})
     for name in TEXT:
@@ -100,7 +129,7 @@ def test_effort_override_on_default_text_routes(effort, baseline):
     for name in TEXT:
         assert r[name].extra_params["reasoning_effort"] == effort
         assert r[name].litellm_id == baseline[name].litellm_id
-        assert r[name].max_output_tokens == baseline[name].max_output_tokens
+        assert r[name].max_output_tokens >= baseline[name].max_output_tokens
     assert r["oneshot"] == baseline["oneshot"]
 
 
@@ -161,7 +190,7 @@ def test_openai_deployment_override(tier, effort, baseline):
         assert out[name].api_key_env == "OPENAI_API_KEY"
         assert out[name].caching_mode == "provider_implicit"
         assert out[name].extra_params["reasoning_effort"] == effort
-        assert out[name].max_output_tokens == baseline[name].max_output_tokens
+        assert out[name].max_output_tokens >= baseline[name].max_output_tokens
     assert out["oneshot"] == baseline["oneshot"]
 
 
