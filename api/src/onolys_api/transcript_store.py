@@ -49,4 +49,3 @@ def store_transcript(
         if pointer is not None:
             blobs.delete(pointer.key)
         raise
-

@@ -1,11 +1,13 @@
 ---
-status: design
-summary: SP01/SP02 done and pushed; eval-compare-redesign PRDs 03–07 approved with owner answers; next dev-tasks.
+status: implementation
+summary: SP01–SP07 implemented; independent full-branch review PASS; shipping and final CI pending.
 date: 2026-11-25
 ---
 # session-report-ux
 
-- [Latest implementation, review and verification pointer](review-2026-11-24-2222.md)
+- [Current redesign implementation and verification](code-2026-11-25-0345.md)
+- [Current full-branch review checkpoint](review-2026-11-25-0345.md)
+- [Earlier implementation, review and verification pointer](review-2026-11-24-2222.md)
 - [Eval shell/form evidence](code-2026-11-24-2212-eval-shell-form.md)
 - [Product recovery/internal docs evidence](code-2026-11-24-2216.md)
 - [Admin retirement/auth preservation evidence](code-2026-11-24-admin-retirement.md)
@@ -42,18 +44,18 @@ Dependency: `01 ──(commit order only)──▶ 02`.
 - 01 [RESOLVED]: failure is terminal; unconfirmed speaker + failure stays failed.
 - 02: no open items (threshold tuning and coverage retry are [DEFERRED]).
 
-All requested product/eval code follow-ups and independent review are complete; Compare/Summary remains [design-only](eval-compare-summary-proposal.md) (`eccd65b`); PRDs 03–07 for it now exist (see Design: eval-compare-redesign). The earlier branch push reached `549b3b3`; final integrated verification through `fc08361` passed and the final evidence is prepared for the authorized branch push. No PR or deployment was performed. See the [latest pointer](review-2026-11-24-2222.md) for commits, task-checkpoint evidence and current remote state.
+The earlier product/eval follow-ups were completed and pushed through `8741f35`. The subsequent Compare/Summary redesign (SP03–SP07) and OpenAI support are implemented locally. Independent final full-branch review is PASS; no redesign push, PR or deployment has occurred. See the [current implementation evidence](code-2026-11-25-0345.md) and [review checkpoint](review-2026-11-25-0345.md).
 
 ## Design: eval-compare-redesign
 Input is the approved [proposal](eval-compare-summary-proposal.md) (latest 3f00fe0); brainstorm skipped (proposal is the decided design).
 
 | # | Sub-project | Scope | Depends | Status |
 |---|---|---|---|---|
-| 03 | [Eval environment](03-eval-environment/PRD.md) | Third Terraform env `eval` from infra/modules/environment (Firestore DB `eval`, bucket `onolys-audio-eval`, queue, worker, allowlisted eval-backend, EVAL_MODE on); opt-in module vars leave staging/prod plans unchanged; legacy staging eval removed right away (eval unusable until SP05, accepted); all admin infra and Terraform budget removed; eval uses the prod login (shared sign-in, `api` auth + allowlist; `eval/auth` package removed); allowlist emails copied by the coding agent; no service-account script; owner runs plan/apply/deploy | — | draft PRD |
-| 04 | [Eval run path](04-eval-run-path/PRD.md) | Prod run path gets internal `is_eval` (eval fields on RunDoc, engine+route override, eval-mode guard, caps bypass, public models reject unknown fields); prod unchanged | 03 (config `ENVS` gets `eval` in SP03) | draft PRD |
-| 05 | [Eval backend on prod pipeline](05-eval-backend-on-prod-pipeline/PRD.md) | Eval backend rebuilt on prod pipeline: shared prod sessions, each combo×repeat = prod RunDoc (n_runs=1) via server-side tick scheduler (one active run per session, max 2 sessions in flight per AI provider, runs finish with browser closed), `internal_error` 1 retry, provider overload backoff + cooldown on top of the engine's existing 429/529 handling, failure isolation, provider breaker (5 consecutive failures → provider skipped for that eval run, status `partial`), `eval_runs` grouping doc, idempotent Cancel (stops new runs only, in-flight finish, no prod worker edit, keeps completed, state `partial`), scoped delete, old eval-only run engine deleted; existing eval screens keep working | 03, 04 | draft PRD |
-| 06 | [Compare calculations](06-compare-calculations/PRD.md) | Pure offline-tested server-side compare calculations + authenticated read endpoints; partial eval runs (cancelled, failed or provider-skipped) compare completed runs only, missing/skipped runs reported in `excluded`/`coverage` | 05 | draft PRD |
-| 07 | [Compare screens](07-compare-screens/PRD.md) | Four read-only Compare screens (Overview, Deep dive, More analysis, Line view) in eval/web, hand-rolled SVG/CSS, replacing old Compare/Summary tables; adds confirmed Cancel button (in-flight runs finish) and "Partial — cancelled" badge on History, run detail and Compare; provider-skipped notice and n/a cells; live status on reopen | 06 | draft PRD |
+| 03 | [Eval environment](03-eval-environment/PRD.md) | Third Terraform env `eval` from infra/modules/environment (Firestore DB `eval`, bucket `onolys-audio-eval`, queue, worker, allowlisted eval-backend, EVAL_MODE on); opt-in module vars leave staging/prod plans unchanged; legacy staging eval removed right away (eval unusable until SP05, accepted); all admin infra and Terraform budget removed; eval uses the prod login (shared sign-in, `api` auth + allowlist; `eval/auth` package removed); allowlist emails copied by the coding agent; no service-account script; owner runs plan/apply/deploy | — | done — implemented and reviewed |
+| 04 | [Eval run path](04-eval-run-path/PRD.md) | Prod run path gets internal `is_eval` (eval fields on RunDoc, engine+route override, eval-mode guard, caps bypass, public models reject unknown fields); prod unchanged | 03 (config `ENVS` gets `eval` in SP03) | done — implemented and reviewed |
+| 05 | [Eval backend on prod pipeline](05-eval-backend-on-prod-pipeline/PRD.md) | Eval backend rebuilt on prod pipeline: shared prod sessions, each combo×repeat = prod RunDoc (n_runs=1) via server-side tick scheduler (one active run per session, max 2 sessions in flight per AI provider, runs finish with browser closed), `internal_error` 1 retry, provider overload backoff + cooldown on top of the engine's existing 429/529 handling, failure isolation, provider breaker (5 consecutive failures → provider skipped for that eval run, status `partial`), `eval_runs` grouping doc, idempotent Cancel (stops new runs only, in-flight finish, no prod worker edit, keeps completed, state `partial`), scoped delete, old eval-only run engine deleted; existing eval screens keep working | 03, 04 | done — implemented and reviewed |
+| 06 | [Compare calculations](06-compare-calculations/PRD.md) | Pure offline-tested server-side compare calculations + authenticated read endpoints; partial eval runs (cancelled, failed or provider-skipped) compare completed runs only, missing/skipped runs reported in `excluded`/`coverage` | 05 | done — implemented and reviewed |
+| 07 | [Compare screens](07-compare-screens/PRD.md) | Four read-only Compare screens (Overview, Deep dive, More analysis, Line view) in eval/web, hand-rolled SVG/CSS, replacing old Compare/Summary tables; adds confirmed Cancel button (in-flight runs finish) and "Partial — cancelled" badge on History, run detail and Compare; provider-skipped notice and n/a cells; live status on reopen | 06 | done — implemented and reviewed |
 
 ```
 03 ──▶ 04 ──▶ 05 ──▶ 06 ──▶ 07
@@ -92,4 +94,4 @@ Also `03 ──▶ 05`.
 - All other previously open items took their stated defaults (heatmap globals `value=null`, no R:Q/%CR tolerance, separate eval-backend image, shared tick queue, `create_run` additive edit, any allowlisted user may delete, allow concurrent eval runs on a session, keep eval STT flow, A..Z combo letters, etc.), recorded `[RESOLVED: owner 2026-11-25 — default]` in each PRD.
 - Open items resolved: worker stop for in-flight runs (no worker edit; in-flight finish), cancelled-run partial spend (moot), "X of Y runs done" (API counters).
 
-Next: `dev-tasks` for 03–07.
+Implementation 03–07 is complete. OpenAI catalog support (`4fa8a32`) covers 17 supported model/effort variants with 68 mocked HTTP-boundary checks; key wiring is opt-in and source-only. Independent final full-branch review is PASS; shipping and final CI remain with the orchestrator. Owner activation steps remain pending; see the [handoff](_next-context_.md).

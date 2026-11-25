@@ -1,6 +1,6 @@
 ---
-status: draft
-summary: SP07 Compare screens in eval/web — API/URL foundation, Cancel + Partial + provider-skip display, four Compare tabs, final a11y/responsive/CI gate (9 tasks)
+status: done
+summary: SP07 Tasks 1–9 implemented and offline-verified; review fixes recorded
 date: 2026-11-25
 ---
 # Tasks: SP07 Compare screens
@@ -8,15 +8,17 @@ Source of truth: /root/projects/onolys/iaudit/.worktrees/session-report-ux/docs/
 
 | # | Task | Depends on | Status |
 |---|---|---|---|
-| 1 | Foundation: types, compare API, URL state, fixtures, old Compare removal | — | todo |
-| 2 | Cancel with confirm dialog + History live refresh | 1 | todo |
-| 3 | Partial badge + provider-skipped notices | 1 | todo |
-| 4 | Compare shell: entry links, header, tabs, legend, states | 1, 3 | todo |
-| 5 | Overview tab (verdict, leaderboard, heatmap) | 4 | todo |
-| 6 | Deep dive tab | 5 | todo |
-| 7 | More analysis tab | 4 | todo |
-| 8 | Line view tab | 6 | todo |
-| 9 | Auth alignment, responsive/a11y checks, docs, final gate | 2, 5, 6, 7, 8 | todo |
+| 1 | Foundation: types, compare API, URL state, fixtures, old Compare removal | — | done |
+| 2 | Cancel with confirm dialog + History live refresh | 1 | done |
+| 3 | Partial badge + provider-skipped notices | 1 | done |
+| 4 | Compare shell: entry links, header, tabs, legend, states | 1, 3 | done |
+| 5 | Overview tab (verdict, leaderboard, heatmap) | 4 | done |
+| 6 | Deep dive tab | 5 | done |
+| 7 | More analysis tab | 4 | done |
+| 8 | Line view tab | 6 | done |
+| 9 | Auth alignment, responsive/a11y checks, docs, final gate | 2, 5, 6, 7, 8 | done |
+
+Completion evidence: [implementation](code-2026-11-25-0345.md), [review](review-2026-11-25-0345.md), and [Task 9 verification](task9-verification-20261125.md). Task commits: 1 `9dde098`, 2 `aad8d36`, 3 `1ebb4ec`, 4 `07cd7e7`, 5 `83d78db`, 6 `4def9f2`, 7 `89866a3`, 8 `606bd3f`, 9 `7dcd6eb`. Review fixes: `1a5c992`. Owner checks below remain separate.
 
 ## Task 1 — Foundation
 What it is / what it means: the plumbing every screen needs, so later tasks only draw UI. Traces to Decisions 2, 7 and the Architecture "Data fetching / Routes / Removed" sections.

@@ -86,4 +86,3 @@ resource "google_secret_manager_secret_iam_member" "worker_provider" {
   role      = "roles/secretmanager.secretAccessor"
   member    = "serviceAccount:${google_service_account.worker.email}"
 }
-
