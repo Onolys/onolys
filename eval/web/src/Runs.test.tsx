@@ -51,6 +51,7 @@ it('refreshes terminal cancellation details before stopping polling', async () =
   render(<RunView api={api} runId="r1" onRerun={vi.fn()} />);
   await act(async () => {});
   fireEvent.click(screen.getByRole('button', { name: 'Cancel run' }));
+  fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Cancel run' }));
   await act(async () => {});
   expect(api.cancel).toHaveBeenCalledWith('r1');
   expect(api.run).toHaveBeenCalledTimes(2);
@@ -68,6 +69,7 @@ it('keeps polling after cancellation while in-flight work runs, then shows final
   await act(async () => {});
   expect(screen.queryByRole('button', { name: 'View JSON u1' })).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: 'Cancel run' }));
+  fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Cancel run' }));
   await act(async () => {});
   expect(api.run).toHaveBeenCalledTimes(2);
   await act(async () => { await vi.advanceTimersByTimeAsync(3000); });
@@ -126,13 +128,13 @@ it('keeps polling with backoff after a failed status poll and shows a non-blocki
   expect(api.run).toHaveBeenCalledTimes(4);
   expect(screen.queryByRole('button', { name: 'Cancel run' })).toBeNull();
 });
-it('shows Cancelling… and hides Cancel when the run summary says cancel_requested', async () => {
+it('shows the cancelling note and hides Cancel when the run summary says cancel_requested', async () => {
   vi.useFakeTimers();
   const api = { ...createEvalApi('', vi.fn()), run: vi.fn().mockResolvedValue({ ...detail('running'), cancel_requested: true }) };
   render(<RunView api={api} runId="r1" onRerun={vi.fn()} />);
   await act(async () => {});
   expect(screen.queryByRole('button', { name: 'Cancel run' })).toBeNull();
-  expect((screen.getByRole('button', { name: 'Cancelling…' }) as HTMLButtonElement).disabled).toBe(true);
+  expect(screen.getByText('Cancelled — runs already in progress will finish; no new runs start.')).toBeTruthy();
   expect(screen.getByText(/^cancelling · /)).toBeTruthy();
 });
 it('history loads more using the server cursor, retains rows on failure and retries that page', async () => {

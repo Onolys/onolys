@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { Badge, Button, Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, Input } from '@onolys/ui';
 import { ApiError } from './api';
+import { CancelRunDialog, CancellationNote, canCancelRun, isActiveRun, mergeRunStatus } from './CancelRunDialog';
 import { RunConfigDialog, savedConfiguration } from './RunConfigDialog';
 import './runs.css';
 import type { EvalApi, RunDetail, RunSummary, RunUnit } from './api';
@@ -20,13 +21,13 @@ const inputName = (run: RunSummary) => 'dataset_id' in run.input ? run.input.dat
 function Usage({ run }: { run: RunSummary }) {
   return <p>{run.usage.input_tokens} input tokens · {run.usage.output_tokens} output tokens · {run.cost_usd_est == null ? '—' : `~$${run.cost_usd_est.toFixed(4)}`} estimate; STT excluded.{run.unpriced_units > 0 && ` ${run.unpriced_units} unpriced unit(s); estimate is incomplete.`}</p>;
 }
-function RunActions({ run, onRerun, onConfig, onDelete }: { run: RunSummary; onRerun: (run: RunSummary) => void; onDelete: (run: RunSummary) => void; onConfig: (run: RunSummary, trigger: HTMLElement | null) => void }) {
+function RunActions({ run, onRerun, onConfig, onDelete, onCancel }: { onCancel: (run: RunSummary, trigger: HTMLElement | null) => void; run: RunSummary; onRerun: (run: RunSummary) => void; onDelete: (run: RunSummary) => void; onConfig: (run: RunSummary, trigger: HTMLElement | null) => void }) {
   const trigger = useRef<HTMLButtonElement>(null);
   const openingConfig = useRef(false);
   return <DropdownMenu><DropdownMenuTrigger asChild><Button ref={trigger} variant="ghost" size="icon" aria-label={`Actions for ${run.name || inputName(run)}`}>⋮</Button></DropdownMenuTrigger>
     <DropdownMenuContent align="end" onCloseAutoFocus={event => {
       if (openingConfig.current) { event.preventDefault(); openingConfig.current = false; }
-    }}><DropdownMenuItem onSelect={() => onRerun(run)}>Rerun</DropdownMenuItem><DropdownMenuItem onSelect={() => { openingConfig.current = true; onConfig(run, trigger.current); }}>Config</DropdownMenuItem><DropdownMenuItem disabled={!deletable(run.status)} onSelect={() => onDelete(run)}>Delete</DropdownMenuItem></DropdownMenuContent>
+    }}><DropdownMenuItem onSelect={() => onRerun(run)}>Rerun</DropdownMenuItem><DropdownMenuItem onSelect={() => { openingConfig.current = true; onConfig(run, trigger.current); }}>Config</DropdownMenuItem>{canCancelRun(run) && <DropdownMenuItem onSelect={() => { openingConfig.current = true; onCancel(run, trigger.current); }}>Cancel run</DropdownMenuItem>}<DropdownMenuItem disabled={!deletable(run.status)} onSelect={() => onDelete(run)}>Delete</DropdownMenuItem></DropdownMenuContent>
   </DropdownMenu>;
 }
 const historyColumns = ['Date', 'Dataset', 'Status', 'Engines', 'Models', 'Tiers', 'Efforts'] as const;
@@ -76,7 +77,8 @@ export function RunView({ api, runId, onRerun }: { api: EvalApi; runId: string; 
   const [run, setRun] = useState<RunDetail>();
   const [error, setError] = useState('');
   const [attempt, setAttempt] = useState(0);
-  const [cancelling, setCancelling] = useState(false);
+  const [toCancel, setToCancel] = useState<RunSummary | null>(null);
+  const cancelTrigger = useRef<HTMLElement | null>(null);
   const [missing, setMissing] = useState(false);
   const [configuration, setConfiguration] = useState<RunSummary | null>(null);
   const configTrigger = useRef<HTMLElement | null>(null);
@@ -92,7 +94,7 @@ export function RunView({ api, runId, onRerun }: { api: EvalApi; runId: string; 
         const value = await api.run(runId, controller.signal);
         if (controller.signal.aborted) return;
         failures = 0; setError(''); setMissing(false);
-        setRun(value);
+        setRun(previous => previous ? mergeRunStatus(previous, value) : value);
         if (!terminal(value.status)) timer = setTimeout(() => void poll(), POLL_MS);
       } catch (e) {
         if (controller.signal.aborted) return;
@@ -103,20 +105,12 @@ export function RunView({ api, runId, onRerun }: { api: EvalApi; runId: string; 
     };
     void poll(); return halt;
   }, [api, runId, attempt]);
-  const cancel = async () => {
-    if (cancelling) return;
-    setCancelling(true); setError('');
-    try {
-      await api.cancel(runId);
-      stop.current();
-      setAttempt(n => n + 1);
-    } catch (e) { setError(errorMessage(e)); setCancelling(false); }
-  };
-  const cancelRequested = cancelling || run?.cancel_requested === true;
+  const cancelRequested = run?.cancel_requested === true;
   return <section className="run-detail"><h1>Run {run?.name || runId}</h1>{error && <div role="alert">{error}{!missing && run && !terminal(run.status) && ' Still trying to refresh.'}<button onClick={() => { setError(''); setMissing(false); setAttempt(n => n + 1); }}>Retry run status</button></div>}
     {!run ? (!error && <p role="status">Loading run…</p>) : <>
       <p role="status">{statusLabel(run, cancelRequested)} · {run.completed_units}/{run.total_units} units complete · {run.failed_units} failed · {run.cancelled_units} cancelled</p>
-      {!terminal(run.status) && <button disabled={cancelRequested} onClick={() => void cancel()}>{cancelRequested ? 'Cancelling…' : 'Cancel run'}</button>}
+      <CancellationNote run={run} />
+      {canCancelRun(run) && <Button onClick={event => { cancelTrigger.current = event.currentTarget; setToCancel(run); }}>Cancel run</Button>}
       <button onClick={() => onRerun(run)}>Rerun with different engines/presets</button>
       <Button variant="outline" onClick={event => { configTrigger.current = event.currentTarget; setConfiguration(run); }}>Config</Button>
       {run.description && <p>{run.description}</p>}<Usage run={run} />
@@ -128,7 +122,7 @@ export function RunView({ api, runId, onRerun }: { api: EvalApi; runId: string; 
           <td data-label="Attempt">{unit.engine === 'human' ? 'Once' : unit.repeat == null ? '—' : `${unit.repeat + 1} / ${run.repeats}`}</td><td data-label="Status">{unit.status}</td><td data-label="Stage">{unit.stage || '—'}</td>
           <td data-label="Output / error">{unit.error && <p role="alert">{typeof unit.error === 'string' ? unit.error : `${unit.error.code}${unit.error.message ? `: ${unit.error.message}` : ''}`}</p>}{unit.status === 'done' ? <UnitOutput api={api} runId={runId} unit={unit} /> : !unit.error && '—'}</td>
         </tr>; })}</tbody></table></div>
-    </>}<RunConfigDialog returnFocus={configTrigger} run={configuration} onClose={() => setConfiguration(null)} />
+    </>}<CancelRunDialog api={api} run={toCancel} returnFocus={cancelTrigger} onClose={() => setToCancel(null)} onUpdated={fresh => { if (!isActiveRun(fresh)) stop.current(); setRun(fresh); }} /><RunConfigDialog returnFocus={configTrigger} run={configuration} onClose={() => setConfiguration(null)} />
   </section>;
 }
 export function History({ api, onOpen, onRerun }: { api: EvalApi; onOpen: (id: string) => void; onRerun: (run: RunSummary) => void }) {
@@ -145,6 +139,8 @@ export function History({ api, onOpen, onRerun }: { api: EvalApi; onOpen: (id: s
   const [sort, setSort] = useState<{ column: HistoryColumn; dir: 'ascending' | 'descending' } | null>(null);
   const [configuration, setConfiguration] = useState<RunSummary | null>(null);
   const configTrigger = useRef<HTMLElement | null>(null);
+  const [toCancel, setToCancel] = useState<RunSummary | null>(null);
+  const cancelTrigger = useRef<HTMLElement | null>(null);
   const [toDelete, setToDelete] = useState<RunSummary | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState('');
@@ -163,6 +159,24 @@ export function History({ api, onOpen, onRerun }: { api: EvalApi; onOpen: (id: s
     }).catch(e => { if (!controller.signal.aborted) { setError(errorMessage(e)); setLoading(false); } });
     return () => controller.abort();
   }, [api, attempt, cursor]);
+  const activeIds = JSON.stringify((runs ?? []).filter(isActiveRun).map(run => run.run_id));
+  useEffect(() => {
+    const ids = JSON.parse(activeIds) as string[];
+    if (!ids.length) return;
+    const controller = new AbortController();
+    let timer: ReturnType<typeof setTimeout>;
+    const poll = async () => {
+      await Promise.all(ids.map(async id => {
+        try {
+          const fresh = await api.run(id, controller.signal);
+          if (!controller.signal.aborted) setRuns(previous => previous?.map(old => old.run_id === id ? mergeRunStatus(old, fresh) : old));
+        } catch (e) { if (!controller.signal.aborted) setError(errorMessage(e)); }
+      }));
+      if (!controller.signal.aborted) timer = setTimeout(() => void poll(), POLL_MS);
+    };
+    timer = setTimeout(() => void poll(), POLL_MS);
+    return () => { clearTimeout(timer); controller.abort(); };
+  }, [api, activeIds, attempt]);
   // Search, filters and sorting must include the entire history, using summaries only.
   useEffect(() => {
     if (exhaustive && nextCursor && !loading && !error) {
@@ -204,12 +218,13 @@ export function History({ api, onOpen, onRerun }: { api: EvalApi; onOpen: (id: s
       <table className="history-table"><thead><tr>{historyColumns.map(column => <th scope="col" key={column} aria-sort={sort?.column === column ? sort.dir : 'none'}><button type="button" className="sort" onClick={() => toggle(column)}>{column}</button></th>)}<th scope="col"><span className="sr-only">Actions</span></th></tr></thead>
         <tbody>{visible.map(run => <tr key={run.run_id}>{historyColumns.map(column => <td key={column} data-label={column}>{column === 'Dataset' ? <a href={`?run=${encodeURIComponent(run.run_id)}`} onClick={event => {
           if (event.button === 0 && !event.ctrlKey && !event.metaKey && !event.shiftKey && !event.altKey) { event.preventDefault(); onOpen(run.run_id); }
-        }}>{inputName(run)}</a> : column === 'Date' ? <time dateTime={run.created_at}>{dateText(run.created_at)}</time> : column === 'Status' ? <Badge variant="outline" className="max-w-full whitespace-normal">{columnValue(run, column)}</Badge> : columnValue(run, column)}</td>)}
-          <td className="history-actions" data-label="Actions"><RunActions run={run} onRerun={onRerun} onConfig={(saved, trigger) => { configTrigger.current = trigger; setConfiguration(saved); }} onDelete={target => { setDeleteError(''); setToDelete(target); }} /></td></tr>)}</tbody>
+        }}>{inputName(run)}</a> : column === 'Date' ? <time dateTime={run.created_at}>{dateText(run.created_at)}</time> : column === 'Status' ? <><Badge variant="outline" className="max-w-full whitespace-normal">{columnValue(run, column)}</Badge><CancellationNote run={run} /></> : columnValue(run, column)}</td>)}
+          <td className="history-actions" data-label="Actions"><RunActions run={run} onCancel={(saved, trigger) => { cancelTrigger.current = trigger; setToCancel(saved); }} onRerun={onRerun} onConfig={(saved, trigger) => { configTrigger.current = trigger; setConfiguration(saved); }} onDelete={target => { setDeleteError(''); setToDelete(target); }} /></td></tr>)}</tbody>
       </table>{visible.length === 0 && <p>No runs match these filters.</p>}</>}
     {loading && <p role="status">{exhaustive ? 'Loading full history for search, filters and sorting…' : 'Loading history…'}</p>}
     {nextCursor && !error && <Button disabled={loading} onClick={() => { setLoading(true); setCursor(nextCursor); }}>Load more</Button>}
     {exhaustive && !loading && !nextCursor && !error && <p role="status">All {runs?.length ?? 0} saved runs searched.</p>}
+    <CancelRunDialog api={api} run={toCancel} returnFocus={cancelTrigger} onClose={() => setToCancel(null)} onUpdated={fresh => setRuns(previous => previous?.map(old => old.run_id === fresh.run_id ? fresh : old))} />
     <RunConfigDialog returnFocus={configTrigger} run={configuration} onClose={() => setConfiguration(null)} />
     <Dialog open={toDelete !== null} onOpenChange={open => { if (!open && !deleting) setToDelete(null); }}>
       <DialogContent>
