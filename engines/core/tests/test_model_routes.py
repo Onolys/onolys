@@ -23,7 +23,7 @@ def test_staging_text_routes_use_claude_low_and_keep_gemini_baseline():
         assert route.supports_temperature is False
         assert route.max_output_tokens == 64000
     assert routes["oneshot"].litellm_id == "gemini/gemini-4-neon"
-    assert routes["oneshot"].max_output_tokens == 4096
+    assert routes["oneshot"].max_output_tokens == 64000
     broken, _ = resolve_preset("test-broken-tiers", registry, {})
     assert broken["miti_code"].litellm_id == "gemini/gemini-4-neon"
     assert "does-not-exist" in broken["mid"].litellm_id
@@ -59,7 +59,7 @@ def test_prod_base_routes_remain_gemini():
 def test_prod_has_oneshot_route():
     reg = load_registry(ROOT / "config/prod/routes.yaml", env={})
     assert reg.routes()["oneshot"].litellm_id == "gemini/gemini-4-neon"
-    assert reg.routes()["oneshot"].max_output_tokens == 4096
+    assert reg.routes()["oneshot"].max_output_tokens == 64000
 
 
 def test_llm_override_without_models_file_names_models_file(tmp_path, monkeypatch):

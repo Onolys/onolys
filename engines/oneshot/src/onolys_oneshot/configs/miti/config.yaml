@@ -1,7 +1,7 @@
 name: miti
 version: "1"
 route: oneshot
-max_output_tokens: 4096
+max_output_tokens: 64000
 inputs: [transcript, params]
 schema_hint: true
 params_schema:

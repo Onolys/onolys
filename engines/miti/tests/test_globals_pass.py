@@ -173,7 +173,7 @@ def test_default_max_tokens_when_pack_has_no_param(tmp_path, pack_data):
     pack = make_pack(tmp_path, pack_data)
     c = FakeClient(lambda req, n: reply(req, {"g1": g(4, GOOD), "g2": g(4, GOOD)}))
     run(c, pack)
-    assert c.requests[0].max_tokens == 4000
+    assert c.requests[0].max_tokens is None  # route cap applies
 
 
 def test_response_model_requires_every_global():

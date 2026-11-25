@@ -88,7 +88,7 @@ async def test_request_route_and_no_sampling_param(tmp_path, pack_data):
     req = client.requests[0]
     assert req.tier == "miti_code"
     assert req.temperature == LLMRequest.__dataclass_fields__["temperature"].default  # untouched
-    assert req.max_tokens == 8000
+    assert req.max_tokens is None  # no pack param: the route cap applies
     assert len(req.cache_prefixes) == 2
     assert req.call_tag.startswith("miti_code")
 

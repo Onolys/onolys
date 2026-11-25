@@ -32,6 +32,7 @@ from onolys_engine_core.transcript import Transcript
 from pydantic import BaseModel
 
 from onolys_miti import miti
+from onolys_miti.code_pass import _opt_int
 from onolys_miti.locate import locate
 from onolys_miti.prepare import OTHER, SUBJECT, RoleTurn, mark_roles, select_turns
 from onolys_miti.report import Tip, TipQuote, Warning
@@ -43,7 +44,7 @@ MIN_TIPS = 3
 MAX_TIPS = 5
 MAX_PER_ITEM = 2
 MAX_ALT_SENTENCES = 2
-DEFAULT_TIPS_MAX_TOKENS = 4000
+DEFAULT_TIPS_MAX_TOKENS = None  # None: the route's output cap applies
 PROMPT_FILE = "tips_system.md"
 
 _OUTPUT_FORMAT = (
@@ -192,7 +193,7 @@ def _build_request(
         call_tag=tag,
         cache_prefixes=[prefix, header],
         unit="tips",
-        max_tokens=int(
+        max_tokens=_opt_int(
             miti.MITI.data.get("params", {}).get("tips_max_tokens", DEFAULT_TIPS_MAX_TOKENS)
         ),
         deadline=deadline,

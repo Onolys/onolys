@@ -32,7 +32,7 @@ from onolys_miti.result import Instance, ResultWarning
 
 ROUTE = "miti_code"
 DEFAULT_VOLLEYS_PER_CALL = 25
-DEFAULT_CODE_MAX_TOKENS = 8000
+DEFAULT_CODE_MAX_TOKENS = None  # None: the route's output cap applies
 MAX_DROP_RATE = 0.20  # a batch with a larger share of dropped utterances is retried once
 UNCODED = "uncoded"
 
@@ -75,7 +75,7 @@ class CodePassResult:
 class RequestParts:
     cache_prefixes: list[str]
     system: str
-    max_tokens: int
+    max_tokens: int | None
     volleys_per_call: int
     response_model: type[BaseModel]
 
@@ -124,6 +124,11 @@ def _render_fewshot() -> str:
 _PARAM_KEYS = ("volleys_per_call", "code_max_tokens", "globals_max_tokens")
 
 
+def _opt_int(value: Any) -> int | None:
+    """A pack token param as int; None (the default) leaves the cap to the route."""
+    return None if value is None else int(value)
+
+
 def _overrides(params: dict[str, Any]) -> dict[str, Any]:
     """Run params beat MITI `params`, which beat the engine defaults (PRD R2)."""
     return {k: params[k] for k in _PARAM_KEYS if params.get(k) is not None}
@@ -147,7 +152,7 @@ def build_requests_parts(
     return RequestParts(
         cache_prefixes=[prefix1, "\n".join(header)],
         system="Code the clinician volleys in the user message.",
-        max_tokens=int(pp.get("code_max_tokens", DEFAULT_CODE_MAX_TOKENS)),
+        max_tokens=_opt_int(pp.get("code_max_tokens", DEFAULT_CODE_MAX_TOKENS)),
         volleys_per_call=int(pp.get("volleys_per_call", DEFAULT_VOLLEYS_PER_CALL)),
         response_model=make_response_model(count_codes()),
     )

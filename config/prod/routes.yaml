@@ -23,8 +23,8 @@ strong: *gemini_mid
 miti_code: {alias: mid}
 miti_globals: {alias: mid}
 tips: {alias: mid}
-# Eval baseline has an explicit cap; the Claude preset overrides its provider too.
-oneshot: {<<: *gemini_mid, max_output_tokens: 4096}
+# Eval baseline has an explicit cap (64000, same as the text routes); the Claude preset overrides its provider too.
+oneshot: {<<: *gemini_mid, max_output_tokens: 64000}
 
 # Named bundles of route overrides (+ an STT key from stt_providers.yaml). DEFAULT_PRESET picks one.
 presets:
@@ -49,4 +49,4 @@ presets:
         extra_params: {}
       mid: *claude
       strong: *claude
-      oneshot: {<<: *claude, max_output_tokens: 4096}
+      oneshot: {<<: *claude, max_output_tokens: 64000}
