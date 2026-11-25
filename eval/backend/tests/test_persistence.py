@@ -83,8 +83,13 @@ def test_atomic_transaction_supports_claim_and_finalization():
     assert repo.transact_unit('r', 'u', finish)
     assert repo.get_run('r')['completed_units'] == 1
     assert repo.get_unit('r', 'u')['status'] == 'done'
-    assert repo.cancel_run('r')
-    assert repo.get_run('r')['cancel_requested'] is True
+    assert repo.cancel_run('r')  # terminal (done): found, but a no-op
+    assert 'cancel_requested' not in repo.get_run('r')
+    repo.create_run('live', {'status': 'running'}, {})
+    assert repo.cancel_run('live', at='T') and repo.cancel_run('live', at='later')
+    assert repo.get_run('live')['cancel_requested'] is True
+    assert repo.get_run('live')['cancelled_at'] == 'T'  # set once
+    assert not repo.cancel_run('absent')
 
 
 def test_prices_prefer_provider_zero_and_token_fallback(tmp_path):

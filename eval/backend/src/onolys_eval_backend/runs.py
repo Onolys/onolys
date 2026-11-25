@@ -721,14 +721,20 @@ def finish_unit(repository, rid, uid, result, *, expected=None, owner=_ANY):
 
 @router.post("/v1/runs/{run_id}/cancel")
 def cancel_run(request: Request, run_id: str):
+    """Stop new runs only (05 R7). Only the flags are written here, in one transaction; the tick
+    marks unstarted cells `cancelled` (it owns every other write to the group doc, so a cancel
+    cannot be lost to, or clobber, a concurrent tick). In-flight runs finish; idempotent; a
+    terminal or already-cancelled run is a no-op (the repository ignores non-active runs)."""
     repository = request.app.state.services.repository
-    if not repository.cancel_run(run_id):
+    if not repository.cancel_run(run_id, at=datetime.now(UTC).isoformat()):
         raise HTTPException(404, "Run not found.")
-    # Finalize pending units immediately, including ones never successfully queued.
-    # In-flight units retain ownership and finish normally; no provider cancellation.
-    for uid in repository.list_units(run_id):
-        finish_unit(repository, run_id, uid, {"status": "cancelled"}, expected={"queued"})
-    return {"run_id": run_id, "status": repository.get_run(run_id)["status"]}
+    run = repository.get_run(run_id)
+    if "tick_seq" not in run and run["status"] in {"queued", "running"}:
+        # Legacy unit-based run: finalize pending units immediately; in-flight ones finish.
+        for uid in repository.list_units(run_id):
+            finish_unit(repository, run_id, uid, {"status": "cancelled"}, expected={"queued"})
+        run = repository.get_run(run_id)
+    return {"run_id": run_id, "status": run["status"], "cancelled_at": run.get("cancelled_at")}
 
 
 def _metric_usage(metrics, start=0):

@@ -7,6 +7,7 @@ unchanged. Routers own input validation and executors own state-machine decision
 
 from collections.abc import Callable, Mapping
 from copy import deepcopy
+from datetime import UTC, datetime
 from threading import RLock
 from typing import Protocol
 
@@ -14,6 +15,13 @@ Record = dict
 # None aborts without writes. Otherwise patch run and unit together. Firestore may
 # retry callbacks: they must be pure, with no bucket writes, LLM calls or enqueues.
 UnitMutation = Callable[[Record, Record], tuple[Record, Record] | None]
+
+
+_CANCELLABLE = {'queued', 'running'}
+
+
+def _utc_iso():
+    return datetime.now(UTC).isoformat()
 
 
 class EvalRepository(Protocol):
@@ -35,7 +43,7 @@ class EvalRepository(Protocol):
     def update_run(self, run_id: str, updates: Record) -> None: ...
     def update_unit(self, run_id: str, unit_id: str, updates: Record) -> None: ...
     def transact_unit(self, run_id: str, unit_id: str, mutate: UnitMutation) -> bool: ...
-    def cancel_run(self, run_id: str) -> bool: ...
+    def cancel_run(self, run_id: str, at: str | None = None) -> bool: ...
     # Scheduler (05 R6): the `eval_slots/{provider}` doc, `{holders: {run_id: eval_run_id}}`.
     def claim_slot(self, provider: str, run_id: str, eval_run_id: str, cap: int) -> bool: ...
     def release_slot(self, provider: str, run_id: str) -> None: ...
@@ -143,11 +151,16 @@ class InMemoryEvalRepository:
             self._units[run_id][unit_id].update(unit_updates)
             return True
 
-    def cancel_run(self, run_id):
+    def cancel_run(self, run_id, at=None):
+        """Flags only (the tick marks cells). Idempotent; `cancelled_at` set once; no-op if over."""
         with self._lock:
             if run_id not in self._runs:
                 return False
-            self._runs[run_id]['cancel_requested'] = True
+            run = self._runs[run_id]
+            if run.get('status') in _CANCELLABLE:
+                run['cancel_requested'] = True
+                run.setdefault('cancelled_at', None)
+                run['cancelled_at'] = run['cancelled_at'] or at or _utc_iso()
             return True
 
     # The lock is the in-memory equivalent of a Firestore transaction: read, decide, write.
@@ -325,16 +338,20 @@ class FirestoreEvalRepository:
 
         return apply(self.client.transaction())
 
-    def cancel_run(self, run_id):
+    def cancel_run(self, run_id, at=None):
         from google.cloud import firestore
 
         ref = self.runs.document(run_id)
 
         @firestore.transactional
         def cancel(transaction):
-            if not ref.get(transaction=transaction).exists:
+            snapshot = ref.get(transaction=transaction)
+            if not snapshot.exists:
                 return False
-            transaction.update(ref, {'cancel_requested': True})
+            run = snapshot.to_dict()
+            if run.get('status') in _CANCELLABLE:
+                stamp = run.get('cancelled_at') or at or _utc_iso()
+                transaction.update(ref, {'cancel_requested': True, 'cancelled_at': stamp})
             return True
 
         return cancel(self.client.transaction())

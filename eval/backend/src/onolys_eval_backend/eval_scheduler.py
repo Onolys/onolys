@@ -11,7 +11,7 @@
 5. all cells terminal -> roll the status up; later ticks are no-ops.
 
 Task 6 (R6b-R6d): overload `waiting` + provider cooldown, per-cell isolation (`_isolated`),
-provider breaker (`_record_outcome`). Seam for Task 7: `_cancelled_finish`.
+provider breaker (`_record_outcome`). Cancel (R7): `_cancel_cells`.
 """
 
 import hashlib
@@ -434,20 +434,45 @@ def _rollup(doc: dict) -> None:
         doc["status"] = "done"
     elif done:
         doc["status"] = "partial"
-    elif doc["cancelled_units"] and not doc["failed_units"] and not doc["skipped_units"]:
-        doc["status"] = "cancelled"
+    elif doc["cancelled_units"] and not doc["skipped_units"] and (
+        doc.get("cancel_requested") or not doc["failed_units"]
+    ):
+        doc["status"] = "cancelled"  # R7: no run done, even if in-flight ones failed
     else:
         doc["status"] = "failed"
     doc["finished_at"] = _now().isoformat()
 
 
-def _cancelled_finish(doc: dict) -> None:
-    """Task 7 seam. Minimal here so a cancelled run's chain ends: once nothing is in flight the
-    rest never starts; Task 7 owns marking those cells `cancelled` and the exact final status."""
-    if any(e["active_run_id"] for e in doc["sessions"].values()):
-        return
-    doc["status"] = "partial" if doc["done_units"] else "cancelled"
-    doc["finished_at"] = _now().isoformat()
+def _cancel_cells(doc: dict, cells: list[dict]) -> None:
+    """R7: every cell not started, `waiting` included, becomes `cancelled`; skipped cells stay
+    skipped; the in-flight run (if any) finishes and is kept. Cancelled cells are added to
+    `skipped_idx` so the cursor steps over them, and never reach `_record_outcome` (breaker).
+    Idempotent: a second pass finds nothing left to mark."""
+    for sid, entry in doc["sessions"].items():
+        gone = set(entry.setdefault("skipped_idx", []))
+        start = entry["cursor"] + (1 if entry["active_run_id"] else 0)
+        for idx in range(start, len(cells)):
+            if idx in gone:
+                continue
+            cell = cells[idx]
+            identity = (cell["engine"], cell["combo_key"], cell["repeat"])
+            waiting = next((r for r in entry["runs"] if r["status"] == "waiting"
+                            and (r["engine"], r["combo_key"], r["repeat"]) == identity), None)
+            if waiting is not None:
+                waiting.update(status="cancelled", error="cancelled")
+            else:
+                entry["runs"].append({
+                    "run_id": None, "combo_key": cell["combo_key"], "engine": cell["engine"],
+                    "repeat": cell["repeat"], "attempt": len(_cell_refs(entry, cell)),
+                    "status": "cancelled", "error": "cancelled",
+                })
+            entry["skipped_idx"].append(idx)
+            doc["cells_wait"].pop(cell_key(sid, cell), None)
+            doc["cancelled_units"] += 1
+        if not entry["active_run_id"]:
+            if entry["state"] == "waiting":
+                entry["state"] = "pending"
+            _advance(entry, cells)
 
 
 _STATE_KEYS = (
@@ -498,8 +523,11 @@ def run_tick(services, eval_run_id: str, n: int) -> str:
     sweep_slots(services, doc, eval_run_id)
 
     # (4) fill idle sessions in order, unless cancelled
-    if doc.get("cancel_requested"):
-        _cancelled_finish(doc)
+    latest = repository.get_run(eval_run_id) or {}  # a cancel may land mid-tick: re-read the flag
+    if latest.get("cancel_requested") or doc.get("cancel_requested"):
+        doc["cancel_requested"] = True
+        doc["cancelled_at"] = latest.get("cancelled_at") or doc.get("cancelled_at")
+        _cancel_cells(doc, cells)
     else:
         for sid, entry in sorted(sessions.items(), key=lambda item: item[1]["order"]):
             if entry["active_run_id"] or entry["cursor"] >= len(cells):
