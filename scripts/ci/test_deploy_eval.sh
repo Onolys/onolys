@@ -5,14 +5,18 @@ ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$ROOT"
 python3 - <<'PY'
 import json
+import yaml
+import os
+import subprocess
+import tempfile
 from pathlib import Path
 
 wf = Path('.github/workflows/deploy-eval.yml')
 assert wf.is_file(), 'deploy-eval.yml missing'
 s = wf.read_text()
-for required in ['workflow_call:', 'environment: staging',
+for required in ['workflow_dispatch:', 'environment: staging',
                  'file: eval/backend/Dockerfile', 'steps.push.outputs.digest',
-                 'GIT_SHA=${{ inputs.sha }}', 'google-github-actions/auth@v2',
+                 'GIT_SHA=${{ github.sha }}', 'google-github-actions/auth@v2',
                  'google-github-actions/deploy-cloudrun@v2', 'skip_default_labels: true', 'id-token: write',
                  'onolys-eval-backend-eval', 'eval-staging', 'onolys-eval-staging',
                  'VITE_EVAL_API_URL:', 'vars.PROD_VITE_FIREBASE_API_KEY',
@@ -22,13 +26,64 @@ for required in ['workflow_call:', 'environment: staging',
                  'content-security-policy:',
                  'hosting:eval-staging']:
     assert required in s, f'missing workflow contract: {required}'
-assert 'workflow_dispatch:' not in s and '\n  push:' not in s, 'eval must release only inside the staging lock'
-assert 'concurrency:' not in s, 'caller holds the release lock through the reusable workflow'
-assert 'env_vars: GIT_SHA=${{ inputs.sha }}' in s, 'runtime env must replace Terraform bootstrap SHA'
-assert s.count('ref: ${{ inputs.sha }}') == 3, 'build, site and Firestore checkout must pin the worker SHA'
-assert 'github.sha' not in s, 'workflow_run default ref is not the tested commit'
-for forbidden in ['DEPLOYER_PROD_SA', 'credentials_json', 'service_account_key',
-                  'environment: production', '_deploy-cloudrun.yml']:
+workflow = yaml.safe_load(s)
+triggers = workflow.get('on', workflow.get(True))
+assert set(triggers) == {'workflow_dispatch'}, 'eval is an independent manual release only'
+assert workflow['concurrency'] == {'group': 'deploy-eval', 'cancel-in-progress': False}
+jobs = workflow['jobs']
+build = jobs['build']
+assert build['if'] == "github.ref == 'refs/heads/main'", 'reject non-main before credentials'
+assert build['permissions']['actions'] == 'read'
+steps = build['steps']
+release = next(i for i, step in enumerate(steps) if step.get('id') == 'release')
+auth = next(i for i, step in enumerate(steps) if 'google-github-actions/auth@' in step.get('uses', ''))
+assert release < auth, 'admit CI-green current main before cloud authentication'
+assert 'verify_staging_release.cjs' in steps[release]['with']['script']
+assert steps[release]['env']['RELEASE_SHA'] == '${{ github.sha }}'
+assert build['outputs']['sha'] == '${{ github.sha }}'
+assert steps[0]['with']['ref'] == '${{ github.sha }}'
+assert any('check_config.sh' in step.get('run', '') for step in steps[:auth]), 'source config guard before auth'
+worker_build = next(step for step in steps if step.get('id') == 'push-worker')
+assert worker_build['with']['file'] == 'api/Dockerfile', 'same runtime build inputs as app worker'
+assert worker_build['with']['build-args'] == 'GIT_SHA=${{ github.sha }}'
+assert 'onolys/eval-worker' in s and 'onolys/api' not in s, 'eval must never publish an app image tag'
+preflight = next(step for step in steps if 'gcloud run services describe' in step.get('run', ''))
+assert auth < steps.index(preflight) < steps.index(worker_build)
+assert steps.index(preflight) < next(i for i, step in enumerate(steps) if step.get('id') == 'push')
+# Execute the actual workflow preflight with an offline gcloud stub, including access/missing failures.
+with tempfile.TemporaryDirectory() as tmp:
+    command = Path(tmp, 'gcloud')
+    command.write_text('#!/bin/bash\nprintf "%s\\n" "$*" >> "$CALL_LOG"\nexit "${STUB_EXIT:-0}"\n')
+    command.chmod(0o755)
+    env = {**os.environ, 'PATH': tmp + os.pathsep + os.environ['PATH'],
+           'PROJECT': 'test-project', 'REGION': 'test-region', 'CALL_LOG': str(Path(tmp, 'calls'))}
+    result = subprocess.run(['bash', '-e', '-c', preflight['run']], env=env, text=True, capture_output=True)
+    assert result.returncode == 0, result.stderr
+    calls = Path(env['CALL_LOG']).read_text()
+    assert 'onolys-worker-eval' in calls and 'onolys-eval-backend-eval' in calls
+    assert calls.count('--project test-project --region test-region') == 2
+    for code in ['1', '7']:
+        result = subprocess.run(['bash', '-e', '-c', preflight['run']], env={**env, 'STUB_EXIT': code}, text=True, capture_output=True)
+        assert result.returncode != 0 and 'SP03 Terraform' in result.stdout and 'secret versions' in result.stdout
+assert build['outputs']['worker_image'] == '${{ steps.vars.outputs.worker_repo }}@${{ steps.push-worker.outputs.digest }}'
+assert any('check_config.sh --image "$IMAGE"' in step.get('run', '') and
+           step.get('env', {}).get('IMAGE') == build['outputs']['worker_image'] for step in steps), 'guard worker image by digest'
+worker = jobs['deploy-worker']
+assert worker['needs'] == 'build'
+assert worker['uses'] == './.github/workflows/_deploy-cloudrun.yml'
+assert worker['with']['env'] == 'eval' and worker['with']['service'] == 'onolys-worker-eval'
+assert worker['with']['image'] == '${{ needs.build.outputs.worker_image }}'
+assert worker['with']['git_sha'] == '${{ needs.build.outputs.sha }}'
+assert 'env_vars' not in worker['with'], 'Terraform owns eval runtime settings'
+assert set(jobs['deploy-backend']['needs']) == {'build', 'deploy-worker'}, 'worker must precede backend rollout'
+assert 'env_vars: GIT_SHA=${{ needs.build.outputs.sha }}' in s, 'replace backend bootstrap SHA'
+assert 'build' in jobs['site']['needs']
+for name in ['site', 'firestore']:
+    checkout = next(step for step in jobs[name]['steps'] if step.get('uses', '').startswith('actions/checkout@'))
+    assert checkout['with']['ref'] == '${{ needs.build.outputs.sha }}', f'{name} must pin admitted SHA'
+assert set(jobs['smoke']['needs']) == {'deploy-backend', 'site', 'firestore'}
+assert 'inputs.sha' not in s and 'workflow_call:' not in s
+for forbidden in ['DEPLOYER_PROD_SA', 'credentials_json', 'service_account_key', 'environment: production']:
     assert forbidden not in s, f'forbidden workflow config: {forbidden}'
 img = Path('scripts/ci/test_eval_image.sh').read_text()
 run = img[img.index('docker run -d'):]
@@ -43,7 +98,7 @@ assert len(ev) == 1 and ev[0]['rules'] == 'firestore.rules' and ev[0]['indexes']
 dc = Path('.github/workflows/_deploy-cloudrun.yml').read_text()
 assert 'staging|prod|eval' in dc and "inputs.env == 'prod' && vars.DEPLOYER_PROD_SA || vars.DEPLOYER_STAGING_SA" in dc
 assert "inputs.env == 'prod' && 'production' || 'staging'" in dc
-print('ok staging-only WIF workflow, digest image, image provenance, SHA-coordinated deploy and smoke')
+print('ok staging-only WIF workflow, digest image, image provenance, independent SHA-coordinated eval release and smoke')
 docker = Path('eval/backend/Dockerfile').read_text()
 for member in ['engines/core', 'engines/miti', 'engines/oneshot', 'api',
                'eval/core', 'eval/backend']:

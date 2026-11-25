@@ -118,3 +118,16 @@ it('opens Compare separately and restores tab URL navigation and browser back',a
  await waitFor(()=>expect(screen.getByRole('tab',{name:'More analysis'}).getAttribute('aria-selected')).toBe('true'));
  window.history.back();await waitFor(()=>expect(screen.getByRole('tab',{name:'Overview'}).getAttribute('aria-selected')).toBe('true'));
 });
+
+it('hides account creation on the allowlisted eval login while preserving sign-in and recovery', async () => {
+  window.history.replaceState({}, '', '/login?next=%2F%3Fview%3Dhistory');
+  const baseFetch = vi.fn();
+  render(<Root service={fake()} baseFetch={baseFetch} />);
+  await screen.findByRole('heading', { name: 'Log in' });
+  expect(screen.queryByRole('link', { name: 'Create an account' })).toBeNull();
+  expect(screen.queryByText(/New here/)).toBeNull();
+  expect(screen.getByRole('button', { name: 'Log in' })).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Continue with Google' })).toBeTruthy();
+  expect(screen.getByRole('link', { name: 'Forgot your password?' }).getAttribute('href')).toBe('/forgot-password?next=%2F%3Fview%3Dhistory');
+  expect(baseFetch).not.toHaveBeenCalled();
+});

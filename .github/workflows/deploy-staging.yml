@@ -178,34 +178,6 @@ jobs:
         LLM_EFFORT=${{ needs.build.outputs.llm_effort }}
     secrets: inherit
 
-  deploy-worker-eval:
-    # 03-eval R8a: the eval worker runs the exact image digest staging just deployed (no rebuild), as deployer-staging.
-    # Terraform owns its runtime settings (EVAL_MODE, secrets, queue); only the pinned image and GIT_SHA change here.
-    needs: [build, deploy-worker]
-    permissions:
-      contents: read
-      id-token: write
-    uses: ./.github/workflows/_deploy-cloudrun.yml
-    with:
-      env: eval
-      service: onolys-worker-eval
-      image: ${{ needs.build.outputs.image }}
-      region: us-central1
-      git_sha: ${{ needs.build.outputs.sha }}
-    secrets: inherit
-
-  deploy-eval:
-    # Keep the caller's deploy-staging lock until backend, site and rules finish.
-    # No path gate: every worker revision needs its matching scheduler/RunDoc SHA.
-    needs: [build, deploy-worker-eval]
-    permissions:
-      contents: read
-      id-token: write
-    uses: ./.github/workflows/deploy-eval.yml
-    with:
-      sha: ${{ needs.build.outputs.sha }}
-    secrets: inherit
-
   deploy-voice:
     needs: [build, deploy-api]
     permissions:

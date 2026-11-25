@@ -1,14 +1,13 @@
 name: deploy-eval
 
-# Called only within deploy-staging's release lock, after the identical-SHA eval worker.
-# Manual entrypoint: dispatch deploy-staging on current CI-green main (deploys both halves).
+# Independent manual eval release: current main with successful exact-SHA push CI.
+# Worker, backend, site and rules share one trusted commit and this eval-only lock.
 on:
-  workflow_call:
-    inputs:
-      sha:
-        description: Exact CI-green commit already deployed to the eval worker
-        required: true
-        type: string
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-eval
+  cancel-in-progress: false
 
 permissions:
   contents: read
@@ -19,26 +18,52 @@ env:
 
 jobs:
   build:
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     environment: staging
     permissions:
       contents: read
+      actions: read
       id-token: write
     outputs:
+      sha: ${{ github.sha }}
+      worker_image: ${{ steps.vars.outputs.worker_repo }}@${{ steps.push-worker.outputs.digest }}
       image: ${{ steps.vars.outputs.repo }}@${{ steps.push.outputs.digest }}
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.sha }}
+          ref: ${{ github.sha }}
+      - name: Admit only current main with successful exact-SHA push CI
+        id: release
+        uses: actions/github-script@v7
+        env:
+          RELEASE_SHA: ${{ github.sha }}
+        with:
+          script: |
+            const verify = require('./scripts/ci/verify_staging_release.cjs');
+            await verify({github, context, sha: process.env.RELEASE_SHA});
+      - name: Config guard (source tree)
+        run: bash scripts/ci/check_config.sh
       - id: vars
-        run: echo "repo=${REGION}-docker.pkg.dev/${PROJECT}/onolys/eval-backend" >> "$GITHUB_OUTPUT"
+        run: |
+          echo "repo=${REGION}-docker.pkg.dev/${PROJECT}/onolys/eval-backend" >> "$GITHUB_OUTPUT"
+          echo "worker_repo=${REGION}-docker.pkg.dev/${PROJECT}/onolys/eval-worker" >> "$GITHUB_OUTPUT"
       - id: auth
         uses: google-github-actions/auth@v2
         with:
           workload_identity_provider: ${{ vars.WIF_PROVIDER }}
           service_account: ${{ vars.DEPLOYER_STAGING_SA }}
           token_format: access_token
+      - uses: google-github-actions/setup-gcloud@v2
+      - name: Check eval services are provisioned and accessible before publishing images
+        run: |
+          for service in onolys-worker-eval onolys-eval-backend-eval; do
+            if ! gcloud run services describe "$service" --project "$PROJECT" --region "$REGION" --format='value(metadata.name)'; then
+              echo "::error::Eval service $service is missing or inaccessible. An infrastructure owner must review/apply the existing SP03 Terraform and verify eval IAM and secret versions; see docs/reference/infra.md. This workflow only releases provisioned services."
+              exit 1
+            fi
+          done
       - uses: docker/login-action@v3
         with:
           registry: ${{ env.REGION }}-docker.pkg.dev
@@ -51,21 +76,52 @@ jobs:
         with:
           context: .
           file: eval/backend/Dockerfile
-          build-args: GIT_SHA=${{ inputs.sha }}
+          build-args: GIT_SHA=${{ github.sha }}
           push: true
-          tags: ${{ steps.vars.outputs.repo }}:${{ inputs.sha }}
+          tags: ${{ steps.vars.outputs.repo }}:${{ github.sha }}
           cache-from: type=gha,scope=eval-backend
           cache-to: type=gha,mode=max,scope=eval-backend
       - name: Smoke the exact pushed image (auth, runtime imports, no datasets)
         env:
           IMAGE: ${{ steps.vars.outputs.repo }}@${{ steps.push.outputs.digest }}
-          EXPECTED_GIT_SHA: ${{ inputs.sha }}
+          EXPECTED_GIT_SHA: ${{ github.sha }}
         run: |
           docker pull "$IMAGE"
           SKIP_BUILD=1 bash scripts/ci/test_eval_image.sh "$IMAGE"
+      - name: Build and push eval worker from the app runtime Dockerfile
+        id: push-worker
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: api/Dockerfile
+          build-args: GIT_SHA=${{ github.sha }}
+          push: true
+          tags: ${{ steps.vars.outputs.worker_repo }}:${{ github.sha }}
+          cache-from: type=gha,scope=eval-worker
+          cache-to: type=gha,mode=max,scope=eval-worker
+      - name: Config guard (inside the eval worker image, by digest)
+        env:
+          IMAGE: ${{ steps.vars.outputs.worker_repo }}@${{ steps.push-worker.outputs.digest }}
+        run: bash scripts/ci/check_config.sh --image "$IMAGE"
+
+  deploy-worker:
+    needs: build
+    permissions:
+      contents: read
+      id-token: write
+    uses: ./.github/workflows/_deploy-cloudrun.yml
+    with:
+      env: eval
+      service: onolys-worker-eval
+      image: ${{ needs.build.outputs.worker_image }}
+      region: ${{ vars.GCP_REGION || 'us-central1' }}
+      project: ${{ vars.GCP_PROJECT || 'onolys' }}
+      git_sha: ${{ needs.build.outputs.sha }}
+      # Terraform owns eval mode, routes, secrets and queue settings.
+    secrets: inherit
 
   deploy-backend:
-    needs: build
+    needs: [build, deploy-worker]
     runs-on: ubuntu-latest
     timeout-minutes: 15
     environment: staging
@@ -87,10 +143,10 @@ jobs:
           service: onolys-eval-backend-eval
           image: ${{ needs.build.outputs.image }}
           skip_default_labels: true
-          env_vars: GIT_SHA=${{ inputs.sha }}
+          env_vars: GIT_SHA=${{ needs.build.outputs.sha }}
 
   site:
-    needs: deploy-backend
+    needs: [build, deploy-backend]
     runs-on: ubuntu-latest
     timeout-minutes: 15
     environment: staging
@@ -100,7 +156,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.sha }}
+          ref: ${{ needs.build.outputs.sha }}
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -148,7 +204,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.sha }}
+          ref: ${{ needs.build.outputs.sha }}
       - uses: google-github-actions/auth@v2
         with:
           workload_identity_provider: ${{ vars.WIF_PROVIDER }}

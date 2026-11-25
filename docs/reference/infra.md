@@ -181,9 +181,15 @@ Offline guards: `python3 -m pytest infra/scripts/test_nightly_gemini_secret.py -
 
 Workflows: `deploy-staging.yml` runs after the `CI` workflow succeeds on `main` (also manual). Before cloud authentication, automatic and manual releases verify that the SHA is still current `main` and has successful push CI in this repository. A stale queued run fails rather than rolling back a newer release. `deploy-prod.yml` is manual (`workflow_dispatch`, input `sha` or `version`) or on a `v*` tag. `nightly.yml` runs 06:17 UTC daily.
 
-Eval releases are part of that same serialized staging workflow. It deploys `onolys-worker-eval` with the **exact staging worker image digest**, then calls `deploy-eval.yml` with the same tested SHA to build/deploy the eval backend (`onolys-eval-backend-eval`), Firestore rules/indexes (`firestore:eval`) and the eval site. Every checkout, backend image provenance and both runtime `GIT_SHA` values use that SHA; the backend deploy explicitly updates `GIT_SHA`, replacing Terraform's bootstrap value. There is no path gate or independent eval push/manual trigger. The staging concurrency lock remains held until the called workflow finishes, so another release cannot move either side independently.
+App staging and eval release independently. `deploy-staging.yml` builds and deploys only the staging app API, worker, voice service, rules and site; its `deploy-staging` lock and smoke checks cover that app release. App failures do not block starting an eval release, and eval infrastructure failures do not fail an app release. Production promotion remains `deploy-prod.yml`: it requires the app image to have run on staging API, worker and voice services, with no eval deployment requirement.
 
-To release eval manually, dispatch **deploy-staging on `main` after its push CI succeeds**; this releases the worker and backend together. Do not dispatch or rerun an old independent eval workflow. During the first transition, wait for or cancel any runs started under the previous deployment definitions before starting the coordinated release: changing a workflow cannot retroactively lock an already running historical definition. Deployment is sequential, so in-flight evals can still fail the strict code-drift check while revisions change. If a deployment fails between services, correct the failure and dispatch staging again on current CI-green `main` to restore the pair. This does not weaken the worker's drift guard.
+To release eval, dispatch **deploy-eval on `main` after its push CI succeeds**. It is manual only and has its own `deploy-eval` concurrency lock. Before cloud authentication it rejects non-main refs, stale SHAs and commits without successful exact-SHA push CI in this repository, using the same admission guard as staging. It does not wait for or trigger an app deployment. Its authenticated preflight checks that `onolys-worker-eval` and `onolys-eval-backend-eval` exist and are accessible before publishing images. A missing/inaccessible service stops the release with infrastructure guidance; it does not create services or widen IAM.
+
+The eval workflow independently builds the worker from `api/Dockerfile` into the existing Artifact Registry repository's **`onolys/eval-worker` package**, and builds `eval/backend/Dockerfile` into `onolys/eval-backend`. It never writes an `onolys/api` image tag. Eval and app workers share runtime Dockerfile, dependency and engine inputs at a given commit, but have separately built image digests and environment settings; matching image digests or deployed app/eval versions are not required. The workflow validates source configuration and the eval worker image configuration by digest, and retains the eval backend image smoke test. Terraform owns the eval worker's mode, routes, secrets and queue settings; staging app LLM overrides are not copied into eval.
+
+Within one eval release, the worker deploys first, then the backend; the site and `firestore:eval` rules/indexes use the same admitted SHA. Both runtime `GIT_SHA` values and all image build provenance use that SHA, replacing Terraform bootstrap values. The eval lock remains held through Hosting, rules and smoke checks. During the first transition, wait for or cancel runs using the old coupled definitions before dispatching either new release: a changed workflow cannot retroactively lock a historical run. Deployment remains sequential, so active eval runs can still fail strict code/configuration drift checks while revisions change. If a release fails between services, correct the failure and dispatch **deploy-eval** again on current CI-green `main` to restore the pair. The drift guard remains enabled.
+
+Eval releases require the existing SP03 infrastructure to have been provisioned. If the dedicated services are absent, an infrastructure owner must follow [eval infrastructure activation](#eval-infrastructure-activation): create/import secret shells, seed enabled versions, then review and manually apply the full existing Terraform configuration, including eval runtime/deployer IAM. Confirm the dedicated services are healthy before dispatching eval. This is separate from splitting the release workflows; CI does not apply Terraform, and an existing legacy backend alone does not provision the dedicated eval worker/backend pair.
 
 The eval backend's `api-eval` service account starts and polls Speech-to-Text operations for dataset audio. It receives `roles/speech.client` only when the eval backend is enabled in `env=eval`; staging/prod API grants remain unchanged. The existing worker Speech grants remain in place.
 
@@ -209,6 +215,30 @@ python3 infra/scripts/seed-secrets.py --env staging     # also: --env prod
 ```
 
 It creates `uid-hmac-key-{env}` (random, only if missing) and writes the key for each `--map ENVVAR=base-id` (default `GEMINI_API_KEY=gemini-api-key` and `ANTHROPIC_API_KEY=anthropic-api-key`; a key whose variable is unset keeps its existing version) into `<base-id>-{env}`, so `--env staging` and `--env prod` fill different secrets from the key in your shell. Re-running is a no-op unless a value changed.
+
+### Eval infrastructure activation
+
+Cloud Run cannot start revisions whose `latest` secret references have no enabled version. Provision the existing SP03 configuration in this order, using the operator's existing backend, credentials and ignored tfvars; review each saved plan before applying it:
+
+1. From `infra/`, create a targeted secret-shell plan, inspect it and apply only that reviewed plan. The resource names are existing configuration, not new infrastructure code:
+
+   ```bash
+   terraform plan \
+     -target='module.eval.google_secret_manager_secret.uid_hmac' \
+     -target='module.eval.google_secret_manager_secret.provider' \
+     -target='module.eval.google_secret_manager_secret.eval_allowed_emails[0]' \
+     -out=eval-secret-shells.tfplan
+   terraform show eval-secret-shells.tfplan
+   terraform apply eval-secret-shells.tfplan
+   ```
+
+   Keep `infra/eval-allowlist-import.tf` through the successful first apply: it imports the existing allowlist shell rather than trying to recreate it. Confirm the plan preserves that secret and its enabled value; do not rotate it as part of provisioning.
+
+2. From the repository root, securely load the configured eval provider keys into the environment, then run `python3 infra/scripts/seed-secrets.py --env eval`. The helper generates the eval UID HMAC value when missing and seeds the default Gemini/Anthropic mappings. Supply repeated `--map ENVVAR=base-id` flags instead when the operator's `eval_llm_secrets` or `stt_secrets` has additional or different configured keys (the flags replace the default map). Verify enabled version metadata for all referenced secrets, including the existing allowlist. Do not put secret values in command arguments, tfvars, plans or git.
+
+3. From `infra/`, review a full saved plan before applying it. It provisions the dedicated eval Cloud Run worker/backend, database, queue, bucket and service-account/IAM bindings. Preserve currently deployed app SHAs and operator variables as described above, and inspect any staging/production drift before approving. After healthy dedicated services and their IAM are verified, dispatch `deploy-eval` on current CI-green `main`.
+
+The release preflight checks service existence/access only; it does not validate every secret version, provision resources or replace the owner's infrastructure review.
 
 ### Auth-email staging activation (two phases)
 
