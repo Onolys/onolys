@@ -73,7 +73,7 @@ def test_eval_site_packages_and_offline_jobs() -> None:
         else:
             for required in (
                 "working-directory: eval/web", "node-version: 22",
-                "cache-dependency-path: eval/web/package-lock.json",
+                "eval/web/package-lock.json",
                 "npm ci", "npm test", "npm run typecheck", "npm run lint", "npm run build",
             ):
                 assert required in job, required
@@ -102,15 +102,21 @@ def test_deps_map_matches_pyproject_dependencies() -> None:
     assert actual == expected
 
 
-def test_retired_admin_source_keeps_eval_auth_registered() -> None:
+def test_retired_admin_source_is_fully_removed() -> None:
     assert not (ROOT / "admin").exists()
-    assert "admin-auth:eval/auth:python" in _array("PACKAGES")
-    assert not any(e.startswith("admin-backend:") for e in _array("PACKAGES"))
+    assert not (ROOT / "eval/auth").exists()
+    assert not any(e.startswith(("admin-backend:", "admin-auth:")) for e in _array("PACKAGES"))
     workflow = (ROOT / ".github/workflows/ci.yml").read_text()
-    assert "ruff check eval/auth" in workflow
-    assert "pytest eval/auth" in workflow
-    assert "admin-backend" not in workflow
+    for gone in ("admin-backend", "admin-auth", "onolys-admin-auth", "eval/auth"):
+        assert gone not in workflow, gone
     assert not (ROOT / ".github/workflows/deploy-admin.yml").exists()
+    # eval-web typechecks/builds the prod sources it aliases, so web deps must be installed first.
+    match = re.search(r"^  eval-web:\n(.*?)(?=^  [a-z#]|\Z)", workflow, re.M | re.S)
+    assert match and "working-directory: web" in match.group(1) and "web/package-lock.json" in match.group(1)
+    regex = next(l for l in (ROOT / "scripts/ci/changes.sh").read_text().splitlines() if l.startswith("EVAL_WEB_EXTRA_RE="))
+    for needed in ("web/src/auth/", "web/src/api/client", "web/src/components/classes/"):
+        assert needed in regex, needed
+    assert "frontend/" not in regex
 
 
 if __name__ == "__main__":
@@ -120,5 +126,5 @@ if __name__ == "__main__":
     test_eval_package_is_registered()
     test_eval_site_packages_and_offline_jobs()
     test_deps_map_matches_pyproject_dependencies()
-    test_retired_admin_source_keeps_eval_auth_registered()
+    test_retired_admin_source_is_fully_removed()
     print("ok   changes.sh DEPS map matches pyproject dependencies")

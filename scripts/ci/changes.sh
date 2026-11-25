@@ -16,7 +16,6 @@ PACKAGES=(
   "oneshot:engines/oneshot:python"
   "miti:engines/miti:python"
   "api:api:python"
-  "admin-auth:eval/auth:python"
   "eval:eval/core:python"
   "eval-backend:eval/backend:python"
   "eval-web:eval/web:node"
@@ -41,12 +40,12 @@ EVAL_EXTRA_RE='^eval/datasets/'
 
 # Backend runtime configuration and image inputs are not Python package dependencies.
 EVAL_BACKEND_EXTRA_RE='^(config/|protocols/|\.dockerignore$)'
-# The SPA copies admin auth and maintains API types by hand; recheck those contracts.
+# The SPA aliases the prod web auth, API client and classes sources and maintains API types by hand; recheck those contracts.
 # These are source/data dependencies, not npm runtime edges in DEPS.
-EVAL_WEB_EXTRA_RE='^(frontend/src/auth/|frontend/src/transport/authFetch\.ts$|eval/backend/|api/openapi\.json$|docs/contracts/public/|engines/miti/src/onolys_miti/data/report\.schema\.json$)'
+EVAL_WEB_EXTRA_RE='^(web/src/auth/|web/src/api/client\.ts$|web/src/components/classes/|eval/backend/|api/openapi\.json$|docs/contracts/public/|engines/miti/src/onolys_miti/data/report\.schema\.json$)'
 
-# The infra job's tests import eval/auth (onolys_admin_auth), so eval/auth changes also run infra.
-INFRA_EXTRA_RE='^(eval/auth/|pyproject\.toml$|uv\.lock$)'
+# The infra job's static tests run in the root workspace env, so lock/root manifest changes also run infra.
+INFRA_EXTRA_RE='^(pyproject\.toml$|uv\.lock$)'
 
 # Direct workspace dependencies (name: deps), mirrored from each pyproject [project].dependencies.
 # A change in a package also runs every package that (transitively) depends on it.

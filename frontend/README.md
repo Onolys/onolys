@@ -4,7 +4,7 @@ Vite + React + strict TypeScript + Vitest. Sign-in, a 401/403 gate and one empty
 
 After sign-in the shell calls `GET {VITE_ADMIN_API_URL}/v1/me` with the Firebase ID token. 401 returns to sign-in, 403 shows "Not allowed" (account not on the admin allowlist), a network error or 5xx shows a retry button.
 
-The admin backend source and deployment workflow are retired. This frontend and its existing cloud resources remain in place; use mock mode for standalone local development. Shared evaluation auth now lives in [`eval/auth`](../eval/auth/pyproject.toml).
+The admin backend source and deployment workflow are retired. This frontend and its existing cloud resources remain in place; use mock mode for standalone local development. Evaluation auth now reuses the prod web app's [`web/src/auth`](../web/src/auth) (aliased by `eval/web`).
 
 ## Quickstart
 

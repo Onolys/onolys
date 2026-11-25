@@ -25,7 +25,6 @@ jobs:
       eval-backend: ${{ steps.flags.outputs.eval-backend }}
       eval-web: ${{ steps.flags.outputs.eval-web }}
       api: ${{ steps.flags.outputs.api }}
-      admin-auth: ${{ steps.flags.outputs.admin-auth }}
       frontend: ${{ steps.flags.outputs.frontend }}
       web: ${{ steps.flags.outputs.web }}
       infra: ${{ steps.flags.outputs.infra }}
@@ -209,7 +208,14 @@ jobs:
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: eval/web/package-lock.json
+          cache-dependency-path: |
+            eval/web/package-lock.json
+            web/package-lock.json
+      # eval/web aliases web/src/auth and imports web/src/api/client.ts and web/src/components/classes (prod sources),
+      # so their dependencies must be installed for the typecheck and build.
+      - name: Install prod web dependencies (types for the shared prod sources)
+        working-directory: web
+        run: npm ci
       - run: npm ci
       - run: npm test
       - run: npm run typecheck
@@ -464,21 +470,6 @@ jobs:
           docker run --rm --entrypoint test onolys-api:ci ! -e /src/eval/datasets
           docker image inspect onolys-api:ci --format 'image size bytes: {{.Size}}'
 
-  admin-auth:
-    needs: changes
-    if: needs.changes.outputs.admin-auth == 'true'
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v5
-        with:
-          enable-cache: true
-          cache-dependency-glob: uv.lock
-      - run: uv sync --frozen --package onolys-admin-auth
-      - run: uv run --no-sync --package onolys-admin-auth ruff check eval/auth
-      - run: uv run --no-sync --package onolys-admin-auth pytest eval/auth
-
   frontend:
     needs: changes
     if: needs.changes.outputs.frontend == 'true'
@@ -603,12 +594,12 @@ jobs:
       - name: Static infra tests (offline)
         working-directory: .
         run: |
-          uv sync --frozen --package onolys-admin-auth
-          uv run --no-sync --package onolys-admin-auth pytest infra/scripts -q
+          uv sync --frozen --package onolys-engine-core
+          uv run --no-sync --package onolys-engine-core pytest infra/scripts -q
 
   required:
     if: always()
-    needs: [changes, guards, engine-core, oneshot, miti, eval-core, eval-backend, eval-web, api-unit, api-emulator, api-coverage, api-flaky, api-rules, api-image, admin-auth, frontend, web, web-e2e, infra]
+    needs: [changes, guards, engine-core, oneshot, miti, eval-core, eval-backend, eval-web, api-unit, api-emulator, api-coverage, api-flaky, api-rules, api-image, frontend, web, web-e2e, infra]
     runs-on: ubuntu-latest
     timeout-minutes: 1
     permissions:

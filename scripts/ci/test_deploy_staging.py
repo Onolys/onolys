@@ -34,4 +34,11 @@ def depends_on_build(name):
 
 for name in jobs:
     assert depends_on_build(name), f"{name} can run before configuration validation"
+# R8a: the eval worker takes the same staging digest through the shared deploy workflow as env=eval.
+ev = jobs["deploy-worker-eval"]
+assert ev["uses"] == "./.github/workflows/_deploy-cloudrun.yml"
+assert ev["with"]["env"] == "eval" and ev["with"]["service"] == "onolys-worker-eval"
+assert ev["with"]["image"] == jobs["deploy-worker"]["with"]["image"] == "${{ needs.build.outputs.image }}"
+assert "build" in ev["needs"] and "deploy-worker" in ev["needs"]
+assert "env_vars" not in ev["with"], "Terraform owns eval runtime settings; image-only deploy"
 print("ok   staging LLM guard precedes all environment side effects and supplies API/worker")
