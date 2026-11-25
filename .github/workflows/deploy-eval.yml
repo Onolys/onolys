@@ -12,7 +12,8 @@ concurrency:
 permissions:
   contents: read
 env:
-  PROJECT: ${{ vars.GCP_PROJECT || 'onolys' }}
+  PROJECT: ${{ vars.EVAL_GCP_PROJECT || vars.GCP_PROJECT || 'onolys' }}
+  EVAL_SITE: ${{ vars.EVAL_GCP_PROJECT && vars.EVAL_HOSTING_SITE || 'onolys-eval-staging' }}
   REGION: ${{ vars.GCP_REGION || 'us-central1' }}
   FIREBASE_TOOLS_VERSION: 15.37.0
 
@@ -49,11 +50,18 @@ jobs:
         run: |
           echo "repo=${REGION}-docker.pkg.dev/${PROJECT}/onolys/eval-backend" >> "$GITHUB_OUTPUT"
           echo "worker_repo=${REGION}-docker.pkg.dev/${PROJECT}/onolys/eval-worker" >> "$GITHUB_OUTPUT"
+      - name: Validate isolated eval release target before cloud authentication
+        env:
+          EVAL_GCP_PROJECT: ${{ vars.EVAL_GCP_PROJECT }}
+          EVAL_WIF_PROVIDER: ${{ vars.EVAL_WIF_PROVIDER }}
+          EVAL_DEPLOYER_SA: ${{ vars.EVAL_DEPLOYER_SA }}
+          EVAL_HOSTING_SITE: ${{ vars.EVAL_HOSTING_SITE }}
+        run: python3 scripts/ci/release_target.py eval
       - id: auth
         uses: google-github-actions/auth@v2
         with:
-          workload_identity_provider: ${{ vars.WIF_PROVIDER }}
-          service_account: ${{ vars.DEPLOYER_STAGING_SA }}
+          workload_identity_provider: ${{ vars.EVAL_GCP_PROJECT && vars.EVAL_WIF_PROVIDER || vars.WIF_PROVIDER }}
+          service_account: ${{ vars.EVAL_GCP_PROJECT && vars.EVAL_DEPLOYER_SA || vars.DEPLOYER_STAGING_SA }}
           token_format: access_token
       - uses: google-github-actions/setup-gcloud@v2
       - name: Check eval services are provisioned and accessible before publishing images
@@ -115,7 +123,9 @@ jobs:
       service: onolys-worker-eval
       image: ${{ needs.build.outputs.worker_image }}
       region: ${{ vars.GCP_REGION || 'us-central1' }}
-      project: ${{ vars.GCP_PROJECT || 'onolys' }}
+      project: ${{ vars.EVAL_GCP_PROJECT || vars.GCP_PROJECT || 'onolys' }}
+      workload_identity_provider: ${{ vars.EVAL_GCP_PROJECT && vars.EVAL_WIF_PROVIDER || vars.WIF_PROVIDER }}
+      service_account: ${{ vars.EVAL_GCP_PROJECT && vars.EVAL_DEPLOYER_SA || vars.DEPLOYER_STAGING_SA }}
       git_sha: ${{ needs.build.outputs.sha }}
       # Terraform owns eval mode, routes, secrets and queue settings.
     secrets: inherit
@@ -133,8 +143,8 @@ jobs:
     steps:
       - uses: google-github-actions/auth@v2
         with:
-          workload_identity_provider: ${{ vars.WIF_PROVIDER }}
-          service_account: ${{ vars.DEPLOYER_STAGING_SA }}
+          workload_identity_provider: ${{ vars.EVAL_GCP_PROJECT && vars.EVAL_WIF_PROVIDER || vars.WIF_PROVIDER }}
+          service_account: ${{ vars.EVAL_GCP_PROJECT && vars.EVAL_DEPLOYER_SA || vars.DEPLOYER_STAGING_SA }}
       - id: deploy
         uses: google-github-actions/deploy-cloudrun@v2
         with:
@@ -171,7 +181,7 @@ jobs:
         working-directory: eval/web
         env:
           VITE_EVAL_API_URL: ${{ needs.deploy-backend.outputs.url }}
-          VITE_FIREBASE_PROJECT_ID: ${{ env.PROJECT }}
+          VITE_FIREBASE_PROJECT_ID: ${{ vars.GCP_PROJECT || 'onolys' }}
           VITE_FIREBASE_API_KEY: ${{ vars.PROD_VITE_FIREBASE_API_KEY }}
           VITE_FIREBASE_AUTH_DOMAIN: eval.onolys.com
           VITE_FIREBASE_APP_ID: ${{ vars.PROD_VITE_FIREBASE_APP_ID }}
@@ -188,8 +198,10 @@ jobs:
         run: bash scripts/ci/set_eval_origin.sh "${BACKEND_URL%/}" eval/web/firebase.json
       - uses: google-github-actions/auth@v2
         with:
-          workload_identity_provider: ${{ vars.WIF_PROVIDER }}
-          service_account: ${{ vars.DEPLOYER_STAGING_SA }}
+          workload_identity_provider: ${{ vars.EVAL_GCP_PROJECT && vars.EVAL_WIF_PROVIDER || vars.WIF_PROVIDER }}
+          service_account: ${{ vars.EVAL_GCP_PROJECT && vars.EVAL_DEPLOYER_SA || vars.DEPLOYER_STAGING_SA }}
+      - name: Configure the selected project Hosting target
+        run: python3 scripts/ci/release_target.py hosting eval/web/firebase.json "$PROJECT" eval-staging "$EVAL_SITE"
       - name: Deploy only eval-staging Hosting
         run: npx --yes firebase-tools@${{ env.FIREBASE_TOOLS_VERSION }} deploy --config eval/web/firebase.json --only "hosting:eval-staging" --project "$PROJECT" --non-interactive
 
@@ -207,8 +219,8 @@ jobs:
           ref: ${{ needs.build.outputs.sha }}
       - uses: google-github-actions/auth@v2
         with:
-          workload_identity_provider: ${{ vars.WIF_PROVIDER }}
-          service_account: ${{ vars.DEPLOYER_STAGING_SA }}
+          workload_identity_provider: ${{ vars.EVAL_GCP_PROJECT && vars.EVAL_WIF_PROVIDER || vars.WIF_PROVIDER }}
+          service_account: ${{ vars.EVAL_GCP_PROJECT && vars.EVAL_DEPLOYER_SA || vars.DEPLOYER_STAGING_SA }}
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -232,7 +244,7 @@ jobs:
             echo "attempt $i: /v1/me -> $code; retrying"; sleep 6
           done
           [ "$code" = 401 ] || { echo "anonymous /v1/me returned $code, want 401" >&2; exit 1; }
-          headers="$(curl -sfI --max-time 20 https://onolys-eval-staging.web.app/)"
+          headers="$(curl -sfI --max-time 20 "https://$EVAL_SITE.web.app/")"
           echo "$headers" | grep -i '^content-security-policy:' | grep -qF "$origin" \
             || { echo "Hosting CSP missing backend $origin" >&2; exit 1; }
           echo "ok anonymous /v1/me -> 401; Hosting CSP permits $origin"

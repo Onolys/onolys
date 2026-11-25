@@ -70,7 +70,9 @@ jobs:
       - name: Test deploy-prod staging image matcher
         run: python3 scripts/ci/test_staging_ran_image.py
       - name: Test staging LLM predeployment guard
-        run: python3 scripts/ci/test_deploy_staging.py
+        run: |
+          python3 scripts/ci/test_deploy_staging.py
+          python3 scripts/ci/test_release_targets.py
       - name: Test workflow_run fork-safety guard
         run: python3 scripts/ci/test_workflow_run_guard.py
       - name: Test no checkout after GCP auth in workflows

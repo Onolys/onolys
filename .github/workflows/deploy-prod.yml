@@ -54,6 +54,9 @@ env:
 
 jobs:
   resolve:
+    # Registry and staging provenance are read using the staging project and identity.
+    env:
+      PROJECT: ${{ vars.STAGING_GCP_PROJECT || vars.GCP_PROJECT || 'onolys' }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -69,6 +72,16 @@ jobs:
       # Checkout comes BEFORE auth: checkout cleans the workspace and would delete the gha-creds-*.json that auth writes
       # there. The default-ref checkout is only a git repo to move to the resolved sha later (no checkout after auth).
       - uses: actions/checkout@v4
+      - name: Validate isolated staging release target before cloud authentication
+        env:
+          STAGING_GCP_PROJECT: ${{ vars.STAGING_GCP_PROJECT }}
+          STAGING_WIF_PROVIDER: ${{ vars.STAGING_WIF_PROVIDER }}
+          STAGING_DEPLOYER_SA: ${{ vars.STAGING_DEPLOYER_SA }}
+          STAGING_HOSTING_SITE: ${{ vars.STAGING_HOSTING_SITE }}
+          STAGING_ISOLATED_VITE_FIREBASE_API_KEY: ${{ vars.STAGING_ISOLATED_VITE_FIREBASE_API_KEY }}
+          STAGING_ISOLATED_VITE_FIREBASE_AUTH_DOMAIN: ${{ vars.STAGING_ISOLATED_VITE_FIREBASE_AUTH_DOMAIN }}
+          STAGING_ISOLATED_VITE_FIREBASE_APP_ID: ${{ vars.STAGING_ISOLATED_VITE_FIREBASE_APP_ID }}
+        run: python3 scripts/ci/release_target.py staging
       - id: auth
         uses: google-github-actions/auth@v2
         with:
@@ -187,7 +200,8 @@ jobs:
       env: prod
       service: onolys-api-prod
       image: ${{ needs.resolve.outputs.image }}
-      region: us-central1
+      region: ${{ vars.GCP_REGION || 'us-central1' }}
+      project: ${{ vars.GCP_PROJECT || 'onolys' }}
       git_sha: ${{ needs.resolve.outputs.sha }}
       env_vars: |-
         LLM_PROVIDER=${{ needs.resolve.outputs.llm_provider }}
@@ -205,7 +219,8 @@ jobs:
       env: prod
       service: onolys-worker-prod
       image: ${{ needs.resolve.outputs.image }}
-      region: us-central1
+      region: ${{ vars.GCP_REGION || 'us-central1' }}
+      project: ${{ vars.GCP_PROJECT || 'onolys' }}
       git_sha: ${{ needs.resolve.outputs.sha }}
       env_vars: |-
         LLM_PROVIDER=${{ needs.resolve.outputs.llm_provider }}
@@ -223,7 +238,8 @@ jobs:
       env: prod
       service: onolys-voice-prod
       image: ${{ needs.resolve.outputs.image }}
-      region: us-central1
+      region: ${{ vars.GCP_REGION || 'us-central1' }}
+      project: ${{ vars.GCP_PROJECT || 'onolys' }}
       git_sha: ${{ needs.resolve.outputs.sha }}
       # Same image as the api; the mode comes from SERVICE_MODE (also set by Terraform on the service).
       env_vars: |-
