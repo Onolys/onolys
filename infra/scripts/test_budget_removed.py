@@ -23,7 +23,8 @@ def test_root_project_data_source_gone():
 
 
 def test_removed_block_keeps_existing_budget():
-    tf = all_tf()
+    # Other files remove unrelated resources; inspect the authoritative budget declaration.
+    tf = (ROOT / "budget.tf").read_text()
     start = tf.index("removed {")
     body = tf[start:tf.index("\n}\n", start)]
     assert re.search(r"from\s*=\s*google_billing_budget\.monthly", body)
