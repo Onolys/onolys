@@ -7,7 +7,8 @@ from types import SimpleNamespace
 import pytest
 from fastapi import HTTPException
 from onolys_api.repo.fake import FakeRepo
-from onolys_api.repo.models import transcript_sha256
+from onolys_api.repo.limits import LimitDefaults
+from onolys_api.repo.models import EvalRunInfo, eval_session_input_sha256, transcript_sha256
 from onolys_api.storage.fake import FakeBlobStore
 from onolys_engine_core.transcript_input import validate_transcript_input
 from test_uploads import gold, transcript
@@ -137,3 +138,28 @@ def test_double_create_race_is_noop(env, monkeypatch):
     sid = ensure_session(env, src())
     assert n_sessions(env) == 1
     assert env.repo.get_session(UID, sid).state == "awaiting_input"
+
+
+@pytest.mark.parametrize("language", [None, "auto"])
+def test_null_transcript_language_pin_matches_storage_and_admits_run(env, language):
+    data = transcript()
+    data["language"] = None
+    assert validate_transcript_input(data).language is None
+    env.datasets.write_json("datasets/synthetic/one/transcript.json", data)
+    sid = ensure_session(env, src(language=language))
+    session = env.repo.get_session(UID, sid)
+    stored = env.repo.get_transcript(UID, sid, "current")
+    assert session.language == stored.language == "en"
+    assert session.eval.input_sha256 == eval_session_input_sha256(
+        session.to_store(), stored.to_store(),
+    )
+    info = EvalRunInfo(
+        eval_run_id="group", combo_key="combo", repeat=0, engine="miti",
+        route_override={}, resolved_route={}, engine_version="test",
+    )
+    assert env.repo.start_run(
+        UID, sid, "run", "2026-11-25", LimitDefaults(eval_day=1, interview_day=1),
+        1, "test", 45, ("awaiting_input",), 1, None,
+        coded_span=session.coded_span.model_dump(), eval=info,
+    ) == "started"
+    assert env.repo.get_run(UID, sid, "run").language == stored.language

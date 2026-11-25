@@ -16,9 +16,10 @@ from onolys_api.repo.models import (
     EvalSessionInfo,
     SessionDoc,
     SessionStatusDoc,
+    TranscriptDoc,
     eval_session_input_sha256,
 )
-from onolys_api.transcript_store import store_transcript
+from onolys_api.transcript_store import session_language, store_transcript
 from onolys_engine_core.transcript_input import (
     inferred_clinician_speaker,
     validate_transcript_input,
@@ -119,9 +120,10 @@ def ensure_session(services, source: SessionSource) -> str:
             gold=gold_info,
         ),
     )
+    resolved_language = session_language(session.language, transcript.language)
+    pinned_transcript = TranscriptDoc.build(transcript, None, resolved_language)
     session.eval.input_sha256 = eval_session_input_sha256(
-        {**session.to_store(), "clinician_speaker": clinician},
-        {"sha256": transcript_sha, "language": transcript.language or session.language},
+        {**session.to_store(), "clinician_speaker": clinician}, pinned_transcript.to_store(),
     )
     try:
         repo.create_session(uid, sid, session, SessionStatusDoc(uid=uid))
