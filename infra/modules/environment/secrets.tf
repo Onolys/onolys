@@ -20,6 +20,26 @@ resource "google_secret_manager_secret" "admin_allowed_emails" {
   }
 }
 
+# Eval allowlist (PRD 03-eval-environment R6/R6a): shell only, value copied out of band / seed-secrets.py --allowlist.
+resource "google_secret_manager_secret" "eval_allowed_emails" {
+  count     = var.eval_backend_enabled ? 1 : 0
+  project   = var.project
+  secret_id = "eval-allowed-emails-${var.env}"
+
+  replication {
+    auto {}
+  }
+}
+
+# The eval-backend (api SA) reads only the HMAC key and the allowlist; provider keys stay worker-only.
+resource "google_secret_manager_secret_iam_member" "eval_allowed_emails" {
+  count     = var.eval_backend_enabled ? 1 : 0
+  project   = var.project
+  secret_id = google_secret_manager_secret.eval_allowed_emails[0].secret_id
+  role      = "roles/secretmanager.secretAccessor"
+  member    = "serviceAccount:${google_service_account.api.email}"
+}
+
 locals {
   # Keys are the env-var names (known at plan time); values the BASE secret ids (env suffix added below).
   worker_provider_secrets = merge(var.llm_secrets, var.stt_secrets)

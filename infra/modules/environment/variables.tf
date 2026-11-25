@@ -217,3 +217,21 @@ variable "max_active_runs" {
   type        = number
   default     = null
 }
+
+variable "datasets_bucket" {
+  description = "Datasets bucket name emitted as DATASETS_BUCKET on the eval-backend service (read-only use by the backend)."
+  type        = string
+  default     = ""
+}
+
+variable "eval_max_per_provider" {
+  description = "EVAL_MAX_PER_PROVIDER on the eval-backend service: max interviews in parallel per AI provider (enforced by the backend scheduler, not Terraform)."
+  type        = number
+  default     = 2
+}
+
+variable "eval_owner_uid" {
+  description = "EVAL_OWNER_UID on the eval-backend service: the single uid every allowlisted eval user acts as."
+  type        = string
+  default     = "eval"
+}

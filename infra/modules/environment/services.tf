@@ -6,6 +6,8 @@
 locals {
   runtime_env = coalesce(var.runtime_env, var.env)
   worker_url  = "https://onolys-worker-${var.env}-${data.google_project.this.number}.${var.region}.run.app"
+  # Deterministic run.app URL (same pattern as worker_url); the backend verifies Cloud Tasks OIDC against it.
+  eval_backend_url = "https://onolys-eval-backend-${var.env}-${data.google_project.this.number}.${var.region}.run.app"
   routes_env = [
     { name = "ROUTES_FILE", value = "config/${local.runtime_env}/routes.yaml" },
     { name = "DEFAULT_PRESET", value = var.default_preset },
@@ -292,6 +294,128 @@ resource "google_cloud_run_v2_service" "worker" {
   ]
 }
 
+resource "google_cloud_run_v2_service" "eval_backend" {
+  count               = var.eval_backend_enabled ? 1 : 0
+  project             = var.project
+  location            = var.region
+  name                = "onolys-eval-backend-${var.env}"
+  ingress             = "INGRESS_TRAFFIC_ALL"
+  deletion_protection = false
+
+  template {
+    # Same SA as the module's api (identical grants by construction, PRD 03 R4).
+    service_account                  = google_service_account.api.email
+    timeout                          = "60s"
+    max_instance_request_concurrency = 20
+
+    scaling {
+      min_instance_count = 0 # Cloud Tasks wakes it
+      max_instance_count = var.api_max_instances
+    }
+
+    containers {
+      image = var.placeholder_image
+
+      resources {
+        limits = {
+          cpu    = "1"
+          memory = "1Gi"
+        }
+        cpu_idle = true
+      }
+
+      env {
+        name  = "GIT_SHA"
+        value = var.git_sha
+      }
+      env {
+        name  = "SERVICE_MODE"
+        value = "api"
+      }
+      env {
+        name = "UID_HMAC_KEY"
+        value_source {
+          secret_key_ref {
+            secret  = google_secret_manager_secret.uid_hmac.secret_id
+            version = "latest"
+          }
+        }
+      }
+      env {
+        name  = "BLOB_SIGNER_EMAIL"
+        value = google_service_account.api.email
+      }
+      env {
+        name  = "CORS_ORIGINS"
+        value = join(",", var.eval_cors_origins)
+      }
+      env {
+        name  = "SERVICE_URL"
+        value = local.eval_backend_url
+      }
+      env {
+        name  = "TASKS_OIDC_AUDIENCE"
+        value = local.eval_backend_url
+      }
+      env {
+        name  = "DATASETS_BUCKET"
+        value = var.datasets_bucket
+      }
+      env {
+        name  = "EVAL_MAX_PER_PROVIDER"
+        value = tostring(var.eval_max_per_provider)
+      }
+      env {
+        name  = "EVAL_OWNER_UID"
+        value = var.eval_owner_uid
+      }
+      env {
+        name = "EVAL_ALLOWED_EMAILS"
+        value_source {
+          secret_key_ref {
+            secret  = google_secret_manager_secret.eval_allowed_emails[0].secret_id
+            version = "latest"
+          }
+        }
+      }
+      dynamic "env" {
+        for_each = local.platform_env
+        content {
+          name  = env.value.name
+          value = env.value.value
+        }
+      }
+      dynamic "env" {
+        for_each = local.routes_env
+        content {
+          name  = env.value.name
+          value = env.value.value
+        }
+      }
+    }
+  }
+
+  lifecycle {
+    ignore_changes = [
+      template[0].containers[0].image,
+      template[0].revision,
+      client,
+      scaling,
+      client_version,
+      labels["commit-sha"],
+      labels["managed-by"],
+      template[0].labels["commit-sha"],
+      template[0].labels["managed-by"],
+      template[0].labels["goog-terraform-provisioned"],
+    ]
+  }
+
+  depends_on = [
+    google_secret_manager_secret_iam_member.hmac,
+    google_secret_manager_secret_iam_member.eval_allowed_emails,
+  ]
+}
+
 resource "google_cloud_run_v2_service" "admin_backend" {
   count               = var.admin_enabled ? 1 : 0
   project             = var.project
@@ -394,6 +518,16 @@ resource "google_cloud_run_v2_service_iam_member" "worker_tasks_invoker" {
   name     = google_cloud_run_v2_service.worker.name
   role     = "roles/run.invoker"
   member   = "serviceAccount:${google_service_account.tasks_invoker.email}"
+}
+
+# Auth is in-app (Firebase ID token + allowlist), same as the legacy eval service.
+resource "google_cloud_run_v2_service_iam_member" "eval_backend_public" {
+  count    = var.eval_backend_enabled ? 1 : 0
+  project  = var.project
+  location = var.region
+  name     = google_cloud_run_v2_service.eval_backend[0].name
+  role     = "roles/run.invoker"
+  member   = "allUsers"
 }
 
 resource "google_cloud_run_v2_service_iam_member" "admin_public" {

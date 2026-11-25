@@ -48,12 +48,39 @@ def test_missing_env_value():
     assert run(c2, {}).ok and not c2.adds  # existing version kept
 
 
-def test_admin_emails_only_when_requested():
+def test_allowlist_only_when_requested():
     c = Fake()
-    run(c, {"ANTHROPIC_API_KEY": "k", "ADMIN_ALLOWED_EMAILS": "a@x.com"})
-    assert "admin-allowed-emails-staging" not in c.v
-    run(c, {"ANTHROPIC_API_KEY": "k", "ADMIN_ALLOWED_EMAILS": "a@x.com"}, admin=True)
-    assert c.v["admin-allowed-emails-staging"] == b"a@x.com"
+    run(c, {"ANTHROPIC_API_KEY": "k", "EVAL_ALLOWED_EMAILS": "a@x.com"}, target="eval")
+    assert "eval-allowed-emails-eval" not in c.v
+    run(c, {"ANTHROPIC_API_KEY": "k", "EVAL_ALLOWED_EMAILS": "a@x.com"}, target="eval", allowlist=True)
+    assert c.v["eval-allowed-emails-eval"] == b"a@x.com"
+    assert c.v["anthropic-api-key-eval"] == b"k" and "uid-hmac-key-eval" in c.v
+
+
+def test_allowlist_missing_fails_and_existing_kept():
+    c = Fake()
+    assert not run(c, {"ANTHROPIC_API_KEY": "k"}, target="eval", allowlist=True).ok
+    c2 = Fake({"eval-allowed-emails-eval": b"keep"})
+    assert run(c2, {"ANTHROPIC_API_KEY": "k"}, target="eval", allowlist=True).ok
+    assert c2.v["eval-allowed-emails-eval"] == b"keep"
+
+
+def test_no_admin_flag_or_env():
+    src = pathlib.Path(__file__).with_name("seed-secrets.py").read_text()
+    assert "ADMIN_ALLOWED_EMAILS" not in src and "--admin" not in src and "admin-allowed-emails" not in src
+
+
+def test_cli_accepts_env_eval_and_allowlist(monkeypatch, capsys):
+    calls = {}
+
+    def fake_seed(client, **kw):
+        calls.update(kw)
+        return seed.Report()
+
+    monkeypatch.setattr(seed, "SecretManager", lambda project: object())
+    monkeypatch.setattr(seed, "seed", fake_seed)
+    assert seed.main(["--env", "eval", "--allowlist"]) == 0
+    assert calls["env"] == "eval" and calls["allowlist"] is True
 
 
 def test_report_has_no_values():

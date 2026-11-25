@@ -71,3 +71,12 @@ output "voice_service_name" {
 output "voice_sa_email" {
   value = one(google_service_account.voice[*].email)
 }
+
+output "eval_backend_url" {
+  description = "Eval-backend service URL; null unless eval_backend_enabled."
+  value       = one(google_cloud_run_v2_service.eval_backend[*].uri)
+}
+
+output "eval_backend_service_name" {
+  value = one(google_cloud_run_v2_service.eval_backend[*].name)
+}

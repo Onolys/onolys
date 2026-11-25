@@ -174,6 +174,8 @@ module "eval" {
   notification_channel_ids = []
   public_api_enabled       = false
   eval_mode                = true
+  eval_backend_enabled     = true
+  datasets_bucket          = google_storage_bucket.eval_staging.name
   eval_cap_day             = 1000000
   max_active_runs          = 1000
   cors_origins = [

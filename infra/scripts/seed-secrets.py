@@ -5,7 +5,7 @@ Usage (staging; keys from the environment, never from argv or files in the repo)
   set -a; . ~/.config/onolys/keys.env; set +a
   python3 infra/scripts/seed-secrets.py --env staging
   # other provider keys: --map ENVVAR=base-secret-id (repeatable; replaces the default map; written to <base>-{env})
-  # admin allowlist:     ADMIN_ALLOWED_EMAILS="a@x.com,b@y.com" ... --admin
+  # eval allowlist:      EVAL_ALLOWED_EMAILS="a@x.com,b@y.com" ... --env eval --allowlist (rotation only)
 
 Provider keys are per environment: base id `gemini-api-key` is written to `gemini-api-key-{env}` (default map:
 GEMINI_API_KEY, the evaluation LLM, and ANTHROPIC_API_KEY, kept for the `claude` routes preset).
@@ -46,7 +46,7 @@ def _put(client, rep, sid, value: bytes):
         rep.add(sid, "created" if cur is None else "new version")
 
 
-def seed(client, *, env, provider_maps, environ, admin=False):
+def seed(client, *, env, provider_maps, environ, allowlist=False):
     rep = Report()
     hmac_id = f"uid-hmac-key-{env}"
     if client.latest_value(hmac_id) is None:
@@ -63,15 +63,15 @@ def seed(client, *, env, provider_maps, environ, admin=False):
             rep.add(sid, f"unchanged ({name} not set)")
         else:
             rep.add(sid, f"MISSING: set {name}", fail=True)
-    if admin:
-        sid = f"admin-allowed-emails-{env}"
-        val = environ.get("ADMIN_ALLOWED_EMAILS")
+    if allowlist:
+        sid = f"eval-allowed-emails-{env}"
+        val = environ.get("EVAL_ALLOWED_EMAILS")
         if val:
             _put(client, rep, sid, val.encode())
         elif client.latest_value(sid) is None:
-            rep.add(sid, "MISSING: set ADMIN_ALLOWED_EMAILS", fail=True)
+            rep.add(sid, "MISSING: set EVAL_ALLOWED_EMAILS", fail=True)
         else:
-            rep.add(sid, "unchanged (ADMIN_ALLOWED_EMAILS not set)")
+            rep.add(sid, "unchanged (EVAL_ALLOWED_EMAILS not set)")
     return rep
 
 
@@ -110,14 +110,14 @@ class SecretManager:
 
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--env", required=True, choices=["staging", "prod"])
+    ap.add_argument("--env", required=True, choices=["staging", "prod", "eval"])
     ap.add_argument("--project", default="onolys")
     ap.add_argument("--map", action="append", default=[], metavar="ENVVAR=secret-id",
                     help="provider key (repeatable); default GEMINI_API_KEY=gemini-api-key and ANTHROPIC_API_KEY=anthropic-api-key (base id; --env suffix is added)")
-    ap.add_argument("--admin", action="store_true", help="also seed admin-allowed-emails-{env} from ADMIN_ALLOWED_EMAILS")
+    ap.add_argument("--allowlist", action="store_true", help="also seed eval-allowed-emails-{env} from EVAL_ALLOWED_EMAILS")
     a = ap.parse_args(argv)
     maps = dict(m.split("=", 1) for m in a.map) if a.map else dict(DEFAULT_MAP)
-    rep = seed(SecretManager(a.project), env=a.env, provider_maps=maps, environ=os.environ, admin=a.admin)
+    rep = seed(SecretManager(a.project), env=a.env, provider_maps=maps, environ=os.environ, allowlist=a.allowlist)
     print("\n".join(rep.lines))
     return 0 if rep.ok else 1
 
