@@ -115,6 +115,13 @@ class WorkflowTests(unittest.TestCase):
         web = str(workflow['jobs']['web'])
         self.assertIn('release_target.py hosting web/firebase.json', web)
         self.assertIn('hosting:app-staging', web)
+        steps = workflow['jobs']['web']['steps']
+        setup = next(i for i, step in enumerate(steps) if step.get('uses', '').startswith('google-github-actions/setup-gcloud@'))
+        voice = next(i for i, step in enumerate(steps) if 'release_target.py voice' in step.get('run', ''))
+        auth = next(i for i, step in enumerate(steps) if step.get('uses', '').startswith('google-github-actions/auth@'))
+        self.assertLess(auth, setup)
+        self.assertLess(setup, voice)
+        self.assertEqual(steps[setup]['if'], "vars.STAGING_GCP_PROJECT != ''")
 
     def test_eval_keeps_production_auth_but_uses_eval_deployer(self):
         workflow = self.workflow('deploy-eval.yml')
