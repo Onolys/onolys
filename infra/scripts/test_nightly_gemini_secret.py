@@ -104,3 +104,14 @@ def test_service_account_can_access_only_exact_staging_secret():
     # No project-wide grant or extra resource grants can hide next to the narrow binding.
     assert len(re.findall(r'resource "google_secret_manager_secret_iam_member"', terraform())) == 1
     assert 'resource "google_project_iam_' not in terraform()
+
+
+def test_isolated_staging_pauses_only_the_legacy_paid_job():
+    job = live_job()
+    condition = re.search(r'^    if: >-\n(.*?)(?=^    \S)', job, re.M | re.S)[1]
+    assert "vars.STAGING_GCP_PROJECT == '' &&" in condition
+    # The activation switch must not pause offline coverage or create a skipped-job dependency.
+    other_jobs = workflow().replace('  api-real-mode:\n' + job, '')
+    assert 'STAGING_GCP_PROJECT' not in other_jobs
+    assert 'needs: api-real-mode' not in other_jobs
+    assert '  full-offline:\n' in other_jobs

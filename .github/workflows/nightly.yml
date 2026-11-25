@@ -18,8 +18,10 @@ jobs:
     uses: ./.github/workflows/ci.yml
 
   api-real-mode:
-    # Fixture STT/repo/blobs; real Gemini uses the same staging key as the runtime.
+    # The legacy Gemini reader bills onolys. Pause paid checks after staging isolation
+    # until a separately scoped isolated Nightly identity and key are provisioned.
     if: >-
+      vars.STAGING_GCP_PROJECT == '' &&
       github.ref == 'refs/heads/main' &&
       (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
