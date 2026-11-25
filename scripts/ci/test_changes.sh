@@ -109,6 +109,8 @@ run false "core=false oneshot=false miti=false api=false eval=false eval-backend
 run false "core=false oneshot=false miti=false api=false eval=false eval-backend=false eval-web=true frontend=false web=false infra=false" web/src/api/client.ts
 run false "core=false oneshot=false miti=false api=false eval=false eval-backend=false eval-web=true frontend=false web=false infra=false" web/src/components/classes.ts
 run false "core=false oneshot=false miti=false api=false eval=false eval-backend=false eval-web=true frontend=false web=false infra=false" web/src/api/errors.ts
+run false "core=false oneshot=false miti=false api=false eval=false eval-backend=false eval-web=true frontend=false web=false infra=false" web/package-lock.json
+run false "core=false oneshot=false miti=false api=false eval=false eval-backend=false eval-web=true frontend=false web=false infra=false" web/package.json
 run false "core=false oneshot=false miti=false api=false eval=false eval-backend=false eval-web=false frontend=true web=false infra=false" frontend/src/auth/AuthGate.tsx
 run false "core=false oneshot=false miti=false api=true eval=false eval-backend=true eval-web=true frontend=false web=false infra=false" api/openapi.json
 run false "core=false oneshot=false miti=false api=true eval=false eval-backend=true eval-web=false frontend=false web=false infra=false" api/openapi.json.bak

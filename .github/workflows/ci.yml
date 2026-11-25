@@ -211,8 +211,8 @@ jobs:
           cache-dependency-path: |
             eval/web/package-lock.json
             web/package-lock.json
-      # eval/web aliases web/src/auth and imports web/src/api/client.ts and web/src/components/classes (prod sources),
-      # so their dependencies must be installed for the typecheck and build.
+      # eval/web aliases web/src/auth and imports web/src/api and web/src/components/classes.ts (prod sources),
+      # so web/package.json and web/package-lock.json dependencies must be installed for the typecheck and build.
       - name: Install prod web dependencies (types for the shared prod sources)
         working-directory: web
         run: npm ci

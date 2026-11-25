@@ -12,7 +12,7 @@ web app --/v1--> api (+ worker) --registry--> MitiEngine (onolys_miti)
                     |                           |-- speech-to-text
                     |                           `-- voice (Gemini Live)
                     `-- Firestore, Cloud Storage, Cloud Tasks
-eval site --/v1--> eval backend --onolys_admin_auth--> Identity Platform + allowlist
+eval site --/v1--> eval backend --onolys_api.auth + eval allowlist--> Identity Platform + allowlist
 ```
 
 ## Shared engine core: `onolys_engine_core`
@@ -57,7 +57,7 @@ A React + TypeScript app. It talks to the api on the same origin (`/v1`), listen
 
 ## Evaluation auth and retained admin frontend
 
-The evaluation backend uses `eval/auth` (`onolys_admin_auth`) to verify Identity Platform tokens and the email allowlist. See [shared auth](reference/backend-api.md). The former admin backend source and deployment workflow have been retired. `frontend/` remains the legacy sign-in shell; its existing cloud resources and `admin.onolys.com` auth domain are retained. [ADR 0023](decisions/0023-admin-deployment-and-auth.md) records the original deployment design.
+The evaluation backend reuses the prod api auth (`onolys_api.auth` `IdTokenVerifier` / `verify_claims`) to verify Identity Platform tokens, plus an eval email allowlist (`EVAL_ALLOWED_EMAILS`, `eval/backend` `allowlist.py`). See [shared auth](reference/backend-api.md). The former admin backend source and deployment workflow have been retired. `frontend/` remains the legacy sign-in shell; its existing cloud resources and `admin.onolys.com` auth domain are retained. [ADR 0023](decisions/0023-admin-deployment-and-auth.md) records the original deployment design.
 
 ## Infrastructure
 

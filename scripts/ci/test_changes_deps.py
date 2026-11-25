@@ -114,7 +114,7 @@ def test_retired_admin_source_is_fully_removed() -> None:
     match = re.search(r"^  eval-web:\n(.*?)(?=^  [a-z#]|\Z)", workflow, re.M | re.S)
     assert match and "working-directory: web" in match.group(1) and "web/package-lock.json" in match.group(1)
     regex = next(l for l in (ROOT / "scripts/ci/changes.sh").read_text().splitlines() if l.startswith("EVAL_WEB_EXTRA_RE="))
-    for needed in ("web/src/auth/", "web/src/api/", "web/src/components/classes\\.ts"):
+    for needed in ("web/src/auth/", "web/src/api/", "web/src/components/classes\\.ts", "web/package(-lock)?\\.json"):
         assert needed in regex, needed
     assert "frontend/" not in regex
 
