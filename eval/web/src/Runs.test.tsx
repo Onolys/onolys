@@ -180,7 +180,7 @@ it('history searches the complete saved configuration across cursor pages withou
  await screen.findByRole('button', { name: 'Actions for Evening' });
  expect(api.runs.mock.calls[1][1]).toBe('tail'); expect(api.run).not.toHaveBeenCalled();
  fireEvent.change(screen.getByLabelText('Search history'), { target: { value: '0.12345' } });
- expect(screen.getAllByRole('link')).toHaveLength(1);
+ expect(screen.getAllByRole('link', { name: 'saved' })).toHaveLength(1);
  fireEvent.change(screen.getByLabelText('Search history'), { target: { value: '' } });
  for (const name of ['Date', 'Dataset', 'Status', 'Engines', 'Models', 'Tiers', 'Efforts']) {
    if (name !== 'Date') expect(screen.getByLabelText(`Filter ${name}`)).toBeTruthy();
@@ -191,7 +191,7 @@ it('history searches the complete saved configuration across cursor pages withou
    expect(column.getAttribute('aria-sort')).toBe('descending');
  }
  fireEvent.change(screen.getByLabelText('Filter Models'), { target: { value: 'claude' } });
- expect(screen.getAllByRole('link')).toHaveLength(1);
+ expect(screen.getAllByRole('link', { name: 'saved' })).toHaveLength(1);
  fireEvent.change(screen.getByLabelText('Date from'), { target: { value: '2026-11-24' } });
  expect(screen.queryAllByRole('link')).toHaveLength(0);
 });
@@ -234,10 +234,10 @@ it('full-history search keeps partial rows on a failed page and retries the same
  await screen.findByRole('link', { name: 'saved' });
  fireEvent.change(screen.getByLabelText('Search history'), { target: { value: 'saved' } });
  expect((await screen.findByRole('alert')).textContent).toContain('Results are incomplete');
- expect(screen.getAllByRole('link')).toHaveLength(1);
+ expect(screen.getAllByRole('link', { name: 'saved' })).toHaveLength(1);
  fireEvent.click(screen.getByRole('button', { name: 'Retry history' }));
  await screen.findByText('All 2 saved runs searched.');
- expect(screen.getAllByRole('link')).toHaveLength(2);
+ expect(screen.getAllByRole('link', { name: 'saved' })).toHaveLength(2);
  expect(runs.mock.calls.map(call => call[1])).toEqual([undefined, 'p2', 'p2']);
 });
 it('config omits private run references and offers manual copying on clipboard failure', async () => {
@@ -342,4 +342,17 @@ it('deleteRun posts confirm_run_id to /runs/{id}/delete', async () => {
  const fetcher = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ run_id: 'r 1', status: 'deleting' }) });
  await createEvalApi('https://x', fetcher as unknown as typeof fetch).deleteRun('r 1');
  expect(fetcher).toHaveBeenCalledWith('https://x/v1/runs/r%201/delete', expect.objectContaining({ method: 'POST', body: JSON.stringify({ confirm_run_id: 'r 1' }) }));
+});
+it.each(['done','partial','queued','running','failed','cancelled','deleting'] as const)('offers Compare only with finished results: %s',async status=>{
+ const run={...detail(status),run_id:`entry-${status}`};
+ const client={...createEvalApi('',vi.fn()),run:vi.fn().mockResolvedValue(run),runs:vi.fn().mockResolvedValue({runs:[run]})};
+ const onNavigate=vi.fn();
+ const view=render(<RunView api={client} runId={run.run_id} onRerun={vi.fn()} onNavigate={onNavigate}/>);
+ await act(async()=>{});
+ if(status==='done'||status==='partial'){
+  const link=screen.getByRole('link',{name:'Compare'});expect(link.getAttribute('href')).toContain(`run=entry-${status}&view=compare&tab=overview`);fireEvent.click(link);expect(onNavigate).toHaveBeenCalledWith({run:run.run_id,view:'compare',tab:'overview'});
+ }else{expect(screen.queryByRole('link',{name:'Compare'})).toBeNull();expect(screen.getByText('Compare opens when the run has finished results')).toBeTruthy();}
+ view.unmount();
+ render(<History api={client} onOpen={vi.fn()} onRerun={vi.fn()} onNavigate={onNavigate}/>);await act(async()=>{});
+ expect(Boolean(screen.queryByRole('link',{name:'Compare'}))).toBe(status==='done'||status==='partial');
 });

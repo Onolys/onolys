@@ -6,8 +6,10 @@ import { PublicOnly, RequireVerified } from '@prod-auth/guards';
 import { Login } from '@prod-auth/pages/Login';
 import type { AuthService } from '@prod-auth/types';
 import { createEvalApi, type RunSummary } from './api';
-import { buildCompareUrl, type CompareUrlState } from './compare/compareUrl';
+import { parseCompareUrl } from './compare/compareUrl';
+import { navigateEval } from './evalNavigation';
 import { History, RunView } from './Runs';
+import { CompareApp } from './compare/CompareApp';
 import { getConfig } from './config';
 import { NewRun } from './NewRun';
 import { NoAccess } from './NoAccess';
@@ -16,13 +18,7 @@ import { createAuthFetch } from './transport/authFetch';
 import './app.css';
 import { Button } from '@onolys/ui';
 
-/** Query navigation shared by run links and Compare drill-downs. */
-export function navigateEval(state: CompareUrlState, saved?: RunSummary) {
-  const url = new URL(window.location.href);
-  url.search = buildCompareUrl(state, url.searchParams);
-  window.history.pushState(saved ? { initialRun: saved } : {}, '', url);
-  window.dispatchEvent(new PopStateEvent('popstate'));
-}
+export { navigateEval } from './evalNavigation';
 const browserFetch: typeof fetch = (input, init) => fetch(input, init);
 /** Prod-app pages the Login links to; they are not mounted here, accounts are made and verified in the prod app. */
 const PROD_ONLY_PATHS = ['/signup', '/forgot-password', '/verify-email', '/auth/action'];
@@ -74,7 +70,7 @@ function AllowedApp({ baseFetch }: { baseFetch: typeof fetch }) {
       {access === 'loading' && <p role="status">Checking access…</p>}
       {access === 'error' && <div role="alert"><p>Could not reach the server.</p><Button onClick={() => { setAccess('loading'); setAttempt(n => n + 1); }}>Retry</Button></div>}
       {access === 'allowed' && <>
-        {runId ? <RunView key={runId} api={api} runId={runId} onRerun={rerun} /> : location.get('view') === 'history' ? <History api={api} onOpen={navigate} onRerun={rerun} /> : <NewRun key={initialRun?.run_id ?? 'new'} api={api} initialRun={initialRun} onRunCreated={navigate} />}
+        {runId && location.get('view') === 'compare' ? <CompareApp key={runId} api={api} runId={runId} state={parseCompareUrl(location)} navigate={navigateEval} /> : runId ? <RunView key={runId} api={api} runId={runId} onRerun={rerun} /> : location.get('view') === 'history' ? <History api={api} onOpen={navigate} onRerun={rerun} /> : <NewRun key={initialRun?.run_id ?? 'new'} api={api} initialRun={initialRun} onRunCreated={navigate} />}
       </>}
   </>;
 }

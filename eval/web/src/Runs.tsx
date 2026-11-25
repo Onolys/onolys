@@ -5,6 +5,8 @@ import { CancelRunDialog, CancellationNote, canCancelRun, isActiveRun, mergeRunS
 import { PartialBadge, ProviderSkipNotices, partialStatusText, providerName } from './RunStatus';
 import { RunConfigDialog, savedConfiguration } from './RunConfigDialog';
 import './runs.css';
+import { CompareLink, type CompareNavigate } from './compare/CompareLink';
+import { navigateEval } from './evalNavigation';
 import type { EvalApi, RunDetail, RunSummary, RunUnit } from './api';
 
 const errorMessage = (error: unknown) => error instanceof Error ? error.message : 'Could not load run. Please try again.';
@@ -74,7 +76,7 @@ function UnitOutput({ api, runId, unit }: { api: EvalApi; runId: string; unit: R
   }, [api, runId, unit.unit_id, open, output, attempt]);
   return <><button type="button" aria-expanded={open} onClick={() => setOpen(value => !value)}>{open ? 'Hide' : 'View'} JSON {unit.unit_id}</button>{open && (error ? <div role="alert">{error}<button onClick={() => { setError(''); setAttempt(n => n + 1); }}>Retry JSON</button></div> : output === undefined ? <p role="status">Loading JSON…</p> : <pre>{JSON.stringify(output, null, 2)}</pre>)}</>;
 }
-export function RunView({ api, runId, onRerun }: { api: EvalApi; runId: string; onRerun: (run: RunSummary) => void }) {
+export function RunView({ api, runId, onRerun, onNavigate = navigateEval }: { api: EvalApi; runId: string; onRerun: (run: RunSummary) => void; onNavigate?: CompareNavigate }) {
   const [run, setRun] = useState<RunDetail>();
   const [error, setError] = useState('');
   const [attempt, setAttempt] = useState(0);
@@ -111,6 +113,7 @@ export function RunView({ api, runId, onRerun }: { api: EvalApi; runId: string; 
     {!run ? (!error && <p role="status">Loading run…</p>) : <>
       <p role="status">{run.status === 'partial' ? 'partial' : statusLabel(run, cancelRequested)} · {run.done_units}/{run.total_units} runs done · {run.failed_units} failed · {run.cancelled_units} cancelled</p>
       <CancellationNote run={run} />
+      <CompareLink run={run} navigate={onNavigate} />
       {canCancelRun(run) && <Button onClick={event => { cancelTrigger.current = event.currentTarget; setToCancel(run); }}>Cancel run</Button>}
       <button onClick={() => onRerun(run)}>Rerun with different engines/presets</button>
       <Button variant="outline" onClick={event => { configTrigger.current = event.currentTarget; setConfiguration(run); }}>Config</Button>
@@ -128,7 +131,7 @@ export function RunView({ api, runId, onRerun }: { api: EvalApi; runId: string; 
     </>}<CancelRunDialog api={api} run={toCancel} returnFocus={cancelTrigger} onClose={() => setToCancel(null)} onUpdated={fresh => { if (!isActiveRun(fresh)) stop.current(); setRun(fresh); }} /><RunConfigDialog returnFocus={configTrigger} run={configuration} onClose={() => setConfiguration(null)} />
   </section>;
 }
-export function History({ api, onOpen, onRerun }: { api: EvalApi; onOpen: (id: string) => void; onRerun: (run: RunSummary) => void }) {
+export function History({ api, onOpen, onRerun, onNavigate = navigateEval }: { api: EvalApi; onOpen: (id: string) => void; onRerun: (run: RunSummary) => void; onNavigate?: CompareNavigate }) {
   const [runs, setRuns] = useState<RunSummary[]>();
   const [error, setError] = useState('');
   const [attempt, setAttempt] = useState(0);
@@ -222,7 +225,7 @@ export function History({ api, onOpen, onRerun }: { api: EvalApi; onOpen: (id: s
         <tbody>{visible.map(run => <tr key={run.run_id}>{historyColumns.map(column => <td key={column} data-label={column}>{column === 'Dataset' ? <a href={`?run=${encodeURIComponent(run.run_id)}`} onClick={event => {
           if (event.button === 0 && !event.ctrlKey && !event.metaKey && !event.shiftKey && !event.altKey) { event.preventDefault(); onOpen(run.run_id); }
         }}>{inputName(run)}</a> : column === 'Date' ? <time dateTime={run.created_at}>{dateText(run.created_at)}</time> : column === 'Status' ? <div>{run.status === 'partial' ? <PartialBadge run={run} /> : <Badge variant="outline" className="max-w-full whitespace-normal">{columnValue(run, column)}</Badge>}{isActiveRun(run) && <p>{run.done_units} of {run.total_units} runs done</p>}<CancellationNote run={run} /><ProviderSkipNotices skips={run.provider_skips} short /></div> : columnValue(run, column)}</td>)}
-          <td className="history-actions" data-label="Actions"><RunActions run={run} onCancel={(saved, trigger) => { cancelTrigger.current = trigger; setToCancel(saved); }} onRerun={onRerun} onConfig={(saved, trigger) => { configTrigger.current = trigger; setConfiguration(saved); }} onDelete={target => { setDeleteError(''); setToDelete(target); }} /></td></tr>)}</tbody>
+          <td className="history-actions" data-label="Actions"><CompareLink run={run} navigate={onNavigate} /><RunActions run={run} onCancel={(saved, trigger) => { cancelTrigger.current = trigger; setToCancel(saved); }} onRerun={onRerun} onConfig={(saved, trigger) => { configTrigger.current = trigger; setConfiguration(saved); }} onDelete={target => { setDeleteError(''); setToDelete(target); }} /></td></tr>)}</tbody>
       </table>{visible.length === 0 && <p>No runs match these filters.</p>}</>}
     {loading && <p role="status">{exhaustive ? 'Loading full history for search, filters and sorting…' : 'Loading history…'}</p>}
     {nextCursor && !error && <Button disabled={loading} onClick={() => { setLoading(true); setCursor(nextCursor); }}>Load more</Button>}

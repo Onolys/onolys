@@ -104,3 +104,16 @@ it('preserves compare drill-down state during pushState navigation', () => {
  expect(new URLSearchParams(window.location.search).get('session')).toBe('s1');
  expect(new URLSearchParams(window.location.search).get('combos')).toBe('miti|m/t/e');
 });
+it('opens Compare separately and restores tab URL navigation and browser back',async()=>{
+ const overview=(await import('./compare/fixtures/overview.json')).default;
+ const analysis=(await import('./compare/fixtures/analysis.json')).default;
+ window.history.replaceState({},'', '/?run=r1&view=compare&tab=overview');
+ const baseFetch=vi.fn(async(input:RequestInfo|URL)=>{
+  const path=String(input);return new Response(JSON.stringify(path.includes('/compare/overview')?overview:path.includes('/compare/analysis')?analysis:path.endsWith('/me')?{}:{run_id:'r1',status:'done',input:{dataset_id:'saved',session_ids:['s1']},combo_labels:{},units:[]}));
+ });
+ render(<Root service={fake('a@example.com')} baseFetch={baseFetch}/>);
+ expect(await screen.findByRole('heading',{name:'Synthetic lines'})).toBeTruthy();expect(screen.queryByRole('heading',{name:'Unit progress'})).toBeNull();
+ fireEvent.click(screen.getByRole('tab',{name:'More analysis'}));await waitFor(()=>expect(window.location.search).toContain('tab=more'));
+ await waitFor(()=>expect(screen.getByRole('tab',{name:'More analysis'}).getAttribute('aria-selected')).toBe('true'));
+ window.history.back();await waitFor(()=>expect(screen.getByRole('tab',{name:'Overview'}).getAttribute('aria-selected')).toBe('true'));
+});
