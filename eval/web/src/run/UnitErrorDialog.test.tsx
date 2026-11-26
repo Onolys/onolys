@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
 import type { RunUnit } from '../api';
 import { unitLogsUrl } from './logsUrl';
@@ -59,5 +59,5 @@ it('focus returns to the badge on close', async () => {
   fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' });
   await act(async () => {});
   expect(screen.queryByRole('dialog')).toBeNull();
-  expect(document.activeElement).toBe(b);
+  await waitFor(() => expect(document.activeElement).toBe(b));
 });

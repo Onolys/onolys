@@ -49,7 +49,7 @@ it('restores an existing backend run from its URL after reload and handles brows
     } : { runs: [] }));
   });
   const view = render(<Root service={fake('a@example.com')} baseFetch={baseFetch} />);
-  expect(await screen.findByRole('heading', { name: 'Run saved/run' })).toBeTruthy();
+  expect(await screen.findByRole('heading', { name: 'Run - saved/run' })).toBeTruthy();
   expect(baseFetch.mock.calls.some(call => String(call[0]).endsWith('/v1/runs/saved%2Frun'))).toBe(true);
   expect(baseFetch.mock.calls.some(call => String(call[0]).includes('/datasets'))).toBe(false);
   window.history.pushState({}, '', '/?view=history');
@@ -113,7 +113,7 @@ it('opens Compare separately and restores tab URL navigation and browser back',a
   const path=String(input);return new Response(JSON.stringify(path.includes('/compare/overview')?overview:path.includes('/compare/analysis')?analysis:path.endsWith('/me')?{}:{run_id:'r1',status:'done',input:{dataset_id:'saved',session_ids:['s1']},combo_labels:{},units:[]}));
  });
  render(<Root service={fake('a@example.com')} baseFetch={baseFetch}/>);
- expect(await screen.findByRole('heading',{name:'Synthetic lines'})).toBeTruthy();expect(screen.queryByRole('heading',{name:'Unit progress'})).toBeNull();
+ expect(await screen.findByRole('heading',{name:'Compare - Synthetic lines'})).toBeTruthy();expect(screen.queryByRole('heading',{name:'Unit progress'})).toBeNull();
  fireEvent.click(screen.getByRole('tab',{name:'More analysis'}));await waitFor(()=>expect(window.location.search).toContain('tab=more'));
  await waitFor(()=>expect(screen.getByRole('tab',{name:'More analysis'}).getAttribute('aria-selected')).toBe('true'));
  window.history.back();await waitFor(()=>expect(screen.getByRole('tab',{name:'Overview'}).getAttribute('aria-selected')).toBe('true'));
