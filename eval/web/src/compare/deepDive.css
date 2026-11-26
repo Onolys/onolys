@@ -42,7 +42,28 @@
 .deep-bucket-legend { display:flex; flex-wrap:wrap; gap:.4rem .9rem; }
 .deep-bucket-stats { display:grid; font-size:.8125rem; color:var(--muted-foreground,#536160); }
 .deep-bucket-stats strong { font-size:1rem; color:var(--foreground,#171c1c); }
-.deep-lines td button { min-width:2.5rem; min-height:2.5rem; }
+/* P/R/F1 table: inline F1 bar with P/R beneath */
+.deep-prf .ui-note { margin:.5rem 0 0; }
+.deep-prf-legend { display:inline-flex; gap:.6rem; }
+.deep-f1 { display:grid; gap:.1rem; min-width:0; }
+.deep-f1-line { display:flex; align-items:center; gap:.45rem; min-width:0; }
+.deep-f1-track { flex:0 1 4.5rem; min-width:1.5rem; width:4.5rem; height:.55rem; border-radius:3px; background:var(--muted,#f7f9f9); overflow:hidden; }
+.deep-f1-track>span { display:block; height:100%; border-radius:3px; }
+.deep-f1-sub { color:var(--muted-foreground,#536160); font-size:.75rem; }
+.deep-f1-na { color:var(--muted-foreground,#536160); }
+/* Confusion grid (CSS grid, behind a toggle) */
+.deep-confusion-section { margin:1rem 0; }
+.deep-confusion { display:grid; gap:2px; margin:.75rem 0; min-width:0; font-size:.8125rem; }
+.deep-conf-row { display:grid; grid-template-columns:minmax(5rem,1.4fr) repeat(var(--cols,1),minmax(0,1fr)); gap:2px; }
+.deep-conf-head { display:flex; align-items:center; min-width:0; padding:.3rem .4rem; font-weight:600; background:var(--muted,#f7f9f9); overflow-wrap:anywhere; justify-content:center; text-align:center; }
+.deep-conf-rowhead { justify-content:flex-start; text-align:left; }
+.deep-conf-cell { display:flex; min-width:0; }
+.deep-conf-cell button { width:100%; min-height:2.5rem; padding:.2rem; font:inherit; font-weight:600; border:1px solid var(--border,#d3dbda); border-radius:3px; background:transparent; color:inherit; cursor:pointer; }
+.deep-conf-cell button:disabled { cursor:default; color:var(--muted-foreground,#536160); font-weight:400; }
+.deep-conf-cell button:focus-visible { outline:2px solid var(--ring,#0b5f5a); outline-offset:1px; }
+.deep-conf-multi { grid-template-columns:minmax(5rem,1.4fr) minmax(0,1fr); }
+.deep-agree { background:rgba(23,91,66,.5); }
+.deep-confused { background:rgba(180,83,9,.5); }
 .deep-reasoning-columns { display:flex; flex-wrap:wrap; gap:1rem; }
 .deep-reasoning-columns>section { flex:1 1 15rem; min-width:0; border:1px solid var(--border); padding:.75rem; }
 .deep-verbatim,.deep-reasoning blockquote { white-space:pre-wrap; overflow-wrap:anywhere; }

@@ -1,11 +1,12 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { ChartFrame } from './ChartFrame';
+import { useEffect, useRef, useState } from 'react';
 import { EvalLink } from './CompareLink';
 import type { CompareDeepDive, CompareOptions, NA, Snippet } from './compareApi';
 import type { CompareTabProps } from './compareTypes';
 import { GlobalsDotPlot } from './charts/GlobalsDotPlot';
 import { MissBuckets } from './charts/MissBuckets';
 import { CountBars } from './charts/CountBars';
+import { PrfTable } from './charts/PrfTable';
+import { ConfusionGrid } from './charts/ConfusionGrid';
 import type { DotSeries } from './charts/dotPlotLayout';
 import { ComboSelector, pairedSessions } from './charts/ComboSelector';
 import { failedCombos } from './failedCombos';
@@ -14,12 +15,6 @@ import './deepDive.css';
 const unavailable=(na:NA|undefined)=>`n/a${na?` - ${na.reason}`:''}`;
 const metricNames:Record<string,string>={cct:'Cultivating change talk',sst:'Softening sustain talk',partnership:'Partnership',empathy:'Empathy'};
 type Props=CompareTabProps<CompareDeepDive>;
-function Scroll({name,children}:{name:string;children:ReactNode}) {
- // Keyboard focus makes the wide chart or data table scrollable without a pointer.
- // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex
- return <div className="table-scroll" role="region" aria-label={name} tabIndex={0}>{children}</div>;
-}
-
 function ReasoningPanel({code,combo,letter,count,api,runId,selected}:{code:string;combo?:string;letter:string;count:number|undefined;api:Props['api'];runId:string;selected:string[]}) {
  const [snippets,setSnippets]=useState<Snippet[]>([]);
  const [notes,setNotes]=useState<{session_id:string;turn_id:string;note:string}[]>([]);
@@ -46,22 +41,10 @@ function ReasoningPanel({code,combo,letter,count,api,runId,selected}:{code:strin
  </section>;
 }
 
-function ConfusionGrid({current,combo,letter,selected,onMatch,interactive}:{current:CompareDeepDive['lines']['combos'][string];combo:string;letter:string;selected:string[];onMatch:(options:CompareOptions)=>void;interactive:boolean}) {
- const rows=Object.keys(current.confusion);
- const columns=[...new Set(Object.values(current.confusion).flatMap(row=>Object.keys(row)))];
- return <table aria-label={interactive?'Confusion grid':'Confusion data'}><caption>Human row vs {letter} column · {current.aligned} aligned lines · n={current.n}</caption><thead><tr><th scope="col">Human / combo</th>{columns.map(code=><th key={code} scope="col">{code}</th>)}</tr></thead><tbody>{rows.map(human=><tr key={human}><th scope="row">{human}</th>{columns.map(prediction=>{
-  const value=current.confusion[human][prediction];
-  return <td key={prediction}>{interactive?<button type="button" disabled={value===undefined||value===0} data-confusion-value={value??0} aria-label={`Human ${human}, ${letter} ${prediction}: ${value??0}`} onClick={()=>onMatch({combos:selected,combo,code:human,metric:prediction})}>{value??0}</button>:value??0}</td>;
- })}</tr>)}<tr><th scope="row">multi (multiple codes on either side)</th><td colSpan={Math.max(columns.length,1)}>{interactive?<button type="button" data-confusion-multi data-confusion-value={current.multi} disabled={!current.multi} onClick={()=>onMatch({combos:selected,combo,code:'multi',metric:'multi'})}>{current.multi}</button>:current.multi}</td></tr></tbody></table>;
-}
-
-function LineAgreement({data,legend,runId,navigate,state,api}:Props) {
+function LineAgreement({data,legend,runId,navigate,state,api,series}:Props&{series:DotSeries[]}) {
  const selected=data.combos.map(combo=>combo.combo_key);
  const letter=(key:string)=>legend.find(item=>item.combo.combo_key===key)?.letter??key;
- const available=selected.filter(key=>data.lines.combos[key]&&!data.lines.combos[key].lane);
- const [choice,setChoice]=useState<string>();
- const key=choice&&available.includes(choice)?choice:available[0];
- const current=key?data.lines.combos[key]:undefined;
+ const available=series.filter(item=>data.lines.combos[item.key]&&!data.lines.combos[item.key].lane);
  const [matches,setMatches]=useState<{options:CompareOptions;ids:string[]}|null>(null);
  const lastOptions=useRef<CompareOptions|undefined>(undefined);
  const [loading,setLoading]=useState(false);
@@ -76,14 +59,12 @@ function LineAgreement({data,legend,runId,navigate,state,api}:Props) {
   }catch(reason){if(!controller.signal.aborted)setError(reason instanceof Error?reason.message:'Could not load matching sessions.');}
   finally{if(!controller.signal.aborted)setLoading(false);}
  };
- if(data.lines.missing)return <section><h3>Per-line agreement</h3><p>no line-level output ({data.lines.missing})</p></section>;
- const prf=<table aria-label="Line agreement"><caption>Precision, recall and F1 by code and combo</caption><thead><tr><th scope="col">Code</th><th scope="col">Combo</th><th scope="col">Precision</th><th scope="col">Recall</th><th scope="col">F1</th><th scope="col">Sessions / aligned lines</th></tr></thead><tbody>{available.flatMap(combo=>Object.entries(data.lines.combos[combo]?.per_code??{}).map(([code,values])=><tr key={`${combo}-${code}`}><th scope="row">{code}</th><td>{letter(combo)}</td><td>{values.p??'n/a'}</td><td>{values.r??'n/a'}</td><td>{values.f1??'n/a'}</td><td>n={data.lines.combos[combo].n} · {data.lines.combos[combo].aligned} aligned · {data.lines.combos[combo].repeats} repeats</td></tr>))}</tbody></table>;
- return <section className="deep-lines"><h3>Per-line agreement</h3><p>{data.lines.codes_labeled.length} of 10 codes labeled</p>{data.lines.dataset_notes.map((note,index)=><p key={index}>{note}</p>)}
-  {selected.filter(combo=>data.lines.combos[combo]?.lane).map(combo=><p key={combo}>no line-level output ({letter(combo)})</p>)}
-  {available.length>0&&<><ChartFrame title="Precision / recall / F1" howToRead="Each value uses only the codes this dataset labels. n counts sessions; aligned lines and repeat counts come from the server." table={prf}><Scroll name="Line agreement results">{prf}</Scroll></ChartFrame>
-   <label>Confusion combo <select aria-label="Confusion combo" value={key} onChange={event=>{pending.current?.abort();setLoading(false);setError(undefined);setChoice(event.target.value);setMatches(null);}}>{available.map(combo=><option key={combo} value={combo}>{letter(combo)}</option>)}</select></label>
-   <ChartFrame title="Confusion" howToRead="Rows are human labels and columns are combo labels. The separate multi bucket includes lines with several codes on either side; those lines are excluded from the grid. Open a cell to find matching sessions in Line view." table={<ConfusionGrid current={current!} combo={key} letter={letter(key)} selected={selected} onMatch={options=>void find(options)} interactive={false}/>}><Scroll name="Confusion results"><ConfusionGrid current={current!} combo={key} letter={letter(key)} selected={selected} onMatch={options=>void find(options)} interactive/></Scroll></ChartFrame>
-   {loading&&<p role="status">Loading matching sessions…</p>}{error&&<div role="alert"><p>{error}</p><button type="button" onClick={()=>{if(lastOptions.current)void find(lastOptions.current);}}>Retry matching sessions</button></div>}{matches&&(matches.ids.length?<ul aria-label="Matching sessions">{matches.ids.map(session=><li key={session}><EvalLink state={{...state,view:'compare',run:runId,tab:'lines',...matches.options,session,only:'disagree'}} navigate={navigate}>{session}</EvalLink></li>)}</ul>:<p>No matching sessions</p>)}
+ if(data.lines.missing)return <section><h3>Per-line agreement</h3><p className="deep-empty">no line-level output ({data.lines.missing})</p></section>;
+ return <section className="deep-lines"><h3>Per-line agreement</h3>
+  {series.filter(item=>data.lines.combos[item.key]?.lane).map(item=><p key={item.key} className="deep-empty">no line-level output ({letter(item.key)})</p>)}
+  {available.length>0&&<><PrfTable lines={data.lines} series={available}/>
+   <ConfusionGrid combos={data.lines.combos} series={available} onSwitch={()=>{pending.current?.abort();setLoading(false);setError(undefined);setMatches(null);}} onMatch={pick=>void find({combos:selected,...pick})} footer={<>
+    {loading&&<p role="status">Loading matching sessions…</p>}{error&&<div role="alert"><p>{error}</p><button type="button" onClick={()=>{if(lastOptions.current)void find(lastOptions.current);}}>Retry matching sessions</button></div>}{matches&&(matches.ids.length?<ul aria-label="Matching sessions">{matches.ids.map(session=><li key={session}><EvalLink state={{...state,view:'compare',run:runId,tab:'lines',...matches.options,session,only:'disagree'}} navigate={navigate}>{session}</EvalLink></li>)}</ul>:<p>No matching sessions</p>)}</>}/>
   </>}
  </section>;
 }
@@ -107,7 +88,7 @@ export function DeepDive(props:Props) {
     return <section key={metric} ref={node=>{sectionRefs.current[metric]=node;}}><GlobalsDotPlot metric={metric} title={`${metricNames[metric]??metric} ratings`} dots={dots} series={series} cells={cells}/></section>;
    })}</div><MissBuckets globals={globals.map(([metric,cells])=>({metric,title:metricNames[metric]??metric,cells}))} series={series}/></section>
    <section><h3>Counts per code</h3><CountBars codes={codes} human={data.counts.human} cells={data.counts.cells} bias={data.counts.bias_pct} series={series} onSection={(code,node)=>{sectionRefs.current[code]=node;}}/></section>
-   <LineAgreement key={selected.join(',')} {...props}/>
+   <LineAgreement key={selected.join(',')} {...props} series={series}/>
    <section className="deep-reasoning"><h3>Reasoning roll-up</h3><p>Snippets load on request, up to 50 per page. Empty saved reasoning is shown as withheld.</p>{codes.map(code=><section key={code}><h4>{code}</h4><div className="deep-reasoning-columns"><section aria-label={`${code} Human`}><h5>Human</h5><p>Count: {data.counts.human?.[code]?.value??unavailable(data.counts.human?.[code]?.na)} · n={data.counts.human?.[code]?.n??0}</p><ReasoningPanel key={`${code}-human-${selected.join(',')}`} code={code} letter="Human" count={undefined} api={api} runId={runId} selected={selected}/></section>{shown.map(combo=><ReasoningPanel key={`${code}-${combo.combo_key}-${selected.join(',')}`} code={code} combo={combo.combo_key} letter={letter(combo.combo_key)} count={data.rationale_counts[code]?.[combo.combo_key]} api={api} runId={runId} selected={selected}/>)}</div></section>)}</section>
   </>}
  </div>;

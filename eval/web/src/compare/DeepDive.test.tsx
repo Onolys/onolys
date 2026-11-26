@@ -26,20 +26,22 @@ it('renders server values, same-cohort human means, n/of, bias words, dots and t
  const card=view.container.querySelector('[data-count-card="gi"]') as HTMLElement;
  expect(within(card).queryByRole('table',{name:'gi counts'})).toBeNull();fireEvent.click(within(card).getByRole('button',{name:'Show data'}));
  expect(within(card).getByRole('table',{name:'gi counts'}).textContent).toContain('paired 2 of 2');
- expect(screen.getAllByRole('table',{name:'Line agreement'})[0].textContent).toContain('Precision');
+ expect(screen.getAllByRole('table',{name:'Line agreement'})[0].textContent).toContain('F1');
  expect(screen.getByText('10 of 10 codes labeled')).toBeTruthy();expect(p.api.compareReasoning).not.toHaveBeenCalled();
 });
+const openGrid=()=>fireEvent.click(screen.getByRole('button',{name:'Show confusion grid'}));
 it.each([['human','no line-level output (human)'],['both','no line-level output (both)']])('hides line charts for %s missing output',(missing,text)=>{
  const data=deep();data.lines.missing=missing;render(<DeepDive {...props(data)}/>);
- expect(screen.getByText(text)).toBeTruthy();expect(screen.queryByRole('table',{name:'Line agreement'})).toBeNull();expect(screen.queryByLabelText('Confusion combo')).toBeNull();
+ expect(screen.getByText(text)).toBeTruthy();expect(screen.queryByRole('table',{name:'Line agreement'})).toBeNull();expect(screen.queryByRole('button',{name:'Show confusion grid'})).toBeNull();
 });
 it('names a missing combo and switches the confusion matrix without losing multi',()=>{
  const data=deep(), key=data.combos[0].combo_key;data.lines.combos[key].lane='no line-level output';data.lines.combos[data.combos[1].combo_key].lane=null;
  const view=render(<DeepDive {...props(data)}/>);expect(screen.getByText('no line-level output (A)')).toBeTruthy();
- expect(screen.getByLabelText('Confusion combo')).toHaveProperty('value',data.combos[1].combo_key);expect(view.container.querySelector('[data-confusion-multi]')).toBeTruthy();
+ expect(view.container.querySelector('.deep-confusion')).toBeNull();openGrid();
+ expect(within(screen.getByRole('group',{name:'Confusion combo'})).getByRole('button',{name:'Combo B'}).getAttribute('aria-pressed')).toBe('true');expect(view.container.querySelector('[data-confusion-multi]')).toBeTruthy();
 });
 it('keeps confusion totals plus multi equal aligned lines and resolves matching sessions in one request',async()=>{
- const p=props(), key=p.data.combos[0].combo_key;const view=render(<DeepDive {...p}/>);
+ const p=props(), key=p.data.combos[0].combo_key;const view=render(<DeepDive {...p}/>);openGrid();
  expect(Array.from(view.container.querySelectorAll('[data-confusion-value]')).reduce((sum,node)=>sum+Number(node.getAttribute('data-confusion-value')),0)).toBe(p.data.lines.combos[key].aligned);
  const button=screen.getAllByRole('button',{name:/Human question, A question:/})[0];fireEvent.click(button);
  expect(await screen.findByRole('link',{name:'synthetic-s01'})).toBeTruthy();
@@ -87,7 +89,7 @@ it('retains an explicit selection even if its Count error is unavailable and ren
 });
 it('reports empty matching sessions and supports retry after a matching-session failure',async()=>{
  const p=props();p.api.compareLineMatches.mockRejectedValueOnce(new Error('Match lookup failed')).mockResolvedValueOnce({session_ids:[]});
- render(<DeepDive {...p}/>);fireEvent.click(screen.getByRole('button',{name:/Human sr, A cr:/}));
+ render(<DeepDive {...p}/>);openGrid();fireEvent.click(screen.getByRole('button',{name:/Human sr, A cr:/}));
  expect(await screen.findByText('Match lookup failed')).toBeTruthy();fireEvent.click(screen.getByRole('button',{name:'Retry matching sessions'}));
  expect(await screen.findByText('No matching sessions')).toBeTruthy();expect(p.navigate).not.toHaveBeenCalled();
 });
@@ -95,7 +97,7 @@ it('reports empty matching sessions and supports retry after a matching-session 
 it('switches displayed confusion data and links the multi bucket with exact filters',async()=>{
  const p=props(),second=p.data.combos[1].combo_key;
  p.data.lines.combos[second]={...structuredClone(p.data.lines.combos[p.data.combos[0].combo_key]),confusion:{none:{none:2}},multi:3,aligned:5};
- const view=render(<DeepDive {...p}/>);fireEvent.change(screen.getByLabelText('Confusion combo'),{target:{value:second}});
+ const view=render(<DeepDive {...p}/>);openGrid();fireEvent.click(within(screen.getByRole('group',{name:'Confusion combo'})).getByRole('button',{name:'Combo B'}));
  expect(screen.getByRole('button',{name:'Human none, B none: 2'})).toBeTruthy();expect(screen.queryByRole('button',{name:/Human sr, A cr/})).toBeNull();
  const multi=view.container.querySelector('[data-confusion-multi]')!;fireEvent.click(multi);
  await act(async()=>{});expect(p.api.compareLineMatches).toHaveBeenLastCalledWith('r1',expect.objectContaining({combo:second,code:'multi',metric:'multi'}),expect.any(AbortSignal));
