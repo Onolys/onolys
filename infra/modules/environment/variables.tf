@@ -57,6 +57,12 @@ variable "placeholder_image" {
   default     = "us-docker.pkg.dev/cloudrun/container/hello"
 }
 
+variable "api_min_instances" {
+  description = "Min instances for the public api Cloud Run service (0 = scale to zero). Prod sets 1 to avoid cold starts."
+  type        = number
+  default     = 0
+}
+
 variable "api_max_instances" {
   type    = number
   default = 3
@@ -199,12 +205,6 @@ variable "eval_backend_enabled" {
   description = "Creates the allowlisted eval-backend service, its grants and the allowlist secret (eval instance only)."
   type        = bool
   default     = false
-}
-
-variable "eval_backend_min_instances" {
-  description = "Min instances for the eval-backend Cloud Run service (0 = scale to zero; Cloud Tasks wakes it). Eval sets 1 to avoid cold starts."
-  type        = number
-  default     = 0
 }
 
 variable "eval_cors_origins" {

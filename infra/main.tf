@@ -78,6 +78,7 @@ module "prod" {
   worker_concurrency       = var.worker_concurrency
   worker_max_instances     = var.worker_max_instances
   api_max_instances        = 10
+  api_min_instances        = 1 # prod keeps one warm api instance
   llm_secrets              = var.llm_secrets
   stt_secrets              = var.stt_secrets
   git_sha                  = var.git_sha["prod"]

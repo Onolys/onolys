@@ -95,12 +95,12 @@ module "environment" {
   public_api_enabled   = var.environment == "staging"
   eval_mode            = var.environment == "eval"
   eval_backend_enabled = var.environment == "eval"
-  # Warm instance for the eval backend (eval only; staging/prod keep the module default of 0).
-  eval_backend_min_instances = var.environment == "eval" ? 1 : 0
-  eval_cors_origins          = local.eval_cors_origins
-  datasets_bucket            = local.datasets_bucket
-  eval_cap_day               = var.environment == "eval" ? 1000000 : 10
-  max_active_runs            = var.environment == "eval" ? 1000 : null
+  # Warm api instance in prod only (staging stays at 0).
+  api_min_instances = var.environment == "prod" ? 1 : 0
+  eval_cors_origins = local.eval_cors_origins
+  datasets_bucket   = local.datasets_bucket
+  eval_cap_day      = var.environment == "eval" ? 1000000 : 10
+  max_active_runs   = var.environment == "eval" ? 1000 : null
   # Auth email stays off: cross-project email permissions are not granted implicitly.
   resend_secret_wired = var.resend_secret_wired
 
