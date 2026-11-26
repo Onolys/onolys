@@ -130,7 +130,7 @@ it('marks disagreeing rows with a warning chip and text, others unmarked; muted 
 });
 it('renders speaker chips, a human lane and one lane chip per combo in a fixed, non-scrolling layout',()=>{
  const p=props();const view=render(<LineView {...p}/>);const row=view.container.querySelector('[data-turn="t5"]') as HTMLElement;
- expect(row.querySelector('td[data-label="Speaker"] .ui-chip')?.textContent).toBe('A');expect(row.querySelector('[data-human]')).toBeTruthy();
+ expect(row.querySelector('td[data-label="Speaker"] .ui-chip')?.textContent).toBe('Speaker A');expect(row.querySelector('[data-human]')).toBeTruthy();
  expect(row.querySelectorAll('td[data-label^="Combo "] .line-chip')).toHaveLength(p.data.combos.length);expect([...view.container.querySelectorAll('thead th')].slice(4)).toHaveLength(p.data.combos.length);
  expect(view.container.querySelector('.line-lanes .table-scroll')).toBeNull();
  const css=lineCss;expect(css).toMatch(/table-layout:\s*fixed/);expect(css).not.toMatch(/overflow(-x)?\s*:\s*(auto|scroll)/);expect(css).toMatch(/@media \(max-width: 760px\)[\s\S]*display: block/);
@@ -192,4 +192,12 @@ it('keeps an explicit combo selection over the best-three default',async()=>{
  render(<CompareApp api={p.api} runId="r1" state={{view:'compare',tab:'lines',session:'synthetic-s01',combos:['c0','c1']}} navigate={p.navigate}/>);
  await screen.findByLabelText('Combo');
  expect(p.api.compareLines).toHaveBeenCalledWith('r1','synthetic-s01',expect.objectContaining({combos:['c0','c1']}),expect.any(AbortSignal));
+});
+
+it('speaker chips differ from combo tag letters and use a compact label',()=>{
+ const p=props();const view=render(<LineView {...p}/>);
+ const speakers=[...view.container.querySelectorAll('td[data-label="Speaker"] .ui-chip')].map(c=>c.textContent??'');
+ const letters=new Set(p.legend.map(l=>l.letter));expect(speakers.length).toBeGreaterThan(0);
+ for(const text of speakers){expect(letters.has(text)).toBe(false);expect(text).toMatch(/^Speaker /);}
+ expect(lineCss.replace(/@media[^{]*/g,"")).not.toMatch(/(^|[^-])width:\s*\d+px/);
 });

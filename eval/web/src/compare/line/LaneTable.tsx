@@ -6,6 +6,8 @@ import '../lineView.css';
 
 export interface LaneTurn { id: string; speaker: string; is_clinician: boolean; text: string }
 export const MAX_LANES = 3;
+/** Speaker chip text: a bare id like A/B becomes "Speaker A" so it is never mistaken for a combo tag letter; names/roles pass through. */
+export const speakerLabel = (speaker: string) => (speaker.length <= 2 ? `Speaker ${speaker}` : speaker);
 export const laneLabel = (value: string[]) => value.length ? value.join(', ') : 'none';
 
 /**
@@ -26,7 +28,7 @@ export function LaneTable({ turns, selected, human, lane, letter, index, unavail
     const flagged = isDisagreement(turn.id);
     return <tr key={turn.id} data-turn={turn.id} className={flagged ? 'line-disagree' : undefined}>
      <th scope="row" data-label="Turn"><button type="button" ref={node => setTrigger(turn.id, node)} aria-label={`Inspect turn ${turn.id}`} onClick={event => inspect(turn.id, event.currentTarget)}>{turn.id}</button>{flagged && <span aria-label="Disagreement"> <Chip tone="warning">Disagrees</Chip></span>}</th>
-     <td data-label="Speaker" className="line-verbatim"><Chip tone={turn.is_clinician ? 'info' : 'neutral'}>{turn.speaker}</Chip></td>
+     <td data-label="Speaker" className="line-verbatim"><Chip tone={turn.is_clinician ? 'info' : 'neutral'}>{speakerLabel(turn.speaker)}</Chip></td>
      <td data-label="Transcript" data-transcript className="line-verbatim">{turn.text}</td>
      <td data-label="Human" data-human>{human[turn.id] === undefined ? '' : laneLabel(human[turn.id])}</td>
      {selected.map(key => <td key={key} data-label={`Combo ${letter(key)}`}><p className="line-chip">{unavailable(key, turn.id) ?? lane(key)?.turns[turn.id]?.map(laneLabel).join(' / ') ?? ''}</p></td>)}
