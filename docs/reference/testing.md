@@ -116,9 +116,9 @@ Staging PR previews (Hosting channels on `onolys-app-staging`) need their host i
 python3 infra/scripts/identity-config.py --domains-only --add-domain <channel-host>
 ```
 
-- Auth: ADC for the Identity Platform project that owns the app's sign-in (`onolys`, shared with prod, and the issuer for eval; isolated staging uses its own `onolys-staging` once `STAGING_GCP_PROJECT` is set, so use that project's config instead). The staging deployer SA needs Identity Platform admin: `roles/firebaseauth.admin`.
+- Auth: ADC for the Identity Platform project that owns the app's sign-in. Previews and staging run in the isolated `onolys-staging` project with its own user pool (not shared with prod); eval has its own pool in `onolys-eval`. The staging deployer SA needs Identity Platform admin: `roles/firebaseauth.admin`.
 - Idempotent and add-only (union with the live list; it never removes). Terraform ignores `authorized_domains` drift, so added hosts are not pruned on apply.
-- Hosts accumulate (limit 1000); prune closed-PR hosts occasionally by PATCHing `authorizedDomains` on `https://identitytoolkit.googleapis.com/admin/v2/projects/onolys/config` (PR previews run only while staging is legacy; they pause once `STAGING_GCP_PROJECT` is set).
+- Hosts accumulate (limit 1000); prune closed-PR hosts occasionally by PATCHing `authorizedDomains` on `https://identitytoolkit.googleapis.com/admin/v2/projects/onolys-staging/config`.
 
 ## Preview acceptance (SP00 task 9), measured 2026-11-21
 
@@ -135,15 +135,15 @@ PR #35 preview: web `onolys-app-staging--pr-35-kkj34ogl.web.app`, API tag `pr-35
 
 ### Test user for previews and staging
 
-The API rejects unverified emails, so a normal signup cannot sign in without the verify link. Create a pre-verified user instead (ADC, quota project `onolys`):
+The API rejects unverified emails, so a normal signup cannot sign in without the verify link. Create a pre-verified user instead (ADC; default project `onolys-eval`; for PR previews and staging pass `--project onolys-staging`; only `onolys-eval` and `onolys-staging` are accepted, anything else exits 2):
 
 ```
-python3 infra/scripts/create-test-user.py [--email EMAIL] [--password PASSWORD]
+python3 infra/scripts/create-test-user.py --project onolys-staging [--email EMAIL] [--generate] [--update]   # password: $ONOLYS_ACCOUNT_PASSWORD or prompt
 ```
 
-It prints `email:` and `password:` (defaults: `test-onolys-<8 hex>@onolys.com` and a generated strong password; an existing email exits non-zero and is not modified). Open the PR preview (or staging) `/login` and sign in with email and password. Google sign-in does not work on previews (see above).
+It prints `email:` and `project:`, and `password:` only when the password was generated (`--generate`, or no `--email`, and no `$ONOLYS_ACCOUNT_PASSWORD`/`--password` given); default email `test-onolys-<8 hex>@onolys.com`. An existing email exits non-zero and is not modified. Open the PR preview (or staging) `/login` and sign in with email and password. Google sign-in does not work on previews (see above).
 
-The Firebase Auth user pool is shared by staging and prod (only the Firestore databases are separate), so the account also exists in prod's pool. Delete test users in the Firebase console (Authentication, Users) when done.
+The `onolys-staging` user pool is isolated from prod, so the account does not exist in prod. For eval accounts use `--project onolys-eval` (the default); eval has no self sign-up, so operator-created accounts are the only way in. Delete test users in the Firebase console (Authentication, Users) of the matching project when done.
 
 Owner/infra action: Google sign-in on previews needs each channel host added to the authorised domains (workflow step plus `roles/firebaseauth.admin` for the preview deployer), or accept email/password only on previews. Acceptance criterion 4 (preview sign-in) is met for email/password only.
 

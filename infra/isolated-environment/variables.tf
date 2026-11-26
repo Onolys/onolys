@@ -32,17 +32,17 @@ variable "audio_bucket_name" {
 }
 
 variable "auth_project" {
-  description = "Firebase token issuer project; null uses the local project for staging and existing onolys identity for eval."
+  description = "Firebase token issuer project; null uses this runtime project (staging and eval each sign in through their own project)."
   type        = string
   default     = null
 }
 
 variable "manage_identity" {
-  description = "Create local Identity Platform config and a web app for validation. Never manages an external auth project."
+  description = "Create this project's Identity Platform config (email/password) and Firebase web app. Staging and eval set it true; never manages an external auth project."
   type        = bool
   default     = false
   validation {
-    condition     = !var.manage_identity || coalesce(var.auth_project, var.environment == "eval" ? "onolys" : var.project) == var.project
+    condition     = !var.manage_identity || coalesce(var.auth_project, var.project) == var.project
     error_message = "Identity management is allowed only when auth_project equals this runtime project."
   }
 }
@@ -138,7 +138,7 @@ variable "resend_secret_wired" {
   type        = bool
   default     = false
   validation {
-    condition     = !var.resend_secret_wired || (var.app_base_url != "" && coalesce(var.auth_project, var.environment == "eval" ? "onolys" : var.project) == var.project)
+    condition     = !var.resend_secret_wired || (var.app_base_url != "" && coalesce(var.auth_project, var.project) == var.project)
     error_message = "Auth email requires a nonempty supported app_base_url and identity in this runtime project."
   }
 }

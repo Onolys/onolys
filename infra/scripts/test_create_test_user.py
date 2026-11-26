@@ -12,23 +12,23 @@ spec.loader.exec_module(ctu)
 
 class Fake:
     def __init__(self, existing=()):
-        self.existing = set(existing)
+        self.existing = {e: f"uid-{e}" for e in existing}
         self.created = []
-        self.verified = []
+        self.updated = []
 
-    def exists(self, email):
-        return email in self.existing
+    def lookup(self, email):
+        return self.existing.get(email)
 
     def create(self, email, password):
         self.created.append((email, password))
         return "uid-1"
 
-    def set_verified(self, uid):
-        self.verified.append(uid)
+    def update(self, uid, password):
+        self.updated.append((uid, password))
 
 
-def run(args, client, capsys):
-    rc = ctu.main(args, client=client)
+def run(args, client, capsys, env=None, prompt=None):
+    rc = ctu.main(args, client=client, env=env or {}, prompt=prompt or (lambda: pytest.fail("prompted")))
     return rc, capsys.readouterr()
 
 
@@ -45,32 +45,72 @@ def test_generated_password_meets_policy(capsys):
         assert len(ctu.generate_password()) >= 16
 
 
-def test_verified_flag_set_and_output_exact(capsys):
+def test_default_project_is_eval():
+    assert ctu.DEFAULT_PROJECT == "onolys-eval"
+
+
+@pytest.mark.parametrize("project", ["onolys", "onolys-prod", "1054076260967", " Onolys ", "my-sandbox", ""])
+def test_non_allowlisted_project_refused(project, capsys):
     c = Fake()
-    rc, out = run(["--email", "a@b.co", "--password", "Sup3rSecret!"], c, capsys)
-    assert rc == 0
-    assert c.verified == ["uid-1"]
-    assert out.out == "email: a@b.co\npassword: Sup3rSecret!\n"
+    rc, out = run(["--project", project, "--email", "a@b.co", "--password", "Sup3rSecret!"], c, capsys)
+    assert rc == 2 and "allowed" in out.err.lower()
+    assert c.created == [] and c.updated == []
+
+
+@pytest.mark.parametrize("project", ["onolys-eval", "onolys-staging", " Onolys-Eval "])
+def test_allowlisted_projects_allowed(project):
+    assert ctu.project_errors(project) == []
+
+
+def test_create_payload_is_verified_and_sends_nothing_by_email():
+    assert ctu.create_payload("a@b.co", "pw123456") == {"email": "a@b.co", "password": "pw123456", "emailVerified": True}
+    assert ctu.update_payload("uid-9", "pw123456") == {"localId": "uid-9", "password": "pw123456", "emailVerified": True}
+
+
+def test_create_with_env_password_does_not_print_it(capsys):
+    c = Fake()
+    rc, out = run(["--email", "a@b.co"], c, capsys, env={"ONOLYS_ACCOUNT_PASSWORD": "FromEnv-12345"})
+    assert rc == 0 and c.created == [("a@b.co", "FromEnv-12345")]
+    assert out.out == "email: a@b.co\nproject: onolys-eval\n" and "FromEnv" not in out.err
+
+
+def test_prompt_used_when_email_given_without_password(capsys):
+    c = Fake()
+    rc, out = run(["--email", "a@b.co"], c, capsys, prompt=lambda: "Prompted-12345")
+    assert rc == 0 and c.created == [("a@b.co", "Prompted-12345")]
+    assert "Prompted" not in out.out
+
+
+def test_generated_password_printed(capsys):
+    c = Fake()
+    rc, out = run(["--email", "a@b.co", "--generate"], c, capsys)
+    assert rc == 0 and f"password: {c.created[0][1]}" in out.out
 
 
 def test_existing_email_errors_without_modifying(capsys):
     c = Fake(existing={"a@b.co"})
-    rc, out = run(["--email", "a@b.co"], c, capsys)
-    assert rc != 0
-    assert "already exists" in out.err
-    assert c.created == [] and c.verified == []
+    rc, out = run(["--email", "a@b.co", "--password", "longEnough1"], c, capsys)
+    assert rc == 1
+    assert "already exists" in out.err and "--update" in out.err
+    assert c.created == [] and c.updated == []
     assert out.out == ""
 
 
-def test_custom_passthrough(capsys):
+def test_update_sets_password_and_verified_on_existing(capsys):
+    c = Fake(existing={"a@b.co"})
+    rc, out = run(["--email", "a@b.co", "--update", "--password", "longEnough1"], c, capsys)
+    assert rc == 0 and c.updated == [("uid-a@b.co", "longEnough1")] and c.created == []
+
+
+def test_update_creates_when_missing(capsys):
     c = Fake()
-    run(["--email", "me@x.org", "--password", "longEnough1"], c, capsys)
-    assert c.created == [("me@x.org", "longEnough1")]
+    rc, _ = run(["--email", "a@b.co", "--update", "--password", "longEnough1"], c, capsys)
+    assert rc == 0 and c.created == [("a@b.co", "longEnough1")]
 
 
 def test_weak_password_rejected(capsys):
     c = Fake()
-    rc, out = run(["--password", "short"], c, capsys)
+    rc, out = run(["--email", "a@b.co", "--password", "short"], c, capsys)
     assert rc != 0
     assert "password" in out.err.lower()
     assert c.created == []

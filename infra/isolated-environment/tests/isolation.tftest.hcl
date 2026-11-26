@@ -38,7 +38,7 @@ run "staging_project_isolation" {
   }
 }
 
-run "eval_project_with_existing_identity" {
+run "eval_project_with_own_identity" {
   command = plan
   variables {
     environment     = "eval"
@@ -46,8 +46,8 @@ run "eval_project_with_existing_identity" {
     hosting_site_id = "onolys-eval-app"
   }
   assert {
-    condition     = output.project == "onolys-eval" && output.auth_project == "onolys"
-    error_message = "Eval billing/runtime must be separate from its existing identity issuer."
+    condition     = output.project == "onolys-eval" && output.auth_project == "onolys-eval"
+    error_message = "Eval signs in through its own project, never the production onolys project."
   }
   assert {
     condition     = output.api_service_name == null && output.voice_service_name == null && output.eval_backend_service_name == "onolys-eval-backend-eval"
@@ -102,6 +102,7 @@ run "never_manage_external_identity" {
   variables {
     environment     = "eval"
     project         = "onolys-eval"
+    auth_project    = "onolys"
     manage_identity = true
   }
   expect_failures = [var.manage_identity]
@@ -172,5 +173,50 @@ run "eval_never_gets_previews" {
   assert {
     condition     = length(google_service_account.pr_preview) == 0 && length(google_iam_workload_identity_pool_provider.github_pr) == 0 && length(google_iam_workload_identity_pool.github_pr) == 0 && length(google_project_iam_member.pr_preview) == 0 && output.pr_preview_wif_provider == null
     error_message = "Eval must not get a preview identity."
+  }
+}
+
+run "eval_manages_its_own_identity_and_domain" {
+  command = plan
+  variables {
+    environment     = "eval"
+    project         = "onolys-eval"
+    hosting_site_id = "onolys-eval-app"
+    manage_identity = true
+  }
+  assert {
+    condition     = length(google_identity_platform_config.this) == 1 && length(google_firebase_web_app.this) == 1
+    error_message = "Eval creates its own Identity Platform config and Firebase web app."
+  }
+  assert {
+    condition     = contains(google_identity_platform_config.this[0].authorized_domains, "eval.onolys.com") && contains(google_identity_platform_config.this[0].authorized_domains, "onolys-eval-app.web.app")
+    error_message = "Eval authorizes its own site and eval.onolys.com."
+  }
+  assert {
+    condition     = length(google_identity_platform_config.this[0].client) == 1 && google_identity_platform_config.this[0].client[0].permissions[0].disabled_user_signup == true
+    error_message = "Eval disables self sign-up; accounts are created by the operator script."
+  }
+  assert {
+    condition     = length(google_firebase_hosting_custom_domain.eval) == 1 && google_firebase_hosting_custom_domain.eval[0].custom_domain == "eval.onolys.com"
+    error_message = "eval.onolys.com is a custom domain of the isolated eval site."
+  }
+  assert {
+    condition     = contains(output.eval_cors_origins, "https://eval.onolys.com") && contains(output.eval_cors_origins, "https://onolys-eval-app.web.app")
+    error_message = "Eval backend CORS must allow the eval custom domain and the Hosting site."
+  }
+}
+
+run "staging_has_no_custom_domain_or_eval_host" {
+  command = plan
+  variables {
+    manage_identity = true
+  }
+  assert {
+    condition     = length(google_firebase_hosting_custom_domain.eval) == 0 && !contains(google_identity_platform_config.this[0].authorized_domains, "eval.onolys.com")
+    error_message = "Staging never gets the eval domain."
+  }
+  assert {
+    condition     = length(google_identity_platform_config.this[0].client) == 0
+    error_message = "Staging keeps open sign-up (no client permissions block)."
   }
 }

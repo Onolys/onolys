@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Validate explicit release target bundles and create local Hosting target mappings.
 
-*_GCP_PROJECT is the activation switch: prepare the other repository variables first.
+STAGING_GCP_PROJECT is the activation switch for staging: prepare the other repository variables first.
+Eval always runs isolated (EVAL_GCP_PROJECT required).
 No cloud commands or credentials are used here.
 """
 import argparse
@@ -19,9 +20,13 @@ def validate(role: str, env: dict[str, str]) -> None:
     prefix = role.upper()
     project = env.get(f'{prefix}_GCP_PROJECT', '')
     if not project:
+        if role == 'eval':
+            # Eval has no legacy target (its site and prod sign-in were removed): it always runs in onolys-eval.
+            raise ValueError('EVAL_GCP_PROJECT must be onolys-eval; eval no longer has a legacy target')
         return
     if project != f'onolys-{role}':
-        raise ValueError(f'{prefix}_GCP_PROJECT must be onolys-{role}; clear it to use the legacy target')
+        hint = '; clear it to use the legacy target' if role == 'staging' else ''
+        raise ValueError(f'{prefix}_GCP_PROJECT must be onolys-{role}{hint}')
     values = {field: env.get(f'{prefix}_{field}', '') for field in ('WIF_PROVIDER', 'DEPLOYER_SA', 'HOSTING_SITE')}
     missing = [f'{prefix}_{field}' for field, value in values.items() if not value]
     if missing:
@@ -40,6 +45,16 @@ def validate(role: str, env: dict[str, str]) -> None:
             raise ValueError('Isolated staging must use its own Firebase auth domain')
         if not re.fullmatch(r'1:[0-9]+:web:[a-z0-9]+', env['STAGING_ISOLATED_VITE_FIREBASE_APP_ID']):
             raise ValueError('Isolated staging needs a Firebase web app ID')
+    if role == 'eval':
+        # Eval signs in through its own project's Firebase web app, never prod's.
+        for field in ('API_KEY', 'AUTH_DOMAIN', 'APP_ID'):
+            value = env.get(f'EVAL_VITE_FIREBASE_{field}', '')
+            if not value or any(char.isspace() for char in value):
+                raise ValueError(f'EVAL_VITE_FIREBASE_{field} is required for eval')
+        if env['EVAL_VITE_FIREBASE_AUTH_DOMAIN'] != 'onolys-eval.firebaseapp.com':
+            raise ValueError('Eval must use its own Firebase auth domain')
+        if not re.fullmatch(r'1:[0-9]+:web:[a-z0-9]+', env['EVAL_VITE_FIREBASE_APP_ID']):
+            raise ValueError('Eval needs its own Firebase web app ID')
     site = values['HOSTING_SITE']
     if role == 'staging' and site != 'onolys-staging-app':
         raise ValueError('STAGING_HOSTING_SITE must be onolys-staging-app (the supported callback origin)')

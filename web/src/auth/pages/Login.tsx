@@ -14,7 +14,8 @@ export interface LoginState {
   passwordUpdated?: boolean;
 }
 
-export function Login({ showSignup = true }: { showSignup?: boolean }) {
+/** `showSignup`/`showForgot`/`showGoogle` default on (prod app). Eval turns them off: accounts are operator-created there. `note` replaces them. */
+export function Login({ showSignup = true, showForgot = true, showGoogle = true, note }: { showSignup?: boolean; showForgot?: boolean; showGoogle?: boolean; note?: string }) {
   const { service } = useAuth();
   const { search, state } = useLocation();
   const from = (state ?? {}) as LoginState;
@@ -72,14 +73,15 @@ export function Login({ showSignup = true }: { showSignup?: boolean }) {
         <Button type="submit" disabled={busy}>
           Log in
         </Button>
-        <Button type="button" variant="outline" disabled={busy} onClick={() => void google()}>
+        {showGoogle && <Button type="button" variant="outline" disabled={busy} onClick={() => void google()}>
           Continue with Google
-        </Button>
-        <p>
+        </Button>}
+        {showForgot && <p>
           <Link to={withNext("/forgot-password", search)} className={LINK}>
             Forgot your password?
           </Link>
-        </p>
+        </p>}
+        {note && <p>{note}</p>}
         {showSignup && <p>
           New here?{" "}
           <Link to={withNext("/signup", search)} className={LINK}>

@@ -44,6 +44,6 @@ def test_required_dns_updates_output_shape():
     assert "local.custom_domains" in b
     loc = block(src(), "locals")
     assert "google_firebase_hosting_custom_domain.app" in loc
-    assert "google_firebase_hosting_custom_domain.eval_staging" in loc  # eval's auth handler domain stays (issuer is onolys)
+    assert "eval_staging" not in loc and "eval.onolys.com" not in loc  # eval.onolys.com moved to the isolated eval root
     assert "host" in b and "value" in b
     assert "verification" in b  # cert _acme-challenge TXT

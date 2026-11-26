@@ -18,10 +18,10 @@ for required in ['workflow_dispatch:', 'environment: staging',
                  'file: eval/backend/Dockerfile', 'steps.push.outputs.digest',
                  'GIT_SHA=${{ github.sha }}', 'google-github-actions/auth@v2',
                  'google-github-actions/deploy-cloudrun@v2', 'skip_default_labels: true', 'id-token: write',
-                 'onolys-eval-backend-eval', 'eval-staging', 'onolys-eval-staging',
-                 'VITE_EVAL_API_URL:', 'vars.PROD_VITE_FIREBASE_API_KEY',
-                 'vars.PROD_VITE_FIREBASE_APP_ID', 'VITE_FIREBASE_AUTH_DOMAIN: eval.onolys.com',
-                 'firestore:eval', 'working-directory: web', 'VITE_APP_URL:',
+                 'onolys-eval-backend-eval', 'eval-staging',
+                 'VITE_EVAL_API_URL:', 'vars.EVAL_VITE_FIREBASE_API_KEY',
+                 'vars.EVAL_VITE_FIREBASE_APP_ID', 'vars.EVAL_VITE_FIREBASE_AUTH_DOMAIN',
+                 'firestore:eval', 'working-directory: web',
                  'set_eval_origin.sh', 'test_eval_image.sh', '/v1/me', '401',
                  'content-security-policy:',
                  'hosting:eval-staging']:
@@ -91,7 +91,7 @@ for name in ['ENV=staging', 'FIRESTORE_DATABASE=', 'GCP_PROJECT=', 'AUDIO_BUCKET
     assert f'-e {name}' in run, f'docker run in test_eval_image.sh must set {name} (fail-closed config)'
 assert 'onolys_admin_auth' not in img and 'onolys-admin-auth' not in img and 'ADMIN_' not in img, 'stale admin auth names in test_eval_image.sh'
 assert 'ADMIN_' not in s and 'onolys-eval-backend-staging' not in s, 'legacy admin/staging names remain'
-assert 'vars.PROD_VITE_FIREBASE_AUTH_DOMAIN' not in s, 'auth domain must be the literal eval.onolys.com'
+assert 'PROD_VITE_' not in s and 'onolys-eval-staging' not in s, 'eval must not use the prod Firebase app or the legacy site'
 fs = json.loads(Path('firebase.json').read_text())['firestore']
 ev = [d for d in fs if d['database'] == 'eval']
 assert len(ev) == 1 and ev[0]['rules'] == 'firestore.rules' and ev[0]['indexes'] == 'api/firestore.indexes.json'
@@ -127,7 +127,9 @@ for origin in ['https://apis.google.com', 'https://identitytoolkit.googleapis.co
                'https://*.firebaseapp.com']:
     assert origin in csp, origin
 for rc in ['.firebaserc', 'eval/web/.firebaserc']:
-    assert json.loads(Path(rc).read_text())['targets']['onolys']['hosting']['eval-staging'] == ['onolys-eval-staging']
+    targets = json.loads(Path(rc).read_text())['targets']
+    assert targets['onolys-eval']['hosting']['eval-staging'] == ['onolys-eval-app'], rc
+    assert 'eval-staging' not in targets.get('onolys', {}).get('hosting', {}), 'legacy eval site mapping removed'
 assert 'test_deploy_eval.sh' in Path('.github/workflows/ci.yml').read_text()
 assert 'bash scripts/ci/test_eval_image.sh' in Path('.github/workflows/ci.yml').read_text()
 assert 'eval/web' in Path('scripts/ci/test_hosting_targets.sh').read_text()

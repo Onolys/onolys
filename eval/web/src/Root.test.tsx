@@ -119,15 +119,35 @@ it('opens Compare separately and restores tab URL navigation and browser back',a
  window.history.back();await waitFor(()=>expect(screen.getByRole('tab',{name:'Overview'}).getAttribute('aria-selected')).toBe('true'));
 });
 
-it('hides account creation on the allowlisted eval login while preserving sign-in and recovery', async () => {
+it('eval login has no sign-up or recovery links and tells users to ask the team', async () => {
   window.history.replaceState({}, '', '/login?next=%2F%3Fview%3Dhistory');
   const baseFetch = vi.fn();
   render(<Root service={fake()} baseFetch={baseFetch} />);
   await screen.findByRole('heading', { name: 'Log in' });
   expect(screen.queryByRole('link', { name: 'Create an account' })).toBeNull();
   expect(screen.queryByText(/New here/)).toBeNull();
+  expect(screen.queryByRole('link', { name: 'Forgot your password?' })).toBeNull();
+  expect(screen.getByText('Ask the Onolys team for an eval account.')).toBeTruthy();
   expect(screen.getByRole('button', { name: 'Log in' })).toBeTruthy();
-  expect(screen.getByRole('button', { name: 'Continue with Google' })).toBeTruthy();
-  expect(screen.getByRole('link', { name: 'Forgot your password?' }).getAttribute('href')).toBe('/forgot-password?next=%2F%3Fview%3Dhistory');
+  expect(screen.queryByRole('button', { name: 'Continue with Google' })).toBeNull();
   expect(baseFetch).not.toHaveBeenCalled();
+});
+
+it.each(['/signup', '/forgot-password', '/verify-email', '/auth/action'])('%s is not handed to the prod app: signed out it lands on login', async path => {
+  window.history.replaceState({}, '', path);
+  render(<Root service={fake()} baseFetch={vi.fn()} />);
+  await screen.findByRole('button', { name: 'Log in' });
+  expect(screen.queryByText(/Continuing in the/)).toBeNull();
+  expect(screen.queryByRole('link', { name: 'Onolys app' })).toBeNull();
+});
+
+it('an unverified account lands on a static not-verified page (no redirect loop) with Sign out', async () => {
+  const provider = createFakeAuthService(); provider.signedInAs('a@example.com', { verified: false });
+  const baseFetch = vi.fn();
+  render(<Root service={provider} baseFetch={baseFetch} />);
+  expect(await screen.findByText("Your eval account isn't verified. Ask the Onolys team.")).toBeTruthy();
+  expect(window.location.pathname).toBe('/verify-email');
+  expect(baseFetch).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole('button', { name: 'Sign out' }));
+  await screen.findByRole('button', { name: 'Log in' });
 });

@@ -1,6 +1,8 @@
 locals {
-  auth_project = coalesce(var.auth_project, var.environment == "eval" ? "onolys" : var.project)
+  auth_project = coalesce(var.auth_project, var.project)
   site_origin  = "https://${var.hosting_site_id}.web.app"
+  # Eval is also served from its custom domain, so the browser origin https://eval.onolys.com must pass CORS.
+  eval_cors_origins = var.environment == "eval" ? [local.site_origin, "https://${local.eval_custom_domain}", "http://localhost:5173"] : []
   apis = toset(concat([
     "serviceusage.googleapis.com", "cloudresourcemanager.googleapis.com", "iam.googleapis.com",
     "iamcredentials.googleapis.com", "sts.googleapis.com", "run.googleapis.com",
@@ -93,7 +95,7 @@ module "environment" {
   public_api_enabled   = var.environment == "staging"
   eval_mode            = var.environment == "eval"
   eval_backend_enabled = var.environment == "eval"
-  eval_cors_origins    = var.environment == "eval" ? [local.site_origin, "http://localhost:5173"] : []
+  eval_cors_origins    = local.eval_cors_origins
   datasets_bucket      = local.datasets_bucket
   eval_cap_day         = var.environment == "eval" ? 1000000 : 10
   max_active_runs      = var.environment == "eval" ? 1000 : null

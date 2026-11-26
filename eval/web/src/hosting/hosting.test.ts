@@ -22,12 +22,13 @@ function csp(entry: Entry): Record<string, string[]> {
 afterEach(() => vi.unstubAllEnvs());
 
 describe("eval/web/firebase.json", () => {
-  it("frame-src allows the default Firebase authDomain host and Google sign-in", () => {
+  it("frame-src allows the default Firebase authDomain host (*.firebaseapp.com) and Google sign-in", () => {
     vi.stubEnv("VITE_FIREBASE_AUTH_DOMAIN", "");
     const authDomain = getConfig().firebase.authDomain;
-    expect(authDomain).toBe("eval.onolys.com");
+    expect(authDomain).toBe("onolys-eval.firebaseapp.com");
+    expect(authDomain.endsWith(".firebaseapp.com")).toBe(true); // covered by the wildcard frame-src below
     for (const entry of entries) {
-      expect(csp(entry)["frame-src"]).toEqual(expect.arrayContaining([`https://${authDomain}`, "https://accounts.google.com"]));
+      expect(csp(entry)["frame-src"]).toEqual(expect.arrayContaining(["https://*.firebaseapp.com", "https://accounts.google.com"]));
     }
   });
 });

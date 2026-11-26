@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { BrowserRouter, Route, Routes } from 'react-router';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AuthProvider, useAuth } from '@prod-auth/AuthProvider';
-import { PublicOnly, RequireVerified } from '@prod-auth/guards';
+import { PublicOnly, RequireUnverified, RequireVerified } from '@prod-auth/guards';
 import { Login } from '@prod-auth/pages/Login';
 import type { AuthService } from '@prod-auth/types';
 import { createEvalApi, type RunSummary } from './api';
@@ -20,22 +20,24 @@ import { Button } from '@onolys/ui';
 
 export { navigateEval } from './evalNavigation';
 const browserFetch: typeof fetch = (input, init) => fetch(input, init);
-/** Prod-app pages the Login links to; they are not mounted here, accounts are made and verified in the prod app. */
-const PROD_ONLY_PATHS = ['/signup', '/forgot-password', '/verify-email', '/auth/action'];
-function ToProdApp() {
-  const href = new URL(window.location.pathname + window.location.search, getConfig().appUrl).href;
-  useEffect(() => { window.location.assign(href); }, [href]);
-  return <p role="status">Continuing in the <a href={href}>Onolys app</a>…</p>;
-}
 export function Root({ service, baseFetch = browserFetch }: { service: AuthService; baseFetch?: typeof fetch }) {
   const [queryClient] = useState(() => new QueryClient());
   return <QueryClientProvider client={queryClient}><AuthProvider service={service}><BrowserRouter><Routes>
     <Route element={<Shell />}>
-      <Route element={<PublicOnly />}><Route path="/login" element={<Login showSignup={false} />} /></Route>
-      {PROD_ONLY_PATHS.map(path => <Route key={path} path={path} element={<ToProdApp />} />)}
+      <Route element={<PublicOnly />}><Route path="/login" element={<Login showSignup={false} showForgot={false} showGoogle={false} note="Ask the Onolys team for an eval account." />} /></Route>
+      <Route element={<RequireUnverified />}><Route path="/verify-email" element={<EvalUnverified />} /></Route>
       <Route element={<RequireVerified />}><Route path="*" element={<AllowedApp baseFetch={baseFetch} />} /></Route>
     </Route>
   </Routes></BrowserRouter></AuthProvider></QueryClientProvider>;
+}
+/** Unverified accounts cannot self-verify on eval (no emails): the old /verify-email redirect target would loop. */
+function EvalUnverified() {
+  const { signOut } = useAuth();
+  return <div className="app-message" role="alert">
+    <h2>Account not verified</h2>
+    <p>Your eval account isn't verified. Ask the Onolys team.</p>
+    <Button type="button" onClick={() => void signOut()}>Sign out</Button>
+  </div>;
 }
 function AllowedApp({ baseFetch }: { baseFetch: typeof fetch }) {
   const { service, signOut } = useAuth();
