@@ -245,6 +245,44 @@ def test_live_status_then_final_status_without_any_earlier_get(services):
     assert units_of(final, engine="miti")[0]["scores"]["counts"]["question"] == 3
 
 
+def test_running_unit_shows_live_stage_from_prod_session_step(services):
+    """The worker records the live stage on the prod session (`step`), never on the RunDoc."""
+    c = client(services=services)
+    rid, by = make_run(c, engines=["miti"])
+    sid = by["one"]
+    put_run(services, rid, sid, LOW, status="running")  # RunDoc.stage stays None, as in prod
+    services.repo.update_session(UID, sid, {"step": "code"})
+    unit = units_of(detail(c, rid), engine="miti")[0]
+    assert unit["status"] == "running" and unit["stage"] == "coding"
+    services.repo.update_session(UID, sid, {"step": "assemble"})
+    assert units_of(detail(c, rid), engine="miti")[0]["stage"] == "assembling"
+    services.repo.update_session(UID, sid, {"step": None})
+    assert units_of(detail(c, rid), engine="miti")[0]["stage"] == "starting"
+
+
+def test_created_but_not_started_unit_stays_queued_without_stage(services):
+    c = client(services=services)
+    rid, by = make_run(c, engines=["miti"])
+    sid = by["one"]
+    put_run(services, rid, sid, LOW, status="pending", ref_status="running")
+    unit = units_of(detail(c, rid), engine="miti")[0]
+    assert unit["status"] == "queued" and "stage" not in unit
+
+
+def test_run_detail_reports_running_and_queued_counts_and_flips_queued_group(services):
+    c = client(services=services)
+    rid, by = make_run(c, engines=["miti"], selection=SEL2)
+    sid = by["one"]
+    assert services.repository.get_run(rid)["status"] == "queued"  # scheduler has not ticked
+    put_run(services, rid, sid, LOW, status="running")
+    body = detail(c, rid)
+    ai = units_of(body, engine="miti")
+    assert [u["status"] for u in ai].count("running") == 1
+    assert body["running_units"] == 1
+    assert body["queued_units"] == len(ai) - 1
+    assert body["status"] == "running"  # a unit is running: never "queued"
+
+
 def test_waiting_skipped_and_unstarted_cells(services):
     c = client(services=services)
     rid, by = make_run(c, engines=["miti"], selection=SEL2)

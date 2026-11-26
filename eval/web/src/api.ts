@@ -40,7 +40,7 @@ export type RunStatus = 'queued' | 'running' | 'done' | 'partial' | 'failed' | '
 export interface RunSummary extends Omit<RunInput, 'selection'> {
  selection: Selection | null; combos: Combo[] | null; legacy_selection: boolean; combo_keys: string[]; combo_labels: Record<string, string>; presets?: string[];
  run_id: string; status: RunStatus; created_at: string; cancel_requested?: boolean; cancelled_at?: string | null; skipped_units?: number; provider_skips?: { provider: string; after_failures: number; skipped_cells: number; skipped_at: string }[];
- total_units: number; completed_units: number; done_units: number; failed_units: number; cancelled_units: number;
+ total_units: number; running_units?: number; queued_units?: number; completed_units: number; done_units: number; failed_units: number; cancelled_units: number;
  usage: { input_tokens: number; output_tokens: number; cost_usd?: number | null; calls?: number };
  cost_usd_est: number | null; unpriced_units: number;
  engine_versions: Record<string, string>; engine_git_sha: Record<string, string> | string; resolved_presets: Record<string, unknown>;
