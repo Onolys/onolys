@@ -5,9 +5,14 @@ Usage (ADC, quota project `onolys`):
   python3 infra/scripts/identity-config.py                      # ensure password policy (min 8) + enumeration protection + email action URL
   python3 infra/scripts/identity-config.py --check              # read-only drift check of the email action URL (exit 1 on drift)
   python3 infra/scripts/identity-config.py --domains-only --add-domain HOST ...  # union HOST(s) into authorised domains
+  python3 infra/scripts/identity-config.py --domains-only --remove-domain HOST ...  # retire HOST(s) (explicit list only)
+  add --dry-run to any mode to print the PATCHes instead of sending them
 
-Idempotent: PATCHes only when the live config differs; domains are only ever added, never removed.
-Terraform runs it (with the base domain list) when this file or that list changes
+Idempotent: PATCHes only when the live config differs. Domains are removed ONLY when named with --remove-domain
+(Terraform passes its explicit "retired" list); Firebase's defaults (localhost, <project>.firebaseapp.com,
+<project>.web.app) are never removed, a host that is also added is kept, and anything else (preview channel hosts,
+console-added domains) is left alone.
+Terraform runs it (with the base domain list) when this file or the lists change
 (terraform_data.identity_policy). Preview channel hosts are added by the SP00 preview workflow with
 --domains-only: the wildcard `onolys-app-staging--pr-*.web.app` is rejected by the API
 (INVALID_AUTHORIZED_DOMAIN), see docs/reference/testing.md "Preview auth domains".
@@ -79,14 +84,42 @@ def check(client, callback_uri=DEFAULT_CALLBACK_URI):
     return 1
 
 
-def add_domains(client, hosts):
+def protected_domains(project=PROJECT):
+    """Firebase's project defaults: never removed, whatever the retired list says."""
+    return {"localhost", f"{project}.firebaseapp.com", f"{project}.web.app"}
+
+
+def sync_domains(client, add, remove=(), project=PROJECT):
+    """Union `add` into the authorised domains and drop the explicitly retired `remove` hosts in one PATCH."""
     cur = client.get().get("authorizedDomains", [])
-    new = [h for h in hosts if h not in cur]
-    if not new:
-        print("domains already present")
+    keep_always = protected_domains(project) | set(add)
+    gone = [h for h in cur if h in set(remove) and h not in keep_always]
+    new = [h for h in add if h not in cur]
+    if not new and not gone:
+        print("domains already in sync")
         return
-    client.patch("authorizedDomains", {"authorizedDomains": cur + new})
-    print("added: " + ", ".join(new))
+    client.patch("authorizedDomains", {"authorizedDomains": [h for h in cur if h not in gone] + new})
+    if new:
+        print("added: " + ", ".join(new))
+    if gone:
+        print("removed: " + ", ".join(gone))
+
+
+def add_domains(client, hosts):
+    sync_domains(client, hosts, ())
+
+
+class DryRun:
+    """Wraps a client: reads pass through, PATCHes are printed instead of sent."""
+
+    def __init__(self, inner):
+        self.inner = inner
+
+    def get(self):
+        return self.inner.get()
+
+    def patch(self, mask, body):
+        print(f"dry-run: would PATCH updateMask={mask} body={json.dumps(body)}")
 
 
 class Client:
@@ -125,19 +158,25 @@ class Client:
 def main(argv=None):
     ap = argparse.ArgumentParser()
     ap.add_argument("--add-domain", action="append", default=[], metavar="HOST")
+    ap.add_argument("--remove-domain", action="append", default=[], metavar="HOST", help="retire HOST from authorised domains (never Firebase defaults)")
+    ap.add_argument("--dry-run", action="store_true", help="print the PATCHes instead of sending them")
     ap.add_argument("--callback-uri", default=DEFAULT_CALLBACK_URI, metavar="URL", help="email action URL (verify/reset links)")
     ap.add_argument("--domains-only", action="store_true", help="skip the policy check (fast path for CI preview deploys)")
     ap.add_argument("--check", action="store_true", help="read-only: exit 1 if the live callbackUri differs from the expected URL")
     args = ap.parse_args(argv)
     c = Client()
+    if args.dry_run:
+        c = DryRun(c)
     if args.check:
         sys.exit(check(c, args.callback_uri))
-    if args.domains_only:
-        add_domains(c, args.add_domain)
-        return
-    ensure(c, args.callback_uri)
-    if args.add_domain:
-        add_domains(c, args.add_domain)
+    main_with(c, args.add_domain, args.remove_domain, args.domains_only, args.callback_uri)
+
+
+def main_with(c, add=(), remove=(), domains_only=False, callback_uri=DEFAULT_CALLBACK_URI):
+    if not domains_only:
+        ensure(c, callback_uri)
+    if add or remove:
+        sync_domains(c, list(add), list(remove))
 
 
 if __name__ == "__main__":

@@ -61,7 +61,7 @@ variable "app_site_id" {
   default = "onolys-app"
 }
 
-# Only feeds the authorized sign-in domains (the old staging site was removed).
+# Only feeds the retired sign-in domains (the old staging site was removed; identity-config.py drops its host).
 variable "app_staging_site_id" {
   type    = string
   default = "onolys-app-staging"

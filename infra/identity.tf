@@ -12,18 +12,27 @@ locals {
       "${var.project}.web.app",
       "app.onolys.com",
       "${var.app_site_id}.web.app",
-      "${var.app_staging_site_id}.web.app",
     ],
-    ["eval.onolys.com", "onolys-eval-staging.web.app"],
+    # eval signs in through this project: its custom domain, the auth-handler site and the eval web site.
+    ["eval.onolys.com", "onolys-eval-staging.web.app", "onolys-eval-app.web.app"],
   ))
+
+  # Hosts whose sites were deleted. identity-config.py removes exactly these (never the Firebase defaults, never a
+  # host also in authorized_domains, never anything unlisted such as preview hosts). Safe to keep after removal.
+  retired_authorized_domains = [
+    "${var.app_staging_site_id}.web.app",
+    "admin.onolys.com",             # retired-host
+    "onolys-admin.web.app",         # retired-host
+    "onolys-admin-staging.web.app", # retired-host
+  ]
 }
 
 resource "google_identity_platform_config" "default" {
   project            = var.project
   authorized_domains = local.authorized_domains
 
-  # Domains are only ever added after creation (scripts/identity-config.py, incl. preview channel
-  # hosts the SP00 workflow adds); Terraform must not prune them.
+  # Domains are managed after creation by scripts/identity-config.py (adds, incl. preview channel hosts the SP00
+  # workflow adds, and removal of local.retired_authorized_domains); Terraform must not prune them itself.
   lifecycle {
     ignore_changes = [authorized_domains]
   }
@@ -65,10 +74,11 @@ resource "terraform_data" "identity_policy" {
     filesha256("${path.module}/scripts/identity-config.py"),
     google_identity_platform_config.default.id,
     join(",", local.authorized_domains),
+    join(",", local.retired_authorized_domains),
   ]
 
   provisioner "local-exec" {
-    command = "python3 ${path.module}/scripts/identity-config.py ${join(" ", [for d in local.authorized_domains : "--add-domain ${d}"])}"
+    command = "python3 ${path.module}/scripts/identity-config.py ${join(" ", [for d in local.authorized_domains : "--add-domain ${d}"])} ${join(" ", [for d in local.retired_authorized_domains : "--remove-domain ${d}"])}"
   }
 }
 
