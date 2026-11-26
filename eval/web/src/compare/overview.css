@@ -22,3 +22,8 @@
  .overview-tab .overview-leaderboard tr { margin-block-end: 1rem; border: 1px solid var(--border); }
  .overview-tab .overview-leaderboard td::before { content: attr(data-label); display: block; font-weight: bold; }
 }
+.overview-tab .overview-verdict-block { display: grid; gap: .3rem; margin-block: 0 .75rem; }
+.overview-tab .overview-verdict { margin: 0; font-size: .95rem; }
+.overview-tab .overview-empty { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; padding: .5rem .75rem; border: 1px solid var(--ui-info-border, #c2d6f2); border-radius: var(--radius, .5rem); background: var(--ui-info-bg, #e8f0fb); font-size: .85rem; }
+.overview-tab .overview-empty > span { display: inline; }
+.overview-tab .overview-claim { font-size: .72rem; padding-block: 0; }

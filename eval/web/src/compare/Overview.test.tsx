@@ -13,20 +13,16 @@ function show(data = sample()) {
  render(<Overview data={data} overview={data} state={parseCompareUrl('?run=r1&view=compare')} navigate={navigate} legend={data.combos.map((combo,i)=>({combo,letter:String.fromCharCode(65+i),label:combo.combo_key}))} api={createEvalApi('',vi.fn())} runId="r1"/>);
  return navigate;
 }
-const table = () => screen.getByRole('table',{name:'Combo leaderboard'});
-const leaders = () => within(table()).getAllByRole('row').slice(1).map(r=>within(r).getByRole('rowheader').textContent);
 const cell = (metric:string, combo='A') => screen.getByRole('link',{name:`${metric}, ${combo}: open Deep dive`}).closest('td')!;
-it('prints verbatim verdict, n and footnotes, seven sortable columns, best and reasons',()=>{
+it('prints verbatim verdict with n tags and one muted notes block; leaderboard has plain headers',()=>{
  const data=sample();show(data);
  expect(screen.getByText(data.verdict[0].text)).toBeTruthy();expect(screen.getByText('n=2',{selector:'.overview-claim'})).toBeTruthy();
- data.footnotes.forEach(text=>expect(screen.getByText(text)).toBeTruthy());
- for(const name of ['Count error','Globals within ±1','Line match accuracy','Line match macro F1','Fails','Cost','Time']) expect(within(table()).getByRole('button',{name})).toBeTruthy();
- expect(leaders()[0]).toContain('B');const header=within(table()).getByRole('button',{name:'Count error'});
- fireEvent.click(header);expect(leaders()[0]).toContain('A');expect(header.closest('th')?.getAttribute('aria-sort')).toBe('descending');
- fireEvent.keyDown(header,{key:'Enter'});expect(leaders()[0]).toContain('B');fireEvent.keyDown(header,{key:' '});expect(leaders()[0]).toContain('A');
- fireEvent.click(within(table()).getByRole('button',{name:'Line match accuracy'}));expect(leaders()[0]).toContain('A');
- expect(within(table()).getAllByText(/2 paired of 2/).length).toBeGreaterThan(2);expect(within(table()).getAllByText(/★ best/).length).toBeGreaterThan(0);
- expect(within(table()).getAllByText(/no line-level output/).length).toBe(2);
+ const note=screen.getByText(/Sessions have equal weight; repeats are averaged first/);expect(note.className).toContain('ui-note');
+ expect(screen.getByText(/Time may read short for retried units/)).toBeTruthy();expect(screen.queryByText(/retried_runs counts/)).toBeNull();
+ expect(within(screen.getAllByRole('table')[0]).queryAllByRole('button')).toHaveLength(0);
+ for(const name of ['Count error','Globals within ±1','Line match accuracy','Line match macro F1','Fails','Cost','Time']) expect(within(screen.getAllByRole('table')[0]).getByRole('columnheader',{name})).toBeTruthy();
+ expect(within(screen.getAllByRole('table')[0]).getAllByText(/★ best/).length).toBeGreaterThan(0);
+ expect(within(screen.getAllByRole('table')[0]).getAllByText(/no line-level output/).length).toBe(2);
 });
 it('renders raw Human first, every n, four off headlines, signed bias and server tolerance flags',()=>{
  const data=sample(),a=data.combos[0].combo_key;
@@ -47,7 +43,7 @@ it('renders raw Human first, every n, four off headlines, signed bias and server
 it('keeps exact missing reasons and suppresses all skipped best markers',()=>{
  const data=sample(),key=data.combos[0].combo_key;data.leaderboard[0].na={reason:'skipped: provider unavailable'};
  Object.values(data.heatmap.cells).forEach(row=>Object.assign(row[key],{value:null,off:null,bias:null,na:{reason:'skipped: provider unavailable'},best:true}));show(data);
- const skippedRow=within(table()).getAllByRole('row')[2];expect(skippedRow.textContent).toContain('skipped');expect(skippedRow.textContent).not.toContain('★ best');
+ const skippedRow=within(screen.getAllByRole('table')[0]).getAllByRole('row').find(row=>row.textContent?.includes('skipped'))!;expect(skippedRow.textContent).not.toContain('★ best');
  expect(cell('gi').textContent).toContain('n/a');expect(cell('gi').textContent).toContain('skipped: provider unavailable');expect(cell('gi').textContent).not.toContain('best');
 });
 it('labels the nine-combo scroll region and drills into Deep dive with selected metric and combo',()=>{
@@ -59,23 +55,11 @@ it('labels the nine-combo scroll region and drills into Deep dive with selected 
  fireEvent.click(within(screen.getByRole('table',{name:'Metric heatmap'})).getByRole('link',{name:'A'}));expect(navigate).toHaveBeenLastCalledWith(expect.objectContaining({tab:'deep',combos:[base.combo_key]}));
  expect(screen.getByText(/How to read:/)).toBeTruthy();
 });
-it.each([false,true])('shows only operational columns without human or verdict (%s)',emptyVerdict=>{
+it.each([false,true])('shows only operational columns and an empty-state chip without human or verdict (%s)',emptyVerdict=>{
  const data=sample();if(emptyVerdict)data.verdict=[];else data.has_human=false;show(data);
- expect(screen.getByText('No human reference in this run')).toBeTruthy();expect(within(table()).queryByRole('button',{name:'Count error'})).toBeNull();
- for(const name of ['Fails','Cost','Time'])expect(within(table()).getByRole('button',{name})).toBeTruthy();expect(screen.queryByRole('table',{name:'Metric heatmap'})).toBeNull();
-});
-it('sorts each quality and operational column using its saved values, keeping unavailable last',()=>{
- const data=sample(),[a,b]=data.leaderboard;
- a.globals_within_1.value=0.7;b.globals_within_1.value=0.9;
- a.line_accuracy={...a.line_accuracy,value:0.6};b.line_accuracy={...b.line_accuracy,value:0.8,na:null};
- a.macro_f1={...a.macro_f1,value:0.9};b.macro_f1={...b.macro_f1,value:0.7,na:null};
- a.failures=[{code:'provider_error',count:3}];b.failures=[];
- a.cost.per_run_usd=0.1;b.cost.per_run_usd=0.2;a.time.mean_seconds=12;b.time.mean_seconds=8;
- show(data);
- for(const [name,letter] of [['Globals within ±1','B'],['Line match accuracy','B'],['Line match macro F1','A'],['Fails','B'],['Cost','A'],['Time','B']]){
-  const button=within(table()).getByRole('button',{name});fireEvent.click(button);expect(leaders()[0]).toContain(letter);
-  expect(button.closest('th')?.getAttribute('aria-sort')).toBe(name.startsWith('Globals')||name.startsWith('Line')?'descending':'ascending');
- }
+ expect(screen.getByText('No human reference in this run').closest('.ui-chip')).toBeTruthy();
+ expect(screen.queryByRole('columnheader',{name:'Count error'})).toBeNull();
+ for(const name of ['Fails','Cost','Time'])expect(screen.getByRole('columnheader',{name})).toBeTruthy();expect(screen.queryByRole('table',{name:'Metric heatmap'})).toBeNull();
 });
 it('shows a partial-label reason as n/a rather than a zero headline',()=>{
  const data=sample(),key=data.combos[0].combo_key;
@@ -83,27 +67,10 @@ it('shows a partial-label reason as n/a rather than a zero headline',()=>{
  expect(cell('gi').querySelector('strong')?.textContent).toBe('n/a');expect(cell('gi').textContent).toContain('not labeled in this dataset');expect(cell('gi').textContent).toContain('n=0');
 });
 
-it('prints tied operational best flags verbatim and suppresses skipped rows',()=>{
- const data=sample();
- data.leaderboard.forEach(row=>{row.operational_best={failures:true,cost:true,time:true};});
- // Deliberately different values: the UI must trust the flags, not choose minima.
- data.leaderboard[0].cost.per_run_usd=99;
+it('notes excluded failed combos in muted text and never stars them',()=>{
+ const data=sample(),key=data.combos[0].combo_key;
+ data.excluded=[1,2,3,4].map(n=>({session_id:`s${n}`,combo_key:key,reason:'failed:invalid_parameters'}));
  show(data);
- const rows=within(table()).getAllByRole('row').slice(1);
- rows.forEach(row=>{
-  for(const label of ['Fails','Cost','Time']) expect(within(row.querySelector(`[data-label="${label}"]`) as HTMLElement).getByText('★ best')).toBeTruthy();
- });
- cleanup();
- data.leaderboard[0].na={reason:'skipped: provider unavailable'};
- show(data);
- const skipped=within(table()).getAllByRole('row').find(row=>row.textContent?.includes('— skipped'))!;
- expect(within(skipped).queryByText('★ best')).toBeNull();
-});
-it('does not infer an operational winner when the server flags are false',()=>{
- const data=sample();
- data.leaderboard.forEach(row=>{row.operational_best={failures:false,cost:false,time:false};});
- show(data);
- within(table()).getAllByRole('row').slice(1).forEach(row=>{
-  for(const label of ['Fails','Cost','Time']) expect(row.querySelector(`[data-label="${label}"]`)?.textContent).not.toContain('best');
- });
+ expect(screen.getByText(/Excluded from best: A \(all runs failed: invalid_parameters\)/).className).toContain('ui-note');
+ expect(screen.getAllByRole('table')[0].querySelector('.ui-row-danger')).toBeTruthy();
 });
