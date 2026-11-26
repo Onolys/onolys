@@ -2,13 +2,16 @@ import { useEffect, useId, useRef, useState } from 'react';
 import { Badge, Button, Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, Input } from '@onolys/ui';
 import { ApiError } from './api';
 import { CancelRunDialog, CancellationNote, canCancelRun, isActiveRun, mergeRunStatus } from './CancelRunDialog';
-import { PartialBadge, ProviderSkipNotices, RunErrorNote, partialStatusText, providerName } from './RunStatus';
+import { PartialBadge, ProviderSkipNotices, partialStatusText } from './RunStatus';
 import { RunConfigDialog, savedConfiguration } from './RunConfigDialog';
 import { SlowStartNotice } from '@prod-components/SlowStart';
 import { JsonDialog } from './JsonViewer';
 import './runs.css';
 import { CompareLink, type CompareNavigate } from './compare/CompareLink';
 import { RunHeader } from './run/RunHeader';
+import { RunStatusChips } from './run/RunStatusChips';
+import { UsageTiles } from './run/UsageTiles';
+import { AlertsStrip } from './run/AlertsStrip';
 import { navigateEval } from './evalNavigation';
 import type { EvalApi, RunDetail, RunSummary, RunUnit } from './api';
 
@@ -24,9 +27,6 @@ const localDate = (iso: string) => {
 const POLL_MS = 3000, MAX_POLL_MS = 30000;
 const inputName = (run: RunSummary) => 'dataset_id' in run.input ? run.input.dataset_id : run.input.upload_id;
 
-function Usage({ run }: { run: RunSummary }) {
-  return <p>{run.usage.input_tokens} input tokens · {run.usage.output_tokens} output tokens · {run.cost_usd_est == null ? '—' : `~$${run.cost_usd_est.toFixed(4)}`} estimate; STT excluded.{run.unpriced_units > 0 && ` ${run.unpriced_units} unpriced unit(s); estimate is incomplete.`}</p>;
-}
 function RunActions({ run, onRerun, onConfig, onDelete, onCancel }: { onCancel: (run: RunSummary, trigger: HTMLElement | null) => void; run: RunSummary; onRerun: (run: RunSummary) => void; onDelete: (run: RunSummary) => void; onConfig: (run: RunSummary, trigger: HTMLElement | null) => void }) {
   const trigger = useRef<HTMLButtonElement>(null);
   const openingConfig = useRef(false);
@@ -115,18 +115,13 @@ export function RunView({ api, runId, onRerun, onNavigate = navigateEval }: { ap
     };
     void poll(); return halt;
   }, [api, runId, attempt]);
-  const cancelRequested = run?.cancel_requested === true;
   return <section className="run-detail">{error && <div role="alert">{error}{!missing && run && !terminal(run.status) && ' Still trying to refresh.'}<button onClick={() => { setError(''); setMissing(false); setAttempt(n => n + 1); }}>Retry run status</button></div>}
     {!run ? (!error && <><h1>Run - {runId}</h1><p role="status">Loading run…</p></>) : <>
       <RunHeader run={run} onNavigate={onNavigate} onRerun={onRerun}
         onConfig={(value, trigger) => { configTrigger.current = trigger; setConfiguration(value); }}
-        onCancel={(value, trigger) => { cancelTrigger.current = trigger; setToCancel(value); }} />
-      <p role="status">{run.status === 'partial' ? 'partial' : statusLabel(run, cancelRequested)} · {run.done_units}/{run.total_units} runs done{isActiveRun(run) && ` · ${run.running_units ?? 0} running · ${run.queued_units ?? 0} queued`} · {run.failed_units} failed · {run.cancelled_units} cancelled</p>
-      <RunErrorNote run={run} />
-      <CancellationNote run={run} />
-      <Usage run={run} />
-      <ProviderSkipNotices skips={run.provider_skips} />
-      {run.provider_cooldowns?.map(cooldown => <p key={cooldown.provider}>{providerName(cooldown.provider)} is busy — waiting to retry</p>)}
+        onCancel={(value, trigger) => { cancelTrigger.current = trigger; setToCancel(value); }}><RunStatusChips run={run} /></RunHeader>
+      <UsageTiles run={run} />
+      <AlertsStrip run={run} />
       <div className="unit-section-heading"><h2>Unit progress</h2><span>{run.done_units}/{run.total_units} runs done · {run.repeats} {run.repeats === 1 ? 'attempt' : 'attempts'} per cell</span></div>
       <div className="unit-table-scroll" role="region" aria-label="Unit progress"><table className="units-table"><caption>Each unit is one session × engine × model/tier/effort × attempt. Repeated model attempts run the same settings independently. Human reference is included once per session.</caption>
         <thead><tr>{['Session', 'Engine', 'Model', 'Tier', 'Effort', 'Attempt', 'Status', 'Stage', 'Output / error'].map(label => <th scope="col" key={label}>{label}</th>)}</tr></thead>

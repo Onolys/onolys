@@ -56,7 +56,7 @@ it('refreshes terminal cancellation details before stopping polling', async () =
   await act(async () => {});
   expect(api.cancel).toHaveBeenCalledWith('r1');
   expect(api.run).toHaveBeenCalledTimes(2);
-  expect(screen.getByText('Cancelled — no runs completed · 0/4 runs done · 1 failed · 2 cancelled')).toBeTruthy();
+  expect(screen.getByRole('status', { name: 'Run status' }).textContent).toBe('Cancelled0 of 4 done1 failed2 cancelled');
   expect(screen.queryByRole('button', { name: 'View JSON u1' })).toBeNull();
   await act(async () => { await vi.advanceTimersByTimeAsync(6000); });
   expect(api.run).toHaveBeenCalledTimes(2);
@@ -75,7 +75,7 @@ it('keeps polling after cancellation while in-flight work runs, then shows final
   expect(api.run).toHaveBeenCalledTimes(2);
   await act(async () => { await vi.advanceTimersByTimeAsync(3000); });
   expect(api.run).toHaveBeenCalledTimes(3);
-  expect(screen.getByText('done · 3/4 runs done · 1 failed · 0 cancelled')).toBeTruthy();
+  expect(screen.getByRole('status', { name: 'Run status' }).textContent).toBe('Done3 of 4 done1 failed0 cancelled');
   expect(screen.getByRole('button', { name: 'View JSON u1' })).toBeTruthy();
   expect(screen.getByText(/~\$0.2500/)).toBeTruthy();
   await act(async () => { await vi.advanceTimersByTimeAsync(9000); });
@@ -137,7 +137,7 @@ it('shows the cancelling note and hides Cancel when the run summary says cancel_
   await act(async () => {});
   expect(screen.queryByRole('button', { name: 'Cancel run' })).toBeNull();
   expect(screen.getByText('Cancelled — runs already in progress will finish; no new runs start.')).toBeTruthy();
-  expect(screen.getByText(/^cancelling · /)).toBeTruthy();
+  expect(screen.getByText('Cancelling')).toBeTruthy();
 });
 it('history loads more using the server cursor, retains rows on failure and retries that page', async () => {
   const runs = vi.fn().mockResolvedValueOnce({ runs: [summary()], next_cursor: 'page2' }).mockRejectedValueOnce(new Error('offline')).mockResolvedValueOnce({ runs: [{ ...summary(), run_id: 'r2' }], next_cursor: null });

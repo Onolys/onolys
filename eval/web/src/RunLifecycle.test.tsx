@@ -32,7 +32,7 @@ it.each(['detail', 'history'])('%s guards duplicate cancel clicks, shows pending
  render(page === 'detail' ? <RunView api={api} runId="r1" onRerun={vi.fn()} /> : <History api={api} onOpen={vi.fn()} onRerun={vi.fn()} />); await openCancel(page);
  const confirm = within(screen.getByRole('dialog')).getByRole('button', { name: 'Cancel run' }); fireEvent.click(confirm); fireEvent.click(confirm); expect(api.cancel).toHaveBeenCalledExactlyOnceWith('r1');
  await act(async () => { resolve({ run_id: 'r1', status: 'running' }); });
- expect(screen.getByText('Cancelled — runs already in progress will finish; no new runs start.')).toBeTruthy(); expect(screen.getByText(/cancelling/)).toBeTruthy();
+ expect(screen.getByText('Cancelled — runs already in progress will finish; no new runs start.')).toBeTruthy(); expect(screen.getByText(/^cancelling$/i)).toBeTruthy();
  api.run.mockResolvedValue(run('done')); await act(async () => { await vi.advanceTimersByTimeAsync(3000); }); await waitFor(() => expect(screen.queryByText('Cancelled — runs already in progress will finish; no new runs start.')).toBeNull());
 });
 it.each(['detail', 'history'])('%s retries cancellation errors and handles 409 with a fresh read', async page => {
@@ -57,5 +57,5 @@ it('uses one cancel POST for duplicate confirm clicks and accepts a terminal no-
  render(<RunView api={createEvalApi('', fetcher)} runId="r1" onRerun={vi.fn()} />); await openCancel('detail');
  const confirm = within(screen.getByRole('dialog')).getByRole('button', { name: 'Cancel run' }); fireEvent.click(confirm); fireEvent.click(confirm);
  await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
- const posts = fetcher.mock.calls.filter(call => call[1]?.method === 'POST'); expect(posts).toHaveLength(1); expect(posts[0][0]).toBe('/v1/runs/r1/cancel'); expect(screen.getByText(/^done ·/)).toBeTruthy(); expect(screen.queryByRole('alert')).toBeNull();
+ const posts = fetcher.mock.calls.filter(call => call[1]?.method === 'POST'); expect(posts).toHaveLength(1); expect(posts[0][0]).toBe('/v1/runs/r1/cancel'); expect(screen.getByText('Done')).toBeTruthy(); expect(screen.queryByRole('alert')).toBeNull();
 });

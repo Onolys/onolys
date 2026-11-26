@@ -11,9 +11,13 @@ export function partialStatusText(run: PartialRunStatus): string | null {
   return `Partial — ${run.cancelled_at ? `cancelled at ${dateText(run.cancelled_at)}, ` : ''}${run.done_units} of ${run.total_units} runs done${(run.skipped_units ?? 0) > 0 ? `, ${run.skipped_units} skipped` : ''}`;
 }
 const runErrorText: Record<string, string> = { enqueue_failed: 'Run failed to start: could not queue it for processing. Rerun to try again.' };
-export function RunErrorNote({ run }: { run: Pick<RunSummary, 'status' | 'error'> }) {
+export function runErrorMessage(run: Pick<RunSummary, 'status' | 'error'>): string | null {
   if (run.status !== 'failed' || !run.error) return null;
-  return <p role="alert">{runErrorText[run.error.code] ?? `Run failed: ${run.error.code}`}</p>;
+  return runErrorText[run.error.code] ?? `Run failed: ${run.error.code}`;
+}
+export function RunErrorNote({ run }: { run: Pick<RunSummary, 'status' | 'error'> }) {
+  const message = runErrorMessage(run);
+  return message ? <p role="alert">{message}</p> : null;
 }
 export function PartialBadge({ run, short = false }: { run: PartialRunStatus; short?: boolean }) {
   const text = partialStatusText(run);

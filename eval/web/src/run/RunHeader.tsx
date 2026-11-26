@@ -4,7 +4,6 @@ import { Button } from '@onolys/ui';
 import type { RunDetail } from '../api';
 import { canCancelRun } from '../CancelRunDialog';
 import { CompareLink, type CompareNavigate } from '../compare/CompareLink';
-import { PartialBadge } from '../RunStatus';
 import { CopyField } from '../ui/CopyField';
 import { runLogsUrl } from './logsUrl';
 import './run.css';
@@ -18,7 +17,6 @@ export function RunHeader({ run, onConfig, onRerun, onCancel, onNavigate, childr
   return <>
     <div className="run-title">
       <h1>{`Run - ${run.name || run.run_id}`}</h1>
-      <PartialBadge run={run} />
     </div>
     {run.description && <p className="run-description">{run.description}</p>}
     <section className="run-card" aria-label="Run summary">
