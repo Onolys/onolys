@@ -18,7 +18,7 @@ function props(data=deep()) {return {data,overview:overview(),state,runId:'r1',n
 it('renders server values, same-cohort human means, n/of, bias words, dots and table twins',()=>{
  const data=deep();data.counts.human={gi:{value:7.25,min:7,max:8,n:1,na:null}};
  const p=props(data); const view=render(<DeepDive {...p}/>);
- expect(screen.getByRole('checkbox',{name:'Human (fixed)'})).toHaveProperty('disabled',true);
+ expect(screen.getByRole('button',{name:'Human'})).toHaveProperty('disabled',true);
  expect(screen.getAllByText('under-counts by 50%')[0]).toBeTruthy();
  expect(screen.getAllByText(/n\/a - human count is zero/).length).toBeGreaterThan(0);
  expect(view.container.querySelector('[data-human-count="gi"]')?.textContent).toContain('7.25');
@@ -58,7 +58,7 @@ it('defaults to three available Count errors, refetches picker changes and cache
  const api={...client(),compareOverview:vi.fn().mockResolvedValue(ov)};const navigate=vi.fn();
  const view=render(<CompareApp api={api} runId="r1" state={state} navigate={navigate}/>);await act(async()=>{});
  expect(api.compareDeepDive).toHaveBeenLastCalledWith('r1',expect.objectContaining({combos:['c1','c2','c3']}),expect.any(AbortSignal));
- fireEvent.click(screen.getByRole('checkbox',{name:/A ·/}));expect(navigate).toHaveBeenLastCalledWith(expect.objectContaining({combos:['c1','c2','c3','c0']}));
+ fireEvent.click(screen.getByRole('button',{name:/^A ·/}));expect(navigate).toHaveBeenLastCalledWith(expect.objectContaining({combos:['c1','c2','c3','c0']}));
  view.rerender(<CompareApp api={api} runId="r1" state={{...state,combos:['c1','c2','c3','c0']}} navigate={navigate}/>);await act(async()=>{});expect(api.compareDeepDive).toHaveBeenCalledTimes(2);
  view.rerender(<CompareApp api={api} runId="r1" state={{...state,combos:['c1','c2','c3']}} navigate={navigate}/>);await act(async()=>{});expect(api.compareDeepDive).toHaveBeenCalledTimes(2);
  expect(screen.getByRole('link',{name:'Combo A'}).getAttribute('href')).toContain('combos=c0');
@@ -74,8 +74,8 @@ it('loads Human gold notes without a combo filter and retains verbatim notes ove
  fireEvent.click(screen.getByRole('button',{name:'Load more'}));await screen.findByText('Another saved note');expect(screen.getByText(/Saved human note/).textContent).toBe(note.note);
 });
 it('shows no human reference and no charts for unlabelled runs',()=>{
- const data=deep();data.has_human=false;render(<DeepDive {...props(data)}/>);
- expect(screen.getByText('no human reference')).toBeTruthy();expect(screen.queryByRole('img')).toBeNull();
+ const data=deep();data.has_human=false;const view=render(<DeepDive {...props(data)}/>);
+ expect(screen.getByText('no human reference')).toBeTruthy();expect(view.container.querySelector('svg[role="img"][aria-label$="session dots"]')).toBeNull();expect(screen.queryByRole('group',{name:'Combos to compare'})).toBeTruthy();
 });
 it('retains an explicit selection even if its Count error is unavailable and renders its requested cohorts',async()=>{
  const ov=overview(), key=ov.combos[1].combo_key;ov.count_error[key].na={reason:'unavailable'};

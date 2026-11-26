@@ -1,7 +1,19 @@
 .deep-dive { min-width: 0; }
 .deep-dive section { scroll-margin-top: 1rem; }
-.deep-picker { display:flex; flex-wrap:wrap; gap:.75rem 1.25rem; margin:1rem 0; }
-.deep-picker label { display:flex; align-items:center; gap:.4rem; overflow-wrap:anywhere; }
+/* Cards (shared by the Deep dive charts) */
+.deep-card { min-width:0; margin:1rem 0; padding:1rem 1.1rem; border:1px solid var(--border,#d3dbda); border-radius:var(--radius,.5rem); background:var(--card,#fff); box-shadow:var(--shadow-sm,0 1px 2px rgb(23 28 28/.08)); }
+.deep-card-head { display:flex; flex-wrap:wrap; align-items:flex-start; justify-content:space-between; gap:.5rem .75rem; margin-bottom:.75rem; }
+.deep-card-head h3 { margin:0; font-size:1rem; font-weight:600; }
+.deep-card-head .ui-note { margin:.15rem 0 0; }
+.deep-toggles { display:flex; flex-wrap:wrap; gap:.5rem; }
+.deep-toggle { display:inline-flex; align-items:center; gap:.45rem; max-width:100%; min-height:2rem; margin:0; padding:.25rem .8rem; font:inherit; font-size:.8125rem; font-weight:550; border-radius:999px; border:1px solid var(--border-strong,#6e7e7c); background:var(--card,#fff); color:var(--foreground,#171c1c); cursor:pointer; overflow-wrap:anywhere; text-align:left; }
+.deep-toggle:focus-visible { outline:2px solid var(--ring,#0b5f5a); outline-offset:2px; }
+.deep-toggle.is-on { background:var(--tone,#e4f2ef); border-color:var(--primary,#0b5f5a); }
+.deep-toggle:disabled { cursor:default; }
+.deep-toggle.is-failed { background:var(--muted,#f7f9f9); color:var(--muted-foreground,#536160); border-style:dashed; border-color:var(--border,#d3dbda); }
+.deep-toggle.is-failed .ui-combo-tag { opacity:.5; }
+.deep-toggle-fail { font-size:.75rem; font-weight:500; }
+.deep-human-swatch { width:.8rem; height:.8rem; border-radius:50%; border:2px solid var(--foreground,#171c1c); background:#fff; flex:none; }
 .deep-dive svg { display:block; width:100%; min-width:36rem; height:auto; }
 .deep-dive svg text { fill:currentColor; font-size:14px; }
 .deep-dive svg circle { fill:currentColor; }

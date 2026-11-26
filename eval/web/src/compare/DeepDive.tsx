@@ -3,6 +3,8 @@ import { ChartFrame } from './ChartFrame';
 import { EvalLink } from './CompareLink';
 import type { CompareCell, CompareDeepDive, CompareOptions, NA, Snippet } from './compareApi';
 import type { CompareTabProps } from './compareTypes';
+import { ComboSelector, pairedSessions } from './charts/ComboSelector';
+import { failedCombos } from './failedCombos';
 import './deepDive.css';
 
 const unavailable=(na:NA|undefined)=>`n/a${na?` - ${na.reason}`:''}`;
@@ -95,7 +97,7 @@ export function DeepDive(props:Props) {
  const globals=Object.entries(data.globals.cells);
  const codes=Object.keys(data.counts.cells);
  return <div className="deep-dive"><h2>Deep dive</h2>
-  <fieldset className="deep-picker"><legend>Compare combos</legend><label><input type="checkbox" checked disabled/>Human (fixed)</label>{legend.map(item=><label key={item.combo.combo_key}><input type="checkbox" checked={selected.includes(item.combo.combo_key)} disabled={selected.length===1&&selected.includes(item.combo.combo_key)} onChange={event=>navigate({...state,view:'compare',run:runId,tab:'deep',combos:event.target.checked?[...selected,item.combo.combo_key]:selected.filter(key=>key!==item.combo.combo_key)})}/>{item.letter} · {item.label}</label>)}</fieldset>
+  <ComboSelector legend={legend} failed={failedCombos(props.overview)} selected={selected} paired={pairedSessions(props.overview,selected)} onChange={keys=>navigate({...state,view:'compare',run:runId,tab:'deep',combos:keys})}/>
   {!data.has_human?<p>no human reference</p>:<>
    <section><h3>Globals</h3>{globals.map(([metric,cells])=>{
     const dots=data.globals.dots.filter(dot=>dot.metric===metric&&shown.some(combo=>combo.combo_key===dot.combo_key));
