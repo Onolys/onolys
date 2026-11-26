@@ -15,9 +15,11 @@ export function RunErrorNote({ run }: { run: Pick<RunSummary, 'status' | 'error'
   if (run.status !== 'failed' || !run.error) return null;
   return <p role="alert">{runErrorText[run.error.code] ?? `Run failed: ${run.error.code}`}</p>;
 }
-export function PartialBadge({ run }: { run: PartialRunStatus }) {
+export function PartialBadge({ run, short = false }: { run: PartialRunStatus; short?: boolean }) {
   const text = partialStatusText(run);
-  return text ? <Badge variant="outline" className="max-w-full whitespace-normal" data-partial-badge><span aria-hidden="true">◐ </span>{text}</Badge> : null;
+  if (!text) return null;
+  if (short) return <><Badge variant="outline" data-partial-badge><span aria-hidden="true">◐ </span>Partial</Badge><p className="text-sm text-muted-foreground" data-partial-detail>{text.replace(/^Partial — /, '')}</p></>;
+  return <Badge variant="outline" className="max-w-full whitespace-normal" data-partial-badge><span aria-hidden="true">◐ </span>{text}</Badge>;
 }
 export function ProviderSkipNotices({ skips, short = false }: { skips?: readonly ProviderSkip[]; short?: boolean }) {
   if (!skips?.length) return null;

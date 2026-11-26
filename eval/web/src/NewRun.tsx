@@ -242,7 +242,7 @@ export function NewRun({ api, onRunCreated, initialRun }: { api: EvalApi; onRunC
       <p>Each repeat codes the same session again with each selected engine and model configuration. Choose 3 to compare variation between attempts. Human scores are included once per session.</p>
       <p className="planned" aria-live="polite">{countText(plan)}</p>
       {combos.length > 0 && <details><summary>Combos ({combos.length})</summary><ul>{combos.map(c => <li key={comboKey(c)}>{comboKey(c)}</li>)}</ul></details>}
-      {dropped.length > 0 && <ul aria-label="Skipped combos">{skippedText(dropped).map(t => <li key={t}>{t}</li>)}</ul>}
+      {dropped.length > 0 && <ul aria-label="Skipped combos" className="mb-4">{skippedText(dropped).map(t => <li key={t}>{t}</li>)}</ul>}
       {tooLarge ? <p role="status">{tooLargeMessage(unitCount)}</p> : validation.error !== undefined && !(selection.models.length === 0 && selection.tiers.length === 0 && selection.efforts.length === 0 && !needsCombos) && <p role="status">{validation.error}</p>}
       <Button type="submit" disabled={!canStart}>{busy && upload?.status === 'ready' ? 'Working…' : 'Start run'}</Button>
     </form>

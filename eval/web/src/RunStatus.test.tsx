@@ -14,7 +14,7 @@ it.each(['detail', 'history'])('%s shows each partial/cancelled variant with API
  ] as const) {
   const run = saved(patch); const api = { ...createEvalApi('', vi.fn()), run: vi.fn().mockResolvedValue(run), runs: vi.fn().mockResolvedValue({ runs: [run] }) };
   const view = render(page === 'detail' ? <RunView api={api} runId="r1" onRerun={vi.fn()} /> : <History api={api} onOpen={vi.fn()} onRerun={vi.fn()} />); await act(async () => {});
-  expect(screen.getAllByText(expected, { exact: false }).length).toBeGreaterThan(0); expect(document.body.textContent).not.toContain('8 of 9 runs done');
+  expect(screen.getAllByText(page === 'history' ? expected.replace(/^Partial — /, '') : expected, { exact: false }).length).toBeGreaterThan(0); expect(document.body.textContent).not.toContain('8 of 9 runs done');
   if (run.status === 'partial') expect(document.querySelector('[data-partial-badge]')?.textContent).toContain('◐'); view.unmount();
  }
 });
@@ -22,6 +22,12 @@ it('exports a reusable partial badge, preserves invalid saved timestamps and omi
  const view = render(<PartialBadge run={saved({ cancelled_at: 'saved-time', skipped_units: 0 })} />);
  expect(screen.getByText('Partial — cancelled at saved-time, 3 of 9 runs done', { exact: false })).toBeTruthy();
  view.rerender(<PartialBadge run={saved({ status: 'done' })} />); expect(document.querySelector('[data-partial-badge]')).toBeNull();
+});
+it('short partial badge is a compact pill with the detail outside it', () => {
+ render(<PartialBadge short run={saved({ cancelled_at: 'saved-time', skipped_units: 1 })} />);
+ const badge = document.querySelector('[data-partial-badge]')!;
+ expect(badge.textContent).toBe('◐ Partial'); expect(badge.className).not.toContain('whitespace-normal');
+ expect(document.querySelector('[data-partial-detail]')?.textContent).toBe('cancelled at saved-time, 3 of 9 runs done, 1 skipped');
 });
 it.each(['detail', 'history'])('%s shows provider skips with a symbol, mapped name and unknown-id fallback', async page => {
  const run = saved({ provider_skips: [{ provider: 'gemini', after_failures: 5, skipped_cells: 2, skipped_at: 'saved-time' }, { provider: 'new-provider', after_failures: 7, skipped_cells: 1, skipped_at: 'saved-time' }] });

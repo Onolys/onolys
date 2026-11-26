@@ -19,8 +19,10 @@ p { line-height: var(--leading-body); }
 fieldset { border: 1px solid var(--border); border-radius: var(--radius); background: var(--card); color: var(--card-foreground); margin: 1rem 0; padding: 1rem 1.25rem; min-width: 0; }
 legend { font-weight: 600; padding: 0 .3rem; }
 label { display: grid; gap: .35rem; margin: .75rem 0; font-weight: 500; }
-label:has(> input[type=radio], > [role=checkbox]) { display: flex; align-items: center; gap: .6rem; font-weight: 400; margin: .5rem 0; }
-input[type=radio] { width: 1.1rem; height: 1.1rem; accent-color: var(--primary); }
+label:has(> input[type=checkbox], > input[type=radio], > [role=checkbox]) { display: flex; align-items: center; gap: .6rem; font-weight: 400; margin: .5rem 0; }
+input[type=radio], .compare-app input[type=checkbox] { width: 1.1rem; height: 1.1rem; accent-color: var(--primary); }
+.compare-app select { font: inherit; min-height: 2.75rem; padding: .25rem .75rem; border: 1px solid var(--input); border-radius: calc(var(--radius) - 2px); background: var(--background); color: var(--foreground); box-shadow: var(--shadow-sm); min-width: 0; max-width: 100%; }
+.compare-app select:focus-visible { border-color: var(--ring); box-shadow: 0 0 0 3px var(--ring); }
 :where(.eval-main) button:not(:where([data-slot])) { font: inherit; font-size: .875rem; font-weight: 500; min-height: 2.75rem; background: var(--primary); color: var(--primary-foreground); border: 0; border-radius: calc(var(--radius) - 2px); padding: .5rem 1rem; cursor: pointer; margin: .25rem .5rem .25rem 0; }
 .eval-main button:disabled { opacity: .5; cursor: default; }
 .choice-row { display: flex; gap: 2rem; }
