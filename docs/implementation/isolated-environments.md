@@ -21,8 +21,21 @@ The eval Hosting site `onolys-eval-staging` and its custom domain `eval.onolys.c
 Owner steps for the legacy apply (do not run a plain `terraform apply` in `infra/`):
 
 1. Empty the non-empty buckets first, they have `force_destroy=false`: `onolys-eval-data-staging` (datasets already copied to `gs://onolys-eval-datasets` and verified), `onolys-audio-staging`, `onolys-audio-eval`.
-2. The old eval Firestore database `projects/onolys/databases/eval` has delete protection, so Terraform only drops it from state (`deletion_policy` ABANDON). Disable delete protection and delete it manually with `gcloud firestore databases update --database=eval --delete-protection=DISABLED` then `gcloud firestore databases delete --database=eval`.
-3. Apply with targeted addresses only (`-target=` for the reviewed destroy set). The legacy plan also contains pre-existing PROD drift (destroy of `openai-api-key-prod`, reset of the prod Cloud Run env) that must not be applied blindly.
+
+   ```
+   gcloud storage rm --recursive --project=onolys 'gs://onolys-eval-data-staging/**' 'gs://onolys-audio-staging/**' 'gs://onolys-audio-eval/**'
+   ```
+
+   Do not touch `onolys-eval-datasets` or `onolys-eval-audio` (the new eval buckets in project `onolys-eval`).
+2. The old eval Firestore database `projects/onolys/databases/eval` has delete protection, so Terraform only drops it from state (`deletion_policy` ABANDON). Disable delete protection and delete it manually:
+
+   ```
+   gcloud firestore databases update --project=onolys --database=eval --no-delete-protection
+   gcloud firestore databases delete --project=onolys --database=eval
+   ```
+
+   Warning: project `onolys-eval` also has a database named `eval`; never run these without `--project=onolys`, and do not touch that one.
+3. Apply with targeted addresses only (`-target=` for the reviewed destroy set). The legacy plan also contains pre-existing PROD drift (destroy of `openai-api-key-prod`, reset of the prod Cloud Run env) that must not be applied blindly. The legacy plan also replaces `terraform_data.identity_policy`, which rewrites prod's sign-in authorized-domain list (drops `admin.onolys.com` and `onolys-admin-staging.web.app`); the owner must consciously include or exclude it from the targeted apply.
 4. Only after the apply is clearing `STAGING_GCP_PROJECT` meaningless as a rollback: the legacy staging target no longer exists.
 
 Eval uses the same module with the public API and voice disabled, and enables the eval backend, worker and eval mode. Runtime config remains `ENV=staging`; Firestore database is `eval`. Its smoke site is `onolys-eval-app`. `auth_project` defaults to `onolys` for eval, retaining the existing token issuer without moving users. The root never manages an external identity project. `manage_identity=true` is available for staging validation only when the issuer is that runtime project; it creates local email/password Identity Platform configuration and a Firebase web app. OAuth-provider setup, email template policy and existing-project authorized-domain additions remain separate reviewed identity operations.
