@@ -6,11 +6,16 @@ same env vars from the git_sha / llm_* variables (docs/reference/infra.md "Terra
 them in ignored tfvars; CI reads the live values so a plan/apply never rewrites a deployed commit or LLM selection.
 
 Usage: tf_live_inputs.py --root legacy|isolated --env prod|staging|eval --project P [--region R] --out FILE.auto.tfvars.json
+                         [--expect-sha256 HEX]
+With --expect-sha256 (apply jobs) the freshly read values must hash to the value recorded at plan time; otherwise a deploy landed
+in between and the saved plan would roll it back: exit 1 with "re-run to re-plan". The git_sha comes from the worker only (the
+variable is one value per environment shared by api, worker and voice; a per-service sha cannot be expressed).
 Only reads (gcloud run services describe). Values are non-secret env vars; secret references are never emitted.
 """
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import re
 import subprocess
@@ -48,6 +53,14 @@ def build(root: str, worker: dict | None, api: dict | None) -> tuple[dict, list[
     return out, warnings
 
 
+def digest(values: dict) -> str:
+    return hashlib.sha256(serialize(values).encode()).hexdigest()
+
+
+def serialize(values: dict) -> str:
+    return json.dumps(values, indent=2, sort_keys=True)
+
+
 def describe(name: str, project: str, region: str) -> dict | None:
     proc = subprocess.run(
         ["gcloud", "run", "services", "describe", name, "--project", project, "--region", region, "--format=json"],
@@ -66,6 +79,7 @@ def main() -> int:
     ap.add_argument("--project", required=True)
     ap.add_argument("--region", default="us-central1")
     ap.add_argument("--out", required=True)
+    ap.add_argument("--expect-sha256", help="abort unless the live values hash to this (plan-time) digest")
     a = ap.parse_args()
     worker = describe(f"onolys-worker-{a.env}", a.project, a.region)
     api = describe(f"onolys-api-{a.env}", a.project, a.region) if a.env != "eval" else None
@@ -73,7 +87,11 @@ def main() -> int:
     for w in warnings:
         print(f"::warning::{w}")
     with open(a.out, "w", encoding="utf-8") as f:
-        json.dump(values, f, indent=2, sort_keys=True)
+        f.write(serialize(values))
+    if a.expect_sha256 is not None and digest(values) != a.expect_sha256:
+        print(f"::error::live deploy-managed inputs for {a.env} changed since the plan (a deploy landed): "
+              "applying the saved plan would roll it back. Re-run all jobs to re-plan.", file=sys.stderr)
+        return 1
     print(f"live inputs for {a.env}: {sorted(values)} (written to {a.out})")
     return 0
 

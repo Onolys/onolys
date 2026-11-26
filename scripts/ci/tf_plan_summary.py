@@ -22,7 +22,8 @@ REDACT = [
     re.compile(r"\bya29\.[0-9A-Za-z_\-]{20,}"),
     re.compile(r"(?i)(private_key|client_secret|api[_-]?key|token|password|secret)(\"?\s*[:=]\s*\"?)[^\s\",]{8,}"),
 ]
-ORDER = {"delete": 0, "replace": 1, "update": 2, "create": 3, "read": 4}
+ORDER = {"delete": 0, "replace": 1, "forget": 2, "update": 3, "create": 4, "read": 5}
+KNOWN_COUNTS = ("create", "update", "delete", "replace", "forget")
 
 
 def redact(text: str) -> str:
@@ -37,7 +38,7 @@ def redact(text: str) -> str:
 def classify(actions: list[str]) -> str | None:
     if actions == ["no-op"]:
         return None
-    if actions in (["delete", "create"], ["create", "delete"]):
+    if actions in (["delete", "create"], ["create", "delete"], ["forget", "create"], ["create", "forget"]):
         return "replace"
     if actions == ["read"]:
         return "read"
@@ -45,21 +46,27 @@ def classify(actions: list[str]) -> str | None:
 
 
 def summarize_plan(plan: dict, max_lines: int) -> tuple[str, dict]:
-    counts = {"create": 0, "update": 0, "delete": 0, "replace": 0}
+    counts = {k: 0 for k in KNOWN_COUNTS}
     rows: list[tuple[int, str, str]] = []
     for rc in plan.get("resource_changes", []):
         kind = classify(rc["change"]["actions"])
         if kind is None or kind == "read":
             continue
-        counts[kind] += 1
-        rows.append((ORDER[kind], rc["address"], kind))
+        counts[kind] = counts.get(kind, 0) + 1  # unknown future action kinds must never crash the summary
+        rows.append((ORDER.get(kind, 2), rc["address"], kind))
     rows.sort()
     out_names = sorted(k for k, v in (plan.get("output_changes") or {}).items() if classify(v["actions"]))
     lines = [f"- `{kind}` {addr}" for _, addr, kind in rows[:max_lines]]
     if len(rows) > max_lines:
         lines.append(f"- ... and {len(rows) - max_lines} more (truncated; run the plan locally for the full list)")
     head = (f"**{counts['create']} to add, {counts['update']} to change, {counts['replace']} to replace, "
-            f"{counts['delete']} to destroy**")
+            f"{counts['delete']} to destroy")
+    if counts["forget"]:
+        head += f", {counts['forget']} to forget (removed from state, not destroyed)"
+    extra = {k: v for k, v in counts.items() if k not in KNOWN_COUNTS}
+    if extra:
+        head += ", " + ", ".join(f"{v} {k}" for k, v in sorted(extra.items()))
+    head += "**"
     parts = [head]
     if counts["delete"] or counts["replace"]:
         parts.append("Destructive changes present: review the `delete` and `replace` lines first.")
