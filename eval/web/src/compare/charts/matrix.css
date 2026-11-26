@@ -12,6 +12,7 @@
 .mx-table th a { color: var(--ui-info); overflow-wrap: anywhere; }
 .mx-table td { padding: .45rem .5rem; text-align: center; vertical-align: middle; border-radius: .3rem; overflow-wrap: anywhere; background: #fff; border: 1px solid var(--border, #d3dbda); }
 .mx-sub { display: block; font-size: .72rem; color: var(--ui-muted-fg); }
+.mx-cell .mx-sub { color: var(--foreground, #171c1c); }
 .mx-ahead { background: var(--ui-good-bg); border-color: var(--ui-good-border); }
 .mx-behind { background: var(--ui-low-bg); border-color: var(--ui-low-border); }
 .mx-even { background: #fff; }

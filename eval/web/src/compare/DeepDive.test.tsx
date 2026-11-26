@@ -77,10 +77,10 @@ it('keeps loaded reasoning pages when a code is collapsed and reopened',async()=
  expect(p.api.compareReasoning).toHaveBeenCalledTimes(calls);
  expect(screen.getByText(group.snippets[1].rationale)).toBeTruthy();expect(screen.queryByRole('button',{name:'Load more'})).toBeNull();
 });
-it('does not fetch reasoning for a combo whose rationale count is zero',async()=>{
+it('fetches reasoning for a combo even when its rationale count is zero (server omits zeros, so zero is not trusted)',async()=>{
  const p=props();const key=p.data.combos[0].combo_key;p.data.rationale_counts={...p.data.rationale_counts,question:{...p.data.rationale_counts.question,[key]:0}};
  render(<DeepDive {...p}/>);openCode('question');await act(async()=>{});
- expect(p.api.compareReasoning.mock.calls.some(c=>c[1].combo===key)).toBe(false);
+ expect(p.api.compareReasoning.mock.calls.some(c=>c[1].combo===key)).toBe(true);
 });
 it('defaults to three available Count errors, refetches picker changes and caches effective subsets',async()=>{
  const ov=overview();const original=ov.combos[0];ov.combos=Array.from({length:5},(_,i)=>({...original,combo_key:`c${i}`}));

@@ -201,3 +201,12 @@ it('speaker chips differ from combo tag letters and use a compact label',()=>{
  for(const text of speakers){expect(letters.has(text)).toBe(false);expect(text).toMatch(/^Speaker /);}
  expect(lineCss.replace(/@media[^{]*/g,"")).not.toMatch(/(^|[^-])width:\s*\d+px/);
 });
+it('does not warn when combo codes equal the human codes in a different order',async()=>{
+ const p=props(),popup=await p.api.compareTurn(),key=p.data.combos[0].combo_key;
+ popup.human={codes:['sr','cr'],note:null};popup.combos[key]={missing:null,codes:[['cr','sr'],['cr']],rationales:[],agree:{k:1,r:2}};
+ render(<LineView {...p} state={{...p.state,turn:'t5'}}/>);
+ const dialog=await screen.findByRole('dialog');await within(dialog).findByText('cr, sr');
+ const chips=[...dialog.querySelectorAll('.ui-chip')];
+ expect(chips.find(c=>c.textContent==='cr, sr')!.classList.contains('ui-chip-warning')).toBe(false);
+ expect(chips.find(c=>c.textContent==='cr')!.classList.contains('ui-chip-warning')).toBe(true);
+});

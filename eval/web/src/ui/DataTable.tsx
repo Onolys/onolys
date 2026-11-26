@@ -28,7 +28,7 @@ export function DataTable<T>({ rows, columns, rowKey, rowTone, filters, searchLa
   searchThreshold?: number;
 }) {
   const { visible, search, setSearch, sort, toggleSort, setFilter } = useTableState(rows, columns);
-  const showSearch = rows.length > searchThreshold;
+  const showSearch = rows.length > searchThreshold || search !== "";
   const onKey = (key: string) => (e: KeyboardEvent) => {
     if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggleSort(key); }
   };

@@ -127,3 +127,9 @@ it("searchThreshold prop overrides the default", () => {
   view.rerender(<DataTable rows={many(50)} columns={columns} rowKey={(r) => r.id} searchThreshold={Infinity} />);
   expect(screen.queryByRole("searchbox")).toBeNull();
 });
+it("keeps the search box while a search is active even if rows drop to the threshold", () => {
+  const view = render(<DataTable rows={many(11)} columns={columns} rowKey={(r) => r.id} />);
+  fireEvent.change(screen.getByRole("searchbox"), { target: { value: "zzz" } });
+  view.rerender(<DataTable rows={many(5)} columns={columns} rowKey={(r) => r.id} />);
+  expect((screen.getByRole("searchbox") as HTMLInputElement).value).toBe("zzz");
+});
