@@ -31,17 +31,21 @@ it('prints baseline and reliability values verbatim from the API', () => {
  expect(within(reliability).getAllByText(/75 s/)).toHaveLength(2);
  expect(within(reliability).getAllByText('n=4 · retried 0')).toHaveLength(2);
 });
-it('uses directional server head-to-head counts and ties and links sessions to Line view', () => {
+it('keeps head-to-head and interviews behind toggles; opening shows server counts, ties and Line view links', () => {
  const input=props();input.data.head_to_head[0].ties=7;
  render(<MoreAnalysis {...input}/>);
- const matrix=screen.getAllByRole('table',{name:'Head-to-head'})[0];
- expect(within(matrix).getByText('A closer than B on 0 of 2 sessions · 7 ties')).toBeTruthy();
- expect(within(matrix).getByText('B closer than A on 2 of 2 sessions · 7 ties')).toBeTruthy();
+ expect(screen.queryByRole('table',{name:'Head-to-head'})).toBeNull();
+ expect(screen.queryByRole('table',{name:'Interviews by combo'})).toBeNull();
+ fireEvent.click(screen.getByRole('button',{name:'Show head-to-head'}));
+ fireEvent.click(screen.getByRole('button',{name:'Show interviews by combo'}));
+ const matrix=screen.getByRole('table',{name:'Head-to-head'});
+ expect(within(matrix).getByLabelText('A closer than B on 0 of 2 sessions, 7 ties')).toBeTruthy();
+ expect(within(matrix).getByLabelText('B closer than A on 2 of 2 sessions, 7 ties')).toBeTruthy();
  const link=screen.getByRole('link',{name:'synthetic-s01'});
  expect(link.getAttribute('href')).toBe('?run=eval-lines&view=compare&tab=lines&session=synthetic-s01');
  fireEvent.click(link);
  expect(input.navigate).toHaveBeenCalledWith({run:'eval-lines',view:'compare',tab:'lines',session:'synthetic-s01'});
- expect(screen.getAllByText(/off 2 · n=1 · 2 repeats/).length).toBeGreaterThan(0);
+ expect(screen.getAllByText(/n=1 · 2 repeats/).length).toBeGreaterThan(0);
 });
 it('keeps error vs length behind a toggle and switches the axis using server values', () => {
  const {container}=render(<MoreAnalysis {...props()}/>);
@@ -58,7 +62,7 @@ it('hides human error displays without labels and keeps reliability and baseline
  const {container}=render(<MoreAnalysis {...props(data)}/>);
  expect(screen.getByText('no human reference')).toBeTruthy();
  expect(container.querySelector('svg[role="img"][aria-label$="scatter"]')).toBeNull();
- expect(screen.queryByRole('table',{name:'Head-to-head'})).toBeNull();
+ expect(screen.queryByRole('button',{name:'Show head-to-head'})).toBeNull();
  expect(screen.getByRole('table',{name:'Reliability'})).toBeTruthy();
  expect(screen.getByText(/Needs a second human coder, not in this dataset/)).toBeTruthy();
 });
@@ -88,6 +92,7 @@ it('keeps zero-valued scatters finite and states when no points can be plotted',
  view.rerender(<MoreAnalysis {...input}/>);
  expect(screen.getByText('No priced results available')).toBeTruthy();
  fireEvent.click(screen.getByRole('button',{name:'Show error vs interview length'}));
+ fireEvent.click(screen.getByRole('button',{name:'Show interviews by combo'}));
  expect(screen.getByText('No session length results available')).toBeTruthy();
  expect(screen.getByText('No session results available')).toBeTruthy();
 });
@@ -99,7 +104,4 @@ it('joins exactly the points the server places on the frontier without choosing 
  const line=container.querySelector('.ca-frontier');
  expect([...(line?.getAttribute('data-frontier-combos')?.split(',')??[])].sort()).toEqual(input.data.frontier.points.map(p=>p.combo_key).sort());
  expect(container.querySelectorAll('[data-frontier="true"]')).toHaveLength(2);
- expect(screen.getAllByText('How to read:')).toHaveLength(2);
- expect(screen.getByRole('region',{name:'Head-to-head table'}).getAttribute('tabindex')).toBe('0');
- expect(screen.getByRole('region',{name:'Interviews by combo table'}).getAttribute('tabindex')).toBe('0');
 });
