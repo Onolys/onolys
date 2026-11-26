@@ -72,7 +72,7 @@ Enabling direct storage for all recordings requires the eval bucket PUT CORS pol
 
 ## Releases
 
-Eval releases independently of the app. Dispatch `deploy-eval` on current CI-green `main` to release the eval worker, backend, site and rules together; deploying staging or promoting production does not release eval. The eval worker uses the app runtime Dockerfile and shared engine code, with its own image package, digest and runtime configuration. Both eval services must carry the same release commit for the code-drift checks to pass. Active runs may fail those checks during an update. Provisioning prerequisites and recovery steps are in [infra.md](infra.md).
+Eval releases independently of the app, automatically after CI succeeds on `main` (the same trigger as staging; `deploy-eval` can also be dispatched manually on current CI-green `main`). It releases the eval worker, backend, site and rules together; deploying staging or promoting production does not release eval. The eval worker uses the app runtime Dockerfile and shared engine code, with its own image package, digest and runtime configuration. Both eval services must carry the same release commit for the code-drift checks to pass. Active runs may fail those checks during an update. Provisioning prerequisites and recovery steps are in [infra.md](infra.md).
 
 ## Storage and method limits
 

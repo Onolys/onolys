@@ -16,7 +16,7 @@ assert wf.is_file(), 'deploy-eval.yml missing'
 s = wf.read_text()
 for required in ['workflow_dispatch:', 'environment: staging',
                  'file: eval/backend/Dockerfile', 'steps.push.outputs.digest',
-                 'GIT_SHA=${{ github.sha }}', 'google-github-actions/auth@v2',
+                 'GIT_SHA=${{ steps.sha.outputs.sha }}', 'google-github-actions/auth@v2',
                  'google-github-actions/deploy-cloudrun@v2', 'skip_default_labels: true', 'id-token: write',
                  'onolys-eval-backend-eval', 'eval-staging',
                  'VITE_EVAL_API_URL:', 'vars.EVAL_VITE_FIREBASE_API_KEY',
@@ -28,24 +28,38 @@ for required in ['workflow_dispatch:', 'environment: staging',
     assert required in s, f'missing workflow contract: {required}'
 workflow = yaml.safe_load(s)
 triggers = workflow.get('on', workflow.get(True))
-assert set(triggers) == {'workflow_dispatch'}, 'eval is an independent manual release only'
+assert set(triggers) == {'workflow_run', 'workflow_dispatch'}, 'eval auto-deploys after CI on main like staging; manual dispatch kept'
+assert triggers['workflow_run'] == {'workflows': ['CI'], 'types': ['completed'], 'branches': ['main']}
 assert workflow['concurrency'] == {'group': 'deploy-eval', 'cancel-in-progress': False}
 jobs = workflow['jobs']
 build = jobs['build']
-assert build['if'] == "github.ref == 'refs/heads/main'", 'reject non-main before credentials'
+cond = build['if']
+assert "github.ref == 'refs/heads/main'" in cond, 'reject non-main before credentials'
+for guard in ["github.event_name == 'workflow_dispatch'", "github.event.workflow_run.conclusion == 'success'",
+              "github.event.workflow_run.event == 'push'",
+              "github.event.workflow_run.head_repository.full_name == github.repository",
+              "github.event.workflow_run.head_branch == 'main'"]:
+    assert guard in cond, f'build if lacks {guard}'
 assert build['permissions']['actions'] == 'read'
 steps = build['steps']
 release = next(i for i, step in enumerate(steps) if step.get('id') == 'release')
 auth = next(i for i, step in enumerate(steps) if 'google-github-actions/auth@' in step.get('uses', ''))
 assert release < auth, 'admit CI-green current main before cloud authentication'
 assert 'verify_staging_release.cjs' in steps[release]['with']['script']
-assert steps[release]['env']['RELEASE_SHA'] == '${{ github.sha }}'
-assert build['outputs']['sha'] == '${{ github.sha }}'
-assert steps[0]['with']['ref'] == '${{ github.sha }}'
+sha_step = steps[0]
+assert sha_step['id'] == 'sha' and 'github.event.workflow_run.head_sha || github.sha' in sha_step['env']['RUN_SHA'], \
+    'workflow_run must use the CI run head_sha, not default-branch HEAD'
+SHA = '${{ steps.sha.outputs.sha }}'
+assert steps[release]['env']['RELEASE_SHA'] == SHA
+assert build['outputs']['sha'] == SHA
+checkout0 = next(step for step in steps if step.get('uses', '').startswith('actions/checkout@'))
+assert checkout0['with']['ref'] == SHA
+assert steps.index(sha_step) < steps.index(checkout0)
 assert any('check_config.sh' in step.get('run', '') for step in steps[:auth]), 'source config guard before auth'
 worker_build = next(step for step in steps if step.get('id') == 'push-worker')
 assert worker_build['with']['file'] == 'api/Dockerfile', 'same runtime build inputs as app worker'
-assert worker_build['with']['build-args'] == 'GIT_SHA=${{ github.sha }}'
+assert worker_build['with']['build-args'] == 'GIT_SHA=' + SHA
+assert 'github.sha' not in json.dumps(build['steps'][1:]), 'build job must not use default-branch github.sha'
 assert 'onolys/eval-worker' in s and 'onolys/api' not in s, 'eval must never publish an app image tag'
 preflight = next(step for step in steps if 'gcloud run services describe' in step.get('run', ''))
 assert auth < steps.index(preflight) < steps.index(worker_build)
