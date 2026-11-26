@@ -14,7 +14,7 @@ import { History, RunView } from './Runs';
 import { CompareApp } from './compare/CompareApp';
 import { getConfig } from './config';
 import { NewRun } from './NewRun';
-import { ColdStartNotice } from './ColdStart';
+import { SlowStartNotice } from '@prod-components/SlowStart';
 import { ErrorBoundary, ErrorPage } from './ErrorPage';
 import { NoAccess } from './NoAccess';
 import { Shell } from './Shell';
@@ -72,7 +72,7 @@ function AllowedApp({ baseFetch }: { baseFetch: typeof fetch }) {
   }, [api, attempt]);
   if (denied) return <NoAccess code={denied.code} />;
   return <>
-      {access === 'loading' && <><p role="status">Checking access…</p><ColdStartNotice pending /></>}
+      {access === 'loading' && <><p role="status">Checking access…</p><SlowStartNotice pending /></>}
       {access === 'error' && <div role="alert"><p>Could not reach the server.</p><Button onClick={() => { setAccess('loading'); setAttempt(n => n + 1); }}>Retry</Button></div>}
       {access === 'allowed' && <>
         {runId && location.get('view') === 'compare' ? <CompareApp key={runId} api={api} runId={runId} state={parseCompareUrl(location)} navigate={navigateEval} /> : runId ? <RunView key={runId} api={api} runId={runId} onRerun={rerun} /> : location.get('view') === 'history' ? <History api={api} onOpen={navigate} onRerun={rerun} /> : <NewRun key={initialRun?.run_id ?? 'new'} api={api} initialRun={initialRun} onRunCreated={navigate} />}

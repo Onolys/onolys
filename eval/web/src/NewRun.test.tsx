@@ -47,6 +47,14 @@ const checked = (name: string) => (screen.getByLabelText(name) as HTMLInputEleme
 const start = () => screen.getByRole('button', { name: 'Start run' }) as HTMLButtonElement;
 
 describe('new run', () => {
+  it('shows the shared slow-start notice while choices stay loading', async () => {
+    vi.useFakeTimers();
+    const api = { ...makeApi(), options: vi.fn(() => new Promise<Options>(() => undefined)) };
+    render(<NewRun api={api} onRunCreated={vi.fn()} />);
+    expect(screen.queryByText(/Starting the server/)).toBeNull();
+    await act(async () => { await vi.advanceTimersByTimeAsync(2100); });
+    expect(screen.getByText(/Starting the server/)).toBeTruthy();
+  });
   it('defaults the session slider to 50 for a large dataset and submits the first 50 in order', async () => {
     const { api } = await mount(200);
     const slider = screen.getByRole('slider') as HTMLInputElement;

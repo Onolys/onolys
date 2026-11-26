@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { Button, Input, Textarea } from '@onolys/ui';
-import { ColdStartNotice } from './ColdStart';
+import { SlowStartNotice } from '@prod-components/SlowStart';
 import { sourceLine, originalMedia } from './sourceMedia';
 import type { CodedSpan, Dataset, DatasetMetadata, EvalApi, Mode, Options, RunInput, RunSummary, Selection, Upload, UploadInput } from './api';
 import { MAX_UNITS, countText, effortsFor, modelMap, planCount, skippedText, tiersFor, tooLargeMessage, validateSelection, comboKey } from './matrix';
@@ -227,7 +227,7 @@ export function NewRun({ api, onRunCreated, initialRun }: { api: EvalApi; onRunC
       </fieldset>}
       {initialRun?.legacy_selection && <p role="status">This older run chose models by preset, which can no longer be recreated. Pick a model, tier and effort below; saved input and engines are kept.</p>}
       <div className="configuration-row">
-      <fieldset disabled={busy || optionsLoading}><legend>Engines</legend>{optionsLoading && <p role="status">Loading choices…</p>}<ColdStartNotice pending={optionsLoading && !error} />{unavailableEngines.map(id => <label key={id}><input type="checkbox" checked onChange={() => setEngines(ids => ids.filter(e => e !== id))} />{id} (unavailable)</label>)}{visibleEngines.map(e => <label key={e.id}><input type="checkbox" checked={finalEngines.includes(e.id)} disabled={e.id === 'human' && !humanAvailable} onChange={() => setEngines(ids => toggle(ids, e.id))} />{e.label}</label>)}</fieldset>
+      <fieldset disabled={busy || optionsLoading}><legend>Engines</legend>{optionsLoading && <p role="status">Loading choices…</p>}<SlowStartNotice pending={optionsLoading && !error} />{unavailableEngines.map(id => <label key={id}><input type="checkbox" checked onChange={() => setEngines(ids => ids.filter(e => e !== id))} />{id} (unavailable)</label>)}{visibleEngines.map(e => <label key={e.id}><input type="checkbox" checked={finalEngines.includes(e.id)} disabled={e.id === 'human' && !humanAvailable} onChange={() => setEngines(ids => toggle(ids, e.id))} />{e.label}</label>)}</fieldset>
       <fieldset disabled={busy || optionsLoading}><legend>Models</legend>{unavailableModels.map(id => <label key={id}><input type="checkbox" checked onChange={() => toggleModel(id)} />{id} (unavailable)</label>)}{options?.models.map(m => <label key={m.id}><input type="checkbox" checked={selection.models.includes(m.id)} onChange={() => toggleModel(m.id)} />{m.label}</label>)}</fieldset>
       <fieldset disabled={busy || optionsLoading}><legend>Tiers</legend>{unavailableTiers.map(id => <label key={id}><input type="checkbox" checked onChange={() => toggleTier(id)} />{id} (unavailable)</label>)}{tiers.map(t => <label key={t.id}><input type="checkbox" checked={selection.tiers.includes(t.id)} onChange={() => toggleTier(t.id)} />{t.id}</label>)}</fieldset>
       <fieldset disabled={busy || optionsLoading}><legend>Efforts</legend>{unavailableEfforts.map(id => <label key={id}><input type="checkbox" checked onChange={() => toggleEffort(id)} />{id} (unavailable)</label>)}{efforts.map(e => <label key={e}><input type="checkbox" checked={selection.efforts.includes(e)} onChange={() => toggleEffort(e)} />{e}</label>)}</fieldset>

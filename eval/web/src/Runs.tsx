@@ -4,7 +4,7 @@ import { ApiError } from './api';
 import { CancelRunDialog, CancellationNote, canCancelRun, isActiveRun, mergeRunStatus } from './CancelRunDialog';
 import { PartialBadge, ProviderSkipNotices, RunErrorNote, partialStatusText, providerName } from './RunStatus';
 import { RunConfigDialog, savedConfiguration } from './RunConfigDialog';
-import { ColdStartNotice } from './ColdStart';
+import { SlowStartNotice } from '@prod-components/SlowStart';
 import { JsonDialog } from './JsonViewer';
 import './runs.css';
 import { CompareLink, type CompareNavigate } from './compare/CompareLink';
@@ -234,7 +234,7 @@ export function History({ api, onOpen, onRerun, onNavigate = navigateEval }: { a
         }}>{inputName(run)}</a> : column === 'Date' ? <time dateTime={run.created_at}>{dateText(run.created_at)}</time> : column === 'Status' ? <div>{run.status === 'partial' ? <PartialBadge run={run} /> : <Badge variant="outline" className="max-w-full whitespace-normal">{columnValue(run, column)}</Badge>}{isActiveRun(run) && <p className="text-sm text-muted-foreground">{run.done_units} of {run.total_units} runs done{run.running_units ? `, ${run.running_units} running` : ''}</p>}<CancellationNote run={run} /><ProviderSkipNotices skips={run.provider_skips} short /></div> : columnValue(run, column)}</td>)}
           <td className="history-actions" data-label="Actions"><CompareLink run={run} navigate={onNavigate} /><RunActions run={run} onCancel={(saved, trigger) => { cancelTrigger.current = trigger; setToCancel(saved); }} onRerun={onRerun} onConfig={(saved, trigger) => { configTrigger.current = trigger; setConfiguration(saved); }} onDelete={target => { setDeleteError(''); setToDelete(target); }} /></td></tr>)}</tbody>
       </table>{visible.length === 0 && <p>No runs match these filters.</p>}</>}
-    {loading && <p role="status">{exhaustive ? 'Loading full history for search, filters and sorting…' : 'Loading history…'}</p>}<ColdStartNotice pending={loading && !error && !runs?.length} />
+    {loading && <p role="status">{exhaustive ? 'Loading full history for search, filters and sorting…' : 'Loading history…'}</p>}<SlowStartNotice pending={loading && !error && !runs?.length} />
     {nextCursor && !error && <Button disabled={loading} onClick={() => { setLoading(true); setCursor(nextCursor); }}>Load more</Button>}
     {exhaustive && !loading && !nextCursor && !error && <p role="status">All {runs?.length ?? 0} saved runs searched.</p>}
     <CancelRunDialog api={api} run={toCancel} returnFocus={cancelTrigger} onClose={() => setToCancel(null)} onUpdated={fresh => setRuns(previous => previous?.map(old => old.run_id === fresh.run_id ? fresh : old))} />
