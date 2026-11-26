@@ -33,10 +33,9 @@ it('headers are plain headers (no buttons) and every column is sortable both way
   fireEvent.click(heads[0]); expect(sessions()).toEqual(['s1', 's2', 's3', 's4']);
   fireEvent.click(heads[0]); expect(sessions()).toEqual(['s4', 's3', 's2', 's1']);
 });
-it('searches across columns', () => {
+it('hides the search box on a small table', () => {
   show();
-  fireEvent.change(screen.getByRole('searchbox'), { target: { value: 'gemini' } });
-  expect(sessions()).toEqual(['s1']);
+  expect(screen.queryByRole('searchbox')).toBeNull();
 });
 it('filters by status, engine and model', () => {
   show();
