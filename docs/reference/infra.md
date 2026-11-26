@@ -164,6 +164,10 @@ Environments: create `production` with Tejit as required reviewer (all prod jobs
 
 `VITE_FIREBASE_PROJECT_ID` is taken from `GCP_PROJECT`/`onolys` in the prod/staging workflows (`EVAL_GCP_PROJECT` in deploy-eval); `VITE_FIRESTORE_DATABASE` is hard-coded per workflow (see Terraform outputs).
 
+### Owner step: `RELEASE_TAG_TOKEN` (prod tag job)
+
+The `tag` job of `deploy-prod` pushes `prod-<date>.<n>`. When the promoted commit (staging's, or a rollback target) is older than `main` and `.github/workflows/*` differ, `GITHUB_TOKEN` is refused ("refusing to allow a GitHub App to create or update workflow ... without `workflows` permission") and cannot be granted that permission. Create a fine-grained PAT (resource owner `Onolys`, repository `Onolys/onolys` only, Repository permissions: Contents Read and write, Workflows Read and write, short expiry you will renew) and save it as repo secret `RELEASE_TAG_TOKEN` (Settings > Secrets and variables > Actions). Only the `tag` checkout uses it; unset falls back to `GITHUB_TOKEN`, which works only when workflow files match `main`. Missing tag for run 45737922265 (commit `ce261570a3d31bd529bcdc5adfbe6300ae887894`): after the secret is set, `gh run rerun 45737922265 --failed` re-runs only the failed `tag` job (re-runs use the current secrets; the next `prod-<date>.<n>` is numbered from origin). Or a maintainer tags by hand: `git tag -a prod-<date>.<n> ce261570a3d31bd529bcdc5adfbe6300ae887894 -m "prod deploy" && git push origin refs/tags/prod-<date>.<n>`.
+
 ### Isolated staging and eval release targets (opt in)
 
 The current production project is **`onolys`**. The additive isolated targets are **`onolys-staging`** and **`onolys-eval`**; their billing and infrastructure are provisioned separately. These workflow changes create no resources and change no live variables or domains. With `STAGING_GCP_PROJECT` unset, staging releases use the existing project, identities, sites and Firebase apps. Eval has no legacy target any more: `deploy-eval` always requires the `EVAL_*` bundle (it fails before authentication otherwise).

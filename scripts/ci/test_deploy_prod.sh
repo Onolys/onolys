@@ -84,6 +84,10 @@ has   "tag pushed"                           'git push origin "refs/tags/'
 # Old-commit tag push: a shallow checkout makes git upload the commit's trees/blobs (incl. .github/workflows), which GITHUB_TOKEN may not push
 printf '%s\n' "$TAGJOB" | grep -Eq 'fetch-depth: 0' && ok "tag job checks out full history" || bad "tag job checks out full history"
 printf '%s\n' "$TAGJOB" | grep -Eq 'git fetch .*--depth' && bad "tag job must not shallow-fetch the target sha" || ok "tag job does not shallow-fetch the target sha"
+# Workflow-changing tags (promoting an older commit): the tag job pushes with RELEASE_TAG_TOKEN (Workflows RW), falling back to github.token
+printf '%s\n' "$TAGJOB" | grep -Fq 'token: ${{ secrets.RELEASE_TAG_TOKEN || github.token }}' && ok "tag job checkout uses RELEASE_TAG_TOKEN with github.token fallback" || bad "tag job checkout uses RELEASE_TAG_TOKEN with github.token fallback"
+[[ "$(grep -c 'secrets.RELEASE_TAG_TOKEN' "$WF")" == 1 && "$(printf '%s\n' "$TAGJOB" | grep -c 'secrets.RELEASE_TAG_TOKEN')" == 1 ]] && ok "RELEASE_TAG_TOKEN used only in the tag job" || bad "RELEASE_TAG_TOKEN used only in the tag job"
+printf '%s\n' "$TAGJOB" | grep -Fq 'RELEASE_TAG_TOKEN (fine-grained PAT' && ok "tag job prints a RELEASE_TAG_TOKEN hint on workflows-permission failure" || bad "tag job prints a RELEASE_TAG_TOKEN hint on workflows-permission failure"
 
 # Behaviour of the config guard as the workflow runs it: workflow-ref copy, empty env, target tree passed as ROOT (data only)
 GT="$(mktemp -d)"; trap 'rm -rf "$GT"' EXIT
