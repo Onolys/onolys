@@ -11,7 +11,7 @@
     "isolatedModules": true,
     "skipLibCheck": true,
     "types": ["vite/client", "node"],
-    "paths": { "@prod-auth/*": ["../../web/src/auth/*"] }
+    "paths": { "@prod-auth/*": ["../../web/src/auth/*"], "@prod-routes/*": ["../../web/src/routes/*"], "@prod-components/*": ["../../web/src/components/*"] }
   },
   "include": ["src", "vite.config.ts"]
 }

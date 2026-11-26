@@ -27,7 +27,8 @@ logger = logging.getLogger(__name__)
 # Scheduler-level states the RunDoc cannot express; they win over the RunDoc status.
 REF_STATES = {"waiting", "skipped", "cancelled"}
 RUN_STATES = {"pending": "queued", "running": "running", "done": "done", "failed": "failed"}
-ZERO_USAGE = {"input_tokens": 0, "output_tokens": 0, "calls": 0}
+STAGE_LABELS = {"code": "coding", "tips": "tips", "assemble": "assembling"}
+ZERO_USAGE ={"input_tokens": 0, "output_tokens": 0, "calls": 0}
 
 
 def human_unit_id(sid: str) -> str:
@@ -222,6 +223,27 @@ def _human_unit(services, sid: str, entry: dict) -> dict:
     return unit
 
 
+def _live_stage(services, sid: str, cache: dict) -> str:
+    """Label of the stage the worker is in. The worker writes it to the prod session's `step`
+    (the RunDoc `stage` is never set while running); a run that started but has not reported a
+    stage yet is `starting`."""
+    if sid not in cache:
+        try:
+            cache[sid] = services.repo.get_session(_uid(services), sid).step
+        except NotFoundError:
+            cache[sid] = None
+    return STAGE_LABELS.get(cache[sid], cache[sid]) if cache[sid] else "starting"
+
+
+def live_counts(units: list[dict]) -> dict[str, int]:
+    """Running and queued AI attempts (final attempts only; the human reference never runs)."""
+    finals = [u for u in units if u["engine"] != "human" and u["final"]]
+    return {
+        "running_units": sum(u["status"] == "running" for u in finals),
+        "queued_units": sum(u["status"] == "queued" for u in finals),
+    }
+
+
 def build_units(services, doc: dict) -> list[dict]:
     """Legacy-shaped units: Human per session, then every AI attempt in listing order."""
     combos = {item["combo_key"]: item["combo"] for item in plan_cells(doc)}
@@ -231,6 +253,7 @@ def build_units(services, doc: dict) -> list[dict]:
         key = (cell["sid"], cell["engine"], cell["combo_key"], cell["repeat"])
         finals[key] = max(finals.get(key, -1), cell["attempt"])
     units = []
+    steps: dict[str, str | None] = {}
     for sid, entry in _ordered_sessions(doc):
         if "human" in doc.get("engines", []):
             units.append(_human_unit(services, sid, entry))
@@ -255,8 +278,9 @@ def build_units(services, doc: dict) -> list[dict]:
                 "run_info": cell["run_info"],
                 "cost_usd_est": (cell["run_info"] or {}).get("cost_usd_est"),
             }
-            if run is not None and run.stage and cell["status"] == "running":
-                unit["stage"] = run.stage
+            if cell["status"] == "running":
+                unit["stage"] = (run.stage if run is not None else None) or _live_stage(
+                    services, sid, steps)
             if cell["status"] == "done" and final:
                 unit["scores"], warnings = _scores(services, cell)
                 if warnings:

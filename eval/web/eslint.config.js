@@ -13,6 +13,7 @@ export default tseslint.config(
   {
     languageOptions: { globals: { ...globals.browser, ...globals.node } },
     rules: {
+      'jsx-a11y/label-has-associated-control': ['error', { controlComponents: ['Input', 'Textarea', 'Select', 'Checkbox'] }],
       '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
       'no-restricted-syntax': ['error', {
         selector: "JSXAttribute[name.name='dangerouslySetInnerHTML']",

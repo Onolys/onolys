@@ -234,6 +234,35 @@ def test_cloud_queue_oidc_json_deadline_and_schedule():
     assert task["schedule_time"].timestamp() == now.timestamp() + 15
 
 
+def _queue_calls(tasks_queue):
+    from dataclasses import replace
+
+    from test_app import ENV
+
+    from onolys_eval_backend.config import EvalConfig
+    from onolys_eval_backend.queue import CloudTasksQueue
+
+    calls = []
+    sdk = SimpleNamespace(create_task=lambda **kwargs: calls.append(kwargs))
+    config = replace(EvalConfig.from_env(ENV), tasks_queue=tasks_queue)
+    CloudTasksQueue(config, sdk).enqueue("tick", {"eval_run_id": "r"}, task_id="r-tick-1")
+    return calls[0], config
+
+
+def test_cloud_queue_bare_name_expands_to_full_path():
+    call, config = _queue_calls("steps-eval")
+    full = f"projects/{config.project}/locations/{config.settings.region}/queues/steps-eval"
+    assert call["parent"] == full
+    assert call["task"]["name"] == f"{full}/tasks/r-tick-1"
+
+
+def test_cloud_queue_full_path_is_used_unchanged():
+    full = "projects/p/locations/europe-west1/queues/q"
+    call, _ = _queue_calls(full)
+    assert call["parent"] == full
+    assert call["task"]["name"] == f"{full}/tasks/r-tick-1"
+
+
 def gold():
     from onolys_eval._formulas import compute_summaries
     from onolys_eval.gold import COUNT_IDS, GLOBAL_IDS

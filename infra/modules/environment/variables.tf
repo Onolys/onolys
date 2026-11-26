@@ -57,6 +57,12 @@ variable "placeholder_image" {
   default     = "us-docker.pkg.dev/cloudrun/container/hello"
 }
 
+variable "api_min_instances" {
+  description = "Min instances for the public api Cloud Run service (0 = scale to zero). Prod sets 1 to avoid cold starts."
+  type        = number
+  default     = 0
+}
+
 variable "api_max_instances" {
   type    = number
   default = 3

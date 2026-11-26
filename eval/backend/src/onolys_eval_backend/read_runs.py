@@ -90,6 +90,9 @@ def run_summary(rid, run):
     legacy = is_legacy(run)
     keys = _run_keys(run)
     out = {"run_id": rid, **{key: run.get(key) for key in SUMMARY_FIELDS}}
+    error = run.get("error")
+    code = error.get("code") if isinstance(error, dict) else None
+    out["error"] = {"code": code} if code else None  # code only; never the raw error body
     out["skipped_units"] = run.get("skipped_units") or 0
     out["provider_skips"] = eval_view.provider_skips(run)
     if out["resolved_combos"] is None:
@@ -144,8 +147,13 @@ def run_detail(request: Request, run_id: str):
         logger.exception("tick_reenqueue_failed", extra={"eval_run_id": run_id})
     units = eval_view.build_units(services, run)
     # Outputs are fetched through /units/{id}/output; compare has dedicated read routes.
+    counts = eval_view.live_counts(units)
+    summary = run_summary(run_id, run)
+    if summary["status"] == "queued" and counts["running_units"]:
+        summary["status"] = "running"  # the scheduler has not ticked yet; never show "queued"
     return {
-        **run_summary(run_id, run),
+        **summary,
+        **counts,
         "units": units,
         "provider_cooldowns": eval_view.provider_cooldowns(services, run),
     }

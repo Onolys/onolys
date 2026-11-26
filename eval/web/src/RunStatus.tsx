@@ -10,9 +10,16 @@ export function partialStatusText(run: PartialRunStatus): string | null {
   if (run.status !== 'partial') return null;
   return `Partial — ${run.cancelled_at ? `cancelled at ${dateText(run.cancelled_at)}, ` : ''}${run.done_units} of ${run.total_units} runs done${(run.skipped_units ?? 0) > 0 ? `, ${run.skipped_units} skipped` : ''}`;
 }
-export function PartialBadge({ run }: { run: PartialRunStatus }) {
+const runErrorText: Record<string, string> = { enqueue_failed: 'Run failed to start: could not queue it for processing. Rerun to try again.' };
+export function RunErrorNote({ run }: { run: Pick<RunSummary, 'status' | 'error'> }) {
+  if (run.status !== 'failed' || !run.error) return null;
+  return <p role="alert">{runErrorText[run.error.code] ?? `Run failed: ${run.error.code}`}</p>;
+}
+export function PartialBadge({ run, short = false }: { run: PartialRunStatus; short?: boolean }) {
   const text = partialStatusText(run);
-  return text ? <Badge variant="outline" className="max-w-full whitespace-normal" data-partial-badge><span aria-hidden="true">◐ </span>{text}</Badge> : null;
+  if (!text) return null;
+  if (short) return <><Badge variant="outline" data-partial-badge><span aria-hidden="true">◐ </span>Partial</Badge><p className="text-sm text-muted-foreground" data-partial-detail>{text.replace(/^Partial — /, '')}</p></>;
+  return <Badge variant="outline" className="max-w-full whitespace-normal" data-partial-badge><span aria-hidden="true">◐ </span>{text}</Badge>;
 }
 export function ProviderSkipNotices({ skips, short = false }: { skips?: readonly ProviderSkip[]; short?: boolean }) {
   if (!skips?.length) return null;

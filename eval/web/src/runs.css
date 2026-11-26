@@ -5,10 +5,14 @@
 .history-filters label { display: grid; margin: 0; gap: .35rem; }
 .history-table { table-layout: fixed; }
 .history-table th, .history-table td { padding: .7rem .5rem; overflow-wrap: anywhere; white-space: normal; }
-.history-table th:last-child { width: 3.5rem; }
+.run-detail > span { display: block; margin: .5rem 0; font-size: .875rem; color: var(--muted-foreground); }
+.run-detail > [data-slot=button] { margin: 0 .5rem .5rem 0; }
+.history-table th:last-child { width: 9rem; }
+.history-table .history-actions > span { font-size: .8125rem; color: var(--muted-foreground); }
 .history-table a { color: var(--primary); text-decoration: underline; text-underline-offset: .15rem; }
 .history-table .sort { color: inherit; background: none; padding: 0; margin: 0; font-weight: 650; }
 .history-table [data-slot=badge] { white-space: normal; overflow-wrap: anywhere; max-width: 100%; }
+.eval-config-json pre { margin: 0; font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace); font-size: .8125rem; line-height: 1.5; white-space: pre; overflow-wrap: normal; max-width: none; }
 .unit-section-heading { display: flex; align-items: baseline; flex-wrap: wrap; gap: .4rem 1rem; }
 .unit-section-heading h2 { margin-bottom: .35rem; }
 .unit-table-scroll { max-height: 25rem; overflow: auto; margin-bottom: 1.5rem; }
@@ -18,7 +22,7 @@
 .units-table td:last-child, .units-table th:last-child { width: 22%; }
 .units-table button { max-width: 100%; overflow-wrap: anywhere; }
 .eval-config-dialog { width: min(90vw, 52rem); max-width: 52rem; max-height: 90dvh; display: flex; flex-direction: column; }
-.eval-config-json { min-height: 0; max-height: 60dvh; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; user-select: text; border: 1px solid var(--border); border-radius: .5rem; padding: 1rem; background: var(--muted); }
+.eval-config-json { min-height: 0; max-height: 60dvh; overflow: auto; white-space: pre; overflow-wrap: normal; user-select: text; border: 1px solid var(--border); border-radius: .5rem; padding: 1rem; background: var(--muted); }
 @media (max-width: 1000px) { .history-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 760px) {
   .history-table, .history-table tbody, .history-table tr, .history-table td { display: block; width: 100%; }
