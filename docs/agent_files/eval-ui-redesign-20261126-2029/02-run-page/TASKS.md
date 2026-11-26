@@ -8,14 +8,14 @@ Source of truth: `PRD.md`. Depends on SP01 primitives. Test-first, one commit ea
 
 | # | Task | Depends on | Status |
 |---|---|---|---|
-| 1 | Error code catalog | none | todo |
-| 2 | Logs URL builder | none | todo |
-| 3 | Config popup rebuild (shared) | SP01 | todo |
-| 4 | Run header + summary card + copy id + Logs link | 2, 3 | todo |
-| 5 | Status chips, progress bar, usage tiles, alerts strip | SP01 | todo |
-| 6 | Unit table (search/filter/sort, result cell, unit output popup) | SP01 | todo |
-| 7 | Error popup | 1, 2, 6 | todo |
-| 8 | Page assembly, copy cleanup, update old tests, overflow check | 4, 5, 6, 7 | todo |
+| 1 | Error code catalog | none | done |
+| 2 | Logs URL builder | none | done |
+| 3 | Config popup rebuild (shared) | SP01 | done |
+| 4 | Run header + summary card + copy id + Logs link | 2, 3 | done |
+| 5 | Status chips, progress bar, usage tiles, alerts strip | SP01 | done |
+| 6 | Unit table (search/filter/sort, result cell, unit output popup) | SP01 | done |
+| 7 | Error popup | 1, 2, 6 | done |
+| 8 | Page assembly, copy cleanup, update old tests, overflow check | 4, 5, 6, 7 | done |
 
 ## Task 1 — Error code catalog
 What it is: `run/errorCatalog.ts` mapping stored error codes to {title, explanation, fix hint}; unknown → code + generic hint.
