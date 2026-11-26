@@ -8,13 +8,13 @@ Source of truth: `PRD.md`. Test-first; one commit per task. CI: eval-web job alr
 
 | # | Task | Depends on | Status |
 |---|---|---|---|
-| 1 | Overflow guard test + remove existing overflow-x CSS | none | todo |
-| 2 | Chip, StatTile, SummaryCard, Note, CopyButton | none | todo |
-| 3 | AppDialog + CopyField | 2 | todo |
-| 4 | Disclosure / ToggleSection | 2 | todo |
-| 5 | DataTable + useTableState | 2 | todo |
-| 6 | Chart lib install, size budget test, scales/theme/Axis | none | todo |
-| 7 | ChartFrame v2 + ComboTag (letter/shape/colour) | 4, 6 | todo |
+| 1 | Overflow guard test + remove existing overflow-x CSS | none | done |
+| 2 | Chip, StatTile, SummaryCard, Note, CopyButton | none | done |
+| 3 | AppDialog + CopyField | 2 | done |
+| 4 | Disclosure / ToggleSection | 2 | done |
+| 5 | DataTable + useTableState | 2 | done |
+| 6 | Chart lib install, size budget test, scales/theme/Axis | none | done |
+| 7 | ChartFrame v2 + ComboTag (letter/shape/colour) | 4, 6 | done |
 
 ## Task 1 — Overflow guard test + remove existing overflow-x CSS
 What it is: a vitest that scans `eval/web/src/**/*.css` and inline `style` strings for `overflow-x: auto|scroll`.
