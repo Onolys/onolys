@@ -110,7 +110,7 @@ for (const scheme of ["light", "dark"]) {
         await go(page);
         await wait(page);
         expect(await page.evaluate(() => matchMedia("(prefers-color-scheme: dark)").matches)).toBe(scheme === "dark");
-        await shotTo(page, `${scheme}-${name}`);
+        await shotTo(page, `${scheme}-${name}`, csp);
         const todo = TODO[`${name}@${scheme}`];
         const bad = await axeGate(page);
         if (todo) {
@@ -159,7 +159,7 @@ for (const scheme of ["light", "dark"]) {
         await expect(page.getByText(/^\d+%$/)).toBeVisible();
         await expect(page.getByText(/^Elapsed /)).toBeVisible();
         await wait(page);
-        await shotTo(page, `${scheme}-processing-${name}`);
+        await shotTo(page, `${scheme}-processing-${name}`, csp);
         const bad = await axeGate(page);
         expect(bad, `axe ${scheme} processing ${name}`).toEqual([]);
       };

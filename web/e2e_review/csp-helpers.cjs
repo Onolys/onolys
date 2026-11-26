@@ -19,10 +19,26 @@ async function watchCsp(page) {
       window.__csp.push(`${e.violatedDirective} blocked ${e.blockedURI || "inline"} (${e.sourceFile || ""}:${e.lineNumber || 0})`);
     });
   });
+  const domViolations = () => page.evaluate(() => window.__csp || []).catch(() => []);
   return {
     async all() {
-      const fromDom = await page.evaluate(() => window.__csp || []).catch(() => []);
-      return [...violations, ...fromDom.map((v) => `dom: ${v}`)];
+      return [...violations, ...(await domViolations()).map((v) => `dom: ${v}`)];
+    },
+    /**
+     * Run `fn` (a screenshot) and drop the inline-style violations it causes itself. WebKit's `page.screenshot` appends a
+     * `<style>` to the page (Playwright `shouldToggleStyleSheetToSyncAnimations`), which the strict `style-src 'self'`
+     * correctly blocks: harness noise, not an app violation. Violations seen before `fn` are kept.
+     */
+    async ignoreStyleInjectionDuring(fn) {
+      const consoleBefore = violations.length;
+      const domBefore = (await domViolations()).length;
+      await fn();
+      await domViolations(); // round-trip so queued console messages are delivered
+      const injected = (v) => /style-src|stylesheet/i.test(v);
+      const kept = violations.slice(consoleBefore).filter((v) => !injected(v));
+      violations.length = consoleBefore;
+      violations.push(...kept);
+      await page.evaluate((n) => { window.__csp = window.__csp.slice(0, n).concat(window.__csp.slice(n).filter((v) => !/style-src/i.test(v))); }, domBefore).catch(() => {});
     },
   };
 }
@@ -41,9 +57,10 @@ async function axeGate(page) {
     .map((v) => `${v.id} (${v.impact}) x${v.nodes.length}: ${v.nodes.slice(0, 4).map((n) => n.target.join(" ") + " :: " + (n.any[0] && n.any[0].message || "")).join(" | ")}`);
 }
 
-async function shotTo(page, name) {
+async function shotTo(page, name, csp) {
   fs.mkdirSync(SHOTS, { recursive: true });
-  await page.screenshot({ path: path.join(SHOTS, `${name}.png`), fullPage: true });
+  const shoot = () => page.screenshot({ path: path.join(SHOTS, `${name}.png`), fullPage: true });
+  await (csp ? csp.ignoreStyleInjectionDuring(shoot) : shoot());
 }
 
 module.exports = { SHOTS, watchCsp, expectStrictPolicy, axeGate, shotTo };
