@@ -11,9 +11,9 @@ Source of truth: `PRD.md`. Depends on SP01. Test-first, one commit each; run onl
 | 1 | Verify/fix "best" excludes failed combos in payload | none | done |
 | 2 | ComparisonHeader (title, summary cards, partial badge) | SP01 | done |
 | 3 | Tabs (no scroll) + ComboLegend once | 2 | done |
-| 4 | Verdict + Leaderboard | 1, 3 | in-progress |
-| 5 | Metric heatmap behind toggle | 4 | in-progress |
-| 6 | Update Overview/CompareApp/responsive tests, overflow check | 2, 3, 4, 5 | todo |
+| 4 | Verdict + Leaderboard | 1, 3 | done |
+| 5 | Metric heatmap behind toggle | 4 | done |
+| 6 | Update Overview/CompareApp/responsive tests, overflow check | 2, 3, 4, 5 | done |
 
 ## Task 1 — Verify/fix "best" excludes failed combos
 What it is: check eval/backend compare computation and fixtures: failed/invalid combos (e.g. `invalid_parameters`) must not be flagged best for cost, time, fails, accuracy.
