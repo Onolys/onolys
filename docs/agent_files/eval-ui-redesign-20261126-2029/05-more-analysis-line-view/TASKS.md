@@ -8,14 +8,14 @@ Source of truth: `PRD.md`. Depends on SP01 and SP03. Test-first, one commit each
 
 | # | Task | Depends on | Status |
 |---|---|---|---|
-| 1 | Cost vs accuracy scatter | SP03 | todo |
-| 2 | Reliability table + baseline card | SP03 | todo |
-| 3 | Error vs length chart (toggle) | 1 | todo |
-| 4 | Head-to-head + interviews grid (toggle) | 1 | todo |
-| 5 | More analysis composition + test refresh | 1-4 | todo |
-| 6 | Line view filters + transcript lanes | SP03 | todo |
-| 7 | Session ratings (toggle) + line popup | 6 | todo |
-| 8 | Line view composition, test refresh, overflow check | 6, 7 | todo |
+| 1 | Cost vs accuracy scatter | SP03 | done |
+| 2 | Reliability table + baseline card | SP03 | done |
+| 3 | Error vs length chart (toggle) | 1 | done |
+| 4 | Head-to-head + interviews grid (toggle) | 1 | done |
+| 5 | More analysis composition + test refresh | 1-4 | done |
+| 6 | Line view filters + transcript lanes | SP03 | done |
+| 7 | Session ratings (toggle) + line popup | 6 | done |
+| 8 | Line view composition, test refresh, overflow check | 6, 7 | done |
 
 ## Task 1 — Cost vs accuracy scatter
 What it is: visx scatter with frontier line, ComboTag markers, failed/unpriced combos listed muted under it, one-sentence caption, "Show data".

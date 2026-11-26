@@ -8,13 +8,13 @@ Source of truth: `PRD.md`. Depends on SP01 and SP03 (header/legend). Test-first,
 
 | # | Task | Depends on | Status |
 |---|---|---|---|
-| 1 | Combo selector card | SP03 | todo |
-| 2 | Globals dot plot card | 1 | todo |
-| 3 | Miss-bucket bars (toggle) | 2 | todo |
-| 4 | Counts per code small multiples | 1 | todo |
-| 5 | P/R/F1 table + confusion grid (toggle) | 1 | todo |
-| 6 | Reasoning roll-up + Show data twins | 2, 4, 5 | todo |
-| 7 | Page composition, test refresh, overflow check | 2-6 | todo |
+| 1 | Combo selector card | SP03 | done |
+| 2 | Globals dot plot card | 1 | done |
+| 3 | Miss-bucket bars (toggle) | 2 | done |
+| 4 | Counts per code small multiples | 1 | done |
+| 5 | P/R/F1 table + confusion grid (toggle) | 1 | done |
+| 6 | Reasoning roll-up + Show data twins | 2, 4, 5 | done |
+| 7 | Page composition, test refresh, overflow check | 2-6 | done |
 
 ## Task 1 — Combo selector card
 What it is: toggle chips per combo (ComboTag), "paired x of y", Human always on, failed combo greyed and disabled, default top 3 by Count error.
