@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
-import { Button } from '@onolys/ui';
+import { Button, Input, Textarea } from '@onolys/ui';
+import { ColdStartNotice } from './ColdStart';
 import { sourceLine, originalMedia } from './sourceMedia';
 import type { CodedSpan, Dataset, DatasetMetadata, EvalApi, Mode, Options, RunInput, RunSummary, Selection, Upload, UploadInput } from './api';
 import { MAX_UNITS, countText, effortsFor, modelMap, planCount, skippedText, tiersFor, tooLargeMessage, validateSelection, comboKey } from './matrix';
@@ -188,8 +189,8 @@ export function NewRun({ api, onRunCreated, initialRun }: { api: EvalApi; onRunC
     <form aria-busy={busy} onSubmit={event => { event.preventDefault(); startRun(); }}>
       {busy && <p role="status">Working…</p>}
       <fieldset disabled={busy}><legend>Run details</legend>
-        <label>Name (optional)<input value={name} maxLength={200} onChange={event => setName(event.target.value)} /></label>
-        <label>Description (optional)<textarea value={description} maxLength={4000} rows={3} onChange={event => setDescription(event.target.value)} /></label>
+        <label>Name (optional)<Input value={name} maxLength={200} onChange={event => setName(event.target.value)} /></label>
+        <label>Description (optional)<Textarea value={description} maxLength={4000} rows={3} onChange={event => setDescription(event.target.value)} /></label>
       </fieldset>
       {initialRun ? <fieldset><legend>Saved input</legend><p>Rerun of {rerunSourceID}. Original input and session configuration are preserved.</p><p>{'dataset_id' in initialRun.input ? `Dataset: ${initialRun.input.dataset_id} · ${initialRun.input.session_ids.length} saved sessions` : `Upload: ${initialRun.input.upload_id}`}</p></fieldset> : <fieldset disabled={busy}><legend>Input</legend>
         <div className="choice-row">{(['dataset', 'upload'] as const).map(value => <label key={value}><input type="radio" name="mode" checked={mode === value} onChange={() => changeMode(value)} />{value === 'dataset' ? 'Dataset' : 'Upload'}</label>)}</div>
@@ -200,16 +201,16 @@ export function NewRun({ api, onRunCreated, initialRun }: { api: EvalApi; onRunC
           {datasetReady && !humanAvailable && <p>Human comparison is unavailable because these sessions have no gold files. AI engines can run all sessions.</p>}
           {datasetReady && dataset!.sessions.length > totalSessions && <p role="status">{totalSessions === 0 ? "None of this dataset's sessions has a gold file, so none can be run." : `${dataset!.sessions.length - totalSessions} session(s) without a gold file are excluded, while Human is selected. Deselect Human to run those sessions with AI engines.`}</p>}
         </> : <>
-          <label>Session file<input type="file" accept=".mp3,.wav,.m4a,.webm,.ogg,.json,.txt" onChange={event => { invalidateUpload(); setFile(event.target.files?.[0]); }} /></label>
+          <label>Session file<Input type="file" accept=".mp3,.wav,.m4a,.webm,.ogg,.json,.txt" onChange={event => { invalidateUpload(); setFile(event.target.files?.[0]); }} /></label>
           <p>Recordings up to 300 MiB. Files over 25 MiB upload directly to storage. Keep this page open; refreshing starts a new upload.</p>
-          <label>Gold file (optional)<input type="file" accept=".json,application/json" onChange={event => { invalidateUpload(); setGold(event.target.files?.[0]); }} /></label>
-          <label>Change goal<input value={goal} maxLength={MAX_GOAL} onChange={event => { invalidateUpload(); setGoal(event.target.value); }} /></label><small>{goal.length} / {MAX_GOAL}</small>
-          <label>Language<input value={language} placeholder="e.g. en" onChange={event => { invalidateUpload(); setLanguage(event.target.value); }} /></label>
+          <label>Gold file (optional)<Input type="file" accept=".json,application/json" onChange={event => { invalidateUpload(); setGold(event.target.files?.[0]); }} /></label>
+          <label>Change goal<Input value={goal} maxLength={MAX_GOAL} onChange={event => { invalidateUpload(); setGoal(event.target.value); }} /></label><small>{goal.length} / {MAX_GOAL}</small>
+          <label>Language<Input value={language} placeholder="e.g. en" onChange={event => { invalidateUpload(); setLanguage(event.target.value); }} /></label>
           <label><input type="checkbox" checked={overrideSpan} onChange={event => { invalidateUpload(); setOverrideSpan(event.target.checked); }} />Override coded portion</label>
           {overrideSpan && <fieldset><legend>Coded portion</legend><p>Start is included; end is excluded. Turn numbers start at zero.</p>
             <label>Measure in<select value={spanUnit} onChange={event => { invalidateUpload(); setSpanUnit(event.target.value); }}><option value="turns">Transcript turns</option><option value="ms">Milliseconds</option></select></label>
-            <label>Start<input type="number" min="0" step="1" value={spanStart} onChange={event => { invalidateUpload(); setSpanStart(event.target.value); }} /></label>
-            <label>End<input type="number" min="1" step="1" value={spanEnd} onChange={event => { invalidateUpload(); setSpanEnd(event.target.value); }} /></label>
+            <label>Start<Input type="number" min="0" step="1" value={spanStart} onChange={event => { invalidateUpload(); setSpanStart(event.target.value); }} /></label>
+            <label>End<Input type="number" min="1" step="1" value={spanEnd} onChange={event => { invalidateUpload(); setSpanEnd(event.target.value); }} /></label>
             {!spanValid && <p>Enter whole numbers with end greater than start.</p>}
           </fieldset>}
           {gold && overrideSpan && <p>Human scores keep the coded portion in the gold file if it differs from your chosen portion.</p>}
@@ -226,7 +227,7 @@ export function NewRun({ api, onRunCreated, initialRun }: { api: EvalApi; onRunC
       </fieldset>}
       {initialRun?.legacy_selection && <p role="status">This older run chose models by preset, which can no longer be recreated. Pick a model, tier and effort below; saved input and engines are kept.</p>}
       <div className="configuration-row">
-      <fieldset disabled={busy || optionsLoading}><legend>Engines</legend>{optionsLoading && <p role="status">Loading choices…</p>}{unavailableEngines.map(id => <label key={id}><input type="checkbox" checked onChange={() => setEngines(ids => ids.filter(e => e !== id))} />{id} (unavailable)</label>)}{visibleEngines.map(e => <label key={e.id}><input type="checkbox" checked={finalEngines.includes(e.id)} disabled={e.id === 'human' && !humanAvailable} onChange={() => setEngines(ids => toggle(ids, e.id))} />{e.label}</label>)}</fieldset>
+      <fieldset disabled={busy || optionsLoading}><legend>Engines</legend>{optionsLoading && <p role="status">Loading choices…</p>}<ColdStartNotice pending={optionsLoading && !error} />{unavailableEngines.map(id => <label key={id}><input type="checkbox" checked onChange={() => setEngines(ids => ids.filter(e => e !== id))} />{id} (unavailable)</label>)}{visibleEngines.map(e => <label key={e.id}><input type="checkbox" checked={finalEngines.includes(e.id)} disabled={e.id === 'human' && !humanAvailable} onChange={() => setEngines(ids => toggle(ids, e.id))} />{e.label}</label>)}</fieldset>
       <fieldset disabled={busy || optionsLoading}><legend>Models</legend>{unavailableModels.map(id => <label key={id}><input type="checkbox" checked onChange={() => toggleModel(id)} />{id} (unavailable)</label>)}{options?.models.map(m => <label key={m.id}><input type="checkbox" checked={selection.models.includes(m.id)} onChange={() => toggleModel(m.id)} />{m.label}</label>)}</fieldset>
       <fieldset disabled={busy || optionsLoading}><legend>Tiers</legend>{unavailableTiers.map(id => <label key={id}><input type="checkbox" checked onChange={() => toggleTier(id)} />{id} (unavailable)</label>)}{tiers.map(t => <label key={t.id}><input type="checkbox" checked={selection.tiers.includes(t.id)} onChange={() => toggleTier(t.id)} />{t.id}</label>)}</fieldset>
       <fieldset disabled={busy || optionsLoading}><legend>Efforts</legend>{unavailableEfforts.map(id => <label key={id}><input type="checkbox" checked onChange={() => toggleEffort(id)} />{id} (unavailable)</label>)}{efforts.map(e => <label key={e}><input type="checkbox" checked={selection.efforts.includes(e)} onChange={() => toggleEffort(e)} />{e}</label>)}</fieldset>

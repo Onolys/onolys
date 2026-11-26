@@ -1,6 +1,6 @@
-import { useState, type RefObject } from 'react';
-import { Button, Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@onolys/ui';
+import type { RefObject } from 'react';
 import type { RunSummary } from './api';
+import { JsonDialog } from './JsonViewer';
 
 /** The saved public configuration, without unit output or private storage references. */
 export function savedConfiguration(run: RunSummary) {
@@ -15,15 +15,7 @@ export function savedConfiguration(run: RunSummary) {
   };
 }
 export function RunConfigDialog({ run, onClose, returnFocus }: { run: RunSummary | null; onClose: () => void; returnFocus: RefObject<HTMLElement | null> }) {
-  const [status, setStatus] = useState('');
-  const json = run ? JSON.stringify(savedConfiguration(run), null, 2) : '';
-  return <Dialog open={run !== null} onOpenChange={open => { if (!open) { setStatus(''); onClose(); } }}>
-    <DialogContent onCloseAutoFocus={event => { event.preventDefault(); returnFocus.current?.focus(); }} className="eval-config-dialog flex w-[90vw] max-w-[52rem] flex-col sm:max-w-[52rem]">
-      <DialogHeader><DialogTitle>Saved configuration and versions</DialogTitle><DialogDescription>Configuration and provenance saved with this run.</DialogDescription></DialogHeader>
-      <div className="eval-config-json" role="textbox" aria-readonly="true" aria-multiline="true" tabIndex={0} aria-label="Saved configuration JSON"><pre>{json}</pre></div>
-      <DialogFooter><span role="status">{status}</span><Button onClick={() => {
-        void Promise.resolve().then(() => navigator.clipboard.writeText(json)).then(() => setStatus('Copied.')).catch(() => setStatus('Could not copy. Select the JSON to copy it manually.'));
-      }}>Copy</Button></DialogFooter>
-    </DialogContent>
-  </Dialog>;
+  return <JsonDialog open={run !== null} onOpenChange={open => { if (!open) onClose(); }} title="Saved configuration and versions"
+    description="Configuration and provenance saved with this run." value={run ? savedConfiguration(run) : undefined}
+    onCloseAutoFocus={event => { event.preventDefault(); returnFocus.current?.focus(); }} />;
 }
