@@ -1,7 +1,7 @@
 import { comboColor, comboLetter, comboShape, type ComboShape } from "./chart/theme";
 import "./ui.css";
 
-const SHAPES: Record<ComboShape, string> = {
+export const SHAPES: Record<ComboShape, string> = {
   circle: "M6 1a5 5 0 1 0 0 10A5 5 0 0 0 6 1Z",
   square: "M2 2h8v8H2Z",
   triangle: "M6 1.5 11 10.5H1Z",

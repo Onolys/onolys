@@ -1,0 +1,6 @@
+.ca-svg { display: block; width: 100%; height: auto; max-height: 24rem; overflow: visible; }
+.ca-legend { display: inline-flex; align-items: center; gap: .3rem; min-width: 0; color: var(--ui-muted-fg); }
+.ca-excluded { list-style: none; margin: .6rem 0 0; padding: 0; display: grid; gap: .25rem; font-size: .8rem; color: var(--ui-muted-fg); }
+.ca-excluded li { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem; opacity: .9; }
+.ca-excluded li[data-status="failed"] { color: var(--ui-low); }
+.ca-empty { color: var(--ui-muted-fg); }
