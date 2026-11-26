@@ -1,0 +1,379 @@
+{
+ "_comment": "Every google_* resource/data type in infra/ and infra/isolated-environment maps to the plan permission(s) a refresh needs and the apply permission(s)/role(s) that manage it. Enforced by infra/scripts/test_terraform_ci_permissions.py against the role snapshots; add a row when adding a resource type.",
+ "types": {
+  "data.google_firebase_web_app_config": {
+   "apply_permissions": [],
+   "apply_roles": [
+    "roles/firebase.admin"
+   ],
+   "plan_permissions": [
+    "firebase.clients.get"
+   ]
+  },
+  "data.google_project": {
+   "apply_permissions": [],
+   "apply_roles": [
+    "roles/resourcemanager.projectIamAdmin"
+   ],
+   "plan_permissions": [
+    "resourcemanager.projects.get"
+   ]
+  },
+  "google_artifact_registry_repository": {
+   "apply_permissions": [
+    "artifactregistry.repositories.create",
+    "artifactregistry.repositories.update",
+    "artifactregistry.repositories.delete"
+   ],
+   "apply_roles": [
+    "roles/artifactregistry.admin"
+   ],
+   "plan_permissions": [
+    "artifactregistry.repositories.get"
+   ]
+  },
+  "google_artifact_registry_repository_iam_member": {
+   "apply_permissions": [
+    "artifactregistry.repositories.setIamPolicy"
+   ],
+   "apply_roles": [
+    "roles/artifactregistry.admin"
+   ],
+   "plan_permissions": [
+    "artifactregistry.repositories.getIamPolicy"
+   ]
+  },
+  "google_cloud_run_v2_service": {
+   "apply_permissions": [
+    "run.services.create",
+    "run.services.update",
+    "run.services.delete",
+    "iam.serviceAccounts.actAs"
+   ],
+   "apply_roles": [
+    "roles/run.admin",
+    "roles/iam.serviceAccountUser"
+   ],
+   "plan_permissions": [
+    "run.services.get"
+   ]
+  },
+  "google_cloud_run_v2_service_iam_member": {
+   "apply_permissions": [
+    "run.services.setIamPolicy"
+   ],
+   "apply_roles": [
+    "roles/run.admin"
+   ],
+   "plan_permissions": [
+    "run.services.getIamPolicy"
+   ]
+  },
+  "google_cloud_scheduler_job": {
+   "apply_permissions": [
+    "cloudscheduler.jobs.create",
+    "cloudscheduler.jobs.update",
+    "cloudscheduler.jobs.delete"
+   ],
+   "apply_roles": [
+    "roles/cloudscheduler.admin"
+   ],
+   "plan_permissions": [
+    "cloudscheduler.jobs.get"
+   ]
+  },
+  "google_cloud_tasks_queue": {
+   "apply_permissions": [
+    "cloudtasks.queues.create",
+    "cloudtasks.queues.update",
+    "cloudtasks.queues.delete"
+   ],
+   "apply_roles": [
+    "roles/cloudtasks.admin"
+   ],
+   "plan_permissions": [
+    "cloudtasks.queues.get"
+   ]
+  },
+  "google_cloud_tasks_queue_iam_member": {
+   "apply_permissions": [
+    "cloudtasks.queues.setIamPolicy"
+   ],
+   "apply_roles": [
+    "roles/cloudtasks.admin"
+   ],
+   "plan_permissions": [
+    "cloudtasks.queues.getIamPolicy"
+   ]
+  },
+  "google_firebase_hosting_custom_domain": {
+   "apply_permissions": [
+    "firebasehosting.sites.update"
+   ],
+   "apply_roles": [
+    "roles/firebasehosting.admin"
+   ],
+   "plan_permissions": [
+    "firebasehosting.sites.get"
+   ]
+  },
+  "google_firebase_hosting_site": {
+   "apply_permissions": [
+    "firebasehosting.sites.create",
+    "firebasehosting.sites.update",
+    "firebasehosting.sites.delete"
+   ],
+   "apply_roles": [
+    "roles/firebasehosting.admin"
+   ],
+   "plan_permissions": [
+    "firebasehosting.sites.get"
+   ]
+  },
+  "google_firebase_project": {
+   "apply_permissions": [
+    "firebase.projects.update"
+   ],
+   "apply_roles": [
+    "roles/firebase.admin"
+   ],
+   "plan_permissions": [
+    "firebase.projects.get"
+   ]
+  },
+  "google_firebase_web_app": {
+   "apply_permissions": [
+    "firebase.clients.create",
+    "firebase.clients.update",
+    "firebase.clients.delete"
+   ],
+   "apply_roles": [
+    "roles/firebase.admin"
+   ],
+   "plan_permissions": [
+    "firebase.clients.get"
+   ]
+  },
+  "google_firestore_database": {
+   "apply_permissions": [
+    "datastore.databases.create",
+    "datastore.databases.update",
+    "datastore.databases.delete"
+   ],
+   "apply_roles": [
+    "roles/datastore.owner"
+   ],
+   "plan_permissions": [
+    "datastore.databases.get"
+   ]
+  },
+  "google_firestore_field": {
+   "apply_permissions": [
+    "datastore.schemas.update"
+   ],
+   "apply_roles": [
+    "roles/datastore.indexAdmin"
+   ],
+   "plan_permissions": [
+    "datastore.indexes.get",
+    "datastore.schemas.get"
+   ]
+  },
+  "google_iam_workload_identity_pool": {
+   "apply_permissions": [
+    "iam.googleapis.com/workloadIdentityPools.create",
+    "iam.googleapis.com/workloadIdentityPools.update",
+    "iam.googleapis.com/workloadIdentityPools.delete"
+   ],
+   "apply_roles": [
+    "roles/iam.workloadIdentityPoolAdmin"
+   ],
+   "plan_permissions": [
+    "iam.googleapis.com/workloadIdentityPools.get"
+   ]
+  },
+  "google_iam_workload_identity_pool_provider": {
+   "apply_permissions": [
+    "iam.googleapis.com/workloadIdentityPoolProviders.create",
+    "iam.googleapis.com/workloadIdentityPoolProviders.update",
+    "iam.googleapis.com/workloadIdentityPoolProviders.delete"
+   ],
+   "apply_roles": [
+    "roles/iam.workloadIdentityPoolAdmin"
+   ],
+   "plan_permissions": [
+    "iam.googleapis.com/workloadIdentityPoolProviders.get"
+   ]
+  },
+  "google_identity_platform_config": {
+   "apply_permissions": [
+    "firebaseauth.configs.update"
+   ],
+   "apply_roles": [
+    "roles/firebaseauth.admin"
+   ],
+   "plan_permissions": [
+    "firebaseauth.configs.get"
+   ]
+  },
+  "google_logging_metric": {
+   "apply_permissions": [
+    "logging.logMetrics.create",
+    "logging.logMetrics.update",
+    "logging.logMetrics.delete"
+   ],
+   "apply_roles": [
+    "roles/logging.configWriter"
+   ],
+   "plan_permissions": [
+    "logging.logMetrics.get"
+   ]
+  },
+  "google_monitoring_alert_policy": {
+   "apply_permissions": [
+    "monitoring.alertPolicies.create",
+    "monitoring.alertPolicies.update",
+    "monitoring.alertPolicies.delete"
+   ],
+   "apply_roles": [
+    "roles/monitoring.admin"
+   ],
+   "plan_permissions": [
+    "monitoring.alertPolicies.get"
+   ]
+  },
+  "google_monitoring_notification_channel": {
+   "apply_permissions": [
+    "monitoring.notificationChannels.create",
+    "monitoring.notificationChannels.update",
+    "monitoring.notificationChannels.delete"
+   ],
+   "apply_roles": [
+    "roles/monitoring.admin"
+   ],
+   "plan_permissions": [
+    "monitoring.notificationChannels.get"
+   ]
+  },
+  "google_project_iam_custom_role": {
+   "apply_permissions": [
+    "iam.roles.create",
+    "iam.roles.update",
+    "iam.roles.delete"
+   ],
+   "apply_roles": [
+    "roles/iam.roleAdmin"
+   ],
+   "plan_permissions": [
+    "iam.roles.get"
+   ]
+  },
+  "google_project_iam_member": {
+   "apply_permissions": [
+    "resourcemanager.projects.setIamPolicy"
+   ],
+   "apply_roles": [
+    "roles/resourcemanager.projectIamAdmin"
+   ],
+   "plan_permissions": [
+    "resourcemanager.projects.getIamPolicy"
+   ]
+  },
+  "google_project_service": {
+   "apply_permissions": [
+    "serviceusage.services.enable",
+    "serviceusage.services.disable"
+   ],
+   "apply_roles": [
+    "roles/serviceusage.serviceUsageAdmin"
+   ],
+   "plan_permissions": [
+    "serviceusage.services.get",
+    "serviceusage.services.list"
+   ]
+  },
+  "google_project_service_identity": {
+   "apply_permissions": [
+    "serviceusage.services.use"
+   ],
+   "apply_roles": [
+    "roles/serviceusage.serviceUsageAdmin"
+   ],
+   "plan_permissions": [
+    "serviceusage.services.use"
+   ]
+  },
+  "google_secret_manager_secret": {
+   "apply_permissions": [
+    "secretmanager.secrets.create",
+    "secretmanager.secrets.update",
+    "secretmanager.secrets.delete"
+   ],
+   "apply_roles": [
+    "roles/secretmanager.admin"
+   ],
+   "plan_permissions": [
+    "secretmanager.secrets.get"
+   ]
+  },
+  "google_secret_manager_secret_iam_member": {
+   "apply_permissions": [
+    "secretmanager.secrets.setIamPolicy"
+   ],
+   "apply_roles": [
+    "roles/secretmanager.admin"
+   ],
+   "plan_permissions": [
+    "secretmanager.secrets.getIamPolicy"
+   ]
+  },
+  "google_service_account": {
+   "apply_permissions": [
+    "iam.serviceAccounts.create",
+    "iam.serviceAccounts.update",
+    "iam.serviceAccounts.delete"
+   ],
+   "apply_roles": [
+    "roles/iam.serviceAccountAdmin"
+   ],
+   "plan_permissions": [
+    "iam.serviceAccounts.get"
+   ]
+  },
+  "google_service_account_iam_member": {
+   "apply_permissions": [
+    "iam.serviceAccounts.setIamPolicy"
+   ],
+   "apply_roles": [
+    "roles/iam.serviceAccountAdmin"
+   ],
+   "plan_permissions": [
+    "iam.serviceAccounts.getIamPolicy"
+   ]
+  },
+  "google_storage_bucket": {
+   "apply_permissions": [
+    "storage.buckets.create",
+    "storage.buckets.update",
+    "storage.buckets.delete"
+   ],
+   "apply_roles": [
+    "roles/storage.admin"
+   ],
+   "plan_permissions": [
+    "storage.buckets.get"
+   ]
+  },
+  "google_storage_bucket_iam_member": {
+   "apply_permissions": [
+    "storage.buckets.setIamPolicy"
+   ],
+   "apply_roles": [
+    "roles/storage.admin"
+   ],
+   "plan_permissions": [
+    "storage.buckets.getIamPolicy"
+   ]
+  }
+ }
+}

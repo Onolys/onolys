@@ -18,18 +18,14 @@ variable "state_bucket" {
   type        = string
 }
 
-variable "apply_principal_set" {
-  description = "Full principalSet:// member allowed to impersonate the apply service account. Callers pass a main-only (ref) or production-environment (environment) selector inside their existing, repository-pinned WIF pool."
+variable "apply_required_environment" {
+  description = "GitHub Environment the apply job must run in (prod: `terraform-prod`, required reviewers, main only). Empty for the main-only nonprod roots."
   type        = string
-
-  validation {
-    condition     = startswith(var.apply_principal_set, "principalSet://iam.googleapis.com/") && !strcontains(var.apply_principal_set, "/attribute.repository/")
-    error_message = "The apply identity must be bound to a ref or environment selector, never to the whole repository."
-  }
+  default     = ""
 }
 
 variable "apply_roles" {
-  description = "Project roles for the apply identity. It is effectively project admin (it manages IAM, WIF, Cloud Run, Firestore, secrets, Hosting); the controls are the main-only/production-approval binding, not the role list."
+  description = "Project roles for the apply identity. It is effectively project admin (it manages IAM, WIF, Cloud Run, Firestore, secrets, Hosting); the controls are the apply pool's workflow/ref/environment conditions, not the role list."
   type        = set(string)
   default = [
     "roles/run.admin",
@@ -40,6 +36,7 @@ variable "apply_roles" {
     "roles/resourcemanager.projectIamAdmin",
     "roles/secretmanager.admin",
     "roles/datastore.owner",
+    "roles/datastore.indexAdmin", # datastore.owner has no datastore.indexes.* (google_firestore_field needs indexes.update)
     "roles/storage.admin",
     "roles/cloudtasks.admin",
     "roles/cloudscheduler.admin",
@@ -50,25 +47,33 @@ variable "apply_roles" {
     "roles/firebaserules.admin",
     "roles/serviceusage.serviceUsageAdmin",
     "roles/monitoring.admin",
+    "roles/logging.configWriter",
   ]
 }
 
 variable "plan_roles" {
-  description = "Project roles for the plan identity: metadata-only readers. Deliberately NOT roles/viewer or roles/datastore.viewer (they read Firestore documents and bucket objects, which hold user audio and session data); the plan identity is reachable from any same-repo pull_request workflow."
+  description = "Predefined project roles for the plan identity: metadata-only readers, each verified with `gcloud iam roles describe` and snapshotted in plan-role-permissions.snapshot.json (a test fails if a data-read permission appears). Deliberately NOT roles/viewer, roles/datastore.viewer, roles/firebaseauth.viewer (users.get), roles/cloudtasks.viewer (tasks.get/list: task bodies hold uid/sid/email), roles/iam.securityReviewer (logging.logEntries.list, storage.objects.list, tasks.list), roles/monitoring.viewer (timeSeries.list) or roles/artifactregistry.reader (image download); the plan identity is reachable from any same-repo pull_request workflow. Everything else the plan needs is in the custom role (local.plan_metadata_permissions)."
   type        = set(string)
   default = [
     "roles/run.viewer",
     "roles/secretmanager.viewer",
-    "roles/cloudtasks.viewer",
     "roles/cloudscheduler.viewer",
-    "roles/monitoring.viewer",
-    "roles/iam.securityReviewer",
-    "roles/serviceusage.serviceUsageViewer",
-    "roles/serviceusage.serviceUsageConsumer",
+    "roles/iam.serviceAccountViewer",
+    "roles/iam.roleViewer",
+    "roles/iam.workloadIdentityPoolViewer",
     "roles/firebasehosting.viewer",
-    "roles/firebaseauth.viewer",
-    "roles/artifactregistry.reader",
   ]
+}
+
+variable "plan_extra_permissions" {
+  description = "Additional read-only permissions (get/list only) for the plan custom role when a plan reports a missing permission. Never data-read permissions: a test denies them in the defaults, review any addition by hand."
+  type        = set(string)
+  default     = []
+
+  validation {
+    condition     = alltrue([for p in var.plan_extra_permissions : can(regex("\\.(get|list|getIamPolicy|getMetadata)$", p))])
+    error_message = "plan_extra_permissions accepts get/list/getIamPolicy/getMetadata permissions only."
+  }
 }
 
 variable "plan_extra_roles" {

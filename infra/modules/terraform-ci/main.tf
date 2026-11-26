@@ -2,19 +2,59 @@
 #
 #   terraform-plan   metadata-only read + create-only upload of saved plans. Reachable from same-repo pull_request AND main
 #                    pushes (own WIF pool, see below). Cannot change infrastructure or read user data.
-#   terraform-apply  effectively project admin. Reachable only through the caller-supplied selector: refs/heads/main, or
-#                    the `production` GitHub Environment (required reviewers) for the legacy prod root.
+#   terraform-apply  effectively project admin. Reachable only through its OWN pool `github-apply` whose provider admits just
+#                    the terraform.yml workflow on refs/heads/main (push/workflow_dispatch) and, for prod, only jobs in the
+#                    dedicated GitHub Environment `terraform-prod` (required reviewers). The deployers' pools are untouched.
 #
 # No service account keys exist anywhere. See docs/reference/infra-pipeline.md.
 
 locals {
-  pool_root = "projects/${var.project_number}/locations/global/workloadIdentityPools"
+  pool_root     = "projects/${var.project_number}/locations/global/workloadIdentityPools"
+  workflow_path = "${var.github_repository}/.github/workflows/terraform.yml"
+
+  # Read-only metadata for `terraform plan`, mapped resource by resource in resource-permissions.json (a test enforces the
+  # table). No object, document, task, user, log-entry, secret-version or time-series reads.
+  plan_metadata_permissions = [
+    "storage.buckets.get",
+    "storage.buckets.getIamPolicy",
+    "storage.buckets.list",
+    "datastore.databases.get",
+    "datastore.databases.getMetadata",
+    "datastore.databases.list",
+    "datastore.indexes.get",
+    "datastore.indexes.list",
+    "datastore.schemas.get", # the predefined Firestore roles list index/field management under schemas.* (verified with gcloud)
+    "datastore.schemas.list",
+    "resourcemanager.projects.get",
+    "resourcemanager.projects.getIamPolicy",
+    "firebase.projects.get",
+    "firebase.clients.get",
+    "firebase.clients.list",
+    "firebaseauth.configs.get",
+    "cloudtasks.queues.get",
+    "cloudtasks.queues.list",
+    "cloudtasks.queues.getIamPolicy",
+    "cloudtasks.locations.get",
+    "cloudtasks.locations.list",
+    "artifactregistry.repositories.get",
+    "artifactregistry.repositories.list",
+    "artifactregistry.repositories.getIamPolicy",
+    "monitoring.alertPolicies.get",
+    "monitoring.alertPolicies.list",
+    "monitoring.notificationChannels.get",
+    "monitoring.notificationChannels.list",
+    "logging.logMetrics.get",
+    "logging.logMetrics.list",
+    "serviceusage.services.get",
+    "serviceusage.services.list",
+    "serviceusage.services.use",
+  ]
 }
 
 resource "google_service_account" "apply" {
   project      = var.project
   account_id   = "terraform-apply"
-  display_name = "Terraform apply (GitHub Actions, main / production approval only)"
+  display_name = "Terraform apply (GitHub Actions, terraform.yml on main only)"
 }
 
 resource "google_service_account" "plan" {
@@ -26,11 +66,38 @@ resource "google_service_account" "plan" {
 resource "google_service_account_iam_member" "apply_wif" {
   service_account_id = google_service_account.apply.name
   role               = "roles/iam.workloadIdentityUser"
-  member             = var.apply_principal_set
+  member             = "principalSet://iam.googleapis.com/${local.pool_root}/${google_iam_workload_identity_pool.apply.workload_identity_pool_id}/attribute.workflow_ref/${local.workflow_path}@refs/heads/main"
+}
+
+# Own pool for apply (not the deployers' `github` pool): its provider admits nothing but the terraform workflow on main, and
+# for prod also requires the GitHub Environment (required reviewers) so the cloud token itself needs the approval.
+resource "google_iam_workload_identity_pool" "apply" {
+  project                   = var.project
+  workload_identity_pool_id = "github-apply"
+  display_name              = "GitHub Terraform apply"
+}
+
+resource "google_iam_workload_identity_pool_provider" "apply" {
+  project                            = var.project
+  workload_identity_pool_id          = google_iam_workload_identity_pool.apply.workload_identity_pool_id
+  workload_identity_pool_provider_id = "github-apply"
+  display_name                       = "GitHub Terraform apply"
+  attribute_condition                = "assertion.repository=='${var.github_repository}' && assertion.ref=='refs/heads/main' && assertion.event_name in ['push','workflow_dispatch'] && assertion.job_workflow_ref=='${local.workflow_path}@refs/heads/main'${var.apply_required_environment == "" ? "" : " && assertion.environment=='${var.apply_required_environment}'"}"
+  attribute_mapping = {
+    "google.subject"         = "assertion.sub"
+    "attribute.repository"   = "assertion.repository"
+    "attribute.ref"          = "assertion.ref"
+    "attribute.workflow_ref" = "assertion.job_workflow_ref"
+  }
+  oidc {
+    issuer_uri = "https://token.actions.githubusercontent.com"
+  }
 }
 
 # Separate pool: a principalSet binds every provider of its pool, and the deploy pools either admit only main or are
-# shared with deployers. This pool admits same-repo pull_request events (plan) and main pushes (plan before apply).
+# shared with deployers. This pool admits only jobs of the terraform.yml workflow, for same-repo pull_request, push and
+# workflow_dispatch events (the workflow restricts push/dispatch to main). A PR can edit the workflow file, which is why the
+# plan identity holds nothing but metadata reads.
 resource "google_iam_workload_identity_pool" "plan" {
   project                   = var.project
   workload_identity_pool_id = "github-plan"
@@ -42,7 +109,7 @@ resource "google_iam_workload_identity_pool_provider" "plan" {
   workload_identity_pool_id          = google_iam_workload_identity_pool.plan.workload_identity_pool_id
   workload_identity_pool_provider_id = "github-plan"
   display_name                       = "GitHub Terraform plan"
-  attribute_condition                = "assertion.repository=='${var.github_repository}' && (assertion.event_name=='pull_request' || assertion.ref=='refs/heads/main')"
+  attribute_condition                = "assertion.repository=='${var.github_repository}' && assertion.event_name in ['pull_request','push','workflow_dispatch'] && assertion.job_workflow_ref.startsWith('${local.workflow_path}@')"
   attribute_mapping = {
     "google.subject"       = "assertion.sub"
     "attribute.repository" = "assertion.repository"
@@ -60,28 +127,14 @@ resource "google_service_account_iam_member" "plan_wif" {
   member             = "principalSet://iam.googleapis.com/${local.pool_root}/${google_iam_workload_identity_pool.plan.workload_identity_pool_id}/attribute.repository/${var.github_repository}"
 }
 
-# Metadata the predefined readers above do not cover (buckets, Firestore databases/indexes, project IAM). No object or
-# document read permissions.
+# Metadata the predefined readers do not cover (buckets, Firestore, Cloud Tasks queues, Artifact Registry repos, Monitoring,
+# log-based metrics, Identity Platform config, Service Usage, project IAM). No object or document read permissions.
 resource "google_project_iam_custom_role" "plan_metadata" {
   project     = var.project
   role_id     = "terraformPlanMetadata"
   title       = "Terraform plan metadata reader"
   description = "Read bucket/Firestore/project metadata for terraform plan; no data access."
-  permissions = [
-    "storage.buckets.get",
-    "storage.buckets.getIamPolicy",
-    "storage.buckets.list",
-    "datastore.databases.get",
-    "datastore.databases.getMetadata",
-    "datastore.databases.list",
-    "datastore.indexes.get",
-    "datastore.indexes.list",
-    "resourcemanager.projects.get",
-    "resourcemanager.projects.getIamPolicy",
-    "firebase.projects.get",
-    "firebase.clients.get",
-    "firebase.clients.list",
-  ]
+  permissions = sort(setunion(local.plan_metadata_permissions, var.plan_extra_permissions))
 }
 
 resource "google_project_iam_member" "apply" {

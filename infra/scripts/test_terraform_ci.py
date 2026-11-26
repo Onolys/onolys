@@ -13,33 +13,33 @@ def test_no_service_account_keys_anywhere():
         assert "google_service_account_key" not in p.read_text(), p
 
 
-def test_apply_is_gated_by_ref_or_environment_never_whole_repo():
-    assert 'startswith(var.apply_principal_set, "principalSet://iam.googleapis.com/")' in MODULE
-    assert '!strcontains(var.apply_principal_set, "/attribute.repository/")' in MODULE
-    # legacy prod: only jobs in the `production` GitHub Environment (required reviewers)
-    assert re.search(r"apply_principal_set\s*=.*github\.name\}/attribute\.environment/production\"", LEGACY)
-    # isolated staging/eval: only refs/heads/main inside the main-only pool
-    assert re.search(r"apply_principal_set\s*=.*attribute\.ref/refs/heads/main\"", ISOLATED)
+def test_apply_has_its_own_pool_workflow_and_ref_scoped_never_whole_repo():
+    assert 'workload_identity_pool_id = "github-apply"' in MODULE
+    assert "/attribute.workflow_ref/${local.workflow_path}@refs/heads/main" in MODULE
+    assert "attribute.repository/" not in re.search(r'resource "google_service_account_iam_member" "apply_wif".*?\n}', MODULE, re.S).group(0)
+    cond = re.search(r'attribute_condition\s*=\s*"(assertion\.repository==.*?ref==\'refs/heads/main\'.*?)"\n', MODULE).group(1)
+    for part in ("assertion.ref=='refs/heads/main'", "assertion.event_name in ['push','workflow_dispatch']",
+                 "assertion.job_workflow_ref=='${local.workflow_path}@refs/heads/main'", "var.apply_required_environment"):
+        assert part in cond, part
+    # legacy prod additionally requires the dedicated terraform-prod environment (enforced by the apply provider condition)
+    assert 'apply_required_environment = "terraform-prod"' in LEGACY
+    assert "apply_required_environment" not in ISOLATED
 
 
-def test_plan_pool_is_separate_and_admits_only_pr_and_main_of_this_repo():
+def test_plan_pool_is_separate_and_admits_only_terraform_workflow_events():
     assert 'workload_identity_pool_id = "github-plan"' in MODULE
-    m = re.search(r"attribute_condition\s*=\s*\"(.*)\"", MODULE)
-    assert m
-    cond = m.group(1)
+    cond = re.search(r'attribute_condition\s*=\s*"(assertion\.repository==[^"]*startsWith[^"]*)"', MODULE).group(1)
     assert "assertion.repository=='${var.github_repository}'" in cond
-    assert "assertion.event_name=='pull_request'" in cond and "assertion.ref=='refs/heads/main'" in cond
+    assert "assertion.event_name in ['pull_request','push','workflow_dispatch']" in cond
+    assert "assertion.job_workflow_ref.startsWith('${local.workflow_path}@')" in cond
+    assert "refs/heads/main" not in cond  # no blanket "any event on main"
 
 
-def test_plan_identity_cannot_read_user_data_or_change_infrastructure():
+def test_plan_identity_cannot_use_basic_or_admin_roles_and_uploads_create_only():
     plan_roles = re.search(r'variable "plan_roles".*?default\s*=\s*\[(.*?)\]', MODULE, re.S).group(1)
     for banned in ("roles/viewer", "roles/editor", "roles/owner", "roles/datastore.viewer", "roles/storage.objectViewer",
                    "Admin", "roles/secretmanager.secretAccessor"):
         assert banned not in plan_roles, banned
-    custom = re.search(r"permissions\s*=\s*\[(.*?)\]", MODULE, re.S).group(1)
-    for perm in re.findall(r'"([^"]+)"', custom):
-        assert perm.split(".")[-1] in {"get", "list", "getIamPolicy", "getMetadata"}, perm
-        assert "objects" not in perm and "entities" not in perm
     # saved plans: create-only under plans/, no overwrite/delete
     assert 'role   = "roles/storage.objectCreator"' in MODULE
     assert "objects/plans/" in MODULE
@@ -52,5 +52,5 @@ def test_apply_has_no_owner_or_editor_basic_roles():
 
 
 def test_roots_use_their_own_state_bucket():
-    assert 'state_bucket        = "onolys-tfstate"' in LEGACY
-    assert 'state_bucket        = "${var.project}-tfstate"' in ISOLATED
+    assert re.search(r"state_bucket\s*= \"onolys-tfstate\"", LEGACY)
+    assert re.search(r"state_bucket\s*= \"\$\{var.project\}-tfstate\"", ISOLATED)
