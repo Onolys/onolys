@@ -326,8 +326,15 @@ def create_run(
             services.queue.enqueue(
                 "tick", {"eval_run_id": rid, "n": 1}, task_id=f"{rid}-tick-1"
             )
-        except Exception:
-            logger.exception("tick_enqueue_failed", extra={"eval_run_id": rid})
+        except Exception as exc:
+            # No exc_info: the JSON log filter reduces exception records to the class name. The
+            # message of a Cloud Tasks API error carries no run content, so log it (bounded).
+            logger.error(
+                "tick_enqueue_failed: %s: %s",
+                type(exc).__name__,
+                str(exc)[:200],
+                extra={"eval_run_id": rid},
+            )
             services.repository.update_run(
                 rid, {"status": "failed", "finished_at": now(), "error": {"code": "enqueue_failed"}}
             )

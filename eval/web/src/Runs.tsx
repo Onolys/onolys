@@ -2,7 +2,7 @@ import { useEffect, useId, useRef, useState } from 'react';
 import { Badge, Button, Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, Input } from '@onolys/ui';
 import { ApiError } from './api';
 import { CancelRunDialog, CancellationNote, canCancelRun, isActiveRun, mergeRunStatus } from './CancelRunDialog';
-import { PartialBadge, ProviderSkipNotices, partialStatusText, providerName } from './RunStatus';
+import { PartialBadge, ProviderSkipNotices, RunErrorNote, partialStatusText, providerName } from './RunStatus';
 import { RunConfigDialog, savedConfiguration } from './RunConfigDialog';
 import { ColdStartNotice } from './ColdStart';
 import { JsonDialog } from './JsonViewer';
@@ -118,6 +118,7 @@ export function RunView({ api, runId, onRerun, onNavigate = navigateEval }: { ap
   return <section className="run-detail"><div className="unit-section-heading"><h1>Run {run?.name || runId}</h1>{run && <PartialBadge run={run} />}</div>{error && <div role="alert">{error}{!missing && run && !terminal(run.status) && ' Still trying to refresh.'}<button onClick={() => { setError(''); setMissing(false); setAttempt(n => n + 1); }}>Retry run status</button></div>}
     {!run ? (!error && <p role="status">Loading run…</p>) : <>
       <p role="status">{run.status === 'partial' ? 'partial' : statusLabel(run, cancelRequested)} · {run.done_units}/{run.total_units} runs done{isActiveRun(run) && ` · ${run.running_units ?? 0} running · ${run.queued_units ?? 0} queued`} · {run.failed_units} failed · {run.cancelled_units} cancelled</p>
+      <RunErrorNote run={run} />
       <CancellationNote run={run} />
       <CompareLink run={run} navigate={onNavigate} />
       {canCancelRun(run) && <Button onClick={event => { cancelTrigger.current = event.currentTarget; setToCancel(run); }}>Cancel run</Button>}

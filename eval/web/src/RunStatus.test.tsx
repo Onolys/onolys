@@ -55,3 +55,9 @@ it('shows running units with their stage, queued units without one, and live run
  detail.unmount(); render(<History api={api} onOpen={vi.fn()} onRerun={vi.fn()} />); await act(async () => {});
  expect(screen.getByText('1 of 3 runs done, 1 running')).toBeTruthy();
 });
+it('shows a readable reason for a run that failed before starting (enqueue_failed)', async () => {
+ const run = saved({ status: 'failed', done_units: 0, failed_units: 0, cancelled_units: 0, error: { code: 'enqueue_failed' } });
+ render(<RunView api={{ ...createEvalApi('', vi.fn()), run: vi.fn().mockResolvedValue(run) }} runId="r1" onRerun={vi.fn()} />); await act(async () => {});
+ expect(screen.getByRole('alert').textContent).toContain('Run failed to start: could not queue it for processing');
+ expect(screen.getByRole('status').textContent).toContain('failed');
+});
