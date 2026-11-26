@@ -36,9 +36,8 @@ it.each([320, 768, 1280])('retains accessible chart/table structure at the %ipx 
   <MoreAnalysis {...props} data={analysis as CompareAnalysis}/>
   <LineView {...props} data={lines as CompareLines}/>
  </>);
- const regions = view.container.querySelectorAll('[role="region"]');
- expect(regions.length).toBeGreaterThan(10);
- regions.forEach(region => {
+ // Every remaining scroll region (legacy ChartFrame in Overview/MoreAnalysis/LineView) must stay named and keyboard-focusable.
+ view.container.querySelectorAll('[role="region"]').forEach(region => {
   expect(region.getAttribute('aria-label')).toBeTruthy();
   expect(region.getAttribute('tabindex')).toBe('0');
  });
@@ -46,9 +45,31 @@ it.each([320, 768, 1280])('retains accessible chart/table structure at the %ipx 
   expect(chart.querySelector('h3')?.id).toBe(chart.getAttribute('aria-labelledby'));
   expect(within(chart as HTMLElement).getByText('How to read:')).toBeTruthy();
   expect(chart.querySelector('details summary')?.textContent).toMatch(/^Show data table/);
-  expect(chart.querySelector('details table caption')).toBeTruthy();
-  expect(chart.querySelector('details table th[scope="row"], details table th[scope="col"]')).toBeTruthy();
  });
+ // Deep dive cards use the shared ui ChartFrame: titled section, one-sentence caption, table twin collapsed behind "Show data".
+ const deepRoot = view.container.querySelector('.deep-dive') as HTMLElement;
+ const cards = deepRoot.querySelectorAll('.ui-chart-frame');
+ expect(cards.length).toBeGreaterThanOrEqual(8); // 4 globals + 4+ counts/PRF/confusion/miss cards
+ cards.forEach(card => {
+  expect(card.querySelector('h3')?.id).toBe(card.getAttribute('aria-labelledby'));
+  expect(card.querySelector('.ui-chart-caption')?.textContent?.trim()).toBeTruthy();
+  const twin = card.querySelector('.ui-disclosure-toggle');
+  expect(twin?.textContent).toMatch(/Show data/);
+  expect(twin?.getAttribute('aria-expanded')).toBe('false');
+  expect(card.querySelector('table')).toBeNull(); // twin not rendered until opened (no hidden wide tables)
+ });
+ // Dot plots scale by viewBox: no fixed pixel width/height attributes, so they can never force horizontal scroll.
+ const svgs = deepRoot.querySelectorAll('svg.deep-dot-svg');
+ expect(svgs.length).toBe(4);
+ svgs.forEach(svg => {
+  expect(svg.getAttribute('viewBox')).toMatch(/^0 0 \d+(\.\d+)? \d+(\.\d+)?$/);
+  expect(svg.hasAttribute('width')).toBe(false);
+  expect(svg.hasAttribute('height')).toBe(false);
+ });
+ expect(styles).toMatch(/\.deep-dot-svg\s*\{[^}]*width:\s*100%/);
+ // Cards stack to one column at the breakpoint.
+ expect(styles).toMatch(/@media\(max-width:760px\)[^]*\.deep-grid\s*\{\s*grid-template-columns:\s*minmax\(0,1fr\)/);
+ expect(styles).not.toMatch(/overflow-x\s*:\s*(auto|scroll)/);
  // Heatmap is collapsed by default (opened by toggle); the leaderboard is a DataTable with no scroll region.
  expect(view.container.querySelector('.overview-heatmap')).toBeNull();
  const media = [...sheet.sheet!.cssRules].filter((rule): rule is CSSMediaRule => rule.type === CSSRule.MEDIA_RULE);
