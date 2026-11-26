@@ -13,14 +13,15 @@ locals {
       "app.onolys.com",
       "${var.app_site_id}.web.app",
     ],
-    # eval signs in through this project: its custom domain, the auth-handler site and the eval web site.
-    ["eval.onolys.com", "onolys-eval-staging.web.app", "onolys-eval-app.web.app"],
   ))
 
   # Hosts whose sites were deleted. identity-config.py removes exactly these (never the Firebase defaults, never a
   # host also in authorized_domains, never anything unlisted such as preview hosts). Safe to keep after removal.
   retired_authorized_domains = [
     "${var.app_staging_site_id}.web.app",
+    "eval.onolys.com",              # eval signs in through its own project (onolys-eval) now
+    "onolys-eval-staging.web.app",  # eval-moved
+    "onolys-eval-app.web.app",      # eval-moved
     "admin.onolys.com",             # retired-host
     "onolys-admin.web.app",         # retired-host
     "onolys-admin-staging.web.app", # retired-host
@@ -110,18 +111,6 @@ output "web_env_prod" {
     VITE_FIREBASE_MESSAGING_SENDER_ID = data.google_firebase_web_app_config.app.messaging_sender_id
     VITE_FIRESTORE_DATABASE           = "(default)"
     VITE_VOICE_URL                    = replace(module.prod.voice_url, "https://", "wss://")
-  }
-}
-
-output "web_env_eval" {
-  description = "VITE_* build vars for eval/web (docs only): prod Firebase web app values, auth domain eval.onolys.com."
-  value = {
-    VITE_FIREBASE_API_KEY             = data.google_firebase_web_app_config.app.api_key
-    VITE_FIREBASE_AUTH_DOMAIN         = "eval.onolys.com"
-    VITE_FIREBASE_PROJECT_ID          = var.project
-    VITE_FIREBASE_APP_ID              = google_firebase_web_app.app.app_id
-    VITE_FIREBASE_STORAGE_BUCKET      = data.google_firebase_web_app_config.app.storage_bucket
-    VITE_FIREBASE_MESSAGING_SENDER_ID = data.google_firebase_web_app_config.app.messaging_sender_id
   }
 }
 

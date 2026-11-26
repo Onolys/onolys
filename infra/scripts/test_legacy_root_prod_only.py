@@ -75,19 +75,19 @@ def test_deployer_staging_holds_no_onolys_project_rights_beyond_usage():
     assert granted == ["deployer_staging_usage"], granted
 
 
-def test_eval_signin_config_kept():
-    # eval signs in against the onolys Identity Platform; its hosts stay authorized.
+def test_eval_signin_is_not_in_prod_identity():
+    # eval signs in through its own project (onolys-eval); prod must not authorize its hosts any more.
     ident = TF["identity.tf"]
-    assert '"eval.onolys.com"' in ident and '"onolys-eval-staging.web.app"' in ident
-    assert 'output "web_env_eval"' in ident and 'output "web_env_prod"' in ident
+    block_src = re.search(r"authorized_domains = distinct\(concat\((.*?)\n  \)\)\n", ident, re.S).group(1)
+    retired = re.search(r"retired_authorized_domains = \[(.*?)\]", ident, re.S).group(1)
+    for host in ["eval.onolys.com", "onolys-eval-staging.web.app", "onolys-eval-app.web.app"]:
+        assert host not in block_src, host
+        assert f'"{host}"' in retired, host
+    assert 'output "web_env_prod"' in ident and 'output "web_env_eval"' not in ident
 
 
-def test_eval_auth_handler_site_and_domain_are_the_only_old_eval_resources_kept():
-    # eval's web uses Firebase authDomain eval.onolys.com; its /__/auth/handler is served by this Hosting site + custom
-    # domain, and eval's sign-in issuer is project onolys, so they must stay here (destroying them breaks eval sign-in).
-    site = block(ALL, 'resource "google_firebase_hosting_site" "eval_staging"')
-    assert 'site_id    = "onolys-eval-staging"' in site and "var.project" in site
-    dom = block(ALL, 'resource "google_firebase_hosting_custom_domain" "eval_staging"')
-    assert '"eval.onolys.com"' in dom and "google_firebase_hosting_site.eval_staging.site_id" in dom
-    assert '"eval.onolys.com" = google_firebase_hosting_custom_domain.eval_staging' in TF["domains.tf"]
-    assert re.findall(r'resource "(\w+)" "eval_\w+"', ALL) == ["google_firebase_hosting_site", "google_firebase_hosting_custom_domain"]
+def test_no_eval_hosting_resources_remain_in_legacy_root():
+    # The eval site and eval.onolys.com moved to the isolated eval root (a custom domain lives on one site only).
+    assert not re.findall(r'resource "\w+" "eval_\w+"', ALL)
+    assert "onolys-eval-staging" not in TF["domains.tf"]
+    assert "eval.onolys.com" not in TF["domains.tf"]

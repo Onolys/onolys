@@ -1,5 +1,5 @@
 locals {
-  auth_project = coalesce(var.auth_project, var.environment == "eval" ? "onolys" : var.project)
+  auth_project = coalesce(var.auth_project, var.project)
   site_origin  = "https://${var.hosting_site_id}.web.app"
   apis = toset(concat([
     "serviceusage.googleapis.com", "cloudresourcemanager.googleapis.com", "iam.googleapis.com",

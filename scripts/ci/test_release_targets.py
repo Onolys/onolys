@@ -20,9 +20,12 @@ class TargetTests(unittest.TestCase):
         spec.loader.exec_module(cls.module)
 
     def test_project_is_activation_switch(self):
-        for role in ('staging', 'eval'):
-            self.module.validate(role, {})
-            self.module.validate(role, {f'{role.upper()}_WIF_PROVIDER': 'prepared'})
+        self.module.validate('staging', {})
+        self.module.validate('staging', {'STAGING_WIF_PROVIDER': 'prepared'})
+        # Eval has no legacy target any more (its legacy site and prod sign-in were removed): always isolated.
+        for env in ({}, {'EVAL_WIF_PROVIDER': 'prepared'}):
+            with self.assertRaises(ValueError):
+                self.module.validate('eval', env)
 
     def test_active_bundle_requires_project_local_identity_and_site(self):
         for role in ('staging', 'eval'):
@@ -37,6 +40,10 @@ class TargetTests(unittest.TestCase):
                               STAGING_ISOLATED_VITE_FIREBASE_APP_ID='1:123:web:abc',
                               STAGING_ISOLATED_VITE_FIREBASE_STORAGE_BUCKET='onolys-staging.firebasestorage.app',
                               STAGING_ISOLATED_VITE_FIREBASE_MESSAGING_SENDER_ID='123')
+            else:
+                values.update(EVAL_VITE_FIREBASE_API_KEY='test-api-key',
+                              EVAL_VITE_FIREBASE_AUTH_DOMAIN='onolys-eval.firebaseapp.com',
+                              EVAL_VITE_FIREBASE_APP_ID='1:123:web:abc')
             self.module.validate(role, values)
             for field in ('WIF_PROVIDER', 'DEPLOYER_SA', 'HOSTING_SITE'):
                 with self.subTest(role=role, missing=field), self.assertRaises(ValueError):
@@ -46,6 +53,23 @@ class TargetTests(unittest.TestCase):
                                ('HOSTING_SITE', 'onolys-eval-staging'), ('HOSTING_SITE', 'x\nEVIL=1')]:
                 with self.subTest(role=role, invalid=field), self.assertRaises(ValueError):
                     self.module.validate(role, {**values, f'{prefix}_{field}': bad})
+
+    def test_eval_frontend_bundle_uses_its_own_firebase_app(self):
+        base = {'EVAL_GCP_PROJECT': 'onolys-eval',
+                'EVAL_WIF_PROVIDER': 'projects/123/locations/global/workloadIdentityPools/github/providers/github',
+                'EVAL_DEPLOYER_SA': 'deployer-eval@onolys-eval.iam.gserviceaccount.com',
+                'EVAL_HOSTING_SITE': 'onolys-eval-app',
+                'EVAL_VITE_FIREBASE_API_KEY': 'k',
+                'EVAL_VITE_FIREBASE_AUTH_DOMAIN': 'onolys-eval.firebaseapp.com',
+                'EVAL_VITE_FIREBASE_APP_ID': '1:123:web:abc'}
+        self.module.validate('eval', base)
+        for field in ('API_KEY', 'AUTH_DOMAIN', 'APP_ID'):
+            with self.subTest(missing=field), self.assertRaises(ValueError):
+                self.module.validate('eval', {**base, f'EVAL_VITE_FIREBASE_{field}': ''})
+        for field, bad in [('AUTH_DOMAIN', 'eval.onolys.com'), ('AUTH_DOMAIN', 'onolys.firebaseapp.com'),
+                           ('APP_ID', 'not-an-app-id')]:
+            with self.subTest(invalid=field, value=bad), self.assertRaises(ValueError):
+                self.module.validate('eval', {**base, f'EVAL_VITE_FIREBASE_{field}': bad})
 
     def test_staging_frontend_bundle_is_required_only_after_activation(self):
         env = {'STAGING_GCP_PROJECT': 'onolys-staging',
@@ -172,18 +196,25 @@ class WorkflowTests(unittest.TestCase):
         self.assertLess(setup, voice)
         self.assertEqual(steps[setup]['if'], "vars.STAGING_GCP_PROJECT != ''")
 
-    def test_eval_keeps_production_auth_but_uses_eval_deployer(self):
+    def test_eval_uses_its_own_project_deployer_and_firebase_app(self):
         workflow = self.workflow('deploy-eval.yml')
-        self.assertIn('vars.EVAL_GCP_PROJECT', workflow['env']['PROJECT'])
+        text = (ROOT / '.github/workflows/deploy-eval.yml').read_text()
+        self.assertEqual(workflow['env']['PROJECT'], '${{ vars.EVAL_GCP_PROJECT }}')
+        self.assertEqual(workflow['env']['EVAL_SITE'], '${{ vars.EVAL_HOSTING_SITE }}')
+        for forbidden in ('PROD_VITE_', 'vars.GCP_PROJECT', 'vars.WIF_PROVIDER', 'vars.DEPLOYER_STAGING_SA',
+                          'FIREBASE_AUTH_DOMAIN: eval.onolys.com'):
+            self.assertNotIn(forbidden, text)
         site = workflow['jobs']['site']
         frontend = next(step for step in site['steps'] if step.get('working-directory') == 'eval/web')
-        self.assertEqual(frontend['env']['VITE_FIREBASE_PROJECT_ID'], "${{ vars.GCP_PROJECT || 'onolys' }}")
+        self.assertEqual(frontend['env']['VITE_FIREBASE_PROJECT_ID'], '${{ env.PROJECT }}')
+        for key in ('API_KEY', 'AUTH_DOMAIN', 'APP_ID'):
+            self.assertEqual(frontend['env'][f'VITE_FIREBASE_{key}'], '${{ vars.EVAL_VITE_FIREBASE_' + key + ' }}')
         for name in ('build', 'deploy-backend', 'site', 'firestore'):
             auth = next(step for step in workflow['jobs'][name]['steps'] if step.get('uses', '').startswith('google-github-actions/auth@'))
-            self.assertIn('vars.EVAL_GCP_PROJECT && vars.EVAL_DEPLOYER_SA', auth['with']['service_account'])
+            self.assertEqual(auth['with']['service_account'], '${{ vars.EVAL_DEPLOYER_SA }}')
         worker = workflow['jobs']['deploy-worker']['with']
-        self.assertIn('vars.EVAL_GCP_PROJECT', worker['project'])
-        self.assertIn('vars.EVAL_DEPLOYER_SA', worker['service_account'])
+        self.assertEqual(worker['project'], '${{ vars.EVAL_GCP_PROJECT }}')
+        self.assertEqual(worker['service_account'], '${{ vars.EVAL_DEPLOYER_SA }}')
         self.assertIn('release_target.py hosting eval/web/firebase.json', str(site))
         smoke = str(workflow['jobs']['smoke'])
         self.assertIn('$EVAL_SITE.web.app', smoke)

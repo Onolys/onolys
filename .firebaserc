@@ -6,8 +6,12 @@
     "onolys": {
       "hosting": {
         "app": ["onolys-app"],
-        "app-staging": ["onolys-app-staging"],
-        "eval-staging": ["onolys-eval-staging"]
+        "app-staging": ["onolys-app-staging"]
+      }
+    },
+    "onolys-eval": {
+      "hosting": {
+        "eval-staging": ["onolys-eval-app"]
       }
     }
   }

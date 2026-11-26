@@ -172,12 +172,14 @@ def _identity_tf():
     return (pathlib.Path(__file__).parents[1] / "identity.tf").read_text()
 
 
-def test_declared_domains_keep_eval_and_prod_hosts():
+def test_declared_domains_keep_prod_hosts_only():
     import re
 
     block = re.search(r"authorized_domains = distinct\(concat\((.*?)\n  \)\)\n", _identity_tf(), re.S).group(1)
-    for host in ["app.onolys.com", "eval.onolys.com", "onolys-eval-staging.web.app", "onolys-eval-app.web.app", "var.app_site_id"]:
+    for host in ["app.onolys.com", "var.app_site_id"]:
         assert host in block
+    for host in ["eval.onolys.com", "onolys-eval-staging.web.app", "onolys-eval-app.web.app"]:
+        assert host not in block  # eval has its own identity project
     assert "admin" not in block and "app_staging_site_id" not in block
 
 
@@ -186,6 +188,7 @@ def test_retired_domains_removed_via_script():
 
     src = _identity_tf()
     retired = re.search(r"retired_authorized_domains = \[(.*?)\]", src, re.S).group(1)
-    for host in ["admin.onolys.com", "onolys-admin.web.app", "onolys-admin-staging.web.app", "app_staging_site_id"]:
+    for host in ["admin.onolys.com", "onolys-admin.web.app", "onolys-admin-staging.web.app", "app_staging_site_id",
+                 "eval.onolys.com", "onolys-eval-staging.web.app", "onolys-eval-app.web.app"]:
         assert host in retired
     assert "--remove-domain" in src and "local.retired_authorized_domains" in src

@@ -85,7 +85,7 @@ output "eval_backend_url" {
 }
 
 output "firebase_web_config" {
-  description = "Public local-auth web config, or null when using an external identity project."
+  description = "Public local-auth web config, or null unless manage_identity."
   value = var.manage_identity ? {
     project_id          = var.project
     app_id              = google_firebase_web_app.this[0].app_id
@@ -97,7 +97,7 @@ output "firebase_web_config" {
 }
 
 output "web_env" {
-  description = "Public SDK settings for isolated staging builds; null when retaining external eval identity."
+  description = "Public SDK settings for isolated staging/eval builds (GitHub vars STAGING_ISOLATED_VITE_* / EVAL_VITE_*); null unless manage_identity."
   value = var.manage_identity ? {
     VITE_FIREBASE_API_KEY             = data.google_firebase_web_app_config.this[0].api_key
     VITE_FIREBASE_AUTH_DOMAIN         = data.google_firebase_web_app_config.this[0].auth_domain
@@ -107,4 +107,53 @@ output "web_env" {
     VITE_FIREBASE_MESSAGING_SENDER_ID = data.google_firebase_web_app_config.this[0].messaging_sender_id
     VITE_FIRESTORE_DATABASE           = module.environment.database_id
   } : null
+}
+
+output "required_dns_updates" {
+  description = "Eval only: DNS records for eval.onolys.com to set at the registrar (type, host, value); empty elsewhere or once Hosting needs nothing more."
+  value = flatten([
+    for d in google_firebase_hosting_custom_domain.eval : concat(
+      flatten([
+        for u in d.required_dns_updates : [
+          for dd in u.desired : [
+            for r in dd.records : {
+              domain = d.custom_domain
+              type   = r.type
+              host   = r.domain_name
+              value  = r.rdata
+              action = r.required_action
+            }
+          ]
+        ]
+      ]),
+      flatten([
+        for c in d.cert : [
+          for v in c.verification : [
+            for dn in v.dns : [
+              for dd in dn.desired : [
+                for r in dd.records : {
+                  domain = d.custom_domain
+                  type   = r.type
+                  host   = r.domain_name
+                  value  = r.rdata
+                  action = r.required_action
+                }
+              ]
+            ]
+          ]
+        ]
+      ]),
+    )
+  ])
+}
+
+output "custom_domain_status" {
+  description = "Eval only: Hosting verification state of eval.onolys.com (expect ownership OWNERSHIP_ACTIVE, host HOST_ACTIVE, cert CERT_ACTIVE after DNS)."
+  value = {
+    for d in google_firebase_hosting_custom_domain.eval : d.custom_domain => {
+      ownership = d.ownership_state
+      host      = d.host_state
+      cert      = try(d.cert[0].state, null)
+    }
+  }
 }

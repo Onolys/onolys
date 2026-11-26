@@ -78,3 +78,20 @@ def test_owner_billing_caps_remain_outside_foundation_state():
     legacy = (INFRA / 'budget.tf').read_text()
     removed = re.search(r'removed\s*\{\s*from\s*=\s*google_billing_budget\.monthly\b(.*?)\n\}', legacy, re.S)
     assert removed and re.search(r'destroy\s*=\s*false', removed[1])
+
+
+def test_eval_has_its_own_identity_project_domain_and_site():
+    main = (ROOT / 'main.tf').read_text()
+    variables = (ROOT / 'variables.tf').read_text()
+    identity = (ROOT / 'identity.tf').read_text()
+    # Issuer defaults to the runtime project for every environment: eval never uses the prod onolys project.
+    assert 'coalesce(var.auth_project, var.project)' in main
+    assert '? "onolys" :' not in main and '? "onolys" :' not in variables
+    example = (ROOT / 'examples/environment-eval.tfvars.example').read_text()
+    assert 'auth_project      = "onolys-eval"' in example and 'manage_identity   = true' in example
+    # Authorized domains in onolys-eval: the site and eval.onolys.com (eval only).
+    assert 'eval.onolys.com' in identity and 'var.environment == "eval"' in identity
+    domain = block(identity, 'resource', 'google_firebase_hosting_custom_domain" "eval')
+    assert 'var.environment == "eval"' in domain and 'google_firebase_hosting_site.this.site_id' in domain
+    assert 'local.eval_custom_domain' in domain
+    assert 'output "required_dns_updates"' in (ROOT / 'outputs.tf').read_text()
