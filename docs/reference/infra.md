@@ -166,7 +166,21 @@ Environments: create `production` with Tejit as required reviewer (all prod jobs
 
 ### Owner step: `RELEASE_TAG_TOKEN` (prod tag job)
 
-The `tag` job of `deploy-prod` pushes `prod-<date>.<n>`. When the promoted commit (staging's, or a rollback target) is older than `main` and `.github/workflows/*` differ, `GITHUB_TOKEN` is refused ("refusing to allow a GitHub App to create or update workflow ... without `workflows` permission") and cannot be granted that permission. Create a fine-grained PAT (resource owner `Onolys`, repository `Onolys/onolys` only, Repository permissions: Contents Read and write, Workflows Read and write, short expiry you will renew) and save it as repo secret `RELEASE_TAG_TOKEN` (Settings > Secrets and variables > Actions). Only the `tag` checkout uses it; unset falls back to `GITHUB_TOKEN`, which works only when workflow files match `main`. Missing tag for run 45737922265 (commit `ce261570a3d31bd529bcdc5adfbe6300ae887894`): after the secret is set, `gh run rerun 45737922265 --failed` re-runs only the failed `tag` job (re-runs use the current secrets; the next `prod-<date>.<n>` is numbered from origin). Or a maintainer tags by hand: `git tag -a prod-<date>.<n> ce261570a3d31bd529bcdc5adfbe6300ae887894 -m "prod deploy" && git push origin refs/tags/prod-<date>.<n>`.
+The `tag` job of `deploy-prod` pushes `prod-<date>.<n>`. When the promoted commit (staging's, or a rollback target) is older than `main` and `.github/workflows/*` differ, `GITHUB_TOKEN` is refused ("refusing to allow a GitHub App to create or update workflow ... without `workflows` permission") and cannot be granted that permission. The job runs in its own GitHub environment `release-tag` (not `production`: a later gated job would need a second approval) and uses `RELEASE_TAG_TOKEN` from it; unset falls back to `GITHUB_TOKEN`, which works only when workflow files match `main`.
+
+1. Settings > Environments > New environment `release-tag`: deployment branches = `main` only, no required reviewers.
+2. Create a fine-grained PAT (resource owner `Onolys`, repository `Onolys/onolys` only, Repository permissions: Contents Read and write, Workflows Read and write, short expiry you will renew). The org may need to allow fine-grained PATs, or an owner must approve the token request.
+3. Save it as an **environment secret** `RELEASE_TAG_TOKEN` in `release-tag` (not a repo secret).
+4. Renew before expiry. An expired PAT fails the checkout; prod is already deployed by then, only the tag is lost.
+
+Re-running a failed `tag` job (`gh run rerun <run> --failed`) works for future runs whose workflow file already has the token line. It does not work for run 45737922265 (commit `ce261570a3d31bd529bcdc5adfbe6300ae887894`): re-runs use the original commit's workflow file, which lacks it. Tag that one manually (next `prod-<date>.<n>` is numbered from origin): push over SSH, or run `gh auth refresh -s workflow` first (gh's default HTTPS scopes lack `workflow`):
+
+```
+git tag -a prod-<date>.<n> ce261570a3d31bd529bcdc5adfbe6300ae887894 -m "prod deploy prod-<date>.<n>" -m "commit: ce261570a3d31bd529bcdc5adfbe6300ae887894" -m "image: <image>" -m "run: https://github.com/Onolys/onolys/actions/runs/45737922265"
+git push origin refs/tags/prod-<date>.<n>
+```
+
+Possible later alternative: a GitHub App token via `actions/create-github-app-token` instead of a PAT.
 
 ### Isolated staging and eval release targets (opt in)
 
