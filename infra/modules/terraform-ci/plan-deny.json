@@ -1,0 +1,49 @@
+{
+  "_comment": "Data-read permissions and roles the terraform-plan identity must never hold (it is reachable from any same-repo pull_request). Used by the plan_extra_permissions / plan_extra_roles validations in variables.tf and by infra/scripts/test_terraform_ci_permissions.py. docs/reference/infra-pipeline.md.",
+  "permissions_exact": [
+    "artifactregistry.files.download",
+    "artifactregistry.repositories.downloadArtifacts",
+    "cloudscheduler.jobs.run",
+    "cloudtasks.tasks.fullView",
+    "cloudtasks.tasks.get",
+    "cloudtasks.tasks.list",
+    "firebaseauth.configs.getSecret",
+    "firebaseauth.users.create",
+    "firebaseauth.users.get",
+    "iam.serviceAccounts.getAccessToken",
+    "iam.serviceAccounts.implicitDelegation",
+    "iam.serviceAccounts.signBlob",
+    "logging.logEntries.list",
+    "logging.privateLogEntries.list",
+    "monitoring.timeSeries.list",
+    "run.jobs.run",
+    "run.services.invoke",
+    "secretmanager.versions.access"
+  ],
+  "permission_prefixes": [
+    "aiplatform.",
+    "bigquery.",
+    "cloudkms.",
+    "cloudtasks.tasks.",
+    "datastore.entities.",
+    "firebaseauth.users.",
+    "logging.logEntries.",
+    "logging.privateLogEntries.",
+    "pubsub.",
+    "speech.",
+    "storage.objects."
+  ],
+  "roles": [
+    "roles/aiplatform.viewer",
+    "roles/bigquery.dataViewer",
+    "roles/cloudtasks.viewer",
+    "roles/datastore.viewer",
+    "roles/firebaseauth.viewer",
+    "roles/logging.privateLogViewer",
+    "roles/logging.viewer",
+    "roles/monitoring.viewer",
+    "roles/pubsub.viewer",
+    "roles/serviceusage.serviceUsageViewer",
+    "roles/storage.objectViewer"
+  ]
+}

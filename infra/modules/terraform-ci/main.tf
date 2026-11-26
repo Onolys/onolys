@@ -1,16 +1,32 @@
 # Keyless Terraform automation identities (GitHub OIDC -> Workload Identity Federation), one pair per project.
 #
-#   terraform-plan   metadata-only read + create-only upload of saved plans. Reachable from same-repo pull_request AND main
-#                    pushes (own WIF pool, see below). Cannot change infrastructure or read user data.
+#   terraform-plan   metadata-only read + create-only upload of saved plans. Reachable from same-repo pull_request plans
+#                    (terraform.yml) and from this project's deploy workflow (own WIF pool, see below). Cannot change
+#                    infrastructure or read user data.
 #   terraform-apply  effectively project admin. Reachable only through its OWN pool `github-apply` whose provider admits just
-#                    the terraform.yml workflow on refs/heads/main (push/workflow_dispatch) and, for prod, only jobs in the
-#                    dedicated GitHub Environment `terraform-prod` (required reviewers). The deployers' pools are untouched.
+#                    this project's deploy workflow (deploy-<env>.yml) on refs/heads/main (prod also on release tags), with its
+#                    trigger events, and for prod only jobs in the GitHub Environment `production` (required reviewer), the same
+#                    approval that releases the app. The deployers' pools are untouched.
 #
 # No service account keys exist anywhere. See docs/reference/infra-pipeline.md.
 
 locals {
-  pool_root     = "projects/${var.project_number}/locations/global/workloadIdentityPools"
-  workflow_path = "${var.github_repository}/.github/workflows/terraform.yml"
+  pool_root            = "projects/${var.project_number}/locations/global/workloadIdentityPools"
+  workflow_path        = "${var.github_repository}/.github/workflows/terraform.yml" # PR plans (and manual read-only plans)
+  deploy_workflow_path = "${var.github_repository}/.github/workflows/${var.deploy_workflow}"
+  deploy_events        = join(",", [for e in var.deploy_events : "'${e}'"])
+
+  # Apply: the deploy workflow file at the ref that runs it (a non-reusable workflow's job_workflow_ref is <path>@<github.ref>),
+  # main only, or main plus release tags for prod; prod also requires the job's GitHub Environment.
+  apply_condition = join(" && ", compact([
+    "assertion.repository=='${var.github_repository}'",
+    var.apply_tag_prefix == "" ? "assertion.ref=='refs/heads/main'" : "(assertion.ref=='refs/heads/main' || assertion.ref.startsWith('${var.apply_tag_prefix}'))",
+    "assertion.event_name in [${local.deploy_events}]",
+    var.apply_tag_prefix == "" ? "assertion.job_workflow_ref=='${local.deploy_workflow_path}@refs/heads/main'" : "(assertion.job_workflow_ref=='${local.deploy_workflow_path}@refs/heads/main' || assertion.job_workflow_ref.startsWith('${local.deploy_workflow_path}@${var.apply_tag_prefix}'))",
+    var.apply_required_environment == "" ? "" : "assertion.environment=='${var.apply_required_environment}'",
+  ]))
+  # Plan: PR plans of terraform.yml, and the plan job of this project's deploy pipeline. Read-only identity, so any ref.
+  plan_condition = "assertion.repository=='${var.github_repository}' && ((assertion.event_name in ['pull_request','workflow_dispatch'] && assertion.job_workflow_ref.startsWith('${local.workflow_path}@')) || (assertion.event_name in [${local.deploy_events}] && assertion.job_workflow_ref.startsWith('${local.deploy_workflow_path}@')))"
 
   # Read-only metadata for `terraform plan`, mapped resource by resource in resource-permissions.json (a test enforces the
   # table). No object, document, task, user, log-entry, secret-version or time-series reads.
@@ -54,7 +70,7 @@ locals {
 resource "google_service_account" "apply" {
   project      = var.project
   account_id   = "terraform-apply"
-  display_name = "Terraform apply (GitHub Actions, terraform.yml on main only)"
+  display_name = "Terraform apply (GitHub Actions, ${var.deploy_workflow} only)"
 }
 
 resource "google_service_account" "plan" {
@@ -66,11 +82,13 @@ resource "google_service_account" "plan" {
 resource "google_service_account_iam_member" "apply_wif" {
   service_account_id = google_service_account.apply.name
   role               = "roles/iam.workloadIdentityUser"
-  member             = "principalSet://iam.googleapis.com/${local.pool_root}/${google_iam_workload_identity_pool.apply.workload_identity_pool_id}/attribute.workflow_ref/${local.workflow_path}@refs/heads/main"
+  # Exact workflow ref where the ref is fixed (main). With release tags (prod) the ref varies, so the binding is the repository
+  # within this dedicated single-provider pool and the provider condition (workflow, refs, events, environment) is the gate.
+  member = var.apply_tag_prefix == "" ? "principalSet://iam.googleapis.com/${local.pool_root}/${google_iam_workload_identity_pool.apply.workload_identity_pool_id}/attribute.workflow_ref/${local.deploy_workflow_path}@refs/heads/main" : "principalSet://iam.googleapis.com/${local.pool_root}/${google_iam_workload_identity_pool.apply.workload_identity_pool_id}/attribute.repository/${var.github_repository}"
 }
 
-# Own pool for apply (not the deployers' `github` pool): its provider admits nothing but the terraform workflow on main, and
-# for prod also requires the GitHub Environment (required reviewers) so the cloud token itself needs the approval.
+# Own pool for apply (not the deployers' `github` pool): its provider admits nothing but this project's deploy workflow, and
+# for prod also requires the GitHub Environment (required reviewer) so the cloud token itself needs the approval.
 resource "google_iam_workload_identity_pool" "apply" {
   project                   = var.project
   workload_identity_pool_id = "github-apply"
@@ -82,7 +100,7 @@ resource "google_iam_workload_identity_pool_provider" "apply" {
   workload_identity_pool_id          = google_iam_workload_identity_pool.apply.workload_identity_pool_id
   workload_identity_pool_provider_id = "github-apply"
   display_name                       = "GitHub Terraform apply"
-  attribute_condition                = "assertion.repository=='${var.github_repository}' && assertion.ref=='refs/heads/main' && assertion.event_name in ['push','workflow_dispatch'] && assertion.job_workflow_ref=='${local.workflow_path}@refs/heads/main'${var.apply_required_environment == "" ? "" : " && assertion.environment=='${var.apply_required_environment}'"}"
+  attribute_condition                = local.apply_condition
   attribute_mapping = {
     "google.subject"         = "assertion.sub"
     "attribute.repository"   = "assertion.repository"
@@ -95,9 +113,9 @@ resource "google_iam_workload_identity_pool_provider" "apply" {
 }
 
 # Separate pool: a principalSet binds every provider of its pool, and the deploy pools either admit only main or are
-# shared with deployers. This pool admits only jobs of the terraform.yml workflow, for same-repo pull_request, push and
-# workflow_dispatch events (the workflow restricts push/dispatch to main). A PR can edit the workflow file, which is why the
-# plan identity holds nothing but metadata reads.
+# shared with deployers. This pool admits only jobs of terraform.yml (same-repo pull_request, manual dispatch) and of this
+# project's deploy workflow (its trigger events). A PR can edit the workflow file, which is why the plan identity holds nothing
+# but metadata reads.
 resource "google_iam_workload_identity_pool" "plan" {
   project                   = var.project
   workload_identity_pool_id = "github-plan"
@@ -109,7 +127,7 @@ resource "google_iam_workload_identity_pool_provider" "plan" {
   workload_identity_pool_id          = google_iam_workload_identity_pool.plan.workload_identity_pool_id
   workload_identity_pool_provider_id = "github-plan"
   display_name                       = "GitHub Terraform plan"
-  attribute_condition                = "assertion.repository=='${var.github_repository}' && assertion.event_name in ['pull_request','push','workflow_dispatch'] && assertion.job_workflow_ref.startsWith('${local.workflow_path}@')"
+  attribute_condition                = local.plan_condition
   attribute_mapping = {
     "google.subject"       = "assertion.sub"
     "attribute.repository" = "assertion.repository"

@@ -224,16 +224,16 @@ run "staging_has_no_custom_domain_or_eval_host" {
 run "terraform_ci_identities_are_workflow_scoped_for_apply_and_read_only_for_plan" {
   command = plan
   assert {
-    condition     = module.terraform_ci.bindings.apply_member == "principalSet://iam.googleapis.com/projects/904020682480/locations/global/workloadIdentityPools/github-apply/attribute.workflow_ref/Onolys/onolys/.github/workflows/terraform.yml@refs/heads/main"
-    error_message = "Apply must be impersonable only by the terraform workflow on refs/heads/main in its own pool, never by the whole repository."
+    condition     = module.terraform_ci.bindings.apply_member == "principalSet://iam.googleapis.com/projects/904020682480/locations/global/workloadIdentityPools/github-apply/attribute.workflow_ref/Onolys/onolys/.github/workflows/deploy-staging.yml@refs/heads/main"
+    error_message = "Apply must be impersonable only by the deploy-staging workflow on refs/heads/main in its own pool, never by the whole repository."
   }
   assert {
-    condition     = module.terraform_ci.bindings.apply_condition == "assertion.repository=='Onolys/onolys' && assertion.ref=='refs/heads/main' && assertion.event_name in ['push','workflow_dispatch'] && assertion.job_workflow_ref=='Onolys/onolys/.github/workflows/terraform.yml@refs/heads/main'"
-    error_message = "Nonprod apply provider admits only the terraform workflow on main (no environment requirement)."
+    condition     = module.terraform_ci.bindings.apply_condition == "assertion.repository=='Onolys/onolys' && assertion.ref=='refs/heads/main' && assertion.event_name in ['workflow_run','workflow_dispatch'] && assertion.job_workflow_ref=='Onolys/onolys/.github/workflows/deploy-staging.yml@refs/heads/main'"
+    error_message = "Staging apply provider admits only deploy-staging.yml on main, after CI (workflow_run) or by dispatch (no environment requirement)."
   }
   assert {
-    condition     = module.terraform_ci.bindings.plan_condition == "assertion.repository=='Onolys/onolys' && assertion.event_name in ['pull_request','push','workflow_dispatch'] && assertion.job_workflow_ref.startsWith('Onolys/onolys/.github/workflows/terraform.yml@')"
-    error_message = "Plan provider admits only terraform.yml jobs for PR, push and dispatch events, never any event on main."
+    condition     = module.terraform_ci.bindings.plan_condition == "assertion.repository=='Onolys/onolys' && ((assertion.event_name in ['pull_request','workflow_dispatch'] && assertion.job_workflow_ref.startsWith('Onolys/onolys/.github/workflows/terraform.yml@')) || (assertion.event_name in ['workflow_run','workflow_dispatch'] && assertion.job_workflow_ref.startsWith('Onolys/onolys/.github/workflows/deploy-staging.yml@')))"
+    error_message = "Plan provider admits PR plans from terraform.yml and the deploy-staging pipeline only, never any event on main."
   }
   assert {
     condition     = module.terraform_ci.bindings.plan_member == "principalSet://iam.googleapis.com/projects/904020682480/locations/global/workloadIdentityPools/github-plan/attribute.repository/Onolys/onolys"

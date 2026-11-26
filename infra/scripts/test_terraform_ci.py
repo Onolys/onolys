@@ -13,26 +13,49 @@ def test_no_service_account_keys_anywhere():
         assert "google_service_account_key" not in p.read_text(), p
 
 
-def test_apply_has_its_own_pool_workflow_and_ref_scoped_never_whole_repo():
+def test_apply_has_its_own_pool_and_admits_only_the_deploy_workflow():
     assert 'workload_identity_pool_id = "github-apply"' in MODULE
-    assert "/attribute.workflow_ref/${local.workflow_path}@refs/heads/main" in MODULE
-    assert "attribute.repository/" not in re.search(r'resource "google_service_account_iam_member" "apply_wif".*?\n}', MODULE, re.S).group(0)
-    cond = re.search(r'attribute_condition\s*=\s*"(assertion\.repository==.*?ref==\'refs/heads/main\'.*?)"\n', MODULE).group(1)
-    for part in ("assertion.ref=='refs/heads/main'", "assertion.event_name in ['push','workflow_dispatch']",
-                 "assertion.job_workflow_ref=='${local.workflow_path}@refs/heads/main'", "var.apply_required_environment"):
+    assert 'deploy_workflow_path = "${var.github_repository}/.github/workflows/${var.deploy_workflow}"' in MODULE
+    # exact workflow_ref binding where the ref is fixed (main); repository binding in the dedicated pool only when release tags
+    # are allowed (prod), the provider condition being the gate
+    member = re.search(r'resource "google_service_account_iam_member" "apply_wif".*?\n}', MODULE, re.S).group(0)
+    assert "attribute.workflow_ref/${local.deploy_workflow_path}@refs/heads/main" in member
+    assert 'var.apply_tag_prefix == ""' in member
+    cond = re.search(r"apply_condition = join\(\" && \", compact\(\[(.*?)\]\)\)", MODULE, re.S).group(1)
+    for part in ("assertion.repository=='${var.github_repository}'", "assertion.ref=='refs/heads/main'",
+                 "assertion.event_name in [${local.deploy_events}]",
+                 "assertion.job_workflow_ref=='${local.deploy_workflow_path}@refs/heads/main'",
+                 "assertion.ref.startsWith('${var.apply_tag_prefix}')",
+                 "assertion.job_workflow_ref.startsWith('${local.deploy_workflow_path}@${var.apply_tag_prefix}')",
+                 "assertion.environment=='${var.apply_required_environment}'"):
         assert part in cond, part
-    # legacy prod additionally requires the dedicated terraform-prod environment (enforced by the apply provider condition)
-    assert 'apply_required_environment = "terraform-prod"' in LEGACY
-    assert "apply_required_environment" not in ISOLATED
+    assert "terraform.yml" not in cond  # the PR workflow never reaches the apply identity
+    # legacy prod: deploy-prod.yml (tag pushes v* and dispatch on main), shared `production` approval
+    assert re.search(r'deploy_workflow\s*=\s*"deploy-prod.yml"', LEGACY)
+    assert re.search(r'deploy_events\s*=\s*\["push", "workflow_dispatch"\]', LEGACY)
+    assert re.search(r'apply_tag_prefix\s*=\s*"refs/tags/v"', LEGACY)
+    assert re.search(r'apply_required_environment\s*=\s*"production"', LEGACY)
+    assert "terraform-prod" not in LEGACY + MODULE
+    # staging/eval: their own deploy workflow, after CI (workflow_run) or manual dispatch, main only, no environment
+    assert re.search(r'deploy_workflow\s*=\s*"deploy-\$\{var.environment\}.yml"', ISOLATED)
+    assert re.search(r'deploy_events\s*=\s*\["workflow_run", "workflow_dispatch"\]', ISOLATED)
+    assert "apply_tag_prefix" not in ISOLATED and "apply_required_environment" not in ISOLATED
 
 
-def test_plan_pool_is_separate_and_admits_only_terraform_workflow_events():
+def test_plan_pool_is_separate_and_admits_only_pr_plans_and_the_deploy_workflow():
     assert 'workload_identity_pool_id = "github-plan"' in MODULE
-    cond = re.search(r'attribute_condition\s*=\s*"(assertion\.repository==[^"]*startsWith[^"]*)"', MODULE).group(1)
-    assert "assertion.repository=='${var.github_repository}'" in cond
-    assert "assertion.event_name in ['pull_request','push','workflow_dispatch']" in cond
-    assert "assertion.job_workflow_ref.startsWith('${local.workflow_path}@')" in cond
+    cond = re.search(r'plan_condition = "(.*?)"\n', MODULE).group(1)
+    assert cond.startswith("assertion.repository=='${var.github_repository}' && (")
+    assert "(assertion.event_name in ['pull_request','workflow_dispatch'] && assertion.job_workflow_ref.startsWith('${local.workflow_path}@'))" in cond
+    assert "(assertion.event_name in [${local.deploy_events}] && assertion.job_workflow_ref.startsWith('${local.deploy_workflow_path}@'))" in cond
+    assert "'push'" not in cond  # terraform.yml no longer runs on push
     assert "refs/heads/main" not in cond  # no blanket "any event on main"
+
+
+def test_deploy_inputs_are_validated():
+    for var in ("deploy_workflow", "deploy_events", "apply_tag_prefix"):
+        block = re.search(rf'variable "{var}" \{{(.*?)\n}}', MODULE, re.S).group(1)
+        assert "validation" in block, var
 
 
 def test_plan_identity_cannot_use_basic_or_admin_roles_and_uploads_create_only():

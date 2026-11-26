@@ -15,15 +15,12 @@ PLAN_SNAP = json.loads((MOD / "plan-role-permissions.snapshot.json").read_text()
 APPLY_SNAP = json.loads((MOD / "apply-role-permissions.snapshot.json").read_text())
 TABLE = json.loads((MOD / "resource-permissions.json").read_text())["types"]
 
-# Permissions that read user data or secrets; the plan identity is reachable from any same-repo pull_request workflow.
-DENY_EXACT = {
-    "firebaseauth.users.get", "firebaseauth.users.create", "cloudtasks.tasks.get", "cloudtasks.tasks.list",
-    "cloudtasks.tasks.fullView", "secretmanager.versions.access", "logging.logEntries.list", "logging.privateLogEntries.list",
-    "monitoring.timeSeries.list", "artifactregistry.files.download", "artifactregistry.repositories.downloadArtifacts",
-    "cloudscheduler.jobs.run", "run.jobs.run", "run.services.invoke", "iam.serviceAccounts.getAccessToken",
-    "iam.serviceAccounts.signBlob", "iam.serviceAccounts.implicitDelegation", "firebaseauth.configs.getSecret",
-}
-DENY_PREFIX = ("datastore.entities.", "storage.objects.", "pubsub.", "bigquery.", "speech.", "aiplatform.", "cloudkms.")
+# Permissions/roles that read user data or secrets; the plan identity is reachable from any same-repo pull_request workflow.
+# Single source shared with the plan_extra_* validations in variables.tf.
+DENY = json.loads((MOD / "plan-deny.json").read_text())
+DENY_EXACT = set(DENY["permissions_exact"])
+DENY_PREFIX = tuple(DENY["permission_prefixes"])
+DENY_ROLES = set(DENY["roles"])
 
 
 def default_list(var):
@@ -95,3 +92,21 @@ def test_logging_metric_is_covered_both_ways():
 def test_plan_extra_permissions_variable_feeds_the_custom_role():
     assert 'variable "plan_extra_permissions"' in VARS
     assert "var.plan_extra_permissions" in MAIN
+
+
+def test_plan_extra_inputs_are_validated_against_the_shared_deny_list():
+    perms = re.search(r'variable "plan_extra_permissions" \{(.*?)\n\}', VARS, re.S).group(1)
+    roles = re.search(r'variable "plan_extra_roles" \{(.*?)\n\}', VARS, re.S).group(1)
+    for block in (perms, roles):
+        assert 'file("${path.module}/plan-deny.json")' in block
+    assert ".permissions_exact" in perms and ".permission_prefixes" in perms and "startswith(" in perms
+    assert ".roles" in roles and "validation" in roles
+    # the round-2 offenders: get/list-shaped permissions that read data must hit the deny list
+    for p in ("datastore.entities.get", "datastore.entities.list", "storage.objects.get", "storage.objects.list",
+              "firebaseauth.users.get", "cloudtasks.tasks.get", "cloudtasks.tasks.list", "logging.logEntries.list",
+              "secretmanager.versions.access"):
+        assert p in DENY_EXACT or p.startswith(DENY_PREFIX), p
+    # data-reading predefined roles named in the plan_roles description are denied as extras
+    for r in ("roles/datastore.viewer", "roles/firebaseauth.viewer", "roles/cloudtasks.viewer", "roles/monitoring.viewer"):
+        assert r in DENY_ROLES, r
+    assert not DENY_ROLES & default_list("plan_roles")

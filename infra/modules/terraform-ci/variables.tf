@@ -18,8 +18,39 @@ variable "state_bucket" {
   type        = string
 }
 
+variable "deploy_workflow" {
+  description = "File name of this project's deploy workflow, which plans and applies its infrastructure before the app deploy (deploy-prod.yml, deploy-staging.yml or deploy-eval.yml). The only workflow the apply identity admits."
+  type        = string
+
+  validation {
+    condition     = contains(["deploy-prod.yml", "deploy-staging.yml", "deploy-eval.yml"], var.deploy_workflow)
+    error_message = "deploy_workflow must be deploy-prod.yml, deploy-staging.yml or deploy-eval.yml."
+  }
+}
+
+variable "deploy_events" {
+  description = "GitHub events that trigger the deploy workflow (prod: push of a release tag, workflow_dispatch; staging/eval: workflow_run after CI, workflow_dispatch)."
+  type        = list(string)
+
+  validation {
+    condition     = length(var.deploy_events) > 0 && alltrue([for e in var.deploy_events : contains(["push", "workflow_dispatch", "workflow_run"], e)])
+    error_message = "deploy_events accepts push, workflow_dispatch and workflow_run only (never pull_request)."
+  }
+}
+
+variable "apply_tag_prefix" {
+  description = "Besides refs/heads/main, also admit the deploy workflow on tag refs with this prefix (prod: refs/tags/v, the release tags that trigger deploy-prod.yml). Empty = main only."
+  type        = string
+  default     = ""
+
+  validation {
+    condition     = var.apply_tag_prefix == "" || can(regex("^refs/tags/[A-Za-z0-9._-]+$", var.apply_tag_prefix))
+    error_message = "apply_tag_prefix must be empty or refs/tags/<prefix>."
+  }
+}
+
 variable "apply_required_environment" {
-  description = "GitHub Environment the apply job must run in (prod: `terraform-prod`, required reviewers, main only). Empty for the main-only nonprod roots."
+  description = "GitHub Environment the apply job must run in (prod: `production`, required reviewer; deployment refs main and v* tags). Empty for the nonprod roots."
   type        = string
   default     = ""
 }
@@ -66,7 +97,7 @@ variable "plan_roles" {
 }
 
 variable "plan_extra_permissions" {
-  description = "Additional read-only permissions (get/list only) for the plan custom role when a plan reports a missing permission. Never data-read permissions: a test denies them in the defaults, review any addition by hand."
+  description = "Additional read-only permissions (get/list only) for the plan custom role when a plan reports a missing permission. Never data-read permissions: the shared deny list plan-deny.json is enforced here and in tests; review any addition by hand."
   type        = set(string)
   default     = []
 
@@ -74,10 +105,26 @@ variable "plan_extra_permissions" {
     condition     = alltrue([for p in var.plan_extra_permissions : can(regex("\\.(get|list|getIamPolicy|getMetadata)$", p))])
     error_message = "plan_extra_permissions accepts get/list/getIamPolicy/getMetadata permissions only."
   }
+
+  validation {
+    condition = alltrue([for p in var.plan_extra_permissions :
+      !contains(jsondecode(file("${path.module}/plan-deny.json")).permissions_exact, p) &&
+      alltrue([for prefix in jsondecode(file("${path.module}/plan-deny.json")).permission_prefixes : !startswith(p, prefix)])
+    ])
+    error_message = "plan_extra_permissions contains a data-read permission (plan-deny.json); the plan identity is reachable from pull requests."
+  }
 }
 
 variable "plan_extra_roles" {
-  description = "Additional read-only roles when a plan reports a missing permission."
+  description = "Additional read-only predefined roles when a plan reports a missing permission: `*.viewer` / `*Viewer` roles only, never one in plan-deny.json (they read data). Check the role with `gcloud iam roles describe` first."
   type        = set(string)
   default     = []
+
+  validation {
+    condition = alltrue([for r in var.plan_extra_roles :
+      can(regex("^roles/[A-Za-z0-9_]+\\.([A-Za-z0-9_]*Viewer|viewer)$", r)) &&
+      !contains(jsondecode(file("${path.module}/plan-deny.json")).roles, r)
+    ])
+    error_message = "plan_extra_roles accepts metadata viewer roles only (roles/<service>.viewer or ...Viewer), never a role in plan-deny.json."
+  }
 }
