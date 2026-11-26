@@ -110,7 +110,7 @@ Branch protection (require `CI` checks on `main`) is an owner step.
 
 ## Preview auth domains
 
-Staging PR previews (Hosting channels on `onolys-app-staging`) need their host in the Identity Platform authorised domains, or sign-in fails there. Checked live 2026-11-20 (SP06 task 6): the wildcard `onolys-app-staging--pr-*.web.app` is **rejected** by the API (`400 INVALID_AUTHORIZED_DOMAIN : ... should only contain the valid domain`). So the preview workflow must add each channel host after `firebase hosting:channel:deploy` reports it:
+Staging PR previews (Hosting channels on the staging site `onolys-staging-app`; the checks below were made on the retired legacy site `onolys-app-staging`) need their host in the Identity Platform authorised domains, or sign-in fails there. Checked live 2026-11-20 (SP06 task 6): the wildcard `onolys-app-staging--pr-*.web.app` is **rejected** by the API (`400 INVALID_AUTHORIZED_DOMAIN : ... should only contain the valid domain`). So the preview workflow must add each channel host after `firebase hosting:channel:deploy` reports it:
 
 ```
 python3 infra/scripts/identity-config.py --domains-only --add-domain <channel-host>
