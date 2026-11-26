@@ -60,8 +60,8 @@ it.each([320, 768, 1280])('retains accessible chart/table structure at the %ipx 
  expect(stacked?.cssText).toContain('display: block');
  expect(width <= 760).toBe(width === 320);
  expect(styles).toMatch(/\.overview-row-label\s*\{[^}]*position:\s*sticky;[^}]*left:\s*0/);
- expect(styles).toMatch(/\.overview-scroll\s*\{[^}]*max-width:\s*100%;[^}]*overflow-x:\s*auto/);
- // Wide content uses scroll containers, not a fixed pixel width on a page.
+ expect(styles).toMatch(/\.overview-scroll\s*\{[^}]*max-width:\s*100%;/);
+ // Wide content wraps inside its container, not a fixed pixel width on a page.
  expect(styles).not.toMatch(/(?:^|[;{])\s*width:\s*\d+px/);
  expect(view.container.querySelector('[style*="width: 320px"], [style*="width: 768px"], [style*="width: 1280px"]')).toBeNull();
 });

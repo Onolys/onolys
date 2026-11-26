@@ -1,5 +1,5 @@
 .overview-tab { min-width: 0; max-width: 100%; }
-.overview-tab .overview-scroll { max-width: 100%; overflow-x: auto; }
+.overview-tab .overview-scroll { max-width: 100%; overflow-wrap: anywhere; }
 .overview-tab table { border-collapse: separate; border-spacing: 0; width: 100%; }
 .overview-tab th, .overview-tab td { padding: .65rem; border-bottom: 1px solid var(--border); text-align: left; vertical-align: top; }
 .overview-tab small, .overview-tab td span, .overview-human span { display: block; }
