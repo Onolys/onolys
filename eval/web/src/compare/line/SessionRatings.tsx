@@ -17,7 +17,7 @@ export function ratingChip(value: number | undefined, human: number | undefined)
  return off === 0 ? { tone: 'success', text: 'exact' } : off === 1 ? { tone: 'warning', text: 'off 1' } : { tone: 'danger', text: 'off 2+' };
 }
 
-function Ratings({ data, api, runId, selected, letter }: { data: CompareLines; api: CompareTabProps<CompareLines>['api']; runId: string; selected: string[]; letter: (key: string) => string }) {
+function Ratings({ data, api, runId, selected, letter, index }: { data: CompareLines; api: CompareTabProps<CompareLines>['api']; runId: string; selected: string[]; letter: (key: string) => string; index: (key: string) => number }) {
  const [page, setPage] = useState<CompareReasoning>(); const [error, setError] = useState<unknown>(); const [attempt, setAttempt] = useState(0); const [cursor, setCursor] = useState<string>(); const [pending, setPending] = useState(true);
  const keys = JSON.stringify(selected);
  useEffect(() => {
@@ -29,13 +29,13 @@ function Ratings({ data, api, runId, selected, letter }: { data: CompareLines; a
  const columns: Column<string>[] = [
   { key: 'metric', header: 'Global', value: metric => metric },
   { key: 'human', header: 'Human', value: metric => data.globals.human[metric] ?? 'n/a' },
-  ...selected.map((key, index): Column<string> => ({
+  ...selected.map((key): Column<string> => ({
    key, header: letter(key), sortable: false,
    value: metric => data.globals.combos[key]?.map(row => row[metric] ?? 'n/a').join(' / ') ?? 'n/a',
    render: metric => {
     const rows = data.globals.combos[key];
     if (!rows?.length) return 'n/a';
-    return <span className="line-ratings-cell"><ComboTag index={index} letter={letter(key)} />{rows.map((row, i) => { const chip = ratingChip(row[metric], data.globals.human[metric]); return <Chip key={i} tone={chip.tone}>{row[metric] ?? 'n/a'} · {chip.text}</Chip>; })}</span>;
+    return <span className="line-ratings-cell"><ComboTag index={index(key)} letter={letter(key)} />{rows.map((row, i) => { const chip = ratingChip(row[metric], data.globals.human[metric]); return <Chip key={i} tone={chip.tone}>{row[metric] ?? 'n/a'} · {chip.text}</Chip>; })}</span>;
    },
   })),
  ];
@@ -51,6 +51,6 @@ function Ratings({ data, api, runId, selected, letter }: { data: CompareLines; a
 }
 
 /** Session global ratings, collapsed by default; ratings and reasons are only requested once opened. */
-export function SessionRatings(props: { data: CompareLines; api: CompareTabProps<CompareLines>['api']; runId: string; selected: string[]; letter: (key: string) => string }) {
+export function SessionRatings(props: { data: CompareLines; api: CompareTabProps<CompareLines>['api']; runId: string; selected: string[]; letter: (key: string) => string; index: (key: string) => number }) {
  return <section className="line-ratings"><h3>Session globals</h3><Disclosure label="Show global ratings"><Ratings {...props} /></Disclosure></section>;
 }

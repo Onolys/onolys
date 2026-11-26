@@ -2,16 +2,16 @@ import { useEffect, useRef, useState } from 'react';
 import type { CompareLines, CompareTurn, ModelLane } from './compareApi';
 import type { CompareTabProps } from './compareTypes';
 import { LineFilters } from './line/LineFilters';
-import { LaneTable } from './line/LaneTable';
+import { LaneTable, MAX_LANES } from './line/LaneTable';
 import { LinePopup } from './line/LinePopup';
 import { SessionRatings } from './line/SessionRatings';
 import './lineView.css';
 const category=(value:string[])=>value.length>1?'multi':value[0]??'none';
 const same=(a:string[],b:string[])=>a.length===b.length&&a.every(code=>b.includes(code));
 export function LineView({data,overview,state,navigate,legend,api,runId}:CompareTabProps<CompareLines>) {
- const [expanded,setExpanded]=useState<Record<string,boolean>>({});const [popup,setPopup]=useState<{key:string;data?:CompareTurn;error?:unknown}>();const [attempt,setAttempt]=useState(0);
+ const [popup,setPopup]=useState<{key:string;data?:CompareTurn;error?:unknown}>();const [attempt,setAttempt]=useState(0);
  const returnFocus=useRef<HTMLElement|null>(null);const triggers=useRef<Record<string,HTMLButtonElement|null>>({});
- const selected=state.combos?.length?state.combos:data.combos.map(combo=>combo.combo_key),keys=JSON.stringify(selected);
+ const selected=(state.combos?.length?state.combos:data.combos.map(combo=>combo.combo_key)).slice(0,MAX_LANES),keys=JSON.stringify(selected);
  const popupKey=JSON.stringify([data.session_id,state.turn,keys]);
  useEffect(()=>{
   if(!state.turn||!data.has_human||data.missing==='human'||data.missing==='both')return;const controller=new AbortController();
@@ -21,6 +21,7 @@ export function LineView({data,overview,state,navigate,legend,api,runId}:Compare
  },[api,runId,data.session_id,data.has_human,data.missing,state.turn,keys,popupKey,attempt]);
  const change=(next:Partial<typeof state>)=>navigate({...state,...next,view:'compare',run:runId,tab:'lines',turn:undefined});
  const letter=(key:string)=>legend.find(item=>item.combo.combo_key===key)?.letter??key;
+ const index=(key:string)=>Math.max(0,legend.findIndex(item=>item.combo.combo_key===key));
  const lane=(key:string)=>data.lanes[key] as ModelLane|undefined;
  const laneUnavailable=(key:string,turnId:string)=>{
   const item=lane(key);
@@ -43,8 +44,8 @@ export function LineView({data,overview,state,navigate,legend,api,runId}:Compare
  const active=popup?.key===popupKey?popup:undefined;
  const differingCount=data.turns.filter(turn=>isDisagreement(turn.id)).length;
  return <section className="line-view"><h2>Line view</h2><LineFilters state={state} sessionId={data.session_id} sessions={overview.header.line_sessions??[{session_id:data.session_id,matched_lines:null}]} selected={selected} legend={legend} letter={letter} differing={differingCount} change={change}/>
- <LaneTable turns={turns} selected={selected} human={human} lane={lane} letter={letter} unavailable={laneUnavailable} disagrees={laneDisagrees} isDisagreement={id=>Boolean(isDisagreement(id))} expanded={expanded} toggle={id=>setExpanded(old=>({...old,[id]:!old[id]}))} inspect={(id,trigger)=>{returnFocus.current=trigger;navigate({...state,view:'compare',run:runId,tab:'lines',turn:id});}} setTrigger={(id,node)=>{triggers.current[id]=node;}}/>{data.dataset_notes.map((note,i)=><p key={i} className="line-verbatim">{note}</p>)}
- <SessionRatings key={`${data.session_id}-${keys}`} data={data} api={api} runId={runId} selected={selected} letter={letter}/>
- <LinePopup turnId={state.turn} selected={selected} letter={letter} loaded={active} unavailable={laneUnavailable} retry={()=>setAttempt(n=>n+1)} onClose={()=>navigate({...state,turn:undefined})} returnFocus={returnFocus}/>
+ <LaneTable turns={turns} selected={selected} human={human} lane={lane} letter={letter} index={index} unavailable={laneUnavailable} isDisagreement={id=>Boolean(isDisagreement(id))} inspect={(id,trigger)=>{returnFocus.current=trigger;navigate({...state,view:'compare',run:runId,tab:'lines',turn:id});}} setTrigger={(id,node)=>{triggers.current[id]=node;}}/>{data.dataset_notes.map((note,i)=><p key={i} className="line-verbatim">{note}</p>)}
+ <SessionRatings key={`${data.session_id}-${keys}`} data={data} api={api} runId={runId} selected={selected} letter={letter} index={index}/>
+ <LinePopup turnId={state.turn} selected={selected} letter={letter} index={index} loaded={active} unavailable={laneUnavailable} retry={()=>setAttempt(n=>n+1)} onClose={()=>navigate({...state,turn:undefined})} returnFocus={returnFocus}/>
  </section>;
 }

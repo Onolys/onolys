@@ -1,6 +1,5 @@
 // @vitest-environment jsdom
 import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
 import { createEvalApi } from '../api';
@@ -11,7 +10,8 @@ import linesFixture from './fixtures/lines.json';
 import overviewFixture from './fixtures/overview.json';
 import turnFixture from './fixtures/turn.json';
 afterEach(cleanup);
-const lineCss=readFileSync(resolve(process.cwd(),'src/compare/lineView.css'),'utf8');
+const cssFile='lineView.css'; // variable so Vite does not rewrite new URL() into an asset URL
+const lineCss=readFileSync(new URL(cssFile,import.meta.url),'utf8');
 const openRatings=()=>fireEvent.click(screen.getByRole('button',{name:'Show global ratings'}));
 const openReasoning=async()=>fireEvent.click(await screen.findByRole('button',{name:'Show reasoning'}));
 function props() {
@@ -37,9 +37,27 @@ it('opens URL popup, preserves rationale and repeats, Escape restores focus',asy
  expect(within(dialog).getByText(/Saved text/)).toHaveProperty('textContent','Saved text.\n  Spaces preserved.');expect(within(dialog).getByText('2 of 3 repeats agree')).toBeTruthy();expect(within(dialog).getByText('Human note.')).toBeTruthy();
  fireEvent.keyDown(dialog,{key:'Escape'});expect(p.navigate).toHaveBeenLastCalledWith(expect.objectContaining({turn:undefined}));view.rerender(<LineView {...p}/>);await waitFor(()=>expect(document.activeElement).toBe(trigger));
 });
-it('collapses six lanes with expandable agreement',()=>{
+it('caps lanes at three combo columns with ComboTag headers; the combo filter picks extras',()=>{
  const p=props(),first=p.data.combos[0],lane=p.data.lanes[first.combo_key];p.data.combos=Array.from({length:6},(_,i)=>({...first,combo_key:`c${i}`}));p.legend=p.data.combos.map((combo,i)=>({combo,letter:String.fromCharCode(65+i),label:combo.combo_key}));for(const combo of p.data.combos)p.data.lanes[combo.combo_key]=structuredClone(lane);
- const view=render(<LineView {...p}/>), row=view.container.querySelector('[data-turn="t3"]') as HTMLElement;fireEvent.click(within(row).getByRole('button',{name:'+6 agree'}));expect(within(row).getByText('F: question / question')).toBeTruthy();
+ const view=render(<LineView {...p}/>);const heads=[...view.container.querySelectorAll('thead th')].slice(4);
+ expect(heads.map(h=>h.getAttribute('aria-label')??h.querySelector('[role=img]')?.getAttribute('aria-label'))).toEqual(['Combo A','Combo B','Combo C']);
+ const row=view.container.querySelector('[data-turn="t3"]') as HTMLElement;expect(row.querySelectorAll('td[data-label^="Combo "]')).toHaveLength(3);expect(within(row).queryByRole('button',{name:/agree/})).toBeNull();
+ const boxes=within(screen.getByRole('group',{name:/Combo lanes/})).getAllByRole('checkbox') as HTMLInputElement[];
+ expect(boxes.filter(b=>b.checked)).toHaveLength(3);expect(boxes.filter(b=>!b.checked).every(b=>b.disabled)).toBe(true);
+ fireEvent.click(boxes[0]);expect(p.navigate).toHaveBeenLastCalledWith(expect.objectContaining({combos:['c1','c2']}));
+});
+it('uses legend index for ComboTag in headers, popup and ratings when selection order differs from the legend',async()=>{
+ const p=props(),[a,b]=p.data.combos.map(c=>c.combo_key);const popup=await p.api.compareTurn();popup.combos[b]={missing:null,codes:[['sr']],rationales:[],agree:{k:1,r:1}};
+ const state={...p.state,combos:[b,a],turn:'t5'};const view=render(<LineView {...p} state={state}/>);
+ const shapeOf=(el:Element)=>el.querySelector('svg')?.getAttribute('data-shape');const colourOf=(el:Element)=>(el as HTMLElement).style.color;
+ const ref=(letter:string)=>{const t=view.container.querySelector('.line-view thead [aria-label="Combo '+letter+'"]') as Element;return {shape:shapeOf(t),color:colourOf(t)};};
+ const {shape:shapeA,color:colorA}=ref('A'),{shape:shapeB,color:colorB}=ref('B');expect(shapeA).not.toBe(shapeB);expect(colorA).not.toBe(colorB);
+ const heads=[...view.container.querySelectorAll('thead [role=img]')];expect(heads.map(h=>h.getAttribute('aria-label'))).toEqual(['Combo B','Combo A']);
+ const dialog=await screen.findByRole('dialog');await within(dialog).findByText('1 of 1 repeats agree');
+ const inDialogB=within(dialog).getByRole('img',{name:'Combo B'}),inDialogA=within(dialog).getByRole('img',{name:'Combo A'});
+ expect(shapeOf(inDialogB)).toBe(shapeB);expect(colourOf(inDialogB)).toBe(colorB);expect(shapeOf(inDialogA)).toBe(shapeA);expect(colourOf(inDialogA)).toBe(colorA);
+ fireEvent.click(screen.getByRole('button',{name:'Show global ratings',hidden:true}));const table=await screen.findByRole('table',{name:'Session global ratings',hidden:true});
+ for(const [letter,shape,color] of [['A',shapeA,colorA],['B',shapeB,colorB]] as const){const tags=within(table).queryAllByRole('img',{name:'Combo '+letter,hidden:true});for(const tag of tags){expect(shapeOf(tag)).toBe(shape);expect(colourOf(tag)).toBe(color);}}
 });
 it('keeps human none/multi, prediction and disagreement filters in URL',()=>{
  const p=props();render(<LineView {...p}/>);fireEvent.change(screen.getByLabelText('Human code'),{target:{value:'multi'}});expect(p.navigate).toHaveBeenLastCalledWith(expect.objectContaining({code:'multi',turn:undefined}));fireEvent.change(screen.getByLabelText('Prediction code'),{target:{value:'none'}});expect(p.navigate).toHaveBeenLastCalledWith(expect.objectContaining({metric:'none'}));fireEvent.click(screen.getByLabelText('Only disagreements'));expect(p.navigate).toHaveBeenLastCalledWith(expect.objectContaining({only:'disagree'}));
@@ -77,14 +95,13 @@ it('handles direct matching-session errors with Retry and empty results without 
  render(<CompareApp api={p.api} runId="r1" state={{view:'compare',tab:'lines',code:'none',metric:'multi',combo:p.data.combos[0].combo_key}} navigate={p.navigate}/>);
  expect(await screen.findByText('Matching sessions unavailable')).toBeTruthy();fireEvent.click(screen.getByRole('button',{name:'Retry'}));await screen.findByText('No matching sessions');expect(p.api.compareLines).not.toHaveBeenCalled();expect(p.api.compareLineMatches).toHaveBeenCalledTimes(2);
 });
-it('keeps skipped, failed and empty turn lanes out of agreement while preserving evaluated none',()=>{
- const p=props(),first=p.data.combos[0];p.data.combos=Array.from({length:6},(_,i)=>({...first,combo_key:`c${i}`}));p.legend=p.data.combos.map((combo,i)=>({combo,letter:String.fromCharCode(65+i),label:combo.combo_key}));p.data.lanes.human!.t3=[];
+it('keeps skipped, failed and empty turn lanes out of agreement ',()=>{
+ const p=props(),first=p.data.combos[0];p.data.combos=Array.from({length:3},(_,i)=>({...first,combo_key:`c${i}`}));p.legend=p.data.combos.map((combo,i)=>({combo,letter:String.fromCharCode(65+i),label:combo.combo_key}));p.data.lanes.human!.t3=[];
  for(const combo of p.data.combos)p.data.lanes[combo.combo_key]={missing:null,n:1,repeats:1,turns:{t3:[[]]}};
  p.data.lanes.c0={missing:null,n:0,repeats:0,turns:{t3:[]}};p.data.lanes.c1={missing:null,n:0,repeats:0,turns:{}};p.data.lanes.c2={missing:null,n:1,repeats:1,turns:{t3:[]}};
  p.data.excluded=[{session_id:p.data.session_id,combo_key:'c0',reason:'skipped: provider unavailable'},{session_id:p.data.session_id,combo_key:'c1',reason:'failed: provider error'}];
  const view=render(<LineView {...p}/>),row=view.container.querySelector('[data-turn="t3"]') as HTMLElement;
  expect(within(row).getByText('skipped: provider unavailable')).toBeTruthy();expect(within(row).getByText('failed: provider error')).toBeTruthy();expect(within(row).getByText('no line-level output for this turn')).toBeTruthy();
- fireEvent.click(within(row).getByRole('button',{name:'+3 agree'}));expect(within(row).getByText('D: none')).toBeTruthy();
 });
 it('filters and marks disagreement for the selected combo instead of another combo',()=>{
  const p=props(),a=p.data.combos[0].combo_key,b=p.data.combos[1].combo_key;
@@ -114,7 +131,7 @@ it('marks disagreeing rows with a warning chip and text, others unmarked; muted 
 it('renders speaker chips, a human lane and one lane chip per combo in a fixed, non-scrolling layout',()=>{
  const p=props();const view=render(<LineView {...p}/>);const row=view.container.querySelector('[data-turn="t5"]') as HTMLElement;
  expect(row.querySelector('td[data-label="Speaker"] .ui-chip')?.textContent).toBe('A');expect(row.querySelector('[data-human]')).toBeTruthy();
- expect(row.querySelectorAll('.line-chip')).toHaveLength(p.data.combos.length);
+ expect(row.querySelectorAll('td[data-label^="Combo "] .line-chip')).toHaveLength(p.data.combos.length);expect([...view.container.querySelectorAll('thead th')].slice(4)).toHaveLength(p.data.combos.length);
  expect(view.container.querySelector('.line-lanes .table-scroll')).toBeNull();
  const css=lineCss;expect(css).toMatch(/table-layout:\s*fixed/);expect(css).not.toMatch(/overflow(-x)?\s*:\s*(auto|scroll)/);expect(css).toMatch(/@media \(max-width: 760px\)[\s\S]*display: block/);
 });

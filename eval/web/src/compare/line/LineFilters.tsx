@@ -1,6 +1,7 @@
 import { Chip } from '../../ui/Chip';
 import type { CompareUrlState } from '../compareUrl';
 import type { ComboLegendEntry } from '../compareTypes';
+import { MAX_LANES } from './LaneTable';
 
 export const LINE_CODES = ['affirm', 'confront', 'cr', 'emphasize_autonomy', 'gi', 'persuade', 'persuade_permission', 'question', 'seek_collab', 'sr', 'none', 'multi'];
 
@@ -20,7 +21,7 @@ export function LineFilters({ state, sessionId, sessions, selected, legend, lett
    <label><input type="checkbox" checked={state.only === 'disagree'} onChange={event => change({ only: event.target.checked ? 'disagree' : undefined })}/>Only disagreements</label>
    <span className="line-differing"><Chip tone={differing > 0 ? 'warning' : 'muted'}>{differing} differing {differing === 1 ? 'line' : 'lines'}</Chip></span>
   </div>
-  <fieldset><legend>Combo lanes</legend>{legend.map(item => <label key={item.combo.combo_key}><input type="checkbox" checked={selected.includes(item.combo.combo_key)} onChange={event => {
+  <fieldset><legend>Combo lanes (up to {MAX_LANES})</legend>{legend.map(item => <label key={item.combo.combo_key}><input type="checkbox" checked={selected.includes(item.combo.combo_key)} disabled={!selected.includes(item.combo.combo_key) && selected.length >= MAX_LANES} onChange={event => {
    const next = event.target.checked ? [...selected, item.combo.combo_key] : selected.filter(key => key !== item.combo.combo_key);
    if (next.length) change({ combos: next });
   }}/>{item.letter} · {item.label}</label>)}</fieldset>

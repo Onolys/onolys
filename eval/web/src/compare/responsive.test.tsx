@@ -64,6 +64,10 @@ it.each([320, 768, 1280])('retains accessible chart/table structure at the %ipx 
  expect(lineCss).toMatch(/\.line-view table\s*\{[^}]*width:\s*100%/);
  expect(lineCss).toMatch(/@media \(max-width: 760px\)\s*\{[\s\S]*\.line-view tr[^{]*\{[^}]*display:\s*block/);
  expect(lineCss).toMatch(/td\[data-label\]::before/);
+ expect(lineView.querySelectorAll('.line-lanes thead th .ui-combo-tag').length).toBeGreaterThan(0);
+ expect(lineView.querySelector('.line-lanes td[data-label^="Combo "]')).toBeTruthy();
+ // Turns/Words toggle must reset the global white-on-primary button colour so the unpressed segment is readable.
+ expect(css('charts/errorVsLength.css')).toMatch(/\.evl-toggle button\s*\{[^}]*color:\s*var\(--foreground\)[^}]*margin:\s*0[^}]*min-height:\s*0/);
  expect(lineCss).not.toMatch(/overflow(-x)?\s*:\s*(auto|scroll)/);
  // Wide content wraps inside its container, not a fixed pixel width on a page.
  expect(styles).not.toMatch(/(?:^|[;{])\s*width:\s*\d+px/);

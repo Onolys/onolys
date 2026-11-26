@@ -12,7 +12,7 @@
 .line-view tbody tr { border-bottom: 1px solid var(--border, #d3dbda); }
 .line-view .line-disagree { background: var(--ui-fair-bg); border-left: .2rem solid var(--ui-fair); }
 .line-view tbody th .ui-chip { white-space: nowrap; }
-.line-view .line-chip { display: block; border: 1px solid var(--border, #d3dbda); border-radius: .3rem; margin: .2rem 0; padding: .2rem .4rem; }
+.line-view .line-chip { display: block; border: 1px solid var(--border, #d3dbda); border-radius: .3rem; margin: 0; padding: .2rem .4rem; }
 .line-view .line-verbatim, .line-dialog .line-verbatim { white-space: pre-wrap; overflow-wrap: anywhere; }
 .line-view .line-ratings-cell { display: flex; flex-wrap: wrap; gap: .3rem; align-items: center; }
 @media (max-width: 760px) {
