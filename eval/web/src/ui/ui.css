@@ -40,3 +40,10 @@
 .ui-copyfield-label { font-size: .72rem; text-transform: uppercase; letter-spacing: .05em; color: var(--ui-muted-fg); font-weight: 600; }
 .ui-copyfield-row { display: flex; align-items: flex-start; gap: .5rem; min-width: 0; }
 .ui-copyfield-value { flex: 1; min-width: 0; padding: .3rem .5rem; border: 1px solid var(--border, #d3dbda); border-radius: calc(var(--radius, .5rem) - 2px); background: var(--muted, #f7f9f9); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .8rem; overflow-wrap: anywhere; white-space: pre-wrap; }
+
+.ui-disclosure { min-width: 0; }
+.ui-disclosure-toggle { display: inline-flex; align-items: center; gap: .3rem; font: inherit; font-size: .8125rem; font-weight: 550; margin: 0; padding: .15rem .25rem; border: 0; background: none; color: var(--primary, #0b5f5a); cursor: pointer; border-radius: 4px; }
+.ui-disclosure-toggle:focus-visible { outline: 2px solid var(--ring, #0b5f5a); outline-offset: 2px; }
+.ui-disclosure-icon { width: 1em; height: 1em; transition: transform .15s; }
+.ui-disclosure-icon.is-open { transform: rotate(90deg); }
+.ui-disclosure-body { margin-top: .5rem; min-width: 0; overflow-wrap: anywhere; }
