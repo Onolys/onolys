@@ -164,6 +164,24 @@ Environments: create `production` with Tejit as required reviewer (all prod jobs
 
 `VITE_FIREBASE_PROJECT_ID` is taken from `GCP_PROJECT`/`onolys` in the prod/staging workflows (`EVAL_GCP_PROJECT` in deploy-eval); `VITE_FIRESTORE_DATABASE` is hard-coded per workflow (see Terraform outputs).
 
+### Owner step: `RELEASE_TAG_TOKEN` (prod tag job)
+
+The `tag` job of `deploy-prod` pushes `prod-<date>.<n>`. When the promoted commit (staging's, or a rollback target) is older than `main` and `.github/workflows/*` differ, `GITHUB_TOKEN` is refused ("refusing to allow a GitHub App to create or update workflow ... without `workflows` permission") and cannot be granted that permission. The job runs in its own GitHub environment `release-tag` (not `production`: a later gated job would need a second approval) and uses `RELEASE_TAG_TOKEN` from it; unset falls back to `GITHUB_TOKEN`, which works only when workflow files match `main`.
+
+1. Settings > Environments > New environment `release-tag`: deployment branches = `main` only, no required reviewers.
+2. Create a fine-grained PAT (resource owner `Onolys`, repository `Onolys/onolys` only, Repository permissions: Contents Read and write, Workflows Read and write, short expiry you will renew). The org may need to allow fine-grained PATs, or an owner must approve the token request.
+3. Save it as an **environment secret** `RELEASE_TAG_TOKEN` in `release-tag` (not a repo secret).
+4. Renew before expiry. An expired PAT fails the checkout; prod is already deployed by then, only the tag is lost.
+
+Re-running a failed `tag` job (`gh run rerun <run> --failed`) works for future runs whose workflow file already has the token line. It does not work for run 45737922265 (commit `ce261570a3d31bd529bcdc5adfbe6300ae887894`): re-runs use the original commit's workflow file, which lacks it. Tag that one manually (next `prod-<date>.<n>` is numbered from origin): push over SSH, or run `gh auth refresh -s workflow` first (gh's default HTTPS scopes lack `workflow`):
+
+```
+git tag -a prod-<date>.<n> ce261570a3d31bd529bcdc5adfbe6300ae887894 -m "prod deploy prod-<date>.<n>" -m "commit: ce261570a3d31bd529bcdc5adfbe6300ae887894" -m "image: <image>" -m "run: https://github.com/Onolys/onolys/actions/runs/45737922265"
+git push origin refs/tags/prod-<date>.<n>
+```
+
+Possible later alternative: a GitHub App token via `actions/create-github-app-token` instead of a PAT.
+
 ### Isolated staging and eval release targets (opt in)
 
 The current production project is **`onolys`**. The additive isolated targets are **`onolys-staging`** and **`onolys-eval`**; their billing and infrastructure are provisioned separately. These workflow changes create no resources and change no live variables or domains. With `STAGING_GCP_PROJECT` unset, staging releases use the existing project, identities, sites and Firebase apps. Eval has no legacy target any more: `deploy-eval` always requires the `EVAL_*` bundle (it fails before authentication otherwise).

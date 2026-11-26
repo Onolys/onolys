@@ -13,7 +13,7 @@ name: deploy-prod
 #   and lacks SERVICE_MODE=voice. Roll back only to a prod-* version or sha that ran on all staging services including voice.
 #   Set sha OR version, not both. `v*` = optional human release trigger; `prod-*` = bot record of each successful deploy;
 #   roll back only by `prod-*` version or `sha`.
-#   The prod-* tags cannot re-trigger this workflow: they do not match `v*`, and tags pushed with GITHUB_TOKEN never trigger workflows.
+#   The prod-* tags cannot re-trigger this workflow: no workflow triggers on prod-* tags (this one triggers only on `v*`).
 # Repo variables (owner sets from Terraform outputs; see docs/reference/infra.md):
 #   WIF_PROVIDER, DEPLOYER_STAGING_SA (read-only resolve step), DEPLOYER_PROD_SA, GCP_PROJECT (optional), GCP_REGION (optional),
 #   PROD_VITE_FIREBASE_{API_KEY,AUTH_DOMAIN,APP_ID,STORAGE_BUCKET,MESSAGING_SENDER_ID} (Terraform output web_env_prod),
@@ -335,6 +335,8 @@ jobs:
   # a full-history git repo to push from (see fetch-depth below); the target commit is fetched only if not already present.
   tag:
     needs: [resolve, deploy-api, deploy-worker, deploy-voice, rules, web, smoke]
+    # Dedicated environment (NOT production: a later gated job would need a second approval) so RELEASE_TAG_TOKEN is an environment secret.
+    environment: release-tag
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -342,9 +344,13 @@ jobs:
     steps:
       # Full history: with a shallow checkout the target (an old commit on rollback) is not connected to origin's refs locally, so
       # git push would upload its trees and blobs (incl. .github/workflows/*), which GITHUB_TOKEN may not push. Complete history = tag object only.
+      # token: a promoted commit older than main can differ in .github/workflows/*, and GITHUB_TOKEN may never push such a ref (no
+      # `workflows` permission exists for it). RELEASE_TAG_TOKEN (fine-grained PAT, Onolys/onolys only, Contents RW + Workflows RW) is
+      # used only here; it falls back to GITHUB_TOKEN when unset (environment secret in release-tag). Tags pushed with a PAT can trigger workflows, but no workflow triggers on prod-*.
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          token: ${{ secrets.RELEASE_TAG_TOKEN || github.token }}
       - name: Create and push the annotated prod-<date>.<n> tag
         env:
           SHA: ${{ needs.resolve.outputs.sha }}
@@ -363,9 +369,14 @@ jobs:
             n="$(git ls-remote --tags --refs origin "prod-$d.*" | sed -nE "s#.*/prod-$d\.([0-9]+)\$#\1#p" | sort -n | tail -1)"
             tag="prod-$d.$((10#${n:-0}+1))"
             git tag -a "$tag" "$SHA" -m "prod deploy ${tag}" -m "commit: ${SHA}" -m "image: ${IMAGE}" -m "run: ${run_url}"
-            if git push origin "refs/tags/${tag}"; then pushed=1; break; fi
-            echo "push of ${tag} failed (attempt ${attempt}); recomputing" >&2
+            if git push origin "refs/tags/${tag}" 2>push.err; then pushed=1; break; fi
+            cat push.err >&2
             git tag -d "$tag"
+            if grep -qi 'workflows. permission' push.err; then
+              echo "::error::Tag push refused: the pushing token lacks workflows permission (commit's .github/workflows differ from origin). Fix: set environment secret RELEASE_TAG_TOKEN in environment release-tag (fine-grained PAT, Onolys/onolys only, Contents RW + Workflows RW), then re-run the failed tag job. Or a maintainer tags manually: git tag -a prod-<date>.<n> ${SHA} -m ... && git push origin refs/tags/prod-<date>.<n>" >&2
+              exit 1
+            fi
+            echo "push of ${tag} failed (attempt ${attempt}); recomputing" >&2
             sleep 2
           done
           [ -n "$pushed" ] || { echo "could not push a prod tag after 5 attempts" >&2; exit 1; }
