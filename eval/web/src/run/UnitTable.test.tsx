@@ -82,6 +82,8 @@ it('View JSON opens a popup that shows the unit id (copyable) and the output', a
 it('has an explainer and a muted footnote, and a fixed-layout table with no scroll wrapper', () => {
   show();
   expect(screen.getByRole('heading', { name: 'Unit progress' })).toBeTruthy();
-  expect(document.querySelector('.run-units .ui-note')?.textContent).toContain('Human reference');
+  expect(document.querySelector('.run-units .ui-note')?.textContent).toContain('error code');
+  expect(document.querySelector('.run-units-explainer')?.textContent).toContain('One unit =');
+  expect(document.querySelector('.run-units')?.textContent).not.toMatch(/runs done/);
   expect(document.querySelector('.ui-table')).toBeTruthy();
 });

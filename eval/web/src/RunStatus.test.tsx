@@ -46,7 +46,7 @@ it('renders skipped units as skipped and n/a with the API reason; shows provider
  const row = screen.getByRole('cell', { name: 'skipped' }).closest('tr')!;
  expect(within(row).getByRole('cell', { name: /n\/a.*skipped: provider unavailable/ })).toBeTruthy();
  expect(screen.getByText('Gemini is busy — waiting to retry')).toBeTruthy(); expect(screen.getByRole('cell', { name: 'waiting' })).toBeTruthy();
- expect(screen.getAllByText(/3\/9 runs done/)).toHaveLength(1); expect(screen.queryByText(/8\/9 units complete/)).toBeNull();
+ expect(screen.getAllByText("3 of 9 done")).toHaveLength(1); expect(document.body.textContent).not.toMatch(/3\/9 runs done/); expect(screen.queryByText(/8\/9 units complete/)).toBeNull();
 });
 it('shows running units with their stage, queued units without one, and live run progress', async () => {
  const run = saved({ status: 'running', total_units: 3, done_units: 1, running_units: 1, queued_units: 1, units: [

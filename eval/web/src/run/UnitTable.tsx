@@ -75,11 +75,11 @@ export function UnitTable({ api, runId, run }: { api: EvalApi; runId: string; ru
       : u.status === 'done' ? <UnitOutput api={api} runId={runId} unit={u} /> : '—' },
   ];
   return <section className="run-units" aria-label="Unit progress">
-    <div className="unit-section-heading"><h2>Unit progress</h2><span>{run.done_units}/{run.total_units} runs done · {run.repeats} {run.repeats === 1 ? 'attempt' : 'attempts'} per cell</span></div>
-    <p className="run-units-explainer">Each row is one run of one session with one engine and model setup.</p>
+    <h2 className="run-units-heading">Unit progress</h2>
+    <p className="run-units-explainer">One unit = session × engine × model/tier/effort × attempt. Human reference runs once.</p>
     <DataTable rows={run.units} columns={columns} rowKey={u => u.unit_id} searchLabel="Search units" empty="No units match."
       rowTone={u => u.status === 'failed' ? 'danger' : undefined}
       filters={({ setFilter }) => <UnitFilters units={run.units} modelOf={modelOf} setFilter={setFilter} />} />
-    <Note>Repeated model attempts run the same settings independently. Human reference is included once per session.</Note>
+    <Note>Click a column header to sort; click an error code for details.</Note>
   </section>;
 }
