@@ -5,7 +5,7 @@ Nobody runs `terraform apply` by hand (manual apply is for bootstrap and break-g
 | Environment | Terraform root and state | Pipeline (trigger) | Approval |
 |---|---|---|---|
 | staging (`onolys-staging`) | `infra/isolated-environment` + `examples/backend-staging.hcl.example`, `examples/environment-staging.tfvars.example`; `gs://onolys-staging-tfstate/environment` | [`deploy-staging.yml`](../../.github/workflows/deploy-staging.yml): automatic after CI passes on `main` (`workflow_run`), or dispatch on `main` | none |
-| eval (`onolys-eval`) | same root + `backend-eval.hcl.example`, `environment-eval.tfvars.example`; `gs://onolys-eval-tfstate/environment` | [`deploy-eval.yml`](../../.github/workflows/deploy-eval.yml): dispatch on `main` (built the same as staging, so an automatic after-CI trigger needs no infra change) | none |
+| eval (`onolys-eval`) | same root + `backend-eval.hcl.example`, `environment-eval.tfvars.example`; `gs://onolys-eval-tfstate/environment` | [`deploy-eval.yml`](../../.github/workflows/deploy-eval.yml): automatic after CI passes on `main` (`workflow_run`), or dispatch on `main`, like staging | none |
 | prod (`onolys`) | `infra/` (legacy root); `gs://onolys-tfstate/infra` | [`deploy-prod.yml`](../../.github/workflows/deploy-prod.yml): dispatch on `main` (release, promote, rollback by `sha` or `version`) or a pushed `v*` tag | GitHub Environment `production` (required reviewer): one click for infra and app |
 
 ## Pull requests
