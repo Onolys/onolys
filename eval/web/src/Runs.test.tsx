@@ -19,7 +19,7 @@ it('does not render the removed embedded comparison or summary', async () => {
  await screen.findByRole('heading', {name:'Run - r1'}); expect(screen.queryByRole('tab', {name:'Summary'})).toBeNull(); expect(screen.queryByRole('heading', {name:'Compare'})).toBeNull();
 });
 it('polls at 3s, stops terminal, loads JSON lazily as escaped text and aborts unmount', async () => {
- vi.useFakeTimers(); const api = {...createEvalApi('',vi.fn()), run:vi.fn().mockResolvedValueOnce(detail('running')).mockResolvedValue(detail()), output:vi.fn().mockResolvedValue({text:'<img src=x onerror=alert(1)>'})}; const view=render(<RunView api={api} runId="r1" onRerun={vi.fn()}/>); await act(async()=>{}); expect(api.run).toHaveBeenCalledTimes(1); await act(async()=>{await vi.advanceTimersByTimeAsync(3000)}); expect(api.run).toHaveBeenCalledTimes(2); await act(async()=>{await vi.advanceTimersByTimeAsync(9000)}); expect(api.run).toHaveBeenCalledTimes(2); expect(api.output).not.toHaveBeenCalled(); fireEvent.click(screen.getByRole('button',{name:'View JSON u1'})); await act(async()=>{}); expect(api.output).toHaveBeenCalledWith('r1','u1',expect.any(AbortSignal)); expect(screen.getByText(/<img src=x/)).toBeTruthy(); expect(document.querySelector('img')).toBeNull(); const signal=api.run.mock.calls[0][1] as AbortSignal; view.unmount(); expect(signal.aborted).toBe(true);
+ vi.useFakeTimers(); const api = {...createEvalApi('',vi.fn()), run:vi.fn().mockResolvedValueOnce(detail('running')).mockResolvedValue(detail()), output:vi.fn().mockResolvedValue({text:'<img src=x onerror=alert(1)>'})}; const view=render(<RunView api={api} runId="r1" onRerun={vi.fn()}/>); await act(async()=>{}); expect(api.run).toHaveBeenCalledTimes(1); await act(async()=>{await vi.advanceTimersByTimeAsync(3000)}); expect(api.run).toHaveBeenCalledTimes(2); await act(async()=>{await vi.advanceTimersByTimeAsync(9000)}); expect(api.run).toHaveBeenCalledTimes(2); expect(api.output).not.toHaveBeenCalled(); fireEvent.click(screen.getByRole('button',{name:'View JSON'})); await act(async()=>{}); expect(api.output).toHaveBeenCalledWith('r1','u1',expect.any(AbortSignal)); expect(screen.getByText(/<img src=x/)).toBeTruthy(); expect(document.querySelector('img')).toBeNull(); const signal=api.run.mock.calls[0][1] as AbortSignal; view.unmount(); expect(signal.aborted).toBe(true);
 });
 it('loads spilled JSON lazily from the detail wire shape with output and private ref omitted', async () => {
   const saved = detail();
@@ -29,7 +29,7 @@ it('loads spilled JSON lazily from the detail wire shape with output and private
   render(<RunView api={api} runId="r1" onRerun={vi.fn()} />);
   await act(async () => {});
   expect(api.output).not.toHaveBeenCalled();
-  fireEvent.click(screen.getByRole('button', { name: 'View JSON u1' }));
+  fireEvent.click(screen.getByRole('button', { name: 'View JSON' }));
   await act(async () => {});
   expect(api.output).toHaveBeenCalledExactlyOnceWith('r1', 'u1', expect.any(AbortSignal));
   expect(screen.getByText(/"stored": true/)).toBeTruthy();
@@ -40,10 +40,10 @@ it.each([null, false, 0, ''])('renders inline JSON %j without fetching', async o
   const api = { ...createEvalApi('', vi.fn()), run: vi.fn().mockResolvedValue(saved), output: vi.fn() };
   render(<RunView api={api} runId="r1" onRerun={vi.fn()} />);
   await act(async () => {});
-  fireEvent.click(screen.getByRole('button', { name: 'View JSON u1' }));
+  fireEvent.click(screen.getByRole('button', { name: 'View JSON' }));
   await act(async () => {});
   expect(api.output).not.toHaveBeenCalled();
-  expect(within(screen.getByRole('dialog', { name: 'Unit u1 output' })).getByTestId('json-scroll').textContent).toBe(JSON.stringify(output, null, 2));
+  expect(within(screen.getByRole('dialog', { name: 'Unit output' })).getByTestId('json-scroll').textContent).toBe(JSON.stringify(output, null, 2));
 });
 it('refreshes terminal cancellation details before stopping polling', async () => {
   vi.useFakeTimers();
@@ -57,7 +57,7 @@ it('refreshes terminal cancellation details before stopping polling', async () =
   expect(api.cancel).toHaveBeenCalledWith('r1');
   expect(api.run).toHaveBeenCalledTimes(2);
   expect(screen.getByRole('status', { name: 'Run status' }).textContent).toBe('Cancelled0 of 4 done1 failed2 cancelled');
-  expect(screen.queryByRole('button', { name: 'View JSON u1' })).toBeNull();
+  expect(screen.queryByRole('button', { name: 'View JSON' })).toBeNull();
   await act(async () => { await vi.advanceTimersByTimeAsync(6000); });
   expect(api.run).toHaveBeenCalledTimes(2);
 });
@@ -68,7 +68,7 @@ it('keeps polling after cancellation while in-flight work runs, then shows final
   const api = { ...createEvalApi('', vi.fn()), run: vi.fn().mockResolvedValueOnce(pending).mockResolvedValueOnce(pending).mockResolvedValue(done), cancel: vi.fn().mockResolvedValue({ run_id: 'r1', status: 'running' }) };
   render(<RunView api={api} runId="r1" onRerun={vi.fn()} />);
   await act(async () => {});
-  expect(screen.queryByRole('button', { name: 'View JSON u1' })).toBeNull();
+  expect(screen.queryByRole('button', { name: 'View JSON' })).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: 'Cancel run' }));
   fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Cancel run' }));
   await act(async () => {});
@@ -76,7 +76,7 @@ it('keeps polling after cancellation while in-flight work runs, then shows final
   await act(async () => { await vi.advanceTimersByTimeAsync(3000); });
   expect(api.run).toHaveBeenCalledTimes(3);
   expect(screen.getByRole('status', { name: 'Run status' }).textContent).toBe('Done3 of 4 done1 failed0 cancelled');
-  expect(screen.getByRole('button', { name: 'View JSON u1' })).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'View JSON' })).toBeTruthy();
   expect(screen.getByText(/~\$0.2500/)).toBeTruthy();
   await act(async () => { await vi.advanceTimersByTimeAsync(9000); });
   expect(api.run).toHaveBeenCalledTimes(3);
@@ -210,7 +210,7 @@ it('detail names runs and labels unit configuration and repeated attempts in a c
  const run = { ...detail(), name: 'Morning', combos: [{ model: 'claude', tier: 'sonnet', effort: 'high' }], combo_keys: ['claude/sonnet/high'], units: detail().units.map(unit => ({ ...unit, preset: null, combo: { model: 'claude', tier: 'sonnet', effort: 'high' }, combo_key: 'claude/sonnet/high' })) };
  render(<RunView api={{ ...createEvalApi('', vi.fn()), run: vi.fn().mockResolvedValue(run) }} runId="r1" onRerun={vi.fn()} />);
  await screen.findByRole('heading', { name: 'Run - Morning' });
- const table = screen.getByRole('table', { name: /Each unit/ });
+ const table = screen.getByRole('table');
  expect(table.textContent).toContain('sonnet'); expect(table.textContent).toContain('1 / 3'); expect(table.textContent).toContain('3 / 3');
  expect(screen.queryByText('Saved configuration and versions', { selector: 'summary' })).toBeNull();
 });
@@ -295,10 +295,10 @@ it('filters by the same local calendar date shown for a run near midnight', asyn
 it('labels a Human unit as Once while model attempts use the configured repeat count', async () => {
  const run = detail(); run.units.push({ unit_id: 'human', session_id: 's1', engine: 'human', repeat: 0, status: 'done' });
  render(<RunView api={{ ...createEvalApi('', vi.fn()), run: vi.fn().mockResolvedValue(run) }} runId="r1" onRerun={vi.fn()} />);
- await screen.findByRole('button', { name: 'View JSON human' });
- const row = screen.getByRole('button', { name: 'View JSON human' }).closest('tr')!;
+ await screen.findByRole('cell', { name: 'Once' });
+ const row = screen.getByRole('cell', { name: 'Once' }).closest('tr')!;
  expect(within(row).getByRole('cell', { name: 'Once' })).toBeTruthy();
- expect(screen.getByRole('table', { name: /Each unit/ }).textContent).toContain('3 / 3');
+ expect(screen.getByRole('table').textContent).toContain('3 / 3');
 });
 const openActions = async (name = 'saved') => {
  await screen.findByRole('link', { name });

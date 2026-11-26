@@ -29,3 +29,7 @@
 .run-alerts-body p { margin: 0; }
 .run-alerts-clock { width: .9em; height: .9em; margin-right: .3rem; vertical-align: -.1em; }
 @media (max-width: 760px) { .run-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+.run-units { min-width: 0; margin-bottom: 1.5rem; }
+.run-units-explainer { margin: 0 0 .5rem; font-size: .875rem; color: var(--ui-muted-fg); }
+.run-filter { font: inherit; font-size: .8125rem; min-height: 1.85rem; padding: .1rem .4rem; border: 1px solid var(--border-strong, #6e7e7c); border-radius: calc(var(--radius, .5rem) - 2px); background: var(--card, #fff); color: var(--foreground, #171c1c); max-width: 100%; }

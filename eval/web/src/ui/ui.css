@@ -90,3 +90,6 @@
 .ui-chart-data { min-width: 0; max-width: 100%; overflow-wrap: anywhere; }
 .ui-combo-tag { display: inline-flex; align-items: center; gap: .25rem; font-weight: 700; font-size: .8rem; line-height: 1; }
 .ui-combo-tag svg { width: .9em; height: .9em; flex: none; }
+
+/* Screen-reader-only live region (kept out of role=status so several can coexist). */
+.ui-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
