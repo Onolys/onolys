@@ -201,6 +201,12 @@ variable "eval_backend_enabled" {
   default     = false
 }
 
+variable "eval_backend_min_instances" {
+  description = "Min instances for the eval-backend Cloud Run service (0 = scale to zero; Cloud Tasks wakes it). Eval sets 1 to avoid cold starts."
+  type        = number
+  default     = 0
+}
+
 variable "eval_cors_origins" {
   description = "Browser origins for the eval-backend service (emitted as CORS_ORIGINS, the api Settings name)."
   type        = list(string)

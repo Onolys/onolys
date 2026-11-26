@@ -330,7 +330,7 @@ resource "google_cloud_run_v2_service" "eval_backend" {
     max_instance_request_concurrency = 20
 
     scaling {
-      min_instance_count = 0 # Cloud Tasks wakes it
+      min_instance_count = var.eval_backend_min_instances # default 0: Cloud Tasks wakes it
       max_instance_count = var.api_max_instances
     }
 
