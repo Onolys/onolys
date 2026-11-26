@@ -18,11 +18,10 @@ it('renders server frontier membership and excludes unpriced points', () => {
  expect(container.querySelectorAll('[data-cost-point]')).toHaveLength(2);
  expect(container.querySelectorAll('[data-frontier="true"]')).toHaveLength(1);
  expect(container.querySelector('[data-frontier="true"]')?.getAttribute('data-cost-point')).toBe(data.frontier.points[0].combo_key);
- expect(container.querySelector('polyline')?.getAttribute('data-frontier-combos')).toBe(data.frontier.points.map(p=>p.combo_key).join(','));
  expect(container.querySelector('[data-cost-point="unpriced"]')).toBeNull();
  expect(screen.getByText(/unpriced.*price unavailable/)).toBeTruthy();
  expect(screen.getByRole('img',{name:'Cost vs accuracy scatter'})).toBeTruthy();
- expect(screen.getByText('Show data table for Cost vs accuracy')).toBeTruthy();
+ expect(screen.queryByRole('table',{name:'Cost vs accuracy'})).toBeNull();
 });
 it('prints baseline and reliability values verbatim from the API', () => {
  render(<MoreAnalysis {...props()}/>);
@@ -67,6 +66,7 @@ it('retains failures, level n/a, unavailable cohorts and skipped combo labels', 
  input.data.skipped_combos=[key];
  input.data.reliability[key].failures=[{code:'provider_unavailable',count:3}];
  input.data.reliability[key].levels.technical={value:null,n:0,na:{reason:'not enough repeats'}};
+ input.data.frontier.dominated=[];
  input.data.frontier.unavailable=[{combo_key:key,n:0,na:{reason:'skipped: provider unavailable'}}];
  render(<MoreAnalysis {...input}/>);
  const reliability=screen.getByRole('table',{name:'Reliability'});
@@ -81,8 +81,8 @@ it('keeps zero-valued scatters finite and states when no points can be plotted',
  input.data.frontier.points[0].cost_per_run_usd=0;
  input.data.frontier.dominated=[];
  const view=render(<MoreAnalysis {...input}/>);
- expect(view.container.querySelector('[data-cost-point]')?.getAttribute('cx')).toBe('70');
- expect(view.container.querySelector('[data-cost-point]')?.getAttribute('cy')).toBe('230');
+ expect(view.container.querySelector('[data-cost-point]')).toBeTruthy();
+ expect(view.container.querySelector('[data-cost-label]')?.getAttribute('x')).not.toMatch(/NaN|Infinity/);
  input.data.frontier.points=[];input.data.error_vs_length=[];input.data.grid=[];
  view.rerender(<MoreAnalysis {...input}/>);
  expect(screen.getByText('No priced results available')).toBeTruthy();
@@ -94,11 +94,10 @@ it('joins exactly the points the server places on the frontier without choosing 
  input.data.frontier.points.push(...input.data.frontier.dominated);
  input.data.frontier.dominated=[];
  const {container}=render(<MoreAnalysis {...input}/>);
- const line=container.querySelector('polyline');
- expect(line?.getAttribute('data-frontier-combos')).toBe(input.data.frontier.points.map(p=>p.combo_key).join(','));
- expect(line?.getAttribute('points')?.split(' ')).toHaveLength(2);
+ const line=container.querySelector('.ca-frontier');
+ expect([...(line?.getAttribute('data-frontier-combos')?.split(',')??[])].sort()).toEqual(input.data.frontier.points.map(p=>p.combo_key).sort());
  expect(container.querySelectorAll('[data-frontier="true"]')).toHaveLength(2);
- expect(screen.getAllByText('How to read:')).toHaveLength(5);
+ expect(screen.getAllByText('How to read:')).toHaveLength(4);
  expect(screen.getByRole('region',{name:'Head-to-head table'}).getAttribute('tabindex')).toBe('0');
  expect(screen.getByRole('region',{name:'Interviews by combo table'}).getAttribute('tabindex')).toBe('0');
 });

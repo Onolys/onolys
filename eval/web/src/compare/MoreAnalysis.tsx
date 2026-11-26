@@ -3,6 +3,8 @@ import { ChartFrame } from './ChartFrame';
 import { EvalLink } from './CompareLink';
 import type { CompareAnalysis, NA, ValueCell } from './compareApi';
 import type { CompareTabProps } from './compareTypes';
+import { CostAccuracyScatter } from './charts/CostAccuracyScatter';
+import { failedCombos } from './failedCombos';
 import './moreAnalysis.css';
 
 const unavailable = (na: NA | undefined) => `n/a${na ? ` - ${na.reason}` : ''}`;
@@ -33,16 +35,11 @@ function Axes({maxX, maxY, xLabel}: {maxX: number; maxY: number; xLabel: string}
  </g>;
 }
 
-export function MoreAnalysis({data, legend, runId, navigate}: CompareTabProps<CompareAnalysis>) {
+export function MoreAnalysis({data, overview, legend, runId, navigate}: CompareTabProps<CompareAnalysis>) {
  const [lengthAxis, setLengthAxis] = useState<'turns' | 'words'>('turns');
  const letter = (key: string) => legend.find(entry => entry.combo.combo_key === key)?.letter ?? key;
  const name = (key: string) => `${letter(key)}${data.skipped_combos.includes(key) ? ' (skipped)' : ''}`;
- const priced = [...data.frontier.points, ...data.frontier.dominated];
- const costScale = scales(priced.map(point => ({x: point.cost_per_run_usd, y: point.count_error})));
  const lengthScale = scales(data.error_vs_length.map(point => ({x: point[lengthAxis], y: point.off})));
- const costTable = <table aria-label="Cost vs accuracy"><caption>Cost and Count error from the server</caption><thead><tr><th scope="col">Combo</th><th scope="col">Cost per run (USD)</th><th scope="col">Count error</th><th scope="col">Frontier</th></tr></thead><tbody>
-  {priced.map(point => <tr key={point.combo_key}><th scope="row">{name(point.combo_key)}</th><td>{point.cost_per_run_usd} · n={point.cost_n}</td><td>{point.count_error} · n={point.n}</td><td>{data.frontier.points.some(p => p.combo_key === point.combo_key) ? 'Frontier' : 'Dominated'}</td></tr>)}
- </tbody></table>;
  const headToHead = () => <table aria-label="Head-to-head"><caption>Row combo compared with column combo</caption><thead><tr><th scope="col">Combo</th>{data.combos.map(combo => <th scope="col" key={combo.combo_key}>{name(combo.combo_key)}</th>)}</tr></thead><tbody>{data.combos.map(row => <tr key={row.combo_key}><th scope="row">{name(row.combo_key)}</th>{data.combos.map(col => {
   if (row.combo_key === col.combo_key) return <td key={col.combo_key}>Same combo</td>;
   const pair = data.head_to_head.find(pair => pair.a === row.combo_key && pair.b === col.combo_key || pair.b === row.combo_key && pair.a === col.combo_key);
@@ -67,17 +64,7 @@ export function MoreAnalysis({data, legend, runId, navigate}: CompareTabProps<Co
    <p><strong>How to read:</strong> Each row shows the server’s repeat consistency and operational results. Each n is the number of observations for that value; failures are listed by their saved code.</p>
   </section>
   {!data.has_human ? <p>no human reference</p> : <>
-   <ChartFrame title="Cost vs accuracy" howToRead="Each letter is a priced combo: lower cost is farther left and lower Count error is nearer the bottom. The line joins only the server’s frontier combos; unpriced and unavailable combos are listed below." table={costTable}>
-    {priced.length ? <svg viewBox="0 0 620 300" role="img" aria-label="Cost vs accuracy scatter"><Axes {...costScale} xLabel="Cost per run (USD)"/>
-     <polyline className="more-analysis-frontier" data-frontier-combos={data.frontier.points.map(point=>point.combo_key).join(',')} points={data.frontier.points.map(point=>`${costScale.x(point.cost_per_run_usd)},${costScale.y(point.count_error)}`).join(' ')}/>
-     {priced.map(point => {const frontier=data.frontier.points.some(p=>p.combo_key===point.combo_key);return <g key={point.combo_key}>
-      <circle data-cost-point={point.combo_key} data-frontier={frontier} cx={costScale.x(point.cost_per_run_usd)} cy={costScale.y(point.count_error)} r={frontier ? 6 : 4}><title>{`${name(point.combo_key)}: cost ${point.cost_per_run_usd} USD, cost n=${point.cost_n}; Count error ${point.count_error}, n=${point.n}; ${frontier ? 'Frontier' : 'Dominated'}`}</title></circle>
-      <text x={costScale.x(point.cost_per_run_usd)+8} y={costScale.y(point.count_error)-9}>{name(point.combo_key)}{frontier ? ' ★' : ''} · n={point.n}</text>
-     </g>;})}
-    </svg> : <p>No priced results available</p>}
-   </ChartFrame>
-   {!!data.frontier.unpriced.length && <ul aria-label="Unpriced combos">{data.frontier.unpriced.map(point=><li key={point.combo_key}>{name(point.combo_key)}: {unavailable(point.na)} · Count error {point.count_error} · n={point.n}</li>)}</ul>}
-   {!!data.frontier.unavailable.length && <ul aria-label="Unavailable combos">{data.frontier.unavailable.map(point=><li key={point.combo_key}>{name(point.combo_key)}: {unavailable(point.na)} · n={point.n}</li>)}</ul>}
+   <CostAccuracyScatter data={data} legend={legend} failed={failedCombos(overview)}/>
    <ChartFrame title="Head-to-head" howToRead="Read a row against a column to see how often the row combo was closer to the human counts. Ties and the paired session count come from the server." table={headToHead()}>
     <ScrollTable name="Head-to-head">{headToHead()}</ScrollTable>
    </ChartFrame>
