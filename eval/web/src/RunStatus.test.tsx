@@ -35,7 +35,11 @@ it.each(['detail', 'history'])('%s shows provider skips with a symbol, mapped na
  render(page === 'detail' ? <RunView api={api} runId="r1" onRerun={vi.fn()} /> : <History api={api} onOpen={vi.fn()} onRerun={vi.fn()} />); await act(async () => {});
  const suffix = page === 'detail' ? ' in a row — provider may be down' : '';
  expect(screen.getByText(`Gemini skipped after 5 failures${suffix}`, { exact: false })).toBeTruthy(); expect(screen.getByText(`new-provider skipped after 7 failures${suffix}`, { exact: false })).toBeTruthy();
- expect(document.querySelector('[data-provider-skips]')?.textContent).toContain('⚠');
+ const glyph = document.querySelector('[data-provider-skips]')?.textContent ?? '';
+ if (page === 'detail') expect(glyph).not.toContain('⚠'); else expect(glyph).toContain('⚠');
+});
+it('icon={false} drops the warning glyph', () => {
+ render(<ProviderSkipNotices skips={[{ provider: 'gemini', after_failures: 5 }]} icon={false} />); expect(document.querySelector('[data-provider-skips]')?.textContent).not.toContain('⚠');
 });
 it('accepts Compare provider skips without run-only fields', () => {
  render(<ProviderSkipNotices skips={[{ provider: 'gemini', after_failures: 5 }]} />); expect(screen.getByText('Gemini skipped after 5 failures in a row — provider may be down', { exact: false })).toBeTruthy();

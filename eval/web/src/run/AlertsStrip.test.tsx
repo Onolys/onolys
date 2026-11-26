@@ -15,3 +15,8 @@ it('renders nothing for a plain done run', () => {
   const { container } = render(<AlertsStrip run={{ ...base, status: 'done', done_units: 4, cancelled_units: 0 }} />);
   expect(container.firstChild).toBeNull();
 });
+it('shows a single warning icon for provider skips (no duplicate glyph)', () => {
+  const { container } = render(<AlertsStrip run={{ ...base, status: 'done', done_units: 4, cancelled_units: 0, provider_skips: [{ provider: 'gemini', after_failures: 5 }] } as RunDetail} />);
+  expect(container.querySelectorAll('svg').length).toBe(1);
+  expect(container.textContent).not.toContain('⚠');
+});

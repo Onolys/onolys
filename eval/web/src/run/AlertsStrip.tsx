@@ -18,7 +18,7 @@ export function AlertsStrip({ run }: { run: RunDetail }) {
       <CancellationNote run={run} />
       {cancelledEmpty && <p>Cancelled — no runs completed.</p>}
       <PartialBadge run={run} />
-      <ProviderSkipNotices skips={run.provider_skips} />
+      <ProviderSkipNotices skips={run.provider_skips} icon={false} />
       {cooldowns.map(cooldown => <p key={cooldown.provider}><Clock aria-hidden="true" className="run-alerts-clock" />{providerName(cooldown.provider)} is busy — waiting to retry</p>)}
     </div>
   </div>;

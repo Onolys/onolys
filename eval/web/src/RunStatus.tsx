@@ -25,7 +25,7 @@ export function PartialBadge({ run, short = false }: { run: PartialRunStatus; sh
   if (short) return <><Badge variant="outline" data-partial-badge><span aria-hidden="true">◐ </span>Partial</Badge><p className="text-sm text-muted-foreground" data-partial-detail>{text.replace(/^Partial — /, '')}</p></>;
   return <Badge variant="outline" className="max-w-full whitespace-normal" data-partial-badge><span aria-hidden="true">◐ </span>{text}</Badge>;
 }
-export function ProviderSkipNotices({ skips, short = false }: { skips?: readonly ProviderSkip[]; short?: boolean }) {
+export function ProviderSkipNotices({ skips, short = false, icon = true }: { skips?: readonly ProviderSkip[]; short?: boolean; icon?: boolean }) {
   if (!skips?.length) return null;
-  return <div data-provider-skips>{skips.map(skip => <p key={skip.provider}><span aria-hidden="true">⚠ </span>{providerName(skip.provider)} skipped after {skip.after_failures} failures{!short && ' in a row — provider may be down'}</p>)}</div>;
+  return <div data-provider-skips>{skips.map(skip => <p key={skip.provider}>{icon && <span aria-hidden="true">⚠ </span>}{providerName(skip.provider)} skipped after {skip.after_failures} failures{!short && ' in a row — provider may be down'}</p>)}</div>;
 }

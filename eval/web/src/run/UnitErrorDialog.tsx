@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 import { Lightbulb, SquareArrowOutUpRight } from 'lucide-react';
-import type { RunDetail, RunUnit } from '../api';
+import type { RunUnit } from '../api';
 import { AppDialog } from '../ui/AppDialog';
 import { Chip } from '../ui/Chip';
 import { CopyField } from '../ui/CopyField';
@@ -10,13 +10,13 @@ import { unitLogsUrl } from './logsUrl';
 import './run.css';
 
 /** Danger-chip badge for a failed unit; opens the error popup (catalog explanation, fix hint, copyable ids, per-unit Logs link). */
-export function UnitErrorBadge({ unit, code }: { run: RunDetail; unit: RunUnit; code?: string }) {
+export function UnitErrorBadge({ unit, code }: { unit: RunUnit; code?: string }) {
   const [open, setOpen] = useState(false);
   const trigger = useRef<HTMLButtonElement>(null);
   const info = describeError(code);
   const logs = unitLogsUrl(unit.unit_id);
   return <>
-    <button type="button" ref={trigger} className="run-error-badge" aria-label="View error details" onClick={() => setOpen(true)}><Chip tone="danger">{info.title}</Chip></button>
+    <button type="button" ref={trigger} className="run-error-badge" aria-label="View error details" onClick={() => setOpen(true)}><Chip tone="danger" mono>{info.code || 'unknown'}</Chip></button>
     <AppDialog open={open} onOpenChange={setOpen} title={`Unit ${unit.unit_id} failed`} returnFocus={trigger}
       description="This unit did not finish. Here is what the error code means and what to try next.">
       <div className="run-error-body">

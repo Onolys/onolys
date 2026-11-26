@@ -1,7 +1,7 @@
 /** Cloud Logging deep links for eval units. Verified in eval/backend: a unit's `unit_id` is its RunDoc id (`cell["run_id"]`, passed to `create_run(run_id=...)`), i.e. the `jsonPayload.run_id` the worker logs. The eval group id is NOT in worker logs. Units with no RunDoc yet carry placeholder ids (`cell-…`, `human-…`) that never appear in logs, so they are skipped. */
 export const LOGS_PROJECT = 'onolys-eval';
 export const LOGS_SERVICE = 'onolys-worker-eval';
-export const LOGS_DURATION = 'P7D';
+export const LOGS_DURATION = 'P14D';
 /** Max run ids in one run-level query, to stay under URL limits. */
 export const MAX_LOGS_IDS = 40;
 

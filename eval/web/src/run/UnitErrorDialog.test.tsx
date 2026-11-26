@@ -1,21 +1,20 @@
 // @vitest-environment jsdom
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
-import type { RunDetail, RunUnit } from '../api';
+import type { RunUnit } from '../api';
 import { unitLogsUrl } from './logsUrl';
 import { UnitErrorBadge } from './UnitErrorDialog';
 
 afterEach(cleanup);
-const run = { run_id: 'r1' } as RunDetail;
 const unit = (patch: Partial<RunUnit> = {}): RunUnit => ({ unit_id: 'abc123', session_id: 's1', engine: 'miti', status: 'failed', stage: 'coding', error: { code: 'invalid_parameters' }, ...patch });
-const show = (u = unit()) => render(<UnitErrorBadge run={run} unit={u} code={typeof u.error === 'string' ? u.error : u.error?.code} />);
+const show = (u = unit()) => render(<UnitErrorBadge unit={u} code={typeof u.error === 'string' ? u.error : u.error?.code} />);
 const open = () => { const b = screen.getByRole('button', { name: /error details/i }); fireEvent.click(b); return b; };
 
-it('badge is a danger chip button that does not show the raw code', () => {
+it('badge is a danger chip button showing the error code', () => {
   show();
   const b = screen.getByRole('button', { name: /error details/i });
   expect(b.querySelector('.ui-chip-danger')).toBeTruthy();
-  expect(b.textContent).toBe('Invalid parameters');
+  expect(b.textContent).toBe('invalid_parameters');
   expect(screen.queryByRole('dialog')).toBeNull();
 });
 it('known code: popup title with unit id, chips, explanation, fix, copyable ids, PHI note', () => {

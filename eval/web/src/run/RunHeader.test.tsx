@@ -52,6 +52,9 @@ it('Config / Rerun… / Cancel buttons call back; Compare is a link when results
   fireEvent.click(screen.getByRole('button', { name: 'Rerun…' })); expect(onRerun).toHaveBeenCalledWith(r);
   fireEvent.click(screen.getByRole('button', { name: 'Cancel run' })); expect(onCancel).toHaveBeenCalledWith(r, expect.any(HTMLElement));
   expect(screen.queryByRole('link', { name: 'Compare' })).toBeNull();
+  const off = screen.getByRole('button', { name: 'Compare' }) as HTMLButtonElement;
+  expect(off.disabled).toBe(true); expect(off.getAttribute('title')).toBe('Compare opens when the run has finished results');
+  expect(document.getElementById(off.getAttribute('aria-describedby') ?? '')?.textContent).toBe('Compare opens when the run has finished results');
   view.unmount();
   setup(run({ status: 'done' }), { onNavigate });
   fireEvent.click(screen.getByRole('link', { name: 'Compare' })); expect(onNavigate).toHaveBeenCalled();

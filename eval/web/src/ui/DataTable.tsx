@@ -14,6 +14,8 @@ export type Column<T> = {
   sortable?: boolean;
   /** "low" columns are hidden at medium widths so the table never needs a horizontal scrollbar. */
   priority?: "low";
+  /** Optional CSS width for the column (fixed layout), e.g. "16%". */
+  width?: string;
 };
 
 const ariaSort = (dir: SortDir | undefined) => (dir === "asc" ? "ascending" : dir === "desc" ? "descending" : "none");
@@ -39,7 +41,7 @@ export function DataTable<T>({ rows, columns, rowKey, rowTone, filters, searchLa
         {columns.map((c) => {
           const sortable = c.sortable !== false;
           const dir = sort?.key === c.key ? sort.dir : undefined;
-          return <th key={c.key} scope="col" className={`${c.priority === "low" ? "ui-col-low " : ""}${sortable ? "ui-th-sortable" : ""}`}
+          return <th key={c.key} scope="col" style={c.width ? { width: c.width } : undefined} className={`${c.priority === "low" ? "ui-col-low " : ""}${sortable ? "ui-th-sortable" : ""}`}
             aria-sort={sortable ? ariaSort(dir) : undefined} tabIndex={sortable ? 0 : undefined}
             onClick={sortable ? () => toggleSort(c.key) : undefined} onKeyDown={sortable ? onKey(c.key) : undefined}>
             <span className="ui-th-label">{c.header}</span>

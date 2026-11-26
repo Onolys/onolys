@@ -354,7 +354,7 @@ it.each(['done','partial','queued','running','failed','cancelled','deleting'] as
  await act(async()=>{});
  if(status==='done'||status==='partial'){
   const link=screen.getByRole('link',{name:'Compare'});expect(link.getAttribute('href')).toContain(`run=entry-${status}&view=compare&tab=overview`);fireEvent.click(link);expect(onNavigate).toHaveBeenCalledWith({run:run.run_id,view:'compare',tab:'overview'});
- }else{expect(screen.queryByRole('link',{name:'Compare'})).toBeNull();expect(screen.getByText('Compare opens when the run has finished results')).toBeTruthy();}
+ }else{expect(screen.queryByRole('link',{name:'Compare'})).toBeNull();const off=screen.getByRole('button',{name:'Compare'});expect((off as HTMLButtonElement).disabled).toBe(true);expect(off.getAttribute('title')).toBe('Compare opens when the run has finished results');}
  view.unmount();
  render(<History api={client} onOpen={vi.fn()} onRerun={vi.fn()} onNavigate={onNavigate}/>);await act(async()=>{});
  expect(Boolean(screen.queryByRole('link',{name:'Compare'}))).toBe(status==='done'||status==='partial');

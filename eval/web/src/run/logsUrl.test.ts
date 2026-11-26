@@ -7,7 +7,7 @@ const q = (s: string) => encodeURIComponent(s);
 
 describe('logsUrl', () => {
   it('constants', () => {
-    expect([LOGS_PROJECT, LOGS_SERVICE, LOGS_DURATION, MAX_LOGS_IDS]).toEqual(['onolys-eval', 'onolys-worker-eval', 'P7D', 40]);
+    expect([LOGS_PROJECT, LOGS_SERVICE, LOGS_DURATION, MAX_LOGS_IDS]).toEqual(['onolys-eval', 'onolys-worker-eval', 'P14D', 40]);
   });
   it('builds the exact URL for one unit', () => {
     expect(unitLogsUrl('abc123')).toBe(`${base}${q('resource.labels.service_name="onolys-worker-eval" AND jsonPayload.run_id="abc123"')}${tail}`);

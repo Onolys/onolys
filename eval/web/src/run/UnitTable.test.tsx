@@ -20,7 +20,7 @@ const sessions = () => screen.getAllByRole('row').slice(1).map(row => within(row
 it('headers are plain headers (no buttons) and every column is sortable both ways', () => {
   show();
   const heads = screen.getAllByRole('columnheader');
-  expect(heads.map(h => h.textContent)).toEqual(['Session', 'Engine', 'Model', 'Tier', 'Effort', 'Attempt', 'Status', 'Stage', 'Output / error']);
+  expect(heads.map(h => h.textContent)).toEqual(['Session', 'Engine', 'Model', 'Tier', 'Effort', 'Attempt', 'Status', 'Stage', 'Result']);
   for (const h of heads) { expect(h.querySelector('button')).toBeNull(); expect(h.getAttribute('aria-sort')).toBe('none'); }
   for (const [i, h] of heads.entries()) {
     fireEvent.click(h); expect(h.getAttribute('aria-sort')).toBe('ascending');
@@ -59,10 +59,9 @@ it('shows statuses as chips, truncates with a title, tones failed rows, labels h
   expect(within(human).getByText('Once')).toBeTruthy();
   expect(screen.getAllByRole('table')[0].textContent).toContain('2 / 3');
 });
-it('result cell: failed shows an error badge instead of the raw code; done shows View JSON with no id', () => {
+it('result cell: failed shows an error-code badge; done shows View JSON with no id', () => {
   show();
-  expect(screen.queryByText('invalid_parameters')).toBeNull();
-  expect(screen.getByText('Invalid parameters').closest('.ui-chip-danger')).toBeTruthy();
+    expect(screen.getByText('invalid_parameters').closest('.ui-chip-danger')).toBeTruthy();
   const buttons = screen.getAllByRole('button', { name: 'View JSON' });
   expect(buttons).toHaveLength(2);
   for (const b of buttons) expect(b.textContent).not.toMatch(/u-b|human-1/);

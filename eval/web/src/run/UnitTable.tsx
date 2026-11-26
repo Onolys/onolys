@@ -29,7 +29,7 @@ function UnitOutput({ api, runId, unit }: { api: EvalApi; runId: string; unit: R
     return () => controller.abort();
   }, [api, runId, unit.unit_id, open, output, attempt]);
   return <>
-    <Button type="button" variant="outline" size="sm" onClick={() => setOpen(true)}>View JSON</Button>
+    <Button type="button" variant="outline" size="sm" className="run-compact" onClick={() => setOpen(true)}>View JSON</Button>
     <JsonDialog open={open} onOpenChange={setOpen} title="Unit output" extra={<CopyField label="Unit id" value={unit.unit_id} />}
       value={output} loading={open && !error && output === undefined} error={error || undefined}
       onRetry={() => { setError(''); setAttempt(n => n + 1); }} />
@@ -62,16 +62,16 @@ export function UnitTable({ api, runId, run }: { api: EvalApi; runId: string; ru
   const attempt = (unit: RunUnit) => unit.engine === 'human' ? 'Once' : unit.repeat == null ? null : `${unit.repeat + 1} / ${run.repeats}`;
   const result = (unit: RunUnit) => unit.status === 'skipped' ? `n/a${unit.error ? ` — ${unitErrorNote(unit)}` : ''}` : unit.error ? unitErrorCode(unit) || 'unknown' : unit.status === 'done' ? 'Output' : null;
   const columns: Column<RunUnit>[] = [
-    { key: 'session', header: 'Session', value: u => u.session_id },
-    { key: 'engine', header: 'Engine', value: u => u.engine },
-    { key: 'model', header: 'Model', value: u => modelOf(u) || null, render: u => modelOf(u) || '—' },
-    { key: 'tier', header: 'Tier', priority: 'low', value: u => comboOf(u).tier || null, render: u => comboOf(u).tier || '—' },
-    { key: 'effort', header: 'Effort', priority: 'low', value: u => comboOf(u).effort || null, render: u => comboOf(u).effort || '—' },
-    { key: 'attempt', header: 'Attempt', value: attempt, render: u => attempt(u) ?? '—' },
-    { key: 'status', header: 'Status', value: u => u.status, render: u => <Chip tone={STATUS_TONE[u.status] ?? 'neutral'} icon={u.status === 'running' ? <Loader2 aria-hidden="true" className="run-spin" /> : undefined}>{u.status}</Chip> },
-    { key: 'stage', header: 'Stage', priority: 'low', value: u => u.stage || null, render: u => u.stage || '—' },
-    { key: 'result', header: 'Output / error', value: result, render: u => u.status === 'skipped' ? result(u)
-      : u.error ? <UnitErrorBadge run={run} unit={u} code={unitErrorCode(u)} />
+    { key: 'session', width: '16%', header: 'Session', value: u => u.session_id },
+    { key: 'engine', width: '8%', header: 'Engine', value: u => u.engine },
+    { key: 'model', width: '16%', header: 'Model', value: u => modelOf(u) || null, render: u => modelOf(u) || '—' },
+    { key: 'tier', width: '6%', header: 'Tier', priority: 'low', value: u => comboOf(u).tier || null, render: u => comboOf(u).tier || '—' },
+    { key: 'effort', width: '7%', header: 'Effort', priority: 'low', value: u => comboOf(u).effort || null, render: u => comboOf(u).effort || '—' },
+    { key: 'attempt', width: '8%', header: 'Attempt', value: attempt, render: u => attempt(u) ?? '—' },
+    { key: 'status', width: '13%', header: 'Status', value: u => u.status, render: u => <Chip tone={STATUS_TONE[u.status] ?? 'neutral'} icon={u.status === 'running' ? <Loader2 aria-hidden="true" className="run-spin" /> : undefined}>{u.status}</Chip> },
+    { key: 'stage', width: '8%', header: 'Stage', priority: 'low', value: u => u.stage || null, render: u => u.stage || '—' },
+    { key: 'result', width: '18%', header: 'Result', value: result, render: u => u.status === 'skipped' ? result(u)
+      : u.error ? <UnitErrorBadge unit={u} code={unitErrorCode(u)} />
       : u.status === 'done' ? <UnitOutput api={api} runId={runId} unit={u} /> : '—' },
   ];
   return <section className="run-units" aria-label="Unit progress">
