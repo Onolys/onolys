@@ -449,3 +449,19 @@ def test_operational_best_uses_lowest_observation_for_each_metric(routes):
     rows = {r["combo_key"]: r for r in c.get(base + "/overview", headers=AUTH).json()["leaderboard"]}
     assert rows[combo]["operational_best"] == {"failures": False, "cost": True, "time": False}
     assert rows[other]["operational_best"] == {"failures": True, "cost": False, "time": True}
+
+
+def test_operational_best_never_marks_a_combo_whose_runs_all_failed(routes):
+    """A combo that only failed (cheap and fast) must not win cost, time or failures."""
+    scenario, _, c, base = routes("lines")
+    failed, other = [c["combo_key"] for c in scenario["eval_run"]["combos"]]
+    for doc in scenario["run_docs"].values():
+        doc["run_info"]["usage"]["cost_usd"] = 0 if doc["eval"]["combo_key"] == failed else 1
+        if doc["eval"]["combo_key"] == failed:
+            doc["ended"] = doc["started"]
+    for cell in scenario["cells"]:
+        if cell["combo_key"] == failed:
+            cell.update(status="failed", error={"code": "invalid_parameters"})
+    rows = {r["combo_key"]: r for r in c.get(base + "/overview", headers=AUTH).json()["leaderboard"]}
+    assert not any(rows[failed]["operational_best"].values())
+    assert rows[other]["operational_best"] == {"failures": True, "cost": True, "time": True}

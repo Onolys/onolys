@@ -61,7 +61,7 @@ it('defaults to three available Count errors, refetches picker changes and cache
  fireEvent.click(screen.getByRole('checkbox',{name:/A ·/}));expect(navigate).toHaveBeenLastCalledWith(expect.objectContaining({combos:['c1','c2','c3','c0']}));
  view.rerender(<CompareApp api={api} runId="r1" state={{...state,combos:['c1','c2','c3','c0']}} navigate={navigate}/>);await act(async()=>{});expect(api.compareDeepDive).toHaveBeenCalledTimes(2);
  view.rerender(<CompareApp api={api} runId="r1" state={{...state,combos:['c1','c2','c3']}} navigate={navigate}/>);await act(async()=>{});expect(api.compareDeepDive).toHaveBeenCalledTimes(2);
- expect(screen.getByRole('link',{name:'A'}).getAttribute('href')).toContain('combos=c0');
+ expect(screen.getByRole('link',{name:'Combo A'}).getAttribute('href')).toContain('combos=c0');
 });
 
 it('loads Human gold notes without a combo filter and retains verbatim notes over pages',async()=>{
