@@ -42,7 +42,7 @@ it.each([null, false, 0, ''])('renders inline JSON %j without fetching', async o
   fireEvent.click(screen.getByRole('button', { name: 'View JSON u1' }));
   await act(async () => {});
   expect(api.output).not.toHaveBeenCalled();
-  expect(screen.getByRole('button', { name: 'Hide JSON u1' }).closest('td')?.querySelector('pre')?.textContent).toBe(JSON.stringify(output));
+  expect(within(screen.getByRole('dialog', { name: 'Unit u1 output' })).getByTestId('json-scroll').textContent).toBe(JSON.stringify(output, null, 2));
 });
 it('refreshes terminal cancellation details before stopping polling', async () => {
   vi.useFakeTimers();

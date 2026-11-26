@@ -4,6 +4,8 @@ import { ApiError } from './api';
 import { CancelRunDialog, CancellationNote, canCancelRun, isActiveRun, mergeRunStatus } from './CancelRunDialog';
 import { PartialBadge, ProviderSkipNotices, partialStatusText, providerName } from './RunStatus';
 import { RunConfigDialog, savedConfiguration } from './RunConfigDialog';
+import { ColdStartNotice } from './ColdStart';
+import { JsonDialog } from './JsonViewer';
 import './runs.css';
 import { CompareLink, type CompareNavigate } from './compare/CompareLink';
 import { navigateEval } from './evalNavigation';
@@ -74,7 +76,11 @@ function UnitOutput({ api, runId, unit }: { api: EvalApi; runId: string; unit: R
     api.output(runId, unit.unit_id, controller.signal).then(value => { if (!controller.signal.aborted) setOutput(value); }).catch(e => { if (!controller.signal.aborted) setError(errorMessage(e)); });
     return () => controller.abort();
   }, [api, runId, unit.unit_id, open, output, attempt]);
-  return <><button type="button" aria-expanded={open} onClick={() => setOpen(value => !value)}>{open ? 'Hide' : 'View'} JSON {unit.unit_id}</button>{open && (error ? <div role="alert">{error}<button onClick={() => { setError(''); setAttempt(n => n + 1); }}>Retry JSON</button></div> : output === undefined ? <p role="status">Loading JSON…</p> : <pre>{JSON.stringify(output, null, 2)}</pre>)}</>;
+  return <>
+    <Button type="button" variant="outline" size="sm" onClick={() => setOpen(true)}>View JSON {unit.unit_id}</Button>
+    <JsonDialog open={open} onOpenChange={setOpen} title={`Unit ${unit.unit_id} output`} value={output} loading={open && !error && output === undefined} error={error || undefined}
+      onRetry={() => { setError(''); setAttempt(n => n + 1); }} />
+  </>;
 }
 export function RunView({ api, runId, onRerun, onNavigate = navigateEval }: { api: EvalApi; runId: string; onRerun: (run: RunSummary) => void; onNavigate?: CompareNavigate }) {
   const [run, setRun] = useState<RunDetail>();
@@ -227,7 +233,7 @@ export function History({ api, onOpen, onRerun, onNavigate = navigateEval }: { a
         }}>{inputName(run)}</a> : column === 'Date' ? <time dateTime={run.created_at}>{dateText(run.created_at)}</time> : column === 'Status' ? <div>{run.status === 'partial' ? <PartialBadge run={run} /> : <Badge variant="outline" className="max-w-full whitespace-normal">{columnValue(run, column)}</Badge>}{isActiveRun(run) && <p>{run.done_units} of {run.total_units} runs done</p>}<CancellationNote run={run} /><ProviderSkipNotices skips={run.provider_skips} short /></div> : columnValue(run, column)}</td>)}
           <td className="history-actions" data-label="Actions"><CompareLink run={run} navigate={onNavigate} /><RunActions run={run} onCancel={(saved, trigger) => { cancelTrigger.current = trigger; setToCancel(saved); }} onRerun={onRerun} onConfig={(saved, trigger) => { configTrigger.current = trigger; setConfiguration(saved); }} onDelete={target => { setDeleteError(''); setToDelete(target); }} /></td></tr>)}</tbody>
       </table>{visible.length === 0 && <p>No runs match these filters.</p>}</>}
-    {loading && <p role="status">{exhaustive ? 'Loading full history for search, filters and sorting…' : 'Loading history…'}</p>}
+    {loading && <p role="status">{exhaustive ? 'Loading full history for search, filters and sorting…' : 'Loading history…'}</p>}<ColdStartNotice pending={loading && !error && !runs?.length} />
     {nextCursor && !error && <Button disabled={loading} onClick={() => { setLoading(true); setCursor(nextCursor); }}>Load more</Button>}
     {exhaustive && !loading && !nextCursor && !error && <p role="status">All {runs?.length ?? 0} saved runs searched.</p>}
     <CancelRunDialog api={api} run={toCancel} returnFocus={cancelTrigger} onClose={() => setToCancel(null)} onUpdated={fresh => setRuns(previous => previous?.map(old => old.run_id === fresh.run_id ? fresh : old))} />
