@@ -179,3 +179,17 @@ it('renders popup codes as chips; combo codes disagreeing with the human code ar
  expect(cr).toHaveLength(1);expect(cr[0].classList.contains('ui-chip-warning')).toBe(true);expect(cr[0].textContent).toBe('cr');
  expect(dialog.querySelectorAll('.line-dialog-heading').length).toBeGreaterThanOrEqual(2);expect(dialog.querySelector('h3:not(.line-dialog-heading)')).toBeNull();
 });
+it('defaults lanes to the best three by count error, never a failed combo, when nothing is selected',async()=>{
+ const p=fourCombos();const err=(off:number|null)=>({...Object.values(p.overview.count_error)[0],off,na:off===null?{reason:'failed'}:null});
+ p.overview.count_error={c0:err(9),c1:err(2),c2:err(5),c3:err(null)};
+ render(<CompareApp api={p.api} runId="r1" state={{view:'compare',tab:'lines',session:'synthetic-s01'}} navigate={p.navigate}/>);
+ await screen.findByLabelText('Combo');
+ expect(p.api.compareLines).toHaveBeenCalledWith('r1','synthetic-s01',expect.objectContaining({combos:['c1','c2','c0']}),expect.any(AbortSignal));
+});
+it('keeps an explicit combo selection over the best-three default',async()=>{
+ const p=fourCombos();const err=(off:number)=>({...Object.values(p.overview.count_error)[0],off,na:null});
+ p.overview.count_error={c0:err(9),c1:err(2),c2:err(5),c3:err(1)};
+ render(<CompareApp api={p.api} runId="r1" state={{view:'compare',tab:'lines',session:'synthetic-s01',combos:['c0','c1']}} navigate={p.navigate}/>);
+ await screen.findByLabelText('Combo');
+ expect(p.api.compareLines).toHaveBeenCalledWith('r1','synthetic-s01',expect.objectContaining({combos:['c0','c1']}),expect.any(AbortSignal));
+});
