@@ -100,6 +100,33 @@ Which statuses are transient (`upstream_unavailable`) and which are permanent (`
 
 `provider_error` is the sanitized first line of the provider's text, up to 300 chars; `error_type` is the exception class name.
 
+## Eval environment
+
+Eval runs in its own project, not `onolys`. Region `us-central1`.
+
+| Thing | Value |
+|---|---|
+| GCP project | `onolys-eval` |
+| Firestore database | `eval` |
+| Worker service | `onolys-worker-eval` |
+| Eval backend service | `onolys-eval-backend-eval` |
+
+Ids: the eval run group is `eval_runs/{id}`; `{id}` is the `?run=` URL param in the eval UI. Its units are `sessions/{session_id}/runs/{run_id}`, each with field `eval.eval_run_id` linking back to the group. Worker logs carry `run_id` and `session_id`, **not** the eval group id: look up the unit's `run_id` (or `session_id`) first, then search logs with it.
+
+Logs Explorer (worker, last 7 days):
+
+```
+https://console.cloud.google.com/logs/query;query=resource.labels.service_name%3D%22onolys-worker-eval%22;duration=P7D?project=onolys-eval
+```
+
+CLI, one unit:
+
+```
+gcloud logging read 'resource.labels.service_name="onolys-worker-eval" AND jsonPayload.run_id="<rid>"' --project=onolys-eval --freshness=7d
+```
+
+Field meanings and `error_code` values are the same as above.
+
 ## PHI rules
 
 - Only allowlisted field names are logged; names containing `text`, `body`, `transcript`, `excerpt` or `message` are blocked. Values are capped (200 chars, `provider_error` 300).
