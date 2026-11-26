@@ -24,3 +24,6 @@
  .line-view .line-disagree { border-left-width: .2rem; }
  .line-view td[data-label]::before, .line-view th[data-label]::before { content: attr(data-label); display: block; font-size: .72rem; color: var(--ui-muted-fg); }
 }
+.line-dialog .line-dialog-card { border: 1px solid var(--border, #d3dbda); border-radius: var(--radius, .5rem); padding: .75rem 1rem; margin: .75rem 0; background: var(--card, #fff); box-shadow: var(--shadow-sm, 0 1px 2px rgb(23 28 28 / .08)); min-width: 0; }
+.line-dialog .line-dialog-heading { display: flex; align-items: center; gap: .4rem; margin: 0 0 .4rem; font-size: .8125rem; font-weight: 600; color: var(--ui-muted-fg); overflow-wrap: anywhere; }
+.line-dialog .line-dialog-codes { display: flex; flex-wrap: wrap; gap: .3rem; margin: 0 0 .4rem; }

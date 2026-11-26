@@ -170,3 +170,12 @@ it('swaps a navigated combo outside the first three into the shown lanes and sel
  expect(p.api.compareLines).toHaveBeenCalledWith('r1','synthetic-s01',expect.objectContaining({combos:['c0','c1','c3'],combo:'c3'}),expect.any(AbortSignal));
  expect((screen.getByLabelText('Combo') as HTMLSelectElement).value).toBe('c3');
 });
+
+it('renders popup codes as chips; combo codes disagreeing with the human code are warning chips with text',async()=>{
+ const p=props();render(<LineView {...p} state={{...p.state,turn:'t5'}}/>);
+ const dialog=await screen.findByRole('dialog');await within(dialog).findByText('withheld');
+ const chips=[...dialog.querySelectorAll('.ui-chip')];const sr=chips.filter(c=>c.textContent==='sr'),cr=chips.filter(c=>c.textContent==='cr');
+ expect(sr.length).toBeGreaterThanOrEqual(3);expect(sr.every(c=>!c.classList.contains('ui-chip-warning'))).toBe(true);
+ expect(cr).toHaveLength(1);expect(cr[0].classList.contains('ui-chip-warning')).toBe(true);expect(cr[0].textContent).toBe('cr');
+ expect(dialog.querySelectorAll('.line-dialog-heading').length).toBeGreaterThanOrEqual(2);expect(dialog.querySelector('h3:not(.line-dialog-heading)')).toBeNull();
+});
