@@ -90,5 +90,3 @@
 .ui-chart-data { min-width: 0; max-width: 100%; overflow-wrap: anywhere; }
 .ui-combo-tag { display: inline-flex; align-items: center; gap: .25rem; font-weight: 700; font-size: .8rem; line-height: 1; }
 .ui-combo-tag svg { width: .9em; height: .9em; flex: none; }
-.ui-combo-c0 { color: #0b5f5a; } .ui-combo-c1 { color: #b45309; } .ui-combo-c2 { color: #1d4f91; } .ui-combo-c3 { color: #7a3f98; }
-.ui-combo-c4 { color: #a3185f; } .ui-combo-c5 { color: #4d7c0f; } .ui-combo-c6 { color: #0e7490; }

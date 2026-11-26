@@ -16,7 +16,7 @@ const columns: Column<Row>[] = [
   { key: "name", header: "Name", value: (r) => r.name },
   { key: "score", header: "Score", value: (r) => r.score },
   { key: "status", header: "Status", value: (r) => r.status, priority: "low" },
-  { key: "static", header: "Static", sortable: false, render: () => "x" },
+  { key: "static", header: "Static", sortable: false, value: () => "x", render: () => "x" },
 ];
 const names = () => screen.getAllByRole("row").slice(1).map((r) => within(r).getAllByRole("cell")[0].textContent);
 
@@ -74,6 +74,23 @@ it("filter slot renders in the toolbar", () => {
   expect(screen.getByText("FilterSlot")).toBeTruthy();
 });
 
+it("filters render-prop exposes setFilter and filters rows (fn stored, not run as updater)", () => {
+  render(<DataTable rows={rows} columns={columns} rowKey={(r) => r.id} filters={({ setFilter }) => <>
+    <button onClick={() => setFilter((r) => r.status === "failed")}>Failed</button><button onClick={() => setFilter(null)}>All</button></>} />);
+  fireEvent.click(screen.getByText("Failed"));
+  expect(names()).toEqual(["alpha"]);
+  fireEvent.click(screen.getByText("All"));
+  expect(names()).toHaveLength(3);
+});
+
+it("render-only display still gets a title tooltip and is searchable via required value", () => {
+  const cols: Column<Row>[] = [{ key: "n", header: "N", value: (r) => r.name, render: (r) => <b>{r.name}!</b> }];
+  render(<DataTable rows={rows} columns={cols} rowKey={(r) => r.id} />);
+  expect(screen.getByTitle("Bravo")).toBeTruthy();
+  fireEvent.change(screen.getByRole("searchbox"), { target: { value: "brav" } });
+  expect(screen.getAllByRole("row")).toHaveLength(2);
+});
+
 it("long cell has a title with the full value, fixed layout, low-priority column class, and danger row tone", () => {
   const long = "x".repeat(200);
   const { container } = render(<DataTable rows={[{ id: "z", name: long, score: 1, status: "failed" }]} columns={columns} rowKey={(r) => r.id} rowTone={(r) => (r.status === "failed" ? "danger" : undefined)} />);
@@ -91,6 +108,6 @@ it("useTableState: sort cycle, search and filter", () => {
   expect(result.current.sort).toEqual({ key: "score", dir: "asc" });
   act(() => result.current.setSearch("ok"));
   expect(result.current.visible.map((r) => r.id)).toEqual(["a", "c"]);
-  act(() => result.current.setFilter(() => (r: Row) => r.id === "a"));
+  act(() => result.current.setFilter((r: Row) => r.id === "a"));
   expect(result.current.visible.map((r) => r.id)).toEqual(["a"]);
 });

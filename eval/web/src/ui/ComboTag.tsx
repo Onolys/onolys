@@ -1,4 +1,4 @@
-import { comboLetter, comboShape, type ComboShape } from "./chart/theme";
+import { comboColor, comboLetter, comboShape, type ComboShape } from "./chart/theme";
 import "./ui.css";
 
 const SHAPES: Record<ComboShape, string> = {
@@ -15,7 +15,7 @@ const SHAPES: Record<ComboShape, string> = {
 export function ComboTag({ index, letter }: { index: number; letter?: string }) {
   const shape = comboShape(index);
   const text = letter ?? comboLetter(index);
-  return <span className={`ui-combo-tag ui-combo-c${index % 7}`} aria-label={`Combo ${text}`}>
+  return <span className="ui-combo-tag" role="img" style={{ color: comboColor(index) }} aria-label={`Combo ${text}`}>
     <svg viewBox="0 0 12 12" aria-hidden="true" data-shape={shape}><path d={SHAPES[shape]} fill="currentColor" /></svg>
     <span aria-hidden="true">{text}</span>
   </span>;

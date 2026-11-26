@@ -30,7 +30,8 @@ it("ComboTag renders letter + shape + colour class", () => {
   const { container } = render(<ComboTag index={1} />);
   const tag = container.querySelector(".ui-combo-tag")!;
   expect(tag.textContent).toBe("B");
-  expect(tag.classList.contains("ui-combo-c1")).toBe(true);
+  expect((tag as HTMLElement).style.color).toBe("rgb(180, 83, 9)");
+  expect(screen.getByRole("img", { name: "Combo B" })).toBe(tag);
   expect(tag.querySelector("svg")!.getAttribute("data-shape")).toBe("square");
   expect(tag.getAttribute("aria-label")).toBe("Combo B");
 });
@@ -39,6 +40,6 @@ it("ComboTag wraps palette after 7 and honours an explicit letter", () => {
   const { container } = render(<ComboTag index={7} letter="Z" />);
   const tag = container.querySelector(".ui-combo-tag")!;
   expect(tag.textContent).toBe("Z");
-  expect(tag.classList.contains("ui-combo-c0")).toBe(true);
+  expect((tag as HTMLElement).style.color).toBe("rgb(11, 95, 90)");
   expect(tag.querySelector("svg")!.getAttribute("data-shape")).toBe("circle");
 });

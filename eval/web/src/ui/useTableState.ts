@@ -3,7 +3,7 @@ import { useMemo, useState } from "react";
 export type Cell = string | number | null | undefined;
 export type SortDir = "asc" | "desc";
 export type SortState = { key: string; dir: SortDir } | null;
-export type SortableColumn<T> = { key: string; sortable?: boolean; value?: (row: T) => Cell };
+export type SortableColumn<T> = { key: string; sortable?: boolean; value: (row: T) => Cell };
 
 const text = (v: Cell) => (v == null ? "" : String(v));
 
@@ -16,7 +16,9 @@ function compare(a: Cell, b: Cell): number {
 export function useTableState<T>(rows: readonly T[], columns: readonly SortableColumn<T>[]) {
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState<SortState>(null);
-  const [filter, setFilter] = useState<((row: T) => boolean) | null>(null);
+  const [filter, setFilterState] = useState<((row: T) => boolean) | null>(null);
+  /** Functions are stored as-is (wrapped so React does not treat them as updaters). */
+  const setFilter = (fn: ((row: T) => boolean) | null) => setFilterState(() => fn);
 
   const toggleSort = (key: string) => setSort((s) => (s?.key !== key ? { key, dir: "asc" } : s.dir === "asc" ? { key, dir: "desc" } : null));
 
