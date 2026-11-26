@@ -9,17 +9,13 @@ import { DataTable, type Column } from '../ui/DataTable';
 import { Note } from '../ui/Note';
 import { describeError } from './errorCatalog';
 import { comboFields } from './comboFields';
+import { UnitErrorBadge } from './UnitErrorDialog';
 import './run.css';
 
 const errorMessage = (error: unknown) => error instanceof Error ? error.message : 'Could not load run. Please try again.';
 const STATUS_TONE: Record<string, ChipTone> = { done: 'success', failed: 'danger', running: 'info', queued: 'neutral', waiting: 'neutral', skipped: 'warning', cancelled: 'muted' };
 export const unitErrorCode = (unit: RunUnit) => typeof unit.error === 'string' ? unit.error : unit.error?.code;
 const unitErrorNote = (unit: RunUnit) => typeof unit.error === 'string' ? unit.error : unit.error?.message ?? describeError(unit.error?.code).title;
-
-/** Error badge for a failed unit (the details popup arrives in Task 7). */
-function UnitErrorBadge({ code }: { run: RunDetail; unit: RunUnit; code?: string }) {
-  return <Chip tone="danger">{describeError(code).title}</Chip>;
-}
 
 function UnitOutput({ api, runId, unit }: { api: EvalApi; runId: string; unit: RunUnit }) {
   const [open, setOpen] = useState(false);

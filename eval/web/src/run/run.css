@@ -33,3 +33,11 @@
 .run-units { min-width: 0; margin-bottom: 1.5rem; }
 .run-units-explainer { margin: 0 0 .5rem; font-size: .875rem; color: var(--ui-muted-fg); }
 .run-filter { font: inherit; font-size: .8125rem; min-height: 1.85rem; padding: .1rem .4rem; border: 1px solid var(--border-strong, #6e7e7c); border-radius: calc(var(--radius, .5rem) - 2px); background: var(--card, #fff); color: var(--foreground, #171c1c); max-width: 100%; }
+.run-error-badge { all: unset; cursor: pointer; display: inline-flex; max-width: 100%; border-radius: 999px; }
+.run-error-badge:focus-visible { outline: 2px solid var(--ring, #0b5f5a); outline-offset: 2px; }
+.run-error-body { display: grid; gap: .7rem; min-width: 0; }
+.run-error-body p { margin: 0; font-size: .875rem; }
+.run-error-title { margin: 0 0 .2rem; font-size: .95rem; }
+.run-error-fix { display: flex; gap: .45rem; align-items: flex-start; padding: .45rem .65rem; border-radius: calc(var(--radius, .5rem) - 2px); background: var(--ui-info-bg, #e8f0fb); color: var(--ui-info, #1d4f91); }
+.run-error-fix svg { width: 1rem; height: 1rem; flex: none; margin-top: .1rem; }
+.run-error-body .run-logs { justify-self: start; }
