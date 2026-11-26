@@ -203,16 +203,18 @@ def _line_metrics(v):
 
 
 def _operational_best(v):
-    """Lowest observed operations, with ties; skipped and missing data never win."""
-    finished = {c["combo_key"] for c in final_attempts(v.projection.attempts)
-                if c["status"] in ("done", "failed")}
+    """Lowest observed operations, with ties; skipped, wholly failed and missing data never win."""
+    final = final_attempts(v.projection.attempts)
+    finished = {c["combo_key"] for c in final if c["status"] in ("done", "failed")}
+    succeeded = {c["combo_key"] for c in final if c["status"] == "done"}
+    failed_only = finished - succeeded
     values = {key: {
         "failures": sum(f["count"] for f in v.ops[key]["failures"])
                     if key in finished else None,
         "cost": v.ops[key]["cost"]["per_run_usd"]
                 if v.ops[key]["cost"]["n"] and not v.ops[key]["cost"]["na"] else None,
         "time": v.ops[key]["time"]["mean_seconds"] if v.ops[key]["time"]["n"] else None}
-        for key in v.keys if key not in v.skipped}
+        for key in v.keys if key not in v.skipped and key not in failed_only}
     best = {key: dict.fromkeys(("failures", "cost", "time"), False) for key in v.keys}
     for metric in ("failures", "cost", "time"):
         eligible = [row[metric] for row in values.values() if row[metric] is not None]
