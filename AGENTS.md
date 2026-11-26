@@ -23,6 +23,10 @@ Never invent quotations, speaker identities, or timestamps.
 
 The MITI engine documents itself in `engines/miti/README.md`.
 
+## Frontend work
+
+Any agent working on frontend code (`web/`, `eval/web`, admin, any UI) must read and follow `docs/design-rules.md` every time, before making changes.
+
 ## Agent-generated files
 
 All agent-generated, branch-related files (PRDs, task lists, reviews, plans, notes) go under `docs/agent_files/<branch-name-timestamp>/`.

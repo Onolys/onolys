@@ -15,7 +15,7 @@ One GCP project (`onolys`, number `1054076260967`), region `us-central1`, two en
 ```
 Browser -> Hosting site (onolys-app) -> /v1/** rewrite -> Cloud Run onolys-api-prod -> Firestore (default), GCS, Cloud Tasks
 Cloud Tasks steps-prod -(OIDC)-> onolys-worker-prod -> STT (location us) + Gemini API (Anthropic API for the `claude` preset)
-staging: same shape, site onolys-app-staging, Firestore DB `staging`, *-staging services
+staging: same shape, project `onolys-staging`, site `onolys-staging-app`, Firestore DB `staging`, *-staging services
 ```
 
 ## Resource names
@@ -33,7 +33,7 @@ staging: same shape, site onolys-app-staging, Firestore DB `staging`, *-staging 
 | Secret `<base>-{env}` per `llm_secrets` / `stt_secrets` entry (default bases `gemini-api-key`, `anthropic-api-key`) | `gemini-api-key-staging`, `anthropic-api-key-staging` | `gemini-api-key-prod`, `anthropic-api-key-prod` |
 | Log-based metric (5xx) | `onolys-api-5xx-staging` | `onolys-api-5xx-prod` |
 | Alert policies | none while `staging_alerts=false` | `Onolys failed step/run (prod)`, `Onolys api 5xx rate (prod)` |
-| Hosting site | `onolys-app-staging` (`https://onolys-app-staging.web.app`) | `onolys-app` (`https://onolys-app.web.app`, custom domain `app.onolys.com`) |
+| Hosting site | `onolys-staging-app` in project `onolys-staging` (`https://onolys-staging-app.web.app`) | `onolys-app` (`https://onolys-app.web.app`, custom domain `app.onolys.com`) |
 
 Shared (project level): Artifact Registry repo `onolys` (`us-central1-docker.pkg.dev/onolys/onolys`, no cleanup policy, so any earlier sha stays deployable), spend limits are not in Terraform (owner sets the Anthropic Console limit and a Google Cloud billing budget in the consoles; the former `google_billing_budget.monthly` was dropped from state with a `removed` block, `destroy = false`, so the existing budget is untouched), Monitoring channel `Onolys owner email`, Workload Identity pool `github` with provider `github` (condition `assertion.repository=='Onolys/onolys'`), Speech-to-Text service agent `service-1054076260967@gcp-sa-speech.iam.gserviceaccount.com` (`objectViewer` on both buckets), Identity Platform config (email+password, min length 8, open sign-up, no MFA). Email verify/reset links need `notification.sendEmail.callbackUri` = `https://app.onolys.com/auth/action` (set only by `python3 infra/scripts/identity-config.py`, a manual Terraform apply); `python3 infra/scripts/identity-config.py --check` is a read-only drift check (exit 1 and the remedy if it differs). Not in CI: the deployer SAs hold no Identity Platform read role (would need e.g. `roles/firebaseauth.viewer`).
 
@@ -71,9 +71,9 @@ Set by Terraform (`infra/modules/environment/services.tf`). Base service values 
 | `AI_CAP_DAY` | yes | yes | `5` (per user AI interviews per UTC day, app-side) |
 | `ROUTES_FILE` | yes | yes | `config/{env}/routes.yaml` (baked into the image; `stt_providers.yaml` sits next to it) |
 | `DEFAULT_PRESET` | yes | yes | `default` |
-| `CORS_ORIGINS` | yes | no | staging `https://onolys-app-staging.web.app,http://localhost:5173`; prod `https://app.onolys.com` |
+| `CORS_ORIGINS` | yes | no | staging `https://onolys-staging-app.web.app,http://localhost:5173`; prod `https://app.onolys.com` |
 | `UID_HMAC_KEY` | yes | yes | secret ref `uid-hmac-key-{env}` (keys the `uid_hash` log field) |
-| `APP_BASE_URL` | yes | when activated | staging `https://onolys-app-staging.web.app`, prod `https://app.onolys.com` (module var `app_base_url`; `deploy-staging.yml` re-sets it on the api). The worker receives it only when `resend_secret_wired[env]` is true. Optional for `Settings`: when unset the service starts and `POST /v1/auth/email/verification` answers 503 `email_unavailable` (password reset stays 202 and logs `outcome=unconfigured`). When set it must be an HTTPS origin on a known app host or startup fails. The PR preview does not set it, so verification answers 503 and reset retains its generic 202 |
+| `APP_BASE_URL` | yes | when activated | staging `https://onolys-staging-app.web.app`, prod `https://app.onolys.com` (module var `app_base_url`; `deploy-staging.yml` re-sets it on the api). The worker receives it only when `resend_secret_wired[env]` is true. Optional for `Settings`: when unset the service starts and `POST /v1/auth/email/verification` answers 503 `email_unavailable` (password reset stays 202 and logs `outcome=unconfigured`). When set it must be an HTTPS origin on a known app host or startup fails. The PR preview does not set it, so verification answers 503 and reset retains its generic 202 |
 | `CLIENT_IP_TRUSTED_HOPS` | no | no | integer >= 0, default `1`. Number of proxy entries to skip from the right of `X-Forwarded-For` when picking the client IP for the password-reset per-IP cap (`parts[-(hops+1)]`, clamped to the leftmost; non-IP values fall back to the `unknown` bucket). See "Client IP and `X-Forwarded-For`" below |
 | `EMAIL_FROM` | yes | when activated | `Onolys <no-reply@onolys.com>` (module var `email_from`; also in `deploy-staging.yml`) |
 | `RESEND_API_KEY` | when activated | when activated | secret ref `resend-api-key-{env}`, only when root map var `resend_secret_wired[env]` is true (default false for both; a revision fails if the secret has no version). Without it verification answers 503 `email_unavailable`; reset still returns generic 202 and its delivery logs `outcome=unconfigured` |
@@ -141,7 +141,7 @@ Status then (`terraform output custom_domain_status`): `ownership OWNERSHIP_MISS
 
 Re-run the output before adding records: the values change if Hosting changes its desired state, and the TXT value is per-certificate. Remove any conflicting `A`/`AAAA` record on `app.onolys.com` (a `CNAME` cannot coexist with other records on the same host).
 
-No other staging custom domain (`onolys-app-staging.web.app` only).
+No other staging custom domain (`onolys-staging-app.web.app` only).
 
 ## GitHub settings the owner must set
 
