@@ -1,10 +1,28 @@
-# Custom domains (PRD R11, D10): prod app only; staging stays on *.web.app.
+# Custom domains (PRD R11, D10): prod app only.
 # DNS is added by the owner after apply (output required_dns_updates), so do not block apply on verification.
 resource "google_firebase_hosting_custom_domain" "app" {
   provider              = google-beta
   project               = var.project
   site_id               = google_firebase_hosting_site.app.site_id
   custom_domain         = "app.onolys.com"
+  wait_dns_verification = false
+}
+
+# Kept from the old eval environment on purpose: eval's web uses Firebase authDomain eval.onolys.com, whose
+# /__/auth/handler is served by this Hosting site + custom domain, and eval's sign-in issuer is project onolys.
+# Destroying them would break eval sign-in. Nothing else of the old eval environment stays here.
+resource "google_firebase_hosting_site" "eval_staging" {
+  provider   = google-beta
+  project    = var.project
+  site_id    = "onolys-eval-staging"
+  depends_on = [google_project_service.api]
+}
+
+resource "google_firebase_hosting_custom_domain" "eval_staging" {
+  provider              = google-beta
+  project               = var.project
+  site_id               = google_firebase_hosting_site.eval_staging.site_id
+  custom_domain         = "eval.onolys.com"
   wait_dns_verification = false
 }
 
@@ -64,12 +82,4 @@ output "custom_domain_status" {
       cert      = try(d.cert[0].state, null)
     }
   }
-}
-
-resource "google_firebase_hosting_custom_domain" "eval_staging" {
-  provider              = google-beta
-  project               = var.project
-  site_id               = google_firebase_hosting_site.eval_staging.site_id
-  custom_domain         = "eval.onolys.com"
-  wait_dns_verification = false
 }

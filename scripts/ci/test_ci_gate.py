@@ -97,7 +97,7 @@ class GateTests(unittest.TestCase):
             self.assertIn(job, workflow.split("  required:", 1)[1])
         nightly = Path(".github/workflows/nightly.yml").read_text()
         self.assertIn("uses: ./.github/workflows/ci.yml", nightly)
-        caller = nightly.split("  full-offline:\n", 1)[1].split("\n  api-real-mode:", 1)[0]
+        caller = nightly.split("  full-offline:\n", 1)[1].split("\n  api-nightly:", 1)[0]
         self.assertIn("actions: read", caller)
         self.assertIn("contents: read", caller)
 

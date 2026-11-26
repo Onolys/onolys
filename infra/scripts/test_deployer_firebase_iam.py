@@ -21,8 +21,8 @@ def test_custom_role_grants_only_firebase_project_get():
     assert re.search(r'permissions\s*=\s*\["firebase\.projects\.get"\]', b)
 
 
-def test_both_deployers_hold_firebase_project_get_unconditionally():
-    for env in ("staging", "prod"):
+def test_prod_deployer_holds_firebase_project_get_unconditionally():
+    for env in ("prod",):
         b = block("google_project_iam_member", f"deployer_{env}_firebase_project_get")
         assert "google_project_iam_custom_role.firebase_project_get.name" in b, env
         assert f"local.deployer_{env}_member" in b, env
@@ -31,7 +31,7 @@ def test_both_deployers_hold_firebase_project_get_unconditionally():
 
 def test_rules_admin_is_project_level_without_name_condition():
     # IAM conditions on resource.name never matched firebaserules `projects/onolys:test` (403 in CI).
-    for env in ("staging", "prod"):
+    for env in ("prod",):
         b = block("google_project_iam_member", f"deployer_{env}_rules_admin")
         assert '"roles/firebaserules.admin"' in b, env
         assert "condition" not in b, env

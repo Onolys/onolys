@@ -34,5 +34,5 @@ def test_removed_block_keeps_existing_budget():
 def test_owner_channel_still_used_by_alerts():
     main = (ROOT / "main.tf").read_text()
     assert 'resource "google_monitoring_notification_channel" "owner_email"' in all_tf()
-    assert main.count("google_monitoring_notification_channel.owner_email.id") >= 2
+    assert main.count("google_monitoring_notification_channel.owner_email.id") >= 1
     assert 'variable "alert_email"' in (ROOT / "variables.tf").read_text()

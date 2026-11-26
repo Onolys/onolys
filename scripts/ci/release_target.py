@@ -47,6 +47,36 @@ def validate(role: str, env: dict[str, str]) -> None:
         raise ValueError(f'{prefix}_HOSTING_SITE must name a new isolated Firebase Hosting site')
 
 
+def validate_preview(env: dict[str, str], web: bool = True) -> None:
+    """PR previews follow STAGING_GCP_PROJECT. Isolated mode needs its own limited identity; never fall back to another one."""
+    project = env.get('STAGING_GCP_PROJECT', '')
+    if not project:
+        return
+    if project != 'onolys-staging':
+        raise ValueError('STAGING_GCP_PROJECT must be onolys-staging; clear it to use the legacy target')
+    provider = env.get('STAGING_PREVIEW_WIF_PROVIDER', '')
+    account = env.get('STAGING_PREVIEW_SA', '')
+    site = env.get('STAGING_HOSTING_SITE', '')
+    missing = [name for name, value in (('STAGING_PREVIEW_WIF_PROVIDER', provider), ('STAGING_PREVIEW_SA', account),
+                                        ('STAGING_HOSTING_SITE', site)) if not value]
+    if missing:
+        raise ValueError('Isolated PR previews require ' + ', '.join(missing)
+                         + ' (terraform outputs pr_preview_wif_provider / pr_preview_service_account)')
+    if not re.fullmatch(r'projects/[0-9]+/locations/global/workloadIdentityPools/github-pr/providers/github-pr', provider):
+        raise ValueError('STAGING_PREVIEW_WIF_PROVIDER must be the github-pr provider in the separate github-pr pool, not the deployer provider')
+    if account != f'pr-preview-staging@{project}.iam.gserviceaccount.com':
+        raise ValueError(f'STAGING_PREVIEW_SA must be pr-preview-staging@{project}.iam.gserviceaccount.com')
+    if site != 'onolys-staging-app':
+        raise ValueError('STAGING_HOSTING_SITE must be onolys-staging-app')
+    if web:
+        for field in ('API_KEY', 'AUTH_DOMAIN', 'APP_ID'):
+            value = env.get(f'STAGING_ISOLATED_VITE_FIREBASE_{field}', '')
+            if not value or any(char.isspace() for char in value):
+                raise ValueError(f'STAGING_ISOLATED_VITE_FIREBASE_{field} is required for isolated previews')
+        if env['STAGING_ISOLATED_VITE_FIREBASE_AUTH_DOMAIN'] != 'onolys-staging.firebaseapp.com':
+            raise ValueError('Isolated previews must use the staging Firebase auth domain')
+
+
 def configure_hosting(config: Path, project: str, target: str, site: str) -> None:
     """Map only the requested target in this job's checkout; retain checked-in legacy mappings."""
     data = json.loads(config.read_text())
@@ -61,6 +91,9 @@ def configure_hosting(config: Path, project: str, target: str, site: str) -> Non
 
 
 def configure_voice(config: Path, origin: str) -> None:
+    # The api service env VOICE_URL is wss://<host>.run.app; Cloud Run status.url is https://<host>.run.app. Same origin.
+    if origin.startswith('wss://'):
+        origin = 'https://' + origin[len('wss://'):]
     if not re.fullmatch(r'https://[a-z0-9][a-z0-9.-]*\.run\.app', origin):
         raise ValueError('Voice URL must be an exact HTTPS Cloud Run origin')
     data = json.loads(config.read_text())
@@ -82,6 +115,8 @@ def main() -> int:
     sub = parser.add_subparsers(dest='command', required=True)
     sub.add_parser('staging')
     sub.add_parser('eval')
+    sub.add_parser('preview')
+    sub.add_parser('preview-cleanup')
     voice = sub.add_parser('voice')
     voice.add_argument('config', type=Path)
     voice.add_argument('origin')
@@ -96,6 +131,8 @@ def main() -> int:
             configure_voice(args.config, args.origin)
         elif args.command == 'hosting':
             configure_hosting(args.config, args.project, args.target, args.site)
+        elif args.command in ('preview', 'preview-cleanup'):
+            validate_preview(dict(os.environ), web=args.command == 'preview')
         else:
             validate(args.command, dict(os.environ))
     except (ValueError, OSError) as exc:

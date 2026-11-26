@@ -10,6 +10,8 @@ One GCP project (`onolys`, number `1054076260967`), region `us-central1`, two en
 
 > **Per-environment projects.** Production stays in `onolys` and in this legacy root. Staging (`onolys-staging`, `904020682480`) and eval (`onolys-eval`, `976672392004`) are moving to their own projects through the separate `infra/isolated-environment/` root, activated by the GitHub vars `STAGING_GCP_PROJECT` / `EVAL_GCP_PROJECT`. Until activation, and for everything this page describes about `*-staging` and eval resources in `onolys`, the legacy layout applies; the old `*-staging` / `*-eval` secrets in `onolys` have been deleted by the owner. See [isolated environments](../implementation/isolated-environments.md).
 
+> **Legacy staging and eval removed from this root.** `module "staging"`, `module "eval"`, `eval.tf`, the `onolys-app-staging` and `onolys-eval-staging` sites and the staging/eval deployer grants are no longer declared in `infra/`. A reviewed `terraform apply` here destroys the old `staging`/`eval` Firestore databases, `*-staging`/`*-eval` Cloud Run services, buckets (incl. `onolys-eval-data-staging`), queues, schedulers, service accounts, IAM and secret shells in `onolys`, and changes nothing in prod. Kept: `deployer-staging` (+ WIF binding, pool/provider, `serviceUsageConsumer`) for deploy-prod `resolve`, the `onolys` registry, prod, and the Identity Platform config with the eval/staging authorized domains. Parts of this page that describe the old staging/eval resources are historical; staging and eval now live in `onolys-staging` / `onolys-eval`.
+
 ```
 Browser -> Hosting site (onolys-app) -> /v1/** rewrite -> Cloud Run onolys-api-prod -> Firestore (default), GCS, Cloud Tasks
 Cloud Tasks steps-prod -(OIDC)-> onolys-worker-prod -> STT (location us) + Gemini API (Anthropic API for the `claude` preset)
@@ -118,9 +120,6 @@ Run `cd infra && terraform output` (needs ADC; see Operating Terraform).
 | `wif_provider` | GitHub var `WIF_PROVIDER`. Now: `projects/1054076260967/locations/global/workloadIdentityPools/github/providers/github` |
 | `deployer_staging_email` | GitHub var `DEPLOYER_STAGING_SA`. Now: `deployer-staging@onolys.iam.gserviceaccount.com` |
 | `deployer_prod_email` | GitHub var `DEPLOYER_PROD_SA`. Now: `deployer-prod@onolys.iam.gserviceaccount.com` |
-| `nightly_wif_provider` | GitHub var `NIGHTLY_WIF_PROVIDER`; isolated `github-nightly` pool/provider, available after applying `infra/nightly.tf` |
-| `nightly_gemini_email` | GitHub var `NIGHTLY_GEMINI_SA`; `nightly-gemini@onolys.iam.gserviceaccount.com`, available after apply |
-| `web_env_staging` | map with `VITE_FIREBASE_API_KEY`, `_AUTH_DOMAIN`, `_APP_ID`, `_STORAGE_BUCKET`, `_MESSAGING_SENDER_ID`, `_PROJECT_ID`, and `VITE_FIRESTORE_DATABASE` (= `staging`). Sensitive: read with `terraform output -json web_env_staging` |
 | `web_env_prod` | same keys; `VITE_FIRESTORE_DATABASE` = `(default)` |
 | `web_env_eval` | VITE_* build vars for the eval web app (prod login project, site `onolys-eval-staging`) |
 | `required_dns_updates` | DNS records the owner adds (next section) |
@@ -156,8 +155,6 @@ Environments: create `production` with Tejit as required reviewer (all prod jobs
 | `WIF_PROVIDER` | deploy-staging, deploy-prod, deploy-eval, `_deploy-cloudrun` | `wif_provider` |
 | `DEPLOYER_STAGING_SA` | same (and the read-only `resolve` step of deploy-prod) | `deployer_staging_email` |
 | `DEPLOYER_PROD_SA` | deploy-prod, `_deploy-cloudrun` | `deployer_prod_email` |
-| `NIGHTLY_WIF_PROVIDER` | Nightly `api-real-mode`, trusted `main` only | `nightly_wif_provider` |
-| `NIGHTLY_GEMINI_SA` | Nightly `api-real-mode`, staging secret reader | `nightly_gemini_email` |
 | `GCP_PROJECT`, `GCP_REGION` | optional; default `onolys`, `us-central1` | leave unset |
 | `STAGING_VITE_FIREBASE_API_KEY`, `_AUTH_DOMAIN`, `_APP_ID`, `_STORAGE_BUCKET`, `_MESSAGING_SENDER_ID` | deploy-staging (web build) | `web_env_staging` keys `VITE_FIREBASE_*` (same names without the `STAGING_` prefix) |
 | `PROD_VITE_FIREBASE_API_KEY`, `_AUTH_DOMAIN`, `_APP_ID`, `_STORAGE_BUCKET`, `_MESSAGING_SENDER_ID` | deploy-prod (web build) | `web_env_prod` keys |
@@ -180,6 +177,7 @@ Prepare each bundle at repository level, keeping its project variable unset unti
 | `STAGING_WIF_PROVIDER` / `EVAL_WIF_PROVIDER` | isolated staging root's `wif_provider` | isolated eval root's `wif_provider` |
 | `STAGING_DEPLOYER_SA` / `EVAL_DEPLOYER_SA` | isolated staging root's `deployer_email` in `onolys-staging` | isolated eval root's `deployer_email` in `onolys-eval` |
 | `STAGING_HOSTING_SITE` / `EVAL_HOSTING_SITE` | `onolys-staging-app` (`hosting_site_id`; supported email callback origin) | isolated eval root's `hosting_site_id`, a new site distinct from the legacy sites |
+| `STAGING_PREVIEW_WIF_PROVIDER` / `STAGING_PREVIEW_SA` | isolated staging root's `pr_preview_wif_provider` / `pr_preview_service_account` (needs `enable_pr_previews`; PR previews only) | unused |
 | `STAGING_ISOLATED_VITE_FIREBASE_API_KEY` | new staging Firebase web app SDK API key | unused |
 | `STAGING_ISOLATED_VITE_FIREBASE_AUTH_DOMAIN` | `onolys-staging.firebaseapp.com` | unused |
 | `STAGING_ISOLATED_VITE_FIREBASE_APP_ID` | new staging Firebase web app SDK app ID | unused |
@@ -187,7 +185,7 @@ Prepare each bundle at repository level, keeping its project variable unset unti
 
 The project variable is the activation switch. Preparing the identity, site and isolated Firebase variables alone has no effect. Once activated, an incomplete or invalid bundle fails before cloud authentication, image publication or deployment; the workflow never silently redirects an incomplete active bundle to the old project. Stage the new Firebase values under `STAGING_ISOLATED_VITE_FIREBASE_*`; retain `STAGING_VITE_FIREBASE_*` for the legacy app. `GCP_PROJECT`, `WIF_PROVIDER`, `DEPLOYER_STAGING_SA` and `DEPLOYER_PROD_SA` continue to describe the existing `onolys` project and identities. Keep them unchanged. Region continues to use `GCP_REGION` (default `us-central1`).
 
-After staging activation, app images, Cloud Run, Firestore `staging` rules and Hosting target `app-staging` all use `onolys-staging`. CI creates a project-scoped `.firebaserc` mapping only in its disposable checkout, sets the selected site as the API CORS/email origin and `VITE_APP_HOSTS` email-action destination, and replaces the staging voice CSP origin with that project's provisioned voice URL. Smoke uses `https://onolys-staging-app.web.app`. The new staging runtime must include the admitted callback origin; activate only after these changes and the matching infrastructure are on `main`. PR previews, preview cleanup and preview sweeping pause on activation; existing preview resources stay in the old project until a separately approved preview migration/cleanup. Finish any desired legacy cleanup before setting `STAGING_GCP_PROJECT`.
+After staging activation, app images, Cloud Run, Firestore `staging` rules and Hosting target `app-staging` all use `onolys-staging`. CI creates a project-scoped `.firebaserc` mapping only in its disposable checkout, sets the selected site as the API CORS/email origin and `VITE_APP_HOSTS` email-action destination, and replaces the staging voice CSP origin with that project's provisioned voice URL. Smoke uses `https://onolys-staging-app.web.app`. The new staging runtime must include the admitted callback origin; activate only after these changes and the matching infrastructure are on `main`. PR previews, preview cleanup and preview sweeping follow `STAGING_GCP_PROJECT`: they run in `onolys-staging` (site `STAGING_HOSTING_SITE`) as the limited `pr-preview-staging` identity (`STAGING_PREVIEW_WIF_PROVIDER` / `STAGING_PREVIEW_SA`, pull_request-only provider in its own `github-pr` workload identity pool, separate from the main-only deployer pool `github`) and fail fast when those vars are missing. Existing preview resources in the old project are not touched after activation; finish any desired legacy cleanup before setting `STAGING_GCP_PROJECT`.
 
 After eval activation, its worker/backend images, Cloud Run, Firestore `eval` rules and Hosting target `eval-staging` use `onolys-eval` and its project-local deployer. Eval login continues to use the production `onolys` Firebase app, existing `PROD_VITE_FIREBASE_API_KEY`/`APP_ID` and `eval.onolys.com` auth domain. Provision the backend's `AUTH_PROJECT=onolys` and CORS for the new eval site. Before any login smoke, add **`onolys-eval-app.web.app`** (or the explicitly chosen new eval site hostname) to **Firebase Authentication > Settings > Authorized domains in production project `onolys`**, and complete any corresponding OAuth origin configuration. Keep `VITE_FIREBASE_AUTH_DOMAIN=eval.onolys.com`: its existing auth handler stays on the legacy Hosting site in `onolys` and continues to serve the shared production Firebase app. The new temporary site uses that existing handler; moving its custom domain, OAuth redirect or DNS configuration is a separate owner action. No live Firebase Auth/OAuth settings are changed by this patch. Smoke checks the selected site's `.web.app` origin. This does not transfer `eval.onolys.com` or any other live custom domain.
 
@@ -202,22 +200,11 @@ Production writes and the single production approval remain in `onolys`, with th
 
 Apply registry roles on the repository, rather than granting project-wide write access. No new staging/eval deployer receives production write permissions. The workflow still promotes the staging image by digest, validates production LLM settings against that image, and never rebuilds it. Historical promotions after staging activation must have provenance in the newly selected staging project; clearing the activation variable returns provenance lookup to the legacy project. The switch does not copy old registry images or revision history.
 
-Before activation, review/apply the new roots, provision enabled secret versions, confirm all services/sites and cross-project reader grants, and stage the complete repository-variable bundle. Set only the corresponding project variable last, then perform a reviewed release and verify the new `.web.app` site before considering a custom-domain handoff. Clearing the project variable restores legacy workflow targeting on subsequent releases; it does not move data or reverse any resources already created in the new project. The paid Nightly `api-real-mode` job pauses when `STAGING_GCP_PROJECT` is set, preventing its legacy `onolys` Gemini key from charging production after staging isolation. The live Gemini job is now off by default and opt-in via repo var `NIGHTLY_LEGACY_GEMINI=true` (the legacy secret `onolys/gemini-api-key-staging` was deleted). All offline Nightly jobs continue. Resuming paid checks requires a separately reviewed isolated Nightly identity and project-local key; changing the existing Nightly variables alone does not bypass this pause.
+Before activation, review/apply the new roots, provision enabled secret versions, confirm all services/sites and cross-project reader grants, and stage the complete repository-variable bundle. Set only the corresponding project variable last, then perform a reviewed release and verify the new `.web.app` site before considering a custom-domain handoff. Clearing the project variable is no longer a rollback to legacy staging: the legacy staging/eval targets in `onolys` are being destroyed (see the legacy apply steps in [isolated environments](../implementation/isolated-environments.md)), so workflows would point at resources that no longer exist. It does not move data or reverse any resources already created in the new project. The live Gemini provider check was removed from Nightly (along with its `nightly-gemini` identity and `github-nightly` pool); run it manually with `api/tests/test_live_real_mode.py -m live`.
 
 ### Gemini key: Secret Manager is the source
 
-`nightly.yml` (`api-real-mode`) reads `gemini-api-key-staging` from Secret Manager, the same secret used by staging runtime services. The action masks the fetched value and exposes it only to the live-test step as `GEMINI_API_KEY`. It does not export the key to the job environment or store it in a GitHub repository secret. Runtime references stay `gemini-api-key-staging` and `gemini-api-key-prod` for their respective environments; the production key stays only in Secret Manager and is never copied into GitHub.
-
-Nightly uses keyless GitHub OIDC with the dedicated `nightly-gemini` service account and isolated `github-nightly` pool/provider in `infra/nightly.tf`. Both the workflow job and provider admit only scheduled/manual runs from `main`; the provider also requires the exact repository and `.github/workflows/nightly.yml@refs/heads/main` workflow identity. The account's impersonation binding accepts only the main-branch subject from that pool, and its sole resource grant is Secret Accessor on `gemini-api-key-staging`. PR/fork runs, other refs and other workflows cannot use it. Existing deployer accounts receive no secret access.
-
-Activate in this order:
-
-1. Review and apply the Terraform changes, creating the isolated pool/provider, reader account and exact-secret IAM grants. Confirm `gemini-api-key-staging` has an enabled current version without printing its payload.
-2. Set repository variables `NIGHTLY_WIF_PROVIDER` and `NIGHTLY_GEMINI_SA` from the two Terraform outputs above. Keep the existing GitHub `GEMINI_API_KEY` secret during activation.
-3. After the workflow is on `main`, manually dispatch **Nightly on `main`** and verify `api-real-mode` succeeds through OIDC, masked Secret Manager retrieval and the live Gemini test. A dispatch from another ref skips this job. No key or credentials should be printed or uploaded as an artifact.
-4. Only after that successful verification, delete the now-unused GitHub `GEMINI_API_KEY` repository secret. No workflow consumes it after this change. Deploys and Nightly require no GCP JSON key or provider-key repository secret.
-
-Offline guards: `python3 -m pytest infra/scripts/test_nightly_gemini_secret.py -q`, `python3 scripts/ci/check_no_llm_keys_in_pr_workflows.py`, `actionlint .github/workflows/nightly.yml`, and Terraform `fmt -check` / `validate`. These validate configuration, not live IAM propagation; the trusted-main Nightly run completes activation.
+The live Gemini provider check was removed from Nightly (along with its `nightly-gemini` identity and `github-nightly` pool); run it manually with `api/tests/test_live_real_mode.py -m live`. Runtime references stay `gemini-api-key-staging` and `gemini-api-key-prod` for their respective environments; the production key stays only in Secret Manager and is never copied into GitHub. Offline guard: `python3 -m pytest infra/scripts/test_nightly_gemini_secret.py -q` (asserts the removal), plus `python3 scripts/ci/check_no_llm_keys_in_pr_workflows.py` and Terraform `fmt -check` / `validate`. Applying this removal to a legacy root destroys the old `github-nightly` pool/provider and `nightly-gemini` account.
 
 Workflows: `deploy-staging.yml` runs after the `CI` workflow succeeds on `main` (also manual). Before cloud authentication, automatic and manual releases verify that the SHA is still current `main` and has successful push CI in this repository. A stale queued run fails rather than rolling back a newer release. `deploy-prod.yml` is manual (`workflow_dispatch`, input `sha` or `version`) or on a `v*` tag. `nightly.yml` runs 06:17 UTC daily.
 
@@ -243,7 +230,7 @@ cd infra && terraform init && terraform plan     # add -lock=false for a read-on
 terraform apply
 ```
 
-No `gcloud` needed; the providers use `user_project_override` with billing project `onolys`. `terraform plan/apply` is manual (no CI apply). Cloud Run images and `GIT_SHA` belong to CI: after a CI deploy `plan` may show `GIT_SHA` drift; apply with `-var 'git_sha={staging="<staging sha>",prod="<prod sha>"}' -var 'eval_git_sha=<eval sha>'` (one value per environment) to keep it quiet. CI-set labels: `commit-sha`, `managed-by` (service + template) and `goog-terraform-provisioned` (template) are ignored via `lifecycle`.
+No `gcloud` needed; the providers use `user_project_override` with billing project `onolys`. `terraform plan/apply` is manual (no CI apply). Cloud Run images and `GIT_SHA` belong to CI: after a CI deploy `plan` may show `GIT_SHA` drift; apply with `-var 'git_sha={prod="<prod sha>"}'` (the legacy root is prod only; `git_sha` and `resend_secret_wired` accept just the `prod` key) to keep it quiet. CI-set labels: `commit-sha`, `managed-by` (service + template) and `goog-terraform-provisioned` (template) are ignored via `lifecycle`.
 
 After a CI pinned api deploy (`pin_traffic`, revision named `<service>-<sha7>-<run>-<attempt>`), the next plan shows a harmless `template.revision -> null` on the api (it is deliberately not in `ignore_changes`, otherwise apply fails with 409 "Revision ... with different configuration already exists"); Cloud Run then auto-names the new revision.
 
@@ -257,6 +244,8 @@ python3 infra/scripts/seed-secrets.py --env staging     # also: --env prod
 It creates `uid-hmac-key-{env}` (random, only if missing) and writes the key for each `--map ENVVAR=base-id` (default `GEMINI_API_KEY=gemini-api-key` and `ANTHROPIC_API_KEY=anthropic-api-key`; a key whose variable is unset keeps its existing version) into `<base-id>-{env}`, so `--env staging` and `--env prod` fill different secrets from the key in your shell. Re-running is a no-op unless a value changed.
 
 ### Eval infrastructure activation
+
+> Historical: the staging/eval modules this section targets were removed from the legacy root; new staging/eval are managed by `infra/isolated-environment/`.
 
 Cloud Run cannot start revisions whose `latest` secret references have no enabled version. Provision the existing SP03 configuration in this order, using the operator's existing backend, credentials and ignored tfvars; review each saved plan before applying it:
 
@@ -281,6 +270,8 @@ Cloud Run cannot start revisions whose `latest` secret references have no enable
 The release preflight checks service existence/access only; it does not validate every secret version, provision resources or replace the owner's infrastructure review.
 
 ### Auth-email staging activation (two phases)
+
+> Historical: the staging/eval modules this section targets were removed from the legacy root; new staging/eval are managed by `infra/isolated-environment/`.
 
 Verification is sent by the API; password-reset requests enqueue a durable `reset-email` task and the worker generates the action link and sends through Resend. The API can also send a reset as a fallback if enqueueing fails. Both therefore need the email settings and the same environment's Resend key. The shared Identity Platform user pool is project-wide.
 
@@ -324,6 +315,8 @@ Review the saved plan before applying: targets include dependencies, so confirm 
 The explicit `-var 'resend_secret_wired={staging=true,prod=false}'` above also makes the initial activation plan self-contained. Retain the same map in the automatically loaded operator tfvars file for later plans/applies. Without either input, false defaults disable email wiring. Production activation remains a separate rollout; these commands neither create nor activate its Resend resources. Targeting is an exceptional staged rollout tool; review a subsequent full plan for unrelated drift without applying it automatically.
 
 ### Cutover: shared `anthropic-api-key` to per-env secrets (one-time, owner decision 2026-11-20)
+
+> Historical: the staging/eval modules this section targets were removed from the legacy root; new staging/eval are managed by `infra/isolated-environment/`.
 
 A Cloud Run revision that references a secret with no version fails to deploy, so the new secrets must have values before services switch. Terraform drops the old shared secret from state without deleting it (`removed` block, `destroy = false`), so live revisions keep working until you delete it. Order:
 

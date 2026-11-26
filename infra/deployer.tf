@@ -1,5 +1,6 @@
 # Keyless GitHub deploys (PRD R9, R13, D5): Workload Identity pool + provider `github`, and the
-# `deployer-staging` service account (also used by SP00's PR previews) and `deployer-prod` (production environment only).
+# `deployer-staging` service account (kept only so deploy-prod's read-only `resolve` job can impersonate it and read the isolated staging project;
+# its rights over the old staging/eval resources were removed with them) and `deployer-prod` (production environment only).
 
 resource "google_iam_workload_identity_pool" "github" {
   project                   = var.project
@@ -38,7 +39,7 @@ resource "google_service_account" "deployer_staging" {
   display_name = "Onolys GitHub deployer (staging + PR previews)"
 }
 
-# Any workflow of the repo may impersonate (staging + previews run on PR branches).
+# Any workflow of the repo may impersonate (deploy-prod `resolve` runs on tags/dispatch).
 resource "google_service_account_iam_member" "deployer_staging_wif" {
   service_account_id = google_service_account.deployer_staging.name
   role               = "roles/iam.workloadIdentityUser"
@@ -47,16 +48,6 @@ resource "google_service_account_iam_member" "deployer_staging_wif" {
 
 locals {
   deployer_staging_member = "serviceAccount:${google_service_account.deployer_staging.email}"
-  staging_services = merge(
-    {
-      api    = module.staging.api_service_name
-      worker = module.staging.worker_service_name
-      voice  = module.staging.voice_service_name
-    },
-  )
-  staging_runtime_sas = merge(
-    { api = module.staging.api_sa_email, worker = module.staging.worker_sa_email, voice = module.staging.voice_sa_email },
-  )
 }
 
 # firebase-tools reads the Firebase project (firebase.projects.get) before every deploy. That permission is
@@ -70,126 +61,12 @@ resource "google_project_iam_custom_role" "firebase_project_get" {
   permissions = ["firebase.projects.get"]
 }
 
-resource "google_project_iam_member" "deployer_staging_firebase_project_get" {
-  project = var.project
-  role    = google_project_iam_custom_role.firebase_project_get.name
-  member  = local.deployer_staging_member
-}
-
-# --- Staging deploys ---
-resource "google_cloud_run_v2_service_iam_member" "deployer_staging_developer" {
-  for_each = local.staging_services
-  project  = var.project
-  location = var.region
-  name     = each.value
-  role     = "roles/run.developer"
-  member   = local.deployer_staging_member
-}
-
-# Deploying a revision acts as the runtime SA.
-resource "google_service_account_iam_member" "deployer_staging_runtime_user" {
-  for_each           = local.staging_runtime_sas
-  service_account_id = "projects/${var.project}/serviceAccounts/${each.value}"
-  role               = "roles/iam.serviceAccountUser"
-  member             = local.deployer_staging_member
-}
-
-resource "google_artifact_registry_repository_iam_member" "deployer_staging_writer" {
-  project    = var.project
-  location   = var.region
-  repository = google_artifact_registry_repository.onolys.repository_id
-  role       = "roles/artifactregistry.writer"
-  member     = local.deployer_staging_member
-}
-
-# Firebase CLI / REST calls are billed to the project.
+# API calls made with this identity (deploy-prod `resolve` against the isolated staging project) need serviceusage.
 resource "google_project_iam_member" "deployer_staging_usage" {
   project = var.project
   role    = "roles/serviceusage.serviceUsageConsumer"
   member  = local.deployer_staging_member
 }
-
-# Hosting deploy access is project level on purpose: IAM conditions on resource.name (site name by id, `projects/-`, and the
-# versions/releases children) never matched what Hosting presents (run 44812626576, 403 on .../versions), and Policy
-# Troubleshooter cannot evaluate Hosting site names. Trade-off: either deployer could deploy to any site (incl.
-# prod). Accepted: same GitHub repo trust, workflows only target their own site. See ADR 0022 (D5).
-resource "google_project_iam_member" "deployer_staging_hosting" {
-  project = var.project
-  role    = "roles/firebasehosting.admin"
-  member  = local.deployer_staging_member
-}
-
-# Firestore rules/indexes. Indexes are limited to the staging database by condition. Rules are project level on
-# purpose: firebase-tools calls rulesets.test/create on the bare project resource, and IAM conditions on
-# resource.name (tried: project id and project number) never matched it (run 44810006543, 403 on :test).
-# Trade-off: deployer-staging could release prod rules (releases/cloud.firestore). Accepted: same GitHub repo
-# trust, and the workflow only targets `firestore:staging`. See ADR 0022 (D5).
-resource "google_project_iam_member" "deployer_staging_index_admin" {
-  project = var.project
-  role    = "roles/datastore.indexAdmin"
-  member  = local.deployer_staging_member
-
-  condition {
-    title       = "firestore-staging-only"
-    description = "Only the staging database"
-    expression  = "resource.name.startsWith(\"${module.staging.firestore_db_resource}\")"
-  }
-}
-
-resource "google_project_iam_member" "deployer_staging_rules_admin" {
-  project = var.project
-  role    = "roles/firebaserules.admin"
-  member  = local.deployer_staging_member
-}
-
-# Firestore indexes of the `eval` database (rules are project level above).
-resource "google_project_iam_member" "deployer_staging_eval_index_admin" {
-  project = var.project
-  role    = "roles/datastore.indexAdmin"
-  member  = local.deployer_staging_member
-
-  condition {
-    title       = "firestore-eval-only"
-    description = "Only the eval database"
-    expression  = "resource.name.startsWith(\"${module.eval.firestore_db_resource}\")"
-  }
-}
-
-# --- Eval environment (03-eval R8): worker-eval takes the staging image digest, eval-backend its own image ---
-locals {
-  eval_services = {
-    worker  = module.eval.worker_service_name
-    backend = module.eval.eval_backend_service_name
-  }
-  # The eval backend runs as the module's api SA.
-  eval_runtime_sas = {
-    api    = module.eval.api_sa_email
-    worker = module.eval.worker_sa_email
-  }
-}
-
-resource "google_cloud_run_v2_service_iam_member" "deployer_eval_developer" {
-  for_each = local.eval_services
-  project  = var.project
-  location = var.region
-  name     = each.value
-  role     = "roles/run.developer"
-  member   = local.deployer_staging_member
-}
-
-resource "google_service_account_iam_member" "deployer_eval_runtime_user" {
-  for_each           = local.eval_runtime_sas
-  service_account_id = "projects/${var.project}/serviceAccounts/${each.value}"
-  role               = "roles/iam.serviceAccountUser"
-  member             = local.deployer_staging_member
-}
-
-# --- PR previews (SP00 R3, PRD R13) ---
-# A preview is a no-traffic TAGGED REVISION (tag `pr-<N>`) on the existing staging API service, so it needs no grant
-# beyond `roles/run.developer` on the staging services (deployer_staging_developer above) and actAs on `api-staging`
-# (deployer_staging_runtime_user). Do NOT add a Cloud Run role scoped to `onolys-pr-*`: Cloud Run does not support
-# `resource.name` IAM conditions, so such a binding grants nothing (run 44837572867: run.services.get denied), and an
-# unconditional role would let the staging deployer touch prod (owner rejected it 2026-11-21).
 
 output "wif_provider" {
   description = "Value for google-github-actions/auth `workload_identity_provider`."
@@ -267,7 +144,7 @@ resource "google_project_iam_member" "deployer_prod_firebase_project_get" {
   member  = local.deployer_prod_member
 }
 
-# Project level for the same reason as deployer_staging_hosting (see above).
+# Project level on purpose: IAM conditions on Hosting resource names never matched what Hosting presents (ADR 0022 D5).
 resource "google_project_iam_member" "deployer_prod_hosting" {
   project = var.project
   role    = "roles/firebasehosting.admin"

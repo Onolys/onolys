@@ -45,11 +45,10 @@ def test_worker_email_access_is_gated_and_limited_to_resend_and_link_generation(
     assert "google_project_iam_member.worker_auth_email" in worker
 
 
-def test_email_activation_defaults_remain_off_for_both_environments():
+def test_email_activation_defaults_remain_off_for_prod():
     root = (INFRA / "variables.tf").read_text()
     var = re.search(r'variable "resend_secret_wired" \{(.*?)\n\}', root, re.S).group(1)
-    assert re.search(r'staging\s*=\s*false', var)
     assert re.search(r'prod\s*=\s*false', var)
     wiring = (INFRA / "main.tf").read_text()
-    for env in ("staging", "prod"):
-        assert f'var.resend_secret_wired["{env}"]' in wiring
+    assert 'var.resend_secret_wired["prod"]' in wiring
+    assert "staging" not in var

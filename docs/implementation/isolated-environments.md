@@ -14,6 +14,30 @@ Project creation, billing linkage and the operator's permissions are prerequisit
 
 Staging and production use the same `modules/environment` implementation and API/worker/voice topology, with Firestore, audio storage, Tasks, Scheduler, per-service identities, secrets and IAM. Staging uses its own project, database `staging`, new smoke Hosting site `onolys-staging-app`, smaller service limits, staging routes and optionally its own Firebase users. Production retains its current project, `(default)` database, domains, state and operator settings. The new root does not change the legacy root or its defaults.
 
+The legacy root no longer declares `module.staging` or `module.eval` (nor `eval.tf` or the old staging/eval hosting sites and deployer grants). Applying it destroys the old staging/eval resources in `onolys` (owner-approved, data included) and changes nothing in prod (except as noted for drift below); `deployer-staging`, its WIF binding and `serviceUsageConsumer` stay because deploy-prod `resolve` still impersonates it.
+
+The eval Hosting site `onolys-eval-staging` and its custom domain `eval.onolys.com` stay in the legacy root on purpose: eval's web uses Firebase `authDomain` `eval.onolys.com`, whose `/__/auth/handler` is served by that site, and eval's sign-in issuer is project `onolys`.
+
+Owner steps for the legacy apply (do not run a plain `terraform apply` in `infra/`):
+
+1. Empty the non-empty buckets first, they have `force_destroy=false`: `onolys-eval-data-staging` (datasets already copied to `gs://onolys-eval-datasets` and verified), `onolys-audio-staging`, `onolys-audio-eval`.
+
+   ```
+   gcloud storage rm --recursive --project=onolys 'gs://onolys-eval-data-staging/**' 'gs://onolys-audio-staging/**' 'gs://onolys-audio-eval/**'
+   ```
+
+   Do not touch `onolys-eval-datasets` or `onolys-eval-audio` (the new eval buckets in project `onolys-eval`).
+2. The old eval Firestore database `projects/onolys/databases/eval` has delete protection, so Terraform only drops it from state (`deletion_policy` ABANDON). Disable delete protection and delete it manually:
+
+   ```
+   gcloud firestore databases update --project=onolys --database=eval --no-delete-protection
+   gcloud firestore databases delete --project=onolys --database=eval
+   ```
+
+   Warning: project `onolys-eval` also has a database named `eval`; never run these without `--project=onolys`, and do not touch that one.
+3. Apply with targeted addresses only (`-target=` for the reviewed destroy set). The legacy plan also contains pre-existing PROD drift (destroy of `openai-api-key-prod`, reset of the prod Cloud Run env) that must not be applied blindly. The legacy plan also replaces `terraform_data.identity_policy`, which rewrites prod's sign-in authorized-domain list (drops `admin.onolys.com` and `onolys-admin-staging.web.app`); the owner must consciously include or exclude it from the targeted apply.
+4. Only after the apply is clearing `STAGING_GCP_PROJECT` meaningless as a rollback: the legacy staging target no longer exists.
+
 Eval uses the same module with the public API and voice disabled, and enables the eval backend, worker and eval mode. Runtime config remains `ENV=staging`; Firestore database is `eval`. Its smoke site is `onolys-eval-app`. `auth_project` defaults to `onolys` for eval, retaining the existing token issuer without moving users. The root never manages an external identity project. `manage_identity=true` is available for staging validation only when the issuer is that runtime project; it creates local email/password Identity Platform configuration and a Firebase web app. OAuth-provider setup, email template policy and existing-project authorized-domain additions remain separate reviewed identity operations.
 
 The module's new `audio_bucket_name`, `auth_project` and `speech_object_prefix` inputs default to null, preserving legacy names, issuer and Speech access. New buckets default to `PROJECT-audio`. Eval grants its Speech service agent read access only under `eval-uploads/`; normal staging retains the existing module access. UID HMAC and provider keys remain environment-local secret references, with no values in Terraform. New provider-shell defaults include Gemini, Anthropic and OpenAI; mounting credentials does not select a provider.
@@ -33,6 +57,10 @@ A successful reviewed apply enables required APIs through `google_project_servic
 | Cloud Functions | Not used | Not used | Not used by this application |
 
 Each project gets its own repository `onolys`, deployer service account and GitHub WIF provider. Trust requires repository `Onolys/onolys` and `refs/heads/main`; it grants no tag or PR-branch deployment access. The deployer has service-scoped Cloud Run revision rights and runtime actAs, its own repository writer, project-local Hosting/rules permissions, and index access conditioned on its database.
+
+### PR previews (staging only)
+
+Previews run in isolated staging when `STAGING_GCP_PROJECT` is set. Terraform input `enable_pr_previews` (true in the staging example; ignored for eval) adds service account `pr-preview-staging`, a separate WIF pool `github-pr` (not the deployer's pool `github`: a principalSet binding matches every provider of its pool, so sharing would let any same-repo PR impersonate `deployer-staging`) holding provider `github-pr` that admits only `Onolys/onolys` `pull_request` events, and these grants: `run.developer` on the api service only, `iam.serviceAccountUser` on the api runtime SA only, repository `artifactregistry.writer`, `firebasehosting.admin`, `serviceusage.serviceUsageConsumer` and the `firebase.projects.get` custom role. Nothing on worker, voice, Firestore or rules/indexes, and no secret grants to the preview identity itself; but the preview revision runs as the api runtime SA, so preview code can read the secrets that SA reads in staging (e.g. the Resend and uid-hmac secrets). The preview workflows hold no LLM keys. No `firebaseauth.admin`: firebase-tools may warn about channel domains in Firebase Auth, which is accepted (previews use email/password). Owner steps after the reviewed apply: set repo vars `STAGING_PREVIEW_WIF_PROVIDER` (output `pr_preview_wif_provider`, `projects/904020682480/locations/global/workloadIdentityPools/github-pr/providers/github-pr`) and `STAGING_PREVIEW_SA` (output `pr_preview_service_account`). Until set, previews fail fast with a clear message while `STAGING_GCP_PROJECT` is set.
 
 Production promotion can retain its existing GitHub identity. The staging example explicitly opts the legacy staging resolver into service-scoped `roles/run.viewer` plus repository reader, and grants repository reader to the existing prod deployer and prod Cloud Run service agent. Those principals get no new staging deployment or actAs rights. The optional `cloud_run_reader_members` and `artifact_registry_reader_members` inputs default to empty; review example grants before applying. Production WIF and resources are unchanged.
 
@@ -92,7 +120,7 @@ Then review a full saved plan against the new project's backend, confirm there a
 
 The canonical isolated staging app origin is accepted by the backend's fixed host allowlist. Its web build must set `VITE_APP_HOSTS=onolys-staging-app.web.app` for email-action navigation. `APP_BASE_URL` does not itself enable email: seed Resend and set `resend_secret_wired=true` only after validating the sender and local identity permissions. Cross-project auth-email activation is rejected by this root pending a separate IAM review. Existing production mail, domains, users and route selections remain untouched.
 
-Activating `STAGING_GCP_PROJECT` pauses only Nightly's paid `api-real-mode` job: its legacy `onolys` Gemini key would otherwise keep billing production. The live Gemini job is now off by default and opt-in via repo var `NIGHTLY_LEGACY_GEMINI=true` (the legacy secret `onolys/gemini-api-key-staging` was deleted). Offline Nightly coverage continues; a dedicated isolated Nightly identity/key and explicit workflow update are deferred. No budgets or live workflow settings are changed by this guard.
+The live Gemini provider check was removed from Nightly (along with its `nightly-gemini` identity and `github-nightly` pool); run it manually with `api/tests/test_live_real_mode.py -m live`. No budgets or live workflow settings are changed by this guard.
 
 Do not cut over live domains, delete old environments, change GitHub configuration, migrate user data or populate datasets as part of provisioning this foundation. Those operations need their own verified rollout. Check application health, login, isolated Firestore/audio/Tasks paths, provider calls and report behavior on the new smoke sites first; offline validation does not establish those live results.
 

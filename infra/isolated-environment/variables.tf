@@ -91,6 +91,12 @@ variable "github_repository" {
   default = "Onolys/onolys"
 }
 
+variable "enable_pr_previews" {
+  description = "Staging only: create the limited PR preview identity (own WIF provider admitting only pull_request events, service account, scoped grants). Ignored for eval."
+  type        = bool
+  default     = false
+}
+
 variable "artifact_registry_reader_members" {
   description = "Optional exact IAM principals for cross-project promotion, scoped only to this image repository. Empty grants no external access."
   type        = set(string)

@@ -14,6 +14,16 @@ output "wif_provider" {
   value = google_iam_workload_identity_pool_provider.github.name
 }
 
+output "pr_preview_wif_provider" {
+  description = "Value for repo var STAGING_PREVIEW_WIF_PROVIDER; null unless enable_pr_previews on staging."
+  value       = local.preview_enabled ? google_iam_workload_identity_pool_provider.github_pr[0].name : null
+}
+
+output "pr_preview_service_account" {
+  description = "Value for repo var STAGING_PREVIEW_SA; null unless enable_pr_previews on staging."
+  value       = local.preview_enabled ? google_service_account.pr_preview[0].email : null
+}
+
 output "deployer_email" {
   value = google_service_account.deployer.email
 }

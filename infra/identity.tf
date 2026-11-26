@@ -72,20 +72,11 @@ resource "terraform_data" "identity_policy" {
   }
 }
 
-# One Firebase web app per host.
+# Firebase web app for the prod host.
 resource "google_firebase_web_app" "app" {
   provider        = google-beta
   project         = var.project
   display_name    = "onolys-app"
-  deletion_policy = "DELETE"
-
-  depends_on = [google_project_service.api]
-}
-
-resource "google_firebase_web_app" "app_staging" {
-  provider        = google-beta
-  project         = var.project
-  display_name    = "onolys-app-staging"
   deletion_policy = "DELETE"
 
   depends_on = [google_project_service.api]
@@ -97,27 +88,7 @@ data "google_firebase_web_app_config" "app" {
   web_app_id = google_firebase_web_app.app.app_id
 }
 
-data "google_firebase_web_app_config" "app_staging" {
-  provider   = google-beta
-  project    = var.project
-  web_app_id = google_firebase_web_app.app_staging.app_id
-}
-
 # Public web config per build (Firebase web apiKey is a public identifier; access is enforced by Identity Platform + rules).
-output "web_env_staging" {
-  description = "VITE_* build vars for the staging web app (site onolys-app-staging)."
-  value = {
-    VITE_FIREBASE_API_KEY             = data.google_firebase_web_app_config.app_staging.api_key
-    VITE_FIREBASE_AUTH_DOMAIN         = data.google_firebase_web_app_config.app_staging.auth_domain
-    VITE_FIREBASE_PROJECT_ID          = var.project
-    VITE_FIREBASE_APP_ID              = google_firebase_web_app.app_staging.app_id
-    VITE_FIREBASE_STORAGE_BUCKET      = data.google_firebase_web_app_config.app_staging.storage_bucket
-    VITE_FIREBASE_MESSAGING_SENDER_ID = data.google_firebase_web_app_config.app_staging.messaging_sender_id
-    VITE_FIRESTORE_DATABASE           = module.staging.database_id
-    VITE_VOICE_URL                    = replace(module.staging.voice_url, "https://", "wss://")
-  }
-}
-
 output "web_env_prod" {
   description = "VITE_* build vars for the prod web app (site onolys-app). Firestore DB is (default)."
   value = {
@@ -142,11 +113,6 @@ output "web_env_eval" {
     VITE_FIREBASE_STORAGE_BUCKET      = data.google_firebase_web_app_config.app.storage_bucket
     VITE_FIREBASE_MESSAGING_SENDER_ID = data.google_firebase_web_app_config.app.messaging_sender_id
   }
-}
-
-output "voice_url_staging" {
-  description = "Voice relay URL (staging); https, use wss:// from the browser."
-  value       = module.staging.voice_url
 }
 
 output "voice_url_prod" {

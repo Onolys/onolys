@@ -7,6 +7,11 @@ override_data {
   values = { number = "904020682480" }
 }
 
+override_data {
+  target = data.google_project.this
+  values = { number = "904020682480" }
+}
+
 variables {
   environment     = "staging"
   project         = "onolys-staging"
@@ -100,4 +105,72 @@ run "never_manage_external_identity" {
     manage_identity = true
   }
   expect_failures = [var.manage_identity]
+}
+
+run "previews_disabled_by_default" {
+  command = plan
+  assert {
+    condition     = length(google_service_account.pr_preview) == 0 && length(google_iam_workload_identity_pool_provider.github_pr) == 0 && length(google_iam_workload_identity_pool.github_pr) == 0 && output.pr_preview_service_account == null && output.pr_preview_wif_provider == null
+    error_message = "Preview identity must be opt-in."
+  }
+}
+
+run "staging_previews_limited_identity" {
+  command = plan
+  variables {
+    enable_pr_previews = true
+  }
+  assert {
+    condition     = length(google_service_account.pr_preview) == 1 && google_service_account.pr_preview[0].account_id == "pr-preview-staging"
+    error_message = "Enabled staging creates the dedicated preview service account."
+  }
+  assert {
+    condition     = google_iam_workload_identity_pool_provider.github_pr[0].attribute_condition == "assertion.repository == 'Onolys/onolys' && assertion.event_name == 'pull_request'"
+    error_message = "Preview provider must admit only same-repo pull_request events."
+  }
+  assert {
+    condition     = google_iam_workload_identity_pool_provider.github.attribute_condition == "assertion.repository=='Onolys/onolys' && assertion.ref=='refs/heads/main'"
+    error_message = "The deployer provider must stay main-only."
+  }
+  assert {
+    condition     = google_cloud_run_v2_service_iam_member.pr_preview_api[0].name == "onolys-api-staging" && google_cloud_run_v2_service_iam_member.pr_preview_api[0].role == "roles/run.developer" && google_service_account_iam_member.pr_preview_runtime[0].role == "roles/iam.serviceAccountUser"
+    error_message = "Run developer only on the api service; actAs only the api runtime SA."
+  }
+  assert {
+    condition     = toset(keys(google_project_iam_member.pr_preview)) == toset(["roles/serviceusage.serviceUsageConsumer", "roles/firebasehosting.admin"])
+    error_message = "Project-level preview roles are limited to Hosting and API usage."
+  }
+}
+
+run "preview_and_deployer_identities_use_separate_pools" {
+  command = plan
+  variables {
+    enable_pr_previews = true
+  }
+  assert {
+    condition     = google_service_account_iam_member.deployer_wif.member == "principalSet://iam.googleapis.com/projects/904020682480/locations/global/workloadIdentityPools/github/attribute.repository/Onolys/onolys"
+    error_message = "The deployer binding must match only the main-only pool."
+  }
+  assert {
+    condition     = google_service_account_iam_member.pr_preview_wif[0].member == "principalSet://iam.googleapis.com/projects/904020682480/locations/global/workloadIdentityPools/github-pr/attribute.repository/Onolys/onolys"
+    error_message = "The preview binding must match only the preview pool."
+  }
+  assert {
+    condition     = google_iam_workload_identity_pool_provider.github.workload_identity_pool_id == "github" && google_iam_workload_identity_pool_provider.github_pr[0].workload_identity_pool_id == "github-pr"
+    error_message = "A pool principalSet matches every provider in its pool: previews and the deployer must not share a pool."
+  }
+}
+
+run "eval_never_gets_previews" {
+  command = plan
+  variables {
+    environment        = "eval"
+    project            = "onolys-eval"
+    hosting_site_id    = "onolys-eval-app"
+    enable_pr_previews = true
+  }
+  assert {
+    condition     = length(google_service_account.pr_preview) == 0 && length(google_iam_workload_identity_pool_provider.github_pr) == 0 && length(google_iam_workload_identity_pool.github_pr) == 0 && length(google_project_iam_member.pr_preview) == 0 && output.pr_preview_wif_provider == null
+    error_message = "Eval must not get a preview identity."
+  }
 }
