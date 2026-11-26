@@ -19,9 +19,9 @@ export type Column<T> = {
 const ariaSort = (dir: SortDir | undefined) => (dir === "asc" ? "ascending" : dir === "desc" ? "descending" : "none");
 
 /** Fixed-layout, searchable, sortable table. Headers are plain th (no buttons); no horizontal scroll: cells wrap/ellipsize with a title, low-priority columns hide, and below 760px rows stack into cards. */
-export function DataTable<T>({ rows, columns, rowKey, rowTone, filters, searchLabel = "Search", empty = "No matching rows." }: {
+export function DataTable<T>({ rows, columns, rowKey, rowTone, filters, searchLabel = "Search", empty = "No matching rows.", ariaLabel }: {
   rows: readonly T[]; columns: readonly Column<T>[]; rowKey: (row: T) => string;
-  rowTone?: (row: T) => RowTone | undefined; filters?: ReactNode | ((ctl: { setFilter: (fn: ((row: T) => boolean) | null) => void }) => ReactNode); searchLabel?: string; empty?: string;
+  rowTone?: (row: T) => RowTone | undefined; filters?: ReactNode | ((ctl: { setFilter: (fn: ((row: T) => boolean) | null) => void }) => ReactNode); searchLabel?: string; empty?: string; ariaLabel?: string;
 }) {
   const { visible, search, setSearch, sort, toggleSort, setFilter } = useTableState(rows, columns);
   const onKey = (key: string) => (e: KeyboardEvent) => {
@@ -34,7 +34,7 @@ export function DataTable<T>({ rows, columns, rowKey, rowTone, filters, searchLa
       </label>
       {filters ? <div className="ui-table-filters">{typeof filters === "function" ? filters({ setFilter }) : filters}</div> : null}
     </div>
-    <table className="ui-table">
+    <table className="ui-table" aria-label={ariaLabel}>
       <thead><tr>
         {columns.map((c) => {
           const sortable = c.sortable !== false;

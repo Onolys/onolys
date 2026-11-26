@@ -15,7 +15,7 @@ import lines from './fixtures/lines.json';
 
 afterEach(cleanup);
 const css = (file: string) => readFileSync(new URL(file, import.meta.url), 'utf8');
-const styles = ['compare.css', 'overview.css', 'deepDive.css', 'moreAnalysis.css', 'lineView.css'].map(css).join('\n');
+const styles = ['compare.css', 'overview.css', 'metricHeatmap.css', 'leaderboard.css', 'deepDive.css', 'moreAnalysis.css', 'lineView.css'].map(css).join('\n');
 const sheet = document.createElement('style');
 sheet.textContent = styles;
 document.head.append(sheet);
@@ -49,18 +49,11 @@ it.each([320, 768, 1280])('retains accessible chart/table structure at the %ipx 
   expect(chart.querySelector('details table caption')).toBeTruthy();
   expect(chart.querySelector('details table th[scope="row"], details table th[scope="col"]')).toBeTruthy();
  });
- const heatmap = view.container.querySelector('.overview-heatmap')!;
- expect(heatmap.getAttribute('aria-describedby')).toBe('overview-heatmap-caption');
- expect(document.getElementById('overview-heatmap-caption')?.textContent).toContain('How to read:');
- const rules = [...sheet.sheet!.cssRules];
- const media = rules.filter((rule): rule is CSSMediaRule => rule.type === CSSRule.MEDIA_RULE);
- const mobile = media.filter(rule => rule.conditionText.replaceAll(' ', '') === '(max-width:760px)');
- expect(mobile.length).toBeGreaterThan(0);
- const stacked = mobile.flatMap(rule => [...rule.cssRules]).find(rule => rule.cssText.includes('.overview-leaderboard tbody'));
- expect(stacked?.cssText).toContain('display: block');
+ // Heatmap is collapsed by default (opened by toggle); the leaderboard is a DataTable with no scroll region.
+ expect(view.container.querySelector('.overview-heatmap')).toBeNull();
+ const media = [...sheet.sheet!.cssRules].filter((rule): rule is CSSMediaRule => rule.type === CSSRule.MEDIA_RULE);
+ expect(media.some(rule => rule.conditionText.replaceAll(' ', '') === '(max-width:760px)')).toBe(true);
  expect(width <= 760).toBe(width === 320);
- expect(styles).toMatch(/\.overview-row-label\s*\{[^}]*position:\s*sticky;[^}]*left:\s*0/);
- expect(styles).toMatch(/\.overview-scroll\s*\{[^}]*max-width:\s*100%;/);
  // Wide content wraps inside its container, not a fixed pixel width on a page.
  expect(styles).not.toMatch(/(?:^|[;{])\s*width:\s*\d+px/);
  expect(view.container.querySelector('[style*="width: 320px"], [style*="width: 768px"], [style*="width: 1280px"]')).toBeNull();
