@@ -48,11 +48,22 @@ it('keeps confusion totals plus multi equal aligned lines and resolves matching 
  expect(p.api.compareLineMatches).toHaveBeenCalledWith('r1',expect.objectContaining({combo:key,code:'question',metric:'question',combos:p.data.combos.map(c=>c.combo_key)}),expect.any(AbortSignal));
  expect(p.navigate).toHaveBeenLastCalledWith(expect.objectContaining({tab:'lines',session:'synthetic-s01',only:'disagree',combo:key,code:'question',metric:'question'}));
 });
+const openCode=(code:string)=>{fireEvent.click(screen.getByRole('button',{name:'Show reasoning roll-up'}));fireEvent.click(screen.getByRole('button',{name:code}));};
+it('keeps roll-up and P/R/F1 twin collapsed; reasoning loads only when a code is expanded',async()=>{
+ const p=props();render(<DeepDive {...p}/>);
+ expect(screen.queryByRole('button',{name:'question'})).toBeNull();expect(screen.queryByRole('table',{name:'P/R/F1 data'})).toBeNull();
+ fireEvent.click(screen.getByRole('button',{name:'Show reasoning roll-up'}));expect(p.api.compareReasoning).not.toHaveBeenCalled();
+ expect(screen.getByRole('button',{name:'question'}).getAttribute('aria-expanded')).toBe('false');
+ fireEvent.click(screen.getByRole('button',{name:'question'}));await act(async()=>{});
+ expect(p.api.compareReasoning).toHaveBeenCalledWith('r1',expect.objectContaining({code:'question'}),expect.any(AbortSignal));
+ expect(p.api.compareReasoning.mock.calls.every(c=>c[1].code==='question')).toBe(true);
+ const prf=screen.getAllByRole('button',{name:'Show data'}).find(b=>b.closest('.deep-prf'))!;fireEvent.click(prf);expect(screen.getByRole('table',{name:'P/R/F1 data'}).textContent).toContain('F1');
+});
 it('loads reasoning on demand, preserves verbatim and withheld text and follows cursors',async()=>{
  const p=props();const group=reasoning.groups.find(group=>group.code==='question')!;
- p.api.compareReasoning.mockResolvedValueOnce({...reasoning,groups:[{...group,snippets:group.snippets.slice(0,1)}],next_cursor:'page2'}).mockResolvedValueOnce({...reasoning,groups:[{...group,snippets:group.snippets.slice(1,2)}],next_cursor:null});
- render(<DeepDive {...p}/>);fireEvent.click(screen.getByRole('button',{name:'Load reasoning question A'}));
- expect(await screen.findByText('withheld')).toBeTruthy();fireEvent.click(screen.getByRole('button',{name:'Load more'}));expect(await screen.findByText(group.snippets[1].rationale)).toBeTruthy();
+ p.api.compareReasoning.mockImplementation(async(_r:string,o:{combo?:string;cursor?:string})=>o.combo!==p.data.combos[0].combo_key?{...reasoning,groups:[],next_cursor:null}:o.cursor==='page2'?{...reasoning,groups:[{...group,snippets:group.snippets.slice(1,2)}],next_cursor:null}:{...reasoning,groups:[{...group,snippets:group.snippets.slice(0,1)}],next_cursor:'page2'});
+ render(<DeepDive {...p}/>);openCode('question');
+ expect(await screen.findByText('withheld')).toBeTruthy();fireEvent.click(await screen.findByRole('button',{name:'Load more'}));expect(await screen.findByText(group.snippets[1].rationale)).toBeTruthy();
  expect(p.api.compareReasoning).toHaveBeenLastCalledWith('r1',expect.objectContaining({code:'question',combo:p.data.combos[0].combo_key,cursor:'page2'}),expect.any(AbortSignal));
 });
 it('defaults to three available Count errors, refetches picker changes and caches effective subsets',async()=>{
@@ -70,11 +81,11 @@ it('defaults to three available Count errors, refetches picker changes and cache
 it('loads Human gold notes without a combo filter and retains verbatim notes over pages',async()=>{
  const p=props();
  const note={session_id:'synthetic-s01',turn_id:'t7',note:'Saved human note.\nSecond line.'};
- p.api.compareReasoning.mockResolvedValueOnce({...reasoning,groups:[{code:'affirm',snippets:[],human_notes:[note]}],next_cursor:'notes2'}).mockResolvedValueOnce({...reasoning,groups:[{code:'affirm',snippets:[],human_notes:[{...note,turn_id:'t9',note:'Another saved note'}]}],next_cursor:null});
- render(<DeepDive {...p}/>);fireEvent.click(screen.getByRole('button',{name:'Load human notes affirm'}));
+ p.api.compareReasoning.mockImplementation(async(_r:string,o:{combo?:string;cursor?:string})=>o.combo?{...reasoning,groups:[],next_cursor:null}:o.cursor==='notes2'?{...reasoning,groups:[{code:'affirm',snippets:[],human_notes:[{...note,turn_id:'t9',note:'Another saved note'}]}],next_cursor:null}:{...reasoning,groups:[{code:'affirm',snippets:[],human_notes:[note]}],next_cursor:'notes2'});
+ render(<DeepDive {...p}/>);openCode('affirm');
  expect((await screen.findByText(/Saved human note/)).textContent).toBe(note.note);
- expect(p.api.compareReasoning).toHaveBeenLastCalledWith('r1',expect.objectContaining({code:'affirm',combo:undefined}),expect.any(AbortSignal));
- fireEvent.click(screen.getByRole('button',{name:'Load more'}));await screen.findByText('Another saved note');expect(screen.getByText(/Saved human note/).textContent).toBe(note.note);
+ expect(p.api.compareReasoning).toHaveBeenCalledWith('r1',expect.objectContaining({code:'affirm',combo:undefined}),expect.any(AbortSignal));
+ fireEvent.click(await screen.findByRole('button',{name:'Load more'}));await screen.findByText('Another saved note');expect(screen.getByText(/Saved human note/).textContent).toBe(note.note);
 });
 it('shows no human reference and no charts for unlabelled runs',()=>{
  const data=deep();data.has_human=false;const view=render(<DeepDive {...props(data)}/>);

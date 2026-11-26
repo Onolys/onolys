@@ -1,46 +1,20 @@
 import { useEffect, useRef, useState } from 'react';
 import { EvalLink } from './CompareLink';
-import type { CompareDeepDive, CompareOptions, NA, Snippet } from './compareApi';
+import type { CompareDeepDive, CompareOptions } from './compareApi';
 import type { CompareTabProps } from './compareTypes';
 import { GlobalsDotPlot } from './charts/GlobalsDotPlot';
 import { MissBuckets } from './charts/MissBuckets';
 import { CountBars } from './charts/CountBars';
 import { PrfTable } from './charts/PrfTable';
 import { ConfusionGrid } from './charts/ConfusionGrid';
+import { ReasoningRollup } from './charts/ReasoningRollup';
 import type { DotSeries } from './charts/dotPlotLayout';
 import { ComboSelector, pairedSessions } from './charts/ComboSelector';
 import { failedCombos } from './failedCombos';
 import './deepDive.css';
 
-const unavailable=(na:NA|undefined)=>`n/a${na?` - ${na.reason}`:''}`;
 const metricNames:Record<string,string>={cct:'Cultivating change talk',sst:'Softening sustain talk',partnership:'Partnership',empathy:'Empathy'};
 type Props=CompareTabProps<CompareDeepDive>;
-function ReasoningPanel({code,combo,letter,count,api,runId,selected}:{code:string;combo?:string;letter:string;count:number|undefined;api:Props['api'];runId:string;selected:string[]}) {
- const [snippets,setSnippets]=useState<Snippet[]>([]);
- const [notes,setNotes]=useState<{session_id:string;turn_id:string;note:string}[]>([]);
- const [cursor,setCursor]=useState<string|null>();
- const [loading,setLoading]=useState(false);
- const [error,setError]=useState<string>();
- const pending=useRef<AbortController|null>(null);
- useEffect(()=>()=>pending.current?.abort(),[]);
- const load=async()=>{
-  if(pending.current)return;
-  const controller=new AbortController();pending.current=controller;setLoading(true);setError(undefined);
-  try {
-   const page=await api.compareReasoning(runId,{combos:selected,code,combo,cursor:cursor??undefined},controller.signal);
-   if(!controller.signal.aborted){setSnippets(previous=>[...previous,...page.groups.filter(group=>group.code===code).flatMap(group=>group.snippets).filter(snippet=>snippet.combo_key===combo)]);setNotes(previous=>[...previous,...page.groups.filter(group=>group.code===code).flatMap(group=>group.human_notes??[])]);setCursor(page.next_cursor);}
-  }catch(reason){if(!controller.signal.aborted)setError(reason instanceof Error?reason.message:'Could not load reasoning.');}
-  finally{if(!controller.signal.aborted){setLoading(false);pending.current=null;}}
- };
- return <section className="deep-reasoning-panel" aria-label={`${code} ${letter} reasoning`}><h5>{combo?`${letter} · ${count===undefined?'n/a':count} snippets`:'Human notes'}</h5>
-  {!combo&&notes.map((note,index)=><article key={index}><p>{note.session_id} · {note.turn_id}</p><p className="deep-verbatim">{note.note===''?'withheld':note.note}</p></article>)}
-  {!combo&&cursor===null&&!notes.length&&<p>No gold notes present</p>}
-  {snippets.map((snippet,index)=><article key={index}><p>{snippet.session_id} · repeat {snippet.repeat}{snippet.turn_id&&` · ${snippet.turn_id}`}</p><p className="deep-verbatim">{snippet.rationale===''?'withheld':snippet.rationale}</p>{snippet.quote!==null&&snippet.quote!==undefined&&<blockquote>{snippet.quote}</blockquote>}{snippet.evidence?.map((evidence,i)=><blockquote key={i}>{evidence.turn_id}: {evidence.quote}</blockquote>)}</article>)}
-  {loading&&<p role="status">Loading reasoning…</p>}{error&&<p role="alert">{error}</p>}
-  {(cursor!==null||error)&&<button type="button" disabled={loading} aria-label={error?`Retry reasoning ${code} ${letter}`:cursor===undefined?combo?`Load reasoning ${code} ${letter}`:`Load human notes ${code}`:undefined} onClick={()=>void load()}>{error?'Retry':cursor===undefined?combo?'Load reasoning':'Load human notes':'Load more'}</button>}
- </section>;
-}
-
 function LineAgreement({data,legend,runId,navigate,state,api,series}:Props&{series:DotSeries[]}) {
  const selected=data.combos.map(combo=>combo.combo_key);
  const letter=(key:string)=>legend.find(item=>item.combo.combo_key===key)?.letter??key;
@@ -89,7 +63,7 @@ export function DeepDive(props:Props) {
    })}</div><MissBuckets globals={globals.map(([metric,cells])=>({metric,title:metricNames[metric]??metric,cells}))} series={series}/></section>
    <section><h3>Counts per code</h3><CountBars codes={codes} human={data.counts.human} cells={data.counts.cells} bias={data.counts.bias_pct} series={series} onSection={(code,node)=>{sectionRefs.current[code]=node;}}/></section>
    <LineAgreement key={selected.join(',')} {...props} series={series}/>
-   <section className="deep-reasoning"><h3>Reasoning roll-up</h3><p>Snippets load on request, up to 50 per page. Empty saved reasoning is shown as withheld.</p>{codes.map(code=><section key={code}><h4>{code}</h4><div className="deep-reasoning-columns"><section aria-label={`${code} Human`}><h5>Human</h5><p>Count: {data.counts.human?.[code]?.value??unavailable(data.counts.human?.[code]?.na)} · n={data.counts.human?.[code]?.n??0}</p><ReasoningPanel key={`${code}-human-${selected.join(',')}`} code={code} letter="Human" count={undefined} api={api} runId={runId} selected={selected}/></section>{shown.map(combo=><ReasoningPanel key={`${code}-${combo.combo_key}-${selected.join(',')}`} code={code} combo={combo.combo_key} letter={letter(combo.combo_key)} count={data.rationale_counts[code]?.[combo.combo_key]} api={api} runId={runId} selected={selected}/>)}</div></section>)}</section>
+   <ReasoningRollup codes={codes} human={data.counts.human} rationaleCounts={data.rationale_counts} combos={shown.map(combo=>combo.combo_key)} letter={letter} api={api} runId={runId} selected={selected}/>
   </>}
  </div>;
 }
