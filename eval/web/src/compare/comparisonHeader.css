@@ -1,0 +1,7 @@
+.compare-header { display: grid; gap: .75rem; margin-block: .5rem 1rem; min-width: 0; }
+.compare-title-row { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem 1rem; min-width: 0; }
+.compare-title-row h1 { margin: 0; font-size: 1.5rem; line-height: 1.2; min-width: 0; overflow-wrap: anywhere; }
+.compare-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr)); gap: .75rem; min-width: 0; }
+.compare-cards .ui-summary-value { font-size: 1.25rem; display: grid; gap: .35rem; justify-items: start; }
+.compare-cards .ui-summary-sub { display: grid; gap: .3rem; justify-items: start; }
+.compare-chips { display: flex; flex-wrap: wrap; gap: .3rem; min-width: 0; }

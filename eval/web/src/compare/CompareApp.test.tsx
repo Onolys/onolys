@@ -15,21 +15,22 @@ it('renders overview header, cohorts and stable letters beyond Z',async()=>{
  const client={...api(),compareOverview:vi.fn().mockResolvedValue(partial)};
  render(<CompareApp api={client} runId="r1" state={state()} navigate={vi.fn()}/>);
  expect(screen.getByRole('status').textContent).toContain('Loading');
- await screen.findByRole('heading',{name:'Synthetic lines'});
- expect(screen.getByText('2 sessions, 2 repeats')).toBeTruthy();
- expect(screen.getByText('Human labels: all counts, 4 globals')).toBeTruthy();
+ await screen.findByRole('heading',{name:'Compare - Synthetic lines'});
+ expect(screen.getByText('2 attempts each · 2 combos')).toBeTruthy();
+ expect(screen.getByText('All 10 counts')).toBeTruthy();
+ expect(screen.getByText('4 globals')).toBeTruthy();
  expect(screen.getByText(/Partial — 11 of 15 runs done, 2 skipped/)).toBeTruthy();
- expect(screen.getByText('Coverage: 3 of 8 runs done, 2 skipped · partial')).toBeTruthy();
+ expect(screen.getByText('3 of 8 runs done, 2 skipped')).toBeTruthy();
  expect(screen.getByText(/Gemini skipped after 5 failures in a row/)).toBeTruthy();
- expect(screen.getByText(/s1.*cancelled/)).toBeTruthy();
+ expect(screen.getByText('s1: cancelled')).toBeTruthy();
  expect(screen.getByRole('link',{name:'Back to run'}).getAttribute('href')).toBe('?run=r1');
- expect(screen.getByText('gi: paired 2 of 2')).toBeTruthy();
+ expect(screen.getByText('20 of 20 complete')).toBeTruthy();
  expect([0,25,26,27,51,52].map(comboLetter)).toEqual(['A','Z','AA','AB','AZ','BA']);
 });
 it('navigates tabs by arrow key, caches completed tabs, and keeps tab errors local with Retry',async()=>{
  const client=api();client.compareDeepDive.mockRejectedValueOnce(new Error('deep failed')).mockResolvedValue(deep);
  const navigate=vi.fn(); const view=render(<CompareApp api={client} runId="r1" state={state()} navigate={navigate}/>);
- await screen.findByRole('heading',{name:'Synthetic lines'});
+ await screen.findByRole('heading',{name:'Compare - Synthetic lines'});
  fireEvent.keyDown(screen.getByRole('tab',{name:'Overview'}),{key:'ArrowRight'});
  expect(navigate).toHaveBeenLastCalledWith(expect.objectContaining({tab:'deep'}));
  view.rerender(<CompareApp api={client} runId="r1" state={state('deep')} navigate={navigate}/>);
@@ -75,10 +76,10 @@ it('uses saved progress for the cancelled partial badge while retaining AI cover
  const partial={...overview,header:{...overview.header,progress:{done_units:11,total_units:15,skipped_units:2}},coverage:{...overview.coverage,eval_status:'partial',cancelled_at,runs_done:7,runs_total:10,runs_skipped:1}};
  const client={...api(),compareOverview:vi.fn().mockResolvedValue(partial)};
  const view=render(<CompareApp api={client} runId="r1" state={state()} navigate={vi.fn()}/>);
- await screen.findByRole('heading',{name:'Synthetic lines'});
+ await screen.findByRole('heading',{name:'Compare - Synthetic lines'});
  const badge=view.container.querySelector('[data-partial-badge]')!;
  expect(badge.textContent).toContain(`Partial — cancelled at ${new Date(cancelled_at).toLocaleString()}, 11 of 15 runs done, 2 skipped`);
- expect(screen.getByText('Coverage: 7 of 10 runs done, 1 skipped · partial')).toBeTruthy();
+ expect(screen.getByText('7 of 10 runs done, 1 skipped')).toBeTruthy();
 });
 it('rejects malformed nested tab payloads with local Retry and keeps other tabs usable',async()=>{
  const {default:lines}=await import('./fixtures/lines.json');let lineAttempts=0;
