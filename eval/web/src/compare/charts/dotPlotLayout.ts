@@ -1,4 +1,3 @@
-import { comboShape, type ComboShape } from '../../ui/chart/theme';
 import { SCORE_TICKS, scoreScale } from '../../ui/chart/scales';
 
 export interface DotSeries { key: string; letter: string; index: number; label: string }
@@ -46,19 +45,3 @@ export function dotPlotLayout({ rows, series, width = WIDTH }: { rows: DotRowInp
  return { width, height: AXIS_TOP + rows.length * rowHeight + 6, gutter: GUTTER, plotLeft: PLOT_LEFT,
   ticks: SCORE_TICKS.map(value => ({ value, x: scale(value), labelY: 16 })), rows: placed };
 }
-
-/** SVG path of a combo shape centred on (cx, cy) in a SYMBOL_SIZE box. */
-export function symbolPath(shape: ComboShape, cx: number, cy: number, size = SYMBOL_SIZE): string {
- const r = size / 2, p = (x: number, y: number) => `${+(cx + x * r).toFixed(2)} ${+(cy + y * r).toFixed(2)}`;
- const poly = (pts: [number, number][]) => `M${pts.map(([x, y]) => p(x, y)).join('L')}Z`;
- switch (shape) {
-  case 'square': return poly([[-.85, -.85], [.85, -.85], [.85, .85], [-.85, .85]]);
-  case 'triangle': return poly([[0, -1], [1, .85], [-1, .85]]);
-  case 'diamond': return poly([[0, -1], [1, 0], [0, 1], [-1, 0]]);
-  case 'cross': return poly([[-.35, -1], [.35, -1], [.35, -.35], [1, -.35], [1, .35], [.35, .35], [.35, 1], [-.35, 1], [-.35, .35], [-1, .35], [-1, -.35], [-.35, -.35]]);
-  case 'star': return poly([[0, -1], [.3, -.35], [1, -.3], [.48, .15], [.62, .9], [0, .52], [-.62, .9], [-.48, .15], [-1, -.3], [-.3, -.35]]);
-  case 'hexagon': return poly([[0, -1], [.9, -.5], [.9, .5], [0, 1], [-.9, .5], [-.9, -.5]]);
-  default: return `M${p(-1, 0)}A${r} ${r} 0 1 0 ${p(1, 0)}A${r} ${r} 0 1 0 ${p(-1, 0)}Z`;
- }
-}
-export const shapeOf = (index: number) => comboShape(index);

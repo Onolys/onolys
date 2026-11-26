@@ -1,10 +1,10 @@
 import { Chip } from '../../ui/Chip';
 import { ChartFrame } from '../../ui/ChartFrame';
-import { CHART_COLORS, comboColor } from '../../ui/chart/theme';
-import { ComboTag } from '../../ui/ComboTag';
+import { CHART_COLORS, comboColor, comboShape } from '../../ui/chart/theme';
+import { ComboTag, SHAPES } from '../../ui/ComboTag';
 import { DataTable, type Column } from '../../ui/DataTable';
 import type { CompareCell, CompareDeepDive } from '../compareApi';
-import { dotPlotLayout, ROW_PAD, shapeOf, SYMBOL_SIZE, symbolPath, type DotRowInput, type DotSeries } from './dotPlotLayout';
+import { dotPlotLayout, ROW_PAD, SYMBOL_SIZE, type DotRowInput, type DotSeries } from './dotPlotLayout';
 import '../deepDive.css';
 
 type Dot = CompareDeepDive['globals']['dots'][number];
@@ -54,7 +54,7 @@ export function GlobalsDotPlot({ metric, title, dots, series, cells }: { metric:
       {row.lanes.map(lane => <text key={lane.key} x={lane.letterX} y={lane.y} dy=".35em" textAnchor="end" fontSize="10" fontWeight="700" fill={comboColor(lane.index)}>{lane.letter}</text>)}
       {row.human && <line x1={row.human.x} x2={row.human.x} y1={row.top + ROW_PAD / 2} y2={row.top + row.height - ROW_PAD / 2} stroke={CHART_COLORS.ink} strokeOpacity=".35" strokeDasharray="2 3"/>}
       {row.human && <circle data-global-dot="human" cx={row.human.x} cy={row.human.y} r={SYMBOL_SIZE / 2} fill="#fff" stroke={CHART_COLORS.ink} strokeWidth="2"><title>{`${row.labelFull}, Human: ${row.human.value}`}</title></circle>}
-      {row.lanes.flatMap(lane => lane.symbols.map(sym => <path key={`${lane.key}-${sym.repeat}`} data-global-dot={lane.key} d={symbolPath(shapeOf(lane.index), sym.x, sym.y)} fill={comboColor(lane.index)}><title>{`${row.labelFull}, ${lane.letter}, repeat ${sym.repeat + 1}: ${sym.value}`}</title></path>))}
+      {row.lanes.flatMap(lane => lane.symbols.map(sym => <path key={`${lane.key}-${sym.repeat}`} data-global-dot={lane.key} d={SHAPES[comboShape(lane.index)]} transform={`translate(${sym.x - SYMBOL_SIZE / 2} ${sym.y - SYMBOL_SIZE / 2}) scale(${SYMBOL_SIZE / 12})`} fill={comboColor(lane.index)}><title>{`${row.labelFull}, ${lane.letter}, repeat ${sym.repeat + 1}: ${sym.value}`}</title></path>))}
      </g>)}
     </svg>}
    <div className="deep-miss-chips">{series.map(s => <MissChip key={s.key} s={s} cell={cells[s.key]}/>)}</div>

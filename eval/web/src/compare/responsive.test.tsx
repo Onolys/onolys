@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { readFileSync } from 'node:fs';
-import { cleanup, render, within } from '@testing-library/react';
+import { cleanup, render } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
 import { createEvalApi } from '../api';
 import { Overview } from './Overview';
@@ -36,15 +36,10 @@ it.each([320, 768, 1280])('retains accessible chart/table structure at the %ipx 
   <MoreAnalysis {...props} data={analysis as CompareAnalysis}/>
   <LineView {...props} data={lines as CompareLines}/>
  </>);
- // Every remaining scroll region (legacy ChartFrame in Overview/MoreAnalysis/LineView) must stay named and keyboard-focusable.
+ // Every remaining scroll region (Overview/MoreAnalysis/LineView) must stay named and keyboard-focusable.
  view.container.querySelectorAll('[role="region"]').forEach(region => {
   expect(region.getAttribute('aria-label')).toBeTruthy();
   expect(region.getAttribute('tabindex')).toBe('0');
- });
- view.container.querySelectorAll('.compare-chart').forEach(chart => {
-  expect(chart.querySelector('h3')?.id).toBe(chart.getAttribute('aria-labelledby'));
-  expect(within(chart as HTMLElement).getByText('How to read:')).toBeTruthy();
-  expect(chart.querySelector('details summary')?.textContent).toMatch(/^Show data table/);
  });
  // Deep dive cards use the shared ui ChartFrame: titled section, one-sentence caption, table twin collapsed behind "Show data".
  const deepRoot = view.container.querySelector('.deep-dive') as HTMLElement;

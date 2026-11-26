@@ -3,6 +3,8 @@ import { cleanup, fireEvent, render, screen, within } from '@testing-library/rea
 import { afterEach, expect, it } from 'vitest';
 import type { CompareCell, CompareDeepDive } from '../compareApi';
 import deepFixture from '../fixtures/deepDive.json';
+import { comboShape } from '../../ui/chart/theme';
+import { SHAPES } from '../../ui/ComboTag';
 import { GlobalsDotPlot } from './GlobalsDotPlot';
 import { dotPlotLayout, LABEL_CHAR_PX, SYMBOL_SIZE, type DotSeries } from './dotPlotLayout';
 afterEach(cleanup);
@@ -72,6 +74,19 @@ it('renders a card per global with title, one-sentence caption, legend, chips fr
   expect(chips[0].textContent).toContain(`±1 ${Math.round((cc.within_1 ?? 0) * 100)}%`);
   expect(view.container.querySelector('svg[role="img"][aria-label^="Cultivating change talk"]')).toBeTruthy();
   expect(view.container.querySelectorAll('[data-global-dot]').length).toBe(dp.reduce((n, d) => n + d.values.length, 0) + new Set(dp.filter(d => d.human !== null).map(d => d.session_id)).size);
+});
+it('draws each combo dot with the shared ComboTag shape for its index', () => {
+  const data = deep();
+  const keys = data.combos.map(c => c.combo_key);
+  const dp = data.globals.dots.filter(d => d.metric === 'cct');
+  const s: DotSeries[] = keys.map((key, index) => ({ key, letter: String.fromCharCode(65 + index), index, label: key }));
+  const view = render(<GlobalsDotPlot metric="cct" title="T" dots={dp} series={s} cells={data.globals.cells.cct} />);
+  let checked = 0;
+  s.forEach(({ key, index }) => view.container.querySelectorAll(`path[data-global-dot="${key}"]`).forEach(p => {
+    expect(p.getAttribute('d')).toBe(SHAPES[comboShape(index)]);
+    checked++;
+  }));
+  expect(checked).toBeGreaterThan(0);
 });
 it('shows unavailable combos as a muted chip with the server reason instead of plain n/a text', () => {
   const data = deep(); const keys = data.combos.map(c => c.combo_key);
