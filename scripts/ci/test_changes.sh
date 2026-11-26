@@ -32,6 +32,9 @@ run false "core=false oneshot=false miti=false api=true eval=false eval-backend=
 touch "$T/web/package.json"; mkdir -p "$T/infra"   # web (package.json) and infra (dir) now exist
 run false "core=false oneshot=false miti=false api=false eval=false eval-backend=false eval-web=false frontend=false web=true infra=false" web/src/a.ts
 run false "core=false oneshot=false miti=false api=false eval=false eval-backend=false eval-web=false frontend=false web=false infra=true" infra/main.tf
+run false "core=false oneshot=false miti=false api=false eval=false eval-backend=false eval-web=false frontend=false web=false infra=true" infra/isolated-environment/terraform-ci.tf
+run false "core=false oneshot=false miti=false api=false eval=false eval-backend=false eval-web=false frontend=false web=false infra=true" infra/modules/terraform-ci/main.tf
+run false "core=false oneshot=false miti=true api=true eval=false eval-backend=false eval-web=false frontend=true web=true infra=true" scripts/ci/tf_plan_summary.py
 # generated-type inputs (api/openapi.json, report.schema.json) trigger the web gen:api staleness check
 run false "core=false oneshot=false miti=false api=true eval=false eval-backend=false eval-web=false frontend=false web=true infra=false" api/openapi.json
 run false "core=false oneshot=false miti=true api=true eval=false eval-backend=false eval-web=false frontend=false web=true infra=false" engines/miti/src/onolys_miti/data/report.schema.json

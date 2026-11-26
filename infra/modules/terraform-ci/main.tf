@@ -78,6 +78,9 @@ resource "google_project_iam_custom_role" "plan_metadata" {
     "datastore.indexes.list",
     "resourcemanager.projects.get",
     "resourcemanager.projects.getIamPolicy",
+    "firebase.projects.get",
+    "firebase.clients.get",
+    "firebase.clients.list",
   ]
 }
 

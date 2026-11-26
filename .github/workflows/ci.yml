@@ -90,6 +90,8 @@ jobs:
         run: bash scripts/ci/test_pr_preview.sh
       - name: actionlint (workflows)
         run: bash <(curl -sSfL https://raw.githubusercontent.com/rhysd/actionlint/v1.7.7/scripts/download-actionlint.bash) 1.7.7 && ./actionlint -color
+      - name: Test terraform plan/apply workflow and helpers
+        run: python3 scripts/ci/test_terraform_pipeline.py
       - name: Test CI tiers and required gate
         run: python3 scripts/ci/test_ci_gate.py
 
@@ -592,6 +594,14 @@ jobs:
       - run: terraform fmt -check -recursive
       - run: terraform init -backend=false
       - run: terraform validate
+      # Offline: the isolated root (staging/eval) and bootstrap, plus mocked-provider plans. Plans against real state run in terraform.yml.
+      - name: Validate and test the isolated-environment root and bootstrap
+        run: |
+          for d in isolated-environment isolated-environment/bootstrap; do
+            terraform -chdir="$d" init -backend=false -lockfile=readonly -input=false
+            terraform -chdir="$d" validate
+          done
+          terraform -chdir=isolated-environment test
       - uses: astral-sh/setup-uv@v5
         with:
           enable-cache: true

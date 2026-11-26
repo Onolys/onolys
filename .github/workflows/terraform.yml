@@ -1,0 +1,392 @@
+name: terraform
+
+# Terraform plan on PRs, apply on merge (docs/reference/infra-pipeline.md). Nobody runs `terraform apply` by hand.
+#   pull_request  plan prod (legacy infra/), staging and eval (infra/isolated-environment) and post one PR comment.
+#   push to main  plan again, then apply the SAME saved plan: staging and eval automatically, prod only after approval of the
+#                 GitHub Environment `production` (required reviewers; an owner setting).
+# Repository and logs are public: nothing prints plan attribute values (see scripts/ci/tf_plan_summary.py).
+# fmt/validate/terraform test run in ci.yml (job `infra`, part of the `required` gate).
+on:
+  pull_request:
+    paths:
+      - "infra/**"
+      - ".github/workflows/terraform.yml"
+      - "scripts/ci/tf_*.py"
+  push:
+    branches: [main]
+    paths:
+      - "infra/**"
+      - ".github/workflows/terraform.yml"
+      - "scripts/ci/tf_*.py"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  TF_IN_AUTOMATION: "true"
+  TF_INPUT: "0"
+  TF_PLUGIN_CACHE_DIR: ${{ github.workspace }}/.terraform-plugin-cache
+
+jobs:
+  plan:
+    # Same-repo only: fork PRs get no OIDC token and must never reach cloud identities.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    # CI budget: every job finishes within 5 minutes (plugin cache, readonly lockfile, one job per environment).
+    timeout-minutes: 5
+    concurrency:
+      group: terraform-plan-${{ matrix.env }}-${{ github.ref }}
+      cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+    permissions:
+      contents: read
+      id-token: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - env: prod
+            prefix: PROD
+            root: infra
+            backend: ""
+            varfile: ""
+            project: onolys
+            bucket: onolys-tfstate
+            tfroot: legacy
+          - env: staging
+            prefix: STAGING
+            root: infra/isolated-environment
+            backend: examples/backend-staging.hcl.example
+            varfile: examples/environment-staging.tfvars.example
+            project: onolys-staging
+            bucket: onolys-staging-tfstate
+            tfroot: isolated
+          - env: eval
+            prefix: EVAL
+            root: infra/isolated-environment
+            backend: examples/backend-eval.hcl.example
+            varfile: examples/environment-eval.tfvars.example
+            project: onolys-eval
+            bucket: onolys-eval-tfstate
+            tfroot: isolated
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - id: cfg
+        env:
+          WIF: ${{ vars[format('TF_{0}_PLAN_WIF_PROVIDER', matrix.prefix)] }}
+          SA: ${{ vars[format('TF_{0}_PLAN_SA', matrix.prefix)] }}
+        run: |
+          if [ -n "$WIF" ] && [ -n "$SA" ]; then
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::TF_${{ matrix.prefix }}_PLAN_WIF_PROVIDER / TF_${{ matrix.prefix }}_PLAN_SA are unset: pipeline not bootstrapped for ${{ matrix.env }}; skipping."
+            python3 scripts/ci/tf_plan_summary.py --env "${{ matrix.env }}" --status unconfigured > "$RUNNER_TEMP/summary.md"
+          fi
+      - if: steps.cfg.outputs.ok == 'true'
+        uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3
+        with:
+          terraform_version: 1.9.8
+          terraform_wrapper: false
+      - if: steps.cfg.outputs.ok == 'true'
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: .terraform-plugin-cache
+          key: tf-plugins-${{ runner.os }}-${{ hashFiles(format('{0}/.terraform.lock.hcl', matrix.root)) }}
+      - if: steps.cfg.outputs.ok == 'true'
+        id: auth
+        uses: google-github-actions/auth@c200f3691d83b41bf9bbd8638997a462592937ed # v2
+        with:
+          workload_identity_provider: ${{ vars[format('TF_{0}_PLAN_WIF_PROVIDER', matrix.prefix)] }}
+          service_account: ${{ vars[format('TF_{0}_PLAN_SA', matrix.prefix)] }}
+      - name: Read live deploy-managed inputs (git_sha, llm_*) so the plan never reverts a deploy
+        if: steps.cfg.outputs.ok == 'true'
+        run: >
+          python3 scripts/ci/tf_live_inputs.py --root "${{ matrix.tfroot }}" --env "${{ matrix.env }}"
+          --project "${{ matrix.project }}" --out "${{ matrix.root }}/live.auto.tfvars.json"
+      - name: terraform init and plan (output to a file, never to the public log)
+        id: plan
+        if: steps.cfg.outputs.ok == 'true'
+        working-directory: ${{ matrix.root }}
+        env:
+          BACKEND: ${{ matrix.backend }}
+          VARFILE: ${{ matrix.varfile }}
+        run: |
+          set +e
+          mkdir -p "$TF_PLUGIN_CACHE_DIR"
+          backend=(); [ -n "$BACKEND" ] && backend=("-backend-config=$BACKEND")
+          args=(-input=false -no-color -lock=false -parallelism=30 -detailed-exitcode -out=tfplan)
+          [ -n "$VARFILE" ] && args+=("-var-file=$VARFILE")
+          terraform init -input=false -no-color -lockfile=readonly "${backend[@]}" > "$RUNNER_TEMP/tf.log" 2>&1
+          rc=$?
+          if [ "$rc" -eq 0 ]; then terraform plan "${args[@]}" >> "$RUNNER_TEMP/tf.log" 2>&1; rc=$?; fi
+          if [ "$rc" -eq 1 ]; then
+            echo "status=failed" >> "$GITHUB_OUTPUT"
+            python3 "$GITHUB_WORKSPACE/scripts/ci/tf_plan_summary.py" --env "${{ matrix.env }}" --status failed --log "$RUNNER_TEMP/tf.log" > "$RUNNER_TEMP/summary.md"
+          else
+            echo "status=ok" >> "$GITHUB_OUTPUT"
+            echo "changes=$([ "$rc" -eq 2 ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+            terraform show -json tfplan > "$RUNNER_TEMP/plan.json"
+            python3 "$GITHUB_WORKSPACE/scripts/ci/tf_plan_summary.py" --env "${{ matrix.env }}" --status ok --plan-json "$RUNNER_TEMP/plan.json" > "$RUNNER_TEMP/summary.md"
+          fi
+          exit 0
+      - name: Summary
+        if: always()
+        run: |
+          [ -f "$RUNNER_TEMP/summary.md" ] && { cat "$RUNNER_TEMP/summary.md"; cat "$RUNNER_TEMP/summary.md" >> "$GITHUB_STEP_SUMMARY"; }
+          mkdir -p tf-summary && cp "$RUNNER_TEMP/summary.md" "tf-summary/${{ matrix.env }}.md" || true
+      - if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: tf-summary-${{ matrix.env }}
+          path: tf-summary/
+          retention-days: 3
+          if-no-files-found: ignore
+      # Main only: the saved plan goes to the PRIVATE state bucket (plans/), never to a public artifact; only its hash travels
+      # in an artifact so the apply job can prove it applies exactly what this job planned.
+      - name: Save the plan to the private state bucket and record its hash
+        if: steps.plan.outputs.status == 'ok' && github.event_name != 'pull_request'
+        env:
+          CHANGES: ${{ steps.plan.outputs.changes }}
+          BUCKET: ${{ matrix.bucket }}
+          ENVNAME: ${{ matrix.env }}
+        run: |
+          set -euo pipefail
+          object="plans/${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${ENVNAME}.tfplan"
+          sha=""
+          if [ "$CHANGES" = "true" ]; then
+            sha="$(sha256sum "${{ matrix.root }}/tfplan" | cut -d' ' -f1)"
+            gcloud storage cp "${{ matrix.root }}/tfplan" "gs://${BUCKET}/${object}" --quiet
+          fi
+          mkdir -p tf-meta
+          printf '{"env":"%s","changes":%s,"sha256":"%s","object":"%s"}\n' "$ENVNAME" "$CHANGES" "$sha" "$object" > "tf-meta/${ENVNAME}.json"
+      - if: steps.plan.outputs.status == 'ok' && github.event_name != 'pull_request'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: tf-meta-${{ matrix.env }}
+          path: tf-meta/
+          retention-days: 3
+      - name: Fail the job if the plan failed
+        if: steps.plan.outputs.status == 'failed'
+        run: |
+          echo "::error::terraform plan failed for ${{ matrix.env }} (redacted excerpt above)."
+          exit 1
+
+  comment:
+    needs: plan
+    if: always() && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          pattern: tf-summary-*
+          path: tf-summary
+          merge-multiple: true
+      - name: Create or update the single plan comment
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
+        with:
+          script: |
+            const fs = require('fs');
+            const marker = '<!-- terraform-plan-comment -->';
+            const order = ['prod', 'staging', 'eval'];
+            const parts = [];
+            for (const env of order) {
+              const file = `tf-summary/${env}.md`;
+              if (fs.existsSync(file)) parts.push(fs.readFileSync(file, 'utf8').trim());
+            }
+            if (!parts.length) { core.notice('no plan summaries to post'); return; }
+            const run = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            let body = `${marker}\n### Terraform plan\n\n${parts.join('\n\n---\n\n')}\n\n_Resource addresses and actions only; values are never posted. Run ${run}. Merging applies staging and eval automatically; prod waits for approval of the \`production\` environment._`;
+            if (body.length > 64000) body = body.slice(0, 64000) + '\n\n...(truncated)';
+            const { owner, repo } = context.repo;
+            const issue_number = context.issue.number;
+            const comments = await github.paginate(github.rest.issues.listComments, { owner, repo, issue_number, per_page: 100 });
+            const mine = comments.find(c => c.user.type === 'Bot' && c.body && c.body.includes(marker));
+            if (mine) await github.rest.issues.updateComment({ owner, repo, comment_id: mine.id, body });
+            else await github.rest.issues.createComment({ owner, repo, issue_number, body });
+
+  apply-nonprod:
+    # Staging and eval apply automatically on main, from the plan produced earlier in this same run.
+    needs: plan
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    # Apply is a deploy-style job (Cloud Run, domains, Hosting can take several minutes); plan jobs stay within 5 minutes.
+    timeout-minutes: 20
+    concurrency:
+      group: terraform-apply-${{ matrix.env }}
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      id-token: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - env: staging
+            prefix: STAGING
+            root: infra/isolated-environment
+            backend: examples/backend-staging.hcl.example
+            bucket: onolys-staging-tfstate
+          - env: eval
+            prefix: EVAL
+            root: infra/isolated-environment
+            backend: examples/backend-eval.hcl.example
+            bucket: onolys-eval-tfstate
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - id: cfg
+        env:
+          WIF: ${{ vars[format('TF_{0}_APPLY_WIF_PROVIDER', matrix.prefix)] }}
+          SA: ${{ vars[format('TF_{0}_APPLY_SA', matrix.prefix)] }}
+        run: |
+          if [ -n "$WIF" ] && [ -n "$SA" ]; then echo "ok=true" >> "$GITHUB_OUTPUT"; else
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::TF_${{ matrix.prefix }}_APPLY_WIF_PROVIDER / TF_${{ matrix.prefix }}_APPLY_SA are unset: ${{ matrix.env }} was NOT applied."
+          fi
+      - if: steps.cfg.outputs.ok == 'true'
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: tf-meta-${{ matrix.env }}
+          path: tf-meta
+      - id: meta
+        if: steps.cfg.outputs.ok == 'true'
+        run: |
+          {
+            echo "changes=$(jq -r .changes "tf-meta/${{ matrix.env }}.json")"
+            echo "sha256=$(jq -r .sha256 "tf-meta/${{ matrix.env }}.json")"
+            echo "object=$(jq -r .object "tf-meta/${{ matrix.env }}.json")"
+          } >> "$GITHUB_OUTPUT"
+      - if: steps.meta.outputs.changes == 'true'
+        uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3
+        with:
+          terraform_version: 1.9.8
+          terraform_wrapper: false
+      - if: steps.meta.outputs.changes == 'true'
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: .terraform-plugin-cache
+          key: tf-plugins-${{ runner.os }}-${{ hashFiles(format('{0}/.terraform.lock.hcl', matrix.root)) }}
+      - if: steps.meta.outputs.changes == 'true'
+        uses: google-github-actions/auth@c200f3691d83b41bf9bbd8638997a462592937ed # v2
+        with:
+          workload_identity_provider: ${{ vars[format('TF_{0}_APPLY_WIF_PROVIDER', matrix.prefix)] }}
+          service_account: ${{ vars[format('TF_{0}_APPLY_SA', matrix.prefix)] }}
+      - name: Apply exactly the saved plan
+        if: steps.meta.outputs.changes == 'true'
+        working-directory: ${{ matrix.root }}
+        env:
+          BACKEND: ${{ matrix.backend }}
+          BUCKET: ${{ matrix.bucket }}
+          OBJECT: ${{ steps.meta.outputs.object }}
+          EXPECTED_SHA: ${{ steps.meta.outputs.sha256 }}
+        run: |
+          set -uo pipefail
+          mkdir -p "$TF_PLUGIN_CACHE_DIR"
+          gcloud storage cp "gs://${BUCKET}/${OBJECT}" tfplan --quiet
+          actual="$(sha256sum tfplan | cut -d' ' -f1)"
+          if [ "$actual" != "$EXPECTED_SHA" ]; then echo "::error::saved plan hash mismatch; refusing to apply"; exit 1; fi
+          terraform init -input=false -no-color -lockfile=readonly "-backend-config=$BACKEND" > "$RUNNER_TEMP/apply.log" 2>&1 || { tail -30 "$RUNNER_TEMP/apply.log"; exit 1; }
+          rc=0
+          terraform apply -input=false -no-color tfplan >> "$RUNNER_TEMP/apply.log" 2>&1 || rc=$?
+          # Public log: resource progress lines only, never the Outputs block.
+          sed '/^Outputs:/,$d' "$RUNNER_TEMP/apply.log" | grep -E '(Creating|Modifying|Destroying|Creation complete|Modifications complete|Destruction complete)|^Apply complete|^Error' | head -200 || true
+          [ "$rc" -eq 0 ] || { echo "::error::terraform apply failed for ${{ matrix.env }}"; exit "$rc"; }
+      - name: Remove the saved plan
+        if: always() && steps.meta.outputs.changes == 'true'
+        env:
+          BUCKET: ${{ matrix.bucket }}
+          OBJECT: ${{ steps.meta.outputs.object }}
+        run: gcloud storage rm "gs://${BUCKET}/${OBJECT}" --quiet || true
+
+  apply-prod:
+    # Prod (legacy infra/ root) applies only after a reviewer approves the GitHub Environment `production`.
+    needs: [plan, apply-nonprod]
+    if: needs.plan.result == 'success' && needs.apply-nonprod.result == 'success' && github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: production
+    concurrency:
+      group: terraform-apply-prod
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - id: cfg
+        env:
+          WIF: ${{ vars.TF_PROD_APPLY_WIF_PROVIDER }}
+          SA: ${{ vars.TF_PROD_APPLY_SA }}
+        run: |
+          if [ -n "$WIF" ] && [ -n "$SA" ]; then echo "ok=true" >> "$GITHUB_OUTPUT"; else
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::TF_PROD_APPLY_WIF_PROVIDER / TF_PROD_APPLY_SA are unset: prod was NOT applied."
+          fi
+      - if: steps.cfg.outputs.ok == 'true'
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: tf-meta-prod
+          path: tf-meta
+      - id: meta
+        if: steps.cfg.outputs.ok == 'true'
+        run: |
+          {
+            echo "changes=$(jq -r .changes tf-meta/prod.json)"
+            echo "sha256=$(jq -r .sha256 tf-meta/prod.json)"
+            echo "object=$(jq -r .object tf-meta/prod.json)"
+          } >> "$GITHUB_OUTPUT"
+      - if: steps.meta.outputs.changes == 'true'
+        uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3
+        with:
+          terraform_version: 1.9.8
+          terraform_wrapper: false
+      - if: steps.meta.outputs.changes == 'true'
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: .terraform-plugin-cache
+          key: tf-plugins-${{ runner.os }}-${{ hashFiles('infra/.terraform.lock.hcl') }}
+      - if: steps.meta.outputs.changes == 'true'
+        uses: google-github-actions/auth@c200f3691d83b41bf9bbd8638997a462592937ed # v2
+        with:
+          workload_identity_provider: ${{ vars.TF_PROD_APPLY_WIF_PROVIDER }}
+          service_account: ${{ vars.TF_PROD_APPLY_SA }}
+      - name: Install Python deps for infra/scripts/identity-config.py (Terraform local-exec, ADC from the auth step)
+        if: steps.meta.outputs.changes == 'true'
+        env:
+          PIP_BREAK_SYSTEM_PACKAGES: "1"
+        run: python3 -m pip install --quiet --user "google-auth>=2,<3" requests
+      - name: Apply exactly the saved plan
+        if: steps.meta.outputs.changes == 'true'
+        working-directory: infra
+        env:
+          OBJECT: ${{ steps.meta.outputs.object }}
+          EXPECTED_SHA: ${{ steps.meta.outputs.sha256 }}
+        run: |
+          set -uo pipefail
+          mkdir -p "$TF_PLUGIN_CACHE_DIR"
+          gcloud storage cp "gs://onolys-tfstate/${OBJECT}" tfplan --quiet
+          actual="$(sha256sum tfplan | cut -d' ' -f1)"
+          if [ "$actual" != "$EXPECTED_SHA" ]; then echo "::error::saved plan hash mismatch; refusing to apply"; exit 1; fi
+          terraform init -input=false -no-color -lockfile=readonly > "$RUNNER_TEMP/apply.log" 2>&1 || { tail -30 "$RUNNER_TEMP/apply.log"; exit 1; }
+          rc=0
+          terraform apply -input=false -no-color tfplan >> "$RUNNER_TEMP/apply.log" 2>&1 || rc=$?
+          # Public log: resource progress lines only, never the Outputs block.
+          sed '/^Outputs:/,$d' "$RUNNER_TEMP/apply.log" | grep -E '(Creating|Modifying|Destroying|Creation complete|Modifications complete|Destruction complete)|^Apply complete|^Error' | head -200 || true
+          [ "$rc" -eq 0 ] || { echo "::error::terraform apply failed for prod"; exit "$rc"; }
+      - name: Remove the saved plan
+        if: always() && steps.meta.outputs.changes == 'true'
+        env:
+          OBJECT: ${{ steps.meta.outputs.object }}
+        run: gcloud storage rm "gs://onolys-tfstate/${OBJECT}" --quiet || true
