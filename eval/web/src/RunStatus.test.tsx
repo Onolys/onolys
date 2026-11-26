@@ -42,3 +42,16 @@ it('renders skipped units as skipped and n/a with the API reason; shows provider
  expect(screen.getByText('Gemini is busy — waiting to retry')).toBeTruthy(); expect(screen.getByRole('cell', { name: 'waiting' })).toBeTruthy();
  expect(screen.getAllByText(/3\/9 runs done/)).toHaveLength(2); expect(screen.queryByText(/8\/9 units complete/)).toBeNull();
 });
+it('shows running units with their stage, queued units without one, and live run progress', async () => {
+ const run = saved({ status: 'running', total_units: 3, done_units: 1, running_units: 1, queued_units: 1, units: [
+  { unit_id: 'u1', session_id: 's1', engine: 'miti', status: 'done' },
+  { unit_id: 'u2', session_id: 's1', engine: 'miti', status: 'running', stage: 'coding' },
+  { unit_id: 'u3', session_id: 's2', engine: 'miti', status: 'queued' }] });
+ const api = { ...createEvalApi('', vi.fn()), run: vi.fn().mockResolvedValue(run), runs: vi.fn().mockResolvedValue({ runs: [run] }) };
+ const detail = render(<RunView api={api} runId="r1" onRerun={vi.fn()} />); await act(async () => {});
+ expect(screen.getByText(/1\/3 runs done · 1 running · 1 queued/)).toBeTruthy();
+ const running = screen.getByRole('cell', { name: 'running' }).closest('tr')!; expect(within(running).getByRole('cell', { name: 'coding' })).toBeTruthy();
+ const queued = screen.getByRole('cell', { name: 'queued' }).closest('tr')!; expect(within(queued).queryByText('coding')).toBeNull();
+ detail.unmount(); render(<History api={api} onOpen={vi.fn()} onRerun={vi.fn()} />); await act(async () => {});
+ expect(screen.getByText('1 of 3 runs done, 1 running')).toBeTruthy();
+});

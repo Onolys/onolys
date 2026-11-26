@@ -144,8 +144,13 @@ def run_detail(request: Request, run_id: str):
         logger.exception("tick_reenqueue_failed", extra={"eval_run_id": run_id})
     units = eval_view.build_units(services, run)
     # Outputs are fetched through /units/{id}/output; compare has dedicated read routes.
+    counts = eval_view.live_counts(units)
+    summary = run_summary(run_id, run)
+    if summary["status"] == "queued" and counts["running_units"]:
+        summary["status"] = "running"  # the scheduler has not ticked yet; never show "queued"
     return {
-        **run_summary(run_id, run),
+        **summary,
+        **counts,
         "units": units,
         "provider_cooldowns": eval_view.provider_cooldowns(services, run),
     }
