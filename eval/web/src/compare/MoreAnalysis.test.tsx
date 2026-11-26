@@ -23,8 +23,36 @@ it('renders server frontier membership and excludes unpriced points', () => {
  expect(screen.getByRole('img',{name:'Cost vs accuracy scatter'})).toBeTruthy();
  expect(screen.queryByRole('table',{name:'Cost vs accuracy'})).toBeNull();
 });
+it('shows only cost vs accuracy and reliability by default; everything else is a collapsed toggle', () => {
+ const {container}=render(<MoreAnalysis {...props()}/>);
+ expect(screen.getByRole('img',{name:'Cost vs accuracy scatter'})).toBeTruthy();
+ expect(screen.getByRole('table',{name:'Reliability'})).toBeTruthy();
+ const toggles=['Show error vs interview length','Show head-to-head','Show interviews by combo','Show human-vs-human baseline'];
+ for (const name of toggles) expect(screen.getByRole('button',{name}).getAttribute('aria-expanded')).toBe('false');
+ expect(container.querySelector('.more-analysis-toggles')?.textContent).toBe(toggles.join(''));
+ expect(screen.queryByText(/How to read/)).toBeNull();
+ expect(screen.queryByText(/Needs a second human coder/)).toBeNull();
+ expect(container.querySelector('.table-scroll')).toBeNull();
+ const order=[...container.querySelectorAll('.more-analysis > *')].map(n=>n.getAttribute('aria-label')||n.className||n.tagName);
+ expect(order.indexOf('Reliability')).toBeGreaterThan(order.findIndex(x=>String(x).includes('ui-chart-frame')||x==='SECTION'));
+});
+it('keeps a failed combo muted and never best across the composed page', () => {
+ const input=props();
+ const key=input.data.combos[0].combo_key;
+ const ov=structuredClone(overview) as CompareOverview;
+ const per=ov.header.sessions*ov.header.repeats;
+ ov.excluded=Array.from({length:per},(_,i)=>({...(ov.excluded[0]??{}),combo_key:key,session_id:`s${i}`,reason:'failed:invalid_parameters'})) as CompareOverview['excluded'];
+ for (const row of ov.leaderboard) {const mine=row.combo_key===key;row.operational_best.failures=mine;row.operational_best.time=mine;}
+ render(<MoreAnalysis {...input} overview={ov}/>);
+ const reliability=screen.getByRole('table',{name:'Reliability'});
+ expect(within(reliability).getByText('all runs failed')).toBeTruthy();
+ expect(within(reliability).queryAllByText('★ best')).toHaveLength(0);
+ const list=screen.getByRole('list',{name:'Not plotted'});
+ expect(within(list).getByText('failed')).toBeTruthy();
+});
 it('prints baseline and reliability values verbatim from the API', () => {
  render(<MoreAnalysis {...props()}/>);
+ fireEvent.click(screen.getByRole('button',{name:'Show human-vs-human baseline'}));
  expect(screen.getByText(/Needs a second human coder, not in this dataset/)).toBeTruthy();
  const reliability=screen.getByRole('table',{name:'Reliability'});
  expect(within(reliability).getByText(/5 of 9 agree/)).toBeTruthy();
@@ -60,7 +88,8 @@ it('keeps error vs length behind a toggle and switches the axis using server val
 it('hides human error displays without labels and keeps reliability and baseline', () => {
  const data=structuredClone(analysis) as CompareAnalysis;data.has_human=false;
  const {container}=render(<MoreAnalysis {...props(data)}/>);
- expect(screen.getByText('no human reference')).toBeTruthy();
+ expect(screen.getByText(/No human reference/)).toBeTruthy();
+ fireEvent.click(screen.getByRole('button',{name:'Show human-vs-human baseline'}));
  expect(container.querySelector('svg[role="img"][aria-label$="scatter"]')).toBeNull();
  expect(screen.queryByRole('button',{name:'Show head-to-head'})).toBeNull();
  expect(screen.getByRole('table',{name:'Reliability'})).toBeTruthy();
