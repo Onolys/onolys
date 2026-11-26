@@ -47,7 +47,7 @@ th[aria-sort=descending] button.sort::after { content: " \25BC"; }
 [role=tablist] { margin: .5rem 0; }
 [role=tab][aria-selected=false] { background: var(--muted); color: var(--foreground); }
 
-.configuration-row { margin: 1rem 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1rem; align-items: start; }
+.configuration-row { margin: 1rem 0 1.5rem; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1rem; align-items: start; }
 .configuration-row fieldset { height: 100%; }
 .configuration-row label { overflow-wrap: anywhere; flex-wrap: nowrap; align-items: flex-start; }
 .dataset-source > div { display: grid; grid-template-columns: minmax(7rem, 10rem) minmax(0, 1fr); gap: 1rem; margin: .75rem 0; }
