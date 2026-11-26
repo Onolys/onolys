@@ -200,3 +200,23 @@ def test_stale_fail_releases_runs_in_one_txn_and_reconcile_repairs_a_leak(repos)
     assert repos[1].reconcile_active_runs(uid) == 0  # idempotent
     assert uid not in repos[2].list_uids_with_active_runs(500)
     assert sid not in [s.id for s in repos[2].list_sessions_stuck("running", future, 500)]
+
+
+def test_concurrent_put_idempotency_same_key_one_wins_and_never_raises(repos):
+    """Same-key session creates race on one idempotency doc. Firestore answers the extra writers
+    with Aborted (lock contention); that must read as "lost the race" (False), never escape as
+    an exception (the API turned it into a 500)."""
+    from onolys_api.repo.models import IdempotencyDoc
+
+    uid, key = f"u-{uuid.uuid4().hex[:10]}", "race-key"
+    doc = IdempotencyDoc(body_hash="h", response={}, created_at=datetime.now(UTC))
+    n = 16
+    barrier = threading.Barrier(n)
+
+    def put(i):
+        barrier.wait(timeout=30)
+        return repos[i % len(repos)].put_idempotency(uid, key, doc)
+
+    with ThreadPoolExecutor(n) as ex:
+        outs = list(ex.map(put, range(n)))
+    assert outs.count(True) == 1 and outs.count(False) == n - 1
