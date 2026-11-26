@@ -62,15 +62,15 @@ export function UnitTable({ api, runId, run }: { api: EvalApi; runId: string; ru
   const attempt = (unit: RunUnit) => unit.engine === 'human' ? 'Once' : unit.repeat == null ? null : `${unit.repeat + 1} / ${run.repeats}`;
   const result = (unit: RunUnit) => unit.status === 'skipped' ? `n/a${unit.error ? ` — ${unitErrorNote(unit)}` : ''}` : unit.error ? unitErrorCode(unit) || 'unknown' : unit.status === 'done' ? 'Output' : null;
   const columns: Column<RunUnit>[] = [
-    { key: 'session', width: '16%', header: 'Session', value: u => u.session_id },
-    { key: 'engine', width: '8%', header: 'Engine', value: u => u.engine },
-    { key: 'model', width: '16%', header: 'Model', value: u => modelOf(u) || null, render: u => modelOf(u) || '—' },
-    { key: 'tier', width: '6%', header: 'Tier', priority: 'low', value: u => comboOf(u).tier || null, render: u => comboOf(u).tier || '—' },
-    { key: 'effort', width: '7%', header: 'Effort', priority: 'low', value: u => comboOf(u).effort || null, render: u => comboOf(u).effort || '—' },
-    { key: 'attempt', width: '8%', header: 'Attempt', value: attempt, render: u => attempt(u) ?? '—' },
+    { key: 'session', width: '14%', header: 'Session', value: u => u.session_id },
+    { key: 'engine', width: '9%', header: 'Engine', value: u => u.engine },
+    { key: 'model', width: '14%', header: 'Model', value: u => modelOf(u) || null, render: u => modelOf(u) || '—' },
+    { key: 'tier', width: '7%', header: 'Tier', priority: 'low', value: u => comboOf(u).tier || null, render: u => comboOf(u).tier || '—' },
+    { key: 'effort', width: '9%', header: 'Effort', priority: 'low', value: u => comboOf(u).effort || null, render: u => comboOf(u).effort || '—' },
+    { key: 'attempt', width: '10%', header: 'Attempt', value: attempt, render: u => attempt(u) ?? '—' },
     { key: 'status', width: '13%', header: 'Status', value: u => u.status, render: u => <Chip tone={STATUS_TONE[u.status] ?? 'neutral'} icon={u.status === 'running' ? <Loader2 aria-hidden="true" className="run-spin" /> : undefined}>{u.status}</Chip> },
     { key: 'stage', width: '8%', header: 'Stage', priority: 'low', value: u => u.stage || null, render: u => u.stage || '—' },
-    { key: 'result', width: '18%', header: 'Result', value: result, render: u => u.status === 'skipped' ? result(u)
+    { key: 'result', width: '16%', header: 'Result', value: result, render: u => u.status === 'skipped' ? result(u)
       : u.error ? <UnitErrorBadge unit={u} code={unitErrorCode(u)} />
       : u.status === 'done' ? <UnitOutput api={api} runId={runId} unit={u} /> : '—' },
   ];

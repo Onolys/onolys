@@ -86,3 +86,12 @@ it('has an explainer and a muted footnote, and a fixed-layout table with no scro
   expect(document.querySelector('.run-units')?.textContent).not.toMatch(/runs done/);
   expect(document.querySelector('.ui-table')).toBeTruthy();
 });
+it('gives short sortable headers enough width not to truncate (Tier, Effort, Attempt)', () => {
+  show();
+  const width = (name: string) => parseFloat(screen.getByRole('columnheader', { name }).style.width);
+  expect(width('Tier')).toBeGreaterThanOrEqual(7);
+  expect(width('Effort')).toBeGreaterThanOrEqual(9);
+  expect(width('Attempt')).toBeGreaterThanOrEqual(10);
+  const total = screen.getAllByRole('columnheader').reduce((sum, h) => sum + parseFloat(h.style.width), 0);
+  expect(total).toBe(100);
+});
