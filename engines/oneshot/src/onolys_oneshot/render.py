@@ -19,7 +19,7 @@ CORE_FOOTER = (
     "Return only JSON matching the schema; never invent quotes, speakers or timestamps"
 )
 _CONTROL_PARAMS = {
-    "config", "coded_span", "preset", "speaker_map", "n_runs", "seed", "code_version",
+    "config", "coded_span", "preset", "speaker_map", "n_runs", "seed", "code_version", "stt_run",
 }
 
 

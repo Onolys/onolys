@@ -192,3 +192,18 @@ def test_default_package_root_rejects_unknown_configs():
     assert "absent" not in config_names()
     with pytest.raises(InputError):
         load_config("absent")
+
+
+@pytest.mark.parametrize("stt_run", [None, {"provider": "x", "model": "y"}])
+def test_packaged_miti_accepts_the_params_the_worker_sends(transcript, stt_run):
+    """Regression: the worker/adapter always send `stt_run` (None without STT); the miti config
+    has additionalProperties false, so a leaked `stt_run` failed every eval unit with
+    invalid_parameters. Like the other control params it must never reach the params schema."""
+    params = {
+        "change_goal": "Reduce drinking", "seed": "sid", "coded_span": None, "language": "en",
+        "n_runs": 1, "preset": "default", "code_version": "abc", "stt_run": stt_run,
+        "config": "miti", "speaker_map": {"A": "clinician"},
+    }
+    prompt = render_prompt(load_config("miti"), transcript, params)
+    assert "Reduce drinking" in prompt.user
+    assert "stt_run" not in prompt.user
