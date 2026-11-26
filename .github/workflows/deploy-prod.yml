@@ -363,7 +363,27 @@ jobs:
             n="$(git ls-remote --tags --refs origin "prod-$d.*" | sed -nE "s#.*/prod-$d\.([0-9]+)\$#\1#p" | sort -n | tail -1)"
             tag="prod-$d.$((10#${n:-0}+1))"
             git tag -a "$tag" "$SHA" -m "prod deploy ${tag}" -m "commit: ${SHA}" -m "image: ${IMAGE}" -m "run: ${run_url}"
-            if git push origin "refs/tags/${tag}"; then pushed=1; break; fi
+            if err="$(git push origin "refs/tags/${tag}" 2>&1)"; then echo "$err"; pushed=1; break; fi
+            echo "$err" >&2
+            # WORKFLOWS_REFUSED_BEGIN
+            # GitHub refuses a GITHUB_TOKEN push when the commit's workflow files differ from main; no permission allows it and a retry cannot help.
+            if printf '%s' "$err" | grep -qi 'workflows. permission'; then
+              echo "::warning::prod is deployed; tag not pushed (GITHUB_TOKEN cannot push this ref). Tag by hand: commit ${SHA}, suggested ${tag}, image ${IMAGE}, run ${run_url}. See docs/reference/infra.md, If the prod tag is missing."
+              {
+                echo "### Prod deployed, tag NOT pushed"
+                echo "- commit: \`${SHA}\`"
+                echo "- suggested tag: \`${tag}\` (check \`git ls-remote --tags --refs origin 'prod-*'\` for the next free number)"
+                echo "- image: \`${IMAGE}\`"
+                echo "- run: ${run_url}"
+                echo "- tag by hand (SSH remote, or after \`gh auth refresh -s workflow\`):"
+                echo "  \`\`\`"
+                echo "  git tag -a ${tag} ${SHA} -m 'prod deploy ${tag}' -m 'commit: ${SHA}' -m 'image: ${IMAGE}' -m 'run: ${run_url}'"
+                echo "  git push origin refs/tags/${tag}"
+                echo "  \`\`\`"
+              } >> "$GITHUB_STEP_SUMMARY"
+              exit 0
+            fi
+            # WORKFLOWS_REFUSED_END
             echo "push of ${tag} failed (attempt ${attempt}); recomputing" >&2
             git tag -d "$tag"
             sleep 2

@@ -81,6 +81,16 @@ check_tag "prod-2026-11-21.1"  ""
 check_tag "prod-2026-11-21.11" "aaa\trefs/tags/prod-2026-11-21.9\nbbb\trefs/tags/prod-2026-11-21.10\nccc\trefs/tags/prod-2026-11-21.2\n"
 check_tag "prod-2026-11-21.4"  "aaa\trefs/tags/prod-2026-11-21.3\nbbb\trefs/tags/prod-2026-11-20.99\n"
 has   "tag pushed"                           'git push origin "refs/tags/'
+# Workflow-permission refusal (GitHub refuses GITHUB_TOKEN pushes when workflow files differ from main): warn, never fail, no token
+has   "tag step greps the workflows-permission refusal" "grep -qi 'workflows. permission'"
+has   "tag step emits a ::warning:: with manual tag hint" '::warning::.*prod is deployed'
+hasnt "no RELEASE_TAG_TOKEN reference"       'RELEASE_TAG_TOKEN'
+# Run the real refusal handler against a fake git whose push is refused: exit 0, warning printed, no retry
+wsnip="$(printf '%s\n' "$TAGJOB" | awk '/WORKFLOWS_REFUSED_BEGIN/{f=1;next} /WORKFLOWS_REFUSED_END/{f=0} f{print}' | sed 's/^ *//')"
+[[ -n "$wsnip" ]] && ok "refusal handler block present" || bad "refusal handler block present"
+out="$(GITHUB_STEP_SUMMARY="$(mktemp)" SHA=abc IMAGE=img GITHUB_SERVER_URL=https://github.com GITHUB_REPOSITORY=o/r GITHUB_RUN_ID=1 \
+  bash -c 'set -o pipefail; tag=prod-2026-11-26.1; run_url=u; err="! [remote rejected] x (refusing to allow a GitHub App to create or update workflow \`.github/workflows/a.yml\` without \`workflows\` permission)"; for attempt in 1; do '"$wsnip"'; echo NOT_HANDLED; done' 2>&1)"; rc=$?
+[[ $rc -eq 0 && "$out" == *"::warning::"* && "$out" != *NOT_HANDLED* ]] && ok "refusal path exits 0 with a warning" || bad "refusal path exits 0 with a warning (rc=$rc out='$out')"
 # Old-commit tag push: a shallow checkout makes git upload the commit's trees/blobs (incl. .github/workflows), which GITHUB_TOKEN may not push
 printf '%s\n' "$TAGJOB" | grep -Eq 'fetch-depth: 0' && ok "tag job checks out full history" || bad "tag job checks out full history"
 printf '%s\n' "$TAGJOB" | grep -Eq 'git fetch .*--depth' && bad "tag job must not shallow-fetch the target sha" || ok "tag job does not shallow-fetch the target sha"
