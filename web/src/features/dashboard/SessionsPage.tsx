@@ -7,6 +7,7 @@ import { unwrap } from "../../api/client";
 import { describeError } from "../../api/errors";
 import { useApiClient } from "../../auth/useApiClient";
 import { H1, LINK, LINK_BTN, NOTE, PAGE as PAGE_STACK } from "../../components/classes";
+import { SlowStartNotice } from "../../components/SlowStart";
 import { StatusChip } from "../../components/StatusChip";
 import { ratingEnabled } from "../../config";
 import { ErrorCard } from "../session/ErrorCard";
@@ -40,6 +41,7 @@ export function SessionsPage() {
     body = (
       <div aria-busy="true" className="grid gap-3">
         <p className={NOTE}>Loading your sessions…</p>
+        <SlowStartNotice pending />
         <Skeleton className="h-12 w-full" />
         <Skeleton className="h-12 w-full" />
       </div>
