@@ -19,7 +19,7 @@ The legacy root no longer declares `module.staging` or `module.eval` (nor `eval.
 The eval Hosting site `onolys-eval-staging` and its custom domain `eval.onolys.com` are removed from the legacy root; the domain moves to the isolated eval root (see [Eval own sign-in and eval.onolys.com](#eval-own-sign-in-and-eval-onolyscom)).
 Applying the legacy root therefore also deletes the `onolys-eval-staging` site in `onolys`.
 
-Routine applies of every root now run in CI ([infra pipeline](../reference/infra-pipeline.md), [ADR 0026](../decisions/0026-terraform-plan-apply-in-ci.md)); the manual steps below are bootstrap and break-glass only. The legacy destroy of the old staging/eval resources described here is complete (verified 2026-11-26: a read-only prod plan showed no change outside `module.terraform_ci`); confirm that again before the CI identities' first apply, otherwise the first CI prod apply would run it.
+Routine applies of every root run in CI, inside each environment's deploy pipeline once enabled ([infra pipeline](../reference/infra-pipeline.md), [ADR 0026](../decisions/0026-terraform-plan-apply-in-ci.md)); the manual steps below are bootstrap and break-glass only. The legacy destroy of the old staging/eval resources described here is complete (verified 2026-11-26: a read-only prod plan showed no change outside `module.terraform_ci`); confirm that again before the CI identities' first apply, otherwise the first CI prod apply would run it.
 
 Owner steps for a manual legacy apply (do not run a plain `terraform apply` in `infra/`):
 
