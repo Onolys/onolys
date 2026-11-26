@@ -18,5 +18,5 @@ export default defineConfig({
     dedupe: ["react", "react-dom", "react-router", "firebase", "@tanstack/react-query", "@onolys/ui", "openapi-fetch", "lucide-react"],
   },
   server: { fs: { allow: [fileURLToPath(new URL("../..", import.meta.url))] } },
-  test: { environment: "node" },
+  test: { environment: "node", setupFiles: ["./src/testSetup.ts"] },
 });

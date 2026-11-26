@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
-import { Button, Input, Textarea } from '@onolys/ui';
+import { Button, Checkbox, Input, Select, Textarea } from '@onolys/ui';
 import { SlowStartNotice } from '@prod-components/SlowStart';
 import { sourceLine, originalMedia } from './sourceMedia';
 import type { CodedSpan, Dataset, DatasetMetadata, EvalApi, Mode, Options, RunInput, RunSummary, Selection, Upload, UploadInput } from './api';
@@ -14,6 +14,11 @@ const MAX_GOAL = 4000; // RunRequest.change_goal limit
 const toggle = (values: string[], value: string) => values.includes(value) ? values.filter(v => v !== value) : [...values, value];
 
 const DEFAULT_SESSIONS = 50;
+
+/** Labelled @onolys/ui checkbox (as in prod forms). */
+function Check({ checked, disabled, onChange, children }: { checked: boolean; disabled?: boolean; onChange: (checked: boolean) => void; children: React.ReactNode }) {
+  return <label><Checkbox className="size-5 min-h-5 min-w-5" checked={checked} disabled={disabled} onCheckedChange={value => onChange(value === true)} />{children}</label>;
+}
 
 export function NewRun({ api, onRunCreated, initialRun }: { api: EvalApi; onRunCreated: (id: string) => void; initialRun?: RunSummary }) {
   const rerunSourceID = initialRun?.run_id;
@@ -195,7 +200,7 @@ export function NewRun({ api, onRunCreated, initialRun }: { api: EvalApi; onRunC
       {initialRun ? <fieldset><legend>Saved input</legend><p>Rerun of {rerunSourceID}. Original input and session configuration are preserved.</p><p>{'dataset_id' in initialRun.input ? `Dataset: ${initialRun.input.dataset_id} · ${initialRun.input.session_ids.length} saved sessions` : `Upload: ${initialRun.input.upload_id}`}</p></fieldset> : <fieldset disabled={busy}><legend>Input</legend>
         <div className="choice-row">{(['dataset', 'upload'] as const).map(value => <label key={value}><input type="radio" name="mode" checked={mode === value} onChange={() => changeMode(value)} />{value === 'dataset' ? 'Dataset' : 'Upload'}</label>)}</div>
         {mode === 'dataset' ? <>
-          <label>Choose dataset<select value={datasetId} onChange={event => { setDatasetId(event.target.value); setDataset(undefined); setSessionLimit(0); setError(''); }}><option value="" disabled>Select a dataset</option>{datasets.map(d => <option key={d.dataset_id} value={d.dataset_id}>{d.title} ({originalMedia(d.source_media)})</option>)}</select></label>
+          <label>Choose dataset<Select value={datasetId} onChange={event => { setDatasetId(event.target.value); setDataset(undefined); setSessionLimit(0); setError(''); }}><option value="" disabled>Select a dataset</option>{datasets.map(d => <option key={d.dataset_id} value={d.dataset_id}>{d.title} ({originalMedia(d.source_media)})</option>)}</Select></label>
           {selectedDataset && <dl className="dataset-source" data-testid="dataset-source">{sourceLine(selectedDataset).split(' · ').map(line => { const separator = line.indexOf(':'); return <div key={line}><dt>{separator >= 0 ? line.slice(0, separator) : 'MITI version'}</dt><dd>{separator >= 0 ? line.slice(separator + 2) : line}</dd></div>; })}</dl>}
           {datasetReady && totalSessions > 0 && <label className="session-limit">Sessions to run: {shownLimit} of {totalSessions}<input type="range" style={{ '--range-fill': `${totalSessions <= 1 ? 100 : (shownLimit - 1) / (totalSessions - 1) * 100}%` } as CSSProperties} min={1} max={totalSessions} step={1} value={shownLimit} aria-valuetext={`${shownLimit} of ${totalSessions} sessions`} onChange={event => setSessionLimit(Number(event.target.value))} /></label>}
           {datasetReady && !humanAvailable && <p>Human comparison is unavailable because these sessions have no gold files. AI engines can run all sessions.</p>}
@@ -206,9 +211,9 @@ export function NewRun({ api, onRunCreated, initialRun }: { api: EvalApi; onRunC
           <label>Gold file (optional)<Input type="file" accept=".json,application/json" onChange={event => { invalidateUpload(); setGold(event.target.files?.[0]); }} /></label>
           <label>Change goal<Input value={goal} maxLength={MAX_GOAL} onChange={event => { invalidateUpload(); setGoal(event.target.value); }} /></label><small>{goal.length} / {MAX_GOAL}</small>
           <label>Language<Input value={language} placeholder="e.g. en" onChange={event => { invalidateUpload(); setLanguage(event.target.value); }} /></label>
-          <label><input type="checkbox" checked={overrideSpan} onChange={event => { invalidateUpload(); setOverrideSpan(event.target.checked); }} />Override coded portion</label>
+          <Check checked={overrideSpan} onChange={value => { invalidateUpload(); setOverrideSpan(value); }}>Override coded portion</Check>
           {overrideSpan && <fieldset><legend>Coded portion</legend><p>Start is included; end is excluded. Turn numbers start at zero.</p>
-            <label>Measure in<select value={spanUnit} onChange={event => { invalidateUpload(); setSpanUnit(event.target.value); }}><option value="turns">Transcript turns</option><option value="ms">Milliseconds</option></select></label>
+            <label>Measure in<Select value={spanUnit} onChange={event => { invalidateUpload(); setSpanUnit(event.target.value); }}><option value="turns">Transcript turns</option><option value="ms">Milliseconds</option></Select></label>
             <label>Start<Input type="number" min="0" step="1" value={spanStart} onChange={event => { invalidateUpload(); setSpanStart(event.target.value); }} /></label>
             <label>End<Input type="number" min="1" step="1" value={spanEnd} onChange={event => { invalidateUpload(); setSpanEnd(event.target.value); }} /></label>
             {!spanValid && <p>Enter whole numbers with end greater than start.</p>}
@@ -227,13 +232,13 @@ export function NewRun({ api, onRunCreated, initialRun }: { api: EvalApi; onRunC
       </fieldset>}
       {initialRun?.legacy_selection && <p role="status">This older run chose models by preset, which can no longer be recreated. Pick a model, tier and effort below; saved input and engines are kept.</p>}
       <div className="configuration-row">
-      <fieldset disabled={busy || optionsLoading}><legend>Engines</legend>{optionsLoading && <p role="status">Loading choices…</p>}<SlowStartNotice pending={optionsLoading && !error} />{unavailableEngines.map(id => <label key={id}><input type="checkbox" checked onChange={() => setEngines(ids => ids.filter(e => e !== id))} />{id} (unavailable)</label>)}{visibleEngines.map(e => <label key={e.id}><input type="checkbox" checked={finalEngines.includes(e.id)} disabled={e.id === 'human' && !humanAvailable} onChange={() => setEngines(ids => toggle(ids, e.id))} />{e.label}</label>)}</fieldset>
-      <fieldset disabled={busy || optionsLoading}><legend>Models</legend>{unavailableModels.map(id => <label key={id}><input type="checkbox" checked onChange={() => toggleModel(id)} />{id} (unavailable)</label>)}{options?.models.map(m => <label key={m.id}><input type="checkbox" checked={selection.models.includes(m.id)} onChange={() => toggleModel(m.id)} />{m.label}</label>)}</fieldset>
-      <fieldset disabled={busy || optionsLoading}><legend>Tiers</legend>{unavailableTiers.map(id => <label key={id}><input type="checkbox" checked onChange={() => toggleTier(id)} />{id} (unavailable)</label>)}{tiers.map(t => <label key={t.id}><input type="checkbox" checked={selection.tiers.includes(t.id)} onChange={() => toggleTier(t.id)} />{t.id}</label>)}</fieldset>
-      <fieldset disabled={busy || optionsLoading}><legend>Efforts</legend>{unavailableEfforts.map(id => <label key={id}><input type="checkbox" checked onChange={() => toggleEffort(id)} />{id} (unavailable)</label>)}{efforts.map(e => <label key={e}><input type="checkbox" checked={selection.efforts.includes(e)} onChange={() => toggleEffort(e)} />{e}</label>)}</fieldset>
+      <fieldset disabled={busy || optionsLoading}><legend>Engines</legend>{optionsLoading && <p role="status">Loading choices…</p>}<SlowStartNotice pending={optionsLoading && !error} />{unavailableEngines.map(id => <Check key={id} checked onChange={() => setEngines(ids => ids.filter(e => e !== id))}>{id} (unavailable)</Check>)}{visibleEngines.map(e => <Check key={e.id} checked={finalEngines.includes(e.id)} disabled={e.id === 'human' && !humanAvailable} onChange={() => setEngines(ids => toggle(ids, e.id))}>{e.label}</Check>)}</fieldset>
+      <fieldset disabled={busy || optionsLoading}><legend>Models</legend>{unavailableModels.map(id => <Check key={id} checked onChange={() => toggleModel(id)}>{id} (unavailable)</Check>)}{options?.models.map(m => <Check key={m.id} checked={selection.models.includes(m.id)} onChange={() => toggleModel(m.id)}>{m.label}</Check>)}</fieldset>
+      <fieldset disabled={busy || optionsLoading}><legend>Tiers</legend>{unavailableTiers.map(id => <Check key={id} checked onChange={() => toggleTier(id)}>{id} (unavailable)</Check>)}{tiers.map(t => <Check key={t.id} checked={selection.tiers.includes(t.id)} onChange={() => toggleTier(t.id)}>{t.id}</Check>)}</fieldset>
+      <fieldset disabled={busy || optionsLoading}><legend>Efforts</legend>{unavailableEfforts.map(id => <Check key={id} checked onChange={() => toggleEffort(id)}>{id} (unavailable)</Check>)}{efforts.map(e => <Check key={e} checked={selection.efforts.includes(e)} onChange={() => toggleEffort(e)}>{e}</Check>)}</fieldset>
       </div>
       {unavailable.length > 0 && <p role="status">Saved choices are unavailable: {unavailable.join(', ')}. Remove them or choose available replacements before starting.</p>}
-      <label>Runs per cell<select disabled={busy} value={repeats} onChange={event => setRepeats(Number(event.target.value) as 1 | 3)}><option value="1">1</option><option value="3">3</option></select></label>
+      <label>Runs per cell<Select disabled={busy} value={repeats} onChange={event => setRepeats(Number(event.target.value) as 1 | 3)}><option value="1">1</option><option value="3">3</option></Select></label>
       <p>Each repeat codes the same session again with each selected engine and model configuration. Choose 3 to compare variation between attempts. Human scores are included once per session.</p>
       <p className="planned" aria-live="polite">{countText(plan)}</p>
       {combos.length > 0 && <details><summary>Combos ({combos.length})</summary><ul>{combos.map(c => <li key={comboKey(c)}>{comboKey(c)}</li>)}</ul></details>}

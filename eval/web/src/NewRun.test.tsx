@@ -43,7 +43,7 @@ async function uploadMode() {
 function chooseFile(label = 'Session file', name = 'session.txt') {
   fireEvent.change(screen.getByLabelText(label), { target: { files: [new File(['example'], name)] } });
 }
-const checked = (name: string) => (screen.getByLabelText(name) as HTMLInputElement).checked;
+const checked = (name: string) => screen.getByLabelText(name).getAttribute('aria-checked') === 'true';
 const start = () => screen.getByRole('button', { name: 'Start run' }) as HTMLButtonElement;
 
 describe('new run', () => {
@@ -88,7 +88,7 @@ describe('new run', () => {
   it('loads configured dataset defaults, all sessions, prod labels and starts with a selection', async () => {
     const { api, onRunCreated } = await mount();
     expect(screen.getByLabelText(/Sessions to run: 2 of 2/)).toBeTruthy();
-    expect(checked('Human score')).toBe(true); expect((screen.getByLabelText('Human score') as HTMLInputElement).disabled).toBe(false);
+    expect(checked('Human score')).toBe(true); expect((screen.getByLabelText('Human score') as HTMLButtonElement).disabled).toBe(false);
     expect(checked('MITI lean (prod)')).toBe(true);
     expect(checked('Claude')).toBe(true); expect(checked('claude-sonnet-5-5')).toBe(true); expect(checked('low')).toBe(true);
     expect(screen.getByText('4 units = 2 sessions x (1 human + 1 engines x 1 combos x 1 repeats)')).toBeTruthy();
@@ -366,8 +366,8 @@ it('retains unavailable saved model, tier and effort values visibly', async () =
   const saved = { run_id: 'retired', input: { upload_id: 'saved-upload' }, engines: ['miti'], selection: { models: ['retired-model'], tiers: ['retired-tier'], efforts: ['retired-effort'] }, repeats: 1 } as RunSummary;
   render(<NewRun api={api} initialRun={saved} onRunCreated={vi.fn()} />);
   for (const value of ['retired-model', 'retired-tier', 'retired-effort']) {
-    const choice = await screen.findByLabelText(`${value} (unavailable)`) as HTMLInputElement;
-    expect(choice.checked).toBe(true);
+    const choice = await screen.findByLabelText(`${value} (unavailable)`);
+    expect(choice.getAttribute('aria-checked')).toBe('true');
   }
   expect(start().disabled).toBe(true);
   expect(api.rerun).not.toHaveBeenCalled();
