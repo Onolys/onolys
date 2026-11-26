@@ -1,19 +1,15 @@
 import { useState, type ReactNode } from 'react';
 import { ChartFrame } from './ChartFrame';
 import { EvalLink } from './CompareLink';
-import type { CompareAnalysis, NA, ValueCell } from './compareApi';
+import type { CompareAnalysis, NA } from './compareApi';
 import type { CompareTabProps } from './compareTypes';
 import { CostAccuracyScatter } from './charts/CostAccuracyScatter';
+import { BaselineCard } from './charts/BaselineCard';
+import { ReliabilityTable } from './charts/ReliabilityTable';
 import { failedCombos } from './failedCombos';
 import './moreAnalysis.css';
 
 const unavailable = (na: NA | undefined) => `n/a${na ? ` - ${na.reason}` : ''}`;
-const levelNames: Record<string, string> = {
- technical: 'Technical', relational: 'Relational', pct_cr: '%CR', reflection_question_ratio: 'R:Q',
-};
-function Value({cell}: {cell: ValueCell}) {
- return <>{cell.na || cell.value === null ? unavailable(cell.na) : `value ${cell.value}`} · n={cell.n}</>;
-}
 function ScrollTable({name, children}: {name: string; children: ReactNode}) {
  // Keyboard focus lets people scroll the wide data table without a pointer.
  // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex
@@ -51,18 +47,8 @@ export function MoreAnalysis({data, overview, legend, runId, navigate}: CompareT
  </tr>)}</tbody></table>;
  return <div className="more-analysis">
   <h2>More analysis</h2>
-  <section aria-labelledby="more-baseline"><h3 id="more-baseline">Human-vs-human baseline</h3><p>{unavailable(data.baseline.na)}</p></section>
-  <section aria-labelledby="more-reliability"><h3 id="more-reliability">Reliability</h3>
-   <ScrollTable name="Reliability"><table aria-label="Reliability"><caption>Repeat consistency, failures and time from the server</caption><thead><tr><th scope="col">Combo</th><th scope="col">Same MITI level</th><th scope="col">Repeat agreement</th><th scope="col">Failures</th><th scope="col">Time</th></tr></thead><tbody>
-    {data.combos.map(combo => {const row=data.reliability[combo.combo_key];return <tr key={combo.combo_key}><th scope="row">{name(combo.combo_key)}</th>{!row ? <td colSpan={4}>n/a</td> : <>
-     <td>{row.na ? unavailable(row.na) : Object.entries(row.levels).map(([metric,cell]) => <div key={metric}>{levelNames[metric] ?? metric}: <Value cell={cell}/></div>)}</td>
-     <td>{Object.entries(row.repeat_agreement).map(([metric,cell]) => <div key={metric}><span>{metric}: </span><span>{cell.na || cell.value === null ? `${unavailable(cell.na)} · n=${cell.n}` : `${cell.agree} of ${cell.n} agree · value ${cell.value} · n=${cell.n}`}</span></div>)}</td>
-     <td>{row.failures.length ? row.failures.map(failure => <div key={failure.code}>{failure.code}: {failure.count}</div>) : 'None reported'}</td>
-     <td>{row.time.mean_seconds === null ? 'n/a' : `${row.time.mean_seconds} seconds`} · n={row.time.n} · retried runs: {row.time.retried_runs}</td>
-    </>}</tr>;})}
-   </tbody></table></ScrollTable>
-   <p><strong>How to read:</strong> Each row shows the server’s repeat consistency and operational results. Each n is the number of observations for that value; failures are listed by their saved code.</p>
-  </section>
+  <BaselineCard baseline={data.baseline}/>
+  <ReliabilityTable data={data} legend={legend} failed={failedCombos(overview)} best={Object.fromEntries(overview.leaderboard.map(row=>[row.combo_key,{failures:row.operational_best.failures,time:row.operational_best.time}]))}/>
   {!data.has_human ? <p>no human reference</p> : <>
    <CostAccuracyScatter data={data} legend={legend} failed={failedCombos(overview)}/>
    <ChartFrame title="Head-to-head" howToRead="Read a row against a column to see how often the row combo was closer to the human counts. Ties and the paired session count come from the server." table={headToHead()}>
