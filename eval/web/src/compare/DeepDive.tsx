@@ -4,6 +4,7 @@ import { EvalLink } from './CompareLink';
 import type { CompareCell, CompareDeepDive, CompareOptions, NA, Snippet } from './compareApi';
 import type { CompareTabProps } from './compareTypes';
 import { GlobalsDotPlot } from './charts/GlobalsDotPlot';
+import { MissBuckets } from './charts/MissBuckets';
 import type { DotSeries } from './charts/dotPlotLayout';
 import { ComboSelector, pairedSessions } from './charts/ComboSelector';
 import { failedCombos } from './failedCombos';
@@ -104,11 +105,8 @@ export function DeepDive(props:Props) {
   {!data.has_human?<p>no human reference</p>:<>
    <section><h3>Globals</h3><div className="deep-grid">{globals.map(([metric,cells])=>{
     const dots=data.globals.dots.filter(dot=>dot.metric===metric&&shown.some(combo=>combo.combo_key===dot.combo_key));
-    const bucketTable=<table aria-label={`${metric} misses`}><caption>Average miss and same / off-by-1 / off-by-2+ shares</caption><thead><tr><th scope="col">Combo</th><th scope="col">Average miss</th><th scope="col">Within ±1</th><th scope="col">Same</th><th scope="col">Off by 1</th><th scope="col">Off by 2+</th><th scope="col">Paired sessions</th></tr></thead><tbody>{shown.map(combo=>{const cell=cells[combo.combo_key];return <tr key={combo.combo_key}><th scope="row">{letter(combo.combo_key)}</th>{cell?<><td>{cell.na||cell.off===null?unavailable(cell.na):cell.off}</td><td>{cell.within_1??'n/a'}</td><td>{cell.buckets?.same??'n/a'}</td><td>{cell.buckets?.off1??'n/a'}</td><td>{cell.buckets?.off2plus??'n/a'}</td><td>{paired(cell)}</td></>:<td colSpan={6}>n/a</td>}</tr>;})}</tbody></table>;
-    return <section key={metric} ref={node=>{sectionRefs.current[metric]=node;}}><GlobalsDotPlot metric={metric} title={`${metricNames[metric]??metric} ratings`} dots={dots} series={series} cells={cells}/><ChartFrame title={`${metricNames[metric]??metric} miss buckets`} howToRead="The segments show the server’s shares of exact matches, misses of one point and misses of two or more. Average miss, within ±1 and paired session counts are printed beside each bar." table={bucketTable}>
-     {shown.map(combo=>{const cell=cells[combo.combo_key];return <div key={combo.combo_key} className="deep-bucket-row"><strong>{letter(combo.combo_key)}</strong>{!cell||cell.na?<span>{unavailable(cell?.na)}</span>:<><div className="deep-stack" aria-label={`${letter(combo.combo_key)} same ${cell.buckets?.same??'n/a'}, off by 1 ${cell.buckets?.off1??'n/a'}, off by 2+ ${cell.buckets?.off2plus??'n/a'}`}>{(['same','off1','off2plus'] as const).map(bucket=><span className={`deep-${bucket}`} key={bucket} style={{width:`${(cell.buckets?.[bucket]??0)*100}%`}} title={`${bucket}: ${cell.buckets?.[bucket]??'n/a'}`}>{bucket}</span>)}</div><span>average miss {cell.off??'n/a'} · within ±1 {cell.within_1??'n/a'}</span></>}<span>{cell?paired(cell):'n/a'}</span></div>;})}
-    </ChartFrame></section>;
-   })}</div></section>
+    return <section key={metric} ref={node=>{sectionRefs.current[metric]=node;}}><GlobalsDotPlot metric={metric} title={`${metricNames[metric]??metric} ratings`} dots={dots} series={series} cells={cells}/></section>;
+   })}</div><MissBuckets globals={globals.map(([metric,cells])=>({metric,title:metricNames[metric]??metric,cells}))} series={series}/></section>
    <section><h3>Counts</h3>{codes.map(code=>{
     const human=data.counts.human?.[code];
     const table=<table aria-label={`${code} counts`}><caption>Same-cohort count means and bias</caption><thead><tr><th scope="col">Reference / combo</th><th scope="col">Mean count</th><th scope="col">Bias</th><th scope="col">Paired sessions</th></tr></thead><tbody><tr><th scope="row">Human</th><td>{human?.value??unavailable(human?.na)}</td><td>Reference</td><td>n={human?.n??0}</td></tr>{shown.map(combo=>{const cell=data.counts.cells[code][combo.combo_key],bias=data.counts.bias_pct[code]?.[combo.combo_key];return <tr key={combo.combo_key}><th scope="row">{letter(combo.combo_key)}</th><td>{cell?.na||cell?.value===null?unavailable(cell?.na):cell?.value??'n/a'}</td><td>{bias?.na||bias?.value===null?unavailable(bias?.na):bias?.value??'n/a'}</td><td>{cell?paired(cell):'n/a'}</td></tr>;})}</tbody></table>;
