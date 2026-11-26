@@ -53,3 +53,21 @@ it('marks n/a and failed cells with text, and says so when empty', () => {
  view.rerender(<InterviewGrid data={data} legend={legendFor(data)} failed={[]} runId="r" navigate={vi.fn()} />);
  expect(screen.getByText('No session results available')).toBeTruthy();
 });
+
+it('tints cells by win share on a diverging scale and keeps text values', () => {
+ const data = base(); const [x, y] = data.combos.map(c => c.combo_key);
+ data.combos = [...data.combos, { ...data.combos[0], combo_key: 'third' }];
+ data.head_to_head = [
+  { a: x, b: y, a_closer: 9, b_closer: 1, ties: 0, n: 10, na: null },
+  { a: x, b: 'third', a_closer: 6, b_closer: 4, ties: 0, n: 10, na: null },
+ ] as CompareAnalysis['head_to_head'];
+ render(<HeadToHead data={data} legend={legendFor(data)} failed={noFail} />);
+ const matrix = screen.getByRole('table', { name: 'Head-to-head' });
+ const strong = within(matrix).getByLabelText('A closer than B on 9 of 10 sessions, 0 ties') as HTMLElement;
+ const weak = within(matrix).getByLabelText('A closer than C on 6 of 10 sessions, 0 ties') as HTMLElement;
+ expect(strong.style.backgroundColor).not.toBe('');
+ expect(weak.style.backgroundColor).not.toBe('');
+ expect(strong.style.backgroundColor).not.toBe(weak.style.backgroundColor);
+ expect(strong.textContent).toContain('9 of 10'); expect(weak.textContent).toContain('6 of 10');
+ expect(screen.getByText(/Ties count for neither combo/)).toBeTruthy();
+});

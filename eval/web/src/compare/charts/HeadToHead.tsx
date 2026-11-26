@@ -1,4 +1,5 @@
 import { Chip } from '../../ui/Chip';
+import { winShareTint } from '../../ui/chart/theme';
 import { ComboTag } from '../../ui/ComboTag';
 import type { CompareAnalysis } from '../compareApi';
 import type { ComboLegendEntry } from '../compareTypes';
@@ -24,7 +25,7 @@ export function HeadToHead({ data, legend, failed }: { data: CompareAnalysis; le
   const wins = pair.a === r ? pair.a_closer : pair.b_closer, losses = pair.a === r ? pair.b_closer : pair.a_closer;
   const verdict = wins > losses ? 'ahead' : wins < losses ? 'behind' : 'even';
   const share = pair.n ? wins / pair.n : 0;
-  return <td key={c} className={`mx-cell mx-${verdict}`} data-verdict={verdict} data-win-share={Number(share.toFixed(2))}
+  return <td key={c} className={`mx-cell mx-${verdict}`} data-verdict={verdict} data-win-share={Number(share.toFixed(2))} style={{ backgroundColor: winShareTint(share) }}
    aria-label={`${letter(r)} closer than ${letter(c)} on ${wins} of ${pair.n} sessions, ${pair.ties} ties`}>
    <b>{wins} of {pair.n}</b><span className="mx-sub">{verdict} · {pair.ties} {pair.ties === 1 ? 'tie' : 'ties'}</span>
   </td>;
@@ -37,6 +38,6 @@ export function HeadToHead({ data, legend, failed }: { data: CompareAnalysis; le
    <thead><tr><th scope="col" className="mx-corner">Closer ↓ / than →</th>{data.combos.map(c => <th scope="col" key={c.combo_key} className={failedAll.has(c.combo_key) ? 'mx-muted' : undefined}>{head(c.combo_key)}</th>)}</tr></thead>
    <tbody>{data.combos.map(row => <tr key={row.combo_key} className={failedAll.has(row.combo_key) ? 'mx-failed' : undefined}><th scope="row">{head(row.combo_key)}</th>{data.combos.map(col => cell(row.combo_key, col.combo_key))}</tr>)}</tbody>
   </table>
-  <p className="mx-note">Ties count for neither combo. Green: row ahead; red: row behind; neutral: even.</p>
+  <p className="mx-note">Ties count for neither combo. Shade shows the row combo's win share: green above half, red below, white at half.</p>
  </section>;
 }
