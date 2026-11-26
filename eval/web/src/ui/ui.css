@@ -32,3 +32,11 @@
 .ui-copy { display: inline-flex; align-items: center; gap: .35rem; font: inherit; font-size: .8125rem; font-weight: 550; min-height: 1.85rem; margin: 0; padding: .1rem .6rem; border: 1px solid var(--border-strong, #6e7e7c); border-radius: calc(var(--radius, .5rem) - 2px); background: var(--card, #fff); color: var(--foreground, #171c1c); cursor: pointer; }
 .ui-copy svg { width: 1em; height: 1em; flex: none; }
 .ui-copy:focus-visible { outline: 2px solid var(--ring, #0b5f5a); outline-offset: 2px; }
+
+.ui-dialog { max-width: min(40rem, calc(100vw - 2rem)); max-height: calc(100vh - 2rem); overflow-y: auto; overflow-x: hidden; }
+.ui-dialog-body { min-width: 0; overflow-wrap: anywhere; }
+
+.ui-copyfield { display: grid; gap: .25rem; min-width: 0; }
+.ui-copyfield-label { font-size: .72rem; text-transform: uppercase; letter-spacing: .05em; color: var(--ui-muted-fg); font-weight: 600; }
+.ui-copyfield-row { display: flex; align-items: flex-start; gap: .5rem; min-width: 0; }
+.ui-copyfield-value { flex: 1; min-width: 0; padding: .3rem .5rem; border: 1px solid var(--border, #d3dbda); border-radius: calc(var(--radius, .5rem) - 2px); background: var(--muted, #f7f9f9); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .8rem; overflow-wrap: anywhere; white-space: pre-wrap; }
