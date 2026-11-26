@@ -54,6 +54,17 @@ it.each([320, 768, 1280])('retains accessible chart/table structure at the %ipx 
  const media = [...sheet.sheet!.cssRules].filter((rule): rule is CSSMediaRule => rule.type === CSSRule.MEDIA_RULE);
  expect(media.some(rule => rule.conditionText.replaceAll(' ', '') === '(max-width:760px)')).toBe(true);
  expect(width <= 760).toBe(width === 320);
+ // Line view: fixed-layout lane table that wraps (no scroll region), stacked cards at <=760px, no pixel widths.
+ const lineView = view.container.querySelector('.line-view') as HTMLElement;
+ expect(lineView.querySelector('.line-lanes table')).toBeTruthy();
+ expect(lineView.querySelector('.line-lanes [role="region"], .line-lanes .table-scroll')).toBeNull();
+ expect(lineView.querySelector('.line-lanes td.line-verbatim, .line-lanes [data-transcript]')).toBeTruthy();
+ const lineCss = css('lineView.css');
+ expect(lineCss).toMatch(/\.line-view table\s*\{[^}]*table-layout:\s*fixed/);
+ expect(lineCss).toMatch(/\.line-view table\s*\{[^}]*width:\s*100%/);
+ expect(lineCss).toMatch(/@media \(max-width: 760px\)\s*\{[\s\S]*\.line-view tr[^{]*\{[^}]*display:\s*block/);
+ expect(lineCss).toMatch(/td\[data-label\]::before/);
+ expect(lineCss).not.toMatch(/overflow(-x)?\s*:\s*(auto|scroll)/);
  // Wide content wraps inside its container, not a fixed pixel width on a page.
  expect(styles).not.toMatch(/(?:^|[;{])\s*width:\s*\d+px/);
  expect(view.container.querySelector('[style*="width: 320px"], [style*="width: 768px"], [style*="width: 1280px"]')).toBeNull();

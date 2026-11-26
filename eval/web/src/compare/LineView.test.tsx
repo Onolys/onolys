@@ -123,3 +123,14 @@ it('wraps long unbroken transcript text in a wrapping cell',()=>{
  const cell=view.container.querySelector('[data-turn="t5"] [data-transcript]') as HTMLElement;expect(cell.textContent).toBe('x'.repeat(500));expect(cell.className).toContain('line-verbatim');
  expect(lineCss).toMatch(/\.line-verbatim[^}]*overflow-wrap:\s*anywhere/);
 });
+it('composes filters, lanes, one verbatim note, ratings toggle and popup in PRD order with ratings closed',()=>{
+ const p=props();const view=render(<LineView {...p}/>);
+ const root=view.container.querySelector('.line-view') as HTMLElement;
+ const at=(sel:string)=>{const node=root.querySelector(sel);expect(node,sel).toBeTruthy();return node as Element;};
+ const before=(a:Element,b:Element)=>expect(a.compareDocumentPosition(b)&Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+ const filters=at('.line-filters'),lanes=at('.line-lanes'),ratings=at('.line-ratings');
+ before(filters,lanes);before(lanes,ratings);
+ expect(screen.getByRole('button',{name:'Show global ratings'}).getAttribute('aria-expanded')).toBe('false');
+ expect(screen.queryByRole('table',{name:'Session global ratings'})).toBeNull();expect(p.api.compareReasoning).not.toHaveBeenCalled();
+ expect(screen.queryByRole('dialog')).toBeNull();expect(root.querySelectorAll('.line-lanes .ui-note')).toHaveLength(1);
+});
