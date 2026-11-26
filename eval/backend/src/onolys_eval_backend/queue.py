@@ -34,9 +34,19 @@ class CloudTasksQueue:
     def __init__(self, config: EvalConfig, client, *, now: Callable = lambda: datetime.now(UTC)):
         self.config, self.client, self.now = config, client, now
 
+    @property
+    def queue_path(self) -> str:
+        """Deployed TASKS_QUEUE is the bare queue name; Cloud Tasks needs the full resource path."""
+        queue = self.config.tasks_queue
+        if "/" in queue:
+            return queue
+        region = self.config.settings.region
+        return f"projects/{self.config.project}/locations/{region}/queues/{queue}"
+
     def enqueue(self, kind, payload, *, delay_seconds=0, task_id=None):
         if kind not in {"transcribe", "tick", "delete"}:
             raise ValueError("Unknown task kind")
+        parent = self.queue_path
         task = {
             "http_request": {
                 "http_method": "POST",
@@ -53,11 +63,11 @@ class CloudTasksQueue:
         if delay_seconds:
             task["schedule_time"] = self.now() + timedelta(seconds=delay_seconds)
         if task_id is not None:
-            task["name"] = f"{self.config.tasks_queue}/tasks/{task_id}"
+            task["name"] = f"{parent}/tasks/{task_id}"
         from google.api_core.exceptions import AlreadyExists
 
         try:
-            self.client.create_task(parent=self.config.tasks_queue, task=task)
+            self.client.create_task(parent=parent, task=task)
         except AlreadyExists:
             if task_id is None:
                 raise

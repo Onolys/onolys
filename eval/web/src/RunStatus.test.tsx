@@ -42,3 +42,9 @@ it('renders skipped units as skipped and n/a with the API reason; shows provider
  expect(screen.getByText('Gemini is busy — waiting to retry')).toBeTruthy(); expect(screen.getByRole('cell', { name: 'waiting' })).toBeTruthy();
  expect(screen.getAllByText(/3\/9 runs done/)).toHaveLength(2); expect(screen.queryByText(/8\/9 units complete/)).toBeNull();
 });
+it('shows a readable reason for a run that failed before starting (enqueue_failed)', async () => {
+ const run = saved({ status: 'failed', done_units: 0, failed_units: 0, cancelled_units: 0, error: { code: 'enqueue_failed' } });
+ render(<RunView api={{ ...createEvalApi('', vi.fn()), run: vi.fn().mockResolvedValue(run) }} runId="r1" onRerun={vi.fn()} />); await act(async () => {});
+ expect(screen.getByRole('alert').textContent).toContain('Run failed to start: could not queue it for processing');
+ expect(screen.getByRole('status').textContent).toContain('failed');
+});

@@ -383,6 +383,31 @@ def test_factory_prices_are_lazy_without_cloud(services):
     assert "audio_bucket" not in factory.__dict__ and "repository" not in factory.__dict__
 
 
+def test_failed_run_exposes_error_code_in_summary_and_detail(services):
+    c = client(services=services)
+    rid, _ = make_run(c, engines=["miti"])
+    services.repository.update_run(
+        rid, {"status": "failed", "error": {"code": "enqueue_failed", "secret": "x"}}
+    )
+    (summary,) = c.get("/v1/runs", headers=AUTH).json()["runs"]
+    assert summary["error"] == {"code": "enqueue_failed"}
+    assert detail(c, rid)["error"] == {"code": "enqueue_failed"}
+
+
+def test_enqueue_failure_logs_exception_message(services, caplog):
+    import logging
+
+    def boom(*args, **kwargs):
+        raise PermissionError("403 queue denied")
+
+    services.queue.enqueue = boom
+    c = client(services=services)
+    with caplog.at_level(logging.ERROR):
+        rid, _ = make_run(c)
+    assert detail(c, rid)["status"] == "failed"
+    assert any("403 queue denied" in r.getMessage() for r in caplog.records)
+
+
 def test_detail_defers_compare_to_dedicated_routes(services):
     c = client(services=services)
     rid, _ = make_run(c)

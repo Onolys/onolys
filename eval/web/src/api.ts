@@ -42,7 +42,7 @@ export interface RunSummary extends Omit<RunInput, 'selection'> {
  run_id: string; status: RunStatus; created_at: string; cancel_requested?: boolean; cancelled_at?: string | null; skipped_units?: number; provider_skips?: { provider: string; after_failures: number; skipped_cells: number; skipped_at: string }[];
  total_units: number; completed_units: number; done_units: number; failed_units: number; cancelled_units: number;
  usage: { input_tokens: number; output_tokens: number; cost_usd?: number | null; calls?: number };
- cost_usd_est: number | null; unpriced_units: number;
+ cost_usd_est: number | null; unpriced_units: number; error?: { code: string } | null;
  engine_versions: Record<string, string>; engine_git_sha: Record<string, string> | string; resolved_presets: Record<string, unknown>;
  resolved_combos?: Record<string, unknown>; base_preset?: string;
 }
