@@ -3,13 +3,14 @@ import { ChartFrame } from './ChartFrame';
 import { EvalLink } from './CompareLink';
 import type { CompareCell, CompareDeepDive, CompareOptions, NA, Snippet } from './compareApi';
 import type { CompareTabProps } from './compareTypes';
+import { GlobalsDotPlot } from './charts/GlobalsDotPlot';
+import type { DotSeries } from './charts/dotPlotLayout';
 import { ComboSelector, pairedSessions } from './charts/ComboSelector';
 import { failedCombos } from './failedCombos';
 import './deepDive.css';
 
 const unavailable=(na:NA|undefined)=>`n/a${na?` - ${na.reason}`:''}`;
 const paired=(cell:CompareCell)=>`paired ${cell.n} of ${cell.of} · ${cell.repeats} repeats`;
-const shapes=['◆','■','▲','✚','▼','✦'];
 const metricNames:Record<string,string>={cct:'Cultivating change talk',sst:'Softening sustain talk',partnership:'Partnership',empathy:'Empathy'};
 type Props=CompareTabProps<CompareDeepDive>;
 function Scroll({name,children}:{name:string;children:ReactNode}) {
@@ -89,7 +90,9 @@ function LineAgreement({data,legend,runId,navigate,state,api}:Props) {
 export function DeepDive(props:Props) {
  const {data,legend,state,navigate,runId,api}=props;
  const selected=state.combos?.length?state.combos:data.combos.map(combo=>combo.combo_key);
- const shown=data.combos.filter(combo=>selected.includes(combo.combo_key));
+ const failedAll=new Set(failedCombos(props.overview).filter(item=>item.all).map(item=>item.combo_key));
+ const shown=data.combos.filter(combo=>selected.includes(combo.combo_key)&&!failedAll.has(combo.combo_key));
+ const series:DotSeries[]=shown.map(combo=>{const index=Math.max(0,legend.findIndex(item=>item.combo.combo_key===combo.combo_key));return {key:combo.combo_key,letter:legend[index]?.letter??combo.combo_key,index,label:legend[index]?.label??combo.combo_key};});
  const letter=(key:string)=>legend.find(item=>item.combo.combo_key===key)?.letter??key;
  const sectionRefs=useRef<Record<string,HTMLElement|null>>({});
  useEffect(()=>{if(state.metric)sectionRefs.current[state.metric]?.scrollIntoView?.({block:'start'});},[state.metric,data]);
@@ -99,22 +102,13 @@ export function DeepDive(props:Props) {
  return <div className="deep-dive"><h2>Deep dive</h2>
   <ComboSelector legend={legend} failed={failedCombos(props.overview)} selected={selected} paired={pairedSessions(props.overview,selected)} onChange={keys=>navigate({...state,view:'compare',run:runId,tab:'deep',combos:keys})}/>
   {!data.has_human?<p>no human reference</p>:<>
-   <section><h3>Globals</h3>{globals.map(([metric,cells])=>{
+   <section><h3>Globals</h3><div className="deep-grid">{globals.map(([metric,cells])=>{
     const dots=data.globals.dots.filter(dot=>dot.metric===metric&&shown.some(combo=>combo.combo_key===dot.combo_key));
-    const sessions=[...new Set(dots.map(dot=>dot.session_id))];
-    const laneHeight=22+Math.max(0,...dots.map(dot=>dot.values.length))*3;
-    const sessionHeight=35+shown.length*laneHeight;
-    const dotTable=<table aria-label={`${metric} ratings`}><caption>Per-session ratings, repeated runs shown individually</caption><thead><tr><th scope="col">Session</th><th scope="col">Human</th>{shown.map(combo=><th scope="col" key={combo.combo_key}>{letter(combo.combo_key)}</th>)}</tr></thead><tbody>{sessions.map(session=><tr key={session}><th scope="row">{session}</th><td>{dots.find(dot=>dot.session_id===session)?.human??'n/a'}</td>{shown.map(combo=>{const dot=dots.find(dot=>dot.session_id===session&&dot.combo_key===combo.combo_key);return <td key={combo.combo_key}>{dot?.values.length?dot.values.join(', '):unavailable(cells[combo.combo_key]?.na)} · n={dot?.n??0} · {dot?.repeats??0} repeats</td>;})}</tr>)}</tbody></table>;
     const bucketTable=<table aria-label={`${metric} misses`}><caption>Average miss and same / off-by-1 / off-by-2+ shares</caption><thead><tr><th scope="col">Combo</th><th scope="col">Average miss</th><th scope="col">Within ±1</th><th scope="col">Same</th><th scope="col">Off by 1</th><th scope="col">Off by 2+</th><th scope="col">Paired sessions</th></tr></thead><tbody>{shown.map(combo=>{const cell=cells[combo.combo_key];return <tr key={combo.combo_key}><th scope="row">{letter(combo.combo_key)}</th>{cell?<><td>{cell.na||cell.off===null?unavailable(cell.na):cell.off}</td><td>{cell.within_1??'n/a'}</td><td>{cell.buckets?.same??'n/a'}</td><td>{cell.buckets?.off1??'n/a'}</td><td>{cell.buckets?.off2plus??'n/a'}</td><td>{paired(cell)}</td></>:<td colSpan={6}>n/a</td>}</tr>;})}</tbody></table>;
-    return <section key={metric} ref={node=>{sectionRefs.current[metric]=node;}}><ChartFrame title={`${metricNames[metric]??metric} ratings`} howToRead="Each session has a human circle and a different letter and shape for each combo. Repeated ratings appear separately on the 1–5 scale; no average rating is inferred." table={dotTable}>
-     <Scroll name={`${metric} per-session ratings`}><svg viewBox={`0 0 760 ${65+sessions.length*sessionHeight}`} role="img" aria-label={`${metric} session dots`}><text x="230" y="20">1</text><text x="350" y="20">2</text><text x="470" y="20">3</text><text x="590" y="20">4</text><text x="710" y="20">5</text>{sessions.map((session,index)=>{
-      const top=55+index*sessionHeight,human=dots.find(dot=>dot.session_id===session)?.human;
-      return <g key={session}><text x="0" y={top}>{session}</text>{human!==null&&human!==undefined&&<g data-global-dot="human"><circle cx={230+(human-1)*120} cy={top-5} r="5"/><text x="165" y={top}>○ H</text></g>}{shown.map((combo,ci)=>{const dot=dots.find(dot=>dot.session_id===session&&dot.combo_key===combo.combo_key);return <g key={combo.combo_key}><text x="165" y={top+laneHeight*(ci+1)}>{shapes[ci%shapes.length]} {letter(combo.combo_key)}</text>{dot?.values.map((value,repeat)=><text data-global-dot={combo.combo_key} key={repeat} x={230+(value-1)*120} y={top+laneHeight*(ci+1)+repeat*3}>{shapes[ci%shapes.length]}<title>{`${session}, ${letter(combo.combo_key)}, repeat ${repeat+1}: ${value}`}</title></text>)}</g>;})}</g>;
-     })}</svg></Scroll>
-    </ChartFrame><ChartFrame title={`${metricNames[metric]??metric} miss buckets`} howToRead="The segments show the server’s shares of exact matches, misses of one point and misses of two or more. Average miss, within ±1 and paired session counts are printed beside each bar." table={bucketTable}>
+    return <section key={metric} ref={node=>{sectionRefs.current[metric]=node;}}><GlobalsDotPlot metric={metric} title={`${metricNames[metric]??metric} ratings`} dots={dots} series={series} cells={cells}/><ChartFrame title={`${metricNames[metric]??metric} miss buckets`} howToRead="The segments show the server’s shares of exact matches, misses of one point and misses of two or more. Average miss, within ±1 and paired session counts are printed beside each bar." table={bucketTable}>
      {shown.map(combo=>{const cell=cells[combo.combo_key];return <div key={combo.combo_key} className="deep-bucket-row"><strong>{letter(combo.combo_key)}</strong>{!cell||cell.na?<span>{unavailable(cell?.na)}</span>:<><div className="deep-stack" aria-label={`${letter(combo.combo_key)} same ${cell.buckets?.same??'n/a'}, off by 1 ${cell.buckets?.off1??'n/a'}, off by 2+ ${cell.buckets?.off2plus??'n/a'}`}>{(['same','off1','off2plus'] as const).map(bucket=><span className={`deep-${bucket}`} key={bucket} style={{width:`${(cell.buckets?.[bucket]??0)*100}%`}} title={`${bucket}: ${cell.buckets?.[bucket]??'n/a'}`}>{bucket}</span>)}</div><span>average miss {cell.off??'n/a'} · within ±1 {cell.within_1??'n/a'}</span></>}<span>{cell?paired(cell):'n/a'}</span></div>;})}
     </ChartFrame></section>;
-   })}</section>
+   })}</div></section>
    <section><h3>Counts</h3>{codes.map(code=>{
     const human=data.counts.human?.[code];
     const table=<table aria-label={`${code} counts`}><caption>Same-cohort count means and bias</caption><thead><tr><th scope="col">Reference / combo</th><th scope="col">Mean count</th><th scope="col">Bias</th><th scope="col">Paired sessions</th></tr></thead><tbody><tr><th scope="row">Human</th><td>{human?.value??unavailable(human?.na)}</td><td>Reference</td><td>n={human?.n??0}</td></tr>{shown.map(combo=>{const cell=data.counts.cells[code][combo.combo_key],bias=data.counts.bias_pct[code]?.[combo.combo_key];return <tr key={combo.combo_key}><th scope="row">{letter(combo.combo_key)}</th><td>{cell?.na||cell?.value===null?unavailable(cell?.na):cell?.value??'n/a'}</td><td>{bias?.na||bias?.value===null?unavailable(bias?.na):bias?.value??'n/a'}</td><td>{cell?paired(cell):'n/a'}</td></tr>;})}</tbody></table>;

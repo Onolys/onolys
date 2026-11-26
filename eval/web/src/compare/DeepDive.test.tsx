@@ -99,3 +99,11 @@ it('switches displayed confusion data and links the multi bucket with exact filt
  const multi=view.container.querySelector('[data-confusion-multi]')!;fireEvent.click(multi);
  await act(async()=>{});expect(p.api.compareLineMatches).toHaveBeenLastCalledWith('r1',expect.objectContaining({combo:second,code:'multi',metric:'multi'}),expect.any(AbortSignal));
 });
+it('excludes an all-failed combo from the dot plots and greys it in the selector',()=>{
+ const p=props(),bad=p.data.combos[1].combo_key;
+ p.overview.excluded=Array.from({length:p.overview.header.sessions*p.overview.header.repeats},(_,i)=>({session_id:`s${i}`,combo_key:bad,reason:'failed:invalid_parameters'}));
+ const view=render(<DeepDive {...p}/>);
+ expect(screen.getByRole('button',{name:/B · .*failed: invalid_parameters/})).toHaveProperty('disabled',true);
+ expect(view.container.querySelectorAll(`[data-global-dot="${bad}"]`).length).toBe(0);
+ expect(view.container.querySelectorAll(`[data-global-dot="${p.data.combos[0].combo_key}"]`).length).toBeGreaterThan(0);
+});
