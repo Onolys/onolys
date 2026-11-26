@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
 import { createEvalApi } from '../api';
 import { DeepDive } from './DeepDive';
@@ -19,12 +19,13 @@ it('renders server values, same-cohort human means, n/of, bias words, dots and t
  const data=deep();data.counts.human={gi:{value:7.25,min:7,max:8,n:1,na:null}};
  const p=props(data); const view=render(<DeepDive {...p}/>);
  expect(screen.getByRole('button',{name:'Human'})).toHaveProperty('disabled',true);
- expect(screen.getAllByText('under-counts by 50%')[0]).toBeTruthy();
+ expect(screen.getAllByText('under-counts 50%')[0]).toBeTruthy();
  expect(screen.getAllByText(/n\/a - human count is zero/).length).toBeGreaterThan(0);
  expect(view.container.querySelector('[data-human-count="gi"]')?.textContent).toContain('7.25');
  expect(view.container.querySelectorAll('[data-global-dot]').length).toBe(40);
- expect(screen.getAllByText(/paired 2 of 2/).length).toBeGreaterThan(0);
- expect(screen.getAllByText(/How to read:/).length).toBeGreaterThan(5);
+ const card=view.container.querySelector('[data-count-card="gi"]') as HTMLElement;
+ expect(within(card).queryByRole('table',{name:'gi counts'})).toBeNull();fireEvent.click(within(card).getByRole('button',{name:'Show data'}));
+ expect(within(card).getByRole('table',{name:'gi counts'}).textContent).toContain('paired 2 of 2');
  expect(screen.getAllByRole('table',{name:'Line agreement'})[0].textContent).toContain('Precision');
  expect(screen.getByText('10 of 10 codes labeled')).toBeTruthy();expect(p.api.compareReasoning).not.toHaveBeenCalled();
 });

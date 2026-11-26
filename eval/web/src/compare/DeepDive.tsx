@@ -1,17 +1,17 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { ChartFrame } from './ChartFrame';
 import { EvalLink } from './CompareLink';
-import type { CompareCell, CompareDeepDive, CompareOptions, NA, Snippet } from './compareApi';
+import type { CompareDeepDive, CompareOptions, NA, Snippet } from './compareApi';
 import type { CompareTabProps } from './compareTypes';
 import { GlobalsDotPlot } from './charts/GlobalsDotPlot';
 import { MissBuckets } from './charts/MissBuckets';
+import { CountBars } from './charts/CountBars';
 import type { DotSeries } from './charts/dotPlotLayout';
 import { ComboSelector, pairedSessions } from './charts/ComboSelector';
 import { failedCombos } from './failedCombos';
 import './deepDive.css';
 
 const unavailable=(na:NA|undefined)=>`n/a${na?` - ${na.reason}`:''}`;
-const paired=(cell:CompareCell)=>`paired ${cell.n} of ${cell.of} · ${cell.repeats} repeats`;
 const metricNames:Record<string,string>={cct:'Cultivating change talk',sst:'Softening sustain talk',partnership:'Partnership',empathy:'Empathy'};
 type Props=CompareTabProps<CompareDeepDive>;
 function Scroll({name,children}:{name:string;children:ReactNode}) {
@@ -97,7 +97,6 @@ export function DeepDive(props:Props) {
  const letter=(key:string)=>legend.find(item=>item.combo.combo_key===key)?.letter??key;
  const sectionRefs=useRef<Record<string,HTMLElement|null>>({});
  useEffect(()=>{if(state.metric)sectionRefs.current[state.metric]?.scrollIntoView?.({block:'start'});},[state.metric,data]);
- const maxCount=Math.max(1,...Object.values(data.counts.cells).flatMap(cells=>Object.values(cells).map(cell=>cell.value??0)),...Object.values(data.counts.human??{}).map(cell=>cell.value??0));
  const globals=Object.entries(data.globals.cells);
  const codes=Object.keys(data.counts.cells);
  return <div className="deep-dive"><h2>Deep dive</h2>
@@ -107,14 +106,7 @@ export function DeepDive(props:Props) {
     const dots=data.globals.dots.filter(dot=>dot.metric===metric&&shown.some(combo=>combo.combo_key===dot.combo_key));
     return <section key={metric} ref={node=>{sectionRefs.current[metric]=node;}}><GlobalsDotPlot metric={metric} title={`${metricNames[metric]??metric} ratings`} dots={dots} series={series} cells={cells}/></section>;
    })}</div><MissBuckets globals={globals.map(([metric,cells])=>({metric,title:metricNames[metric]??metric,cells}))} series={series}/></section>
-   <section><h3>Counts</h3>{codes.map(code=>{
-    const human=data.counts.human?.[code];
-    const table=<table aria-label={`${code} counts`}><caption>Same-cohort count means and bias</caption><thead><tr><th scope="col">Reference / combo</th><th scope="col">Mean count</th><th scope="col">Bias</th><th scope="col">Paired sessions</th></tr></thead><tbody><tr><th scope="row">Human</th><td>{human?.value??unavailable(human?.na)}</td><td>Reference</td><td>n={human?.n??0}</td></tr>{shown.map(combo=>{const cell=data.counts.cells[code][combo.combo_key],bias=data.counts.bias_pct[code]?.[combo.combo_key];return <tr key={combo.combo_key}><th scope="row">{letter(combo.combo_key)}</th><td>{cell?.na||cell?.value===null?unavailable(cell?.na):cell?.value??'n/a'}</td><td>{bias?.na||bias?.value===null?unavailable(bias?.na):bias?.value??'n/a'}</td><td>{cell?paired(cell):'n/a'}</td></tr>;})}</tbody></table>;
-    return <section key={code} ref={node=>{sectionRefs.current[code]=node;}}><ChartFrame title={`${code} counts`} howToRead="Human and combo bars use the same paired cohort supplied by the server. Bias words describe the saved percentage; n/a retains the server’s reason." table={table}>
-     <div className="deep-count-row" data-human-count={code}><strong>Human</strong><div className="deep-count-track"><span style={{width:`${(human?.value??0)/maxCount*100}%`}}/></div><span>{human?.value??unavailable(human?.na)} · n={human?.n??0}</span></div>
-     {shown.map(combo=>{const cell=data.counts.cells[code][combo.combo_key],bias=data.counts.bias_pct[code]?.[combo.combo_key];return <div key={combo.combo_key} className="deep-count-row"><strong>{letter(combo.combo_key)}</strong><div className="deep-count-track"><span style={{width:`${(cell?.value??0)/maxCount*100}%`}}/></div><span>{cell?.na||cell?.value===null?unavailable(cell?.na):cell?.value??'n/a'} · {cell?paired(cell):'n/a'}</span><span>{!bias||bias.na||bias.value===null?unavailable(bias?.na):bias.value>0?`over-counts by ${bias.value}%`:bias.value<0?`under-counts by ${Math.abs(bias.value)}%`:'no count bias'}</span></div>;})}
-    </ChartFrame></section>;
-   })}</section>
+   <section><h3>Counts per code</h3><CountBars codes={codes} human={data.counts.human} cells={data.counts.cells} bias={data.counts.bias_pct} series={series} onSection={(code,node)=>{sectionRefs.current[code]=node;}}/></section>
    <LineAgreement key={selected.join(',')} {...props}/>
    <section className="deep-reasoning"><h3>Reasoning roll-up</h3><p>Snippets load on request, up to 50 per page. Empty saved reasoning is shown as withheld.</p>{codes.map(code=><section key={code}><h4>{code}</h4><div className="deep-reasoning-columns"><section aria-label={`${code} Human`}><h5>Human</h5><p>Count: {data.counts.human?.[code]?.value??unavailable(data.counts.human?.[code]?.na)} · n={data.counts.human?.[code]?.n??0}</p><ReasoningPanel key={`${code}-human-${selected.join(',')}`} code={code} letter="Human" count={undefined} api={api} runId={runId} selected={selected}/></section>{shown.map(combo=><ReasoningPanel key={`${code}-${combo.combo_key}-${selected.join(',')}`} code={code} combo={combo.combo_key} letter={letter(combo.combo_key)} count={data.rationale_counts[code]?.[combo.combo_key]} api={api} runId={runId} selected={selected}/>)}</div></section>)}</section>
   </>}
