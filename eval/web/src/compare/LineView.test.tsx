@@ -151,3 +151,22 @@ it('composes filters, lanes, one verbatim note, ratings toggle and popup in PRD 
  expect(screen.queryByRole('table',{name:'Session global ratings'})).toBeNull();expect(p.api.compareReasoning).not.toHaveBeenCalled();
  expect(screen.queryByRole('dialog')).toBeNull();expect(root.querySelectorAll('.line-lanes .ui-note')).toHaveLength(1);
 });
+function fourCombos() {
+ const p=props(),first=p.data.combos[0],keys=['c0','c1','c2','c3'];
+ const combos=keys.map(key=>({...first,combo_key:key}));
+ p.data.combos=combos;p.overview.combos=combos;
+ p.overview.count_error=Object.fromEntries(keys.map(key=>[key,structuredClone(Object.values(p.overview.count_error)[0])]));
+ return p;
+}
+it('sends only the shown lanes (at most three) so server disagreement ignores hidden combos',async()=>{
+ const p=fourCombos();render(<CompareApp api={p.api} runId="r1" state={{view:'compare',tab:'lines',session:'synthetic-s01',only:'disagree'}} navigate={p.navigate}/>);
+ await screen.findByLabelText('Combo');
+ expect(p.api.compareLines).toHaveBeenCalledWith('r1','synthetic-s01',expect.objectContaining({combos:['c0','c1','c2']}),expect.any(AbortSignal));
+ expect(p.api.compareLines).not.toHaveBeenCalledWith('r1','synthetic-s01',expect.objectContaining({combos:expect.arrayContaining(['c3'])}),expect.any(AbortSignal));
+});
+it('swaps a navigated combo outside the first three into the shown lanes and selects it',async()=>{
+ const p=fourCombos();render(<CompareApp api={p.api} runId="r1" state={{view:'compare',tab:'lines',session:'synthetic-s01',combo:'c3'}} navigate={p.navigate}/>);
+ await screen.findByLabelText('Combo');
+ expect(p.api.compareLines).toHaveBeenCalledWith('r1','synthetic-s01',expect.objectContaining({combos:['c0','c1','c3'],combo:'c3'}),expect.any(AbortSignal));
+ expect((screen.getByLabelText('Combo') as HTMLSelectElement).value).toBe('c3');
+});
