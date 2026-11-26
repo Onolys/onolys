@@ -1522,11 +1522,23 @@ class FirestoreRepo:
 
     def put_idempotency(self, uid: str, key: str, doc: IdempotencyDoc) -> bool:
         ref = self._top("idempotency", _idem_id(uid, key))
-        try:
-            ref.create({**doc.to_store(), "uid": uid})
-        except AlreadyExists:
-            return False
-        return True
+        data = {**doc.to_store(), "uid": uid}
+        # Same-key requests race on this one doc. Firestore answers concurrent writers with
+        # Aborted (lock timeout / contention), which is not a failure of ours: the write was not
+        # applied. If the doc now exists someone won (we lost, like AlreadyExists); else retry.
+        for attempt in range(_TXN_ROUNDS):
+            try:
+                ref.create(data)
+                return True
+            except AlreadyExists:
+                return False
+            except Aborted:
+                if ref.get().exists:
+                    return False
+                if attempt == _TXN_ROUNDS - 1:
+                    raise
+                time.sleep(random.uniform(0.01, 0.15))
+        raise AssertionError("unreachable")  # pragma: no cover
 
     def delete_idempotency(self, uid: str, key: str) -> None:
         ref = self._top("idempotency", _idem_id(uid, key))
