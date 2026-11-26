@@ -25,7 +25,8 @@ def validate(role: str, env: dict[str, str]) -> None:
             raise ValueError('EVAL_GCP_PROJECT must be onolys-eval; eval no longer has a legacy target')
         return
     if project != f'onolys-{role}':
-        raise ValueError(f'{prefix}_GCP_PROJECT must be onolys-{role}; clear it to use the legacy target')
+        hint = '; clear it to use the legacy target' if role == 'staging' else ''
+        raise ValueError(f'{prefix}_GCP_PROJECT must be onolys-{role}{hint}')
     values = {field: env.get(f'{prefix}_{field}', '') for field in ('WIF_PROVIDER', 'DEPLOYER_SA', 'HOSTING_SITE')}
     missing = [f'{prefix}_{field}' for field, value in values.items() if not value]
     if missing:

@@ -49,16 +49,16 @@ def test_default_project_is_eval():
     assert ctu.DEFAULT_PROJECT == "onolys-eval"
 
 
-@pytest.mark.parametrize("project", ["onolys", "onolys-prod", "1054076260967", " Onolys "])
-def test_prod_project_refused(project, capsys):
+@pytest.mark.parametrize("project", ["onolys", "onolys-prod", "1054076260967", " Onolys ", "my-sandbox", ""])
+def test_non_allowlisted_project_refused(project, capsys):
     c = Fake()
     rc, out = run(["--project", project, "--email", "a@b.co", "--password", "Sup3rSecret!"], c, capsys)
-    assert rc == 2 and "prod" in out.err.lower()
+    assert rc == 2 and "allowed" in out.err.lower()
     assert c.created == [] and c.updated == []
 
 
-@pytest.mark.parametrize("project", ["onolys-eval", "onolys-staging", "my-sandbox"])
-def test_non_prod_projects_allowed(project):
+@pytest.mark.parametrize("project", ["onolys-eval", "onolys-staging", " Onolys-Eval "])
+def test_allowlisted_projects_allowed(project):
     assert ctu.project_errors(project) == []
 
 

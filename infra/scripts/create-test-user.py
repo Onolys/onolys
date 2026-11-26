@@ -3,8 +3,8 @@
 
 Eval has no sign-up and sends no email: the operator runs this script to create accounts directly in the
 project's Identity Platform with emailVerified=true (the API/eval backend reject unverified emails). It uses the
-Identity Toolkit management API with ADC and the target project as quota project. The prod project `onolys` is
-refused. Default project: onolys-eval.
+Identity Toolkit management API with ADC and the target project as quota project. Only an allowlist of non-prod
+projects (onolys-eval, onolys-staging) is accepted; anything else exits 2. Default project: onolys-eval.
 
 Usage:
   python3 infra/scripts/create-test-user.py --email a@b.co                 # password from $ONOLYS_ACCOUNT_PASSWORD, else prompted (no echo)
@@ -27,15 +27,15 @@ import sys
 import urllib.request
 
 DEFAULT_PROJECT = "onolys-eval"
-PROD_PROJECTS = {"onolys", "onolys-prod", "1054076260967"}  # id, name and display name of prod
+ALLOWED_PROJECTS = {"onolys-eval", "onolys-staging"}
 PASSWORD_ENV = "ONOLYS_ACCOUNT_PASSWORD"
 MIN_LEN = 8  # identity-config.py POLICY minPasswordLength
 SYMBOLS = "!@#$%^&*-_"
 
 
 def project_errors(project):
-    if project.strip().lower() in PROD_PROJECTS:
-        return [f"refusing to touch production project {project!r}; use a non-prod project such as {DEFAULT_PROJECT}"]
+    if project.strip().lower() not in ALLOWED_PROJECTS:
+        return [f"refusing project {project!r}; allowed: {', '.join(sorted(ALLOWED_PROJECTS))}"]
     return []
 
 
@@ -139,7 +139,7 @@ def main(argv=None, client=None, env=None, prompt=prompt_password):
     if errs:
         print("error: password " + "; ".join(errs), file=sys.stderr)
         return 2
-    c = client or Client(args.project)
+    c = client or Client(args.project.strip().lower())
     uid = c.lookup(email)
     if uid and not args.update:
         print(f"error: user {email} already exists; not modified (use --update to reset its password)", file=sys.stderr)
@@ -148,7 +148,7 @@ def main(argv=None, client=None, env=None, prompt=prompt_password):
         c.update(uid, password)
     else:
         c.create(email, password)
-    print(f"email: {email}\nproject: {args.project}" + (f"\npassword: {password}" if generated else ""))
+    print(f"email: {email}\nproject: {args.project.strip().lower()}" + (f"\npassword: {password}" if generated else ""))
     return 0
 
 

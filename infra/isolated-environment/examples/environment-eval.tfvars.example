@@ -2,7 +2,7 @@ environment       = "eval"
 project           = "onolys-eval"
 hosting_site_id   = "onolys-eval-app"
 audio_bucket_name = "onolys-eval-audio"
-# Own sign-in: Identity Platform (email/password) + Firebase web app in onolys-eval. Eval users re-register.
+# Own sign-in: Identity Platform (email/password) + Firebase web app in onolys-eval. Users are not migrated; the operator creates accounts with infra/scripts/create-test-user.py.
 auth_project      = "onolys-eval"
 manage_identity   = true
 # Empty = new project-owned bucket. Content is populated only after validation.

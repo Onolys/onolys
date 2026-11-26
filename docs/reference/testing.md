@@ -135,13 +135,13 @@ PR #35 preview: web `onolys-app-staging--pr-35-kkj34ogl.web.app`, API tag `pr-35
 
 ### Test user for previews and staging
 
-The API rejects unverified emails, so a normal signup cannot sign in without the verify link. Create a pre-verified user instead (ADC; default project `onolys-eval`, pass `--project` for another non-prod project; the prod project `onolys` is refused):
+The API rejects unverified emails, so a normal signup cannot sign in without the verify link. Create a pre-verified user instead (ADC; default project `onolys-eval`; for PR previews and staging pass `--project onolys-staging`; only `onolys-eval` and `onolys-staging` are accepted, anything else exits 2):
 
 ```
-python3 infra/scripts/create-test-user.py [--email EMAIL] [--generate] [--update] [--project PROJECT]   # password: $ONOLYS_ACCOUNT_PASSWORD or prompt
+python3 infra/scripts/create-test-user.py --project onolys-staging [--email EMAIL] [--generate] [--update]   # password: $ONOLYS_ACCOUNT_PASSWORD or prompt
 ```
 
-It prints `email:` and `password:` (defaults: `test-onolys-<8 hex>@onolys.com` and a generated strong password; an existing email exits non-zero and is not modified). Open the PR preview (or staging) `/login` and sign in with email and password. Google sign-in does not work on previews (see above).
+It prints `email:` and `project:`, and `password:` only when the password was generated (`--generate`, or no `--email`, and no `$ONOLYS_ACCOUNT_PASSWORD`/`--password` given); default email `test-onolys-<8 hex>@onolys.com`. An existing email exits non-zero and is not modified. Open the PR preview (or staging) `/login` and sign in with email and password. Google sign-in does not work on previews (see above).
 
 The Firebase Auth user pool is shared by staging and prod (only the Firestore databases are separate), so the account also exists in prod's pool. Delete test users in the Firebase console (Authentication, Users) when done.
 

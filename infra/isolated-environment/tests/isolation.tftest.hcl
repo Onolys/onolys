@@ -193,6 +193,10 @@ run "eval_manages_its_own_identity_and_domain" {
     error_message = "Eval authorizes its own site and eval.onolys.com."
   }
   assert {
+    condition     = length(google_identity_platform_config.this[0].client) == 1 && google_identity_platform_config.this[0].client[0].permissions[0].disabled_user_signup == true
+    error_message = "Eval disables self sign-up; accounts are created by the operator script."
+  }
+  assert {
     condition     = length(google_firebase_hosting_custom_domain.eval) == 1 && google_firebase_hosting_custom_domain.eval[0].custom_domain == "eval.onolys.com"
     error_message = "eval.onolys.com is a custom domain of the isolated eval site."
   }
@@ -210,5 +214,9 @@ run "staging_has_no_custom_domain_or_eval_host" {
   assert {
     condition     = length(google_firebase_hosting_custom_domain.eval) == 0 && !contains(google_identity_platform_config.this[0].authorized_domains, "eval.onolys.com")
     error_message = "Staging never gets the eval domain."
+  }
+  assert {
+    condition     = length(google_identity_platform_config.this[0].client) == 0
+    error_message = "Staging keeps open sign-up (no client permissions block)."
   }
 }

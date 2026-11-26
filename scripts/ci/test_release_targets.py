@@ -26,6 +26,12 @@ class TargetTests(unittest.TestCase):
         for env in ({}, {'EVAL_WIF_PROVIDER': 'prepared'}):
             with self.assertRaises(ValueError):
                 self.module.validate('eval', env)
+        with self.assertRaises(ValueError) as ctx:
+            self.module.validate('eval', {'EVAL_GCP_PROJECT': 'onolys'})
+        self.assertNotIn('legacy', str(ctx.exception))
+        with self.assertRaises(ValueError) as ctx:
+            self.module.validate('staging', {'STAGING_GCP_PROJECT': 'onolys'})
+        self.assertIn('clear it to use the legacy target', str(ctx.exception))
 
     def test_active_bundle_requires_project_local_identity_and_site(self):
         for role in ('staging', 'eval'):

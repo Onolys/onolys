@@ -28,6 +28,16 @@ resource "google_identity_platform_config" "this" {
   multi_tenant {
     allow_tenants = false
   }
+  # Eval has no self sign-up: accounts are created by the operator script (infra/scripts/create-test-user.py) through the
+  # admin API, which is not subject to this switch. Staging keeps open sign-up.
+  dynamic "client" {
+    for_each = var.environment == "eval" ? [1] : []
+    content {
+      permissions {
+        disabled_user_signup = true
+      }
+    }
+  }
   depends_on = [google_firebase_project.this]
 }
 
