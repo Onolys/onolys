@@ -13,6 +13,7 @@ What exactly is supported? Precise, lookup-oriented facts.
 - [web-email-actions.md](web-email-actions.md): in-app `/auth/action` handler for verify-email and reset-password links, and why.
 - [logging.md](logging.md): finding a session's logs (Reference = session id, Logs Explorer link), log fields, `error_code` table, PHI rules.
 - [infra.md](infra.md): GCP resources, env vars, Terraform outputs, DNS records, GitHub settings, provider how-to, failure runbook, rollback.
+- [infra-pipeline.md](infra-pipeline.md): Terraform plan on PRs, apply on merge (WIF identities, `production` approval, bootstrap, local plans).
 
 - [eval-site.md](eval-site.md): staging evaluation usage, authenticated API, storage, costs and method limits.
 - [eval-datasets.md](eval-datasets.md): evaluation datasets (sources, label schemes, mapping rules, gaps, overlaps, terms) and public datasets not added.
