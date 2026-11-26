@@ -1,4 +1,6 @@
 // @vitest-environment jsdom
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
 import { createEvalApi } from '../api';
@@ -9,6 +11,7 @@ import linesFixture from './fixtures/lines.json';
 import overviewFixture from './fixtures/overview.json';
 import turnFixture from './fixtures/turn.json';
 afterEach(cleanup);
+const lineCss=readFileSync(resolve(process.cwd(),'src/compare/lineView.css'),'utf8');
 function props() {
  const data=structuredClone(linesFixture) as CompareLines, overview=structuredClone(overviewFixture) as CompareOverview;
  overview.header.line_sessions=[{session_id:'synthetic-s01',matched_lines:5},{session_id:'uploaded-real-id',matched_lines:8}];
@@ -87,4 +90,34 @@ it('filters and marks disagreement for the selected combo instead of another com
  const view=render(<LineView {...p} state={{...p.state,combo:b,only:'disagree'}}/>);expect(screen.queryByRole('button',{name:'Inspect turn t5'})).toBeNull();
  view.rerender(<LineView {...p} state={{...p.state,combo:a,only:'disagree'}}/>);expect(screen.getByRole('button',{name:'Inspect turn t5'})).toBeTruthy();
  view.rerender(<LineView {...p} state={{...p.state,combo:b}}/>);const row=view.container.querySelector('[data-turn="t5"]') as HTMLElement;expect(within(row).queryByLabelText('Disagreement')).toBeNull();
+});
+it('shows differing-lines chip count for the selected scope',()=>{
+ const p=props();const view=render(<LineView {...p}/>);const n=p.data.turns.filter(t=>p.data.disagreement[t.id]).length;
+ expect(view.container.querySelector('.line-differing')?.textContent).toBe(`${n} differing ${n===1?'line':'lines'}`);
+ view.rerender(<LineView {...p} state={{...p.state,only:'disagree'}}/>);expect(view.container.querySelector('.line-differing')?.textContent).toBe(`${n} differing ${n===1?'line':'lines'}`);
+});
+it('filters by session, human code and prediction code through the URL',()=>{
+ const p=props();render(<LineView {...p}/>);
+ fireEvent.change(screen.getByLabelText('Session'),{target:{value:'uploaded-real-id'}});expect(p.navigate).toHaveBeenLastCalledWith(expect.objectContaining({session:'uploaded-real-id',turn:undefined}));
+ fireEvent.change(screen.getByLabelText('Human code'),{target:{value:'sr'}});expect(p.navigate).toHaveBeenLastCalledWith(expect.objectContaining({code:'sr'}));
+ fireEvent.change(screen.getByLabelText('Combo'),{target:{value:p.data.combos[1].combo_key}});expect(p.navigate).toHaveBeenLastCalledWith(expect.objectContaining({combo:p.data.combos[1].combo_key}));
+});
+it('marks disagreeing rows with a warning chip and text, others unmarked; muted note present',()=>{
+ const p=props();const view=render(<LineView {...p}/>);
+ const flagged=[...view.container.querySelectorAll('tr.line-disagree')];expect(flagged.length).toBeGreaterThan(0);
+ for(const row of flagged){const mark=within(row as HTMLElement).getByLabelText('Disagreement');expect(mark.textContent).toMatch(/Disagrees/);expect(mark.querySelector('.ui-chip-warning svg')).toBeTruthy();}
+ const rows=[...view.container.querySelectorAll('tbody tr')];expect(rows.length-flagged.length).toBeGreaterThan(0);
+ expect(view.container.querySelector('.ui-note')?.textContent).toMatch(/^How to read:/);
+});
+it('renders speaker chips, a human lane and one lane chip per combo in a fixed, non-scrolling layout',()=>{
+ const p=props();const view=render(<LineView {...p}/>);const row=view.container.querySelector('[data-turn="t5"]') as HTMLElement;
+ expect(row.querySelector('td[data-label="Speaker"] .ui-chip')?.textContent).toBe('A');expect(row.querySelector('[data-human]')).toBeTruthy();
+ expect(row.querySelectorAll('.line-chip')).toHaveLength(p.data.combos.length);
+ expect(view.container.querySelector('.line-lanes .table-scroll')).toBeNull();
+ const css=lineCss;expect(css).toMatch(/table-layout:\s*fixed/);expect(css).not.toMatch(/overflow(-x)?\s*:\s*(auto|scroll)/);expect(css).toMatch(/@media \(max-width: 760px\)[\s\S]*display: block/);
+});
+it('wraps long unbroken transcript text in a wrapping cell',()=>{
+ const p=props();p.data.turns[3].text='x'.repeat(500);const view=render(<LineView {...p}/>);
+ const cell=view.container.querySelector('[data-turn="t5"] [data-transcript]') as HTMLElement;expect(cell.textContent).toBe('x'.repeat(500));expect(cell.className).toContain('line-verbatim');
+ expect(lineCss).toMatch(/\.line-verbatim[^}]*overflow-wrap:\s*anywhere/);
 });
