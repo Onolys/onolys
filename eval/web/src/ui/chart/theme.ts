@@ -29,3 +29,13 @@ export const HUMAN_COLOR = "#171c1c";
 export const comboColor = (index: number) => COMBO_PALETTE[index % COMBO_PALETTE.length];
 export const comboShape = (index: number): ComboShape => COMBO_SHAPES[index % COMBO_SHAPES.length];
 export const comboLetter = (index: number) => String.fromCharCode(65 + (index % 26));
+
+const hex = (c: string) => [1, 3, 5].map(i => parseInt(c.slice(i, i + 2), 16));
+/** Diverging tint for a win share in [0,1]: white at 0.5, towards `low` red below and `good` green above (max 55% mix so text stays readable). */
+export function winShareTint(share: number): string {
+  const s = Math.min(1, Math.max(0, share));
+  const [r, g, b] = hex(s >= 0.5 ? CHART_COLORS.good : CHART_COLORS.low);
+  const k = Math.abs(s - 0.5) * 2 * 0.55;
+  const mix = (c: number) => Math.round(255 + (c - 255) * k);
+  return `rgb(${mix(r)}, ${mix(g)}, ${mix(b)})`;
+}

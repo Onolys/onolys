@@ -130,7 +130,7 @@ it('marks disagreeing rows with a warning chip and text, others unmarked; muted 
 });
 it('renders speaker chips, a human lane and one lane chip per combo in a fixed, non-scrolling layout',()=>{
  const p=props();const view=render(<LineView {...p}/>);const row=view.container.querySelector('[data-turn="t5"]') as HTMLElement;
- expect(row.querySelector('td[data-label="Speaker"] .ui-chip')?.textContent).toBe('A');expect(row.querySelector('[data-human]')).toBeTruthy();
+ expect(row.querySelector('td[data-label="Speaker"] .ui-chip')?.textContent).toBe('Speaker A');expect(row.querySelector('[data-human]')).toBeTruthy();
  expect(row.querySelectorAll('td[data-label^="Combo "] .line-chip')).toHaveLength(p.data.combos.length);expect([...view.container.querySelectorAll('thead th')].slice(4)).toHaveLength(p.data.combos.length);
  expect(view.container.querySelector('.line-lanes .table-scroll')).toBeNull();
  const css=lineCss;expect(css).toMatch(/table-layout:\s*fixed/);expect(css).not.toMatch(/overflow(-x)?\s*:\s*(auto|scroll)/);expect(css).toMatch(/@media \(max-width: 760px\)[\s\S]*display: block/);
@@ -169,4 +169,44 @@ it('swaps a navigated combo outside the first three into the shown lanes and sel
  await screen.findByLabelText('Combo');
  expect(p.api.compareLines).toHaveBeenCalledWith('r1','synthetic-s01',expect.objectContaining({combos:['c0','c1','c3'],combo:'c3'}),expect.any(AbortSignal));
  expect((screen.getByLabelText('Combo') as HTMLSelectElement).value).toBe('c3');
+});
+
+it('renders popup codes as chips; combo codes disagreeing with the human code are warning chips with text',async()=>{
+ const p=props();render(<LineView {...p} state={{...p.state,turn:'t5'}}/>);
+ const dialog=await screen.findByRole('dialog');await within(dialog).findByText('withheld');
+ const chips=[...dialog.querySelectorAll('.ui-chip')];const sr=chips.filter(c=>c.textContent==='sr'),cr=chips.filter(c=>c.textContent==='cr');
+ expect(sr.length).toBeGreaterThanOrEqual(3);expect(sr.every(c=>!c.classList.contains('ui-chip-warning'))).toBe(true);
+ expect(cr).toHaveLength(1);expect(cr[0].classList.contains('ui-chip-warning')).toBe(true);expect(cr[0].textContent).toBe('cr');
+ expect(dialog.querySelectorAll('.line-dialog-heading').length).toBeGreaterThanOrEqual(2);expect(dialog.querySelector('h3:not(.line-dialog-heading)')).toBeNull();
+});
+it('defaults lanes to the best three by count error, never a failed combo, when nothing is selected',async()=>{
+ const p=fourCombos();const err=(off:number|null)=>({...Object.values(p.overview.count_error)[0],off,na:off===null?{reason:'failed'}:null});
+ p.overview.count_error={c0:err(9),c1:err(2),c2:err(5),c3:err(null)};
+ render(<CompareApp api={p.api} runId="r1" state={{view:'compare',tab:'lines',session:'synthetic-s01'}} navigate={p.navigate}/>);
+ await screen.findByLabelText('Combo');
+ expect(p.api.compareLines).toHaveBeenCalledWith('r1','synthetic-s01',expect.objectContaining({combos:['c1','c2','c0']}),expect.any(AbortSignal));
+});
+it('keeps an explicit combo selection over the best-three default',async()=>{
+ const p=fourCombos();const err=(off:number)=>({...Object.values(p.overview.count_error)[0],off,na:null});
+ p.overview.count_error={c0:err(9),c1:err(2),c2:err(5),c3:err(1)};
+ render(<CompareApp api={p.api} runId="r1" state={{view:'compare',tab:'lines',session:'synthetic-s01',combos:['c0','c1']}} navigate={p.navigate}/>);
+ await screen.findByLabelText('Combo');
+ expect(p.api.compareLines).toHaveBeenCalledWith('r1','synthetic-s01',expect.objectContaining({combos:['c0','c1']}),expect.any(AbortSignal));
+});
+
+it('speaker chips differ from combo tag letters and use a compact label',()=>{
+ const p=props();const view=render(<LineView {...p}/>);
+ const speakers=[...view.container.querySelectorAll('td[data-label="Speaker"] .ui-chip')].map(c=>c.textContent??'');
+ const letters=new Set(p.legend.map(l=>l.letter));expect(speakers.length).toBeGreaterThan(0);
+ for(const text of speakers){expect(letters.has(text)).toBe(false);expect(text).toMatch(/^Speaker /);}
+ expect(lineCss.replace(/@media[^{]*/g,"")).not.toMatch(/(^|[^-])width:\s*\d+px/);
+});
+it('does not warn when combo codes equal the human codes in a different order',async()=>{
+ const p=props(),popup=await p.api.compareTurn(),key=p.data.combos[0].combo_key;
+ popup.human={codes:['sr','cr'],note:null};popup.combos[key]={missing:null,codes:[['cr','sr'],['cr']],rationales:[],agree:{k:1,r:2}};
+ render(<LineView {...p} state={{...p.state,turn:'t5'}}/>);
+ const dialog=await screen.findByRole('dialog');await within(dialog).findByText('cr, sr');
+ const chips=[...dialog.querySelectorAll('.ui-chip')];
+ expect(chips.find(c=>c.textContent==='cr, sr')!.classList.contains('ui-chip-warning')).toBe(false);
+ expect(chips.find(c=>c.textContent==='cr')!.classList.contains('ui-chip-warning')).toBe(true);
 });

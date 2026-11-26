@@ -66,6 +66,22 @@ it('loads reasoning on demand, preserves verbatim and withheld text and follows 
  expect(await screen.findByText('withheld')).toBeTruthy();fireEvent.click(await screen.findByRole('button',{name:'Load more'}));expect(await screen.findByText(group.snippets[1].rationale)).toBeTruthy();
  expect(p.api.compareReasoning).toHaveBeenLastCalledWith('r1',expect.objectContaining({code:'question',combo:p.data.combos[0].combo_key,cursor:'page2'}),expect.any(AbortSignal));
 });
+it('keeps loaded reasoning pages when a code is collapsed and reopened',async()=>{
+ const p=props();const group=reasoning.groups.find(group=>group.code==='question')!;
+ p.api.compareReasoning.mockImplementation(async(_r:string,o:{combo?:string;cursor?:string})=>o.combo!==p.data.combos[0].combo_key?{...reasoning,groups:[],next_cursor:null}:o.cursor==='page2'?{...reasoning,groups:[{...group,snippets:group.snippets.slice(1,2)}],next_cursor:null}:{...reasoning,groups:[{...group,snippets:group.snippets.slice(0,1)}],next_cursor:'page2'});
+ render(<DeepDive {...p}/>);openCode('question');
+ fireEvent.click(await screen.findByRole('button',{name:'Load more'}));expect(await screen.findByText(group.snippets[1].rationale)).toBeTruthy();
+ const calls=p.api.compareReasoning.mock.calls.length;
+ fireEvent.click(screen.getByRole('button',{name:'question'}));expect(screen.queryByText(group.snippets[1].rationale)).toBeNull();
+ fireEvent.click(screen.getByRole('button',{name:'question'}));await act(async()=>{});
+ expect(p.api.compareReasoning).toHaveBeenCalledTimes(calls);
+ expect(screen.getByText(group.snippets[1].rationale)).toBeTruthy();expect(screen.queryByRole('button',{name:'Load more'})).toBeNull();
+});
+it('fetches reasoning for a combo even when its rationale count is zero (server omits zeros, so zero is not trusted)',async()=>{
+ const p=props();const key=p.data.combos[0].combo_key;p.data.rationale_counts={...p.data.rationale_counts,question:{...p.data.rationale_counts.question,[key]:0}};
+ render(<DeepDive {...p}/>);openCode('question');await act(async()=>{});
+ expect(p.api.compareReasoning.mock.calls.some(c=>c[1].combo===key)).toBe(true);
+});
 it('defaults to three available Count errors, refetches picker changes and caches effective subsets',async()=>{
  const ov=overview();const original=ov.combos[0];ov.combos=Array.from({length:5},(_,i)=>({...original,combo_key:`c${i}`}));
  const cell=Object.values(ov.count_error)[0];ov.count_error=Object.fromEntries(ov.combos.map((combo,i)=>[combo.combo_key,{...cell,off:[9,1,2,3,0][i],na:i===4?{reason:'unavailable'}:null}]));

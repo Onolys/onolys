@@ -50,8 +50,8 @@ it('popup shows line text, human code, combo codes + rationale, agreement, and r
  const trigger = screen.getByRole('button', { name: 'Inspect turn t5' }); trigger.focus(); fireEvent.click(trigger);
  view.rerender(<LineView {...vp(p)} state={{ ...p.state, turn: 't5' }} />);
  const dialog = await screen.findByRole('dialog'); await within(dialog).findByText('Popup line text.');
- expect(within(dialog).getByText('sr', { selector: '.ui-chip' })).toBeTruthy(); expect(within(dialog).getByText('Because reasons.')).toBeTruthy();
- expect(within(dialog).getByText('sr / cr / sr')).toBeTruthy(); expect(within(dialog).getByText('2 of 3 repeats agree')).toBeTruthy();
+ expect(within(dialog).getAllByText('sr', { selector: '.ui-chip' }).length).toBeGreaterThanOrEqual(1); expect(within(dialog).getByText('Because reasons.')).toBeTruthy();
+ expect(within(dialog).getAllByText('cr', { selector: '.ui-chip-warning' })).toHaveLength(1); expect(within(dialog).getByText('2 of 3 repeats agree')).toBeTruthy();
  expect(within(dialog).getAllByRole('img', { name: /^Combo / }).length).toBeGreaterThan(0);
  fireEvent.keyDown(dialog, { key: 'Escape' }); view.rerender(<LineView {...vp(p)} />);
  await waitFor(() => expect(document.activeElement).toBe(trigger));

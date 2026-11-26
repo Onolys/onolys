@@ -112,3 +112,13 @@ it('orders two n/a rows without NaN (stable)', () => {
  show(data);
  expect(within(table()).getAllByRole('row').length).toBe(data.leaderboard.length + 1);
 });
+
+it('renders a failed combo as plain text, not a deep-dive link, while healthy combos still link', () => {
+ const data = sample(), key = failFirst(data);
+ show(data);
+ const rows = within(table()).getAllByRole('row').slice(1);
+ const failed = rows.find(r => r.textContent!.includes(key))!, healthy = rows.find(r => !r.textContent!.includes(key))!;
+ expect(within(failed).queryByRole('link')).toBeNull();
+ expect(within(failed).getByText('failed')).toBeTruthy();
+ expect(within(healthy).getAllByRole('link').length).toBeGreaterThan(0);
+});

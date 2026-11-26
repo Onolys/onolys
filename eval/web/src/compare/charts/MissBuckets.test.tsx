@@ -42,3 +42,17 @@ it('keeps the data table behind Show data once open', () => {
   expect(screen.getByRole('table', { name: 'cct misses' }).textContent).toContain('0.5');
   expect(screen.getByRole('table', { name: 'cct misses' }).textContent).toContain('50%');
 });
+it('uses largest-remainder rounding so the three shares sum to 100', () => {
+  const g = (b: { same: number; off1: number; off2plus: number }) => [{ metric: 'cct', title: 'T', cells: { a: cell({ buckets: b }) } }];
+  const view = render(<MissBuckets globals={g({ same: 1 / 3, off1: 1 / 3, off2plus: 1 / 3 })} series={series} />); open();
+  const nums = (c: HTMLElement) => [...c.querySelectorAll('.deep-stack [data-bucket]')].map(s => parseInt(s.textContent!, 10));
+  const a = nums(view.container);
+  expect(a.reduce((x, y) => x + y, 0)).toBe(100);
+  expect([...a].sort()).toEqual([33, 33, 34]);
+  expect(view.container.querySelector('.deep-stack')!.getAttribute('aria-label')).toMatch(/^A: same \d+%, off by 1 \d+%, off by 2\+ \d+%$/);
+  cleanup();
+  const v2 = render(<MissBuckets globals={g({ same: 0.125, off1: 0.375, off2plus: 0.5 })} series={series} />); open();
+  const b = nums(v2.container);
+  expect(b.reduce((x, y) => x + y, 0)).toBe(100);
+  expect(b).toEqual([13, 37, 50]);
+});

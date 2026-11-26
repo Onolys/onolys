@@ -47,7 +47,8 @@ export function Leaderboard({ data, legend, state, navigate, runId }: { data: Co
  const columns: Column<Row>[] = [
   { key: 'combo', header: 'Combo', value: r => letterOf(r), render: r => {
    const index = Math.max(0, legend.findIndex(e => e.combo.combo_key === r.combo_key)), fail = failed.get(r.combo_key);
-   return <><EvalLink state={drill(r.combo_key)} navigate={navigate}><ComboTag index={index} letter={letterOf(r)} /></EvalLink>
+   const tag = <ComboTag index={index} letter={letterOf(r)} />;
+   return <>{fail ? tag : <EvalLink state={drill(r.combo_key)} navigate={navigate}>{tag}</EvalLink>}
     <small className="lb-label" title={legend[index]?.label ?? r.combo_key}>{legend[index]?.label ?? r.combo_key}</small>
     {fail && <span className="lb-nowrap" title={`failed: ${fail.code}`}><Chip tone="danger">failed</Chip></span>}{isSkipped(r) && <Chip tone="muted">skipped</Chip>}</>;
   } },

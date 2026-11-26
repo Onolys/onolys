@@ -21,21 +21,24 @@ export type Column<T> = {
 const ariaSort = (dir: SortDir | undefined) => (dir === "asc" ? "ascending" : dir === "desc" ? "descending" : "none");
 
 /** Fixed-layout, searchable, sortable table. Headers are plain th (no buttons); no horizontal scroll: cells wrap/ellipsize with a title, low-priority columns hide, and below 760px rows stack into cards. */
-export function DataTable<T>({ rows, columns, rowKey, rowTone, filters, searchLabel = "Search", empty = "No matching rows.", ariaLabel }: {
+export function DataTable<T>({ rows, columns, rowKey, rowTone, filters, searchLabel = "Search", empty = "No matching rows.", ariaLabel, searchThreshold = 10 }: {
   rows: readonly T[]; columns: readonly Column<T>[]; rowKey: (row: T) => string;
   rowTone?: (row: T) => RowTone | undefined; filters?: ReactNode | ((ctl: { setFilter: (fn: ((row: T) => boolean) | null) => void }) => ReactNode); searchLabel?: string; empty?: string; ariaLabel?: string;
+  /** The search box shows only when there are more rows than this (default 10). Use 0 to always show it, Infinity to never show it. */
+  searchThreshold?: number;
 }) {
   const { visible, search, setSearch, sort, toggleSort, setFilter } = useTableState(rows, columns);
+  const showSearch = rows.length > searchThreshold || search !== "";
   const onKey = (key: string) => (e: KeyboardEvent) => {
     if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggleSort(key); }
   };
   return <div className="ui-table-wrap">
-    <div className="ui-table-toolbar">
-      <label className="ui-table-search"><Search aria-hidden="true" />
+    {showSearch || filters ? <div className="ui-table-toolbar">
+      {showSearch ? <label className="ui-table-search"><Search aria-hidden="true" />
         <input type="search" value={search} placeholder={searchLabel} aria-label={searchLabel} onChange={(e) => setSearch(e.target.value)} />
-      </label>
+      </label> : null}
       {filters ? <div className="ui-table-filters">{typeof filters === "function" ? filters({ setFilter }) : filters}</div> : null}
-    </div>
+    </div> : null}
     <table className="ui-table" aria-label={ariaLabel}>
       <thead><tr>
         {columns.map((c) => {

@@ -62,7 +62,7 @@ it("th is keyboard operable via Enter/Space and contains no button; shows up and
 });
 
 it("search filters rows and shows an empty state", () => {
-  render(<DataTable rows={rows} columns={columns} rowKey={(r) => r.id} />);
+  render(<DataTable rows={rows} columns={columns} rowKey={(r) => r.id} searchThreshold={0} />);
   fireEvent.change(screen.getByRole("searchbox"), { target: { value: "brav" } });
   expect(names()).toEqual(["Bravo"]);
   fireEvent.change(screen.getByRole("searchbox"), { target: { value: "zzz" } });
@@ -85,7 +85,7 @@ it("filters render-prop exposes setFilter and filters rows (fn stored, not run a
 
 it("render-only display still gets a title tooltip and is searchable via required value", () => {
   const cols: Column<Row>[] = [{ key: "n", header: "N", value: (r) => r.name, render: (r) => <b>{r.name}!</b> }];
-  render(<DataTable rows={rows} columns={cols} rowKey={(r) => r.id} />);
+  render(<DataTable rows={rows} columns={cols} rowKey={(r) => r.id} searchThreshold={0} />);
   expect(screen.getByTitle("Bravo")).toBeTruthy();
   fireEvent.change(screen.getByRole("searchbox"), { target: { value: "brav" } });
   expect(screen.getAllByRole("row")).toHaveLength(2);
@@ -110,4 +110,26 @@ it("useTableState: sort cycle, search and filter", () => {
   expect(result.current.visible.map((r) => r.id)).toEqual(["a", "c"]);
   act(() => result.current.setFilter((r: Row) => r.id === "a"));
   expect(result.current.visible.map((r) => r.id)).toEqual(["a"]);
+});
+
+const many = (n: number): Row[] => Array.from({ length: n }, (_, i) => ({ id: `r${i}`, name: `Name ${i}`, score: i, status: "ok" }));
+it("shows the search box only when rows exceed the threshold (default 10)", () => {
+  const view = render(<DataTable rows={many(5)} columns={columns} rowKey={(r) => r.id} />);
+  expect(screen.queryByRole("searchbox")).toBeNull();
+  view.rerender(<DataTable rows={many(10)} columns={columns} rowKey={(r) => r.id} />);
+  expect(screen.queryByRole("searchbox")).toBeNull();
+  view.rerender(<DataTable rows={many(11)} columns={columns} rowKey={(r) => r.id} />);
+  expect(screen.getByRole("searchbox")).toBeTruthy();
+});
+it("searchThreshold prop overrides the default", () => {
+  const view = render(<DataTable rows={many(5)} columns={columns} rowKey={(r) => r.id} searchThreshold={0} />);
+  expect(screen.getByRole("searchbox")).toBeTruthy();
+  view.rerender(<DataTable rows={many(50)} columns={columns} rowKey={(r) => r.id} searchThreshold={Infinity} />);
+  expect(screen.queryByRole("searchbox")).toBeNull();
+});
+it("keeps the search box while a search is active even if rows drop to the threshold", () => {
+  const view = render(<DataTable rows={many(11)} columns={columns} rowKey={(r) => r.id} />);
+  fireEvent.change(screen.getByRole("searchbox"), { target: { value: "zzz" } });
+  view.rerender(<DataTable rows={many(5)} columns={columns} rowKey={(r) => r.id} />);
+  expect((screen.getByRole("searchbox") as HTMLInputElement).value).toBe("zzz");
 });

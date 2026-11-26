@@ -3,6 +3,7 @@ import { cleanup, fireEvent, render, screen, within } from '@testing-library/rea
 import { afterEach, expect, it, vi } from 'vitest';
 import type { CompareAnalysis } from '../compareApi';
 import analysis from '../fixtures/analysis.json';
+import { winShareTint } from '../../ui/chart/theme';
 import { HeadToHead } from './HeadToHead';
 import { InterviewGrid } from './InterviewGrid';
 afterEach(cleanup);
@@ -52,4 +53,39 @@ it('marks n/a and failed cells with text, and says so when empty', () => {
  data.grid = [];
  view.rerender(<InterviewGrid data={data} legend={legendFor(data)} failed={[]} runId="r" navigate={vi.fn()} />);
  expect(screen.getByText('No session results available')).toBeTruthy();
+});
+
+it('tints cells by win share on a diverging scale and keeps text values', () => {
+ const data = base(); const [x, y] = data.combos.map(c => c.combo_key);
+ data.combos = [...data.combos, { ...data.combos[0], combo_key: 'third' }];
+ data.head_to_head = [
+  { a: x, b: y, a_closer: 9, b_closer: 1, ties: 0, n: 10, na: null },
+  { a: x, b: 'third', a_closer: 6, b_closer: 4, ties: 0, n: 10, na: null },
+ ] as CompareAnalysis['head_to_head'];
+ render(<HeadToHead data={data} legend={legendFor(data)} failed={noFail} />);
+ const matrix = screen.getByRole('table', { name: 'Head-to-head' });
+ const strong = within(matrix).getByLabelText('A closer than B on 9 of 10 sessions, 0 ties') as HTMLElement;
+ const weak = within(matrix).getByLabelText('A closer than C on 6 of 10 sessions, 0 ties') as HTMLElement;
+ expect(strong.style.backgroundColor).not.toBe('');
+ expect(weak.style.backgroundColor).not.toBe('');
+ expect(strong.style.backgroundColor).not.toBe(weak.style.backgroundColor);
+ expect(strong.textContent).toContain('9 of 10'); expect(weak.textContent).toContain('6 of 10');
+ expect(screen.getByText(/Ties count for neither combo/)).toBeTruthy();
+});
+
+it('excludes ties from the win share so tint matches the text verdict', () => {
+ const data = base(); const [x, y] = data.combos.map(c => c.combo_key);
+ data.combos = [...data.combos, { ...data.combos[0], combo_key: 'third' }];
+ data.head_to_head = [
+  { a: x, b: y, a_closer: 4, b_closer: 2, ties: 6, n: 12, na: null },
+  { a: x, b: 'third', a_closer: 3, b_closer: 3, ties: 4, n: 10, na: null },
+ ] as CompareAnalysis['head_to_head'];
+ render(<HeadToHead data={data} legend={legendFor(data)} failed={noFail} />);
+ const matrix = screen.getByRole('table', { name: 'Head-to-head' });
+ const ahead = within(matrix).getByLabelText('A closer than B on 4 of 12 sessions, 6 ties') as HTMLElement;
+ const behind = within(matrix).getByLabelText('B closer than A on 2 of 12 sessions, 6 ties') as HTMLElement;
+ const even = within(matrix).getByLabelText('A closer than C on 3 of 10 sessions, 4 ties') as HTMLElement;
+ expect(ahead.getAttribute('data-verdict')).toBe('ahead'); expect(ahead.getAttribute('data-win-share')).toBe('0.67'); expect(ahead.style.backgroundColor).toBe(winShareTint(4 / 6));
+ expect(behind.getAttribute('data-verdict')).toBe('behind'); expect(behind.getAttribute('data-win-share')).toBe('0.33');
+ expect(even.getAttribute('data-verdict')).toBe('even'); expect(even.getAttribute('data-win-share')).toBe('0.5'); expect(even.style.backgroundColor).toBe(winShareTint(0.5));
 });

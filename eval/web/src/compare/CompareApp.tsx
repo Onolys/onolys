@@ -37,7 +37,7 @@ export function CompareApp({api,runId,state,navigate}:{api:EvalApi;runId:string;
  const tab=state.tab??'overview';
  const defaults=overview.data?.combos.filter(combo=>{const cell=overview.data!.count_error[combo.combo_key];return cell && !cell.na && cell.off!==null;}).sort((a,b)=>overview.data!.count_error[a.combo_key].off!-overview.data!.count_error[b.combo_key].off!).slice(0,3).map(combo=>combo.combo_key)??[];
  const shownLanes=(()=>{
-  const base=(state.combos?.length?state.combos:overview.data?.combos.map(combo=>combo.combo_key)??[]).slice(0,MAX_LANES);
+  const base=(state.combos?.length?state.combos:defaults.length?defaults:overview.data?.combos.map(combo=>combo.combo_key)??[]).slice(0,MAX_LANES);
   return state.combo&&!base.includes(state.combo)?[...base.slice(0,MAX_LANES-1),state.combo]:base;
  })();
  const effectiveCombos=tab==='deep'&&!state.combos?.length?defaults:tab==='lines'?shownLanes:state.combos??[];
