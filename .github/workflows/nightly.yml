@@ -64,7 +64,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python: ["3.13", "3.14"]
+        python: ["3.12"] # must satisfy api/pyproject.toml requires-python (scripts/ci/test_workflow_python_versions.py)
     runs-on: ubuntu-latest
     timeout-minutes: 12
     steps:
