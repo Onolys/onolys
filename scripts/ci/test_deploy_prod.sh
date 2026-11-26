@@ -88,15 +88,22 @@ hasnt "no RELEASE_TAG_TOKEN reference"       'RELEASE_TAG_TOKEN'
 # Run the real refusal handler against a fake git whose push is refused: exit 0, warning printed, no retry
 wsnip="$(printf '%s\n' "$TAGJOB" | awk '/WORKFLOWS_REFUSED_BEGIN/{f=1;next} /WORKFLOWS_REFUSED_END/{f=0} f{print}' | sed 's/^ *//')"
 [[ -n "$wsnip" ]] && ok "refusal handler block present" || bad "refusal handler block present"
-out="$(GITHUB_STEP_SUMMARY="$(mktemp)" SHA=abc IMAGE=img GITHUB_SERVER_URL=https://github.com GITHUB_REPOSITORY=o/r GITHUB_RUN_ID=1 \
+SUM1="$(mktemp)"; SUM2="$(mktemp)"; trap 'rm -f "$SUM1" "$SUM2"; rm -rf "${GT:-}"' EXIT
+out="$(GITHUB_STEP_SUMMARY="$SUM1" SHA=abc IMAGE=img GITHUB_SERVER_URL=https://github.com GITHUB_REPOSITORY=o/r GITHUB_RUN_ID=1 \
   bash -c 'set -o pipefail; tag=prod-2026-11-26.1; run_url=u; err="! [remote rejected] x (refusing to allow a GitHub App to create or update workflow \`.github/workflows/a.yml\` without \`workflows\` permission)"; for attempt in 1; do '"$wsnip"'; echo NOT_HANDLED; done' 2>&1)"; rc=$?
 [[ $rc -eq 0 && "$out" == *"::warning::"* && "$out" != *NOT_HANDLED* ]] && ok "refusal path exits 0 with a warning" || bad "refusal path exits 0 with a warning (rc=$rc out='$out')"
+sum="$(cat "$SUM1")"
+[[ "$sum" == *"### Prod deployed, tag NOT pushed"* && "$sum" == *'`abc`'* && "$sum" == *'`prod-2026-11-26.1`'* && "$sum" == *'`img`'* && "$sum" == *"git push origin refs/tags/prod-2026-11-26.1"* ]] && ok "refusal path writes the step-summary block" || bad "refusal path writes the step-summary block ('$sum')"
+# Negative: a non-permission push error must NOT take the warn path (falls through to the retry logic)
+out2="$(GITHUB_STEP_SUMMARY="$SUM2" SHA=abc IMAGE=img GITHUB_SERVER_URL=https://github.com GITHUB_REPOSITORY=o/r GITHUB_RUN_ID=1 \
+  bash -c 'set -o pipefail; tag=prod-2026-11-26.1; run_url=u; err="! [rejected] prod-2026-11-26.1 -> prod-2026-11-26.1 (already exists)"; for attempt in 1; do '"$wsnip"'; echo NOT_HANDLED; done' 2>&1)"; rc2=$?
+[[ $rc2 -eq 0 && "$out2" == *NOT_HANDLED* && "$out2" != *"::warning::"* && ! -s "$SUM2" ]] && ok "non-permission error does not take the warn path" || bad "non-permission error does not take the warn path (rc=$rc2 out='$out2')"
 # Old-commit tag push: a shallow checkout makes git upload the commit's trees/blobs (incl. .github/workflows), which GITHUB_TOKEN may not push
 printf '%s\n' "$TAGJOB" | grep -Eq 'fetch-depth: 0' && ok "tag job checks out full history" || bad "tag job checks out full history"
 printf '%s\n' "$TAGJOB" | grep -Eq 'git fetch .*--depth' && bad "tag job must not shallow-fetch the target sha" || ok "tag job does not shallow-fetch the target sha"
 
 # Behaviour of the config guard as the workflow runs it: workflow-ref copy, empty env, target tree passed as ROOT (data only)
-GT="$(mktemp -d)"; trap 'rm -rf "$GT"' EXIT
+GT="$(mktemp -d)"; trap 'rm -f "$SUM1" "$SUM2"; rm -rf "$GT"' EXIT
 cp "$ROOT/scripts/ci/check_config.sh" "$GT/check_config.sh"
 env -i PATH=/usr/bin:/bin HOME="$GT" ROOT="$ROOT" bash "$GT/check_config.sh" >/dev/null 2>&1 && ok "config guard (copy, env -i) passes on a valid target tree" || bad "config guard (copy, env -i) passes on a valid target tree"
 mkdir -p "$GT/empty"

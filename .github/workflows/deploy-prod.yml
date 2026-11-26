@@ -367,7 +367,7 @@ jobs:
             echo "$err" >&2
             # WORKFLOWS_REFUSED_BEGIN
             # GitHub refuses a GITHUB_TOKEN push when the commit's workflow files differ from main; no permission allows it and a retry cannot help.
-            if printf '%s' "$err" | grep -qi 'workflows. permission'; then
+            if grep -qi 'workflows. permission' <<<"$err"; then
               echo "::warning::prod is deployed; tag not pushed (GITHUB_TOKEN cannot push this ref). Tag by hand: commit ${SHA}, suggested ${tag}, image ${IMAGE}, run ${run_url}. See docs/reference/infra.md, If the prod tag is missing."
               {
                 echo "### Prod deployed, tag NOT pushed"
