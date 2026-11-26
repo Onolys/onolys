@@ -5,7 +5,6 @@ import type { RunSummary } from './api';
 import { prettyJson } from './JsonViewer';
 import { AppDialog } from './ui/AppDialog';
 import { Chip } from './ui/Chip';
-import { ComboTag } from './ui/ComboTag';
 import { Disclosure } from './ui/Disclosure';
 import { StatTile } from './ui/StatTile';
 
@@ -35,7 +34,7 @@ function ComboList({ run }: { run: RunSummary }) {
     : run.combo_keys.map(key => ({ key, engines: [] as string[], model: run.combo_labels?.[key] ?? key, tier: '', effort: '' }));
   if (!rows.length) return null;
   return <div><h3 className="ui-config-heading">Combos</h3><ul className="ui-config-combos">{rows.map((r, i) => <li key={`${r.key}-${i}`}>
-    <ComboTag index={i} />{r.engines.map(engine => <Chip key={engine} mono>{engine}</Chip>)}<strong>{r.model}</strong>
+    {r.engines.map(engine => <Chip key={engine} mono>{engine}</Chip>)}<strong>{r.model}</strong>
     {r.tier && <Chip tone="info">{r.tier}</Chip>}{r.effort && <Chip tone="info">{r.effort}</Chip>}
   </li>)}</ul></div>;
 }

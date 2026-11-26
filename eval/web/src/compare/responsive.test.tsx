@@ -80,6 +80,8 @@ it.each([320, 768, 1280])('retains accessible chart/table structure at the %ipx 
  expect(lineCss).toMatch(/\.line-view table\s*\{[^}]*width:\s*100%/);
  expect(lineCss).toMatch(/@media \(max-width: 760px\)\s*\{[\s\S]*\.line-view tr[^{]*\{[^}]*display:\s*block/);
  expect(lineCss).toMatch(/td\[data-label\]::before/);
+ expect(lineCss).not.toMatch(/\.line-view thead th:nth-child/); // column widths are scoped to the lane table only
+ expect(lineCss).toMatch(/\.line-view \.line-lanes thead th:nth-child\(1\)/);
  expect(lineView.querySelectorAll('.line-lanes thead th .ui-combo-tag').length).toBeGreaterThan(0);
  expect(lineView.querySelector('.line-lanes td[data-label^="Combo "]')).toBeTruthy();
  // Turns/Words toggle must reset the global white-on-primary button colour so the unpressed segment is readable.

@@ -32,11 +32,10 @@ it('shows key-fact tiles and the run id', () => {
   expect(versions.textContent).toContain('abc123');
   expect(within(d).getByText('run_7f3a')).toBeTruthy();
 });
-it('lists combos with ComboTags, model, tier and effort', () => {
+it('lists combos with model, tier and effort, without letter tags', () => {
   open();
   const d = screen.getByRole('dialog');
-  expect(within(d).getByRole('img', { name: 'Combo A' })).toBeTruthy();
-  expect(within(d).getByRole('img', { name: 'Combo B' })).toBeTruthy();
+  expect(within(d).queryAllByRole('img', { name: /^Combo / })).toHaveLength(0);
   expect(within(d).getByText('claude-sonnet-4.5')).toBeTruthy();
   expect(within(d).getByText('gpt-5')).toBeTruthy();
   expect(within(d).getAllByText('standard')).toHaveLength(2);
@@ -44,10 +43,17 @@ it('lists combos with ComboTags, model, tier and effort', () => {
   expect(within(d).getAllByText('miti').length).toBeGreaterThan(0);
   expect(within(d).queryByText('human')).toBeNull();
 });
+it('shows no combo letters with 1 or 2+ AI engines (they would mismatch the Compare legend)', () => {
+  for (const engines of [['miti', 'human'], ['miti', 'oneshot:miti', 'human']]) {
+    const { unmount } = open(run({ engines }));
+    expect(screen.queryAllByRole('img', { name: /^Combo / })).toHaveLength(0);
+    unmount();
+  }
+});
 it('lists legacy combos by label', () => {
   open(run({ combos: null, legacy_selection: true, combo_keys: ['preset:default'], combo_labels: { 'preset:default': 'preset: default (legacy)' } }));
   expect(screen.getByText('preset: default (legacy)')).toBeTruthy();
-  expect(screen.getByRole('img', { name: 'Combo A' })).toBeTruthy();
+  expect(screen.queryByRole('img', { name: 'Combo A' })).toBeNull();
 });
 it('hides raw JSON until the disclosure is toggled, and omits private refs', () => {
   open(run({ description: '<script>x</script>', ...({ output_ref: 'private-location' } as object) }));
