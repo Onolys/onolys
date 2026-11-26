@@ -12,6 +12,8 @@ import overviewFixture from './fixtures/overview.json';
 import turnFixture from './fixtures/turn.json';
 afterEach(cleanup);
 const lineCss=readFileSync(resolve(process.cwd(),'src/compare/lineView.css'),'utf8');
+const openRatings=()=>fireEvent.click(screen.getByRole('button',{name:'Show global ratings'}));
+const openReasoning=async()=>fireEvent.click(await screen.findByRole('button',{name:'Show reasoning'}));
 function props() {
  const data=structuredClone(linesFixture) as CompareLines, overview=structuredClone(overviewFixture) as CompareOverview;
  overview.header.line_sessions=[{session_id:'synthetic-s01',matched_lines:5},{session_id:'uploaded-real-id',matched_lines:8}];
@@ -25,7 +27,7 @@ it('preserves transcript, absent Human vs labelled none, missing lanes and scope
  const p=props();p.data.lanes.human!.t3=[];const view=render(<LineView {...p}/>);
  expect(view.container.querySelector('[data-turn="t2"] [data-human]')?.textContent).toBe('');expect(view.container.querySelector('[data-turn="t3"] [data-human]')?.textContent).toBe('none');
  expect(view.container.querySelector('[data-turn="t5"] [data-transcript]')?.textContent).toBe(p.data.turns[3].text);expect(screen.getAllByText('no line-level output').length).toBeGreaterThan(0);
- expect(await screen.findByText(/Exact global reason/)).toHaveProperty('textContent','Exact global reason.\nMore.');
+ openRatings();await openReasoning();expect(await screen.findByText(/Exact global reason/)).toHaveProperty('textContent','Exact global reason.\nMore.');
  expect(p.api.compareReasoning).toHaveBeenCalledWith('r1',{session:'synthetic-s01',kind:'global',combos:p.data.combos.map(c=>c.combo_key)},expect.any(AbortSignal));expect(p.api.compareTurn).not.toHaveBeenCalled();
  expect(screen.getByRole('option',{name:'uploaded-real-id · 8 matched lines'})).toBeTruthy();
 });
@@ -49,7 +51,7 @@ it('defaults to most matched real uploaded session and resolves direct filtered 
 });
 it('paginates global reasons once per page, preserves old pages and isolates a retry',async()=>{
  const p=props(),payload=await p.api.compareReasoning();p.api.compareReasoning.mockReset().mockRejectedValueOnce(new Error('Global reasons unavailable')).mockResolvedValueOnce({...payload,next_cursor:'page2'}).mockResolvedValueOnce({...payload,groups:[{code:'empathy',snippets:[{...payload.groups[0].snippets[0],rationale:'Second page'}]}]});
- render(<LineView {...p}/>);expect(await screen.findByText('Global reasons unavailable')).toBeTruthy();fireEvent.click(screen.getByRole('button',{name:'Retry'}));await screen.findByText(/Exact global reason/);fireEvent.click(screen.getByRole('button',{name:'Load more global reasons'}));await screen.findByText('Second page');expect(screen.getByText(/Exact global reason/)).toBeTruthy();expect(p.api.compareReasoning).toHaveBeenLastCalledWith('r1',expect.objectContaining({session:'synthetic-s01',kind:'global',cursor:'page2'}),expect.any(AbortSignal));expect(p.api.compareTurn).not.toHaveBeenCalled();
+ render(<LineView {...p}/>);openRatings();expect(await screen.findByText('Global reasons unavailable')).toBeTruthy();fireEvent.click(screen.getByRole('button',{name:'Retry'}));await openReasoning();await screen.findByText(/Exact global reason/);fireEvent.click(screen.getByRole('button',{name:'Load more global reasons'}));await screen.findByText('Second page');expect(screen.getByText(/Exact global reason/)).toBeTruthy();expect(p.api.compareReasoning).toHaveBeenLastCalledWith('r1',expect.objectContaining({session:'synthetic-s01',kind:'global',cursor:'page2'}),expect.any(AbortSignal));expect(p.api.compareTurn).not.toHaveBeenCalled();
 });
 it('filters none and multi against explicit Human labels and selected prediction repeats',()=>{
  const p=props();p.data.lanes.human!.t3=[];
@@ -59,7 +61,7 @@ it('filters none and multi against explicit Human labels and selected prediction
 });
 it('aborts global and popup requests when scope changes and shows the transcript conflict locally',async()=>{
  const p=props();const {ApiError}=await import('../api');p.api.compareTurn.mockRejectedValueOnce(new ApiError('changed',409,'transcript_changed'));
- const view=render(<LineView {...p} state={{...p.state,turn:'t5'}}/>);expect(await screen.findByText('The saved transcript changed since this run; lines cannot be shown.')).toBeTruthy();expect(screen.getByRole('heading',{name:'Line view',hidden:true})).toBeTruthy();
+ const view=render(<LineView {...p} state={{...p.state,turn:'t5'}}/>);fireEvent.click(screen.getByRole('button',{name:'Show global ratings',hidden:true}));expect(await screen.findByText('The saved transcript changed since this run; lines cannot be shown.')).toBeTruthy();expect(screen.getByRole('heading',{name:'Line view',hidden:true})).toBeTruthy();
  const turnSignal=p.api.compareTurn.mock.calls[0][4] as AbortSignal,reasonSignal=p.api.compareReasoning.mock.calls[0][2] as AbortSignal;view.unmount();expect(turnSignal.aborted).toBe(true);expect(reasonSignal.aborted).toBe(true);
 });
 it('shows no human reference with no global request',()=>{
