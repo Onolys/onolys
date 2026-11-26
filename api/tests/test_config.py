@@ -185,7 +185,6 @@ def test_uid_hmac_key_optional_locally():
 @pytest.mark.parametrize(
     "env,url",
     [
-        ("staging", "https://onolys-app-staging.web.app"),
         ("staging", "https://onolys-staging-app.web.app"),
         ("prod", "https://app.onolys.com"),
         ("prod", "https://onolys-app.web.app"),
@@ -198,6 +197,14 @@ def test_app_base_url_allowed(env, url):
     assert s.app_base_url == url
     assert s.email_from == "Onolys <no-reply@onolys.com>"
     assert s.resend_api_key == ""
+
+
+@pytest.mark.parametrize("env", ["staging", "prod"])
+def test_retired_staging_host_rejected(env):
+    with pytest.raises(ConfigError):
+        _settings_from_env(
+            {"ENV": env, "UID_HMAC_KEY": "k", "APP_BASE_URL": "https://onolys-app-staging.web.app"}
+        )
 
 
 @pytest.mark.parametrize(
@@ -296,7 +303,7 @@ def test_staging_startup_without_resend_key():
             "UID_HMAC_KEY": "k",
             "ADAPTERS": "stub",
             "AUTH_PROJECT": "test-project",
-            "APP_BASE_URL": "https://onolys-app-staging.web.app",
+            "APP_BASE_URL": "https://onolys-staging-app.web.app",
         }
     )
     blobs = FakeBlobStore()

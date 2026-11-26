@@ -30,13 +30,13 @@ def test_service_sends_trusted_recipient_and_app_host(kind, mode):
 
     sender = FakeEmailSender()
     links = FakeAuthLinks({"uid": AuthAccount("person@example.com")})
-    service = AuthEmailService(Settings(app_base_url="https://onolys-app-staging.web.app", email_from="Onolys <no-reply@onolys.com>"), links, sender)
+    service = AuthEmailService(Settings(app_base_url="https://onolys-staging-app.web.app", email_from="Onolys <no-reply@onolys.com>"), links, sender)
     sent = service.send_verification("uid", next_path="/sessions") if kind == "verify" else service.send_password_reset("person@example.com")
     assert sent is True
     (message,) = sender.messages
     assert message["to"] == "person@example.com"
     url = next(line for line in message["text"].splitlines() if line.startswith("https://"))
-    assert urlsplit(url).netloc == "onolys-app-staging.web.app"
+    assert urlsplit(url).netloc == "onolys-staging-app.web.app"
     assert parse_qs(urlsplit(url).query)["mode"] == [mode]
     assert url.replace("&", "&amp;") in message["html"]
 

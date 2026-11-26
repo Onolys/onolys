@@ -15,7 +15,7 @@ import { useFormError } from "./useFormError";
  * and the page uses our own auth instance. The `apiKey` query param is ignored.
  */
 
-const DEFAULT_APP_HOSTS = ["app.onolys.com", "onolys-app.web.app", "onolys-app-staging.web.app"];
+const DEFAULT_APP_HOSTS = ["app.onolys.com", "onolys-app.web.app", "onolys-staging-app.web.app"];
 
 /**
  * Hosts (besides this origin) a continue link may send the user back to: the Firebase auth domain plus any
