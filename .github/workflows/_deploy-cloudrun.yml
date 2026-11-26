@@ -60,6 +60,14 @@ on:
         required: false
         type: boolean
         default: false
+      wait_for_job:
+        description: >-
+          Name of a job in the calling run to wait for before deploying (deploy-prod.yml: `infra-apply` when the infra plan has
+          changes). Lets the app deploy start together with that job, so both are released by ONE environment approval, while
+          the deploy itself still runs after it and never over failed infrastructure. Empty = no wait.
+        required: false
+        type: string
+        default: ''
     outputs:
       url:
         description: Deployed service URL
@@ -68,16 +76,38 @@ on:
 permissions:
   contents: read
   id-token: write
+  actions: read # wait_for_job reads this run's job list
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    # +25 minutes of wait budget when waiting for the infra apply (its own timeout is 20 minutes).
+    timeout-minutes: ${{ inputs.wait_for_job != '' && 40 || 15 }}
     # Prod deployer is only impersonable from the `production` GitHub environment (WIF attribute.environment).
     environment: ${{ inputs.env == 'prod' && 'production' || 'staging' }}
     outputs:
       url: ${{ steps.deploy.outputs.url }}
     steps:
+      - name: Wait for infra-apply (approved together with this job; app deploys only after infrastructure)
+        if: inputs.wait_for_job != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          WAIT_JOB: ${{ inputs.wait_for_job }}
+        run: |
+          # Same text in _deploy-cloudrun.yml and deploy-prod.yml (rules, web); scripts/ci/test_terraform_pipeline.py enforces it.
+          set -euo pipefail
+          deadline=$(( $(date +%s) + 25 * 60 ))
+          while :; do
+            state="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/jobs?filter=latest&per_page=100" \
+              --jq "[.jobs[] | select(.name == \"${WAIT_JOB}\")] | .[0] | if . == null then \"missing\" else .status + \" \" + (.conclusion // \"\") end")"
+            case "$state" in
+              "completed success") echo "${WAIT_JOB} succeeded"; exit 0 ;;
+              completed*) echo "::error::${WAIT_JOB} finished as '${state#completed }'; not deploying the app over unapplied infrastructure"; exit 1 ;;
+            esac
+            [ "$(date +%s)" -lt "$deadline" ] || { echo "::error::timed out waiting for ${WAIT_JOB} (${state})"; exit 1; }
+            echo "waiting for ${WAIT_JOB}: ${state}"
+            sleep 15
+          done
       - name: Check inputs
         env:
           IMAGE: ${{ inputs.image }}

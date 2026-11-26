@@ -5,7 +5,11 @@ The repository and its Actions logs are public, so the summary lists only resour
 changed outputs. It never prints attribute values, output values or the plan text; sensitive values are not read at all.
 Remaining defence in depth: credential-looking strings are redacted from anything echoed (error excerpts).
 
-Usage: tf_plan_summary.py --env NAME --status ok|failed|unconfigured [--plan-json F] [--log F] [--max-lines N] > summary.md
+Usage: tf_plan_summary.py --env NAME --status ok|failed|unconfigured [--plan-json F] [--log F] [--max-lines N]
+                          [--protect ADDRESS_PREFIX ...] > summary.md
+With --protect, a plan that destroys or forgets anything under a protected address (the pipeline's own identities,
+module.terraform_ci: e.g. a rollback to a commit from before this pipeline) is BLOCKED: the summary says so and the exit code
+is 3, so the plan job fails and nothing is applied. Replacements are allowed (they recreate the resource).
 """
 from __future__ import annotations
 
@@ -79,6 +83,17 @@ def summarize_plan(plan: dict, max_lines: int) -> tuple[str, dict]:
     return "\n\n".join(parts), counts
 
 
+def protected_removals(plan: dict, prefixes: list[str]) -> list[str]:
+    """Addresses under a protected prefix that the plan would destroy or forget (not replace)."""
+    hits = []
+    for rc in plan.get("resource_changes", []):
+        addr = rc["address"]
+        if classify(rc["change"]["actions"]) in ("delete", "forget") and any(
+                addr == p or addr.startswith(p + ".") or addr.startswith(p + "[") for p in prefixes):
+            hits.append(addr)
+    return sorted(hits)
+
+
 def error_excerpt(log: str, limit: int = 30) -> str:
     keep, grab = [], False
     for line in log.splitlines():
@@ -91,7 +106,7 @@ def error_excerpt(log: str, limit: int = 30) -> str:
     return redact("\n".join(keep) if keep else "\n".join(log.splitlines()[-limit:]))
 
 
-def render(env: str, status: str, plan: dict | None, log: str, max_lines: int) -> str:
+def render(env: str, status: str, plan: dict | None, log: str, max_lines: int, blocked: list[str] | None = None) -> str:
     title = f"#### Terraform plan: `{env}`"
     if status == "unconfigured":
         body = "Not configured yet: repo variables for this environment are unset (pipeline not bootstrapped). Skipped."
@@ -99,6 +114,11 @@ def render(env: str, status: str, plan: dict | None, log: str, max_lines: int) -
         body = "**Plan failed.** Excerpt (redacted):\n\n```\n" + error_excerpt(log) + "\n```"
     else:
         body, _ = summarize_plan(plan or {}, max_lines)
+    if blocked:
+        body = ("**BLOCKED: this plan destroys the pipeline's own identities** ("
+                + ", ".join(f"`{a}`" for a in blocked[:10]) + ("" if len(blocked) <= 10 else ", ...")
+                + "). It is not applied. Typical cause: a rollback to a commit from before this pipeline existed; roll back "
+                "the app only with infra disabled, or apply by hand (break-glass, docs/reference/infra-pipeline.md).\n\n" + body)
     return redact(f"{title}\n\n{body}\n")[:MAX_COMMENT_CHARS]
 
 
@@ -109,11 +129,13 @@ def main() -> int:
     ap.add_argument("--plan-json")
     ap.add_argument("--log")
     ap.add_argument("--max-lines", type=int, default=80)
+    ap.add_argument("--protect", action="append", default=[], help="address prefix that must never be destroyed or forgotten")
     a = ap.parse_args()
     plan = json.load(open(a.plan_json, encoding="utf-8")) if a.plan_json else None
     log = open(a.log, encoding="utf-8", errors="replace").read() if a.log else ""
-    sys.stdout.write(render(a.env, a.status, plan, log, a.max_lines))
-    return 0
+    blocked = protected_removals(plan, a.protect) if (plan and a.protect and a.status == "ok") else []
+    sys.stdout.write(render(a.env, a.status, plan, log, a.max_lines, blocked))
+    return 3 if blocked else 0
 
 
 if __name__ == "__main__":

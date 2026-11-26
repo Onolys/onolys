@@ -83,7 +83,7 @@ assert build['outputs']['worker_image'] == '${{ steps.vars.outputs.worker_repo }
 assert any('check_config.sh --image "$IMAGE"' in step.get('run', '') and
            step.get('env', {}).get('IMAGE') == build['outputs']['worker_image'] for step in steps), 'guard worker image by digest'
 worker = jobs['deploy-worker']
-assert worker['needs'] == 'build'
+assert set(worker['needs']) == {'build', 'infra-plan', 'infra-apply'}, 'infra (plan, apply when changed) precedes the worker'
 assert worker['uses'] == './.github/workflows/_deploy-cloudrun.yml'
 assert worker['with']['env'] == 'eval' and worker['with']['service'] == 'onolys-worker-eval'
 assert worker['with']['image'] == '${{ needs.build.outputs.worker_image }}'

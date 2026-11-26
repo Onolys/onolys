@@ -235,7 +235,7 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(workflow['env']['PROJECT'], "${{ vars.GCP_PROJECT || 'onolys' }}")
         for name in ('deploy-api', 'deploy-worker', 'deploy-voice'):
             job = workflow['jobs'][name]
-            self.assertEqual(job['needs'], 'resolve')
+            self.assertEqual(set(job['needs']), {'resolve', 'infra-plan'})  # infra-apply ordered by wait_for_job (one approval)
             self.assertEqual(job['with']['project'], "${{ vars.GCP_PROJECT || 'onolys' }}")
             self.assertNotIn('service_account', job['with'])
         self.assertNotIn('environment', resolve)

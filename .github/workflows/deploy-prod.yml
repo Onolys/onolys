@@ -19,10 +19,15 @@ name: deploy-prod
 #   PROD_VITE_FIREBASE_{API_KEY,AUTH_DOMAIN,APP_ID,STORAGE_BUCKET,MESSAGING_SENDER_ID} (Terraform output web_env_prod),
 #   PROD_VITE_CONTACT_EMAIL (optional)
 #   PROD_LLM_PROVIDER + PROD_LLM_MODEL (both or neither), PROD_LLM_EFFORT (optional; validated against the promoted image)
-# Approval: the prod jobs (api, worker, voice, rules, web) all start right after `resolve`, so GitHub shows ONE
-# "Review pending deployments" prompt for `production` and one click releases them all (a later-starting gated job
-# would need a second approval). Trade-off: no ordering between api and web; the Hosting rewrite targets the service
-# by name, so that is safe. `resolve` uses the staging deployer, which can only read, before approval.
+# Infrastructure (docs/reference/infra-pipeline.md): `infra-plan` plans prod (legacy infra/ root) at the resolved commit, also
+# for promote and rollback, before any approval; its per-resource summary is in that job's summary. `infra-apply` runs only
+# when the plan has changes. Both are skipped (and this workflow behaves as before) until TF_PROD_ENABLED is 'true'.
+# Approval: the prod jobs (infra-apply, api, worker, voice, rules, web) all start right after `resolve` + `infra-plan`, so
+# GitHub shows ONE "Review pending deployments" prompt for `production` and one click releases them all (a later-starting
+# gated job would need a second approval). Ordering infra before app therefore cannot use `needs`: the app jobs' first step
+# waits until `infra-apply` has succeeded (and fails, deploying nothing, if it did not). Trade-off: no ordering between api
+# and web; the Hosting rewrite targets the service by name, so that is safe. `resolve` uses the staging deployer, which can
+# only read, before approval.
 on:
   workflow_dispatch:
     inputs:
@@ -190,11 +195,91 @@ jobs:
             --mount "type=bind,src=$RUNNER_TEMP/validate_staging_llm.py,dst=/tmp/validate_llm.py,readonly" \
             "$IMAGE" /tmp/validate_llm.py --environment prod --config-root /app/config --stdout >> "$GITHUB_OUTPUT"
 
-  deploy-api:
+  infra-plan:
+    # Infrastructure first (docs/reference/infra-pipeline.md): plan prod at the resolved commit (release, promote or rollback)
+    # BEFORE the approval, so the reviewer reads the per-resource summary in this job's summary. Read-only identity, no
+    # environment. Skipped, and the release runs exactly as before, until the owner sets TF_PROD_ENABLED=true.
     needs: resolve
+    if: ${{ !cancelled() && needs.resolve.result == 'success' && vars.TF_PROD_ENABLED == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
     permissions:
       contents: read
       id-token: write
+    outputs:
+      changes: ${{ steps.plan.outputs.changes }}
+      sha256: ${{ steps.plan.outputs.sha256 }}
+      object: ${{ steps.plan.outputs.object }}
+      live_sha256: ${{ steps.plan.outputs.live_sha256 }}
+    steps:
+      # The workflow's own ref: helper scripts and the terraform-plan/apply actions (never the deployed commit's copies).
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      # The commit being deployed: its Terraform configuration only.
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ needs.resolve.outputs.sha }}
+          path: target
+          persist-credentials: false
+      - id: plan
+        uses: ./.github/actions/terraform-plan
+        with:
+          env: prod
+          root: target/infra
+          tfroot: legacy
+          project: onolys
+          bucket: onolys-tfstate
+          wif_provider: ${{ vars.WIF_PROVIDER }}
+          save: "true"
+
+  infra-apply:
+    # Only when the plan has changes. Same `production` environment and same needs as the app jobs below, so all of them wait
+    # for approval at the same moment: ONE click releases infra and app. The app jobs then wait (wait_for_job / first step)
+    # until this job has succeeded; if it fails they fail without deploying.
+    needs: [resolve, infra-plan]
+    if: ${{ !cancelled() && needs.resolve.result == 'success' && needs.infra-plan.result == 'success' && needs.infra-plan.outputs.changes == 'true' }}
+    name: infra-apply # the app jobs' wait step finds it by this name
+    environment: production
+    runs-on: ubuntu-latest
+    # Apply is a deploy-style job (Cloud Run, domains, Hosting can take several minutes); plan jobs stay within 5 minutes.
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      # The workflow's own ref: helper scripts and the terraform-plan/apply actions (never the deployed commit's copies).
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      # The commit being deployed: its Terraform configuration only.
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ needs.resolve.outputs.sha }}
+          path: target
+          persist-credentials: false
+      - uses: ./.github/actions/terraform-apply
+        with:
+          env: prod
+          root: target/infra
+          tfroot: legacy
+          project: onolys
+          bucket: onolys-tfstate
+          wif_provider: ${{ vars.WIF_PROVIDER }}
+          plan_sha256: ${{ needs.infra-plan.outputs.sha256 }}
+          plan_object: ${{ needs.infra-plan.outputs.object }}
+          live_sha256: ${{ needs.infra-plan.outputs.live_sha256 }}
+          python_deps: "true"
+
+  # App jobs: every `if` starts with !cancelled() and checks each need's result explicitly. A skipped infra job (disabled, or
+  # no changes) must not skip the app, and the default success() would (it also looks at skipped jobs further upstream).
+  deploy-api:
+    needs: [resolve, infra-plan]
+    if: ${{ !cancelled() && needs.resolve.result == 'success' && (needs.infra-plan.result == 'success' || needs.infra-plan.result == 'skipped') }}
+    permissions:
+      contents: read
+      id-token: write
+      actions: read # wait_for_job reads this run's jobs
     uses: ./.github/workflows/_deploy-cloudrun.yml
     with:
       env: prod
@@ -203,6 +288,7 @@ jobs:
       region: ${{ vars.GCP_REGION || 'us-central1' }}
       project: ${{ vars.GCP_PROJECT || 'onolys' }}
       git_sha: ${{ needs.resolve.outputs.sha }}
+      wait_for_job: ${{ needs.infra-plan.outputs.changes == 'true' && 'infra-apply' || '' }}
       env_vars: |-
         LLM_PROVIDER=${{ needs.resolve.outputs.llm_provider }}
         LLM_MODEL=${{ needs.resolve.outputs.llm_model }}
@@ -210,10 +296,12 @@ jobs:
     secrets: inherit
 
   deploy-worker:
-    needs: resolve
+    needs: [resolve, infra-plan]
+    if: ${{ !cancelled() && needs.resolve.result == 'success' && (needs.infra-plan.result == 'success' || needs.infra-plan.result == 'skipped') }}
     permissions:
       contents: read
       id-token: write
+      actions: read # wait_for_job reads this run's jobs
     uses: ./.github/workflows/_deploy-cloudrun.yml
     with:
       env: prod
@@ -222,6 +310,7 @@ jobs:
       region: ${{ vars.GCP_REGION || 'us-central1' }}
       project: ${{ vars.GCP_PROJECT || 'onolys' }}
       git_sha: ${{ needs.resolve.outputs.sha }}
+      wait_for_job: ${{ needs.infra-plan.outputs.changes == 'true' && 'infra-apply' || '' }}
       env_vars: |-
         LLM_PROVIDER=${{ needs.resolve.outputs.llm_provider }}
         LLM_MODEL=${{ needs.resolve.outputs.llm_model }}
@@ -229,10 +318,12 @@ jobs:
     secrets: inherit
 
   deploy-voice:
-    needs: resolve
+    needs: [resolve, infra-plan]
+    if: ${{ !cancelled() && needs.resolve.result == 'success' && (needs.infra-plan.result == 'success' || needs.infra-plan.result == 'skipped') }}
     permissions:
       contents: read
       id-token: write
+      actions: read # wait_for_job reads this run's jobs
     uses: ./.github/workflows/_deploy-cloudrun.yml
     with:
       env: prod
@@ -241,20 +332,44 @@ jobs:
       region: ${{ vars.GCP_REGION || 'us-central1' }}
       project: ${{ vars.GCP_PROJECT || 'onolys' }}
       git_sha: ${{ needs.resolve.outputs.sha }}
+      wait_for_job: ${{ needs.infra-plan.outputs.changes == 'true' && 'infra-apply' || '' }}
       # Same image as the api; the mode comes from SERVICE_MODE (also set by Terraform on the service).
       env_vars: |-
         SERVICE_MODE=voice
     secrets: inherit
 
   rules:
-    needs: resolve
+    needs: [resolve, infra-plan]
+    if: ${{ !cancelled() && needs.resolve.result == 'success' && (needs.infra-plan.result == 'success' || needs.infra-plan.result == 'skipped') }}
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    # +25 minutes of wait budget when waiting for infra-apply (its own timeout is 20 minutes).
+    timeout-minutes: ${{ needs.infra-plan.outputs.changes == 'true' && 35 || 10 }}
     environment: production
     permissions:
       contents: read
       id-token: write
+      actions: read # the wait step reads this run's jobs
     steps:
+      - name: Wait for infra-apply (approved together with this job; app deploys only after infrastructure)
+        if: needs.infra-plan.outputs.changes == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          WAIT_JOB: ${{ needs.infra-plan.outputs.changes == 'true' && 'infra-apply' || '' }}
+        run: |
+          # Same text in _deploy-cloudrun.yml and deploy-prod.yml (rules, web); scripts/ci/test_terraform_pipeline.py enforces it.
+          set -euo pipefail
+          deadline=$(( $(date +%s) + 25 * 60 ))
+          while :; do
+            state="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/jobs?filter=latest&per_page=100" \
+              --jq "[.jobs[] | select(.name == \"${WAIT_JOB}\")] | .[0] | if . == null then \"missing\" else .status + \" \" + (.conclusion // \"\") end")"
+            case "$state" in
+              "completed success") echo "${WAIT_JOB} succeeded"; exit 0 ;;
+              completed*) echo "::error::${WAIT_JOB} finished as '${state#completed }'; not deploying the app over unapplied infrastructure"; exit 1 ;;
+            esac
+            [ "$(date +%s)" -lt "$deadline" ] || { echo "::error::timed out waiting for ${WAIT_JOB} (${state})"; exit 1; }
+            echo "waiting for ${WAIT_JOB}: ${state}"
+            sleep 15
+          done
       - uses: actions/checkout@v4
         with:
           ref: ${{ needs.resolve.outputs.sha }}
@@ -269,14 +384,37 @@ jobs:
         run: npx --yes firebase-tools@${{ env.FIREBASE_TOOLS_VERSION }} deploy --only 'firestore:(default)' --project "$PROJECT" --non-interactive
 
   web:
-    needs: resolve
+    needs: [resolve, infra-plan]
+    if: ${{ !cancelled() && needs.resolve.result == 'success' && (needs.infra-plan.result == 'success' || needs.infra-plan.result == 'skipped') }}
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    # +25 minutes of wait budget when waiting for infra-apply (its own timeout is 20 minutes).
+    timeout-minutes: ${{ needs.infra-plan.outputs.changes == 'true' && 40 || 15 }}
     environment: production
     permissions:
       contents: read
       id-token: write
+      actions: read # the wait step reads this run's jobs
     steps:
+      - name: Wait for infra-apply (approved together with this job; app deploys only after infrastructure)
+        if: needs.infra-plan.outputs.changes == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          WAIT_JOB: ${{ needs.infra-plan.outputs.changes == 'true' && 'infra-apply' || '' }}
+        run: |
+          # Same text in _deploy-cloudrun.yml and deploy-prod.yml (rules, web); scripts/ci/test_terraform_pipeline.py enforces it.
+          set -euo pipefail
+          deadline=$(( $(date +%s) + 25 * 60 ))
+          while :; do
+            state="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/jobs?filter=latest&per_page=100" \
+              --jq "[.jobs[] | select(.name == \"${WAIT_JOB}\")] | .[0] | if . == null then \"missing\" else .status + \" \" + (.conclusion // \"\") end")"
+            case "$state" in
+              "completed success") echo "${WAIT_JOB} succeeded"; exit 0 ;;
+              completed*) echo "::error::${WAIT_JOB} finished as '${state#completed }'; not deploying the app over unapplied infrastructure"; exit 1 ;;
+            esac
+            [ "$(date +%s)" -lt "$deadline" ] || { echo "::error::timed out waiting for ${WAIT_JOB} (${state})"; exit 1; }
+            echo "waiting for ${WAIT_JOB}: ${state}"
+            sleep 15
+          done
       - uses: actions/checkout@v4
         with:
           ref: ${{ needs.resolve.outputs.sha }}
@@ -312,6 +450,7 @@ jobs:
 
   smoke:
     needs: [resolve, deploy-api, deploy-worker, deploy-voice, rules, web]
+    if: ${{ !cancelled() && needs.resolve.result == 'success' && needs.deploy-api.result == 'success' && needs.deploy-worker.result == 'success' && needs.deploy-voice.result == 'success' && needs.rules.result == 'success' && needs.web.result == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -329,12 +468,14 @@ jobs:
           echo "$body"
           echo "$body" | jq -e --arg sha "$SHA" '.code_version == $sha'
 
-  # Runs only when every prod deploy job AND the healthz smoke succeeded (default success() over `needs`). Tags the promoted commit
+  # Runs only when every prod deploy job AND the healthz smoke succeeded (explicit results; !cancelled() so a skipped infra job
+  # upstream does not skip it). Tags the promoted commit
   # prod-<UTC date>.<n>, always a NEW tag (also for a rollback / re-deploy of an already-tagged sha), so the newest
   # prod-* tag = the last fully successful deploy (rollback target). The only job that may write to the repo. The checkout is
   # a full-history git repo to push from (see fetch-depth below); the target commit is fetched only if not already present.
   tag:
     needs: [resolve, deploy-api, deploy-worker, deploy-voice, rules, web, smoke]
+    if: ${{ !cancelled() && needs.resolve.result == 'success' && needs.deploy-api.result == 'success' && needs.deploy-worker.result == 'success' && needs.deploy-voice.result == 'success' && needs.rules.result == 'success' && needs.web.result == 'success' && needs.smoke.result == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:

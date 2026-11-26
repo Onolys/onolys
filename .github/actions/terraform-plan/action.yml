@@ -1,0 +1,174 @@
+name: terraform-plan
+description: >
+  Plan one environment (docs/reference/infra-pipeline.md). Shared by terraform.yml (PR plans, nothing saved) and the
+  infra-plan jobs of deploy-staging.yml, deploy-eval.yml and deploy-prod.yml (save the plan for the infra-apply job).
+  A composite action, not a reusable workflow, on purpose: the OIDC job_workflow_ref stays the calling workflow, which is what
+  the WIF provider conditions match. Needs the workflow's own ref checked out at the workspace root (helper scripts) and the
+  Terraform configuration to plan under `root` (in the deploy pipelines a second checkout of the commit being deployed).
+  The repository and its logs are public: the plan text never reaches the log; the summary lists addresses and actions only.
+
+inputs:
+  env:
+    description: prod | staging | eval
+    required: true
+  root:
+    description: Terraform root directory, relative to the workspace
+    required: true
+  tfroot:
+    description: legacy | isolated (tf_live_inputs.py root shape)
+    required: true
+  project:
+    description: GCP project id
+    required: true
+  bucket:
+    description: private state bucket holding plans/
+    required: true
+  backend:
+    description: backend config file relative to root (empty for the legacy root)
+    required: false
+    default: ""
+  varfile:
+    description: tfvars file relative to root (empty = variable defaults)
+    required: false
+    default: ""
+  wif_provider:
+    description: the environment's deploy WIF provider variable; the plan identity is derived from it (scripts/ci/tf_identity.py)
+    required: true
+  save:
+    description: "true = copy a plan with changes to gs://<bucket>/plans/ and output its hashes for the apply job"
+    required: false
+    default: "false"
+
+outputs:
+  status:
+    description: ok | failed (failed also covers a plan blocked by the protected-identity guard)
+    value: ${{ steps.plan.outputs.status }}
+  changes:
+    description: "true when the plan has changes"
+    value: ${{ steps.plan.outputs.changes }}
+  sha256:
+    description: SHA-256 of the saved plan (save only; empty without changes)
+    value: ${{ steps.save.outputs.sha256 }}
+  object:
+    description: object name of the saved plan in the state bucket (save only)
+    value: ${{ steps.save.outputs.object }}
+  live_sha256:
+    description: hash of the deploy-managed inputs (git_sha, llm_*) the plan was made with (save only)
+    value: ${{ steps.save.outputs.live_sha256 }}
+  summary_file:
+    description: path of the Markdown summary (addresses and actions only)
+    value: ${{ steps.plan.outputs.summary_file }}
+
+runs:
+  using: composite
+  steps:
+    - id: ident
+      shell: bash
+      env:
+        WIF: ${{ inputs.wif_provider }}
+        PROJECT: ${{ inputs.project }}
+      run: python3 "$GITHUB_WORKSPACE/scripts/ci/tf_identity.py" --wif-provider "$WIF" --project "$PROJECT" --kind plan >> "$GITHUB_OUTPUT"
+    - uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3
+      with:
+        terraform_version: 1.9.8
+        terraform_wrapper: false
+    - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+      with:
+        path: .terraform-plugin-cache
+        key: tf-plugins-${{ runner.os }}-${{ hashFiles(format('{0}/.terraform.lock.hcl', inputs.root)) }}
+    - uses: google-github-actions/auth@c200f3691d83b41bf9bbd8638997a462592937ed # v2
+      with:
+        workload_identity_provider: ${{ steps.ident.outputs.provider }}
+        service_account: ${{ steps.ident.outputs.sa }}
+    - id: live
+      name: Read live deploy-managed inputs (git_sha, llm_*) so the plan never reverts a deploy
+      shell: bash
+      env:
+        ENVNAME: ${{ inputs.env }}
+        TFROOT: ${{ inputs.tfroot }}
+        PROJECT: ${{ inputs.project }}
+        ROOTDIR: ${{ inputs.root }}
+      run: >
+        python3 "$GITHUB_WORKSPACE/scripts/ci/tf_live_inputs.py" --root "$TFROOT" --env "$ENVNAME" --project "$PROJECT"
+        --out "$ROOTDIR/live.auto.tfvars.json"
+    - id: plan
+      name: terraform init and plan (output to a file, never to the public log)
+      shell: bash
+      working-directory: ${{ inputs.root }}
+      env:
+        ENVNAME: ${{ inputs.env }}
+        BACKEND: ${{ inputs.backend }}
+        VARFILE: ${{ inputs.varfile }}
+        TF_IN_AUTOMATION: "true"
+        TF_INPUT: "0"
+        TF_PLUGIN_CACHE_DIR: ${{ github.workspace }}/.terraform-plugin-cache
+      run: |
+        set +e
+        mkdir -p "$TF_PLUGIN_CACHE_DIR"
+        summary="$RUNNER_TEMP/tf-summary-${ENVNAME}.md"
+        echo "summary_file=$summary" >> "$GITHUB_OUTPUT"
+        backend=(); [ -n "$BACKEND" ] && backend=("-backend-config=$BACKEND")
+        args=(-input=false -no-color -lock=false -parallelism=30 -detailed-exitcode -out=tfplan)
+        [ -n "$VARFILE" ] && args+=("-var-file=$VARFILE")
+        terraform init -input=false -no-color -lockfile=readonly "${backend[@]}" > "$RUNNER_TEMP/tf.log" 2>&1
+        rc=$?
+        if [ "$rc" -eq 0 ]; then terraform plan "${args[@]}" >> "$RUNNER_TEMP/tf.log" 2>&1; rc=$?; fi
+        # From here a failing summary must fail the step (no silent loss of the PR comment / run summary).
+        set -e
+        summarize=(python3 "$GITHUB_WORKSPACE/scripts/ci/tf_plan_summary.py" --env "$ENVNAME")
+        if [ "$rc" -eq 1 ]; then
+          echo "status=failed" >> "$GITHUB_OUTPUT"
+          "${summarize[@]}" --status failed --log "$RUNNER_TEMP/tf.log" > "$summary"
+        else
+          terraform show -json tfplan > "$RUNNER_TEMP/plan.json"
+          # --protect: a plan that destroys the pipeline's own identities (e.g. a rollback to a commit from before this
+          # pipeline) is blocked (exit 3) and never applied.
+          guard=0
+          "${summarize[@]}" --status ok --plan-json "$RUNNER_TEMP/plan.json" --protect module.terraform_ci > "$summary" || guard=$?
+          rm -f "$RUNNER_TEMP/plan.json"
+          if [ "$guard" -eq 3 ]; then
+            echo "status=failed" >> "$GITHUB_OUTPUT"
+          elif [ "$guard" -ne 0 ]; then
+            exit "$guard"
+          else
+            echo "status=ok" >> "$GITHUB_OUTPUT"
+            echo "changes=$([ "$rc" -eq 2 ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+          fi
+        fi
+    - name: Plan summary (addresses and actions only) in the run summary
+      if: always()
+      shell: bash
+      env:
+        SUMMARY: ${{ steps.plan.outputs.summary_file }}
+      run: |
+        if [ -n "$SUMMARY" ] && [ -f "$SUMMARY" ]; then cat "$SUMMARY"; cat "$SUMMARY" >> "$GITHUB_STEP_SUMMARY"; fi
+    # Deploy pipelines only: the saved plan goes to the PRIVATE state bucket (plans/), never to a public artifact; only its hash
+    # travels (job outputs) so the apply job can prove it applies exactly what this job planned.
+    - id: save
+      name: Save the plan to the private state bucket and record its hash
+      if: inputs.save == 'true' && steps.plan.outputs.status == 'ok'
+      shell: bash
+      env:
+        CHANGES: ${{ steps.plan.outputs.changes }}
+        BUCKET: ${{ inputs.bucket }}
+        ENVNAME: ${{ inputs.env }}
+        ROOTDIR: ${{ inputs.root }}
+      run: |
+        set -euo pipefail
+        object="plans/${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${ENVNAME}.tfplan"
+        # live_sha256: hash of the deploy-managed inputs (git_sha, llm_*) the plan was made with; the apply re-reads them and
+        # refuses to roll back a change that landed in between.
+        echo "live_sha256=$(sha256sum "${ROOTDIR}/live.auto.tfvars.json" | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+        if [ "$CHANGES" = "true" ]; then
+          gcloud storage cp "${ROOTDIR}/tfplan" "gs://${BUCKET}/${object}" --quiet
+          echo "sha256=$(sha256sum "${ROOTDIR}/tfplan" | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+          echo "object=${object}" >> "$GITHUB_OUTPUT"
+        fi
+    - name: Fail the job if the plan failed or was blocked
+      if: steps.plan.outputs.status != 'ok'
+      shell: bash
+      env:
+        ENVNAME: ${{ inputs.env }}
+      run: |
+        echo "::error::terraform plan failed or was blocked for ${ENVNAME} (redacted summary above)."
+        exit 1
