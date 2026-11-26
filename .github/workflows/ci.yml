@@ -577,11 +577,13 @@ jobs:
           path: web/e2e_review/test-results/
           retention-days: 3
 
+  # Budget: every job finishes within 5 minutes (required_gate.py also caps the whole PR path at 300 s). The isolated-root
+  # validate/test runs in its own job in parallel so neither job approaches the limit (each is dominated by provider downloads).
   infra:
     needs: changes
     if: needs.changes.outputs.infra == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 5
     defaults:
       run:
         working-directory: infra
@@ -594,14 +596,6 @@ jobs:
       - run: terraform fmt -check -recursive
       - run: terraform init -backend=false
       - run: terraform validate
-      # Offline: the isolated root (staging/eval) and bootstrap, plus mocked-provider plans. Plans against real state run in terraform.yml.
-      - name: Validate and test the isolated-environment root and bootstrap
-        run: |
-          for d in isolated-environment isolated-environment/bootstrap; do
-            terraform -chdir="$d" init -backend=false -lockfile=readonly -input=false
-            terraform -chdir="$d" validate
-          done
-          terraform -chdir=isolated-environment test
       - uses: astral-sh/setup-uv@v5
         with:
           enable-cache: true
@@ -612,9 +606,32 @@ jobs:
           uv sync --frozen --package onolys-engine-core
           uv run --no-sync --package onolys-engine-core pytest infra/scripts -q
 
+  infra-isolated:
+    needs: changes
+    if: needs.changes.outputs.infra == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    defaults:
+      run:
+        working-directory: infra
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.9.8
+          terraform_wrapper: false
+      # Offline: the isolated root (staging/eval) and bootstrap, plus mocked-provider plans. Plans against real state run in terraform.yml.
+      - name: Validate and test the isolated-environment root and bootstrap
+        run: |
+          for d in isolated-environment isolated-environment/bootstrap; do
+            terraform -chdir="$d" init -backend=false -lockfile=readonly -input=false
+            terraform -chdir="$d" validate
+          done
+          terraform -chdir=isolated-environment test
+
   required:
     if: always()
-    needs: [changes, guards, engine-core, oneshot, miti, eval-core, eval-backend, eval-web, api-unit, api-emulator, api-coverage, api-flaky, api-rules, api-image, frontend, web, web-e2e, infra]
+    needs: [changes, guards, engine-core, oneshot, miti, eval-core, eval-backend, eval-web, api-unit, api-emulator, api-coverage, api-flaky, api-rules, api-image, frontend, web, web-e2e, infra, infra-isolated]
     runs-on: ubuntu-latest
     timeout-minutes: 1
     permissions:
