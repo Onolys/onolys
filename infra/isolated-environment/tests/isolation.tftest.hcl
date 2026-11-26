@@ -7,6 +7,11 @@ override_data {
   values = { number = "904020682480" }
 }
 
+override_data {
+  target = data.google_project.this
+  values = { number = "904020682480" }
+}
+
 variables {
   environment     = "staging"
   project         = "onolys-staging"
@@ -105,7 +110,7 @@ run "never_manage_external_identity" {
 run "previews_disabled_by_default" {
   command = plan
   assert {
-    condition     = length(google_service_account.pr_preview) == 0 && length(google_iam_workload_identity_pool_provider.github_pr) == 0 && output.pr_preview_service_account == null && output.pr_preview_wif_provider == null
+    condition     = length(google_service_account.pr_preview) == 0 && length(google_iam_workload_identity_pool_provider.github_pr) == 0 && length(google_iam_workload_identity_pool.github_pr) == 0 && output.pr_preview_service_account == null && output.pr_preview_wif_provider == null
     error_message = "Preview identity must be opt-in."
   }
 }
@@ -137,6 +142,25 @@ run "staging_previews_limited_identity" {
   }
 }
 
+run "preview_and_deployer_identities_use_separate_pools" {
+  command = plan
+  variables {
+    enable_pr_previews = true
+  }
+  assert {
+    condition     = google_service_account_iam_member.deployer_wif.member == "principalSet://iam.googleapis.com/projects/904020682480/locations/global/workloadIdentityPools/github/attribute.repository/Onolys/onolys"
+    error_message = "The deployer binding must match only the main-only pool."
+  }
+  assert {
+    condition     = google_service_account_iam_member.pr_preview_wif[0].member == "principalSet://iam.googleapis.com/projects/904020682480/locations/global/workloadIdentityPools/github-pr/attribute.repository/Onolys/onolys"
+    error_message = "The preview binding must match only the preview pool."
+  }
+  assert {
+    condition     = google_iam_workload_identity_pool_provider.github.workload_identity_pool_id == "github" && google_iam_workload_identity_pool_provider.github_pr[0].workload_identity_pool_id == "github-pr"
+    error_message = "A pool principalSet matches every provider in its pool: previews and the deployer must not share a pool."
+  }
+}
+
 run "eval_never_gets_previews" {
   command = plan
   variables {
@@ -146,7 +170,7 @@ run "eval_never_gets_previews" {
     enable_pr_previews = true
   }
   assert {
-    condition     = length(google_service_account.pr_preview) == 0 && length(google_iam_workload_identity_pool_provider.github_pr) == 0 && length(google_project_iam_member.pr_preview) == 0 && output.pr_preview_wif_provider == null
+    condition     = length(google_service_account.pr_preview) == 0 && length(google_iam_workload_identity_pool_provider.github_pr) == 0 && length(google_iam_workload_identity_pool.github_pr) == 0 && length(google_project_iam_member.pr_preview) == 0 && output.pr_preview_wif_provider == null
     error_message = "Eval must not get a preview identity."
   }
 }

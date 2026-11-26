@@ -7,10 +7,12 @@ name: pr-preview
 # (run.developer on that service only). Hosting cannot rewrite to a tag, so the web build calls the tag URL
 # https://pr-<N>---<staging api host> directly (CORS allows the channel origin on this revision; the CSP is extended).
 # Target: when vars.STAGING_GCP_PROJECT is set, previews run in the isolated staging project (site vars.STAGING_HOSTING_SITE) as
-# the dedicated, limited identity pr-preview-staging via the pull_request-only WIF provider (STAGING_PREVIEW_WIF_PROVIDER /
-# STAGING_PREVIEW_SA, Terraform outputs pr_preview_wif_provider / pr_preview_service_account of infra/isolated-environment/).
-# That identity has no worker/voice/secret/Firestore-rules access and cannot be used from main-only deploy workflows. When it is
-# unset, the legacy project onolys / site onolys-app-staging / deployer-staging identity is used. In isolated mode missing preview
+# the dedicated, limited identity pr-preview-staging via the pull_request-only WIF provider in its own pool github-pr
+# (STAGING_PREVIEW_WIF_PROVIDER / STAGING_PREVIEW_SA, Terraform outputs pr_preview_wif_provider / pr_preview_service_account of
+# infra/isolated-environment/). That identity has no worker/voice/Firestore-rules grants and cannot be used from main-only deploy
+# workflows; the preview revision itself runs as the api runtime SA and can read that SA's staging secrets. The legacy fallback
+# (project onolys / site onolys-app-staging / deployer-staging) only remains while STAGING_GCP_PROJECT is unset; the legacy
+# staging target is being destroyed, so clearing the variable is NOT a supported rollback. In isolated mode missing preview
 # vars fail fast (release_target.py preview) instead of authenticating as another identity.
 # Fork PRs get no preview (no secrets, no WIF). Cleanup: pr-preview-cleanup.yml.
 #

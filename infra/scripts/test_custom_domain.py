@@ -44,6 +44,6 @@ def test_required_dns_updates_output_shape():
     assert "local.custom_domains" in b
     loc = block(src(), "locals")
     assert "google_firebase_hosting_custom_domain.app" in loc
-    assert "eval_staging" not in loc  # the old eval hosting site/domain was removed with the legacy eval environment
+    assert "google_firebase_hosting_custom_domain.eval_staging" in loc  # eval's auth handler domain stays (issuer is onolys)
     assert "host" in b and "value" in b
     assert "verification" in b  # cert _acme-challenge TXT

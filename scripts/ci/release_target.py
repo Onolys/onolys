@@ -62,8 +62,8 @@ def validate_preview(env: dict[str, str], web: bool = True) -> None:
     if missing:
         raise ValueError('Isolated PR previews require ' + ', '.join(missing)
                          + ' (terraform outputs pr_preview_wif_provider / pr_preview_service_account)')
-    if not re.fullmatch(r'projects/[0-9]+/locations/global/workloadIdentityPools/[a-z0-9-]+/providers/github-pr', provider):
-        raise ValueError('STAGING_PREVIEW_WIF_PROVIDER must be the github-pr (pull_request) provider, not the deployer provider')
+    if not re.fullmatch(r'projects/[0-9]+/locations/global/workloadIdentityPools/github-pr/providers/github-pr', provider):
+        raise ValueError('STAGING_PREVIEW_WIF_PROVIDER must be the github-pr provider in the separate github-pr pool, not the deployer provider')
     if account != f'pr-preview-staging@{project}.iam.gserviceaccount.com':
         raise ValueError(f'STAGING_PREVIEW_SA must be pr-preview-staging@{project}.iam.gserviceaccount.com')
     if site != 'onolys-staging-app':
@@ -91,6 +91,9 @@ def configure_hosting(config: Path, project: str, target: str, site: str) -> Non
 
 
 def configure_voice(config: Path, origin: str) -> None:
+    # The api service env VOICE_URL is wss://<host>.run.app; Cloud Run status.url is https://<host>.run.app. Same origin.
+    if origin.startswith('wss://'):
+        origin = 'https://' + origin[len('wss://'):]
     if not re.fullmatch(r'https://[a-z0-9][a-z0-9.-]*\.run\.app', origin):
         raise ValueError('Voice URL must be an exact HTTPS Cloud Run origin')
     data = json.loads(config.read_text())

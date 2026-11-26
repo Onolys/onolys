@@ -71,6 +71,18 @@ class TargetTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 self.module.configure_voice(config, 'https://evil.example/path')
 
+    def test_voice_origin_accepts_the_service_env_wss_form(self):
+        # The api service env VOICE_URL is wss://<host>.run.app (api/config.py); the CSP origin is the same host.
+        with tempfile.TemporaryDirectory() as temp:
+            config = Path(temp, 'firebase.json')
+            config.write_text((ROOT / 'web/firebase.json').read_text())
+            self.module.configure_voice(config, 'wss://onolys-voice-staging-123.us-central1.run.app')
+            after = json.loads(config.read_text())
+            self.assertIn('wss://onolys-voice-staging-123.us-central1.run.app', str(after['hosting'][1]))
+            for bad in ('ws://onolys-voice-staging-123.us-central1.run.app', 'wss://evil.example', 'wss://x.run.app/path'):
+                with self.subTest(bad=bad), self.assertRaises(ValueError):
+                    self.module.configure_voice(config, bad)
+
     def test_hosting_mapping_is_project_scoped(self):
         with tempfile.TemporaryDirectory() as temp:
             config = Path(temp, 'firebase.json')
@@ -88,7 +100,7 @@ class TargetTests(unittest.TestCase):
 
     PREVIEW_ENV = {
         'STAGING_GCP_PROJECT': 'onolys-staging',
-        'STAGING_PREVIEW_WIF_PROVIDER': 'projects/123/locations/global/workloadIdentityPools/github/providers/github-pr',
+        'STAGING_PREVIEW_WIF_PROVIDER': 'projects/123/locations/global/workloadIdentityPools/github-pr/providers/github-pr',
         'STAGING_PREVIEW_SA': 'pr-preview-staging@onolys-staging.iam.gserviceaccount.com',
         'STAGING_HOSTING_SITE': 'onolys-staging-app',
         'STAGING_ISOLATED_VITE_FIREBASE_API_KEY': 'k',
@@ -110,6 +122,9 @@ class TargetTests(unittest.TestCase):
         for field, bad in [
             ('STAGING_GCP_PROJECT', 'onolys'),
             ('STAGING_PREVIEW_WIF_PROVIDER', 'projects/123/locations/global/workloadIdentityPools/github/providers/github'),
+            # Same provider id in the deployer pool: previews must use the separate preview pool.
+            ('STAGING_PREVIEW_WIF_PROVIDER', 'projects/123/locations/global/workloadIdentityPools/github/providers/github-pr'),
+            ('STAGING_PREVIEW_WIF_PROVIDER', 'projects/123/locations/global/workloadIdentityPools/github-pr/providers/github'),
             ('STAGING_PREVIEW_SA', 'deployer-staging@onolys-staging.iam.gserviceaccount.com'),
             ('STAGING_PREVIEW_SA', 'pr-preview-staging@onolys.iam.gserviceaccount.com'),
             ('STAGING_HOSTING_SITE', 'onolys-app-staging'),
@@ -212,6 +227,10 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(build['env']['VITE_APP_HOSTS'], "${{ vars.STAGING_GCP_PROJECT && 'onolys-staging-app.web.app' || '' }}")
         self.assertIn('vars.STAGING_ISOLATED_VITE_FIREBASE_API_KEY', build['env']['VITE_FIREBASE_API_KEY'])
         self.assertIn('release_target.py hosting web/firebase.preview.json', str(preview))
+        # The newest preview revision is left for the sweep, so the sweep must run in isolated mode too.
+        sweep = self.workflow('deploy-staging.yml')['jobs']['sweep-previews']
+        self.assertNotIn('STAGING_GCP_PROJECT', str(sweep.get('if', '')))
+        self.assertIn('STAGING_DEPLOYER_SA', str(sweep['steps']))
         cleanup = self.workflow('pr-preview-cleanup.yml')
         self.assertIn('vars.STAGING_GCP_PROJECT', cleanup['env']['GCP_PROJECT'])
         self.assertIn('vars.STAGING_HOSTING_SITE', cleanup['env']['PREVIEW_SITE'])

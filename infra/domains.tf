@@ -8,9 +8,28 @@ resource "google_firebase_hosting_custom_domain" "app" {
   wait_dns_verification = false
 }
 
+# Kept from the old eval environment on purpose: eval's web uses Firebase authDomain eval.onolys.com, whose
+# /__/auth/handler is served by this Hosting site + custom domain, and eval's sign-in issuer is project onolys.
+# Destroying them would break eval sign-in. Nothing else of the old eval environment stays here.
+resource "google_firebase_hosting_site" "eval_staging" {
+  provider   = google-beta
+  project    = var.project
+  site_id    = "onolys-eval-staging"
+  depends_on = [google_project_service.api]
+}
+
+resource "google_firebase_hosting_custom_domain" "eval_staging" {
+  provider              = google-beta
+  project               = var.project
+  site_id               = google_firebase_hosting_site.eval_staging.site_id
+  custom_domain         = "eval.onolys.com"
+  wait_dns_verification = false
+}
+
 locals {
   custom_domains = merge(
     { "app.onolys.com" = google_firebase_hosting_custom_domain.app },
+    { "eval.onolys.com" = google_firebase_hosting_custom_domain.eval_staging },
   )
 }
 

@@ -28,9 +28,9 @@ def test_no_staging_or_eval_module_or_files():
 
 
 def test_no_old_staging_or_eval_resources():
-    for token in ["google_firebase_hosting_site\" \"app_staging", "google_firebase_hosting_site\" \"eval_staging",
-                  "google_firebase_hosting_custom_domain\" \"eval_staging", "google_storage_bucket\" \"eval_staging",
-                  "google_firebase_web_app\" \"app_staging", "app_staging\"", "eval_staging", "onolys-eval-data-staging",
+    for token in ["google_firebase_hosting_site\" \"app_staging", "google_storage_bucket\" \"eval_staging",
+                  "google_firebase_web_app\" \"app_staging", "app_staging\"", "onolys-eval-data-staging",
+                  "eval_datasets_viewer", "eval_speech_uploads",
                   "deployer_staging_developer", "deployer_staging_runtime_user", "deployer_staging_hosting",
                   "deployer_staging_index_admin", "deployer_staging_rules_admin", "deployer_staging_eval_index_admin",
                   "deployer_staging_writer", "deployer_staging_firebase_project_get", "deployer_eval_developer",
@@ -80,3 +80,14 @@ def test_eval_signin_config_kept():
     ident = TF["identity.tf"]
     assert '"eval.onolys.com"' in ident and '"onolys-eval-staging.web.app"' in ident
     assert 'output "web_env_eval"' in ident and 'output "web_env_prod"' in ident
+
+
+def test_eval_auth_handler_site_and_domain_are_the_only_old_eval_resources_kept():
+    # eval's web uses Firebase authDomain eval.onolys.com; its /__/auth/handler is served by this Hosting site + custom
+    # domain, and eval's sign-in issuer is project onolys, so they must stay here (destroying them breaks eval sign-in).
+    site = block(ALL, 'resource "google_firebase_hosting_site" "eval_staging"')
+    assert 'site_id    = "onolys-eval-staging"' in site and "var.project" in site
+    dom = block(ALL, 'resource "google_firebase_hosting_custom_domain" "eval_staging"')
+    assert '"eval.onolys.com"' in dom and "google_firebase_hosting_site.eval_staging.site_id" in dom
+    assert '"eval.onolys.com" = google_firebase_hosting_custom_domain.eval_staging' in TF["domains.tf"]
+    assert re.findall(r'resource "(\w+)" "eval_\w+"', ALL) == ["google_firebase_hosting_site", "google_firebase_hosting_custom_domain"]

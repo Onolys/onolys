@@ -27,10 +27,19 @@ resource "google_service_account" "deployer" {
   depends_on   = [google_project_service.api]
 }
 
+data "google_project" "this" {
+  project_id = var.project
+}
+
+locals {
+  # Pool resource prefix built from known values (not the computed pool .name) so the bindings are assertable in offline plans.
+  wif_pool_root = "projects/${data.google_project.this.number}/locations/global/workloadIdentityPools"
+}
+
 resource "google_service_account_iam_member" "deployer_wif" {
   service_account_id = google_service_account.deployer.name
   role               = "roles/iam.workloadIdentityUser"
-  member             = "principalSet://iam.googleapis.com/${google_iam_workload_identity_pool.github.name}/attribute.repository/${var.github_repository}"
+  member             = "principalSet://iam.googleapis.com/${local.wif_pool_root}/${google_iam_workload_identity_pool.github.workload_identity_pool_id}/attribute.repository/${var.github_repository}"
 }
 
 locals {

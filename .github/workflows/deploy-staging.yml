@@ -151,7 +151,6 @@ jobs:
     secrets: inherit
 
   sweep-previews:
-    if: vars.STAGING_GCP_PROJECT == ''
     # Orphan PR-preview revisions whose cleanup could not delete them (Cloud Run keeps the newest revision). Never fatal.
     needs: [build, deploy-api]
     runs-on: ubuntu-latest
