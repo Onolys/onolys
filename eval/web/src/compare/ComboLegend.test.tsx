@@ -26,3 +26,11 @@ it('flags a failed combo with its error code and a tinted row', () => {
  expect(items[1].className).toContain('is-failed');
  expect(items[0].className).not.toContain('is-failed');
 });
+it('renders a failed combo as plain text, not a link, while healthy combos still link', () => {
+ render(<ComboLegend legend={legend} failed={[{ combo_key: base.combos[1].combo_key, code: 'invalid_parameters', runs: 4, all: true }]} state={{ view: 'compare', run: 'r1' }} navigate={vi.fn()}/>);
+ const items = screen.getAllByRole('listitem');
+ expect(within(items[1]).queryByRole('link')).toBeNull();
+ expect(within(items[1]).getByRole('img', { name: 'Combo B' })).toBeTruthy();
+ expect(within(items[1]).getByText('failed: invalid_parameters')).toBeTruthy();
+ expect(within(items[0]).getByRole('link', { name: 'Combo A' })).toBeTruthy();
+});

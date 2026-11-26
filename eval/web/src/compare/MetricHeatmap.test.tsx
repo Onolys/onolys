@@ -61,6 +61,8 @@ it('marks a failed combo column and never outlines or tolerance-greens it', () =
  show(data);
  const head = within(grid()).getByRole('columnheader', { name: /^A/ });
  expect(head.textContent).toContain('failed'); expect(head.className).toContain('is-failed');
+ expect(within(head).queryByRole('link')).toBeNull();
+ expect(within(grid()).getByRole('columnheader', { name: /^B/ }).querySelector('a')).toBeTruthy();
  expect(cell('gi').className).toContain('is-failed'); expect(cell('gi').className).not.toContain('is-best'); expect(cell('gi').className).not.toContain('within-tolerance');
  expect(cell('gi').textContent).not.toContain('★ best');
 });

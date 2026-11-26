@@ -40,7 +40,7 @@ export function MetricHeatmap({ data, legend, state, navigate, runId }: { data: 
    <thead><tr><th className="overview-row-label" scope="col">Metric</th><th scope="col">Human</th>
     {legend.map(entry => {
      const key = entry.combo.combo_key, fail = failed.get(key);
-     return <th scope="col" key={key} className={fail ? 'is-failed' : undefined}><EvalLink state={drill(key)} navigate={navigate}>{entry.letter}</EvalLink>
+     return <th scope="col" key={key} className={fail ? 'is-failed' : undefined}>{fail ? entry.letter : <EvalLink state={drill(key)} navigate={navigate}>{entry.letter}</EvalLink>}
       {fail && <small>failed</small>}{!fail && skipped(key) && <small>skipped</small>}</th>;
     })}</tr></thead>
    <tbody>{GROUPS.map(group => {

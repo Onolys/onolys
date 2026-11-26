@@ -13,7 +13,7 @@ export function ComboLegend({ legend, failed, state, navigate }: { legend: Combo
   {legend.map((item, index) => {
    const fail = failures.get(item.combo.combo_key);
    return <li key={item.combo.combo_key} className={fail ? 'is-failed' : undefined}>
-    <EvalLink state={{ ...state, view: 'compare', tab: 'deep', combos: [item.combo.combo_key] }} navigate={navigate}><ComboTag index={index} letter={item.letter}/></EvalLink>
+    {fail ? <ComboTag index={index} letter={item.letter}/> : <EvalLink state={{ ...state, view: 'compare', tab: 'deep', combos: [item.combo.combo_key] }} navigate={navigate}><ComboTag index={index} letter={item.letter}/></EvalLink>}
     <span className="compare-legend-label">{item.label}</span>
     {fail && <Chip tone="danger">failed: {fail.code}</Chip>}
    </li>;
