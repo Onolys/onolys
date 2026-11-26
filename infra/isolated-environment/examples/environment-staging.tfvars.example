@@ -16,3 +16,10 @@ app_base_url = "https://onolys-staging-app.web.app"
 resend_secret_wired = false
 # Limited identity for pull_request previews (pr-preview*.yml); outputs feed STAGING_PREVIEW_WIF_PROVIDER / STAGING_PREVIEW_SA.
 enable_pr_previews = true
+# Optional: keep staging plans free of drift. deploy-staging sets GIT_SHA and
+# LLM_* on every deploy, and Terraform owns them from these variables, so pass
+# the live values (git_sha is the deployed commit sha string). Refresh after deploys.
+# git_sha      = "<live staging sha>"
+# llm_provider = "anthropic"
+# llm_model    = "claude-sonnet-5-5"
+# llm_effort   = "high"
