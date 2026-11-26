@@ -101,49 +101,16 @@ def test_api_sa_is_not_gated():
     m = re.search(r'resource "google_service_account" "api" \{(.*?)\n\}', MODMAIN, re.S)
     assert m and not re.search(r"\bcount\s*=", m.group(1))
 
-
-def test_eval_instance_wiring():
-    body = module_block("eval")
-    for needle in (
-        'env                      = "eval"',
-        'database_id              = "eval"',
-        "delete_protection        = true",
-        "alerts_enabled           = false",
-        'runtime_env              = "staging"',
-        "public_api_enabled       = false",
-        "eval_mode                = true",
-        "eval_cap_day             = 1000000",
-        "max_active_runs          = 1000",
-        'app_base_url             = ""',
-        "worker_concurrency       = var.eval_worker_concurrency",
-        "worker_max_instances     = var.eval_worker_max_instances",
-        "llm_secrets              = var.eval_llm_secrets",
-        "git_sha                  = var.eval_git_sha",
-    ):
-        assert needle in body, needle
-    assert "allUsers" not in body
-
-
-def test_staging_prod_do_not_opt_in():
-    for name in ("staging", "prod"):
+def test_prod_does_not_opt_in():
+    for name in ("prod",):
         body = module_block(name)
         for key in ("eval_mode", "runtime_env", "public_api_enabled", "max_active_runs", "eval_cap_day"):
             assert key not in body, (name, key)
-
-
-def test_root_eval_vars():
-    assert re.search(r"default\s*=\s*2", var_block(ROOT_VARS, "eval_worker_concurrency"))
-    assert re.search(r"default\s*=\s*4", var_block(ROOT_VARS, "eval_worker_max_instances"))
-    assert "default     = var.llm_secrets" not in ROOT_VARS  # variable defaults cannot reference vars
-    assert re.search(r'default\s*=\s*"unset"', var_block(ROOT_VARS, "eval_git_sha"))
-    assert "GEMINI_API_KEY" in var_block(ROOT_VARS, "eval_llm_secrets")
-
 
 def test_datastore_user_condition_names_instance_database():
     m = re.search(r'resource "google_project_iam_member" "datastore_user" \{(.*?)\n\}', MODMAIN, re.S)
     assert 'expression  = "resource.name == \\"${local.firestore_db_resource}\\""' in m.group(1)
     assert 'firestore_db_resource = "projects/${var.project}/databases/${var.database_id}"' in MODMAIN
-    assert 'database_id              = "eval"' in module_block("eval")
 
 
 def test_no_all_users_on_eval_worker():

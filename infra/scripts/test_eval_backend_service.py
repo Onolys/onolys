@@ -9,17 +9,12 @@ SECRETS = (MOD / "secrets.tf").read_text()
 MODMAIN = (MOD / "main.tf").read_text()
 OUTPUTS = (MOD / "outputs.tf").read_text()
 MAIN = (INFRA / "main.tf").read_text()
-ROOT_VARS = (INFRA / "variables.tf").read_text()
 
 
 def block(text, rtype, name):
     m = re.search(r'resource "%s" "%s" \{\n(.*?)\n\}\n' % (rtype, name), text, re.S)
     assert m, f"{rtype}.{name} missing"
     return m.group(1)
-
-
-def eval_module():
-    return re.search(r'module "eval" \{(.*?)\n\}', MAIN, re.S).group(1)
 
 
 def backend():
@@ -64,8 +59,6 @@ def test_public_invoker_gated_on_backend():
 
 def test_worker_eval_mode_env():
     assert "var.eval_mode" in SERVICES and '"EVAL_MODE"' in SERVICES
-    assert "eval_mode                = true" in eval_module()
-    assert "eval_backend_enabled     = true" in eval_module()
 
 
 def test_allowlist_secret_shell_and_iam():
@@ -73,16 +66,6 @@ def test_allowlist_secret_shell_and_iam():
     assert "var.eval_backend_enabled" in s and 'secret_id = "eval-allowed-emails-${var.env}"' in s
     i = block(SECRETS, "google_secret_manager_secret_iam_member", "eval_allowed_emails")
     assert "google_service_account.api.email" in i
-
-
-def test_dispatch_cap_covers_providers_plus_headroom():
-    dflt = lambda n: int(re.search(r'variable "%s" \{.*?default\s*=\s*(\d+)' % n, ROOT_VARS, re.S).group(1))
-    cap = dflt("eval_worker_concurrency") * dflt("eval_worker_max_instances")
-    llm = re.search(r'variable "eval_llm_secrets" \{.*?default\s*=\s*\{(.*?)\}', ROOT_VARS, re.S).group(1)
-    n = len(re.findall(r"\w+\s*=\s*\"", llm))
-    assert n == 2 and cap >= 2 * n + 2
-    assert "max_concurrent_dispatches = var.worker_concurrency * var.worker_max_instances" in MODMAIN
-
 
 def test_secret_shells_cover_eval_needs():
     assert 'secret_id = "uid-hmac-key-${var.env}"' in SECRETS
@@ -101,6 +84,6 @@ def test_backend_can_transcribe_audio_only_in_eval():
     assert 'role    = "roles/speech.client"' in grant
     assert 'member  = "serviceAccount:${google_service_account.api.email}"' in grant
     assert 'project = var.project' in grant
-    for name in ("staging", "prod"):
+    for name in ("prod",):
         instance = re.search(r'module "%s" \{(.*?)\n\}' % name, MAIN, re.S).group(1)
         assert "eval_backend_enabled" not in instance

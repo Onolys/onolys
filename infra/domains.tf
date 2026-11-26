@@ -1,4 +1,4 @@
-# Custom domains (PRD R11, D10): prod app only; staging stays on *.web.app.
+# Custom domains (PRD R11, D10): prod app only.
 # DNS is added by the owner after apply (output required_dns_updates), so do not block apply on verification.
 resource "google_firebase_hosting_custom_domain" "app" {
   provider              = google-beta
@@ -11,7 +11,6 @@ resource "google_firebase_hosting_custom_domain" "app" {
 locals {
   custom_domains = merge(
     { "app.onolys.com" = google_firebase_hosting_custom_domain.app },
-    { "eval.onolys.com" = google_firebase_hosting_custom_domain.eval_staging },
   )
 }
 
@@ -64,12 +63,4 @@ output "custom_domain_status" {
       cert      = try(d.cert[0].state, null)
     }
   }
-}
-
-resource "google_firebase_hosting_custom_domain" "eval_staging" {
-  provider              = google-beta
-  project               = var.project
-  site_id               = google_firebase_hosting_site.eval_staging.site_id
-  custom_domain         = "eval.onolys.com"
-  wait_dns_verification = false
 }

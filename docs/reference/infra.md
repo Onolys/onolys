@@ -10,6 +10,8 @@ One GCP project (`onolys`, number `1054076260967`), region `us-central1`, two en
 
 > **Per-environment projects.** Production stays in `onolys` and in this legacy root. Staging (`onolys-staging`, `904020682480`) and eval (`onolys-eval`, `976672392004`) are moving to their own projects through the separate `infra/isolated-environment/` root, activated by the GitHub vars `STAGING_GCP_PROJECT` / `EVAL_GCP_PROJECT`. Until activation, and for everything this page describes about `*-staging` and eval resources in `onolys`, the legacy layout applies; the old `*-staging` / `*-eval` secrets in `onolys` have been deleted by the owner. See [isolated environments](../implementation/isolated-environments.md).
 
+> **Legacy staging and eval removed from this root.** `module "staging"`, `module "eval"`, `eval.tf`, the `onolys-app-staging` and `onolys-eval-staging` sites and the staging/eval deployer grants are no longer declared in `infra/`. A reviewed `terraform apply` here destroys the old `staging`/`eval` Firestore databases, `*-staging`/`*-eval` Cloud Run services, buckets (incl. `onolys-eval-data-staging`), queues, schedulers, service accounts, IAM and secret shells in `onolys`, and changes nothing in prod. Kept: `deployer-staging` (+ WIF binding, pool/provider, `serviceUsageConsumer`) for deploy-prod `resolve`, the `onolys` registry, prod, and the Identity Platform config with the eval/staging authorized domains. Parts of this page that describe the old staging/eval resources are historical; staging and eval now live in `onolys-staging` / `onolys-eval`.
+
 ```
 Browser -> Hosting site (onolys-app) -> /v1/** rewrite -> Cloud Run onolys-api-prod -> Firestore (default), GCS, Cloud Tasks
 Cloud Tasks steps-prod -(OIDC)-> onolys-worker-prod -> STT (location us) + Gemini API (Anthropic API for the `claude` preset)
@@ -118,7 +120,6 @@ Run `cd infra && terraform output` (needs ADC; see Operating Terraform).
 | `wif_provider` | GitHub var `WIF_PROVIDER`. Now: `projects/1054076260967/locations/global/workloadIdentityPools/github/providers/github` |
 | `deployer_staging_email` | GitHub var `DEPLOYER_STAGING_SA`. Now: `deployer-staging@onolys.iam.gserviceaccount.com` |
 | `deployer_prod_email` | GitHub var `DEPLOYER_PROD_SA`. Now: `deployer-prod@onolys.iam.gserviceaccount.com` |
-| `web_env_staging` | map with `VITE_FIREBASE_API_KEY`, `_AUTH_DOMAIN`, `_APP_ID`, `_STORAGE_BUCKET`, `_MESSAGING_SENDER_ID`, `_PROJECT_ID`, and `VITE_FIRESTORE_DATABASE` (= `staging`). Sensitive: read with `terraform output -json web_env_staging` |
 | `web_env_prod` | same keys; `VITE_FIRESTORE_DATABASE` = `(default)` |
 | `web_env_eval` | VITE_* build vars for the eval web app (prod login project, site `onolys-eval-staging`) |
 | `required_dns_updates` | DNS records the owner adds (next section) |
@@ -243,6 +244,8 @@ It creates `uid-hmac-key-{env}` (random, only if missing) and writes the key for
 
 ### Eval infrastructure activation
 
+> Historical: the staging/eval modules this section targets were removed from the legacy root; new staging/eval are managed by `infra/isolated-environment/`.
+
 Cloud Run cannot start revisions whose `latest` secret references have no enabled version. Provision the existing SP03 configuration in this order, using the operator's existing backend, credentials and ignored tfvars; review each saved plan before applying it:
 
 1. From `infra/`, create a targeted secret-shell plan, inspect it and apply only that reviewed plan. The resource names are existing configuration, not new infrastructure code:
@@ -266,6 +269,8 @@ Cloud Run cannot start revisions whose `latest` secret references have no enable
 The release preflight checks service existence/access only; it does not validate every secret version, provision resources or replace the owner's infrastructure review.
 
 ### Auth-email staging activation (two phases)
+
+> Historical: the staging/eval modules this section targets were removed from the legacy root; new staging/eval are managed by `infra/isolated-environment/`.
 
 Verification is sent by the API; password-reset requests enqueue a durable `reset-email` task and the worker generates the action link and sends through Resend. The API can also send a reset as a fallback if enqueueing fails. Both therefore need the email settings and the same environment's Resend key. The shared Identity Platform user pool is project-wide.
 
@@ -309,6 +314,8 @@ Review the saved plan before applying: targets include dependencies, so confirm 
 The explicit `-var 'resend_secret_wired={staging=true,prod=false}'` above also makes the initial activation plan self-contained. Retain the same map in the automatically loaded operator tfvars file for later plans/applies. Without either input, false defaults disable email wiring. Production activation remains a separate rollout; these commands neither create nor activate its Resend resources. Targeting is an exceptional staged rollout tool; review a subsequent full plan for unrelated drift without applying it automatically.
 
 ### Cutover: shared `anthropic-api-key` to per-env secrets (one-time, owner decision 2026-11-20)
+
+> Historical: the staging/eval modules this section targets were removed from the legacy root; new staging/eval are managed by `infra/isolated-environment/`.
 
 A Cloud Run revision that references a secret with no version fails to deploy, so the new secrets must have values before services switch. Terraform drops the old shared secret from state without deleting it (`removed` block, `destroy = false`), so live revisions keep working until you delete it. Order:
 

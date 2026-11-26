@@ -148,14 +148,13 @@ def test_api_gets_voice_url_and_vertex_api_enabled():
     assert '"aiplatform.googleapis.com"' in (INFRA / "main.tf").read_text()
     assert "voice_url" in (MOD / "outputs.tf").read_text()
     ident = (INFRA / "identity.tf").read_text()
-    assert 'output "voice_url_staging"' in ident and 'output "voice_url_prod"' in ident
+    assert 'output "voice_url_prod"' in ident and "voice_url_staging" not in ident
 
 
 def test_deployer_can_deploy_voice_service_and_act_as_its_sa():
     text = (INFRA / "deployer.tf").read_text()
-    for env in ("staging", "prod"):
-        assert f"voice  = module.{env}.voice_service_name" in text
-        assert f"voice = module.{env}.voice_sa_email" in text
+    assert "voice  = module.prod.voice_service_name" in text
+    assert "voice = module.prod.voice_sa_email" in text
 
 
 def test_api_service_does_not_ignore_template_revision():

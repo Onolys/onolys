@@ -34,7 +34,7 @@ resource "google_project_service" "api" {
   disable_on_destroy = false
 }
 
-# Shared image repo for both envs. No cleanup policy in v1 (PRD D18).
+# Shared legacy image repo (prod images; staging/eval use their own projects). No cleanup policy in v1 (PRD D18).
 resource "google_artifact_registry_repository" "onolys" {
   project       = var.project
   location      = var.region
@@ -45,19 +45,11 @@ resource "google_artifact_registry_repository" "onolys" {
   depends_on = [google_project_service.api]
 }
 
-# Firebase Hosting sites, alongside landing's `onolys` and `onolys-redirect` (not managed here).
+# Prod Firebase Hosting site, alongside landing's `onolys` and `onolys-redirect` (not managed here).
 resource "google_firebase_hosting_site" "app" {
   provider = google-beta
   project  = var.project
   site_id  = var.app_site_id
-
-  depends_on = [google_project_service.api]
-}
-
-resource "google_firebase_hosting_site" "app_staging" {
-  provider = google-beta
-  project  = var.project
-  site_id  = var.app_staging_site_id
 
   depends_on = [google_project_service.api]
 }
@@ -73,34 +65,7 @@ removed {
   }
 }
 
-module "staging" {
-  source = "./modules/environment"
-
-  project                  = var.project
-  region                   = var.region
-  env                      = "staging"
-  database_id              = "staging"
-  delete_protection        = false
-  default_preset           = var.default_preset
-  worker_concurrency       = var.worker_concurrency
-  worker_max_instances     = var.worker_max_instances
-  api_max_instances        = 3
-  llm_secrets              = var.llm_secrets
-  stt_secrets              = var.stt_secrets
-  git_sha                  = var.git_sha["staging"]
-  app_base_url             = "https://${var.app_staging_site_id}.web.app"
-  resend_secret_wired      = var.resend_secret_wired["staging"]
-  alerts_enabled           = var.staging_alerts
-  notification_channel_ids = [google_monitoring_notification_channel.owner_email.id]
-  cors_origins = [
-    "https://${var.app_staging_site_id}.web.app",
-    "http://localhost:5173",
-  ]
-
-  depends_on = [google_project_service.api]
-}
-
-# Prod: second instance of the module, isolated from staging by DB, bucket, queue, SAs and secrets (PRD R5-R9, D2).
+# Prod: the only environment in this root. Staging and eval live in their own projects (infra/isolated-environment).
 module "prod" {
   source = "./modules/environment"
 
@@ -121,46 +86,6 @@ module "prod" {
   alerts_enabled           = true
   notification_channel_ids = [google_monitoring_notification_channel.owner_email.id]
   cors_origins             = ["https://app.onolys.com"]
-
-  depends_on = [google_project_service.api]
-}
-
-# Eval: third instance of the module (PRD 03-eval-environment R1). Own DB, bucket, queue, SAs and secrets. Runs as
-# ENV=staging with EVAL_MODE=true; no public api/voice services; caps effectively off (big numbers, 0 would block).
-module "eval" {
-  source = "./modules/environment"
-
-  project                  = var.project
-  region                   = var.region
-  env                      = "eval"
-  runtime_env              = "staging"
-  database_id              = "eval"
-  delete_protection        = true
-  default_preset           = var.default_preset
-  worker_concurrency       = var.eval_worker_concurrency
-  worker_max_instances     = var.eval_worker_max_instances
-  llm_secrets              = var.eval_llm_secrets
-  stt_secrets              = var.stt_secrets
-  git_sha                  = var.eval_git_sha
-  app_base_url             = ""
-  alerts_enabled           = false
-  notification_channel_ids = []
-  public_api_enabled       = false
-  eval_mode                = true
-  eval_backend_enabled     = true
-  datasets_bucket          = google_storage_bucket.eval_staging.name
-  eval_cap_day             = 1000000
-  max_active_runs          = 1000
-  cors_origins = [
-    "https://eval.onolys.com",
-    "https://onolys-eval-staging.web.app",
-    "http://localhost:5173",
-  ]
-  eval_cors_origins = [
-    "https://eval.onolys.com",
-    "https://onolys-eval-staging.web.app",
-    "http://localhost:5173",
-  ]
 
   depends_on = [google_project_service.api]
 }
