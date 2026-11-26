@@ -63,7 +63,12 @@ it('shades a failed combo row red, shows a failed chip with code, and never star
  show(data);
  const row = within(table()).getAllByRole('row').slice(1).find(r => r.textContent!.includes(key))!;
  expect(row.className).toContain('ui-row-danger');
- expect(within(row).getByText(/failed: invalid_parameters/)).toBeTruthy();
+ expect(within(row).getByText('failed').closest('[title]')!.getAttribute('title')).toBe('failed: invalid_parameters');
+ expect(within(row).getByText('all failed').closest('[title]')!.getAttribute('title')).toBe('invalid_parameters');
+ expect(row.querySelector('[data-label="Cost"]')!.textContent).toBe('—');
+ expect(row.querySelector('[data-label="Time"]')!.textContent).toBe('—');
+ expect(row.querySelector('[data-bar]')).toBeNull();
+ expect(row.textContent).not.toContain('per run');
  expect(within(row).queryByText('★ best')).toBeNull();
  const other = within(table()).getAllByRole('row').slice(1).find(r => !r.textContent!.includes(key))!;
  expect(other.className).not.toContain('ui-row-danger');
@@ -90,4 +95,20 @@ it('suppresses best for skipped rows and shows exact missing reasons', () => {
  show(data);
  const skipped = within(table()).getAllByRole('row').find(r => r.textContent!.includes('skipped'))!;
  expect(within(skipped).queryByText('★ best')).toBeNull();
+});
+it('excludes all-failed combos from bar scaling and keeps partial failures as one chip-line per code', () => {
+ const data = sample(), key = failFirst(data);
+ data.leaderboard[0].cost.per_run_usd = 100; data.leaderboard[0].time.mean_seconds = 900;
+ data.leaderboard[1].cost.per_run_usd = 0.2; data.leaderboard[1].time.mean_seconds = 10;
+ data.leaderboard[1].failures = [{ code: 'invalid_parameters', count: 2 }, { code: 'timeout', count: 1 }];
+ show(data);
+ const other = within(table()).getAllByRole('row').slice(1).find(r => !r.textContent!.includes(key))!;
+ expect((other.querySelector('[data-bar="cost"] i') as HTMLElement).style.width).toBe('100%');
+ expect(within(other).getByText('2 × invalid_parameters').className).toContain('lb-code');
+ expect(within(other).getByText('1 × timeout')).toBeTruthy();
+});
+it('orders two n/a rows without NaN (stable)', () => {
+ const data = sample(); data.leaderboard.forEach(r => { r.na = { reason: 'x' } as never; });
+ show(data);
+ expect(within(table()).getAllByRole('row').length).toBe(data.leaderboard.length + 1);
 });

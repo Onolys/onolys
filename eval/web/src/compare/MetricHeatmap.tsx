@@ -58,8 +58,8 @@ export function MetricHeatmap({ data, legend, state, navigate, runId }: { data: 
         const next = drill(key, row.id);
         return <td key={key} className={`overview-heatmap-cell${within ? ' within-tolerance' : ''}${best ? ' is-best' : ''}${bad ? ' is-failed' : ''}`}>
          <a href={buildCompareUrl(next)} onClick={event => activate(event, next)} aria-label={`${label}, ${entry.letter}: open Deep dive`}>
-          {cell.na ? <><strong>n/a</strong><small>{cell.na.reason}</small></> : <><strong>{num(cell.off)}</strong>{cell.bias !== null && <small>{signed(cell.bias)}</small>}</>}
-          <small>n={cell.n}</small>{best && <small className="overview-best">★ best</small>}
+          {bad ? <strong title="n/a: all runs failed">—</strong> : cell.na ? <><strong>n/a</strong><small>{cell.na.reason}</small></> : <><strong>{num(cell.off)}</strong>{cell.bias !== null && <small>{signed(cell.bias)}</small>}</>}
+          {!bad && <small>n={cell.n}</small>}{best && <small className="overview-best">★ best</small>}
          </a>
         </td>;
        })}

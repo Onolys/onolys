@@ -33,13 +33,13 @@ function CoverageChips({ cohorts }: { cohorts: CompareOverview['cohorts'] }) {
 }
 
 /** Title, partial badge and four compact summary cards. Full coverage sits behind "Show all"; Config opens the saved-configuration popup. */
-export function ComparisonHeader({ data, run, runId, navigate, legend, coverage, cohorts }: {
+export function ComparisonHeader({ data, run, runId, navigate, legend, cohorts }: {
  data: CompareOverview; run?: RunDetail; runId: string; navigate: CompareNavigate; legend: ComboLegendEntry[];
- coverage?: CompareOverview['coverage']; cohorts?: CompareOverview['cohorts'];
+ cohorts?: CompareOverview['cohorts'];
 }) {
  const [config, setConfig] = useState<RunDetail | null>(null);
  const trigger = useRef<HTMLElement | null>(null);
- const cov = coverage ?? data.coverage;
+ const cov = data.coverage;
  const failed = failedCombos(data);
  const letter = (key: string) => legend.find(item => item.combo.combo_key === key)?.letter ?? key;
  const otherExcluded = data.excluded.filter(item => !(item.combo_key && item.reason.startsWith('failed:')));
@@ -49,7 +49,7 @@ export function ComparisonHeader({ data, run, runId, navigate, legend, coverage,
  const sub = failed.length ? (failed.every(item => item.all) ? 'all runs failed' : 'some runs failed') : excludedItems.length ? 'not compared' : 'Nothing excluded';
  return <header className="compare-header">
   <div className="compare-title">
-   <div className="compare-title-row"><EvalLink state={{ view: 'run', run: runId }} navigate={navigate}>Back to run</EvalLink>
+   <div className="compare-title-row"><EvalLink state={{ view: 'run', run: runId }} navigate={navigate} className="compare-back"><span aria-hidden="true">←</span> Back to run</EvalLink>
     <h1>Compare - {data.header.name || runId}</h1>
     <PartialBadge run={{ status: cov.eval_status, cancelled_at: cov.cancelled_at, ...data.header.progress }}/>
     {run && <Button type="button" variant="outline" size="sm" onClick={event => { trigger.current = event.currentTarget; setConfig(run); }}>Config</Button>}</div>

@@ -90,3 +90,9 @@ it('Config opens the saved-configuration popup only when the run detail is loade
  expect(screen.getByRole('dialog')).toBeTruthy();
  expect(screen.getByText('Run configuration')).toBeTruthy();
 });
+it('styles Back to run as an arrow back link and has no coverage prop', () => {
+ show(base);
+ const link = screen.getByRole('link', { name: 'Back to run' });
+ expect(link.className).toContain('compare-back');
+ expect(link.textContent).toContain('←');
+});
