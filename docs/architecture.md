@@ -61,6 +61,6 @@ The evaluation backend reuses the prod api auth (`onolys_api.auth` `IdTokenVerif
 
 ## Infrastructure
 
-GCP with Terraform, staging and prod: [reference/infra.md](reference/infra.md), [ADR 0022](decisions/0022-infra-gcp-terraform-two-environments.md).
+GCP with Terraform, staging and prod: [reference/infra.md](reference/infra.md), [ADR 0022](decisions/0022-infra-gcp-terraform-two-environments.md). Terraform is planned on PRs and applied in CI after merge: [reference/infra-pipeline.md](reference/infra-pipeline.md), [ADR 0026](decisions/0026-terraform-plan-apply-in-ci.md).
 
 More: [implementation/](implementation/), [decisions/](decisions/), [testing/](testing/).

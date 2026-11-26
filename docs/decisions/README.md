@@ -15,3 +15,4 @@ Why is it like this? Architecture decision records. ADRs 0001-0016 (the old evid
 | [0023](0023-admin-deployment-and-auth.md) | Admin deployment and auth: one Cloud Run service, direct calls, verified email plus allowlist, no MFA (superseded by 0025) |
 | [0024](0024-ai-practice-interview-gemini-live-relay.md) | AI practice interview: Gemini Live via a server-side relay, separate Cloud Run service |
 | [0025](0025-miti-only-lean-engine.md) | MITI-only lean engine; supersedes 0017, 0018, 0019, 0023; archive tag |
+| [0026](0026-terraform-plan-apply-in-ci.md) | Terraform plan on PRs and apply in CI after merge; keyless WIF identities; amends 0022 D1 and D5 |
