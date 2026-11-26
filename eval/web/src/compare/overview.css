@@ -1,7 +1,7 @@
 .overview-tab { min-width: 0; max-width: 100%; }
 .overview-tab .overview-scroll { max-width: 100%; overflow-x: auto; }
 .overview-tab table { border-collapse: separate; border-spacing: 0; width: 100%; }
-.overview-tab th, .overview-tab td { padding: .65rem; border-bottom: 1px solid #cbd5e1; text-align: left; vertical-align: top; }
+.overview-tab th, .overview-tab td { padding: .65rem; border-bottom: 1px solid var(--border); text-align: left; vertical-align: top; }
 .overview-tab small, .overview-tab td span, .overview-human span { display: block; }
 .overview-tab small { font-size: .8rem; margin-block: .2rem; }
 .overview-tab .overview-claim { display: inline-block; margin-inline-start: .6rem; border: 1px solid currentColor; border-radius: .25rem; padding-inline: .3rem; }
@@ -19,6 +19,6 @@
  .overview-tab .overview-heatmap-layout { grid-template-columns: minmax(0, 1fr); }
  .overview-tab .overview-leaderboard thead, .overview-tab .overview-leaderboard thead tr { display: flex; flex-wrap: wrap; }
  .overview-tab .overview-leaderboard, .overview-tab .overview-leaderboard tbody, .overview-tab .overview-leaderboard tr, .overview-tab .overview-leaderboard td, .overview-tab .overview-leaderboard th { display: block; }
- .overview-tab .overview-leaderboard tr { margin-block-end: 1rem; border: 1px solid #cbd5e1; }
+ .overview-tab .overview-leaderboard tr { margin-block-end: 1rem; border: 1px solid var(--border); }
  .overview-tab .overview-leaderboard td::before { content: attr(data-label); display: block; font-weight: bold; }
 }
