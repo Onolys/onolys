@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { readFileSync } from 'node:fs';
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
 import { ApiError, createEvalApi } from '../api';
 import { CompareApp, comboLetter } from './CompareApp';
@@ -8,6 +9,7 @@ import deep from './fixtures/deepDive.json';
 import analysis from './fixtures/analysis.json';
 import { parseCompareUrl } from './compareUrl';
 afterEach(cleanup);
+const css=readFileSync(`${import.meta.dirname}/compare.css`,'utf8');
 const state = (tab = 'overview') => parseCompareUrl(`?run=r1&view=compare&tab=${tab}`);
 const api = () => ({...createEvalApi('',vi.fn()), run:vi.fn().mockRejectedValue(new Error('detail unavailable')), compareOverview:vi.fn().mockResolvedValue(overview), compareDeepDive:vi.fn().mockResolvedValue(deep), compareAnalysis:vi.fn().mockResolvedValue(analysis)});
 it('renders overview header, cohorts and stable letters beyond Z',async()=>{
@@ -50,9 +52,9 @@ it('refetches a new combo cohort, reuses its cache, and preserves overview legen
  const client=api(); const navigate=vi.fn();
  const view=render(<CompareApp api={client} runId="r1" state={{...state('deep'),combos:['second']}} navigate={navigate}/>);await act(async()=>{});
  expect(client.compareDeepDive).toHaveBeenLastCalledWith('r1',{combos:['second'],code:undefined,combo:undefined},expect.any(AbortSignal));
- const first=screen.getByRole('link',{name:'A'}).getAttribute('href');
+ const first=screen.getByRole('link',{name:'Combo A'}).getAttribute('href');
  view.rerender(<CompareApp api={client} runId="r1" state={{...state('deep'),combos:['first','second']}} navigate={navigate}/>);await act(async()=>{});
- expect(client.compareDeepDive).toHaveBeenCalledTimes(2);expect(screen.getByRole('link',{name:'A'}).getAttribute('href')).toBe(first);
+ expect(client.compareDeepDive).toHaveBeenCalledTimes(2);expect(screen.getByRole('link',{name:'Combo A'}).getAttribute('href')).toBe(first);
  view.rerender(<CompareApp api={client} runId="r1" state={{...state('deep'),combos:['second']}} navigate={navigate}/>);await act(async()=>{});
  expect(client.compareDeepDive).toHaveBeenCalledTimes(2);
 });
@@ -69,7 +71,7 @@ it('retries an overview failure and keeps exact saved combo labels with distinct
  render(<CompareApp api={client} runId="r1" state={state()} navigate={vi.fn()}/>);
  expect((await screen.findByRole('alert')).textContent).toContain('temporary');
  fireEvent.click(screen.getByRole('button',{name:'Retry'}));
- expect(await screen.findByText('miti · Saved model / tier / effort',{selector:'dd'})).toBeTruthy();expect(client.run).toHaveBeenCalledTimes(1);
+ expect(await screen.findByText('miti · Saved model / tier / effort',{selector:'.compare-legend-label'})).toBeTruthy();expect(client.run).toHaveBeenCalledTimes(1);
 });
 it('uses saved progress for the cancelled partial badge while retaining AI coverage',async()=>{
  const cancelled_at='2026-11-25T01:00:00Z';
@@ -97,4 +99,31 @@ it('rejects malformed nested tab payloads with local Retry and keeps other tabs 
  view.rerender(<CompareApp api={client} runId="r1" state={state('more')} navigate={navigate}/>);await screen.findByRole('heading',{name:'More analysis'});expect(screen.queryByRole('alert')).toBeNull();
  view.rerender(<CompareApp api={client} runId="r1" state={lineState} navigate={navigate}/>);fireEvent.click(screen.getByRole('button',{name:'Retry'}));await screen.findByRole('button',{name:'Inspect turn t5'});expect(screen.queryByRole('alert')).toBeNull();
  expect(fetcher.mock.calls.filter(([input])=>String(input).includes('/overview'))).toHaveLength(1);
+});
+it('renders the combo legend once above the tabs on every tab and uses a wrapping tablist',async()=>{
+ const client=api();
+ const view=render(<CompareApp api={client} runId="r1" state={state()} navigate={vi.fn()}/>);
+ await screen.findByRole('heading',{name:'Compare - Synthetic lines'});
+ expect(screen.getAllByRole('region',{name:'Combo legend'})).toHaveLength(1);
+ const legend=screen.getByRole('region',{name:'Combo legend'}),tablist=screen.getByRole('tablist',{name:'Compare screens'});
+ expect(legend.compareDocumentPosition(tablist)&Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+ expect(within(tablist).getAllByRole('tab').map(tab=>tab.textContent)).toEqual(['Overview','Deep dive','More analysis','Line view']);
+ view.rerender(<CompareApp api={client} runId="r1" state={state('deep')} navigate={vi.fn()}/>);await act(async()=>{});
+ expect(screen.getAllByRole('region',{name:'Combo legend'})).toHaveLength(1);
+ expect(screen.getByRole('tab',{name:'Deep dive'}).getAttribute('aria-selected')).toBe('true');
+ expect(screen.getByRole('tab',{name:'Overview'}).getAttribute('aria-selected')).toBe('false');
+ expect(screen.getByRole('tab',{name:'Deep dive'}).getAttribute('aria-controls')).toBe('compare-panel');
+ expect(screen.getByRole('tabpanel').getAttribute('aria-labelledby')).toBe('compare-tab-deep');
+});
+it('flags a combo whose runs all failed in the legend',async()=>{
+ const key=overview.combos[0].combo_key;
+ const failed={...overview,excluded:[0,1].flatMap(repeat=>['synthetic-s01','synthetic-s02'].map(session_id=>({session_id,combo_key:key,repeat,reason:'failed:invalid_parameters'})))};
+ render(<CompareApp api={{...api(),compareOverview:vi.fn().mockResolvedValue(failed)}} runId="r1" state={state()} navigate={vi.fn()}/>);
+ await screen.findByRole('heading',{name:'Compare - Synthetic lines'});
+ expect(within(screen.getByRole('region',{name:'Combo legend'})).getByText('failed: invalid_parameters')).toBeTruthy();
+});
+it('tabs never scroll horizontally: wrap with no overflow-x',()=>{
+ const rule=css.match(/\[role="tablist"\]\s*\{([^}]*)\}/)![1];
+ expect(rule).toMatch(/flex-wrap:\s*wrap/);
+ expect(rule).not.toMatch(/overflow/);
 });

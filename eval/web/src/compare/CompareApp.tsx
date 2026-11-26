@@ -5,6 +5,8 @@ import type { CompareAnalysis, CompareDeepDive, CompareLines, CompareOverview } 
 import { EvalLink, type CompareNavigate } from './CompareLink';
 import type { ComboLegendEntry } from './compareTypes';
 import type { CompareTab, CompareUrlState } from './compareUrl';
+import { ComboLegend } from './ComboLegend';
+import { failedCombos } from './failedCombos';
 import { ComparisonHeader } from './ComparisonHeader';
 import { Overview } from './Overview';
 import { DeepDive } from './DeepDive';
@@ -79,14 +81,15 @@ export function CompareApp({api,runId,state,navigate}:{api:EvalApi;runId:string;
   const savedLabel=run?.combo_labels?.[combo.combo_key] ?? run?.combo_labels?.[combo.combo_key.slice(combo.combo_key.indexOf('|')+1)];
   return {letter:comboLetter(index),combo,label:savedLabel ? `${combo.engine} · ${savedLabel}` : [combo.engine,combo.model,combo.tier,combo.effort,combo.combo_key].filter(Boolean).join(' · ')};
  });
+ const failed=failedCombos(data);
  const props={overview:data,run,state:tab==='deep'?{...state,combos:effectiveCombos}:tab==='lines'?{...state,session}:state,navigate,legend,api,runId};
  const cohorts=tab==='deep'?(active&&'cohorts' in active?active.cohorts??{}:{}):data.cohorts;
  const retryTab=()=>{setCache(previous=>{const next={...previous};delete next[cacheKey];return next;});setTabAttempt(n=>n+1);};
  return <section className="compare-app"><ComparisonHeader data={data} run={run} runId={runId} navigate={navigate} legend={legend} cohorts={cohorts}/>
+ <ComboLegend legend={legend} failed={failed} state={state} navigate={navigate}/>
  <div role="tablist" aria-label="Compare screens">{tabs.map((item,index)=><button key={item.id} ref={node=>{tabRefs.current[index]=node;}} type="button" role="tab" id={`compare-tab-${item.id}`} aria-selected={tab===item.id} aria-controls="compare-panel" tabIndex={tab===item.id?0:-1} onClick={()=>navigate({...state,view:'compare',run:runId,tab:item.id})} onKeyDown={event=>{
   let next:number;if(event.key==='ArrowRight')next=(index+1)%tabs.length;else if(event.key==='ArrowLeft')next=(index+tabs.length-1)%tabs.length;else if(event.key==='Home')next=0;else if(event.key==='End')next=tabs.length-1;else return;
   event.preventDefault();tabRefs.current[next]?.focus();navigate({...state,view:'compare',run:runId,tab:tabs[next].id});
  }}>{item.label}</button>)}</div>
- <aside aria-label="Combo legend"><h2>Combo legend</h2><dl>{legend.map(item=><div key={item.combo.combo_key}><dt><EvalLink state={{...state,view:'compare',run:runId,tab:'deep',combos:[item.combo.combo_key]}} navigate={navigate}>{item.letter}</EvalLink></dt><dd>{item.label}</dd></div>)}</dl></aside>
  <div role="tabpanel" id="compare-panel" aria-labelledby={`compare-tab-${tab}`} tabIndex={0}>{entry?.error?<Failure error={entry.error} runId={runId} navigate={navigate} retry={retryTab}/>:tab==='overview'?<Overview {...props} data={data}/>:tab==='lines'&&!session?(match?.error?<Failure error={match.error} runId={runId} navigate={navigate} retry={()=>setMatches(old=>{const next={...old};delete next[matchKey];return next;})}/>:<p role={filtered&&!match?'status':undefined}>{filtered&&!match?'Loading matching sessions…':filtered?'No matching sessions':'No sessions available'}</p>):!active?<p role="status">Loading {tabs.find(item=>item.id===tab)?.label}…</p>:tab==='deep'?<DeepDive {...props} data={active as CompareDeepDive}/>:tab==='more'?<MoreAnalysis {...props} data={active as CompareAnalysis}/>:<LineView {...props} data={active as CompareLines}/>}</div></section>;
 }
