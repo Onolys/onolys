@@ -13,3 +13,7 @@ export function ChartFrame({ title, howToRead, children, table }: { title:string
   </details>
  </section>;
 }
+
+/** v2 lives in ../ui; the legacy frame above stays until SP03-05 migrate callers. */
+export { ChartFrame as ChartFrameV2 } from '../ui/ChartFrame';
+export { ComboTag } from '../ui/ComboTag';
