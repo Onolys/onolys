@@ -1,0 +1,20 @@
+<h1>Design rules (draft for docs/design-rules.md)</h1>
+<p>Apply to eval/web and any new UI built on @onolys/ui tokens.</p>
+<h2>1. No horizontal scroll, anywhere</h2>
+<p>Tables must fit the viewport. Handle overflow by wrapping, truncating with a tooltip, or stacking rows into cards below 760 px.</p>
+<ul><li><b>Do</b>: fixed table layout with column widths, ellipsis + title tooltip for long model names, stacked cards on mobile.</li><li><b>Don't</b>: wrap tables in overflow-x:auto; hide data off-screen; put ids inside buttons.</li></ul>
+<p>Check: page scrollWidth equals clientWidth at 390 and 1440 px.</p>
+<h2>2. All configs open in a popup</h2>
+<p>Any "Config" action opens a modal: key facts as tiles, combo list, raw JSON behind a disclosure with Copy. Errors and raw output also open in popups; ids go inside the popup, not on the trigger.</p>
+<ul><li><b>Do</b>: button "Config" opens modal; "View JSON" opens modal titled with the unit id.</li><li><b>Don't</b>: render config inline or as a navigation.</li></ul>
+<h2>3. Format everything: no plain text for data</h2>
+<p>Statuses are colour-coded chips with icons (never colour alone). Group related info in cards. Counts and metrics are stat tiles. Failures are red and shaded; warnings amber; success green; zero values muted.</p>
+<ul><li><b>Do</b>: [spinner Running] [check 4 of 8 done] [x 1 failed].</li><li><b>Don't</b>: "running · 1/3 runs done · 1 running · 0 failed".</li></ul>
+<h2>4. Table headers are headers, not buttons</h2>
+<p>Column headers are plain th elements. Sortable columns show up/down arrow indicators (aria-sort, keyboard operable). No button styling on headers.</p>
+<ul><li><b>Do</b>: "COST" with stacked arrows, active arrow in primary colour.</li><li><b>Don't</b>: render headers as pill buttons.</li></ul>
+<h2>5. Notes and caveats are muted and small</h2>
+<p>Footnotes, definitions and caveats use muted foreground colour at about 12-13 px, below the content they explain. Failed or invalid items never count toward "best".</p>
+<ul><li><b>Do</b>: small grey note under the table.</li><li><b>Don't</b>: body-size plain paragraph that competes with data.</li></ul>
+<h2>Tokens</h2>
+<p>Use @onolys/ui tokens (primary #0b5f5a, success #166534, warning #854d0e, destructive #8a3030, score-good/fair/low and their backgrounds, radius .5rem). Titles follow "Page - name".</p>

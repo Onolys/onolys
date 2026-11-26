@@ -1,0 +1,44 @@
+<h1>Graphs spec: Eval Compare</h1>
+<h2>Where the prior spec is</h2>
+<ul>
+<li><b>Owner-approved spec</b>: docs/agent_files/session-report-ux-20261124-1738/07-compare-screens/PRD.md (SP07 Compare screens) and 06-compare-calculations/PRD.md (payloads).</li>
+<li><b>Design proposal with wireframes</b>: docs/agent_files/session-report-ux-20261124-1738/eval-compare-summary-proposal.md.</li>
+<li><b>Prior visual mockup</b>: docs/agent_files/session-report-ux-20261124-1738/eval-compare-mockup.html.</li>
+<li><b>Shipped in</b>: PR #63 "Complete session reports and eval Compare workflows" (merged 2026-11-25). Code is in eval/web/src/compare (Overview, DeepDive, MoreAnalysis, LineView, ChartFrame).</li>
+<li><b>Finding</b>: the graphs were built (heatmap, dot rows, grouped bars, confusion grid, scatters) but compare CSS is about 100 lines total, so they render unstyled and cramped. The gap is styling and layout, not missing charts.</li>
+<li>No separate chart spec found in older iaudit session logs; the legacy review UI directory (iaudit-legacy) does not exist in the repo.</li>
+</ul>
+<h2>Graphs per tab</h2>
+<table border="1" cellpadding="4"><tr><th>Tab</th><th>Graph</th><th>Type</th><th>Data</th><th>Source</th></tr>
+<tr><td>Overview</td><td>Leaderboard</td><td>Sortable table with best marks</td><td>aggregates per combo; failed combos excluded from best</td><td>Prior PRD</td></tr>
+<tr><td>Overview</td><td>Metric heatmap</td><td>Grid: metric rows x combo columns, big miss + small signed bias, tolerance green, best outline</td><td>off, bias, n, within_tolerance, best per cell</td><td>Prior PRD</td></tr>
+<tr><td>Overview</td><td>Verdict line</td><td>Text with n tags</td><td>verdict.claims</td><td>Prior PRD</td></tr>
+<tr><td>Overview</td><td>Cost/time mini bars in leaderboard</td><td>Inline bar per cell (new)</td><td>cost, time</td><td>Recommendation</td></tr>
+<tr><td>Deep dive</td><td>Globals dot plot</td><td>Dot rows per interview, Human hollow circle + shape per combo, lanes so symbols never overlap, labels in a left gutter</td><td>ratings per session per combo (repeats separate)</td><td>Prior PRD</td></tr>
+<tr><td>Deep dive</td><td>Rating miss buckets</td><td>100% stacked bar per combo: same / off 1 / off 2+</td><td>buckets, avg miss, within +-1</td><td>Prior PRD</td></tr>
+<tr><td>Deep dive</td><td>Counts per code</td><td>Small multiples, grouped horizontal bars Human vs combos + bias chip</td><td>totals, bias_pct</td><td>Prior PRD</td></tr>
+<tr><td>Deep dive</td><td>Precision / recall / F1</td><td>Table with inline F1 bars</td><td>per code per combo</td><td>Prior PRD (bars: recommendation)</td></tr>
+<tr><td>Deep dive</td><td>Confusion matrix</td><td>Heat grid, human rows x combo columns, multi bucket column, click to Line view</td><td>confusion counts</td><td>Prior PRD</td></tr>
+<tr><td>Deep dive</td><td>Reasoning roll-up</td><td>Accordion cards with counts + snippets</td><td>/compare/reasoning</td><td>Prior PRD</td></tr>
+<tr><td>More analysis</td><td>Cost vs accuracy</td><td>Scatter with frontier line</td><td>cost per run, count error, frontier flags</td><td>Prior PRD</td></tr>
+<tr><td>More analysis</td><td>Error vs length</td><td>Scatter (new: connect points per combo)</td><td>turns/words, off</td><td>Prior PRD</td></tr>
+<tr><td>More analysis</td><td>Head-to-head</td><td>Matrix, colour by win share</td><td>wins/ties</td><td>Prior PRD</td></tr>
+<tr><td>More analysis</td><td>Interviews x combos</td><td>Heat grid, linked rows</td><td>session count error, repeats</td><td>Prior PRD</td></tr>
+<tr><td>More analysis</td><td>Baseline, reliability</td><td>Card (n/a text) and table</td><td>API text</td><td>Prior PRD</td></tr>
+<tr><td>Line view</td><td>Transcript lanes</td><td>Table with code chips per lane, disagreement highlight</td><td>lines, human code, combo codes</td><td>Prior PRD</td></tr>
+<tr><td>Line view</td><td>Session globals</td><td>Rating chips colour-coded by miss</td><td>human vs combo ratings</td><td>Prior PRD</td></tr>
+</table>
+<p>Cross-cutting rules (from prior PRD): every chart has a one-sentence caption and a table twin behind "Show data"; shape + letter + colour, never colour alone; the UI computes no metric; n shown wherever a value is shown.</p>
+<h2>Charting library</h2>
+<p><b>Recommendation: keep hand-rolled inline SVG (no library), with one shared scale/axis helper.</b></p>
+<ul>
+<li>eval/web/package.json has no chart dependency; prior PRD decision #1 chose hand-rolled SVG/CSS; the mockups in this package are built that way, so what you review is what ships.</li>
+<li>The chart set is small (dots, bars, grids, two scatters). Full control of keyboard focus, ARIA and table twins; deterministic jsdom tests; no bundle growth; no supply-chain addition.</li>
+<li>Recharts / ECharts: 100-300 kB+, themes fight Tailwind tokens, weaker a11y control. Not worth it for 6 chart types.</li>
+<li>If chart count grows (brushing, zoom, tooltips on many points): add visx (modular, tree-shakable, React-native SVG) rather than Recharts/ECharts.</li>
+</ul>
+<h2>Fixes to current charts</h2>
+<ul>
+<li>Dot plot label overlap: reserve a fixed left gutter for row labels; plot area starts to the right; axis ticks only above the plot area; one vertical lane per series.</li>
+<li>All charts inside cards with title, caption, legend; no horizontal scroll (scale via viewBox, stack to one column on narrow screens).</li>
+</ul>
