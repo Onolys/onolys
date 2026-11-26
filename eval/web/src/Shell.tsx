@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Outlet } from 'react-router';
+import { Outlet, useLocation } from 'react-router';
 import { AppHeader, Button, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger, Footer, SkipLink } from '@onolys/ui';
 import { useAuth } from '@prod-auth/AuthProvider';
 import { useSignOut } from '@prod-auth/useSignOut';
@@ -27,11 +27,13 @@ export function Shell() {
     window.history.pushState({}, '', event.currentTarget.href);
     window.dispatchEvent(new PopStateEvent('popstate'));
   };
+  const location = useLocation();
+  /** Eval has one page, served at "/": links always go there, even from an unknown path (404). */
   const link = (history = false) => {
     const url = new URL(window.location.href);
     url.searchParams.delete('run'); url.searchParams.delete('view');
     if (history) url.searchParams.set('view', 'history');
-    return url.pathname + url.search + url.hash;
+    return '/' + url.search;
   };
   const historySelected = new URLSearchParams(query).get('view') === 'history' || new URLSearchParams(query).has('run');
   return <div className="shell flex min-h-screen flex-col">
@@ -50,7 +52,7 @@ export function Shell() {
       </DropdownMenu> : undefined} />
     {error && <p role="alert">{error}</p>}
     {/* signed-out pages (login) use the prod page width; the signed-in app uses the prod wide-page width */}
-    <main id="main" className={`eval-main mx-auto w-full flex-1 px-4 py-6 ${signedIn ? 'max-w-none lg:w-4/5' : 'max-w-5xl'}`}><ErrorBoundary><Outlet /></ErrorBoundary></main>
+    <main id="main" className={`eval-main mx-auto w-full flex-1 px-4 py-6 ${signedIn ? 'max-w-none lg:w-4/5' : 'max-w-5xl'}`}><ErrorBoundary resetKey={location.pathname + location.search}><Outlet /></ErrorBoundary></main>
     <Footer
       className="relative flex flex-wrap items-center justify-center gap-x-4 gap-y-0 space-y-0 px-gutter py-3 text-center text-xs"
       notices={<ul className="m-0 flex w-full list-none flex-wrap justify-center gap-x-2 p-0"><li>Internal evaluation app</li><li className="before:mr-2 before:content-['·']">Not official MITI coding</li></ul>}

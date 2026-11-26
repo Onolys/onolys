@@ -17,9 +17,13 @@ export function ErrorPage({ notFound = false, reload = () => window.location.rel
 }
 
 /** Catches render failures below it. `standalone` adds its own main landmark (used when the shell itself may be gone). */
-export class ErrorBoundary extends Component<{ children: ReactNode; standalone?: boolean }, { failed: boolean }> {
+export class ErrorBoundary extends Component<{ children: ReactNode; standalone?: boolean; resetKey?: string }, { failed: boolean }> {
   state = { failed: false };
   static getDerivedStateFromError() { return { failed: true }; }
+  /** A new `resetKey` (e.g. the location) gives the children another chance. */
+  componentDidUpdate(prev: { resetKey?: string }) {
+    if (this.state.failed && prev.resetKey !== this.props.resetKey) this.setState({ failed: false });
+  }
   render() {
     if (!this.state.failed) return this.props.children;
     const page = <ErrorPage />;
