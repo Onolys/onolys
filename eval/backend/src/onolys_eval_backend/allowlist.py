@@ -1,4 +1,4 @@
-"""Eval user gate: prod Identity Platform ID token + `EVAL_ALLOWED_EMAILS`, as ASGI middleware.
+"""Eval user gate: Identity Platform ID token (eval's own project, onolys-eval) + `EVAL_ALLOWED_EMAILS`, as ASGI middleware.
 
 Never logs the token or the email.
 """

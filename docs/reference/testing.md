@@ -135,10 +135,10 @@ PR #35 preview: web `onolys-app-staging--pr-35-kkj34ogl.web.app`, API tag `pr-35
 
 ### Test user for previews and staging
 
-The API rejects unverified emails, so a normal signup cannot sign in without the verify link. Create a pre-verified user instead (ADC, quota project `onolys`):
+The API rejects unverified emails, so a normal signup cannot sign in without the verify link. Create a pre-verified user instead (ADC; default project `onolys-eval`, pass `--project` for another non-prod project; the prod project `onolys` is refused):
 
 ```
-python3 infra/scripts/create-test-user.py [--email EMAIL] [--password PASSWORD]
+python3 infra/scripts/create-test-user.py [--email EMAIL] [--generate] [--update] [--project PROJECT]   # password: $ONOLYS_ACCOUNT_PASSWORD or prompt
 ```
 
 It prints `email:` and `password:` (defaults: `test-onolys-<8 hex>@onolys.com` and a generated strong password; an existing email exits non-zero and is not modified). Open the PR preview (or staging) `/login` and sign in with email and password. Google sign-in does not work on previews (see above).

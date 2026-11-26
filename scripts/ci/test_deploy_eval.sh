@@ -21,7 +21,7 @@ for required in ['workflow_dispatch:', 'environment: staging',
                  'onolys-eval-backend-eval', 'eval-staging',
                  'VITE_EVAL_API_URL:', 'vars.EVAL_VITE_FIREBASE_API_KEY',
                  'vars.EVAL_VITE_FIREBASE_APP_ID', 'vars.EVAL_VITE_FIREBASE_AUTH_DOMAIN',
-                 'firestore:eval', 'working-directory: web', 'VITE_APP_URL:',
+                 'firestore:eval', 'working-directory: web',
                  'set_eval_origin.sh', 'test_eval_image.sh', '/v1/me', '401',
                  'content-security-policy:',
                  'hosting:eval-staging']:

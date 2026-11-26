@@ -196,6 +196,10 @@ run "eval_manages_its_own_identity_and_domain" {
     condition     = length(google_firebase_hosting_custom_domain.eval) == 1 && google_firebase_hosting_custom_domain.eval[0].custom_domain == "eval.onolys.com"
     error_message = "eval.onolys.com is a custom domain of the isolated eval site."
   }
+  assert {
+    condition     = contains(output.eval_cors_origins, "https://eval.onolys.com") && contains(output.eval_cors_origins, "https://onolys-eval-app.web.app")
+    error_message = "Eval backend CORS must allow the eval custom domain and the Hosting site."
+  }
 }
 
 run "staging_has_no_custom_domain_or_eval_host" {

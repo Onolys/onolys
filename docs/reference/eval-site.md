@@ -1,6 +1,18 @@
 # Evaluation site (staging)
 
-The founders-only [evaluation site](https://onolys-eval-app.web.app) compares MITI 4.2.1 coding across engines, presets and human reference data. Sign in with a verified, allowlisted Firebase account. `eval.onolys.com` is its custom domain (project `onolys-eval`); its DNS and certificate must be ready before using it. Accounts are separate from the production app: sign up again in eval.
+The founders-only [evaluation site](https://onolys-eval-app.web.app) compares MITI 4.2.1 coding across engines, presets and human reference data. Sign in with a verified, allowlisted Firebase account. `eval.onolys.com` is its custom domain (project `onolys-eval`); its DNS and certificate must be ready before using it. Accounts are separate from the production app and there is no sign-up, password-reset or verification email on eval: the operator creates accounts (see below). Login pages for those flows do not exist; unknown paths go to the login page.
+
+### Eval accounts (operator)
+
+Accounts live in the `onolys-eval` Identity Platform project only. The operator creates verified email/password users with the local script (ADC with access to `onolys-eval`; nothing is emailed; the script refuses the prod project `onolys`):
+
+```
+ONOLYS_ACCOUNT_PASSWORD='...' python3 infra/scripts/create-test-user.py --email tester@example.com   # or omit the env var to be prompted (no echo)
+python3 infra/scripts/create-test-user.py --email tester@example.com --generate   # generated password, printed once
+python3 infra/scripts/create-test-user.py --email tester@example.com --update     # existing user: reset password, mark verified
+```
+
+Pass the password through `ONOLYS_ACCOUNT_PASSWORD` or the prompt; `--password` works but shows up in shell history and the process list. Without `--update`, an existing email exits non-zero and is not changed. Then add the email to the eval allowlist (`EVAL_ALLOWED_EMAILS`, secret `eval-allowed-emails-eval`) and give the person the email and password out of band.
 
 Choose **Dataset** to select stored sessions, or **Upload** for one audio recording, `transcript.v1` JSON, or UTF-8 `.txt`. In text files, `T:` identifies the clinician and `C:` the client; other labels require an explicit clinician selection. Text has no invented timestamps. For Google transcription, the default English `en` is sent as supported locale `en-US`; explicit locales are preserved. Audio uses automatic transcription and then asks you to select the clinician from actual speaker labels and samples. Supply the session change goal and language. Browser audio uploads normally use an authenticated eval upload-start request, a signed PUT directly to private storage, then an authenticated completion request. This is the same transport pattern as the main application; eval keeps its own upload records, storage paths and access checks. JSON and TXT transcripts, with optional gold, continue through multipart upload. See [transcript format](transcript-format.md).
 
@@ -22,7 +34,7 @@ Token totals are input plus output tokens. `~$` is an estimate, using provider-r
 
 ## HTTP API
 
-The API base is `https://onolys-eval-backend-eval-1054076260967.us-central1.run.app`. Public application endpoints require `Authorization: Bearer <Firebase ID token>`; anonymous requests return 401 and unverified or non-allowlisted identities return 403. Tokens must belong to Firebase project `onolys`. Browser access is restricted to the configured evaluation origins.
+The API base is `https://onolys-eval-backend-eval-1054076260967.us-central1.run.app`. Public application endpoints require `Authorization: Bearer <Firebase ID token>`; anonymous requests return 401 and unverified or non-allowlisted identities return 403. Tokens must belong to Firebase project `onolys-eval`. Browser access is restricted to the configured evaluation origins.
 
 | Method | Path | Purpose |
 |---|---|---|

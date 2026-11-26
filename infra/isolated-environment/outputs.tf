@@ -157,3 +157,8 @@ output "custom_domain_status" {
     }
   }
 }
+
+output "eval_cors_origins" {
+  description = "Browser origins the eval backend accepts (empty outside eval): the Hosting site, the eval custom domain and local dev."
+  value       = local.eval_cors_origins
+}
