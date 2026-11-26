@@ -16,7 +16,7 @@ it('Provenance shows the saved resolved combos and base preset', async () => {
 });
 it('does not render the removed embedded comparison or summary', async () => {
  render(<RunView api={{...createEvalApi('', vi.fn()), run:vi.fn().mockResolvedValue(detail())}} runId="r1" onRerun={vi.fn()} />);
- await screen.findByRole('heading', {name:'Run r1'}); expect(screen.queryByRole('tab', {name:'Summary'})).toBeNull(); expect(screen.queryByRole('heading', {name:'Compare'})).toBeNull();
+ await screen.findByRole('heading', {name:'Run - r1'}); expect(screen.queryByRole('tab', {name:'Summary'})).toBeNull(); expect(screen.queryByRole('heading', {name:'Compare'})).toBeNull();
 });
 it('polls at 3s, stops terminal, loads JSON lazily as escaped text and aborts unmount', async () => {
  vi.useFakeTimers(); const api = {...createEvalApi('',vi.fn()), run:vi.fn().mockResolvedValueOnce(detail('running')).mockResolvedValue(detail()), output:vi.fn().mockResolvedValue({text:'<img src=x onerror=alert(1)>'})}; const view=render(<RunView api={api} runId="r1" onRerun={vi.fn()}/>); await act(async()=>{}); expect(api.run).toHaveBeenCalledTimes(1); await act(async()=>{await vi.advanceTimersByTimeAsync(3000)}); expect(api.run).toHaveBeenCalledTimes(2); await act(async()=>{await vi.advanceTimersByTimeAsync(9000)}); expect(api.run).toHaveBeenCalledTimes(2); expect(api.output).not.toHaveBeenCalled(); fireEvent.click(screen.getByRole('button',{name:'View JSON u1'})); await act(async()=>{}); expect(api.output).toHaveBeenCalledWith('r1','u1',expect.any(AbortSignal)); expect(screen.getByText(/<img src=x/)).toBeTruthy(); expect(document.querySelector('img')).toBeNull(); const signal=api.run.mock.calls[0][1] as AbortSignal; view.unmount(); expect(signal.aborted).toBe(true);
@@ -209,7 +209,7 @@ it('history uses native run links with ordinary-click SPA navigation', async () 
 it('detail names runs and labels unit configuration and repeated attempts in a compact table', async () => {
  const run = { ...detail(), name: 'Morning', combos: [{ model: 'claude', tier: 'sonnet', effort: 'high' }], combo_keys: ['claude/sonnet/high'], units: detail().units.map(unit => ({ ...unit, preset: null, combo: { model: 'claude', tier: 'sonnet', effort: 'high' }, combo_key: 'claude/sonnet/high' })) };
  render(<RunView api={{ ...createEvalApi('', vi.fn()), run: vi.fn().mockResolvedValue(run) }} runId="r1" onRerun={vi.fn()} />);
- await screen.findByRole('heading', { name: 'Run Morning' });
+ await screen.findByRole('heading', { name: 'Run - Morning' });
  const table = screen.getByRole('table', { name: /Each unit/ });
  expect(table.textContent).toContain('sonnet'); expect(table.textContent).toContain('1 / 3'); expect(table.textContent).toContain('3 / 3');
  expect(screen.queryByText('Saved configuration and versions', { selector: 'summary' })).toBeNull();

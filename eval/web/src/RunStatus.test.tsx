@@ -65,5 +65,5 @@ it('shows a readable reason for a run that failed before starting (enqueue_faile
  const run = saved({ status: 'failed', done_units: 0, failed_units: 0, cancelled_units: 0, error: { code: 'enqueue_failed' } });
  render(<RunView api={{ ...createEvalApi('', vi.fn()), run: vi.fn().mockResolvedValue(run) }} runId="r1" onRerun={vi.fn()} />); await act(async () => {});
  expect(screen.getByRole('alert').textContent).toContain('Run failed to start: could not queue it for processing');
- expect(screen.getByRole('status').textContent).toContain('failed');
+ expect(screen.getAllByRole('status').some(el => el.textContent?.includes('failed'))).toBe(true);
 });

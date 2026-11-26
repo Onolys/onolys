@@ -8,6 +8,7 @@ import { SlowStartNotice } from '@prod-components/SlowStart';
 import { JsonDialog } from './JsonViewer';
 import './runs.css';
 import { CompareLink, type CompareNavigate } from './compare/CompareLink';
+import { RunHeader } from './run/RunHeader';
 import { navigateEval } from './evalNavigation';
 import type { EvalApi, RunDetail, RunSummary, RunUnit } from './api';
 
@@ -115,16 +116,15 @@ export function RunView({ api, runId, onRerun, onNavigate = navigateEval }: { ap
     void poll(); return halt;
   }, [api, runId, attempt]);
   const cancelRequested = run?.cancel_requested === true;
-  return <section className="run-detail"><div className="unit-section-heading"><h1>Run {run?.name || runId}</h1>{run && <PartialBadge run={run} />}</div>{error && <div role="alert">{error}{!missing && run && !terminal(run.status) && ' Still trying to refresh.'}<button onClick={() => { setError(''); setMissing(false); setAttempt(n => n + 1); }}>Retry run status</button></div>}
-    {!run ? (!error && <p role="status">Loading run…</p>) : <>
+  return <section className="run-detail">{error && <div role="alert">{error}{!missing && run && !terminal(run.status) && ' Still trying to refresh.'}<button onClick={() => { setError(''); setMissing(false); setAttempt(n => n + 1); }}>Retry run status</button></div>}
+    {!run ? (!error && <><h1>Run - {runId}</h1><p role="status">Loading run…</p></>) : <>
+      <RunHeader run={run} onNavigate={onNavigate} onRerun={onRerun}
+        onConfig={(value, trigger) => { configTrigger.current = trigger; setConfiguration(value); }}
+        onCancel={(value, trigger) => { cancelTrigger.current = trigger; setToCancel(value); }} />
       <p role="status">{run.status === 'partial' ? 'partial' : statusLabel(run, cancelRequested)} · {run.done_units}/{run.total_units} runs done{isActiveRun(run) && ` · ${run.running_units ?? 0} running · ${run.queued_units ?? 0} queued`} · {run.failed_units} failed · {run.cancelled_units} cancelled</p>
       <RunErrorNote run={run} />
       <CancellationNote run={run} />
-      <CompareLink run={run} navigate={onNavigate} />
-      {canCancelRun(run) && <Button onClick={event => { cancelTrigger.current = event.currentTarget; setToCancel(run); }}>Cancel run</Button>}
-      <button onClick={() => onRerun(run)}>Rerun with different engines/presets</button>
-      <Button variant="outline" onClick={event => { configTrigger.current = event.currentTarget; setConfiguration(run); }}>Config</Button>
-      {run.description && <p>{run.description}</p>}<Usage run={run} />
+      <Usage run={run} />
       <ProviderSkipNotices skips={run.provider_skips} />
       {run.provider_cooldowns?.map(cooldown => <p key={cooldown.provider}>{providerName(cooldown.provider)} is busy — waiting to retry</p>)}
       <div className="unit-section-heading"><h2>Unit progress</h2><span>{run.done_units}/{run.total_units} runs done · {run.repeats} {run.repeats === 1 ? 'attempt' : 'attempts'} per cell</span></div>

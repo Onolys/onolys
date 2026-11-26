@@ -1,0 +1,13 @@
+/* Run page pieces (header, status, usage). Light mode only. */
+.run-title { display: flex; align-items: center; flex-wrap: wrap; gap: .4rem .75rem; }
+.run-title h1 { margin: 0; overflow-wrap: anywhere; min-width: 0; }
+.run-description { margin: .15rem 0 0; font-size: .875rem; color: var(--ui-muted-fg); overflow-wrap: anywhere; }
+.run-card { display: grid; gap: .6rem; margin: .6rem 0; padding: .6rem .8rem; border: 1px solid var(--border, #d3dbda); border-radius: var(--radius, .5rem); background: var(--card, #fff); min-width: 0; }
+.run-card-row { display: flex; align-items: flex-end; flex-wrap: wrap; gap: .5rem 1rem; min-width: 0; }
+.run-card-row .ui-copyfield { flex: 1 1 20rem; max-width: 30rem; }
+.run-logs { display: inline-flex; align-items: center; gap: .3rem; font-size: .8125rem; font-weight: 550; min-height: 1.85rem; color: var(--primary, #0b5f5a); text-decoration: underline; text-underline-offset: .15rem; }
+.run-logs svg { width: .95em; height: .95em; flex: none; }
+.run-logs.is-disabled { color: var(--ui-muted-fg); text-decoration: none; cursor: not-allowed; }
+.run-actions { display: flex; align-items: center; flex-wrap: wrap; gap: .4rem .6rem; margin-left: auto; font-size: .8125rem; }
+.run-actions a { color: var(--primary, #0b5f5a); text-decoration: underline; text-underline-offset: .15rem; }
+.run-cancel { color: var(--destructive, #8a3030); }
