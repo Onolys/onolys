@@ -4,3 +4,5 @@
 .overview-leaderboard .lb-na { color: var(--ui-muted-fg); }
 .overview-leaderboard .lb-bar { display: block; width: 100%; max-width: 6rem; height: .3rem; border-radius: .15rem; background: var(--muted, #f7f9f9); }
 .overview-leaderboard .lb-bar i { display: block; height: 100%; border-radius: inherit; background: var(--ui-info, #1d4f91); opacity: .55; }
+.overview-leaderboard .ui-table th { overflow: visible; text-overflow: clip; white-space: normal; overflow-wrap: anywhere; vertical-align: bottom; }
+.overview-leaderboard .ui-cell { overflow: visible; text-overflow: clip; white-space: normal; overflow-wrap: anywhere; }
