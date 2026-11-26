@@ -14,8 +14,7 @@ AUTH_MODES = ("fake", "idp")
 LOCAL_ENVS = ("local", "test")
 # Keep in sync with the web action handler and docs/reference/web-email-actions.md.
 APP_HOSTS = frozenset({
-    "app.onolys.com", "onolys-app.web.app", "onolys-app-staging.web.app",
-    "onolys-staging-app.web.app",
+    "app.onolys.com", "onolys-app.web.app", "onolys-staging-app.web.app",
 })
 
 

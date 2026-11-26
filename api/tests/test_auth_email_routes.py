@@ -18,7 +18,7 @@ from onolys_api.repo.fake import FakeRepo
 
 pytestmark = pytest.mark.unit
 
-BASE = "https://onolys-app-staging.web.app"
+BASE = "https://onolys-staging-app.web.app"
 EMAIL = "phi.person@example.org"
 VERIFY = "/v1/auth/email/verification"
 RESET = "/v1/auth/email/password-reset"

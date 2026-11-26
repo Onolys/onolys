@@ -53,13 +53,13 @@ def test_builder_encodes_code_and_safe_continue_url(kind, mode):
     from onolys_api.email.links import build_action_link
 
     url = build_action_link(
-        Settings(app_base_url="https://onolys-app-staging.web.app"),
+        Settings(app_base_url="https://onolys-staging-app.web.app"),
         kind,
         "code&extra=bad",
         next_path="/sessions?new=1",
     )
     parts = urlsplit(url)
-    assert parts.netloc == "onolys-app-staging.web.app" and parts.path == "/auth/action"
+    assert parts.netloc == "onolys-staging-app.web.app" and parts.path == "/auth/action"
     query = parse_qs(parts.query)
     assert query["mode"] == [mode] and query["oobCode"] == ["code&extra=bad"]
     if kind == "verify":

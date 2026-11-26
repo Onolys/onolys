@@ -147,15 +147,16 @@ describe("resolveContinue", () => {
     expect(appHosts({ VITE_APP_HOSTS: " Staging.Example , other.example", VITE_FIREBASE_AUTH_DOMAIN: "auth.example" })).toEqual(
       new Set(["staging.example", "other.example", "auth.example"]),
     );
-    expect(resolveContinue("https://onolys-app-staging.web.app/verify-email", o, new Set(["onolys-app-staging.web.app"]))).toEqual({
+    expect(resolveContinue("https://onolys-staging-app.web.app/verify-email", o, new Set(["onolys-staging-app.web.app"]))).toEqual({
       kind: "external",
-      href: "https://onolys-app-staging.web.app/verify-email",
+      href: "https://onolys-staging-app.web.app/verify-email",
     });
   });
   it("falls back to the default app hosts when VITE_APP_HOSTS is unset or empty (FX34 follow-up)", () => {
     for (const v of [undefined, "", " , "]) {
       const hosts = appHosts({ VITE_APP_HOSTS: v, VITE_FIREBASE_AUTH_DOMAIN: "auth.example" });
-      expect(hosts).toEqual(new Set(["auth.example", "app.onolys.com", "onolys-app.web.app", "onolys-app-staging.web.app"]));
+      expect(hosts).toEqual(new Set(["auth.example", "app.onolys.com", "onolys-app.web.app", "onolys-staging-app.web.app"]));
+      expect(hosts.has("onolys-app-staging.web.app")).toBe(false);
     }
     expect(appHosts({ VITE_APP_HOSTS: "x.example" }).has("app.onolys.com")).toBe(false);
   });
