@@ -10,7 +10,7 @@ it.each(['detail', 'history'])('%s shows each partial/cancelled variant with API
  for (const [patch, expected] of [
   [{ cancelled_at: '2026-11-23T12:34:00Z', skipped_units: 2 }, `Partial — cancelled at ${new Date('2026-11-23T12:34:00Z').toLocaleString()}, 3 of 9 runs done, 2 skipped`],
   [{}, 'Partial — 3 of 9 runs done'],
-  [{ status: 'cancelled', done_units: 0 }, 'Cancelled — no runs completed'],
+  [{ status: 'cancelled', done_units: 0 }, 'Cancelled'],
  ] as const) {
   const run = saved(patch); const api = { ...createEvalApi('', vi.fn()), run: vi.fn().mockResolvedValue(run), runs: vi.fn().mockResolvedValue({ runs: [run] }) };
   const view = render(page === 'detail' ? <RunView api={api} runId="r1" onRerun={vi.fn()} /> : <History api={api} onOpen={vi.fn()} onRerun={vi.fn()} />); await act(async () => {});
@@ -35,7 +35,11 @@ it.each(['detail', 'history'])('%s shows provider skips with a symbol, mapped na
  render(page === 'detail' ? <RunView api={api} runId="r1" onRerun={vi.fn()} /> : <History api={api} onOpen={vi.fn()} onRerun={vi.fn()} />); await act(async () => {});
  const suffix = page === 'detail' ? ' in a row — provider may be down' : '';
  expect(screen.getByText(`Gemini skipped after 5 failures${suffix}`, { exact: false })).toBeTruthy(); expect(screen.getByText(`new-provider skipped after 7 failures${suffix}`, { exact: false })).toBeTruthy();
- expect(document.querySelector('[data-provider-skips]')?.textContent).toContain('⚠');
+ const glyph = document.querySelector('[data-provider-skips]')?.textContent ?? '';
+ if (page === 'detail') expect(glyph).not.toContain('⚠'); else expect(glyph).toContain('⚠');
+});
+it('icon={false} drops the warning glyph', () => {
+ render(<ProviderSkipNotices skips={[{ provider: 'gemini', after_failures: 5 }]} icon={false} />); expect(document.querySelector('[data-provider-skips]')?.textContent).not.toContain('⚠');
 });
 it('accepts Compare provider skips without run-only fields', () => {
  render(<ProviderSkipNotices skips={[{ provider: 'gemini', after_failures: 5 }]} />); expect(screen.getByText('Gemini skipped after 5 failures in a row — provider may be down', { exact: false })).toBeTruthy();
@@ -46,7 +50,7 @@ it('renders skipped units as skipped and n/a with the API reason; shows provider
  const row = screen.getByRole('cell', { name: 'skipped' }).closest('tr')!;
  expect(within(row).getByRole('cell', { name: /n\/a.*skipped: provider unavailable/ })).toBeTruthy();
  expect(screen.getByText('Gemini is busy — waiting to retry')).toBeTruthy(); expect(screen.getByRole('cell', { name: 'waiting' })).toBeTruthy();
- expect(screen.getAllByText(/3\/9 runs done/)).toHaveLength(2); expect(screen.queryByText(/8\/9 units complete/)).toBeNull();
+ expect(screen.getAllByText("3 of 9 done")).toHaveLength(1); expect(document.body.textContent).not.toMatch(/3\/9 runs done/); expect(screen.queryByText(/8\/9 units complete/)).toBeNull();
 });
 it('shows running units with their stage, queued units without one, and live run progress', async () => {
  const run = saved({ status: 'running', total_units: 3, done_units: 1, running_units: 1, queued_units: 1, units: [
@@ -55,7 +59,7 @@ it('shows running units with their stage, queued units without one, and live run
   { unit_id: 'u3', session_id: 's2', engine: 'miti', status: 'queued' }] });
  const api = { ...createEvalApi('', vi.fn()), run: vi.fn().mockResolvedValue(run), runs: vi.fn().mockResolvedValue({ runs: [run] }) };
  const detail = render(<RunView api={api} runId="r1" onRerun={vi.fn()} />); await act(async () => {});
- expect(screen.getByText(/1\/3 runs done · 1 running · 1 queued/)).toBeTruthy();
+ expect(screen.getByRole('status', { name: 'Run status' }).textContent).toBe('Running1 of 3 done1 running1 queued2 failed3 cancelled');
  const running = screen.getByRole('cell', { name: 'running' }).closest('tr')!; expect(within(running).getByRole('cell', { name: 'coding' })).toBeTruthy();
  const queued = screen.getByRole('cell', { name: 'queued' }).closest('tr')!; expect(within(queued).queryByText('coding')).toBeNull();
  detail.unmount(); render(<History api={api} onOpen={vi.fn()} onRerun={vi.fn()} />); await act(async () => {});
@@ -65,5 +69,5 @@ it('shows a readable reason for a run that failed before starting (enqueue_faile
  const run = saved({ status: 'failed', done_units: 0, failed_units: 0, cancelled_units: 0, error: { code: 'enqueue_failed' } });
  render(<RunView api={{ ...createEvalApi('', vi.fn()), run: vi.fn().mockResolvedValue(run) }} runId="r1" onRerun={vi.fn()} />); await act(async () => {});
  expect(screen.getByRole('alert').textContent).toContain('Run failed to start: could not queue it for processing');
- expect(screen.getByRole('status').textContent).toContain('failed');
+ expect(screen.getAllByRole('status').some(el => el.textContent?.includes('failed'))).toBe(true);
 });

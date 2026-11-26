@@ -18,61 +18,95 @@ it('renders server frontier membership and excludes unpriced points', () => {
  expect(container.querySelectorAll('[data-cost-point]')).toHaveLength(2);
  expect(container.querySelectorAll('[data-frontier="true"]')).toHaveLength(1);
  expect(container.querySelector('[data-frontier="true"]')?.getAttribute('data-cost-point')).toBe(data.frontier.points[0].combo_key);
- expect(container.querySelector('polyline')?.getAttribute('data-frontier-combos')).toBe(data.frontier.points.map(p=>p.combo_key).join(','));
  expect(container.querySelector('[data-cost-point="unpriced"]')).toBeNull();
  expect(screen.getByText(/unpriced.*price unavailable/)).toBeTruthy();
  expect(screen.getByRole('img',{name:'Cost vs accuracy scatter'})).toBeTruthy();
- expect(screen.getByText('Show data table for Cost vs accuracy')).toBeTruthy();
+ expect(screen.queryByRole('table',{name:'Cost vs accuracy'})).toBeNull();
+});
+it('shows only cost vs accuracy and reliability by default; everything else is a collapsed toggle', () => {
+ const {container}=render(<MoreAnalysis {...props()}/>);
+ expect(screen.getByRole('img',{name:'Cost vs accuracy scatter'})).toBeTruthy();
+ expect(screen.getByRole('table',{name:'Reliability'})).toBeTruthy();
+ const toggles=['Show error vs interview length','Show head-to-head','Show interviews by combo','Show human-vs-human baseline'];
+ for (const name of toggles) expect(screen.getByRole('button',{name}).getAttribute('aria-expanded')).toBe('false');
+ expect(container.querySelector('.more-analysis-toggles')?.textContent).toBe(toggles.join(''));
+ expect(screen.queryByText(/How to read/)).toBeNull();
+ expect(screen.queryByText(/Needs a second human coder/)).toBeNull();
+ expect(container.querySelector('.table-scroll')).toBeNull();
+ const order=[...container.querySelectorAll('.more-analysis > *')].map(n=>n.getAttribute('aria-label')||n.className||n.tagName);
+ expect(order.indexOf('Reliability')).toBeGreaterThan(order.findIndex(x=>String(x).includes('ui-chart-frame')||x==='SECTION'));
+});
+it('keeps a failed combo muted and never best across the composed page', () => {
+ const input=props();
+ const key=input.data.combos[0].combo_key;
+ const ov=structuredClone(overview) as CompareOverview;
+ const per=ov.header.sessions*ov.header.repeats;
+ ov.excluded=Array.from({length:per},(_,i)=>({...(ov.excluded[0]??{}),combo_key:key,session_id:`s${i}`,reason:'failed:invalid_parameters'})) as CompareOverview['excluded'];
+ for (const row of ov.leaderboard) {const mine=row.combo_key===key;row.operational_best.failures=mine;row.operational_best.time=mine;}
+ render(<MoreAnalysis {...input} overview={ov}/>);
+ const reliability=screen.getByRole('table',{name:'Reliability'});
+ expect(within(reliability).getByText('all runs failed')).toBeTruthy();
+ expect(within(reliability).queryAllByText('★ best')).toHaveLength(0);
+ const list=screen.getByRole('list',{name:'Not plotted'});
+ expect(within(list).getByText('failed')).toBeTruthy();
 });
 it('prints baseline and reliability values verbatim from the API', () => {
  render(<MoreAnalysis {...props()}/>);
- expect(screen.getByText('n/a - needs a second human coder, not in this dataset')).toBeTruthy();
+ fireEvent.click(screen.getByRole('button',{name:'Show human-vs-human baseline'}));
+ expect(screen.getByText(/Needs a second human coder, not in this dataset/)).toBeTruthy();
  const reliability=screen.getByRole('table',{name:'Reliability'});
- expect(within(reliability).getByText('5 of 9 agree · value 0.5555555555555556 · n=9')).toBeTruthy();
- expect(within(reliability).getByText(/needs at least two successful repeats/)).toBeTruthy();
- expect(within(reliability).getAllByText('75 seconds · n=4 · retried runs: 0')).toHaveLength(2);
+ expect(within(reliability).getByText(/5 of 9 agree/)).toBeTruthy();
+ expect(within(reliability).getAllByText(/75 s/)).toHaveLength(2);
+ expect(within(reliability).getAllByText('n=4 · retried 0')).toHaveLength(2);
 });
-it('uses directional server head-to-head counts and ties and links sessions to Line view', () => {
+it('keeps head-to-head and interviews behind toggles; opening shows server counts, ties and Line view links', () => {
  const input=props();input.data.head_to_head[0].ties=7;
  render(<MoreAnalysis {...input}/>);
- const matrix=screen.getAllByRole('table',{name:'Head-to-head'})[0];
- expect(within(matrix).getByText('A closer than B on 0 of 2 sessions · 7 ties')).toBeTruthy();
- expect(within(matrix).getByText('B closer than A on 2 of 2 sessions · 7 ties')).toBeTruthy();
+ expect(screen.queryByRole('table',{name:'Head-to-head'})).toBeNull();
+ expect(screen.queryByRole('table',{name:'Interviews by combo'})).toBeNull();
+ fireEvent.click(screen.getByRole('button',{name:'Show head-to-head'}));
+ fireEvent.click(screen.getByRole('button',{name:'Show interviews by combo'}));
+ const matrix=screen.getByRole('table',{name:'Head-to-head'});
+ expect(within(matrix).getByLabelText('A closer than B on 0 of 2 sessions, 7 ties')).toBeTruthy();
+ expect(within(matrix).getByLabelText('B closer than A on 2 of 2 sessions, 7 ties')).toBeTruthy();
  const link=screen.getByRole('link',{name:'synthetic-s01'});
  expect(link.getAttribute('href')).toBe('?run=eval-lines&view=compare&tab=lines&session=synthetic-s01');
  fireEvent.click(link);
  expect(input.navigate).toHaveBeenCalledWith({run:'eval-lines',view:'compare',tab:'lines',session:'synthetic-s01'});
- expect(screen.getAllByText(/off 2 · n=1 · 2 repeats/).length).toBeGreaterThan(0);
+ expect(screen.getAllByText(/n=1 · 2 repeats/).length).toBeGreaterThan(0);
 });
-it('switches the length axis using server values', () => {
+it('keeps error vs length behind a toggle and switches the axis using server values', () => {
  const {container}=render(<MoreAnalysis {...props()}/>);
+ expect(container.querySelector('[data-length-point]')).toBeNull();
+ expect(screen.getByRole('button',{name:'Show error vs interview length'}).getAttribute('aria-expanded')).toBe('false');
+ fireEvent.click(screen.getByRole('button',{name:'Show error vs interview length'}));
  expect(screen.getByRole('button',{name:'Turns'}).getAttribute('aria-pressed')).toBe('true');
- expect(container.querySelector('[data-length-point]')?.getAttribute('data-x')).toBe('11');
+ expect(container.querySelector('[data-length-point]')?.getAttribute('data-x')).toBe('8');
  fireEvent.click(screen.getByRole('button',{name:'Words'}));
- expect(screen.getByRole('button',{name:'Words'}).getAttribute('aria-pressed')).toBe('true');
- expect(container.querySelector('[data-length-point]')?.getAttribute('data-x')).toBe('44');
- expect(screen.getByText('Show data table for Error vs length')).toBeTruthy();
+ expect(container.querySelector('[data-length-point]')?.getAttribute('data-x')).toBe('32');
 });
 it('hides human error displays without labels and keeps reliability and baseline', () => {
  const data=structuredClone(analysis) as CompareAnalysis;data.has_human=false;
  const {container}=render(<MoreAnalysis {...props(data)}/>);
- expect(screen.getByText('no human reference')).toBeTruthy();
- expect(container.querySelector('svg')).toBeNull();
- expect(screen.queryByRole('table',{name:'Head-to-head'})).toBeNull();
+ expect(screen.getByText(/No human reference/)).toBeTruthy();
+ fireEvent.click(screen.getByRole('button',{name:'Show human-vs-human baseline'}));
+ expect(container.querySelector('svg[role="img"][aria-label$="scatter"]')).toBeNull();
+ expect(screen.queryByRole('button',{name:'Show head-to-head'})).toBeNull();
  expect(screen.getByRole('table',{name:'Reliability'})).toBeTruthy();
- expect(screen.getByText('n/a - needs a second human coder, not in this dataset')).toBeTruthy();
+ expect(screen.getByText(/Needs a second human coder, not in this dataset/)).toBeTruthy();
 });
 it('retains failures, level n/a, unavailable cohorts and skipped combo labels', () => {
  const input=props(), key=input.data.combos[0].combo_key;
  input.data.skipped_combos=[key];
  input.data.reliability[key].failures=[{code:'provider_unavailable',count:3}];
  input.data.reliability[key].levels.technical={value:null,n:0,na:{reason:'not enough repeats'}};
+ input.data.frontier.dominated=[];
  input.data.frontier.unavailable=[{combo_key:key,n:0,na:{reason:'skipped: provider unavailable'}}];
  render(<MoreAnalysis {...input}/>);
  const reliability=screen.getByRole('table',{name:'Reliability'});
- expect(within(reliability).getByText('provider_unavailable: 3')).toBeTruthy();
- expect(within(reliability).getByText('Technical: n/a - not enough repeats · n=0')).toBeTruthy();
- expect(within(reliability).getByRole('rowheader',{name:'A (skipped)'})).toBeTruthy();
+ expect(within(reliability).getByText('3 × provider_unavailable')).toBeTruthy();
+ expect(within(reliability).getByText('Technical n/a - not enough repeats · n=0')).toBeTruthy();
+ expect(within(reliability).getByText('skipped')).toBeTruthy();
  expect(screen.getByText('A (skipped): n/a - skipped: provider unavailable · n=0')).toBeTruthy();
 });
 it('keeps zero-valued scatters finite and states when no points can be plotted', () => {
@@ -81,11 +115,13 @@ it('keeps zero-valued scatters finite and states when no points can be plotted',
  input.data.frontier.points[0].cost_per_run_usd=0;
  input.data.frontier.dominated=[];
  const view=render(<MoreAnalysis {...input}/>);
- expect(view.container.querySelector('[data-cost-point]')?.getAttribute('cx')).toBe('70');
- expect(view.container.querySelector('[data-cost-point]')?.getAttribute('cy')).toBe('230');
+ expect(view.container.querySelector('[data-cost-point]')).toBeTruthy();
+ expect(view.container.querySelector('[data-cost-label]')?.getAttribute('x')).not.toMatch(/NaN|Infinity/);
  input.data.frontier.points=[];input.data.error_vs_length=[];input.data.grid=[];
  view.rerender(<MoreAnalysis {...input}/>);
  expect(screen.getByText('No priced results available')).toBeTruthy();
+ fireEvent.click(screen.getByRole('button',{name:'Show error vs interview length'}));
+ fireEvent.click(screen.getByRole('button',{name:'Show interviews by combo'}));
  expect(screen.getByText('No session length results available')).toBeTruthy();
  expect(screen.getByText('No session results available')).toBeTruthy();
 });
@@ -94,11 +130,7 @@ it('joins exactly the points the server places on the frontier without choosing 
  input.data.frontier.points.push(...input.data.frontier.dominated);
  input.data.frontier.dominated=[];
  const {container}=render(<MoreAnalysis {...input}/>);
- const line=container.querySelector('polyline');
- expect(line?.getAttribute('data-frontier-combos')).toBe(input.data.frontier.points.map(p=>p.combo_key).join(','));
- expect(line?.getAttribute('points')?.split(' ')).toHaveLength(2);
+ const line=container.querySelector('.ca-frontier');
+ expect([...(line?.getAttribute('data-frontier-combos')?.split(',')??[])].sort()).toEqual(input.data.frontier.points.map(p=>p.combo_key).sort());
  expect(container.querySelectorAll('[data-frontier="true"]')).toHaveLength(2);
- expect(screen.getAllByText('How to read:')).toHaveLength(5);
- expect(screen.getByRole('region',{name:'Head-to-head table'}).getAttribute('tabindex')).toBe('0');
- expect(screen.getByRole('region',{name:'Interviews by combo table'}).getAttribute('tabindex')).toBe('0');
 });

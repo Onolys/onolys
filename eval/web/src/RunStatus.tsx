@@ -11,9 +11,13 @@ export function partialStatusText(run: PartialRunStatus): string | null {
   return `Partial — ${run.cancelled_at ? `cancelled at ${dateText(run.cancelled_at)}, ` : ''}${run.done_units} of ${run.total_units} runs done${(run.skipped_units ?? 0) > 0 ? `, ${run.skipped_units} skipped` : ''}`;
 }
 const runErrorText: Record<string, string> = { enqueue_failed: 'Run failed to start: could not queue it for processing. Rerun to try again.' };
-export function RunErrorNote({ run }: { run: Pick<RunSummary, 'status' | 'error'> }) {
+export function runErrorMessage(run: Pick<RunSummary, 'status' | 'error'>): string | null {
   if (run.status !== 'failed' || !run.error) return null;
-  return <p role="alert">{runErrorText[run.error.code] ?? `Run failed: ${run.error.code}`}</p>;
+  return runErrorText[run.error.code] ?? `Run failed: ${run.error.code}`;
+}
+export function RunErrorNote({ run }: { run: Pick<RunSummary, 'status' | 'error'> }) {
+  const message = runErrorMessage(run);
+  return message ? <p role="alert">{message}</p> : null;
 }
 export function PartialBadge({ run, short = false }: { run: PartialRunStatus; short?: boolean }) {
   const text = partialStatusText(run);
@@ -21,7 +25,7 @@ export function PartialBadge({ run, short = false }: { run: PartialRunStatus; sh
   if (short) return <><Badge variant="outline" data-partial-badge><span aria-hidden="true">◐ </span>Partial</Badge><p className="text-sm text-muted-foreground" data-partial-detail>{text.replace(/^Partial — /, '')}</p></>;
   return <Badge variant="outline" className="max-w-full whitespace-normal" data-partial-badge><span aria-hidden="true">◐ </span>{text}</Badge>;
 }
-export function ProviderSkipNotices({ skips, short = false }: { skips?: readonly ProviderSkip[]; short?: boolean }) {
+export function ProviderSkipNotices({ skips, short = false, icon = true }: { skips?: readonly ProviderSkip[]; short?: boolean; icon?: boolean }) {
   if (!skips?.length) return null;
-  return <div data-provider-skips>{skips.map(skip => <p key={skip.provider}><span aria-hidden="true">⚠ </span>{providerName(skip.provider)} skipped after {skip.after_failures} failures{!short && ' in a row — provider may be down'}</p>)}</div>;
+  return <div data-provider-skips>{skips.map(skip => <p key={skip.provider}>{icon && <span aria-hidden="true">⚠ </span>}{providerName(skip.provider)} skipped after {skip.after_failures} failures{!short && ' in a row — provider may be down'}</p>)}</div>;
 }

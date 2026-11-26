@@ -1,0 +1,58 @@
+<h1>Writeup audit: Eval run + compare pages</h1>
+<p>Format: section header, then what it should contain. Cuts and merges are marked. Source: eval/web/src (Runs.tsx, RunStatus.tsx, compare/*).</p>
+<h2>Run page</h2>
+<ul>
+<li><b>Title: "Run - &lt;run name&gt;"</b>. Dash required. Description (if any) as muted line under it. Cut "Run &lt;name or id&gt;" form.</li>
+<li><b>Run summary card</b>. Run ID (copyable), Open logs link, action buttons (Config, Compare, Rerun, Cancel). Replaces the loose buttons and "Rerun with different engines/presets" (shorten to "Rerun...").</li>
+<li><b>Status chips</b>. One chip per state: overall status, done of total, running, queued, failed, cancelled (zero counts muted). Replaces the plain "running · 1/3 runs done · ..." line. Plus a progress bar.</li>
+<li><b>Usage stats</b>. Input tokens, output tokens, est. cost, started/elapsed as small stat tiles. Muted note: "Cost is an estimate. Speech-to-text is not included." Unpriced units listed in the cost tile, not in the sentence.</li>
+<li><b>Alerts strip</b>. Merge: provider skipped, provider busy/waiting, cancel-requested note, partial badge, run-level error. Each = icon + one sentence. Hidden when empty.</li>
+<li><b>Unit progress</b>. Header + ONE line: "One unit = session x engine x model/tier/effort x attempt. Human reference runs once." Cut the current multi-sentence caption and the duplicated "N/M runs done" next to the heading (already in chips).</li>
+<li><b>Unit table</b>. Columns: Session, Engine, Model, Tier, Effort, Attempt, Status (chip), Stage, Result. Search + status filter above. Muted footnote: truncation/sort/error-click hints.</li>
+<li><b>Result cell</b>. Done: "View JSON" (no id). Failed: red error-code badge, opens error popup. Running: mini progress. Skipped: "n/a" + reason.</li>
+</ul>
+<h2>Compare: shared header (all tabs)</h2>
+<ul>
+<li><b>Title: "Compare - &lt;run name&gt;"</b> with Back to run link. Partial badge when cancelled/partial.</li>
+<li><b>Summary cards</b>. Sessions (n, attempts, combos); Human labels (chips: counts / globals covered); Coverage (one chip per session, "paired x of y", amber when incomplete); Excluded (failed combos with reason). Replaces the jumbled "Human labels... gi: paired 0 of 1 persuade: paired 0 of 1... Coverage" text.</li>
+<li><b>Tabs</b>. Overview, Deep dive, More analysis, Line view.</li>
+<li><b>Combo legend</b>. Letter tag + model + engine/tier/effort; failed combos flagged. Shown once, not repeated per tab.</li>
+</ul>
+<h2>Overview</h2>
+<ul>
+<li><b>Verdict</b>. One or two sentences with n tags. Excluded-combo note in muted small text.</li>
+<li><b>Leaderboard</b>. Sortable table (arrow indicators on plain headers). Best marked with star + "best"; failed combos excluded from best and shaded red. Cut: per-column definitions merged into one muted note.</li>
+<li><b>Leaderboard notes</b>. One muted block: column meanings, "Sessions have equal weight; repeats averaged first", "Time may read short for retried units". Currently loose plain sentences.</li>
+<li><b>Metric heatmap</b>. Rows grouped (counts, globals, ratios). Big = avg miss, small = signed bias. Legend row replaces the 4 separate legend paragraphs and "How to read".</li>
+</ul>
+<h2>Deep dive</h2>
+<ul>
+<li><b>Compare combos</b>. Combo toggle chips + "paired x of y". Cut "Compare combos" fieldset legend look.</li>
+<li><b>Globals</b>. One card per global: dot plot, legend, avg miss / within +-1 chips; separate card with same / off-by-1 / off-by-2+ bars. Captions = one sentence each (replace long "How to read").</li>
+<li><b>Counts per code</b>. Small-multiple cards: bars Human vs combos + bias chip ("under-counts 21%").</li>
+<li><b>Per-line agreement</b>. P/R/F1 table + confusion grid (switchable combo). If no line-level output: one message naming the missing side.</li>
+<li><b>Reasoning roll-up</b>. Per code, accordion; Human count + combo snippets. One muted note ("loads on request, withheld if empty").</li>
+<li><b>Data tables</b>. Each chart's table twin sits behind a "Show data" disclosure, not inline.</li>
+</ul>
+<h2>More analysis</h2>
+<ul>
+<li><b>Cost vs accuracy</b>. Scatter + frontier line. Unpriced/failed combos listed under it.</li>
+<li><b>Error vs interview length</b>. Scatter/lines by combo, Turns/Words toggle.</li>
+<li><b>Human-vs-human baseline</b>. Card with the n/a text (needs a second coder).</li>
+<li><b>Reliability</b>. Table: repeat agreement, fails, time per combo.</li>
+<li><b>Head-to-head</b>. Matrix "row closer than column on N of M"; ties note.</li>
+<li><b>Interviews by combo</b>. Session x combo grid, count error + repeats, session links to Line view.</li>
+</ul>
+<h2>Line view</h2>
+<ul>
+<li><b>Filters</b>. Session picker, only-disagreements, code, combo; count of differing lines chip.</li>
+<li><b>Transcript lanes</b>. # / speaker chip / line text / Human / one lane per combo; disagreements amber with warning mark. One muted note (blank human = no label; text verbatim). Cut the long "How to read".</li>
+<li><b>Global ratings (session)</b>. Table of human vs combo rating chips (green exact, amber off 1, red off 2+); reasoning behind disclosure.</li>
+<li><b>Line popup</b>. Line text, human code, each combo code + rationale, "k of r repeats agree".</li>
+</ul>
+<h2>Popups</h2>
+<ul>
+<li><b>Config</b>. Key facts as tiles (dataset, sessions, attempts, goal, language, versions), combo list with tags, raw JSON behind disclosure + Copy. Used for every "Config" entry point (run page, history, compare).</li>
+<li><b>Error</b>. Title "Unit &lt;id&gt; failed", code/stage/HTTP/retryable chips, plain-language message, full error block + Copy, one-line fix hint.</li>
+<li><b>Unit output</b>. Title "Unit output", unit id shown here (not on the button), JSON.</li>
+</ul>

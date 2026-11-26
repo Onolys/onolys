@@ -2,14 +2,19 @@ import { useEffect, useId, useRef, useState } from 'react';
 import { Badge, Button, Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, Input } from '@onolys/ui';
 import { ApiError } from './api';
 import { CancelRunDialog, CancellationNote, canCancelRun, isActiveRun, mergeRunStatus } from './CancelRunDialog';
-import { PartialBadge, ProviderSkipNotices, RunErrorNote, partialStatusText, providerName } from './RunStatus';
+import { PartialBadge, ProviderSkipNotices, partialStatusText } from './RunStatus';
 import { RunConfigDialog, savedConfiguration } from './RunConfigDialog';
 import { SlowStartNotice } from '@prod-components/SlowStart';
-import { JsonDialog } from './JsonViewer';
 import './runs.css';
 import { CompareLink, type CompareNavigate } from './compare/CompareLink';
+import { RunHeader } from './run/RunHeader';
+import { comboFields } from './run/comboFields';
+import { UnitTable } from './run/UnitTable';
+import { RunStatusChips } from './run/RunStatusChips';
+import { UsageTiles } from './run/UsageTiles';
+import { AlertsStrip } from './run/AlertsStrip';
 import { navigateEval } from './evalNavigation';
-import type { EvalApi, RunDetail, RunSummary, RunUnit } from './api';
+import type { EvalApi, RunDetail, RunSummary } from './api';
 
 const errorMessage = (error: unknown) => error instanceof Error ? error.message : 'Could not load run. Please try again.';
 const terminal = (status: string) => !['queued', 'running'].includes(status);
@@ -23,9 +28,6 @@ const localDate = (iso: string) => {
 const POLL_MS = 3000, MAX_POLL_MS = 30000;
 const inputName = (run: RunSummary) => 'dataset_id' in run.input ? run.input.dataset_id : run.input.upload_id;
 
-function Usage({ run }: { run: RunSummary }) {
-  return <p>{run.usage.input_tokens} input tokens · {run.usage.output_tokens} output tokens · {run.cost_usd_est == null ? '—' : `~$${run.cost_usd_est.toFixed(4)}`} estimate; STT excluded.{run.unpriced_units > 0 && ` ${run.unpriced_units} unpriced unit(s); estimate is incomplete.`}</p>;
-}
 function RunActions({ run, onRerun, onConfig, onDelete, onCancel }: { onCancel: (run: RunSummary, trigger: HTMLElement | null) => void; run: RunSummary; onRerun: (run: RunSummary) => void; onDelete: (run: RunSummary) => void; onConfig: (run: RunSummary, trigger: HTMLElement | null) => void }) {
   const trigger = useRef<HTMLButtonElement>(null);
   const openingConfig = useRef(false);
@@ -37,18 +39,6 @@ function RunActions({ run, onRerun, onConfig, onDelete, onCancel }: { onCancel: 
 }
 const historyColumns = ['Date', 'Dataset', 'Status', 'Engines', 'Models', 'Tiers', 'Efforts'] as const;
 type HistoryColumn = typeof historyColumns[number];
-function comboFields(run: RunSummary, preset?: string | null) {
-  const index = preset ? run.combo_keys?.indexOf(preset) : -1;
-  const combo = index >= 0 ? run.combos?.[index] : undefined;
-  const resolved = (preset ? run.resolved_combos?.[preset] ?? run.resolved_presets?.[preset.replace(/^preset:/, '')] : undefined) as Record<string, unknown> | undefined;
-  const string = (value: unknown) => typeof value === 'string' ? value : '';
-  const legacyModels = preset && run.presets?.includes(preset.replace(/^preset:/, '')) ? [...new Set(Object.values(resolved ?? {}).filter(value => typeof value === 'string'))].join(', ') : '';
-  return {
-    model: combo?.model || string(resolved?.model) || string(resolved?.litellm_id) || legacyModels,
-    tier: combo?.tier || string(resolved?.tier),
-    effort: combo?.effort || string(resolved?.effort) || string(resolved?.reasoning_effort),
-  };
-}
 function columnValue(run: RunSummary, column: HistoryColumn): string {
   const selected = (key: 'models' | 'tiers' | 'efforts', field: 'model' | 'tier' | 'effort') => {
     const values = [...(run.selection?.[key] ?? []), ...(run.combos ?? []).map(combo => combo[field]),
@@ -64,23 +54,6 @@ function columnValue(run: RunSummary, column: HistoryColumn): string {
     case 'Tiers': return selected('tiers', 'tier');
     case 'Efforts': return selected('efforts', 'effort');
   }
-}
-function UnitOutput({ api, runId, unit }: { api: EvalApi; runId: string; unit: RunUnit }) {
-  const [open, setOpen] = useState(false);
-  const [output, setOutput] = useState<unknown>(unit.output);
-  const [error, setError] = useState('');
-  const [attempt, setAttempt] = useState(0);
-  useEffect(() => {
-    if (!open || output !== undefined) return;
-    const controller = new AbortController();
-    api.output(runId, unit.unit_id, controller.signal).then(value => { if (!controller.signal.aborted) setOutput(value); }).catch(e => { if (!controller.signal.aborted) setError(errorMessage(e)); });
-    return () => controller.abort();
-  }, [api, runId, unit.unit_id, open, output, attempt]);
-  return <>
-    <Button type="button" variant="outline" size="sm" onClick={() => setOpen(true)}>View JSON {unit.unit_id}</Button>
-    <JsonDialog open={open} onOpenChange={setOpen} title={`Unit ${unit.unit_id} output`} value={output} loading={open && !error && output === undefined} error={error || undefined}
-      onRetry={() => { setError(''); setAttempt(n => n + 1); }} />
-  </>;
 }
 export function RunView({ api, runId, onRerun, onNavigate = navigateEval }: { api: EvalApi; runId: string; onRerun: (run: RunSummary) => void; onNavigate?: CompareNavigate }) {
   const [run, setRun] = useState<RunDetail>();
@@ -114,27 +87,14 @@ export function RunView({ api, runId, onRerun, onNavigate = navigateEval }: { ap
     };
     void poll(); return halt;
   }, [api, runId, attempt]);
-  const cancelRequested = run?.cancel_requested === true;
-  return <section className="run-detail"><div className="unit-section-heading"><h1>Run {run?.name || runId}</h1>{run && <PartialBadge run={run} />}</div>{error && <div role="alert">{error}{!missing && run && !terminal(run.status) && ' Still trying to refresh.'}<button onClick={() => { setError(''); setMissing(false); setAttempt(n => n + 1); }}>Retry run status</button></div>}
-    {!run ? (!error && <p role="status">Loading run…</p>) : <>
-      <p role="status">{run.status === 'partial' ? 'partial' : statusLabel(run, cancelRequested)} · {run.done_units}/{run.total_units} runs done{isActiveRun(run) && ` · ${run.running_units ?? 0} running · ${run.queued_units ?? 0} queued`} · {run.failed_units} failed · {run.cancelled_units} cancelled</p>
-      <RunErrorNote run={run} />
-      <CancellationNote run={run} />
-      <CompareLink run={run} navigate={onNavigate} />
-      {canCancelRun(run) && <Button onClick={event => { cancelTrigger.current = event.currentTarget; setToCancel(run); }}>Cancel run</Button>}
-      <button onClick={() => onRerun(run)}>Rerun with different engines/presets</button>
-      <Button variant="outline" onClick={event => { configTrigger.current = event.currentTarget; setConfiguration(run); }}>Config</Button>
-      {run.description && <p>{run.description}</p>}<Usage run={run} />
-      <ProviderSkipNotices skips={run.provider_skips} />
-      {run.provider_cooldowns?.map(cooldown => <p key={cooldown.provider}>{providerName(cooldown.provider)} is busy — waiting to retry</p>)}
-      <div className="unit-section-heading"><h2>Unit progress</h2><span>{run.done_units}/{run.total_units} runs done · {run.repeats} {run.repeats === 1 ? 'attempt' : 'attempts'} per cell</span></div>
-      <div className="unit-table-scroll" role="region" aria-label="Unit progress"><table className="units-table"><caption>Each unit is one session × engine × model/tier/effort × attempt. Repeated model attempts run the same settings independently. Human reference is included once per session.</caption>
-        <thead><tr>{['Session', 'Engine', 'Model', 'Tier', 'Effort', 'Attempt', 'Status', 'Stage', 'Output / error'].map(label => <th scope="col" key={label}>{label}</th>)}</tr></thead>
-        <tbody>{run.units.map(unit => { const combo = unit.combo ?? comboFields(run, unit.combo_key ?? unit.preset); return <tr key={unit.unit_id}>
-          <td data-label="Session">{unit.session_id}</td><td data-label="Engine">{unit.engine}</td><td data-label="Model">{combo.model || '—'}</td><td data-label="Tier">{combo.tier || '—'}</td><td data-label="Effort">{combo.effort || '—'}</td>
-          <td data-label="Attempt">{unit.engine === 'human' ? 'Once' : unit.repeat == null ? '—' : `${unit.repeat + 1} / ${run.repeats}`}</td><td data-label="Status">{unit.status}</td><td data-label="Stage">{unit.stage || '—'}</td>
-          <td data-label="Output / error">{unit.status === 'skipped' ? <>n/a{unit.error && ` — ${typeof unit.error === 'string' ? unit.error : unit.error.message ?? unit.error.code}`}</> : <>{unit.error && <p role="alert">{typeof unit.error === 'string' ? unit.error : `${unit.error.code}${unit.error.message ? `: ${unit.error.message}` : ''}`}</p>}{unit.status === 'done' ? <UnitOutput api={api} runId={runId} unit={unit} /> : !unit.error && '—'}</>}</td>
-        </tr>; })}</tbody></table></div>
+  return <section className="run-detail">{error && <div role="alert">{error}{!missing && run && !terminal(run.status) && ' Still trying to refresh.'}<button onClick={() => { setError(''); setMissing(false); setAttempt(n => n + 1); }}>Retry run status</button></div>}
+    {!run ? (!error && <><h1>Run - {runId}</h1><p role="status">Loading run…</p></>) : <>
+      <RunHeader run={run} onNavigate={onNavigate} onRerun={onRerun}
+        onConfig={(value, trigger) => { configTrigger.current = trigger; setConfiguration(value); }}
+        onCancel={(value, trigger) => { cancelTrigger.current = trigger; setToCancel(value); }}><RunStatusChips run={run} /></RunHeader>
+      <UsageTiles run={run} />
+      <AlertsStrip run={run} />
+      <UnitTable api={api} runId={runId} run={run} />
     </>}<CancelRunDialog api={api} run={toCancel} returnFocus={cancelTrigger} onClose={() => setToCancel(null)} onUpdated={fresh => { if (!isActiveRun(fresh)) stop.current(); setRun(fresh); }} /><RunConfigDialog returnFocus={configTrigger} run={configuration} onClose={() => setConfiguration(null)} />
   </section>;
 }

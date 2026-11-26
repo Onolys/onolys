@@ -11,14 +11,15 @@ it('Provenance shows the saved resolved combos and base preset', async () => {
  render(<RunView api={{ ...createEvalApi('', vi.fn()), run: vi.fn().mockResolvedValue(run) }} runId="r1" onRerun={vi.fn()} />);
  await act(async () => {});
  fireEvent.click(screen.getByRole('button', { name: 'Config' }));
+ fireEvent.click(screen.getByRole('button', { name: 'Show raw JSON' }));
  expect(screen.getByText(/saved-combo-model/)).toBeTruthy(); expect(screen.getByText(/"base_preset": "configured-prod"/)).toBeTruthy();
 });
 it('does not render the removed embedded comparison or summary', async () => {
  render(<RunView api={{...createEvalApi('', vi.fn()), run:vi.fn().mockResolvedValue(detail())}} runId="r1" onRerun={vi.fn()} />);
- await screen.findByRole('heading', {name:'Run r1'}); expect(screen.queryByRole('tab', {name:'Summary'})).toBeNull(); expect(screen.queryByRole('heading', {name:'Compare'})).toBeNull();
+ await screen.findByRole('heading', {name:'Run - r1'}); expect(screen.queryByRole('tab', {name:'Summary'})).toBeNull(); expect(screen.queryByRole('heading', {name:'Compare'})).toBeNull();
 });
 it('polls at 3s, stops terminal, loads JSON lazily as escaped text and aborts unmount', async () => {
- vi.useFakeTimers(); const api = {...createEvalApi('',vi.fn()), run:vi.fn().mockResolvedValueOnce(detail('running')).mockResolvedValue(detail()), output:vi.fn().mockResolvedValue({text:'<img src=x onerror=alert(1)>'})}; const view=render(<RunView api={api} runId="r1" onRerun={vi.fn()}/>); await act(async()=>{}); expect(api.run).toHaveBeenCalledTimes(1); await act(async()=>{await vi.advanceTimersByTimeAsync(3000)}); expect(api.run).toHaveBeenCalledTimes(2); await act(async()=>{await vi.advanceTimersByTimeAsync(9000)}); expect(api.run).toHaveBeenCalledTimes(2); expect(api.output).not.toHaveBeenCalled(); fireEvent.click(screen.getByRole('button',{name:'View JSON u1'})); await act(async()=>{}); expect(api.output).toHaveBeenCalledWith('r1','u1',expect.any(AbortSignal)); expect(screen.getByText(/<img src=x/)).toBeTruthy(); expect(document.querySelector('img')).toBeNull(); const signal=api.run.mock.calls[0][1] as AbortSignal; view.unmount(); expect(signal.aborted).toBe(true);
+ vi.useFakeTimers(); const api = {...createEvalApi('',vi.fn()), run:vi.fn().mockResolvedValueOnce(detail('running')).mockResolvedValue(detail()), output:vi.fn().mockResolvedValue({text:'<img src=x onerror=alert(1)>'})}; const view=render(<RunView api={api} runId="r1" onRerun={vi.fn()}/>); await act(async()=>{}); expect(api.run).toHaveBeenCalledTimes(1); await act(async()=>{await vi.advanceTimersByTimeAsync(3000)}); expect(api.run).toHaveBeenCalledTimes(2); await act(async()=>{await vi.advanceTimersByTimeAsync(9000)}); expect(api.run).toHaveBeenCalledTimes(2); expect(api.output).not.toHaveBeenCalled(); fireEvent.click(screen.getByRole('button',{name:'View JSON'})); await act(async()=>{}); expect(api.output).toHaveBeenCalledWith('r1','u1',expect.any(AbortSignal)); expect(screen.getByText(/<img src=x/)).toBeTruthy(); expect(document.querySelector('img')).toBeNull(); const signal=api.run.mock.calls[0][1] as AbortSignal; view.unmount(); expect(signal.aborted).toBe(true);
 });
 it('loads spilled JSON lazily from the detail wire shape with output and private ref omitted', async () => {
   const saved = detail();
@@ -28,7 +29,7 @@ it('loads spilled JSON lazily from the detail wire shape with output and private
   render(<RunView api={api} runId="r1" onRerun={vi.fn()} />);
   await act(async () => {});
   expect(api.output).not.toHaveBeenCalled();
-  fireEvent.click(screen.getByRole('button', { name: 'View JSON u1' }));
+  fireEvent.click(screen.getByRole('button', { name: 'View JSON' }));
   await act(async () => {});
   expect(api.output).toHaveBeenCalledExactlyOnceWith('r1', 'u1', expect.any(AbortSignal));
   expect(screen.getByText(/"stored": true/)).toBeTruthy();
@@ -39,10 +40,10 @@ it.each([null, false, 0, ''])('renders inline JSON %j without fetching', async o
   const api = { ...createEvalApi('', vi.fn()), run: vi.fn().mockResolvedValue(saved), output: vi.fn() };
   render(<RunView api={api} runId="r1" onRerun={vi.fn()} />);
   await act(async () => {});
-  fireEvent.click(screen.getByRole('button', { name: 'View JSON u1' }));
+  fireEvent.click(screen.getByRole('button', { name: 'View JSON' }));
   await act(async () => {});
   expect(api.output).not.toHaveBeenCalled();
-  expect(within(screen.getByRole('dialog', { name: 'Unit u1 output' })).getByTestId('json-scroll').textContent).toBe(JSON.stringify(output, null, 2));
+  expect(within(screen.getByRole('dialog', { name: 'Unit output' })).getByTestId('json-scroll').textContent).toBe(JSON.stringify(output, null, 2));
 });
 it('refreshes terminal cancellation details before stopping polling', async () => {
   vi.useFakeTimers();
@@ -55,8 +56,8 @@ it('refreshes terminal cancellation details before stopping polling', async () =
   await act(async () => {});
   expect(api.cancel).toHaveBeenCalledWith('r1');
   expect(api.run).toHaveBeenCalledTimes(2);
-  expect(screen.getByText('Cancelled — no runs completed · 0/4 runs done · 1 failed · 2 cancelled')).toBeTruthy();
-  expect(screen.queryByRole('button', { name: 'View JSON u1' })).toBeNull();
+  expect(screen.getByRole('status', { name: 'Run status' }).textContent).toBe('Cancelled0 of 4 done1 failed2 cancelled');
+  expect(screen.queryByRole('button', { name: 'View JSON' })).toBeNull();
   await act(async () => { await vi.advanceTimersByTimeAsync(6000); });
   expect(api.run).toHaveBeenCalledTimes(2);
 });
@@ -67,15 +68,15 @@ it('keeps polling after cancellation while in-flight work runs, then shows final
   const api = { ...createEvalApi('', vi.fn()), run: vi.fn().mockResolvedValueOnce(pending).mockResolvedValueOnce(pending).mockResolvedValue(done), cancel: vi.fn().mockResolvedValue({ run_id: 'r1', status: 'running' }) };
   render(<RunView api={api} runId="r1" onRerun={vi.fn()} />);
   await act(async () => {});
-  expect(screen.queryByRole('button', { name: 'View JSON u1' })).toBeNull();
+  expect(screen.queryByRole('button', { name: 'View JSON' })).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: 'Cancel run' }));
   fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Cancel run' }));
   await act(async () => {});
   expect(api.run).toHaveBeenCalledTimes(2);
   await act(async () => { await vi.advanceTimersByTimeAsync(3000); });
   expect(api.run).toHaveBeenCalledTimes(3);
-  expect(screen.getByText('done · 3/4 runs done · 1 failed · 0 cancelled')).toBeTruthy();
-  expect(screen.getByRole('button', { name: 'View JSON u1' })).toBeTruthy();
+  expect(screen.getByRole('status', { name: 'Run status' }).textContent).toBe('Done3 of 4 done1 failed0 cancelled');
+  expect(screen.getByRole('button', { name: 'View JSON' })).toBeTruthy();
   expect(screen.getByText(/~\$0.2500/)).toBeTruthy();
   await act(async () => { await vi.advanceTimersByTimeAsync(9000); });
   expect(api.run).toHaveBeenCalledTimes(3);
@@ -87,8 +88,9 @@ it('history opens a shared config modal and rerun only prefills the saved run', 
  await screen.findByRole('link', { name: 'saved' });
  fireEvent.keyDown(screen.getByRole('button', { name: 'Actions for saved' }), { key: 'Enter' });
  fireEvent.click(await screen.findByRole('menuitem', { name: 'Config' }));
- const dialog = screen.getByRole('dialog', { name: 'Saved configuration and versions' });
+ const dialog = screen.getByRole('dialog', { name: 'Run configuration' });
  expect(within(dialog).getByText(/abc123/)).toBeTruthy();
+ fireEvent.click(within(dialog).getByRole('button', { name: 'Show raw JSON' }));
  expect(within(dialog).getByText(/saved-model/)).toBeTruthy();
  const copy = vi.fn().mockResolvedValue(undefined);
  Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: copy } });
@@ -135,7 +137,7 @@ it('shows the cancelling note and hides Cancel when the run summary says cancel_
   await act(async () => {});
   expect(screen.queryByRole('button', { name: 'Cancel run' })).toBeNull();
   expect(screen.getByText('Cancelled — runs already in progress will finish; no new runs start.')).toBeTruthy();
-  expect(screen.getByText(/^cancelling · /)).toBeTruthy();
+  expect(screen.getByText('Cancelling')).toBeTruthy();
 });
 it('history loads more using the server cursor, retains rows on failure and retries that page', async () => {
   const runs = vi.fn().mockResolvedValueOnce({ runs: [summary()], next_cursor: 'page2' }).mockRejectedValueOnce(new Error('offline')).mockResolvedValueOnce({ runs: [{ ...summary(), run_id: 'r2' }], next_cursor: null });
@@ -207,8 +209,8 @@ it('history uses native run links with ordinary-click SPA navigation', async () 
 it('detail names runs and labels unit configuration and repeated attempts in a compact table', async () => {
  const run = { ...detail(), name: 'Morning', combos: [{ model: 'claude', tier: 'sonnet', effort: 'high' }], combo_keys: ['claude/sonnet/high'], units: detail().units.map(unit => ({ ...unit, preset: null, combo: { model: 'claude', tier: 'sonnet', effort: 'high' }, combo_key: 'claude/sonnet/high' })) };
  render(<RunView api={{ ...createEvalApi('', vi.fn()), run: vi.fn().mockResolvedValue(run) }} runId="r1" onRerun={vi.fn()} />);
- await screen.findByRole('heading', { name: 'Run Morning' });
- const table = screen.getByRole('table', { name: /Each unit/ });
+ await screen.findByRole('heading', { name: 'Run - Morning' });
+ const table = screen.getByRole('table');
  expect(table.textContent).toContain('sonnet'); expect(table.textContent).toContain('1 / 3'); expect(table.textContent).toContain('3 / 3');
  expect(screen.queryByText('Saved configuration and versions', { selector: 'summary' })).toBeNull();
 });
@@ -246,11 +248,12 @@ it('config omits private run references and offers manual copying on clipboard f
  render(<RunView api={{ ...createEvalApi('', vi.fn()), run: vi.fn().mockResolvedValue(run) }} runId="r1" onRerun={vi.fn()} />);
  fireEvent.click(await screen.findByRole('button', { name: 'Config' }));
  const dialog = screen.getByRole('dialog');
+ fireEvent.click(within(dialog).getByRole('button', { name: 'Show raw JSON' }));
  expect(dialog.textContent).not.toContain('private-storage-location');
  expect(within(dialog).getByRole('textbox').textContent).toContain('<script>unsafe</script>');
  expect(document.querySelector('script')).toBeNull();
  fireEvent.click(within(dialog).getByRole('button', { name: 'Copy' }));
- await screen.findByText('Could not copy. Select the JSON to copy it manually.');
+ await screen.findByText('Could not copy. Expand the raw JSON and select it to copy manually.');
 });
 
 it.each(['Escape', 'Close'])('restores focus to detail Config after %s dismissal', async dismissal => {
@@ -292,10 +295,10 @@ it('filters by the same local calendar date shown for a run near midnight', asyn
 it('labels a Human unit as Once while model attempts use the configured repeat count', async () => {
  const run = detail(); run.units.push({ unit_id: 'human', session_id: 's1', engine: 'human', repeat: 0, status: 'done' });
  render(<RunView api={{ ...createEvalApi('', vi.fn()), run: vi.fn().mockResolvedValue(run) }} runId="r1" onRerun={vi.fn()} />);
- await screen.findByRole('button', { name: 'View JSON human' });
- const row = screen.getByRole('button', { name: 'View JSON human' }).closest('tr')!;
+ await screen.findByRole('cell', { name: 'Once' });
+ const row = screen.getByRole('cell', { name: 'Once' }).closest('tr')!;
  expect(within(row).getByRole('cell', { name: 'Once' })).toBeTruthy();
- expect(screen.getByRole('table', { name: /Each unit/ }).textContent).toContain('3 / 3');
+ expect(screen.getByRole('table').textContent).toContain('3 / 3');
 });
 const openActions = async (name = 'saved') => {
  await screen.findByRole('link', { name });
@@ -351,7 +354,7 @@ it.each(['done','partial','queued','running','failed','cancelled','deleting'] as
  await act(async()=>{});
  if(status==='done'||status==='partial'){
   const link=screen.getByRole('link',{name:'Compare'});expect(link.getAttribute('href')).toContain(`run=entry-${status}&view=compare&tab=overview`);fireEvent.click(link);expect(onNavigate).toHaveBeenCalledWith({run:run.run_id,view:'compare',tab:'overview'});
- }else{expect(screen.queryByRole('link',{name:'Compare'})).toBeNull();expect(screen.getByText('Compare opens when the run has finished results')).toBeTruthy();}
+ }else{expect(screen.queryByRole('link',{name:'Compare'})).toBeNull();const off=screen.getByRole('button',{name:'Compare'});expect((off as HTMLButtonElement).disabled).toBe(true);expect(off.getAttribute('title')).toBe('Compare opens when the run has finished results');}
  view.unmount();
  render(<History api={client} onOpen={vi.fn()} onRerun={vi.fn()} onNavigate={onNavigate}/>);await act(async()=>{});
  expect(Boolean(screen.queryByRole('link',{name:'Compare'}))).toBe(status==='done'||status==='partial');

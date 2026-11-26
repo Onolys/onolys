@@ -20,7 +20,7 @@ it('never renders JSON inline; the button opens a dialog and Esc / the close but
   fireEvent.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Close' }));
   await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
 });
-it('shows the JSON in a keyboard-focusable monospace block that scrolls on both axes', async () => {
+it('shows the JSON in a keyboard-focusable monospace block that wraps and scrolls vertically only', async () => {
   render(<JsonViewer value={value} title="Payload" />);
   fireEvent.click(screen.getByRole('button', { name: 'View JSON' }));
   const scroll = (await screen.findByTestId('json-scroll')) as HTMLElement;
@@ -29,8 +29,9 @@ it('shows the JSON in a keyboard-focusable monospace block that scrolls on both 
   const css = readFileSync(resolve(import.meta.dirname, 'runs.css'), 'utf8');
   const rule = css.match(/\.eval-config-json \{[^}]*\}/)![0];
   expect(rule).toMatch(/max-height: \d+dvh/);
-  expect(rule).toMatch(/overflow: auto/);
-  expect(rule).toMatch(/white-space: pre;/);
+  expect(rule).toMatch(/overflow-y: auto/);
+  expect(rule).toMatch(/overflow-x: hidden/);
+  expect(rule).toMatch(/white-space: pre-wrap;/);
   expect(css).toMatch(/\.eval-config-json pre \{[^}]*monospace/);
 });
 it('Copy writes the pretty JSON to the clipboard and confirms', async () => {

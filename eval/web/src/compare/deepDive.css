@@ -1,22 +1,73 @@
 .deep-dive { min-width: 0; }
 .deep-dive section { scroll-margin-top: 1rem; }
-.deep-picker { display:flex; flex-wrap:wrap; gap:.75rem 1.25rem; margin:1rem 0; }
-.deep-picker label { display:flex; align-items:center; gap:.4rem; overflow-wrap:anywhere; }
-.deep-dive svg { display:block; width:100%; min-width:36rem; height:auto; }
-.deep-dive svg text { fill:currentColor; font-size:14px; }
-.deep-dive svg circle { fill:currentColor; }
-.deep-count-row,.deep-bucket-row { display:flex; flex-wrap:wrap; align-items:center; gap:.5rem; margin:.65rem 0; }
-.deep-count-row>strong,.deep-bucket-row>strong { min-width:3.5rem; }
-.deep-count-track { flex:0 1 12rem; width:12rem; height:.8rem; background:var(--muted); border:1px solid currentColor; }
-.deep-count-track>span { display:block; height:100%; background:var(--muted-foreground); }
-.deep-stack { display:flex; flex:0 1 18rem; min-width:8rem; border:1px solid currentColor; }
-.deep-stack>span { overflow:hidden; white-space:nowrap; font-size:.75rem; min-height:1.25rem; }
-.deep-same { background:color-mix(in srgb,var(--primary) 30%,var(--background)); color:var(--foreground); }
-.deep-off1 { background:repeating-linear-gradient(45deg,color-mix(in srgb,var(--muted-foreground) 40%,var(--background)),color-mix(in srgb,var(--muted-foreground) 40%,var(--background)) 4px,var(--background) 4px,var(--background) 7px); color:var(--foreground); }
-.deep-off2plus { background:repeating-linear-gradient(90deg,color-mix(in srgb,var(--destructive) 40%,var(--background)),color-mix(in srgb,var(--destructive) 40%,var(--background)) 3px,var(--background) 3px,var(--background) 5px); color:var(--foreground); }
-.deep-lines td button { min-width:2.5rem; min-height:2.5rem; }
+/* Cards (shared by the Deep dive charts) */
+.deep-card { min-width:0; margin:1rem 0; padding:1rem 1.1rem; border:1px solid var(--border,#d3dbda); border-radius:var(--radius,.5rem); background:var(--card,#fff); box-shadow:var(--shadow-sm,0 1px 2px rgb(23 28 28/.08)); }
+.deep-card-head { display:flex; flex-wrap:wrap; align-items:flex-start; justify-content:space-between; gap:.5rem .75rem; margin-bottom:.75rem; }
+.deep-card-head h3 { margin:0; font-size:1rem; font-weight:600; }
+.deep-card-head .ui-note { margin:.15rem 0 0; }
+.deep-toggles { display:flex; flex-wrap:wrap; gap:.5rem; }
+.deep-toggle { display:inline-flex; align-items:center; gap:.45rem; max-width:100%; min-height:2rem; margin:0; padding:.25rem .8rem; font:inherit; font-size:.8125rem; font-weight:550; border-radius:999px; border:1px solid var(--border-strong,#6e7e7c); background:var(--card,#fff); color:var(--foreground,#171c1c); cursor:pointer; overflow-wrap:anywhere; text-align:left; }
+.deep-toggle:focus-visible { outline:2px solid var(--ring,#0b5f5a); outline-offset:2px; }
+.deep-toggle.is-on { background:var(--tone,#e4f2ef); border-color:var(--primary,#0b5f5a); }
+.deep-toggle:disabled { cursor:default; }
+.deep-toggle.is-failed { background:var(--muted,#f7f9f9); color:var(--muted-foreground,#536160); border-style:dashed; border-color:var(--border,#d3dbda); }
+.deep-toggle.is-failed .ui-combo-tag { opacity:.5; }
+.deep-toggle-fail { font-size:.75rem; font-weight:500; }
+.deep-human-swatch { width:.8rem; height:.8rem; border-radius:50%; border:2px solid var(--foreground,#171c1c); background:#fff; flex:none; }
+/* Globals dot plot cards: two per row, one column below 760px; svg scales by viewBox (no horizontal scroll) */
+.deep-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:1rem; }
+.deep-dot-svg { display:block; width:100%; height:auto; }
+.deep-legend-item { display:inline-flex; align-items:center; gap:.35rem; min-width:0; overflow-wrap:anywhere; }
+.deep-miss-chips { display:flex; flex-wrap:wrap; gap:.4rem; margin-top:.6rem; }
+.deep-miss-chip { display:inline-flex; max-width:100%; }
+.deep-empty { margin:.5rem 0; color:var(--muted-foreground,#536160); }
+/* Counts per code: grouped horizontal bars (CSS only), bias chip under each combo bar */
+.deep-count-row { display:grid; grid-template-columns:5rem minmax(0,1fr) auto; align-items:center; gap:.2rem .6rem; margin:.55rem 0; }
+.deep-count-label { display:inline-flex; align-items:center; gap:.4rem; min-width:0; font-weight:600; font-size:.8125rem; }
+.deep-count-track { min-width:0; height:.85rem; border-radius:4px; background:var(--muted,#f7f9f9); overflow:hidden; }
+.deep-count-track>span { display:block; height:100%; border-radius:4px; }
+.deep-count-value { font-variant-numeric:tabular-nums; font-size:.875rem; white-space:nowrap; }
+.deep-count-value small { color:var(--muted-foreground,#536160); font-size:.75rem; }
+.deep-count-bias { grid-column:2 / -1; min-width:0; }
+/* Miss buckets: 100% stacked bars, solid colours + text counts (never colour alone) */
+.deep-miss { margin:1rem 0; }
+.deep-bucket-row { display:grid; grid-template-columns:auto minmax(0,1fr) 7.5rem; align-items:center; gap:.75rem; margin:.6rem 0; }
+.deep-bucket-row>.ui-chip { grid-column:2 / -1; justify-self:start; }
+.deep-stack { display:flex; min-width:0; height:1.75rem; border-radius:4px; overflow:hidden; background:var(--muted,#f7f9f9); }
+.deep-seg { display:flex; align-items:center; justify-content:center; min-width:0; font-size:.8125rem; font-weight:700; }
+.deep-same { background:#1f7a56; color:#fff; }
+.deep-off1 { background:#e0aa3e; color:#171c1c; }
+.deep-off2plus { background:#b04040; color:#fff; }
+.deep-swatch { display:inline-block; width:.8rem; height:.8rem; border-radius:2px; }
+.deep-bucket-legend { display:flex; flex-wrap:wrap; gap:.4rem .9rem; }
+.deep-bucket-stats { display:grid; font-size:.8125rem; color:var(--muted-foreground,#536160); }
+.deep-bucket-stats strong { font-size:1rem; color:var(--foreground,#171c1c); }
+/* P/R/F1 table: inline F1 bar with P/R beneath */
+.deep-prf .ui-note { margin:.5rem 0 0; }
+.deep-prf-legend { display:inline-flex; gap:.6rem; }
+.deep-f1 { display:grid; gap:.1rem; min-width:0; }
+.deep-f1-line { display:flex; align-items:center; gap:.45rem; min-width:0; }
+.deep-f1-track { flex:0 1 4.5rem; min-width:1.5rem; width:4.5rem; height:.55rem; border-radius:3px; background:var(--muted,#f7f9f9); overflow:hidden; }
+.deep-f1-track>span { display:block; height:100%; border-radius:3px; }
+.deep-f1-sub { color:var(--muted-foreground,#536160); font-size:.75rem; }
+.deep-f1-na { color:var(--muted-foreground,#536160); }
+/* Confusion grid (CSS grid, behind a toggle) */
+.deep-confusion-section { margin:1rem 0; }
+.deep-confusion { display:grid; gap:2px; margin:.75rem 0; min-width:0; font-size:.8125rem; }
+.deep-conf-row { display:grid; grid-template-columns:minmax(5rem,1.4fr) repeat(var(--cols,1),minmax(0,1fr)); gap:2px; }
+.deep-conf-head { display:flex; align-items:center; min-width:0; padding:.3rem .4rem; font-weight:600; background:var(--muted,#f7f9f9); overflow-wrap:anywhere; justify-content:center; text-align:center; }
+.deep-conf-rowhead { justify-content:flex-start; text-align:left; }
+.deep-conf-cell { display:flex; min-width:0; }
+.deep-conf-cell button { width:100%; min-height:2.5rem; padding:.2rem; font:inherit; font-weight:600; border:1px solid var(--border,#d3dbda); border-radius:3px; background:transparent; color:inherit; cursor:pointer; }
+.deep-conf-cell button:disabled { cursor:default; color:var(--muted-foreground,#536160); font-weight:400; }
+.deep-conf-cell button:focus-visible { outline:2px solid var(--ring,#0b5f5a); outline-offset:1px; }
+.deep-conf-multi { grid-template-columns:minmax(5rem,1.4fr) minmax(0,1fr); }
+.deep-agree { background:rgba(23,91,66,.5); }
+.deep-confused { background:rgba(180,83,9,.5); }
 .deep-reasoning-columns { display:flex; flex-wrap:wrap; gap:1rem; }
 .deep-reasoning-columns>section { flex:1 1 15rem; min-width:0; border:1px solid var(--border); padding:.75rem; }
 .deep-verbatim,.deep-reasoning blockquote { white-space:pre-wrap; overflow-wrap:anywhere; }
 .deep-reasoning article+article { border-top:1px solid var(--border); margin-top:1rem; }
-@media(max-width:760px) { .deep-count-row>span,.deep-bucket-row>span { flex-basis:100%; } .deep-reasoning-columns { display:block; } }
+@media(max-width:760px) { .deep-bucket-row { grid-template-columns:auto minmax(0,1fr); } .deep-bucket-stats { grid-column:1 / -1; grid-template-columns:auto auto; justify-content:start; gap:.75rem; } .deep-grid { grid-template-columns:minmax(0,1fr); } .deep-reasoning-columns { display:block; } }
+
+.deep-section-title { font-size: 1.125rem; font-weight: 650; margin: 1.75rem 0 .75rem; }

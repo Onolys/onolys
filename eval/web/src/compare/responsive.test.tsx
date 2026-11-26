@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { readFileSync } from 'node:fs';
-import { cleanup, render, within } from '@testing-library/react';
+import { cleanup, render } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
 import { createEvalApi } from '../api';
 import { Overview } from './Overview';
@@ -15,7 +15,7 @@ import lines from './fixtures/lines.json';
 
 afterEach(cleanup);
 const css = (file: string) => readFileSync(new URL(file, import.meta.url), 'utf8');
-const styles = ['compare.css', 'overview.css', 'deepDive.css', 'moreAnalysis.css', 'lineView.css'].map(css).join('\n');
+const styles = ['compare.css', 'overview.css', 'metricHeatmap.css', 'leaderboard.css', 'deepDive.css', 'moreAnalysis.css', 'lineView.css'].map(css).join('\n');
 const sheet = document.createElement('style');
 sheet.textContent = styles;
 document.head.append(sheet);
@@ -36,32 +36,58 @@ it.each([320, 768, 1280])('retains accessible chart/table structure at the %ipx 
   <MoreAnalysis {...props} data={analysis as CompareAnalysis}/>
   <LineView {...props} data={lines as CompareLines}/>
  </>);
- const regions = view.container.querySelectorAll('[role="region"]');
- expect(regions.length).toBeGreaterThan(10);
- regions.forEach(region => {
+ // Every remaining scroll region (Overview/MoreAnalysis/LineView) must stay named and keyboard-focusable.
+ view.container.querySelectorAll('[role="region"]').forEach(region => {
   expect(region.getAttribute('aria-label')).toBeTruthy();
   expect(region.getAttribute('tabindex')).toBe('0');
  });
- view.container.querySelectorAll('.compare-chart').forEach(chart => {
-  expect(chart.querySelector('h3')?.id).toBe(chart.getAttribute('aria-labelledby'));
-  expect(within(chart as HTMLElement).getByText('How to read:')).toBeTruthy();
-  expect(chart.querySelector('details summary')?.textContent).toMatch(/^Show data table/);
-  expect(chart.querySelector('details table caption')).toBeTruthy();
-  expect(chart.querySelector('details table th[scope="row"], details table th[scope="col"]')).toBeTruthy();
+ // Deep dive cards use the shared ui ChartFrame: titled section, one-sentence caption, table twin collapsed behind "Show data".
+ const deepRoot = view.container.querySelector('.deep-dive') as HTMLElement;
+ const cards = deepRoot.querySelectorAll('.ui-chart-frame');
+ expect(cards.length).toBeGreaterThanOrEqual(8); // 4 globals + 4+ counts/PRF/confusion/miss cards
+ cards.forEach(card => {
+  expect(card.querySelector('h3')?.id).toBe(card.getAttribute('aria-labelledby'));
+  expect(card.querySelector('.ui-chart-caption')?.textContent?.trim()).toBeTruthy();
+  const twin = card.querySelector('.ui-disclosure-toggle');
+  expect(twin?.textContent).toMatch(/Show data/);
+  expect(twin?.getAttribute('aria-expanded')).toBe('false');
+  expect(card.querySelector('table')).toBeNull(); // twin not rendered until opened (no hidden wide tables)
  });
- const heatmap = view.container.querySelector('.overview-heatmap')!;
- expect(heatmap.getAttribute('aria-describedby')).toBe('overview-heatmap-caption');
- expect(document.getElementById('overview-heatmap-caption')?.textContent).toContain('How to read:');
- const rules = [...sheet.sheet!.cssRules];
- const media = rules.filter((rule): rule is CSSMediaRule => rule.type === CSSRule.MEDIA_RULE);
- const mobile = media.filter(rule => rule.conditionText.replaceAll(' ', '') === '(max-width:760px)');
- expect(mobile.length).toBeGreaterThan(0);
- const stacked = mobile.flatMap(rule => [...rule.cssRules]).find(rule => rule.cssText.includes('.overview-leaderboard tbody'));
- expect(stacked?.cssText).toContain('display: block');
+ // Dot plots scale by viewBox: no fixed pixel width/height attributes, so they can never force horizontal scroll.
+ const svgs = deepRoot.querySelectorAll('svg.deep-dot-svg');
+ expect(svgs.length).toBe(4);
+ svgs.forEach(svg => {
+  expect(svg.getAttribute('viewBox')).toMatch(/^0 0 \d+(\.\d+)? \d+(\.\d+)?$/);
+  expect(svg.hasAttribute('width')).toBe(false);
+  expect(svg.hasAttribute('height')).toBe(false);
+ });
+ expect(styles).toMatch(/\.deep-dot-svg\s*\{[^}]*width:\s*100%/);
+ // Cards stack to one column at the breakpoint.
+ expect(styles).toMatch(/@media\(max-width:760px\)[^]*\.deep-grid\s*\{\s*grid-template-columns:\s*minmax\(0,1fr\)/);
+ expect(styles).not.toMatch(/overflow-x\s*:\s*(auto|scroll)/);
+ // Heatmap is collapsed by default (opened by toggle); the leaderboard is a DataTable with no scroll region.
+ expect(view.container.querySelector('.overview-heatmap')).toBeNull();
+ const media = [...sheet.sheet!.cssRules].filter((rule): rule is CSSMediaRule => rule.type === CSSRule.MEDIA_RULE);
+ expect(media.some(rule => rule.conditionText.replaceAll(' ', '') === '(max-width:760px)')).toBe(true);
  expect(width <= 760).toBe(width === 320);
- expect(styles).toMatch(/\.overview-row-label\s*\{[^}]*position:\s*sticky;[^}]*left:\s*0/);
- expect(styles).toMatch(/\.overview-scroll\s*\{[^}]*max-width:\s*100%;[^}]*overflow-x:\s*auto/);
- // Wide content uses scroll containers, not a fixed pixel width on a page.
+ // Line view: fixed-layout lane table that wraps (no scroll region), stacked cards at <=760px, no pixel widths.
+ const lineView = view.container.querySelector('.line-view') as HTMLElement;
+ expect(lineView.querySelector('.line-lanes table')).toBeTruthy();
+ expect(lineView.querySelector('.line-lanes [role="region"], .line-lanes .table-scroll')).toBeNull();
+ expect(lineView.querySelector('.line-lanes td.line-verbatim, .line-lanes [data-transcript]')).toBeTruthy();
+ const lineCss = css('lineView.css');
+ expect(lineCss).toMatch(/\.line-view table\s*\{[^}]*table-layout:\s*fixed/);
+ expect(lineCss).toMatch(/\.line-view table\s*\{[^}]*width:\s*100%/);
+ expect(lineCss).toMatch(/@media \(max-width: 760px\)\s*\{[\s\S]*\.line-view tr[^{]*\{[^}]*display:\s*block/);
+ expect(lineCss).toMatch(/td\[data-label\]::before/);
+ expect(lineCss).not.toMatch(/\.line-view thead th:nth-child/); // column widths are scoped to the lane table only
+ expect(lineCss).toMatch(/\.line-view \.line-lanes thead th:nth-child\(1\)/);
+ expect(lineView.querySelectorAll('.line-lanes thead th .ui-combo-tag').length).toBeGreaterThan(0);
+ expect(lineView.querySelector('.line-lanes td[data-label^="Combo "]')).toBeTruthy();
+ // Turns/Words toggle must reset the global white-on-primary button colour so the unpressed segment is readable.
+ expect(css('charts/errorVsLength.css')).toMatch(/\.evl-toggle button\s*\{[^}]*color:\s*var\(--foreground\)[^}]*margin:\s*0[^}]*min-height:\s*0/);
+ expect(lineCss).not.toMatch(/overflow(-x)?\s*:\s*(auto|scroll)/);
+ // Wide content wraps inside its container, not a fixed pixel width on a page.
  expect(styles).not.toMatch(/(?:^|[;{])\s*width:\s*\d+px/);
  expect(view.container.querySelector('[style*="width: 320px"], [style*="width: 768px"], [style*="width: 1280px"]')).toBeNull();
 });
