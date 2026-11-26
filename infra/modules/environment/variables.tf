@@ -84,6 +84,24 @@ variable "git_sha" {
   default     = "unset"
 }
 
+variable "llm_provider" {
+  description = "LLM_PROVIDER env on api and worker; CI (deploy workflows) sets it on every deploy, so pass the live value to keep plans quiet. null omits the env var."
+  type        = string
+  default     = null
+}
+
+variable "llm_model" {
+  description = "LLM_MODEL env on api and worker (see llm_provider). null omits the env var."
+  type        = string
+  default     = null
+}
+
+variable "llm_effort" {
+  description = "LLM_EFFORT env on api and worker (see llm_provider). null omits the env var."
+  type        = string
+  default     = null
+}
+
 variable "alerts_enabled" {
   description = "Create the failure alert policies (prod true; staging via staging_alerts)."
   type        = bool

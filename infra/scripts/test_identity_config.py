@@ -110,3 +110,82 @@ def test_main_check_is_read_only_and_exits_nonzero(monkeypatch):
     else:
         raise AssertionError("expected SystemExit(1)")
     assert c.patches == []
+
+
+# --- retiring stale authorised domains ---------------------------------------------------------------------------
+LIVE = [
+    "localhost", "onolys.firebaseapp.com", "onolys.web.app", "app.onolys.com", "admin.onolys.com",
+    "onolys-admin.web.app", "onolys.com",
+]
+
+
+def test_remove_domains_drops_only_retired():
+    c = Fake({"authorizedDomains": LIVE})
+    ic.sync_domains(c, [], ["admin.onolys.com", "onolys-admin.web.app"])
+    assert c.patches == [("authorizedDomains", {"authorizedDomains": [
+        "localhost", "onolys.firebaseapp.com", "onolys.web.app", "app.onolys.com", "onolys.com"]})]
+
+
+def test_remove_never_drops_firebase_defaults():
+    c = Fake({"authorizedDomains": LIVE})
+    ic.sync_domains(c, [], ["localhost", "onolys.firebaseapp.com", "onolys.web.app", "admin.onolys.com"])
+    kept = c.patches[0][1]["authorizedDomains"]
+    assert {"localhost", "onolys.firebaseapp.com", "onolys.web.app"} <= set(kept)
+    assert "admin.onolys.com" not in kept
+
+
+def test_remove_keeps_unmanaged_domains():
+    c = Fake({"authorizedDomains": LIVE})
+    ic.sync_domains(c, [], ["admin.onolys.com"])
+    assert "onolys.com" in c.patches[0][1]["authorizedDomains"]
+
+
+def test_add_wins_over_remove_and_add_and_remove_in_one_patch():
+    c = Fake({"authorizedDomains": LIVE})
+    ic.sync_domains(c, ["onolys-eval-app.web.app", "admin.onolys.com"], ["admin.onolys.com", "onolys-admin.web.app"])
+    assert len(c.patches) == 1
+    got = c.patches[0][1]["authorizedDomains"]
+    assert "admin.onolys.com" in got and "onolys-admin.web.app" not in got and got[-1] == "onolys-eval-app.web.app"
+
+
+def test_remove_noop_when_absent():
+    c = Fake({"authorizedDomains": ["localhost", "a.web.app"]})
+    ic.sync_domains(c, [], ["gone.web.app"])
+    assert c.patches == []
+
+
+def test_dry_run_reports_without_patching(capsys):
+    c = Fake({"authorizedDomains": LIVE})
+    ic.main_with(ic.DryRun(c), add=[], remove=["admin.onolys.com"], domains_only=True)
+    assert c.patches == []
+    out = capsys.readouterr().out
+    assert "dry-run" in out and "admin.onolys.com" in out
+
+
+def test_protected_uses_project():
+    assert ic.protected_domains("onolys-staging") == {
+        "localhost", "onolys-staging.firebaseapp.com", "onolys-staging.web.app"}
+
+
+# --- Terraform wiring (infra/identity.tf) ------------------------------------------------------------------------
+def _identity_tf():
+    return (pathlib.Path(__file__).parents[1] / "identity.tf").read_text()
+
+
+def test_declared_domains_keep_eval_and_prod_hosts():
+    import re
+
+    block = re.search(r"authorized_domains = distinct\(concat\((.*?)\n  \)\)\n", _identity_tf(), re.S).group(1)
+    for host in ["app.onolys.com", "eval.onolys.com", "onolys-eval-staging.web.app", "onolys-eval-app.web.app", "var.app_site_id"]:
+        assert host in block
+    assert "admin" not in block and "app_staging_site_id" not in block
+
+
+def test_retired_domains_removed_via_script():
+    import re
+
+    src = _identity_tf()
+    retired = re.search(r"retired_authorized_domains = \[(.*?)\]", src, re.S).group(1)
+    for host in ["admin.onolys.com", "onolys-admin.web.app", "onolys-admin-staging.web.app", "app_staging_site_id"]:
+        assert host in retired
+    assert "--remove-domain" in src and "local.retired_authorized_domains" in src

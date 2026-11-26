@@ -5,6 +5,8 @@ from pathlib import Path
 INFRA = Path(__file__).resolve().parents[1]
 REPO = INFRA.parent
 SELF = Path(__file__).resolve()
+# Retired sign-in hosts must be named to be removed (identity-config.py): tests of that, and lines tagged `retired-host`.
+EXEMPT = {SELF, Path(__file__).with_name("test_identity_config.py").resolve()}
 
 # Google role names (roles/*.admin, *Admin) and the Identity Toolkit `admin/v2` REST path are allowed.
 ALLOWED = [r"roles/[\w.]*admin", r"\w+_admin\b", r"\w*[Aa]dmin\b(?=[\"'`)\s]*$)", r"identitytoolkit\.googleapis\.com/admin/v2",
@@ -21,7 +23,7 @@ def files():
     for root in (INFRA, REPO / "eval", REPO / ".firebaserc"):
         paths = [root] if root.is_file() else root.rglob("*")
         for p in paths:
-            if (p.is_file() and p.resolve() != SELF and ".terraform" not in p.parts and "node_modules" not in p.parts
+            if (p.is_file() and p.resolve() not in EXEMPT and ".terraform" not in p.parts and "node_modules" not in p.parts
                     and "dist" not in p.parts and p.suffix in {".tf", ".py", ".ts", ".tsx", ".json", ".md", ".sh", ""}
                     and p.name != ".terraform.lock.hcl" and not p.name.endswith(".lock")):
                 yield p
@@ -30,7 +32,7 @@ def files():
 def test_no_admin_tokens_in_infra_eval_firebaserc():
     hits = []
     for p in files():
-        text = p.read_text(errors="ignore")
+        text = "\n".join(l for l in p.read_text(errors="ignore").splitlines() if "retired-host" not in l)
         hits += [f"{p.relative_to(REPO)}: {t}" for t in FORBIDDEN if t in text]
     assert not hits, hits
 

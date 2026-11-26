@@ -13,6 +13,13 @@ resource "google_identity_platform_config" "this" {
       enabled           = true
       password_required = true
     }
+    # Declared to match the API's defaults, otherwise every plan wants to remove them.
+    phone_number {
+      enabled = false
+    }
+  }
+  multi_tenant {
+    allow_tenants = false
   }
   depends_on = [google_firebase_project.this]
 }

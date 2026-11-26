@@ -1,7 +1,8 @@
 # Cloud Run shells (PRD R8/R14). The image is owned by CI after first create (ignore_changes).
-# GIT_SHA: provider v6 models `env` as a SET, so a single entry cannot be ignored (env[0] is rejected)
-# and ignoring all of env would also hide secret-ref changes. GIT_SHA is therefore a variable;
-# after a CI deploy, plan shows it as drift until applied with -var 'git_sha={staging="<sha>",prod="<sha>"}' (see docs/reference/infra.md).
+# GIT_SHA and LLM_PROVIDER/LLM_MODEL/LLM_EFFORT are set by the deploy workflows on every deploy. Provider v6 models
+# `env` as a SET, so a single entry cannot be ignored (env[0] is rejected) and ignoring all of env would also hide
+# secret-ref (Resend/provider key) changes. They are therefore variables: pass the live values on plan/apply
+# (git_sha, llm_provider, llm_model, llm_effort; see docs/reference/infra.md "Terraform drift").
 
 locals {
   runtime_env = coalesce(var.runtime_env, var.env)
@@ -24,6 +25,12 @@ locals {
     { name = "AI_RECONNECT_SECONDS", value = tostring(var.ai_reconnect_seconds) },
     { name = "AI_MIC_GATE", value = tostring(var.ai_mic_gate) },
   ]
+  # Deploy-managed LLM overrides (api and worker only; the voice and eval-backend services do not take them). null omits.
+  llm_env = [for e in [
+    { name = "LLM_PROVIDER", value = var.llm_provider },
+    { name = "LLM_MODEL", value = var.llm_model },
+    { name = "LLM_EFFORT", value = var.llm_effort },
+  ] : e if e.value != null]
   platform_env = concat(local.interview_env, [
     { name = "ENV", value = local.runtime_env },
     { name = "GCP_PROJECT", value = var.project },
@@ -135,6 +142,13 @@ resource "google_cloud_run_v2_service" "api" {
         value = "wss://${local.voice_host}"
       }
       dynamic "env" {
+        for_each = local.llm_env
+        content {
+          name  = env.value.name
+          value = env.value.value
+        }
+      }
+      dynamic "env" {
         for_each = local.platform_env
         content {
           name  = env.value.name
@@ -240,6 +254,13 @@ resource "google_cloud_run_v2_service" "worker" {
               version = "latest"
             }
           }
+        }
+      }
+      dynamic "env" {
+        for_each = local.llm_env
+        content {
+          name  = env.value.name
+          value = env.value.value
         }
       }
       dynamic "env" {

@@ -86,6 +86,9 @@ module "environment" {
   llm_secrets          = var.llm_secrets
   stt_secrets          = var.stt_secrets
   git_sha              = var.git_sha
+  llm_provider         = var.llm_provider
+  llm_model            = var.llm_model
+  llm_effort           = var.llm_effort
   placeholder_image    = var.placeholder_image
   public_api_enabled   = var.environment == "staging"
   eval_mode            = var.environment == "eval"

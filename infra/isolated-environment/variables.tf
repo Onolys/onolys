@@ -80,6 +80,24 @@ variable "git_sha" {
   default     = "unset"
 }
 
+variable "llm_provider" {
+  description = "LLM_PROVIDER on api and worker. Deploy workflows set it on every staging deploy; pass the live value to keep plans quiet. null omits it (eval: no override)."
+  type        = string
+  default     = null
+}
+
+variable "llm_model" {
+  description = "LLM_MODEL on api and worker (see llm_provider)."
+  type        = string
+  default     = null
+}
+
+variable "llm_effort" {
+  description = "LLM_EFFORT on api and worker (see llm_provider)."
+  type        = string
+  default     = null
+}
+
 variable "placeholder_image" {
   description = "Bootstrap image; application images and deployment are a separate rollout."
   type        = string
