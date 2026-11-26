@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # Creates the versioned, private Terraform state bucket (idempotent) using curl + ADC. No gcloud.
+# Also keeps the 7-day lifecycle rule that deletes saved CI plans under plans/ (docs/reference/infra-pipeline.md).
 set -euo pipefail
 PROJECT="${PROJECT:-onolys}"
 BUCKET="${BUCKET:-onolys-tfstate}"
@@ -22,6 +23,9 @@ if [ "$code" = "404" ]; then
   curl -fsS "${auth[@]}" -H 'Content-Type: application/json' -X POST "$api?project=$PROJECT" -d "{
     \"name\": \"$BUCKET\", \"location\": \"$LOCATION\",
     \"versioning\": {\"enabled\": true},
+    \"lifecycle\": {\"rule\": [
+      {\"action\": {\"type\": \"Delete\"}, \"condition\": {\"age\": 7, \"matchesPrefix\": [\"plans/\"]}},
+      {\"action\": {\"type\": \"Delete\"}, \"condition\": {\"daysSinceNoncurrentTime\": 7, \"matchesPrefix\": [\"plans/\"]}}]},
     \"iamConfiguration\": {\"uniformBucketLevelAccess\": {\"enabled\": true}, \"publicAccessPrevention\": \"enforced\"}}" >/dev/null
   echo "created gs://$BUCKET"
 elif [ "$code" != "200" ]; then
@@ -30,6 +34,9 @@ else
   # ensure settings even if it already existed
   curl -fsS "${auth[@]}" -H 'Content-Type: application/json' -X PATCH "$api/$BUCKET" -d '{
     "versioning": {"enabled": true},
+    "lifecycle": {"rule": [
+      {"action": {"type": "Delete"}, "condition": {"age": 7, "matchesPrefix": ["plans/"]}},
+      {"action": {"type": "Delete"}, "condition": {"daysSinceNoncurrentTime": 7, "matchesPrefix": ["plans/"]}}]},
     "iamConfiguration": {"uniformBucketLevelAccess": {"enabled": true}, "publicAccessPrevention": "enforced"}}' >/dev/null
   echo "gs://$BUCKET already exists (settings verified)"
 fi

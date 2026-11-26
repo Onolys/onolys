@@ -45,6 +45,26 @@ resource "google_storage_bucket" "state" {
   versioning {
     enabled = true
   }
+  # Saved plans (plans/, written by terraform.yml on main) are throwaway: drop them after 7 days, including the noncurrent
+  # versions bucket versioning keeps. State objects are not under plans/ and are never touched.
+  lifecycle_rule {
+    condition {
+      age            = 7
+      matches_prefix = ["plans/"]
+    }
+    action {
+      type = "Delete"
+    }
+  }
+  lifecycle_rule {
+    condition {
+      days_since_noncurrent_time = 7
+      matches_prefix             = ["plans/"]
+    }
+    action {
+      type = "Delete"
+    }
+  }
   lifecycle {
     prevent_destroy = true
   }

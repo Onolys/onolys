@@ -54,3 +54,12 @@ def test_apply_has_no_owner_or_editor_basic_roles():
 def test_roots_use_their_own_state_bucket():
     assert re.search(r"state_bucket\s*= \"onolys-tfstate\"", LEGACY)
     assert re.search(r"state_bucket\s*= \"\$\{var.project\}-tfstate\"", ISOLATED)
+
+
+def test_state_buckets_expire_saved_plans_after_7_days():
+    tf = (INFRA / "isolated-environment" / "bootstrap" / "main.tf").read_text()
+    sh = (INFRA / "bootstrap.sh").read_text()
+    for text in (tf, sh):
+        assert "plans/" in text
+    assert "age            = 7" in tf and "days_since_noncurrent_time = 7" in tf
+    assert '"age": 7' in sh and '"daysSinceNoncurrentTime": 7' in sh
