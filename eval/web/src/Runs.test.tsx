@@ -11,6 +11,7 @@ it('Provenance shows the saved resolved combos and base preset', async () => {
  render(<RunView api={{ ...createEvalApi('', vi.fn()), run: vi.fn().mockResolvedValue(run) }} runId="r1" onRerun={vi.fn()} />);
  await act(async () => {});
  fireEvent.click(screen.getByRole('button', { name: 'Config' }));
+ fireEvent.click(screen.getByRole('button', { name: 'Show raw JSON' }));
  expect(screen.getByText(/saved-combo-model/)).toBeTruthy(); expect(screen.getByText(/"base_preset": "configured-prod"/)).toBeTruthy();
 });
 it('does not render the removed embedded comparison or summary', async () => {
@@ -87,8 +88,9 @@ it('history opens a shared config modal and rerun only prefills the saved run', 
  await screen.findByRole('link', { name: 'saved' });
  fireEvent.keyDown(screen.getByRole('button', { name: 'Actions for saved' }), { key: 'Enter' });
  fireEvent.click(await screen.findByRole('menuitem', { name: 'Config' }));
- const dialog = screen.getByRole('dialog', { name: 'Saved configuration and versions' });
+ const dialog = screen.getByRole('dialog', { name: 'Run configuration' });
  expect(within(dialog).getByText(/abc123/)).toBeTruthy();
+ fireEvent.click(within(dialog).getByRole('button', { name: 'Show raw JSON' }));
  expect(within(dialog).getByText(/saved-model/)).toBeTruthy();
  const copy = vi.fn().mockResolvedValue(undefined);
  Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: copy } });
@@ -246,11 +248,12 @@ it('config omits private run references and offers manual copying on clipboard f
  render(<RunView api={{ ...createEvalApi('', vi.fn()), run: vi.fn().mockResolvedValue(run) }} runId="r1" onRerun={vi.fn()} />);
  fireEvent.click(await screen.findByRole('button', { name: 'Config' }));
  const dialog = screen.getByRole('dialog');
+ fireEvent.click(within(dialog).getByRole('button', { name: 'Show raw JSON' }));
  expect(dialog.textContent).not.toContain('private-storage-location');
  expect(within(dialog).getByRole('textbox').textContent).toContain('<script>unsafe</script>');
  expect(document.querySelector('script')).toBeNull();
  fireEvent.click(within(dialog).getByRole('button', { name: 'Copy' }));
- await screen.findByText('Could not copy. Select the JSON to copy it manually.');
+ await screen.findByText('Could not copy. Expand the raw JSON and select it to copy manually.');
 });
 
 it.each(['Escape', 'Close'])('restores focus to detail Config after %s dismissal', async dismissal => {

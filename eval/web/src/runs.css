@@ -41,3 +41,9 @@
 }
 @media (max-width: 420px) { .history-filters { grid-template-columns: minmax(0, 1fr); } }
 }
+.ui-config { display: grid; gap: 1rem; min-width: 0; }
+.ui-config-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr)); gap: .5rem; }
+.ui-config-heading { margin: 0 0 .4rem; font-size: .95rem; }
+.ui-config-combos { list-style: none; margin: 0; padding: 0; display: grid; gap: .4rem; }
+.ui-config-combos li { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem; min-width: 0; overflow-wrap: anywhere; }
+.ui-config-status { margin-right: auto; font-size: .8rem; color: var(--muted-foreground); }
