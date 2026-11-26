@@ -30,7 +30,11 @@ variable "alert_email" {
 variable "llm_secrets" {
   description = "Map of env-var name to base secret id for LLM provider keys; each environment gets `<base>-<env>`."
   type        = map(string)
-  default     = { GEMINI_API_KEY = "gemini-api-key", ANTHROPIC_API_KEY = "anthropic-api-key" }
+  default = {
+    GEMINI_API_KEY    = "gemini-api-key"
+    ANTHROPIC_API_KEY = "anthropic-api-key"
+    OPENAI_API_KEY    = "openai-api-key" # live: openai-api-key-prod shell, version and worker accessor exist
+  }
 }
 
 variable "stt_secrets" {
@@ -80,6 +84,24 @@ variable "git_sha" {
     condition     = toset(keys(var.git_sha)) == toset(["prod"])
     error_message = "git_sha needs exactly the key prod."
   }
+}
+
+variable "llm_provider" {
+  description = "Live prod LLM_PROVIDER on api and worker (deploy-prod sets it from PROD_LLM_PROVIDER; blank = no override). Pass the live value to keep plan quiet."
+  type        = string
+  default     = ""
+}
+
+variable "llm_model" {
+  description = "Live prod LLM_MODEL (deploy-prod PROD_LLM_MODEL; blank = no override)."
+  type        = string
+  default     = ""
+}
+
+variable "llm_effort" {
+  description = "Live prod LLM_EFFORT (deploy-prod PROD_LLM_EFFORT; blank = no override)."
+  type        = string
+  default     = ""
 }
 
 variable "default_preset" {

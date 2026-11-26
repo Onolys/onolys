@@ -1,0 +1,16 @@
+# Operator inputs for the legacy root (project `onolys` = PROD only). Copy to the ignored terraform.tfvars;
+# no secrets belong here. Plan/apply read it automatically from infra/.
+
+# Prod rollout of auth email is deferred. Exactly one key: `prod` (a `staging` key fails validation).
+resend_secret_wired = { prod = false }
+
+# Deploy-managed values: CI rewrites these on every deploy, so set the LIVE values before each plan/apply
+# (docs/reference/infra.md "Terraform drift" has the gcloud one-liner). Exactly one key: `prod`.
+git_sha = { prod = "unset" }
+
+# deploy-prod sets all three from PROD_LLM_PROVIDER / PROD_LLM_MODEL / PROD_LLM_EFFORT; blank = no override.
+llm_provider = ""
+llm_model    = ""
+llm_effort   = ""
+
+# llm_secrets already defaults to Gemini + Anthropic + OpenAI (matches live); only override to add providers.

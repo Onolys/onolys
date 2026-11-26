@@ -81,6 +81,9 @@ module "prod" {
   llm_secrets              = var.llm_secrets
   stt_secrets              = var.stt_secrets
   git_sha                  = var.git_sha["prod"]
+  llm_provider             = var.llm_provider
+  llm_model                = var.llm_model
+  llm_effort               = var.llm_effort
   app_base_url             = "https://app.onolys.com"
   resend_secret_wired      = var.resend_secret_wired["prod"]
   alerts_enabled           = true
