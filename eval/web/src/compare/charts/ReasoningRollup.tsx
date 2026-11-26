@@ -37,7 +37,7 @@ function ReasoningPanel({code,combo,letter,count,api,runId,selected}:{code:strin
 
 /** Reasoning roll-up: collapsed accordion per code (Human count + combo snippets). Panels mount, and fetch, only when a code is expanded. */
 export function ReasoningRollup({codes,human,rationaleCounts,combos,letter,api,runId,selected}:{codes:string[];human:CompareDeepDive['counts']['human'];rationaleCounts:CompareDeepDive['rationale_counts'];combos:string[];letter:(key:string)=>string;api:Api;runId:string;selected:string[]}) {
- return <section className="deep-reasoning"><h3>Reasoning roll-up</h3>
+ return <section className="deep-reasoning"><h3 className="deep-section-title">Reasoning roll-up</h3>
   <Disclosure label="Show reasoning roll-up">
    <Note>Snippets load when a code is opened, up to 50 per page. Empty saved reasoning is shown as withheld.</Note>
    {codes.map(code=><Disclosure key={code} label={code}><div className="deep-reasoning-columns"><section aria-label={`${code} Human`}><h5>Human</h5><p>Count: {human?.[code]?.value??unavailable(human?.[code]?.na)} · n={human?.[code]?.n??0}</p><ReasoningPanel key={`h-${selected.join(',')}`} code={code} letter="Human" count={undefined} api={api} runId={runId} selected={selected}/></section>{combos.map(key=><ReasoningPanel key={`${key}-${selected.join(',')}`} code={code} combo={key} letter={letter(key)} count={rationaleCounts[code]?.[key]} api={api} runId={runId} selected={selected}/>)}</div></Disclosure>)}

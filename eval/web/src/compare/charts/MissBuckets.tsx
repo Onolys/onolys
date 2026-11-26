@@ -11,12 +11,6 @@ const BUCKETS = [{ id: 'same', label: 'same' }, { id: 'off1', label: 'off by 1' 
 export type BucketId = (typeof BUCKETS)[number]['id'];
 export interface MissGlobal { metric: string; title: string; cells: Record<string, CompareCell> }
 
-/** Rating counts per bucket: the server's share times the paired ratings (sessions x repeats). */
-export function bucketCounts(cell: CompareCell | undefined): Record<BucketId, number> | null {
- if (!cell || cell.na || !cell.buckets) return null;
- const total = cell.n * cell.repeats;
- return { same: Math.round(cell.buckets.same * total), off1: Math.round(cell.buckets.off1 * total), off2plus: Math.round(cell.buckets.off2plus * total) };
-}
 const naText = (cell: CompareCell | undefined) => (cell?.na ? `n/a - ${cell.na.reason}` : 'n/a');
 const pct = (value: number | undefined) => (value === undefined ? 'n/a' : `${Math.round(value * 100)}%`);
 
@@ -26,21 +20,21 @@ function Bars({ global, series }: { global: MissGlobal; series: DotSeries[] }) {
   { key: 'combo', header: 'Combo', value: row => row.combo.letter },
   { key: 'miss', header: 'Average miss', value: row => (row.na || row.off === null ? naText(row) : row.off) },
   { key: 'within', header: 'Within ±1', value: row => pct(row.within_1) },
-  { key: 'same', header: 'Same', value: row => row.buckets?.same ?? 'n/a' },
-  { key: 'off1', header: 'Off by 1', value: row => row.buckets?.off1 ?? 'n/a' },
-  { key: 'off2plus', header: 'Off by 2+', value: row => row.buckets?.off2plus ?? 'n/a' },
+  { key: 'same', header: 'Same', value: row => pct(row.buckets?.same) },
+  { key: 'off1', header: 'Off by 1', value: row => pct(row.buckets?.off1) },
+  { key: 'off2plus', header: 'Off by 2+', value: row => pct(row.buckets?.off2plus) },
   { key: 'paired', header: 'Paired sessions', value: row => `paired ${row.n} of ${row.of} · ${row.repeats} repeats` },
  ];
  const rows = series.filter(s => global.cells[s.key]).map(s => ({ ...global.cells[s.key], combo: s }));
  return <ChartFrame title={`How far off are the ratings? ${global.title}`} caption="Share of ratings that match the human exactly, miss by one point, or miss by two or more." legend={legend}
   table={<DataTable rows={rows} columns={columns} rowKey={row => row.combo.key} ariaLabel={`${global.metric} misses`} searchLabel="Search combos"/>}>
   {series.map(s => {
-   const cell = global.cells[s.key], counts = bucketCounts(cell);
+   const cell = global.cells[s.key];
    return <div key={s.key} className="deep-bucket-row">
     <ComboTag index={s.index} letter={s.letter}/>
-    {!cell || !counts || cell.buckets === undefined ? <Chip tone="muted" icon={<span aria-hidden="true"/>}><span title={cell ? `paired ${cell.n} of ${cell.of} · ${cell.repeats} repeats` : undefined}>{naText(cell)}</span></Chip> : <>
-     <div className="deep-stack" role="img" aria-label={`${s.letter}: same ${counts.same}, off by 1 ${counts.off1}, off by 2+ ${counts.off2plus}`}>
-      {BUCKETS.map(b => <span key={b.id} data-bucket={b.id} className={`deep-seg deep-${b.id}`} style={{ width: `${cell.buckets![b.id] * 100}%` }} title={`${b.label}: ${counts[b.id]} of ${cell.n * cell.repeats} ratings`}>{counts[b.id] > 0 ? counts[b.id] : ''}</span>)}
+    {!cell || cell.na || !cell.buckets ? <Chip tone="muted" icon={<span aria-hidden="true"/>}><span title={cell ? `paired ${cell.n} of ${cell.of} · ${cell.repeats} repeats` : undefined}>{naText(cell)}</span></Chip> : <>
+     <div className="deep-stack" role="img" aria-label={`${s.letter}: same ${pct(cell.buckets.same)}, off by 1 ${pct(cell.buckets.off1)}, off by 2+ ${pct(cell.buckets.off2plus)}`}>
+      {BUCKETS.map(b => <span key={b.id} data-bucket={b.id} className={`deep-seg deep-${b.id}`} style={{ width: `${cell.buckets![b.id] * 100}%` }} title={`${b.label}: ${pct(cell.buckets![b.id])} of ratings`}>{cell.buckets![b.id] > 0 ? pct(cell.buckets![b.id]) : ''}</span>)}
      </div>
      <div className="deep-bucket-stats"><strong>miss {cell.off ?? 'n/a'}</strong><span>within ±1: {pct(cell.within_1)}</span></div></>}
    </div>;

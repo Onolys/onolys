@@ -33,8 +33,8 @@ function LineAgreement({data,legend,runId,navigate,state,api,series}:Props&{seri
   }catch(reason){if(!controller.signal.aborted)setError(reason instanceof Error?reason.message:'Could not load matching sessions.');}
   finally{if(!controller.signal.aborted)setLoading(false);}
  };
- if(data.lines.missing)return <section><h3>Per-line agreement</h3><p className="deep-empty">no line-level output ({data.lines.missing})</p></section>;
- return <section className="deep-lines"><h3>Per-line agreement</h3>
+ if(data.lines.missing)return <section><h3 className="deep-section-title">Per-line agreement</h3><p className="deep-empty">no line-level output ({data.lines.missing})</p></section>;
+ return <section className="deep-lines"><h3 className="deep-section-title">Per-line agreement</h3>
   {series.filter(item=>data.lines.combos[item.key]?.lane).map(item=><p key={item.key} className="deep-empty">no line-level output ({letter(item.key)})</p>)}
   {available.length>0&&<><PrfTable lines={data.lines} series={available}/>
    <ConfusionGrid combos={data.lines.combos} series={available} onSwitch={()=>{pending.current?.abort();setLoading(false);setError(undefined);setMatches(null);}} onMatch={pick=>void find({combos:selected,...pick})} footer={<>
@@ -57,11 +57,11 @@ export function DeepDive(props:Props) {
  return <div className="deep-dive"><h2>Deep dive</h2>
   <ComboSelector legend={legend} failed={failedCombos(props.overview)} selected={selected} paired={pairedSessions(props.overview,selected)} onChange={keys=>navigate({...state,view:'compare',run:runId,tab:'deep',combos:keys})}/>
   {!data.has_human?<p>no human reference</p>:<>
-   <section><h3>Globals</h3><div className="deep-grid">{globals.map(([metric,cells])=>{
+   <section><h3 className="deep-section-title">Globals</h3><div className="deep-grid">{globals.map(([metric,cells])=>{
     const dots=data.globals.dots.filter(dot=>dot.metric===metric&&shown.some(combo=>combo.combo_key===dot.combo_key));
     return <section key={metric} ref={node=>{sectionRefs.current[metric]=node;}}><GlobalsDotPlot metric={metric} title={`${metricNames[metric]??metric} ratings`} dots={dots} series={series} cells={cells}/></section>;
    })}</div><MissBuckets globals={globals.map(([metric,cells])=>({metric,title:metricNames[metric]??metric,cells}))} series={series}/></section>
-   <section><h3>Counts per code</h3><CountBars codes={codes} human={data.counts.human} cells={data.counts.cells} bias={data.counts.bias_pct} series={series} onSection={(code,node)=>{sectionRefs.current[code]=node;}}/></section>
+   <section><h3 className="deep-section-title">Counts per code</h3><CountBars codes={codes} human={data.counts.human} cells={data.counts.cells} bias={data.counts.bias_pct} series={series} onSection={(code,node)=>{sectionRefs.current[code]=node;}}/></section>
    <LineAgreement key={selected.join(',')} {...props} series={series}/>
    <ReasoningRollup codes={codes} human={data.counts.human} rationaleCounts={data.rationale_counts} combos={shown.map(combo=>combo.combo_key)} letter={letter} api={api} runId={runId} selected={selected}/>
   </>}
