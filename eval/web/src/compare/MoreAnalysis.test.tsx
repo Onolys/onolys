@@ -43,14 +43,15 @@ it('uses directional server head-to-head counts and ties and links sessions to L
  expect(input.navigate).toHaveBeenCalledWith({run:'eval-lines',view:'compare',tab:'lines',session:'synthetic-s01'});
  expect(screen.getAllByText(/off 2 · n=1 · 2 repeats/).length).toBeGreaterThan(0);
 });
-it('switches the length axis using server values', () => {
+it('keeps error vs length behind a toggle and switches the axis using server values', () => {
  const {container}=render(<MoreAnalysis {...props()}/>);
+ expect(container.querySelector('[data-length-point]')).toBeNull();
+ expect(screen.getByRole('button',{name:'Show error vs interview length'}).getAttribute('aria-expanded')).toBe('false');
+ fireEvent.click(screen.getByRole('button',{name:'Show error vs interview length'}));
  expect(screen.getByRole('button',{name:'Turns'}).getAttribute('aria-pressed')).toBe('true');
- expect(container.querySelector('[data-length-point]')?.getAttribute('data-x')).toBe('11');
+ expect(container.querySelector('[data-length-point]')?.getAttribute('data-x')).toBe('8');
  fireEvent.click(screen.getByRole('button',{name:'Words'}));
- expect(screen.getByRole('button',{name:'Words'}).getAttribute('aria-pressed')).toBe('true');
- expect(container.querySelector('[data-length-point]')?.getAttribute('data-x')).toBe('44');
- expect(screen.getByText('Show data table for Error vs length')).toBeTruthy();
+ expect(container.querySelector('[data-length-point]')?.getAttribute('data-x')).toBe('32');
 });
 it('hides human error displays without labels and keeps reliability and baseline', () => {
  const data=structuredClone(analysis) as CompareAnalysis;data.has_human=false;
@@ -86,6 +87,7 @@ it('keeps zero-valued scatters finite and states when no points can be plotted',
  input.data.frontier.points=[];input.data.error_vs_length=[];input.data.grid=[];
  view.rerender(<MoreAnalysis {...input}/>);
  expect(screen.getByText('No priced results available')).toBeTruthy();
+ fireEvent.click(screen.getByRole('button',{name:'Show error vs interview length'}));
  expect(screen.getByText('No session length results available')).toBeTruthy();
  expect(screen.getByText('No session results available')).toBeTruthy();
 });
@@ -97,7 +99,7 @@ it('joins exactly the points the server places on the frontier without choosing 
  const line=container.querySelector('.ca-frontier');
  expect([...(line?.getAttribute('data-frontier-combos')?.split(',')??[])].sort()).toEqual(input.data.frontier.points.map(p=>p.combo_key).sort());
  expect(container.querySelectorAll('[data-frontier="true"]')).toHaveLength(2);
- expect(screen.getAllByText('How to read:')).toHaveLength(3);
+ expect(screen.getAllByText('How to read:')).toHaveLength(2);
  expect(screen.getByRole('region',{name:'Head-to-head table'}).getAttribute('tabindex')).toBe('0');
  expect(screen.getByRole('region',{name:'Interviews by combo table'}).getAttribute('tabindex')).toBe('0');
 });

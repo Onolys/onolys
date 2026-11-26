@@ -1,5 +1,7 @@
-import { useState, type ReactNode } from 'react';
+import type { ReactNode } from 'react';
 import { ChartFrame } from './ChartFrame';
+import { Disclosure } from '../ui/Disclosure';
+import { ErrorVsLength } from './charts/ErrorVsLength';
 import { EvalLink } from './CompareLink';
 import type { CompareAnalysis, NA } from './compareApi';
 import type { CompareTabProps } from './compareTypes';
@@ -15,27 +17,9 @@ function ScrollTable({name, children}: {name: string; children: ReactNode}) {
  // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex
  return <div className="table-scroll" role="region" aria-label={`${name} table`} tabIndex={0}>{children}</div>;
 }
-// These scales place server values on the canvas; no comparison metric is calculated here.
-function scales(points: {x: number; y: number}[]) {
- const maxX = Math.max(0, ...points.map(p => p.x)) || 1;
- const maxY = Math.max(0, ...points.map(p => p.y)) || 1;
- return {maxX, maxY, x: (n: number) => 70 + n / maxX * 480, y: (n: number) => 230 - n / maxY * 180};
-}
-function Axes({maxX, maxY, xLabel}: {maxX: number; maxY: number; xLabel: string}) {
- return <g className="more-analysis-axes">
-  <path d="M70 45 V230 H550"/>
-  <text x="62" y="247">0</text><text x="550" y="247" textAnchor="end">{maxX}</text>
-  <text x="62" y="54" textAnchor="end">{maxY}</text>
-  <text x="310" y="280" textAnchor="middle">{xLabel}</text>
-  <text x="18" y="138" transform="rotate(-90 18 138)" textAnchor="middle">Count error</text>
- </g>;
-}
-
 export function MoreAnalysis({data, overview, legend, runId, navigate}: CompareTabProps<CompareAnalysis>) {
- const [lengthAxis, setLengthAxis] = useState<'turns' | 'words'>('turns');
  const letter = (key: string) => legend.find(entry => entry.combo.combo_key === key)?.letter ?? key;
  const name = (key: string) => `${letter(key)}${data.skipped_combos.includes(key) ? ' (skipped)' : ''}`;
- const lengthScale = scales(data.error_vs_length.map(point => ({x: point[lengthAxis], y: point.off})));
  const headToHead = () => <table aria-label="Head-to-head"><caption>Row combo compared with column combo</caption><thead><tr><th scope="col">Combo</th>{data.combos.map(combo => <th scope="col" key={combo.combo_key}>{name(combo.combo_key)}</th>)}</tr></thead><tbody>{data.combos.map(row => <tr key={row.combo_key}><th scope="row">{name(row.combo_key)}</th>{data.combos.map(col => {
   if (row.combo_key === col.combo_key) return <td key={col.combo_key}>Same combo</td>;
   const pair = data.head_to_head.find(pair => pair.a === row.combo_key && pair.b === col.combo_key || pair.b === row.combo_key && pair.a === col.combo_key);
@@ -57,13 +41,7 @@ export function MoreAnalysis({data, overview, legend, runId, navigate}: CompareT
    <ChartFrame title="Interviews by combo" howToRead="Each cell is that session’s Count error, with its paired n and repeat count. Open a session link to inspect its transcript in Line view." table={grid(false)}>
     {data.grid.length ? <ScrollTable name="Interviews by combo">{grid(true)}</ScrollTable> : <p>No session results available</p>}
    </ChartFrame>
-   <div role="group" aria-label="Length axis">{(['turns','words'] as const).map(axis=><button type="button" key={axis} aria-pressed={lengthAxis===axis} onClick={()=>setLengthAxis(axis)}>{axis==='turns' ? 'Turns' : 'Words'}</button>)}</div>
-   <ChartFrame title="Error vs length" howToRead="Each point is one session and combo. The horizontal axis shows the chosen session length; lower points have less Count error. The data table includes each point’s n and repeat count." table={<table aria-label="Error vs length"><caption>Session and combo error by {lengthAxis}</caption><thead><tr><th scope="col">Session</th><th scope="col">Combo</th><th scope="col">{lengthAxis==='turns' ? 'Turns' : 'Words'}</th><th scope="col">Count error</th><th scope="col">n</th><th scope="col">Repeats</th></tr></thead><tbody>{data.error_vs_length.map(point=><tr key={`${point.session_id}-${point.combo_key}`}><th scope="row">{point.session_id}</th><td>{name(point.combo_key)}</td><td>{point[lengthAxis]}</td><td>{point.off}</td><td>{point.n}</td><td>{point.repeats}</td></tr>)}</tbody></table>}>
-    {data.error_vs_length.length ? <svg viewBox="0 0 620 300" role="img" aria-label="Error vs length scatter"><Axes {...lengthScale} xLabel={lengthAxis==='turns' ? 'Turns' : 'Words'}/>{data.error_vs_length.map(point=><g key={`${point.session_id}-${point.combo_key}`}>
-     <circle data-length-point={`${point.session_id}-${point.combo_key}`} data-x={point[lengthAxis]} cx={lengthScale.x(point[lengthAxis])} cy={lengthScale.y(point.off)} r="4"><title>{`${point.session_id}, ${name(point.combo_key)}: ${point[lengthAxis]} ${lengthAxis}, Count error ${point.off}, n=${point.n}, ${point.repeats} repeats`}</title></circle>
-     <text x={lengthScale.x(point[lengthAxis])+8} y={lengthScale.y(point.off)-9}>{name(point.combo_key)} · n={point.n}</text>
-    </g>)}</svg> : <p>No session length results available</p>}
-   </ChartFrame>
+   <Disclosure label="Show error vs interview length"><ErrorVsLength data={data} legend={legend} failed={failedCombos(overview)}/></Disclosure>
   </>}
  </div>;
 }
