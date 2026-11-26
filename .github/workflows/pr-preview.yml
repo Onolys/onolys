@@ -1,11 +1,17 @@
 name: pr-preview
 
 # One preview per same-repo PR (SP00 R3, D4-D7): a NO-TRAFFIC TAGGED REVISION (tag pr-<N>) of the staging API service
-# onolys-api-staging (combined mode, fake adapters, staging DB) + Firebase Hosting channel pr-<N> on onolys-app-staging
+# onolys-api-staging (combined mode, fake adapters, staging DB) + Firebase Hosting channel pr-<N> on the staging site
 # (7 days) + ONE marker PR comment, edited in place. Owner decision 2026-11-21: separate onolys-pr-<N> services need Cloud
-# Run IAM that cannot be scoped (no resource.name conditions), so previews use only what deployer-staging already has
-# (run.developer on the staging services). Hosting cannot rewrite to a tag, so the web build calls the tag URL
+# Run IAM that cannot be scoped (no resource.name conditions), so previews are tagged revisions of the one staging api service
+# (run.developer on that service only). Hosting cannot rewrite to a tag, so the web build calls the tag URL
 # https://pr-<N>---<staging api host> directly (CORS allows the channel origin on this revision; the CSP is extended).
+# Target: when vars.STAGING_GCP_PROJECT is set, previews run in the isolated staging project (site vars.STAGING_HOSTING_SITE) as
+# the dedicated, limited identity pr-preview-staging via the pull_request-only WIF provider (STAGING_PREVIEW_WIF_PROVIDER /
+# STAGING_PREVIEW_SA, Terraform outputs pr_preview_wif_provider / pr_preview_service_account of infra/isolated-environment/).
+# That identity has no worker/voice/secret/Firestore-rules access and cannot be used from main-only deploy workflows. When it is
+# unset, the legacy project onolys / site onolys-app-staging / deployer-staging identity is used. In isolated mode missing preview
+# vars fail fast (release_target.py preview) instead of authenticating as another identity.
 # Fork PRs get no preview (no secrets, no WIF). Cleanup: pr-preview-cleanup.yml.
 #
 # Shared-service safety (a preview deploy rewrites the staging API service template, see "restore" below):
@@ -20,7 +26,9 @@ name: pr-preview
 #    queued staging deploy could be dropped by a preview. Races are safe instead: Cloud Run rejects a stale template
 #    update (the loser fails loudly; the deploy step below retries, the restore PATCH carries the service etag and retries) and
 #    traffic is pinned by revision name, never "latest".
-# Repo variables (same as deploy-staging.yml): WIF_PROVIDER, DEPLOYER_STAGING_SA, GCP_PROJECT / GCP_REGION (optional),
+# Repo variables. Isolated: STAGING_GCP_PROJECT, STAGING_HOSTING_SITE, STAGING_PREVIEW_WIF_PROVIDER, STAGING_PREVIEW_SA,
+#   STAGING_ISOLATED_VITE_FIREBASE_{API_KEY,AUTH_DOMAIN,APP_ID,STORAGE_BUCKET,MESSAGING_SENDER_ID}, STAGING_VITE_CONTACT_EMAIL (optional).
+#   Legacy (STAGING_GCP_PROJECT unset): WIF_PROVIDER, DEPLOYER_STAGING_SA, GCP_PROJECT / GCP_REGION (optional),
 #   STAGING_VITE_FIREBASE_API_KEY, STAGING_VITE_FIREBASE_AUTH_DOMAIN, STAGING_VITE_FIREBASE_APP_ID,
 #   STAGING_VITE_FIREBASE_STORAGE_BUCKET, STAGING_VITE_FIREBASE_MESSAGING_SENDER_ID, STAGING_VITE_CONTACT_EMAIL (optional)
 # This workflow never reads LLM/STT keys (scripts/ci/check_no_llm_keys_in_pr_workflows.py).
@@ -51,17 +59,16 @@ permissions:
   contents: read
 
 env:
-  PROJECT: ${{ vars.GCP_PROJECT || 'onolys' }}
+  PROJECT: ${{ vars.STAGING_GCP_PROJECT || vars.GCP_PROJECT || 'onolys' }}
   REGION: ${{ vars.GCP_REGION || 'us-central1' }}
-  STAGING_SITE: onolys-app-staging
+  STAGING_SITE: ${{ vars.STAGING_GCP_PROJECT && vars.STAGING_HOSTING_SITE || 'onolys-app-staging' }}
   FIREBASE_TOOLS_VERSION: 15.37.0
   # `preview-real` label is wired but inert until SP09 ships the real adapters: flip to "true" then.
   PREVIEW_REAL_ENABLED: "false"
 
 jobs:
   preview:
-    # Isolated staging previews require an explicit future migration; never touch the old project after cutover.
-    if: github.event.pull_request.head.repo.full_name == github.repository && vars.STAGING_GCP_PROJECT == ''
+    if: github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -76,6 +83,16 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.event.pull_request.head.sha }}
+      - name: Validate the preview target before cloud authentication
+        env:
+          STAGING_GCP_PROJECT: ${{ vars.STAGING_GCP_PROJECT }}
+          STAGING_PREVIEW_WIF_PROVIDER: ${{ vars.STAGING_PREVIEW_WIF_PROVIDER }}
+          STAGING_PREVIEW_SA: ${{ vars.STAGING_PREVIEW_SA }}
+          STAGING_HOSTING_SITE: ${{ vars.STAGING_HOSTING_SITE }}
+          STAGING_ISOLATED_VITE_FIREBASE_API_KEY: ${{ vars.STAGING_ISOLATED_VITE_FIREBASE_API_KEY }}
+          STAGING_ISOLATED_VITE_FIREBASE_AUTH_DOMAIN: ${{ vars.STAGING_ISOLATED_VITE_FIREBASE_AUTH_DOMAIN }}
+          STAGING_ISOLATED_VITE_FIREBASE_APP_ID: ${{ vars.STAGING_ISOLATED_VITE_FIREBASE_APP_ID }}
+        run: python3 scripts/ci/release_target.py preview
       - id: vars
         env:
           HAS_REAL_LABEL: ${{ contains(github.event.pull_request.labels.*.name, 'preview-real') }}
@@ -96,8 +113,8 @@ jobs:
       - id: auth
         uses: google-github-actions/auth@v2
         with:
-          workload_identity_provider: ${{ vars.WIF_PROVIDER }}
-          service_account: ${{ vars.DEPLOYER_STAGING_SA }}
+          workload_identity_provider: ${{ vars.STAGING_GCP_PROJECT && vars.STAGING_PREVIEW_WIF_PROVIDER || vars.WIF_PROVIDER }}
+          service_account: ${{ vars.STAGING_GCP_PROJECT && vars.STAGING_PREVIEW_SA || vars.DEPLOYER_STAGING_SA }}
           token_format: access_token
       - uses: docker/login-action@v3
         with:
@@ -136,16 +153,26 @@ jobs:
         env:
           VITE_API_BASE_URL: ${{ steps.api.outputs.url }}/v1
           VITE_FIREBASE_PROJECT_ID: ${{ env.PROJECT }}
-          VITE_FIREBASE_API_KEY: ${{ vars.STAGING_VITE_FIREBASE_API_KEY }}
-          VITE_FIREBASE_AUTH_DOMAIN: ${{ vars.STAGING_VITE_FIREBASE_AUTH_DOMAIN }}
-          VITE_FIREBASE_APP_ID: ${{ vars.STAGING_VITE_FIREBASE_APP_ID }}
-          VITE_FIREBASE_STORAGE_BUCKET: ${{ vars.STAGING_VITE_FIREBASE_STORAGE_BUCKET }}
-          VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ vars.STAGING_VITE_FIREBASE_MESSAGING_SENDER_ID }}
+          VITE_APP_HOSTS: ${{ vars.STAGING_GCP_PROJECT && 'onolys-staging-app.web.app' || '' }}
+          VITE_FIREBASE_API_KEY: ${{ vars.STAGING_GCP_PROJECT && vars.STAGING_ISOLATED_VITE_FIREBASE_API_KEY || (!vars.STAGING_GCP_PROJECT && vars.STAGING_VITE_FIREBASE_API_KEY) || '' }}
+          VITE_FIREBASE_AUTH_DOMAIN: ${{ vars.STAGING_GCP_PROJECT && vars.STAGING_ISOLATED_VITE_FIREBASE_AUTH_DOMAIN || (!vars.STAGING_GCP_PROJECT && vars.STAGING_VITE_FIREBASE_AUTH_DOMAIN) || '' }}
+          VITE_FIREBASE_APP_ID: ${{ vars.STAGING_GCP_PROJECT && vars.STAGING_ISOLATED_VITE_FIREBASE_APP_ID || (!vars.STAGING_GCP_PROJECT && vars.STAGING_VITE_FIREBASE_APP_ID) || '' }}
+          VITE_FIREBASE_STORAGE_BUCKET: ${{ vars.STAGING_GCP_PROJECT && vars.STAGING_ISOLATED_VITE_FIREBASE_STORAGE_BUCKET || (!vars.STAGING_GCP_PROJECT && vars.STAGING_VITE_FIREBASE_STORAGE_BUCKET) || '' }}
+          VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ vars.STAGING_GCP_PROJECT && vars.STAGING_ISOLATED_VITE_FIREBASE_MESSAGING_SENDER_ID || (!vars.STAGING_GCP_PROJECT && vars.STAGING_VITE_FIREBASE_MESSAGING_SENDER_ID) || '' }}
           VITE_CONTACT_EMAIL: ${{ vars.STAGING_VITE_CONTACT_EMAIL }}
           VITE_FIRESTORE_DATABASE: staging
         run: |
           npm ci
           npm run build
+      - name: Point the staging CSP at the isolated voice origin (read from the api service env; no access to the voice service)
+        if: vars.STAGING_GCP_PROJECT != ''
+        env:
+          SERVICE: ${{ steps.vars.outputs.service }}
+        run: |
+          voice_url="$(gcloud run services describe "$SERVICE" --project "$PROJECT" --region "$REGION" --format json \
+            | jq -r '[.spec.template.spec.containers[0].env[]? | select(.name == "VOICE_URL") | .value][0] // empty')"
+          [ -n "$voice_url" ] || { echo "no VOICE_URL on $SERVICE" >&2; exit 1; }
+          python3 scripts/ci/release_target.py voice web/firebase.json "$voice_url"
       - name: Generate firebase config (tag URL allowed in CSP connect-src, no /v1/** rewrite)
         env:
           API_URL: ${{ steps.api.outputs.url }}
@@ -155,6 +182,7 @@ jobs:
         env:
           CHANNEL: ${{ steps.vars.outputs.channel }}
         run: |
+          python3 scripts/ci/release_target.py hosting web/firebase.preview.json "$PROJECT" app-staging "$STAGING_SITE"
           npx --yes firebase-tools@${{ env.FIREBASE_TOOLS_VERSION }} hosting:channel:deploy "$CHANNEL" \
             --config web/firebase.preview.json --only app-staging --expires 7d \
             --project "$PROJECT" --non-interactive --json > channel.json

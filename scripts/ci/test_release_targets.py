@@ -86,6 +86,38 @@ class TargetTests(unittest.TestCase):
                 self.module.configure_hosting(config, 'onolys-staging', 'missing', 'onolys-staging-isolated')
 
 
+    PREVIEW_ENV = {
+        'STAGING_GCP_PROJECT': 'onolys-staging',
+        'STAGING_PREVIEW_WIF_PROVIDER': 'projects/123/locations/global/workloadIdentityPools/github/providers/github-pr',
+        'STAGING_PREVIEW_SA': 'pr-preview-staging@onolys-staging.iam.gserviceaccount.com',
+        'STAGING_HOSTING_SITE': 'onolys-staging-app',
+        'STAGING_ISOLATED_VITE_FIREBASE_API_KEY': 'k',
+        'STAGING_ISOLATED_VITE_FIREBASE_AUTH_DOMAIN': 'onolys-staging.firebaseapp.com',
+        'STAGING_ISOLATED_VITE_FIREBASE_APP_ID': '1:123:web:abc',
+    }
+
+    def test_isolated_preview_requires_its_own_limited_identity(self):
+        self.module.validate_preview({})
+        self.module.validate_preview({'STAGING_GCP_PROJECT': ''})
+        self.module.validate_preview(self.PREVIEW_ENV)
+        no_web = {k: v for k, v in self.PREVIEW_ENV.items() if 'ISOLATED' not in k}
+        self.module.validate_preview(no_web, web=False)
+        with self.assertRaises(ValueError):
+            self.module.validate_preview(no_web)
+        for field in ('STAGING_PREVIEW_WIF_PROVIDER', 'STAGING_PREVIEW_SA', 'STAGING_HOSTING_SITE'):
+            with self.subTest(missing=field), self.assertRaises(ValueError):
+                self.module.validate_preview({**self.PREVIEW_ENV, field: ''})
+        for field, bad in [
+            ('STAGING_GCP_PROJECT', 'onolys'),
+            ('STAGING_PREVIEW_WIF_PROVIDER', 'projects/123/locations/global/workloadIdentityPools/github/providers/github'),
+            ('STAGING_PREVIEW_SA', 'deployer-staging@onolys-staging.iam.gserviceaccount.com'),
+            ('STAGING_PREVIEW_SA', 'pr-preview-staging@onolys.iam.gserviceaccount.com'),
+            ('STAGING_HOSTING_SITE', 'onolys-app-staging'),
+        ]:
+            with self.subTest(invalid=field, value=bad), self.assertRaises(ValueError):
+                self.module.validate_preview({**self.PREVIEW_ENV, field: bad}, web=False)
+
+
 class WorkflowTests(unittest.TestCase):
     def workflow(self, name):
         return yaml.safe_load((ROOT / '.github/workflows' / name).read_text())
@@ -157,10 +189,32 @@ class WorkflowTests(unittest.TestCase):
         self.assertNotIn('environment', resolve)
         self.assertIn('PROD_LLM_PROVIDER', str(resolve))
 
-    def test_previews_pause_when_new_staging_is_activated(self):
+    def test_previews_run_on_isolated_staging_with_the_preview_identity(self):
         for name, job in [('pr-preview.yml', 'preview'), ('pr-preview-cleanup.yml', 'cleanup')]:
-            guard = self.workflow(name)['jobs'][job]['if']
-            self.assertIn("vars.STAGING_GCP_PROJECT == ''", guard)
+            workflow = self.workflow(name)
+            guard = workflow['jobs'][job]['if']
+            self.assertNotIn('STAGING_GCP_PROJECT', guard)
+            self.assertIn('head.repo.full_name == github.repository', guard)
+            steps = workflow['jobs'][job]['steps']
+            check = next(i for i, step in enumerate(steps) if 'release_target.py preview' in step.get('run', ''))
+            auth = next(i for i, step in enumerate(steps) if step.get('uses', '').startswith('google-github-actions/auth@'))
+            self.assertLess(check, auth, name)
+            self.assertNotIn('${{', steps[check]['run'])
+            for field in ('GCP_PROJECT', 'PREVIEW_WIF_PROVIDER', 'PREVIEW_SA', 'HOSTING_SITE'):
+                self.assertIn(f'STAGING_{field}', steps[check]['env'])
+            with_ = steps[auth]['with']
+            self.assertIn('vars.STAGING_GCP_PROJECT && vars.STAGING_PREVIEW_WIF_PROVIDER || vars.WIF_PROVIDER', with_['workload_identity_provider'])
+            self.assertIn('vars.STAGING_GCP_PROJECT && vars.STAGING_PREVIEW_SA || vars.DEPLOYER_STAGING_SA', with_['service_account'])
+        preview = self.workflow('pr-preview.yml')
+        self.assertIn('vars.STAGING_GCP_PROJECT || vars.GCP_PROJECT', preview['env']['PROJECT'])
+        self.assertIn('vars.STAGING_GCP_PROJECT && vars.STAGING_HOSTING_SITE', preview['env']['STAGING_SITE'])
+        build = next(s for s in preview['jobs']['preview']['steps'] if s.get('working-directory') == 'web')
+        self.assertEqual(build['env']['VITE_APP_HOSTS'], "${{ vars.STAGING_GCP_PROJECT && 'onolys-staging-app.web.app' || '' }}")
+        self.assertIn('vars.STAGING_ISOLATED_VITE_FIREBASE_API_KEY', build['env']['VITE_FIREBASE_API_KEY'])
+        self.assertIn('release_target.py hosting web/firebase.preview.json', str(preview))
+        cleanup = self.workflow('pr-preview-cleanup.yml')
+        self.assertIn('vars.STAGING_GCP_PROJECT', cleanup['env']['GCP_PROJECT'])
+        self.assertIn('vars.STAGING_HOSTING_SITE', cleanup['env']['PREVIEW_SITE'])
 
     def test_reusable_auth_override_retains_fallback(self):
         workflow = self.workflow('_deploy-cloudrun.yml')

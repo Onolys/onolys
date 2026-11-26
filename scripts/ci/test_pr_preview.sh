@@ -22,7 +22,11 @@ has   "same-repo guard"                         "$WF" 'github\.event\.pull_reque
 has   "concurrency per PR number"               "$WF" 'group: pr-preview-\$\{\{ github\.event\.number \}\}'
 has   "cancel-in-progress true"                 "$WF" 'cancel-in-progress: true'
 has   "WIF auth"                                "$WF" 'google-github-actions/auth@v2'
-has   "deployer-staging SA var"                 "$WF" 'vars\.DEPLOYER_STAGING_SA'
+has   "deployer-staging SA var (legacy fallback)" "$WF" 'vars\.DEPLOYER_STAGING_SA'
+has   "isolated: preview SA and WIF provider vars" "$WF" 'vars\.STAGING_GCP_PROJECT && vars\.STAGING_PREVIEW_SA'
+has   "isolated: project and site follow the staging vars" "$WF" 'STAGING_SITE: \$\{\{ vars\.STAGING_GCP_PROJECT && vars\.STAGING_HOSTING_SITE'
+has   "isolated: fail-fast target check before auth" "$WF" 'release_target\.py preview'
+hasnt "previews no longer paused by STAGING_GCP_PROJECT" "$WF" "STAGING_GCP_PROJECT == ''"
 hasnt "no JSON key auth"                        "$WF" 'credentials_json|GOOGLE_CREDENTIALS|service_account_key'
 has   "image tag pr-<N>-<sha>"                  "$WF" 'pr-\$\{\{ github\.event\.number \}\}-'
 has   "preview = tagged revision on the staging API service" "$WF" 'service=onolys-api-staging'
@@ -84,7 +88,10 @@ done
 has   "cleanup on pull_request closed"          "$CL" 'types: \[closed\]'
 has   "cleanup same-repo guard"                 "$CL" 'github\.event\.pull_request\.head\.repo\.full_name == github\.repository'
 has   "cleanup WIF auth"                        "$CL" 'google-github-actions/auth@v2'
-has   "cleanup deployer-staging SA var"         "$CL" 'vars\.DEPLOYER_STAGING_SA'
+has   "cleanup deployer-staging SA var (legacy fallback)" "$CL" 'vars\.DEPLOYER_STAGING_SA'
+has   "cleanup isolated preview SA var"         "$CL" 'vars\.STAGING_GCP_PROJECT && vars\.STAGING_PREVIEW_SA'
+has   "cleanup site follows the staging var"    "$CL" 'PREVIEW_SITE: \$\{\{ vars\.STAGING_GCP_PROJECT && vars\.STAGING_HOSTING_SITE'
+hasnt "cleanup no longer paused by STAGING_GCP_PROJECT" "$CL" "STAGING_GCP_PROJECT == ''"
 has   "cleanup concurrency shares preview group" "$CL" 'group: pr-preview-\$\{\{ github\.event\.number \}\}'
 has   "cleanup removes the tag and revisions via helper"                     "$CL" 'pr_preview\.sh cleanup'
 hasnt "cleanup no JSON key auth"                "$CL" 'credentials_json|GOOGLE_CREDENTIALS|service_account_key'
@@ -112,6 +119,10 @@ echo '{"hosting":[{"target":"other","rewrites":[]}]}' > "$T/nofb.json"
 bash "$PP" firebase-config "$API" "$T/nofb.json" "$T/x.json" >/dev/null 2>&1 && bad "fails without app-staging target" || ok "fails without app-staging target"
 echo '{"hosting":[{"target":"app-staging","rewrites":[{"source":"/v1/**","run":{"serviceId":"s"}}]}]}' > "$T/norw.json"
 bash "$PP" firebase-config "$API" "$T/norw.json" "$T/x.json" >/dev/null 2>&1 && bad "fails without SPA fallback" || ok "fails without SPA fallback"
+
+# isolated channel origin / tag URL shapes are accepted
+[[ "$(bash "$PP" env-overrides stub abcdef1 https://onolys-staging-app--pr-42-x1y2z3.web.app)" == *"CORS_ORIGINS=https://onolys-staging-app--pr-42-x1y2z3.web.app" ]] && ok "env-overrides accepts the isolated channel origin" || bad "env-overrides accepts the isolated channel origin"
+[[ "$(bash "$PP" tag-url https://onolys-api-staging-xyz-uc.a.run.app 9)" == "https://pr-9---onolys-api-staging-xyz-uc.a.run.app" ]] && ok "tag-url for the isolated service host" || bad "tag-url for the isolated service host"
 
 # --- helper: env-overrides (gcloud --update-env-vars with ^|^ delimiter) and tag-url
 ovr="$(bash "$PP" env-overrides stub abcdef1234567890abcdef1234567890abcdef12 https://onolys-app-staging--pr-42-x1.web.app)"

@@ -14,3 +14,5 @@ artifact_registry_reader_members = [
 app_base_url = "https://onolys-staging-app.web.app"
 # Enable only after seeding resend-api-key-staging and validation:
 resend_secret_wired = false
+# Limited identity for pull_request previews (pr-preview*.yml); outputs feed STAGING_PREVIEW_WIF_PROVIDER / STAGING_PREVIEW_SA.
+enable_pr_previews = true

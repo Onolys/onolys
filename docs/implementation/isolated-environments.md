@@ -36,6 +36,10 @@ A successful reviewed apply enables required APIs through `google_project_servic
 
 Each project gets its own repository `onolys`, deployer service account and GitHub WIF provider. Trust requires repository `Onolys/onolys` and `refs/heads/main`; it grants no tag or PR-branch deployment access. The deployer has service-scoped Cloud Run revision rights and runtime actAs, its own repository writer, project-local Hosting/rules permissions, and index access conditioned on its database.
 
+### PR previews (staging only)
+
+Previews run in isolated staging when `STAGING_GCP_PROJECT` is set. Terraform input `enable_pr_previews` (true in the staging example; ignored for eval) adds service account `pr-preview-staging`, a second WIF provider `github-pr` admitting only `Onolys/onolys` `pull_request` events, and these grants: `run.developer` on the api service only, `iam.serviceAccountUser` on the api runtime SA only, repository `artifactregistry.writer`, `firebasehosting.admin`, `serviceusage.serviceUsageConsumer` and the `firebase.projects.get` custom role. Nothing on worker, voice, secrets, Firestore or rules/indexes; the preview workflows hold no LLM keys. No `firebaseauth.admin`: firebase-tools may warn about channel domains in Firebase Auth, which is accepted (previews use email/password). Owner steps after the reviewed apply: set repo vars `STAGING_PREVIEW_WIF_PROVIDER` (output `pr_preview_wif_provider`) and `STAGING_PREVIEW_SA` (output `pr_preview_service_account`). Until set, previews fail fast with a clear message while `STAGING_GCP_PROJECT` is set.
+
 Production promotion can retain its existing GitHub identity. The staging example explicitly opts the legacy staging resolver into service-scoped `roles/run.viewer` plus repository reader, and grants repository reader to the existing prod deployer and prod Cloud Run service agent. Those principals get no new staging deployment or actAs rights. The optional `cloud_run_reader_members` and `artifact_registry_reader_members` inputs default to empty; review example grants before applying. Production WIF and resources are unchanged.
 
 ## Initialize and import
