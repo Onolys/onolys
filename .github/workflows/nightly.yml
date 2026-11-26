@@ -17,57 +17,6 @@ jobs:
       contents: read
     uses: ./.github/workflows/ci.yml
 
-  api-real-mode-paused:
-    # Visible notice instead of a silently skipped (or failing) paid job.
-    if: >-
-      vars.STAGING_GCP_PROJECT != '' ||
-      vars.NIGHTLY_LEGACY_GEMINI != 'true'
-    runs-on: ubuntu-latest
-    timeout-minutes: 2
-    steps:
-      - run: |
-          echo "::notice title=Live Gemini check paused::The legacy onolys gemini-api-key-staging secret was deleted after staging isolation; no isolated Nightly identity/key exists yet. Set NIGHTLY_LEGACY_GEMINI=true only if that legacy secret is restored (and STAGING_GCP_PROJECT is unset)."
-
-  api-real-mode:
-    # The legacy Gemini reader bills onolys and its secret was deleted after staging
-    # isolation, so this is opt-in (NIGHTLY_LEGACY_GEMINI=true) and only while legacy.
-    # A dedicated isolated Nightly identity/key and workflow update are deferred.
-    if: >-
-      vars.STAGING_GCP_PROJECT == '' &&
-      vars.NIGHTLY_LEGACY_GEMINI == 'true' &&
-      github.ref == 'refs/heads/main' &&
-      (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    permissions:
-      contents: read
-      id-token: write
-    steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v5
-        with:
-          enable-cache: true
-          cache-dependency-glob: uv.lock
-      - run: uv sync --frozen --package onolys-api
-      - name: Authenticate Nightly secret reader (keyless)
-        uses: google-github-actions/auth@v2
-        with:
-          workload_identity_provider: ${{ vars.NIGHTLY_WIF_PROVIDER }}
-          service_account: ${{ vars.NIGHTLY_GEMINI_SA }}
-      - name: Read staging Gemini key
-        id: gemini
-        uses: google-github-actions/get-secretmanager-secrets@v2
-        with:
-          secrets: gemini:${{ vars.GCP_PROJECT || 'onolys' }}/gemini-api-key-staging
-          min_mask_length: 1
-          export_to_environment: false
-      - name: Run live Gemini check
-        run: |
-          test -n "$GEMINI_API_KEY"
-          uv run --no-sync --package onolys-api pytest api/tests/test_live_real_mode.py -m live -s
-        env:
-          GEMINI_API_KEY: ${{ steps.gemini.outputs.gemini }}
-
   api-nightly:
     # Long tests excluded from PR CI (marker `nightly`): dev script + combined quickstart (needs uv, ffmpeg, curl, jq).
     runs-on: ubuntu-latest
