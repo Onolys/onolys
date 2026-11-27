@@ -44,7 +44,7 @@ it('keeps confusion totals plus multi equal aligned lines and resolves matching 
  const p=props(), key=p.data.combos[0].combo_key;const view=render(<DeepDive {...p}/>);openGrid();
  expect(Array.from(view.container.querySelectorAll('[data-confusion-value]')).reduce((sum,node)=>sum+Number(node.getAttribute('data-confusion-value')),0)).toBe(p.data.lines.combos[key].aligned);
  const button=screen.getAllByRole('button',{name:/Human question, A question:/})[0];fireEvent.click(button);
- expect(await screen.findByRole('link',{name:'synthetic-s01'})).toBeTruthy();
+ expect(await screen.findByRole('link',{name:'syn-01'})).toBeTruthy();
  expect(p.api.compareLineMatches).toHaveBeenCalledWith('r1',expect.objectContaining({combo:key,code:'question',metric:'question',combos:p.data.combos.map(c=>c.combo_key)}),expect.any(AbortSignal));
  expect(p.navigate).toHaveBeenLastCalledWith(expect.objectContaining({tab:'lines',session:'synthetic-s01',only:'disagree',combo:key,code:'question',metric:'question'}));
 });
@@ -136,4 +136,12 @@ it('excludes an all-failed combo from the dot plots and greys it in the selector
  expect(screen.getByRole('button',{name:/B · .*failed: invalid_parameters/})).toHaveProperty('disabled',true);
  expect(view.container.querySelectorAll(`[data-global-dot="${bad}"]`).length).toBe(0);
  expect(view.container.querySelectorAll(`[data-global-dot="${p.data.combos[0].combo_key}"]`).length).toBeGreaterThan(0);
+});
+it('labels human notes and snippets with the dataset session name, not the internal id',async()=>{
+ const p=props();
+ p.api.compareReasoning.mockImplementation(async(_r:string,o:{combo?:string})=>o.combo?{...reasoning,groups:[],next_cursor:null}:{...reasoning,groups:[{code:'affirm',snippets:[],human_notes:[{session_id:'synthetic-s01',turn_id:'t7',note:'Saved human note.'}]}],next_cursor:null});
+ render(<DeepDive {...p}/>);openCode('affirm');
+ await screen.findByText(/Saved human note/);
+ expect(screen.getByText('syn-01 · t7')).toBeTruthy();
+ expect(screen.queryByText(/synthetic-s01/)).toBeNull();
 });

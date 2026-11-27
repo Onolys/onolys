@@ -107,3 +107,20 @@ it('keeps the data table behind Show data and lists repeats individually', () =>
   const table = screen.getByRole('table', { name: 'cct ratings' });
   expect(table.textContent).toContain('4, 4');
 });
+it('labels rows, tooltips and the Session column with the dataset session name when given', () => {
+  const data = deep(); const keys = data.combos.map(c => c.combo_key);
+  const s: DotSeries[] = keys.map((key, index) => ({ key, letter: String.fromCharCode(65 + index), index, label: key }));
+  const view = render(<GlobalsDotPlot metric="cct" title="T" dots={data.globals.dots.filter(d => d.metric === 'cct')} series={s} cells={data.globals.cells.cct} labels={data.session_labels} />);
+  const row = view.container.querySelector('[data-session="synthetic-s01"]')!;
+  expect(row.querySelector('text')!.firstChild!.textContent).toBe('syn-01');
+  expect(row.textContent).not.toContain('synthetic-s01');
+  expect(row.querySelector('circle title')!.textContent).toBe('syn-01, Human: 4');
+  fireEvent.click(screen.getByRole('button', { name: 'Show data' }));
+  expect(within(screen.getByRole('table', { name: 'cct ratings' })).getAllByText('syn-01').length).toBeGreaterThan(0);
+});
+it('falls back to the id when no labels are given and truncates only the long on-chart label', () => {
+  const l = dotPlotLayout({ rows: [{ session_id: 'abc', label: 'a-very-long-dataset-session-name', human: 3, values: {} }], series });
+  expect(l.rows[0].labelFull).toBe('a-very-long-dataset-session-name');
+  expect(l.rows[0].label.endsWith('…')).toBe(true);
+  expect(dotPlotLayout({ rows: [{ session_id: 'abc', human: 3, values: {} }], series }).rows[0].label).toBe('abc');
+});

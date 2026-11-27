@@ -7,6 +7,7 @@ import { Axis, CHART_COLORS, CHART_GUTTER, comboColor, comboShape, linearScale, 
 import type { CompareAnalysis } from '../compareApi';
 import type { ComboLegendEntry } from '../compareTypes';
 import type { FailedCombo } from '../failedCombos';
+import { sessionLabel } from '../sessionLabel';
 import './errorVsLength.css';
 
 const W = 640, H = 300;
@@ -35,7 +36,7 @@ export function ErrorVsLength({ data, legend, failed }: { data: CompareAnalysis;
  const yTicks = y.ticks(5);
 
  const columns: Column<Point>[] = [
-  { key: 'session', header: 'Session', value: p => p.session_id },
+  { key: 'session', header: 'Session', value: p => sessionLabel(data.session_labels, p.session_id) },
   { key: 'combo', header: 'Combo', value: p => letter(p.combo_key), render: p => <ComboTag index={index(p.combo_key)} letter={letter(p.combo_key)} /> },
   { key: 'len', header: AXIS_LABEL[axis], value: p => p[axis] },
   { key: 'off', header: 'Count error', value: p => p.off },
@@ -55,7 +56,7 @@ export function ErrorVsLength({ data, legend, failed }: { data: CompareAnalysis;
    {series.map(s => <g key={s.key} data-length-series={s.key} color={comboColor(index(s.key))}>
     {s.points.length > 1 && <polyline points={s.points.map(p => `${x(p[axis])},${y(p.off)}`).join(' ')} fill="none" stroke="currentColor" strokeOpacity={0.4} strokeWidth={2} />}
     {s.points.map(p => <g key={p.session_id} data-length-point={`${p.session_id}-${p.combo_key}`} data-x={p[axis]} data-shape={comboShape(index(s.key))} transform={`translate(${x(p[axis]) - 8} ${y(p.off) - 8}) scale(1.33)`}>
-     <title>{`${p.session_id}, ${name(p.combo_key)}: ${p[axis]} ${axis}, Count error ${p.off}, n=${p.n}, ${p.repeats} repeats`}</title>
+     <title>{`${sessionLabel(data.session_labels, p.session_id)}, ${name(p.combo_key)}: ${p[axis]} ${axis}, Count error ${p.off}, n=${p.n}, ${p.repeats} repeats`}</title>
      <path d={SHAPES[comboShape(index(s.key))]} fill="currentColor" fillOpacity={0.85} />
     </g>)}
    </g>)}

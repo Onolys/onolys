@@ -38,7 +38,7 @@ it('shows grid values from the fixture and links sessions to Line view', () => {
  const grid = screen.getByRole('table', { name: 'Interviews by combo' });
  expect(within(grid).getAllByText('off 2').length).toBe(1);
  expect(within(grid).getAllByText('n=1 · 2 repeats').length).toBe(data.grid.length * data.combos.length);
- const link = screen.getByRole('link', { name: 'synthetic-s01' });
+ const link = screen.getByRole('link', { name: 'syn-01' });
  expect(link.getAttribute('href')).toBe('?run=eval-lines&view=compare&tab=lines&session=synthetic-s01');
  fireEvent.click(link);
  expect(navigate).toHaveBeenCalledWith({ run: 'eval-lines', view: 'compare', tab: 'lines', session: 'synthetic-s01' });

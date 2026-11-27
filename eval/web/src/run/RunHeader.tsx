@@ -3,7 +3,7 @@ import { useId, type ReactNode } from 'react';
 import { Button } from '@onolys/ui';
 import type { RunDetail } from '../api';
 import { canCancelRun } from '../CancelRunDialog';
-import { CompareLink, type CompareNavigate } from '../compare/CompareLink';
+import { CompareLink, EvalLink, type CompareNavigate } from '../compare/CompareLink';
 import { CopyField } from '../ui/CopyField';
 import { runLogsUrl } from './logsUrl';
 import './run.css';
@@ -31,7 +31,9 @@ export function RunHeader({ run, onConfig, onRerun, onCancel, onNavigate, childr
           : <span className="run-logs is-disabled" aria-disabled="true" title="No logs yet: units have not started"><SquareArrowOutUpRight aria-hidden="true" /><span>Logs</span></span>}
         <div className="run-actions">
           <Button variant="outline" size="sm" className="run-compact" onClick={event => onConfig(run, event.currentTarget)}><Settings aria-hidden="true" />Config</Button>
-          {compareReady
+          {run.status === 'done'
+            ? <Button asChild variant="outline" size="sm" className="run-compact run-compare-go"><EvalLink state={{ run: run.run_id, view: 'compare', tab: 'overview' }} navigate={onNavigate}>Compare</EvalLink></Button>
+            : compareReady
             ? <CompareLink run={run} navigate={onNavigate} />
             : <><Button variant="outline" size="sm" className="run-compact" disabled title={COMPARE_NOTE} aria-describedby={noteId}>Compare</Button><span id={noteId} hidden>{COMPARE_NOTE}</span></>}
           <Button variant="outline" size="sm" className="run-compact" onClick={() => onRerun(run)}>Rerun…</Button>

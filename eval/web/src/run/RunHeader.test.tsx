@@ -3,6 +3,7 @@ import { cleanup, fireEvent, render, screen, within } from '@testing-library/rea
 import { afterEach, expect, it, vi } from 'vitest';
 import type { RunDetail } from '../api';
 import { RunHeader } from './RunHeader';
+import { buildCompareUrl } from '../compare/compareUrl';
 import { runLogsUrl } from './logsUrl';
 
 afterEach(cleanup);
@@ -66,4 +67,35 @@ it.each(['queued', 'running'] as const)('Cancel shown for %s; hidden once cancel
 it.each(['done', 'partial', 'failed', 'cancelled'] as const)('Cancel hidden for %s', status => {
   setup(run({ status })); expect(screen.queryByRole('button', { name: 'Cancel run' })).toBeNull();
   expect(within(screen.getByRole('region', { name: 'Run summary' })).getByRole('button', { name: 'Config' })).toBeTruthy();
+});
+it('done: green Compare link-button right beside Rerun, href is the compare overview', () => {
+  const onNavigate = vi.fn();
+  setup(run({ status: 'done' }), { onNavigate });
+  const compare = screen.getByRole('link', { name: 'Compare' });
+  expect(compare.getAttribute('href')).toBe(buildCompareUrl({ run: 'run_7f3a91c2e8b4', view: 'compare', tab: 'overview' }, window.location.search));
+  expect(compare.getAttribute('href')).toContain('view=compare');
+  expect(compare.className).toContain('run-compare-go');
+  expect(compare.className).toContain('run-compact');
+  expect(compare.nextElementSibling).toBe(screen.getByRole('button', { name: 'Rerun…' }));
+  fireEvent.click(compare);
+  expect(onNavigate).toHaveBeenCalledWith({ run: 'run_7f3a91c2e8b4', view: 'compare', tab: 'overview' });
+});
+it('done: modified click is left to the browser (new tab still works)', () => {
+  const onNavigate = vi.fn();
+  setup(run({ status: 'done' }), { onNavigate });
+  fireEvent.click(screen.getByRole('link', { name: 'Compare' }), { ctrlKey: true });
+  expect(onNavigate).not.toHaveBeenCalled();
+});
+it('partial: Compare stays an enabled link but is not green', () => {
+  const onNavigate = vi.fn();
+  setup(run({ status: 'partial' }), { onNavigate });
+  const compare = screen.getByRole('link', { name: 'Compare' });
+  expect(compare.className).not.toContain('run-compare-go');
+  fireEvent.click(compare); expect(onNavigate).toHaveBeenCalled();
+});
+it.each(['queued', 'running', 'failed', 'cancelled'] as const)('%s: Compare is the disabled grey button', status => {
+  setup(run({ status }));
+  expect(screen.queryByRole('link', { name: 'Compare' })).toBeNull();
+  const off = screen.getByRole('button', { name: 'Compare' }) as HTMLButtonElement;
+  expect(off.disabled).toBe(true); expect(off.className).not.toContain('run-compare-go');
 });

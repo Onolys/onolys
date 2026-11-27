@@ -43,7 +43,7 @@ export function LineView({data,overview,state,navigate,legend,api,runId}:Compare
  });
  const active=popup?.key===popupKey?popup:undefined;
  const differingCount=data.turns.filter(turn=>isDisagreement(turn.id)).length;
- return <section className="line-view"><h2>Line view</h2><LineFilters state={state} sessionId={data.session_id} sessions={overview.header.line_sessions??[{session_id:data.session_id,matched_lines:null}]} selected={selected} legend={legend} letter={letter} differing={differingCount} change={change}/>
+ return <section className="line-view"><h2>Line view</h2><LineFilters state={state} sessionId={data.session_id} sessions={overview.header.line_sessions??[{session_id:data.session_id,matched_lines:null}]} labels={data.session_labels??overview.session_labels} selected={selected} legend={legend} letter={letter} differing={differingCount} change={change}/>
  <LaneTable turns={turns} selected={selected} human={human} lane={lane} letter={letter} index={index} unavailable={laneUnavailable} isDisagreement={id=>Boolean(isDisagreement(id))} inspect={(id,trigger)=>{returnFocus.current=trigger;navigate({...state,view:'compare',run:runId,tab:'lines',turn:id});}} setTrigger={(id,node)=>{triggers.current[id]=node;}}/>{data.dataset_notes.map((note,i)=><p key={i} className="line-verbatim">{note}</p>)}
  <SessionRatings key={`${data.session_id}-${keys}`} data={data} api={api} runId={runId} selected={selected} letter={letter} index={index}/>
  <LinePopup turnId={state.turn} selected={selected} letter={letter} index={index} loaded={active} unavailable={laneUnavailable} retry={()=>setAttempt(n=>n+1)} onClose={()=>navigate({...state,turn:undefined})} returnFocus={returnFocus}/>

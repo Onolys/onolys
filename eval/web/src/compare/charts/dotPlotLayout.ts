@@ -1,7 +1,7 @@
 import { SCORE_TICKS, scoreScale } from '../../ui/chart/scales';
 
 export interface DotSeries { key: string; letter: string; index: number; label: string }
-export interface DotRowInput { session_id: string; human: number | null; values: Record<string, number[]> }
+export interface DotRowInput { session_id: string; /** Display name; defaults to the id. */ label?: string; human: number | null; values: Record<string, number[]> }
 export interface Symbol { x: number; y: number; value: number; repeat: number }
 
 /** Layout constants in viewBox px. The gutter (labels + lane letters) is fixed; the plot starts to its right. */
@@ -39,7 +39,8 @@ export function dotPlotLayout({ rows, series, width = WIDTH }: { rows: DotRowInp
    });
    return { key: s.key, letter: s.letter, index: s.index, y: laneY(top, j + 1), letterX: GUTTER - 6, symbols };
   });
-  return { session_id: row.session_id, label: truncate(row.session_id), labelFull: row.session_id, labelX: 8, labelY: top + rowHeight / 2, top, height: rowHeight,
+  const shown = row.label ?? row.session_id;
+  return { session_id: row.session_id, label: truncate(shown), labelFull: shown, labelX: 8, labelY: top + rowHeight / 2, top, height: rowHeight,
    human: row.human === null ? null : { x: scale(row.human), y: laneY(top, 0), value: row.human, repeat: 0 }, lanes };
  });
  return { width, height: AXIS_TOP + rows.length * rowHeight + 6, gutter: GUTTER, plotLeft: PLOT_LEFT,

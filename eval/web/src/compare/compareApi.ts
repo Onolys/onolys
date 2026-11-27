@@ -17,6 +17,8 @@ export interface CompareCoverage {
 export interface CompareCombo {combo_key:string;engine:string;model:string|null;tier:string|null;effort:string|null}
 export interface CompareCommon {
  eval_run_id:string;has_human:boolean;combos:CompareCombo[];coverage:CompareCoverage;
+ /** Display name (dataset session id) per internal session id; absent on older servers, so use `sessionLabel`. */
+ session_labels?:Record<string,string>;
  excluded:{session_id:string;combo_key:string|null;reason:string;repeat?:number;metric?:string}[];
 }
 export interface Operations {
@@ -105,7 +107,7 @@ const snippet=shape({session_id:string,combo_key:string,repeat:number,rationale:
 const popupLane=shape({missing:nullable(string),codes:array(strings),rationales:array(snippet),agree:nullable(shape({k:number,r:number}))});
 const modelLane=shape({missing:nullable(string),n:number,repeats:number,turns:record(array(strings))});
 const lineLanes:Check=value=>object(value)&&Object.entries(value).every(([key,lane])=>key==='human'?record(strings)(lane):modelLane(lane));
-const common=shape({eval_run_id:string,has_human:boolean,coverage,excluded});
+const common=shape({eval_run_id:string,has_human:boolean,coverage,excluded},{session_labels:record(string)});
 const frontierPoint=shape({combo_key:string,count_error:number,n:number,cost_per_run_usd:number,cost_n:number});
 const progress=shape({done_units:number,total_units:number,skipped_units:number});
 const projections:Record<'overview'|'deep'|'analysis'|'reasoning'|'lines'|'turn',Check>={

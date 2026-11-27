@@ -465,3 +465,13 @@ def test_operational_best_never_marks_a_combo_whose_runs_all_failed(routes):
     rows = {r["combo_key"]: r for r in c.get(base + "/overview", headers=AUTH).json()["leaderboard"]}
     assert not any(rows[failed]["operational_best"].values())
     assert rows[other]["operational_best"] == {"failures": True, "cost": True, "time": True}
+
+
+@pytest.mark.parametrize("path", ["/overview", "/deep-dive", "/analysis", "/reasoning"])
+def test_every_projection_carries_dataset_session_labels(routes, path):
+    scenario, _, c, base = routes()
+    expected = {s["session_id"]: s["dataset_session_id"] for s in scenario["eval_run"]["sessions"]}
+    assert expected and all(label != sid for sid, label in expected.items())
+    response = c.get(base + path, headers=AUTH)
+    assert response.status_code == 200, response.text
+    assert response.json()["session_labels"] == expected

@@ -86,6 +86,7 @@ const malformedNested=[
  ['overview','missing heatmap cell',()=>({...overview,heatmap:{...overview.heatmap,cells:{}}})],
  ['overview','human heatmap values',()=>({...overview,heatmap:{...overview.heatmap,human:{gi:{min:1,max:1,n:1,values:{}}}}})],
  ['overview','nullable metric string',()=>({...overview,count_error:{bad:{...Object.values(overview.count_error)[0],off:'1'}}})],
+ ['overview','session labels',()=>({...overview,session_labels:{a:1}})],
  ['overview','coverage providers',()=>({...overview,coverage:{...overview.coverage,skipped_providers:[{}]}})],
  ['deep','missing global collections',()=>({...deep,globals:{}})],
  ['deep','invalid dot values',()=>({...deep,globals:{...deep.globals,dots:[{...deep.globals.dots[0],values:{}}]}})],

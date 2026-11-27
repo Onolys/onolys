@@ -3,7 +3,7 @@ import { LOGS_DURATION, LOGS_PROJECT, LOGS_SERVICE, MAX_LOGS_IDS, isWorkerRunId,
 
 const base = 'https://console.cloud.google.com/logs/query;query=';
 const tail = `;duration=${LOGS_DURATION}?project=${LOGS_PROJECT}`;
-const q = (s: string) => encodeURIComponent(s);
+const q = (s: string) => encodeURIComponent(s).replace(/[!'()*~]/g, c => '%' + c.charCodeAt(0).toString(16).toUpperCase());
 
 describe('logsUrl', () => {
   it('constants', () => {
@@ -26,6 +26,12 @@ describe('logsUrl', () => {
     const r = runLogsUrl(['a', 'b', 'c'])!;
     expect(r.url).toBe(`${base}${q('resource.labels.service_name="onolys-worker-eval" AND jsonPayload.run_id=("a" OR "b" OR "c")')}${tail}`);
     expect(r).toMatchObject({ truncated: false, used: 3, total: 3 });
+  });
+  it('percent-encodes parentheses so the Cloud Console does not drop the OR group', () => {
+    const r = runLogsUrl(['a', 'b'])!;
+    expect(r.url).toContain('%28%22a%22%20OR%20%22b%22%29');
+    const query = r.url.slice(r.url.indexOf(';query=') + 7, r.url.indexOf(';duration='));
+    expect(query).not.toMatch(/[()!'*~]/);
   });
   it('uses the plain form for a single id', () => {
     expect(runLogsUrl(['a'])!.url).toBe(unitLogsUrl('a'));

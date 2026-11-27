@@ -4,6 +4,7 @@ import { CHART_COLORS, comboColor, comboShape } from '../../ui/chart/theme';
 import { ComboTag, SHAPES } from '../../ui/ComboTag';
 import { DataTable, type Column } from '../../ui/DataTable';
 import type { CompareCell, CompareDeepDive } from '../compareApi';
+import { sessionLabel, type SessionLabels } from '../sessionLabel';
 import { dotPlotLayout, ROW_PAD, SYMBOL_SIZE, type DotRowInput, type DotSeries } from './dotPlotLayout';
 import '../deepDive.css';
 
@@ -21,16 +22,17 @@ function MissChip({ s, cell }: { s: DotSeries; cell: CompareCell | undefined }) 
 }
 
 /** One card per global: dot plot (session rows, one lane per series), legend, avg miss / within ±1 chips, data table behind "Show data". */
-export function GlobalsDotPlot({ metric, title, dots, series, cells }: { metric: string; title: string; dots: Dot[]; series: DotSeries[]; cells: Record<string, CompareCell> }) {
+export function GlobalsDotPlot({ metric, title, dots, series, cells, labels }: { metric: string; title: string; dots: Dot[]; series: DotSeries[]; cells: Record<string, CompareCell>; labels?: SessionLabels }) {
  const sessions = [...new Set(dots.map(dot => dot.session_id))];
  const rows: DotRowInput[] = sessions.map(session => ({
   session_id: session,
+  label: sessionLabel(labels, session),
   human: dots.find(dot => dot.session_id === session)?.human ?? null,
   values: Object.fromEntries(series.map(s => [s.key, dots.find(dot => dot.session_id === session && dot.combo_key === s.key)?.values ?? []])),
  }));
  const layout = dotPlotLayout({ rows, series });
  const columns: Column<DotRowInput>[] = [
-  { key: 'session', header: 'Session', value: row => row.session_id },
+  { key: 'session', header: 'Session', value: row => row.label ?? row.session_id },
   { key: 'human', header: 'Human', value: row => row.human ?? 'n/a' },
   ...series.map((s): Column<DotRowInput> => ({ key: s.key, header: s.letter, value: row => {
    const dot = dots.find(d => d.session_id === row.session_id && d.combo_key === s.key);

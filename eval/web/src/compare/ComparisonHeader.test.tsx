@@ -80,6 +80,12 @@ it('Excluded card lists non-combo exclusions by reason', () => {
  const card = screen.getByText('Excluded').closest('.ui-summary') as HTMLElement;
  expect(within(card).getByText('s1: cancelled')).toBeTruthy();
 });
+it('Excluded card names the dataset session, not the internal id', () => {
+ show({ ...base, session_labels: { s1: 'high-001' }, excluded: [{ session_id: 's1', combo_key: null, reason: 'cancelled' }] } as CompareOverview);
+ const card = screen.getByText('Excluded').closest('.ui-summary') as HTMLElement;
+ expect(within(card).getByText('high-001: cancelled')).toBeTruthy();
+ expect(within(card).queryByText(/s1:/)).toBeNull();
+});
 it('Config opens the saved-configuration popup only when the run detail is loaded', () => {
  show(base);
  expect(screen.queryByRole('button', { name: 'Config' })).toBeNull();

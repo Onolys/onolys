@@ -210,3 +210,8 @@ it('does not warn when combo codes equal the human codes in a different order',a
  expect(chips.find(c=>c.textContent==='cr, sr')!.classList.contains('ui-chip-warning')).toBe(false);
  expect(chips.find(c=>c.textContent==='cr')!.classList.contains('ui-chip-warning')).toBe(true);
 });
+it('lists sessions by dataset session name, falling back to the id, while option values stay ids',()=>{
+ const p=props();render(<LineView {...p}/>);
+ const options=Array.from((screen.getByLabelText('Session') as HTMLSelectElement).options);
+ expect(options.map(o=>[o.value,o.textContent])).toEqual([['synthetic-s01','syn-01 · 5 matched lines'],['uploaded-real-id','uploaded-real-id · 8 matched lines']]);
+});

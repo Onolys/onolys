@@ -48,3 +48,15 @@ it('says so when there are no points', () => {
  render(<ErrorVsLength data={data} legend={legendFor(data)} failed={noFail} />);
  expect(screen.getByText('No session length results available')).toBeTruthy();
 });
+
+it('shows the dataset session name in the data table and point tooltip', () => {
+ const data = base();
+ const { container } = render(<ErrorVsLength data={data} legend={legendFor(data)} failed={noFail} />);
+ const titles = [...container.querySelectorAll('[data-length-point] title')].map(t => t.textContent ?? '');
+ expect(titles.length).toBeGreaterThan(0);
+ for (const title of titles) { expect(title).toMatch(/^syn-0[12], /); expect(title).not.toContain('synthetic-s0'); }
+ fireEvent.click(screen.getByRole('button', { name: 'Show data' }));
+ const table = screen.getByRole('table', { name: 'Error vs length' });
+ expect(within(table).getAllByText('syn-01').length).toBeGreaterThan(0);
+ expect(table.textContent).not.toContain('synthetic-s0');
+});
