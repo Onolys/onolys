@@ -1,0 +1,125 @@
+name: terraform-apply
+description: >
+  Apply the saved plan of one environment (docs/reference/infra-pipeline.md). Shared by the infra-apply jobs of
+  deploy-staging.yml, deploy-eval.yml and deploy-prod.yml, which run it only when their infra-plan job found changes.
+  A composite action, not a reusable workflow, on purpose: the apply identity's WIF provider matches the calling deploy
+  workflow (OIDC job_workflow_ref) and, for prod, the job's GitHub Environment `production`; a reusable workflow would change
+  both claims. Needs the workflow's own ref checked out at the workspace root (helper scripts, hash-pinned requirements) and
+  the commit being deployed under `root` (the same tree the plan was made from).
+
+inputs:
+  env:
+    description: staging | eval | prod
+    required: true
+  root:
+    description: Terraform root directory, relative to the workspace
+    required: true
+  tfroot:
+    description: legacy | isolated (tf_live_inputs.py root shape)
+    required: true
+  project:
+    description: GCP project id
+    required: true
+  bucket:
+    description: private state bucket holding plans/
+    required: true
+  backend:
+    description: backend config file relative to root (empty for the legacy root)
+    required: false
+    default: ""
+  wif_provider:
+    description: the environment's deploy WIF provider variable; the apply identity is derived from it (scripts/ci/tf_identity.py)
+    required: true
+  plan_sha256:
+    description: SHA-256 of the saved plan (infra-plan job output)
+    required: true
+  plan_object:
+    description: object name of the saved plan in the state bucket (infra-plan job output)
+    required: true
+  live_sha256:
+    description: hash of the deploy-managed inputs the plan was made with (infra-plan job output)
+    required: true
+  python_deps:
+    description: install the hash-pinned Python deps of infra/scripts/identity-config.py (legacy root local-exec)
+    required: false
+    default: "false"
+
+runs:
+  using: composite
+  steps:
+    - id: ident
+      shell: bash
+      env:
+        WIF: ${{ inputs.wif_provider }}
+        PROJECT: ${{ inputs.project }}
+        PLAN_SHA: ${{ inputs.plan_sha256 }}
+        PLAN_OBJECT: ${{ inputs.plan_object }}
+        LIVE_SHA: ${{ inputs.live_sha256 }}
+      run: |
+        set -euo pipefail
+        [[ "$PLAN_SHA" =~ ^[0-9a-f]{64}$ && "$LIVE_SHA" =~ ^[0-9a-f]{64}$ && "$PLAN_OBJECT" == plans/* ]] \
+          || { echo "::error::missing or malformed saved-plan reference from the infra-plan job"; exit 1; }
+        python3 "$GITHUB_WORKSPACE/scripts/ci/tf_identity.py" --wif-provider "$WIF" --project "$PROJECT" --kind apply >> "$GITHUB_OUTPUT"
+    - uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3
+      with:
+        terraform_version: 1.9.8
+        terraform_wrapper: false
+    - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+      with:
+        path: .terraform-plugin-cache
+        key: tf-plugins-${{ runner.os }}-${{ hashFiles(format('{0}/.terraform.lock.hcl', inputs.root)) }}
+    # Installed BEFORE the cloud credentials exist, from a fully pinned, hash-checked requirements file (workflow ref copy).
+    - name: Install hash-pinned Python deps for infra/scripts/identity-config.py
+      if: inputs.python_deps == 'true'
+      shell: bash
+      env:
+        PIP_BREAK_SYSTEM_PACKAGES: "1"
+      run: python3 -m pip install --quiet --user --require-hashes --no-deps -r "$GITHUB_WORKSPACE/scripts/ci/tf-apply-requirements.txt"
+    - uses: google-github-actions/auth@c200f3691d83b41bf9bbd8638997a462592937ed # v2
+      with:
+        workload_identity_provider: ${{ steps.ident.outputs.provider }}
+        service_account: ${{ steps.ident.outputs.sa }}
+    - name: Abort if the live deploy-managed inputs changed since the plan
+      shell: bash
+      env:
+        ENVNAME: ${{ inputs.env }}
+        TFROOT: ${{ inputs.tfroot }}
+        PROJECT: ${{ inputs.project }}
+        EXPECTED_LIVE: ${{ inputs.live_sha256 }}
+      run: >
+        python3 "$GITHUB_WORKSPACE/scripts/ci/tf_live_inputs.py" --root "$TFROOT" --env "$ENVNAME" --project "$PROJECT"
+        --out "$RUNNER_TEMP/live.auto.tfvars.json" --expect-sha256 "$EXPECTED_LIVE"
+    - name: Apply exactly the saved plan
+      shell: bash
+      working-directory: ${{ inputs.root }}
+      env:
+        ENVNAME: ${{ inputs.env }}
+        BACKEND: ${{ inputs.backend }}
+        BUCKET: ${{ inputs.bucket }}
+        OBJECT: ${{ inputs.plan_object }}
+        EXPECTED_SHA: ${{ inputs.plan_sha256 }}
+        TF_IN_AUTOMATION: "true"
+        TF_INPUT: "0"
+        TF_PLUGIN_CACHE_DIR: ${{ github.workspace }}/.terraform-plugin-cache
+      run: |
+        set -uo pipefail
+        mkdir -p "$TF_PLUGIN_CACHE_DIR"
+        gcloud storage cp "gs://${BUCKET}/${OBJECT}" tfplan --quiet
+        actual="$(sha256sum tfplan | cut -d' ' -f1)"
+        if [ "$actual" != "$EXPECTED_SHA" ]; then echo "::error::saved plan hash mismatch; refusing to apply"; exit 1; fi
+        backend=(); [ -n "$BACKEND" ] && backend=("-backend-config=$BACKEND")
+        terraform init -input=false -no-color -lockfile=readonly "${backend[@]}" > "$RUNNER_TEMP/apply.log" 2>&1 || { tail -30 "$RUNNER_TEMP/apply.log"; exit 1; }
+        rc=0
+        terraform apply -input=false -no-color tfplan >> "$RUNNER_TEMP/apply.log" 2>&1 || rc=$?
+        # Public log: resource progress lines only, never the Outputs block.
+        sed '/^Outputs:/,$d' "$RUNNER_TEMP/apply.log" | grep -E '(Creating|Modifying|Destroying|Creation complete|Modifications complete|Destruction complete)|^Apply complete|^Error' | head -200 || true
+        [ "$rc" -eq 0 ] || { echo "::error::terraform apply failed for ${ENVNAME}"; exit "$rc"; }
+    # Only after a successful apply. A failed apply keeps the plan for inspection; the bucket lifecycle rule deletes plans/
+    # after 7 days. To retry, use "Re-run all jobs" (a new plan), never "Re-run failed jobs".
+    - name: Remove the saved plan
+      if: success()
+      shell: bash
+      env:
+        BUCKET: ${{ inputs.bucket }}
+        OBJECT: ${{ inputs.plan_object }}
+      run: gcloud storage rm "gs://${BUCKET}/${OBJECT}" --quiet || true

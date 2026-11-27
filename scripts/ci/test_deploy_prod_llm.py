@@ -31,7 +31,8 @@ assert '-e LLM_PROVIDER -e LLM_MODEL -e LLM_EFFORT' in run
 assert run.count('-e ') == 3 and '--env-file' not in run
 assert 'GITHUB_WORKSPACE' not in run and 'GOOGLE_' not in run
 assert '--environment prod --config-root /app/config --stdout' in run
-assert all(jobs[name]['needs'] == 'resolve' for name in ('deploy-api', 'deploy-worker', 'deploy-voice', 'rules', 'web'))
+# All production jobs become ready together (one approval); infra-apply is ordered by their wait step, not by needs.
+assert all(set(jobs[name]['needs']) == {'resolve', 'infra-plan'} for name in ('deploy-api', 'deploy-worker', 'deploy-voice', 'rules', 'web', 'infra-apply'))
 
 # Run the actual workflow command with a fake Docker executable. Blank variables must
 # support historical images without starting any container or importing a newer loader.

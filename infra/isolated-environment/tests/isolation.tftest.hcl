@@ -220,3 +220,31 @@ run "staging_has_no_custom_domain_or_eval_host" {
     error_message = "Staging keeps open sign-up (no client permissions block)."
   }
 }
+
+run "terraform_ci_identities_are_workflow_scoped_for_apply_and_read_only_for_plan" {
+  command = plan
+  assert {
+    condition     = module.terraform_ci.bindings.apply_member == "principalSet://iam.googleapis.com/projects/904020682480/locations/global/workloadIdentityPools/github-apply/attribute.workflow_ref/Onolys/onolys/.github/workflows/deploy-staging.yml@refs/heads/main"
+    error_message = "Apply must be impersonable only by the deploy-staging workflow on refs/heads/main in its own pool, never by the whole repository."
+  }
+  assert {
+    condition     = module.terraform_ci.bindings.apply_condition == "assertion.repository=='Onolys/onolys' && assertion.ref=='refs/heads/main' && assertion.event_name in ['workflow_run','workflow_dispatch'] && assertion.job_workflow_ref=='Onolys/onolys/.github/workflows/deploy-staging.yml@refs/heads/main'"
+    error_message = "Staging apply provider admits only deploy-staging.yml on main, after CI (workflow_run) or by dispatch (no environment requirement)."
+  }
+  assert {
+    condition     = module.terraform_ci.bindings.plan_condition == "assertion.repository=='Onolys/onolys' && ((assertion.event_name in ['pull_request','workflow_dispatch'] && assertion.job_workflow_ref.startsWith('Onolys/onolys/.github/workflows/terraform.yml@')) || (assertion.event_name in ['workflow_run','workflow_dispatch'] && assertion.job_workflow_ref.startsWith('Onolys/onolys/.github/workflows/deploy-staging.yml@')))"
+    error_message = "Plan provider admits PR plans from terraform.yml and the deploy-staging pipeline only, never any event on main."
+  }
+  assert {
+    condition     = module.terraform_ci.bindings.plan_member == "principalSet://iam.googleapis.com/projects/904020682480/locations/global/workloadIdentityPools/github-plan/attribute.repository/Onolys/onolys"
+    error_message = "Plan uses its own pool so deployer and preview pools never admit it."
+  }
+  assert {
+    condition     = module.terraform_ci.bindings.state_bucket == "onolys-staging-tfstate" && module.terraform_ci.bindings.plan_upload_role == "roles/storage.objectCreator"
+    error_message = "State bucket follows the project; plan can only create saved plans."
+  }
+  assert {
+    condition     = !contains(module.terraform_ci.bindings.plan_roles, "roles/viewer") && !contains(module.terraform_ci.bindings.plan_roles, "roles/datastore.viewer")
+    error_message = "The plan identity must not hold roles that read Firestore documents or bucket objects."
+  }
+}

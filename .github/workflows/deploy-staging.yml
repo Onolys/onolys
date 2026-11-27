@@ -1,6 +1,8 @@
 name: deploy-staging
 
 # Merge to main -> staging (SP06 R13, R14 config guard, D5, D15). Runs after CI is green on main.
+# One ordered pipeline: build -> infra-plan (Terraform plan of staging at this commit) -> infra-apply (only when the plan has
+# changes) -> app deploy. Infra jobs are skipped while TF_STAGING_ENABLED is not 'true' (docs/reference/infra-pipeline.md).
 # Repo variables (owner sets from Terraform outputs; see docs/reference/infra.md):
 #   WIF_PROVIDER, DEPLOYER_STAGING_SA, GCP_PROJECT (optional, default onolys), GCP_REGION (optional, default us-central1),
 #   STAGING_VITE_FIREBASE_API_KEY, STAGING_VITE_FIREBASE_AUTH_DOMAIN, STAGING_VITE_FIREBASE_APP_ID,
@@ -117,11 +119,88 @@ jobs:
           IMAGE: ${{ steps.vars.outputs.repo }}@${{ steps.push.outputs.digest }}
         run: bash scripts/ci/check_config.sh --image "$IMAGE"
 
-  deploy-api:
+  infra-plan:
+    # Infrastructure first (docs/reference/infra-pipeline.md): plan staging at the commit being deployed. Skipped, and the
+    # deploy runs exactly as before, until the owner sets TF_STAGING_ENABLED=true after bootstrapping the identities.
     needs: build
+    if: ${{ !cancelled() && needs.build.result == 'success' && vars.TF_STAGING_ENABLED == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
     permissions:
       contents: read
       id-token: write
+    outputs:
+      changes: ${{ steps.plan.outputs.changes }}
+      sha256: ${{ steps.plan.outputs.sha256 }}
+      object: ${{ steps.plan.outputs.object }}
+      live_sha256: ${{ steps.plan.outputs.live_sha256 }}
+    steps:
+      # The workflow's own ref: helper scripts and the terraform-plan/apply actions (never the deployed commit's copies).
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      # The commit being deployed: its Terraform configuration only.
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ needs.build.outputs.sha }}
+          path: target
+          persist-credentials: false
+      - id: plan
+        uses: ./.github/actions/terraform-plan
+        with:
+          env: staging
+          root: target/infra/isolated-environment
+          tfroot: isolated
+          project: onolys-staging
+          bucket: onolys-staging-tfstate
+          backend: examples/backend-staging.hcl.example
+          varfile: examples/environment-staging.tfvars.example
+          wif_provider: ${{ vars.STAGING_WIF_PROVIDER }}
+          save: "true"
+
+  infra-apply:
+    # Only when the plan has changes; the app jobs below run after it, or right away when it is skipped.
+    needs: [build, infra-plan]
+    if: ${{ !cancelled() && needs.build.result == 'success' && needs.infra-plan.result == 'success' && needs.infra-plan.outputs.changes == 'true' }}
+    runs-on: ubuntu-latest
+    # Apply is a deploy-style job (Cloud Run, domains, Hosting can take several minutes); plan jobs stay within 5 minutes.
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      # The workflow's own ref: helper scripts and the terraform-plan/apply actions (never the deployed commit's copies).
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      # The commit being deployed: its Terraform configuration only.
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ needs.build.outputs.sha }}
+          path: target
+          persist-credentials: false
+      - uses: ./.github/actions/terraform-apply
+        with:
+          env: staging
+          root: target/infra/isolated-environment
+          tfroot: isolated
+          project: onolys-staging
+          bucket: onolys-staging-tfstate
+          backend: examples/backend-staging.hcl.example
+          wif_provider: ${{ vars.STAGING_WIF_PROVIDER }}
+          plan_sha256: ${{ needs.infra-plan.outputs.sha256 }}
+          plan_object: ${{ needs.infra-plan.outputs.object }}
+          live_sha256: ${{ needs.infra-plan.outputs.live_sha256 }}
+
+  # App jobs: every `if` starts with !cancelled() and checks each need's result explicitly. A skipped infra job (disabled, or
+  # no changes) must not skip the app, and the default success() would (it also looks at skipped jobs further upstream).
+  deploy-api:
+    needs: [build, infra-plan, infra-apply]
+    if: ${{ !cancelled() && needs.build.result == 'success' && (needs.infra-plan.result == 'success' || needs.infra-plan.result == 'skipped') && (needs.infra-apply.result == 'success' || needs.infra-apply.result == 'skipped') }}
+    permissions:
+      contents: read
+      id-token: write
+      actions: read # requested by _deploy-cloudrun.yml (wait_for_job; unused here)
     uses: ./.github/workflows/_deploy-cloudrun.yml
     with:
       env: staging
@@ -153,6 +232,7 @@ jobs:
   sweep-previews:
     # Orphan PR-preview revisions whose cleanup could not delete them (Cloud Run keeps the newest revision). Never fatal.
     needs: [build, deploy-api]
+    if: ${{ !cancelled() && needs.build.result == 'success' && needs.deploy-api.result == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -174,9 +254,11 @@ jobs:
 
   deploy-worker:
     needs: [build, deploy-api]
+    if: ${{ !cancelled() && needs.build.result == 'success' && needs.deploy-api.result == 'success' }}
     permissions:
       contents: read
       id-token: write
+      actions: read # requested by _deploy-cloudrun.yml (wait_for_job; unused here)
     uses: ./.github/workflows/_deploy-cloudrun.yml
     with:
       env: staging
@@ -196,9 +278,11 @@ jobs:
 
   deploy-voice:
     needs: [build, deploy-api]
+    if: ${{ !cancelled() && needs.build.result == 'success' && needs.deploy-api.result == 'success' }}
     permissions:
       contents: read
       id-token: write
+      actions: read # requested by _deploy-cloudrun.yml (wait_for_job; unused here)
     uses: ./.github/workflows/_deploy-cloudrun.yml
     with:
       env: staging
@@ -215,7 +299,8 @@ jobs:
     secrets: inherit
 
   rules:
-    needs: build
+    needs: [build, infra-plan, infra-apply]
+    if: ${{ !cancelled() && needs.build.result == 'success' && (needs.infra-plan.result == 'success' || needs.infra-plan.result == 'skipped') && (needs.infra-apply.result == 'success' || needs.infra-apply.result == 'skipped') }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -237,6 +322,7 @@ jobs:
 
   web:
     needs: [build, deploy-api]
+    if: ${{ !cancelled() && needs.build.result == 'success' && needs.deploy-api.result == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -286,6 +372,7 @@ jobs:
 
   smoke:
     needs: [build, deploy-api, deploy-worker, deploy-voice, rules, web]
+    if: ${{ !cancelled() && needs.build.result == 'success' && needs.deploy-api.result == 'success' && needs.deploy-worker.result == 'success' && needs.deploy-voice.result == 'success' && needs.rules.result == 'success' && needs.web.result == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:

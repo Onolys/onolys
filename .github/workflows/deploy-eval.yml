@@ -134,11 +134,88 @@ jobs:
           IMAGE: ${{ steps.vars.outputs.worker_repo }}@${{ steps.push-worker.outputs.digest }}
         run: bash scripts/ci/check_config.sh --image "$IMAGE"
 
-  deploy-worker:
+  infra-plan:
+    # Infrastructure first (docs/reference/infra-pipeline.md): plan eval at the commit being deployed. Skipped, and the
+    # release runs exactly as before, until the owner sets TF_EVAL_ENABLED=true after bootstrapping the identities.
     needs: build
+    if: ${{ !cancelled() && needs.build.result == 'success' && vars.TF_EVAL_ENABLED == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
     permissions:
       contents: read
       id-token: write
+    outputs:
+      changes: ${{ steps.plan.outputs.changes }}
+      sha256: ${{ steps.plan.outputs.sha256 }}
+      object: ${{ steps.plan.outputs.object }}
+      live_sha256: ${{ steps.plan.outputs.live_sha256 }}
+    steps:
+      # The workflow's own ref: helper scripts and the terraform-plan/apply actions (never the deployed commit's copies).
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      # The commit being deployed: its Terraform configuration only.
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ needs.build.outputs.sha }}
+          path: target
+          persist-credentials: false
+      - id: plan
+        uses: ./.github/actions/terraform-plan
+        with:
+          env: eval
+          root: target/infra/isolated-environment
+          tfroot: isolated
+          project: onolys-eval
+          bucket: onolys-eval-tfstate
+          backend: examples/backend-eval.hcl.example
+          varfile: examples/environment-eval.tfvars.example
+          wif_provider: ${{ vars.EVAL_WIF_PROVIDER }}
+          save: "true"
+
+  infra-apply:
+    # Only when the plan has changes; the app jobs below run after it, or right away when it is skipped.
+    needs: [build, infra-plan]
+    if: ${{ !cancelled() && needs.build.result == 'success' && needs.infra-plan.result == 'success' && needs.infra-plan.outputs.changes == 'true' }}
+    runs-on: ubuntu-latest
+    # Apply is a deploy-style job (Cloud Run, domains, Hosting can take several minutes); plan jobs stay within 5 minutes.
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      # The workflow's own ref: helper scripts and the terraform-plan/apply actions (never the deployed commit's copies).
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      # The commit being deployed: its Terraform configuration only.
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ needs.build.outputs.sha }}
+          path: target
+          persist-credentials: false
+      - uses: ./.github/actions/terraform-apply
+        with:
+          env: eval
+          root: target/infra/isolated-environment
+          tfroot: isolated
+          project: onolys-eval
+          bucket: onolys-eval-tfstate
+          backend: examples/backend-eval.hcl.example
+          wif_provider: ${{ vars.EVAL_WIF_PROVIDER }}
+          plan_sha256: ${{ needs.infra-plan.outputs.sha256 }}
+          plan_object: ${{ needs.infra-plan.outputs.object }}
+          live_sha256: ${{ needs.infra-plan.outputs.live_sha256 }}
+
+  # App jobs: every `if` starts with !cancelled() and checks each need's result explicitly. A skipped infra job (disabled, or
+  # no changes) must not skip the app, and the default success() would (it also looks at skipped jobs further upstream).
+  deploy-worker:
+    needs: [build, infra-plan, infra-apply]
+    if: ${{ !cancelled() && needs.build.result == 'success' && (needs.infra-plan.result == 'success' || needs.infra-plan.result == 'skipped') && (needs.infra-apply.result == 'success' || needs.infra-apply.result == 'skipped') }}
+    permissions:
+      contents: read
+      id-token: write
+      actions: read # requested by _deploy-cloudrun.yml (wait_for_job; unused here)
     uses: ./.github/workflows/_deploy-cloudrun.yml
     with:
       env: eval
@@ -154,6 +231,7 @@ jobs:
 
   deploy-backend:
     needs: [build, deploy-worker]
+    if: ${{ !cancelled() && needs.build.result == 'success' && needs.deploy-worker.result == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     environment: staging
@@ -179,6 +257,7 @@ jobs:
 
   site:
     needs: [build, deploy-backend]
+    if: ${{ !cancelled() && needs.build.result == 'success' && needs.deploy-backend.result == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     environment: staging
@@ -227,7 +306,8 @@ jobs:
         run: npx --yes firebase-tools@${{ env.FIREBASE_TOOLS_VERSION }} deploy --config eval/web/firebase.json --only "hosting:eval-staging" --project "$PROJECT" --non-interactive
 
   firestore:
-    needs: build
+    needs: [build, infra-plan, infra-apply]
+    if: ${{ !cancelled() && needs.build.result == 'success' && (needs.infra-plan.result == 'success' || needs.infra-plan.result == 'skipped') && (needs.infra-apply.result == 'success' || needs.infra-apply.result == 'skipped') }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     environment: staging
@@ -250,6 +330,7 @@ jobs:
 
   smoke:
     needs: [deploy-backend, site, firestore]
+    if: ${{ !cancelled() && needs.deploy-backend.result == 'success' && needs.site.result == 'success' && needs.firestore.result == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:

@@ -12,8 +12,9 @@ artifact_registry_reader_members = [
   "serviceAccount:service-1054076260967@serverless-robot-prod.iam.gserviceaccount.com",
 ]
 app_base_url = "https://onolys-staging-app.web.app"
-# Enable only after seeding resend-api-key-staging and validation:
-resend_secret_wired = false
+# Live staging has resend-api-key-staging seeded and wired on api and worker (verified 2026-11-26 with
+# gcloud run services describe). CI plans and applies with this file, so it must match live.
+resend_secret_wired = true
 # Limited identity for pull_request previews (pr-preview*.yml); outputs feed STAGING_PREVIEW_WIF_PROVIDER / STAGING_PREVIEW_SA.
 enable_pr_previews = true
 # Optional: keep staging plans free of drift. deploy-staging sets GIT_SHA and

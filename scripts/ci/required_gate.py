@@ -12,7 +12,7 @@ JOB_FLAGS = {
     "eval-core": "eval", "eval-backend": "eval-backend", "eval-web": "eval-web",
     "api-unit": "api", "api-emulator": "api", "api-coverage": "api",
     "api-flaky": "api", "api-rules": "api", "api-image": "api",
-    "frontend": "frontend", "web": "web", "web-e2e": "web", "infra": "infra",
+    "frontend": "frontend", "web": "web", "web-e2e": "web", "infra": "infra", "infra-isolated": "infra",
 }
 
 

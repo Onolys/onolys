@@ -1,0 +1,159 @@
+name: terraform
+
+# Terraform plan on pull requests (docs/reference/infra-pipeline.md). Nobody runs `terraform apply` by hand, and this workflow
+# never applies: each deploy pipeline (deploy-staging.yml, deploy-eval.yml, deploy-prod.yml) plans its environment at the
+# commit being deployed, applies only when that plan has changes, then deploys the app, in one ordered run.
+#   pull_request       plan prod (legacy infra/), staging and eval (infra/isolated-environment) and post one PR comment.
+#   workflow_dispatch  the same read-only plans on main (run summary only), e.g. to check for drift.
+# Repository and logs are public: nothing prints plan attribute values (see scripts/ci/tf_plan_summary.py).
+# fmt/validate/terraform test run in ci.yml (jobs `infra`, `infra-isolated`, part of the `required` gate).
+# Plan identities are derived from the existing WIF_PROVIDER / STAGING_WIF_PROVIDER / EVAL_WIF_PROVIDER variables
+# (scripts/ci/tf_identity.py); the only new repo variables are the enable flags TF_PROD_ENABLED, TF_STAGING_ENABLED,
+# TF_EVAL_ENABLED ("true" once the identities are bootstrapped). Unset = that environment is skipped here and in its deploy.
+on:
+  pull_request:
+    paths:
+      - "infra/**"
+      - ".github/workflows/terraform.yml"
+      - ".github/actions/terraform-plan/**"
+      - ".github/actions/terraform-apply/**"
+      - "scripts/ci/tf_*.py"
+      - "scripts/ci/tf-apply-requirements.txt"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  TF_IN_AUTOMATION: "true"
+  TF_INPUT: "0"
+  TF_PLUGIN_CACHE_DIR: ${{ github.workspace }}/.terraform-plugin-cache
+
+jobs:
+  plan:
+    # Same-repo only: fork PRs get no OIDC token and must never reach cloud identities.
+    # workflow_dispatch only from main.
+    if: (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && (github.event_name != 'workflow_dispatch' || github.ref == 'refs/heads/main')
+    runs-on: ubuntu-latest
+    # CI budget: every job finishes within 5 minutes (plugin cache, readonly lockfile, one job per environment).
+    timeout-minutes: 5
+    concurrency:
+      group: terraform-plan-${{ matrix.env }}-${{ github.ref }}
+      cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+    permissions:
+      contents: read
+      id-token: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - env: prod
+            prefix: PROD
+            wif_var: WIF_PROVIDER
+            root: infra
+            backend: ""
+            varfile: ""
+            project: onolys
+            bucket: onolys-tfstate
+            tfroot: legacy
+          - env: staging
+            prefix: STAGING
+            wif_var: STAGING_WIF_PROVIDER
+            root: infra/isolated-environment
+            backend: examples/backend-staging.hcl.example
+            varfile: examples/environment-staging.tfvars.example
+            project: onolys-staging
+            bucket: onolys-staging-tfstate
+            tfroot: isolated
+          - env: eval
+            prefix: EVAL
+            wif_var: EVAL_WIF_PROVIDER
+            root: infra/isolated-environment
+            backend: examples/backend-eval.hcl.example
+            varfile: examples/environment-eval.tfvars.example
+            project: onolys-eval
+            bucket: onolys-eval-tfstate
+            tfroot: isolated
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - id: cfg
+        env:
+          ENABLED: ${{ vars[format('TF_{0}_ENABLED', matrix.prefix)] }}
+          WIF: ${{ vars[matrix.wif_var] }}
+        run: |
+          set -euo pipefail
+          if [ "$ENABLED" = "true" ] && [ -n "$WIF" ]; then
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::TF_${{ matrix.prefix }}_ENABLED is not 'true' (or ${{ matrix.wif_var }} is unset): pipeline not bootstrapped for ${{ matrix.env }}; skipping."
+            python3 scripts/ci/tf_plan_summary.py --env "${{ matrix.env }}" --status unconfigured > "$RUNNER_TEMP/summary.md"
+            cat "$RUNNER_TEMP/summary.md" >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - if: steps.cfg.outputs.ok == 'true'
+        uses: ./.github/actions/terraform-plan
+        with:
+          env: ${{ matrix.env }}
+          root: ${{ matrix.root }}
+          tfroot: ${{ matrix.tfroot }}
+          project: ${{ matrix.project }}
+          bucket: ${{ matrix.bucket }}
+          backend: ${{ matrix.backend }}
+          varfile: ${{ matrix.varfile }}
+          wif_provider: ${{ vars[matrix.wif_var] }}
+          save: "false"
+      - name: Collect the summary for the PR comment
+        if: always()
+        env:
+          ENVNAME: ${{ matrix.env }}
+        run: |
+          mkdir -p tf-summary
+          for f in "$RUNNER_TEMP/summary.md" "$RUNNER_TEMP/tf-summary-${ENVNAME}.md"; do
+            if [ -f "$f" ]; then cp "$f" "tf-summary/${ENVNAME}.md"; fi
+          done
+      - if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: tf-summary-${{ matrix.env }}
+          path: tf-summary/
+          retention-days: 7
+          if-no-files-found: ignore
+
+  comment:
+    needs: plan
+    if: always() && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          pattern: tf-summary-*
+          path: tf-summary
+          merge-multiple: true
+      - name: Create or update the single plan comment
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
+        with:
+          script: |
+            const fs = require('fs');
+            const marker = '<!-- terraform-plan-comment -->';
+            const order = ['prod', 'staging', 'eval'];
+            const parts = [];
+            for (const env of order) {
+              const file = `tf-summary/${env}.md`;
+              if (fs.existsSync(file)) parts.push(fs.readFileSync(file, 'utf8').trim());
+            }
+            if (!parts.length) { core.notice('no plan summaries to post'); return; }
+            const run = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            let body = `${marker}\n### Terraform plan\n\n${parts.join('\n\n---\n\n')}\n\n_Resource addresses and actions only; values are never posted. Run ${run}. Nothing is applied from this PR: each environment's deploy pipeline (deploy-staging, deploy-eval, deploy-prod) plans again at the commit it deploys and applies before the app; prod inside the same \`production\` approval as the app._`;
+            if (body.length > 64000) body = body.slice(0, 64000) + '\n\n...(truncated)';
+            const { owner, repo } = context.repo;
+            const issue_number = context.issue.number;
+            const comments = await github.paginate(github.rest.issues.listComments, { owner, repo, issue_number, per_page: 100 });
+            const mine = comments.find(c => c.user.type === 'Bot' && c.body && c.body.includes(marker));
+            if (mine) await github.rest.issues.updateComment({ owner, repo, comment_id: mine.id, body });
+            else await github.rest.issues.createComment({ owner, repo, issue_number, body });
