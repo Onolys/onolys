@@ -7,7 +7,9 @@ export const MAX_LOGS_IDS = 40;
 
 const BASE = 'https://console.cloud.google.com/logs/query';
 const quote = (id: string) => `"${id.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
-const url = (filter: string) => `${BASE};query=${encodeURIComponent(`resource.labels.service_name=${quote(LOGS_SERVICE)} AND ${filter}`)};duration=${LOGS_DURATION}?project=${LOGS_PROJECT}`;
+/** encodeURIComponent leaves ( ) ' ! * ~ raw; the Cloud Console treats parentheses in the URL as its own state syntax and drops the query, so encode them too. */
+const enc = (s: string) => encodeURIComponent(s).replace(/[!'()*~]/g, c => '%' + c.charCodeAt(0).toString(16).toUpperCase());
+const url = (filter: string) => `${BASE};query=${enc(`resource.labels.service_name=${quote(LOGS_SERVICE)} AND ${filter}`)};duration=${LOGS_DURATION}?project=${LOGS_PROJECT}`;
 
 export const isWorkerRunId = (id: string | null | undefined): id is string => !!id && !id.startsWith('cell-') && !id.startsWith('human-');
 
