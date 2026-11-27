@@ -12,6 +12,9 @@
 .run-logs.is-disabled { color: var(--ui-muted-fg); text-decoration: none; cursor: not-allowed; }
 .run-actions { display: flex; align-items: center; flex-wrap: wrap; gap: .4rem .6rem; margin-left: auto; font-size: .8125rem; }
 .run-actions a { color: var(--primary, #0b5f5a); text-decoration: underline; text-underline-offset: .15rem; }
+.run-actions a.run-compare-go { background: var(--ui-good); border-color: var(--ui-good); color: #fff; text-decoration: none; }
+.run-actions a.run-compare-go:hover { background: #124a35; border-color: #124a35; color: #fff; }
+.run-actions a.run-compare-go:focus-visible { outline: 2px solid var(--ui-good); outline-offset: 2px; }
 .run-cancel { color: var(--destructive, #8a3030); }
 .run-status { display: grid; gap: .45rem; }
 .run-chips { display: flex; flex-wrap: wrap; gap: .35rem .45rem; }
