@@ -1,6 +1,10 @@
 {
   "eval_run_id": "eval-lines",
   "has_human": true,
+  "session_labels": {
+    "synthetic-s01": "syn-01",
+    "synthetic-s02": "syn-02"
+  },
   "combos": [
     {
       "combo_key": "claude/synthetic-large/low",

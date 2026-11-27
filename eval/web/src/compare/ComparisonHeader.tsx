@@ -10,6 +10,7 @@ import type { CompareOverview } from './compareApi';
 import { EvalLink, type CompareNavigate } from './CompareLink';
 import { failedCombos } from './failedCombos';
 import type { ComboLegendEntry } from './compareTypes';
+import { sessionLabel } from './sessionLabel';
 import './comparisonHeader.css';
 
 const SHOWN_INCOMPLETE = 3;
@@ -44,7 +45,7 @@ export function ComparisonHeader({ data, run, runId, navigate, legend, cohorts }
  const letter = (key: string) => legend.find(item => item.combo.combo_key === key)?.letter ?? key;
  const otherExcluded = data.excluded.filter(item => !(item.combo_key && item.reason.startsWith('failed:')));
  const excludedItems = [...failed.map(item => ({ key: item.combo_key, text: `${letter(item.combo_key)}: ${item.code}`, tone: 'danger' as const })),
-  ...[...new Map(otherExcluded.map(item => [`${item.session_id}|${item.combo_key}|${item.reason}`, item])).values()].map(item => ({ key: `${item.session_id}|${item.combo_key}|${item.reason}`, text: `${item.combo_key ? `${letter(item.combo_key)}: ` : `${item.session_id}: `}${item.reason}`, tone: 'muted' as const }))];
+  ...[...new Map(otherExcluded.map(item => [`${item.session_id}|${item.combo_key}|${item.reason}`, item])).values()].map(item => ({ key: `${item.session_id}|${item.combo_key}|${item.reason}`, text: `${item.combo_key ? `${letter(item.combo_key)}: ` : `${sessionLabel(data.session_labels, item.session_id)}: `}${item.reason}`, tone: 'muted' as const }))];
  const total = failed.length + otherExcluded.length;
  const sub = failed.length ? (failed.every(item => item.all) ? 'all runs failed' : 'some runs failed') : excludedItems.length ? 'not compared' : 'Nothing excluded';
  return <header className="compare-header">

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { EvalLink } from './CompareLink';
 import type { CompareDeepDive, CompareOptions } from './compareApi';
 import type { CompareTabProps } from './compareTypes';
+import { sessionLabel } from './sessionLabel';
 import { GlobalsDotPlot } from './charts/GlobalsDotPlot';
 import { MissBuckets } from './charts/MissBuckets';
 import { CountBars } from './charts/CountBars';
@@ -38,7 +39,7 @@ function LineAgreement({data,legend,runId,navigate,state,api,series}:Props&{seri
   {series.filter(item=>data.lines.combos[item.key]?.lane).map(item=><p key={item.key} className="deep-empty">no line-level output ({letter(item.key)})</p>)}
   {available.length>0&&<><PrfTable lines={data.lines} series={available}/>
    <ConfusionGrid combos={data.lines.combos} series={available} onSwitch={()=>{pending.current?.abort();setLoading(false);setError(undefined);setMatches(null);}} onMatch={pick=>void find({combos:selected,...pick})} footer={<>
-    {loading&&<p role="status">Loading matching sessions…</p>}{error&&<div role="alert"><p>{error}</p><button type="button" onClick={()=>{if(lastOptions.current)void find(lastOptions.current);}}>Retry matching sessions</button></div>}{matches&&(matches.ids.length?<ul aria-label="Matching sessions">{matches.ids.map(session=><li key={session}><EvalLink state={{...state,view:'compare',run:runId,tab:'lines',...matches.options,session,only:'disagree'}} navigate={navigate}>{session}</EvalLink></li>)}</ul>:<p>No matching sessions</p>)}</>}/>
+    {loading&&<p role="status">Loading matching sessions…</p>}{error&&<div role="alert"><p>{error}</p><button type="button" onClick={()=>{if(lastOptions.current)void find(lastOptions.current);}}>Retry matching sessions</button></div>}{matches&&(matches.ids.length?<ul aria-label="Matching sessions">{matches.ids.map(session=><li key={session}><EvalLink state={{...state,view:'compare',run:runId,tab:'lines',...matches.options,session,only:'disagree'}} navigate={navigate}>{sessionLabel(data.session_labels,session)}</EvalLink></li>)}</ul>:<p>No matching sessions</p>)}</>}/>
   </>}
  </section>;
 }
@@ -59,11 +60,11 @@ export function DeepDive(props:Props) {
   {!data.has_human?<p>no human reference</p>:<>
    <section><h3 className="deep-section-title">Globals</h3><div className="deep-grid">{globals.map(([metric,cells])=>{
     const dots=data.globals.dots.filter(dot=>dot.metric===metric&&shown.some(combo=>combo.combo_key===dot.combo_key));
-    return <section key={metric} ref={node=>{sectionRefs.current[metric]=node;}}><GlobalsDotPlot metric={metric} title={`${metricNames[metric]??metric} ratings`} dots={dots} series={series} cells={cells}/></section>;
+    return <section key={metric} ref={node=>{sectionRefs.current[metric]=node;}}><GlobalsDotPlot metric={metric} title={`${metricNames[metric]??metric} ratings`} dots={dots} series={series} cells={cells} labels={data.session_labels}/></section>;
    })}</div><MissBuckets globals={globals.map(([metric,cells])=>({metric,title:metricNames[metric]??metric,cells}))} series={series}/></section>
    <section><h3 className="deep-section-title">Counts per code</h3><CountBars codes={codes} human={data.counts.human} cells={data.counts.cells} bias={data.counts.bias_pct} series={series} onSection={(code,node)=>{sectionRefs.current[code]=node;}}/></section>
    <LineAgreement key={selected.join(',')} {...props} series={series}/>
-   <ReasoningRollup codes={codes} human={data.counts.human} rationaleCounts={data.rationale_counts} combos={shown.map(combo=>combo.combo_key)} letter={letter} api={api} runId={runId} selected={selected}/>
+   <ReasoningRollup codes={codes} human={data.counts.human} rationaleCounts={data.rationale_counts} combos={shown.map(combo=>combo.combo_key)} letter={letter} api={api} runId={runId} selected={selected} labels={data.session_labels}/>
   </>}
  </div>;
 }

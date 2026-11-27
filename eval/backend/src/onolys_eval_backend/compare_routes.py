@@ -134,6 +134,9 @@ def _view(request, eval_run_id, combos):
                     "model": c.get("model"), "tier": c.get("tier"), "effort": c.get("effort")}
                    for c in selected],
         "coverage": cov,
+        # Readable dataset session name (e.g. "high-001") per internal sid, for display only.
+        "session_labels": {s["session_id"]: s.get("dataset_session_id") or s["session_id"]
+                           for s in group["sessions"]},
         "excluded": [e for e in excluded(final, bad) if e["combo_key"] in keys]
                     + [e for e in metrics.excluded
                        if e["combo_key"] is None or e["combo_key"] in keys],

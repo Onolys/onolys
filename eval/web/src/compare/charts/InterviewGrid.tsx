@@ -4,6 +4,7 @@ import { EvalLink, type CompareNavigate } from '../CompareLink';
 import type { CompareAnalysis } from '../compareApi';
 import type { ComboLegendEntry } from '../compareTypes';
 import type { FailedCombo } from '../failedCombos';
+import { sessionLabel } from '../sessionLabel';
 import './matrix.css';
 
 const na = (reason?: string) => `n/a${reason ? ` - ${reason}` : ''}`;
@@ -21,7 +22,7 @@ export function InterviewGrid({ data, legend, failed, runId, navigate }: { data:
    <caption className="ui-sr">Session Count error, paired n, successful repeats and labeled codes</caption>
    <thead><tr><th scope="col" className="mx-corner">Session</th>{data.combos.map(c => <th scope="col" key={c.combo_key} className={failedAll.has(c.combo_key) ? 'mx-muted' : undefined}><ComboTag index={index(c.combo_key)} letter={letter(c.combo_key)} />{data.skipped_combos.includes(c.combo_key) && <Chip tone="muted">skipped</Chip>}{failedAll.has(c.combo_key) && <Chip tone="danger">failed</Chip>}</th>)}</tr></thead>
    <tbody>{data.grid.map(row => <tr key={row.session_id}>
-    <th scope="row"><EvalLink state={{ run: runId, view: 'compare', tab: 'lines', session: row.session_id }} navigate={navigate}>{row.session_id}</EvalLink></th>
+    <th scope="row"><EvalLink state={{ run: runId, view: 'compare', tab: 'lines', session: row.session_id }} navigate={navigate}>{sessionLabel(data.session_labels, row.session_id)}</EvalLink></th>
     {data.combos.map(c => {
      const cell = row.cells[c.combo_key];
      if (failedAll.has(c.combo_key)) return <td key={c.combo_key} className="mx-muted">—</td>;

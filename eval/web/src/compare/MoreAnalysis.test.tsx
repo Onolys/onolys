@@ -69,7 +69,7 @@ it('keeps head-to-head and interviews behind toggles; opening shows server count
  const matrix=screen.getByRole('table',{name:'Head-to-head'});
  expect(within(matrix).getByLabelText('A closer than B on 0 of 2 sessions, 7 ties')).toBeTruthy();
  expect(within(matrix).getByLabelText('B closer than A on 2 of 2 sessions, 7 ties')).toBeTruthy();
- const link=screen.getByRole('link',{name:'synthetic-s01'});
+ const link=screen.getByRole('link',{name:'syn-01'});
  expect(link.getAttribute('href')).toBe('?run=eval-lines&view=compare&tab=lines&session=synthetic-s01');
  fireEvent.click(link);
  expect(input.navigate).toHaveBeenCalledWith({run:'eval-lines',view:'compare',tab:'lines',session:'synthetic-s01'});
