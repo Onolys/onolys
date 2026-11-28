@@ -1,5 +1,5 @@
 """Smoke test: the synthetic compare fixtures load through the fake source, validate against the
-real contracts, cover every SP06 scenario, and need no network."""
+real contracts, cover every compare scenario, and need no network."""
 import hashlib
 import json
 import re

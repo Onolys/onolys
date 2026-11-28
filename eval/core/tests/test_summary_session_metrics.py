@@ -1,4 +1,4 @@
-"""SP06 Task 3: session-balanced counts, globals, cohorts and cells (pure, in-memory inputs)."""
+"""Session-balanced counts, globals, cohorts and cells (pure, in-memory inputs)."""
 import pytest
 from onolys_eval.gold import COUNT_IDS, GLOBAL_IDS
 from onolys_eval.summary.gold_view import GoldProjection

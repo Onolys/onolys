@@ -1,4 +1,4 @@
-"""Cancel rework (05 R7, Decision 6): stop new runs only, keep completed work, no worker edit.
+"""Cancel rework: stop new runs only, keep completed work, no worker edit.
 
 Reuses the fake harness of test_eval_scheduler / test_eval_resilience (fake clock, no sleeping).
 Delete (Task 8) is not built: "delete refused until terminal" is covered by the status staying

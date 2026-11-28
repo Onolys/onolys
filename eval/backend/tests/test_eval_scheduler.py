@@ -1,4 +1,4 @@
-"""Tick scheduler core (05 R6): a deterministic fake harness, no LLM, no network.
+"""Tick scheduler core: a deterministic fake harness, no LLM, no network.
 
 The prod worker is simulated by flipping RunDocs to done/failed between ticks. Ticks are driven
 by calling `run_tick` with the group doc's own `tick_seq`, as the queue would; nothing calls GET.
@@ -467,7 +467,7 @@ def test_get_run_detail_restarts_a_stalled_chain(env, monkeypatch):
 
 
 def test_worst_case_group_doc_stays_under_the_firestore_limit(env):
-    """499 cells x 8 attempts of refs (R4): the serialized doc is far below 1 MiB."""
+    """499 cells x 8 attempts of refs: the serialized doc is far below 1 MiB."""
     from onolys_eval_backend.eval_group import session_entry
 
     entry = session_entry("one", 0, "0" * 64)

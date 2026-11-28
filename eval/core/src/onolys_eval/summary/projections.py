@@ -1,4 +1,4 @@
-"""Public entry point for the SP06 projections (report, gold, transcript)."""
+"""Public entry point for the compare projections (report, gold, transcript)."""
 from .gold_view import (
     LABEL_COVERAGE,
     GoldProjection,

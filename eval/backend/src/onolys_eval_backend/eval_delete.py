@@ -1,4 +1,4 @@
-"""Delete one eval run's data, resumably (05 R8, Decision 7).
+"""Delete one eval run's data, resumably.
 
 `POST /v1/runs/{id}/delete {confirm_run_id}` is refused 409 `run_active` unless the run is
 terminal; otherwise it sets `deleting` (the tick ignores it, History shows it), answers 202 and

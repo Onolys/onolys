@@ -7,7 +7,7 @@ import analysis from './fixtures/analysis.json';
 import reasoning from './fixtures/reasoning.json';
 import lines from './fixtures/lines.json';
 import turn from './fixtures/turn.json';
-it('loads all real SP06 projections through the authenticated request with opaque filters', async () => {
+it('loads all real compare projections through the authenticated request with opaque filters', async () => {
  const fetcher=vi.fn(); const api=createEvalApi('https://eval/',fetcher); const signal=new AbortController().signal;
  for (const [call,payload,suffix] of [
   [() => api.compareOverview('r/1',{combos:['miti|model/tier/effort']},signal),overview,'overview'],

@@ -1,4 +1,4 @@
-"""Server-driven tick scheduler for eval runs (05 R6): the browser is never needed.
+"""Server-driven tick scheduler for eval runs: the browser is never needed.
 
 `POST /internal/tasks/tick {eval_run_id, n}` runs one scheduling round for one eval run:
 
@@ -11,8 +11,8 @@
    claim (cap from config), drift check, `create_run(is_eval=True)` with a deterministic id;
 5. all cells terminal -> roll the status up; later ticks are no-ops.
 
-Task 6 (R6b-R6d): overload `waiting` + provider cooldown, per-cell isolation (`_isolated`),
-provider breaker (`_record_outcome`). Cancel (R7): `_cancel_cells`.
+Resilience: overload `waiting` + provider cooldown, per-cell isolation (`_isolated`),
+provider breaker (`_record_outcome`). Cancel: `_cancel_cells`.
 """
 
 import hashlib
@@ -45,10 +45,10 @@ TICK_DELAY_S = 10
 STALE_TICK_S = 60  # GET re-enqueues a tick when none has run for this long while active
 ACTIVE = {"queued", "running"}
 RUN_TERMINAL = {"done", "failed"}  # RunStatus values of a finished RunDoc
-# Provider capacity codes: the cell goes `waiting` behind a provider cooldown (R6b).
+# Provider capacity codes: the cell goes `waiting` behind a provider cooldown.
 OVERLOAD_CODES = {"upstream_unavailable", "rate_limited"}
 OVERLOAD_BASE_S, OVERLOAD_CAP_S, OVERLOAD_MAX_RETRIES = 15, 120, 6
-HANDLER_ERROR_LIMIT = 3  # consecutive handler errors on one cell before it fails (R6c)
+HANDLER_ERROR_LIMIT = 3  # consecutive handler errors on one cell before it fails
 ZERO_USAGE = {"input_tokens": 0, "output_tokens": 0, "calls": 0, "cost_usd": 0.0}
 
 
@@ -173,7 +173,7 @@ def _advance(entry: dict, cells: list[dict]) -> None:
 
 
 def _record_outcome(services, doc: dict, cells: list[dict], provider: str, outcome: str) -> None:
-    """Provider breaker (R6d): only FINAL `failed` counts, `done` resets, anything else (cancelled,
+    """Provider breaker: only FINAL `failed` counts, `done` resets, anything else (cancelled,
     skipped, waiting) neither counts nor resets. At the limit, every not-started cell of the
     provider in this eval run is skipped (`provider_unavailable`); in-flight runs are kept."""
     if outcome not in ("done", "failed") or provider in doc.setdefault("provider_skips", {}):
@@ -230,7 +230,7 @@ def _isolated(
     services, doc: dict, sid: str, cells: list[dict], handler, *,
     clear_errors=True, preserve_active=False,
 ):
-    """Run one cell's handler (R6c): an unexpected exception is logged (cell key, no payload),
+    """Run one cell's handler: an unexpected exception is logged (cell key, no payload),
     its partial changes are rolled back, and after 3 consecutive errors only that cell fails.
     Uncertain active-run reads retain their ref/slot until an actual outcome can be read.
     """
@@ -525,14 +525,14 @@ def _rollup(doc: dict) -> None:
     elif done:
         doc["status"] = "partial"
     elif doc["cancelled_units"] and not doc["skipped_units"] and not doc["failed_units"]:
-        doc["status"] = "cancelled"  # R7: no run done, even if in-flight ones failed
+        doc["status"] = "cancelled"  # cancel: no run done, even if in-flight ones failed
     else:
         doc["status"] = "failed"
     doc["finished_at"] = _now().isoformat()
 
 
 def _cancel_cells(doc: dict, cells: list[dict]) -> None:
-    """R7: every cell not started, `waiting` included, becomes `cancelled`; skipped cells stay
+    """Cancel: every cell not started, `waiting` included, becomes `cancelled`; skipped cells stay
     skipped; the in-flight run (if any) finishes and is kept. Cancelled cells are added to
     `skipped_idx` so the cursor steps over them, and never reach `_record_outcome` (breaker).
     Idempotent: a second pass finds nothing left to mark."""

@@ -1,4 +1,4 @@
-"""Run selection, cost, time, coverage, excluded runs and status gating (SP06 R1, R6, R10).
+"""Run selection, cost, time, coverage, excluded runs and status gating.
 
 Pure: no I/O, no clock. Inputs are `EvalRunSource.cells` dicts and the grouping doc. Only the
 highest `attempt` per (session, combo, repeat) counts; earlier attempts feed only the time

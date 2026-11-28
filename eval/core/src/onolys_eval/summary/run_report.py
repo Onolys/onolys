@@ -1,4 +1,4 @@
-"""Engine-keyed parsing of one saved ReportDoc into a typed run projection (SP06 R2).
+"""Engine-keyed parsing of one saved ReportDoc into a typed run projection.
 
 Pure: no I/O, no clock. Parsing is keyed by `RunDoc.eval.engine`, never by sniffing the report
 shape. A run that cannot be read exactly is `unparseable` with a reason code (fail closed): a

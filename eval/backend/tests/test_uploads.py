@@ -473,7 +473,7 @@ def test_default_english_maps_to_supported_google_stt_locale_only(
     assert services.stt_params(language).language == expected
 
 
-# --- LM-18 / D3 / M-7 / B7 ---------------------------------------------------------------
+# --- Upload and language handling ---------------------------------------------------
 
 
 class FakeClock:

@@ -1,4 +1,4 @@
-"""SP06 Task 4: line alignment, presence P/R/F1, confusion with multi bucket (pure)."""
+"""Line alignment, presence P/R/F1, confusion with multi bucket (pure)."""
 import pytest
 
 from onolys_eval.summary.gold_view import GoldProjection, LineLabel

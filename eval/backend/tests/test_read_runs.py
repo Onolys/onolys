@@ -1,4 +1,4 @@
-"""Read side on the prod pipeline (05 R10/R11): RunDocs, ReportDocs and gold behind the legacy
+"""Read side on the prod pipeline: RunDocs, ReportDocs and gold behind the legacy
 shapes. No units subcollection; scores are computed on read. Synthetic fixtures only."""
 
 import hashlib

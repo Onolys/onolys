@@ -1,4 +1,4 @@
-"""Offline tests for SP06 More analysis and payload-grounded verdicts."""
+"""Offline tests for compare More analysis and payload-grounded verdicts."""
 from dataclasses import replace
 
 import pytest

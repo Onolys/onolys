@@ -1,4 +1,4 @@
-"""Line alignment, presence-based P/R/F1 and confusion per combo (SP06 R7). Pure: no I/O, no clock.
+"""Line alignment, presence-based P/R/F1 and confusion per combo. Pure: no I/O, no clock.
 
 Aligned lines = clinician turns of the session (already inside the coded span) that have a gold
 `utterance_codes` row. Universe L = codes the dataset labels; codes outside L are masked on both
@@ -112,7 +112,7 @@ def _session_score(aligned, runs: Sequence[ParsedRun], universe, order):
 
 def compute_line_metrics(sessions: Sequence[LineSession], combos: Sequence[str],
                          codes_labeled: Sequence[str], dataset_id: str | None = None) -> LineMetrics:
-    """Line metrics over the requested `combos`; `codes_labeled` is the universe L (R3)."""
+    """Line metrics over the requested `combos`; `codes_labeled` is the universe of coded labels."""
     out = LineMetrics(codes_labeled=tuple(codes_labeled))
     if dataset_id in DATASET_NOTES:
         out.dataset_notes.append(DATASET_NOTES[dataset_id])

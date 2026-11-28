@@ -1,1 +1,1 @@
-"""Synthetic compare fixtures (SP06). See README.md."""
+"""Synthetic compare fixtures. See README.md."""

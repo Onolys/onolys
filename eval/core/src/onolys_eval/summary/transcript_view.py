@@ -1,4 +1,4 @@
-"""Transcript projection for the Line view (SP06 R4).
+"""Transcript projection for the Line view.
 
 Pure. Only the saved TranscriptDoc's turns inside the run's pinned `coded_span`, with
 `is_clinician`. No storage pointers, no audio refs, no invented fields. A transcript whose

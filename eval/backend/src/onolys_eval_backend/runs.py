@@ -204,7 +204,7 @@ def _pinned_sessions(services, body, pinned):
 def create_run(
     services, config, body, created_by, *, registry=None, pinned=None, saved_config=None
 ):
-    """Create the eval run's grouping doc and enqueue tick 1 (05 R5). No RunDoc is created.
+    """Create the eval run's grouping doc and enqueue tick 1. No RunDoc is created.
 
     Sessions are imported once and shared (`ensure_session`); `pinned` (a rerun) is the saved
     `sessions` map whose sids are reused after a transcript-hash check. `saved_config` is the
@@ -373,7 +373,7 @@ def post_run(request: Request, body: RunRequest):
 
 @router.post("/v1/runs/{run_id}/cancel")
 def cancel_run(request: Request, run_id: str):
-    """Stop new runs only (05 R7). Only the flags are written here, in one transaction; the tick
+    """Stop new runs only. Only the flags are written here, in one transaction; the tick
     marks unstarted cells `cancelled` (it owns every other write to the group doc, so a cancel
     cannot be lost to, or clobber, a concurrent tick). In-flight runs finish; idempotent; a
     terminal or already-cancelled run is a no-op (the repository ignores non-active runs)."""

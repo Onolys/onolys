@@ -2,7 +2,7 @@
 # Source PDFs and extracted text are retained only in the private, external cache.
 dataset_id: casaa-miti421-video2013
 title: CASAA 2013 Helping People Change video series — MITI 4.2.1
-license_note: Internal use only; reuse terms confirmed OK by owner (D5).
+license_note: Internal use only; reuse terms confirmed OK by owner.
 source_page: https://casaa.unm.edu/tools/miti.html
 miti_version: 4.2.1
 # Verified 2026-11-24: the CASAA page links only ordering info (video via changecompanies.net)

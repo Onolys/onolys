@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from onolys_api.config import Settings
 from onolys_engine_core.errors import ConfigError
 
-# Pre-R14 names. The eval backend now uses the api's AUTH_PROJECT / CORS_ORIGINS plus
+# Legacy names. The eval backend now uses the api's AUTH_PROJECT / CORS_ORIGINS plus
 # EVAL_ALLOWED_EMAILS, and refuses to start if an old name is still set.
 REMOVED_ENV = (
     "EVAL_AUTH",

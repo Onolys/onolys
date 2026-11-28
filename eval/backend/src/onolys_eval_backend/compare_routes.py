@@ -91,7 +91,7 @@ def _view(request, eval_run_id, combos):
     active = [k for k in keys if k not in skipped]
     metrics = mark_skipped(compute_metrics(sessions, active or keys), skipped)
     # Operational metadata comes from saved RunDocs for completed runs, including their
-    # pinned route cost. Failed cells retain SP05's saved usage/error metadata.
+    # pinned route cost. Failed cells retain the eval run's saved usage/error metadata.
     docs = {r.cell["run_id"]: r.doc for r in projection.runs}
     attempts = []
     for original in projection.attempts:

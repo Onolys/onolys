@@ -1,8 +1,8 @@
-"""Read adapter (05 R10/R11): legacy-shaped units built from RunDocs, ReportDocs and gold.
+"""Read adapter: legacy-shaped units built from RunDocs, ReportDocs and gold.
 
 The group doc (`eval_runs/{id}`) holds only refs; everything else is read from the prod pipeline
 on demand. Scores are computed on read (`miti_lean_scores` / `oneshot_scores` / `gold_scores`),
-never stored. `list_cells`, `load_report` and `load_gold` are the surface SP06 builds on.
+never stored. `list_cells`, `load_report` and `load_gold` are the surface the compare summary uses.
 
 A Cell is `{sid, dataset_session_id, engine, combo_key, repeat, attempt, run_id, status, started,
 ended, error, run_info{usage, cost_usd_est}, gold_ref}`, ordered session -> plan -> attempt. The

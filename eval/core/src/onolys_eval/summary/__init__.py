@@ -1,1 +1,1 @@
-"""Pure compare calculations (SP06). No I/O: loaders live in the eval backend."""
+"""Pure compare calculations. No I/O: loaders live in the eval backend."""

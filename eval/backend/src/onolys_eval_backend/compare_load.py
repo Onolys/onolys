@@ -1,4 +1,4 @@
-"""Read one eval group into bounded, hash-checked SP06 projections. No writes or providers."""
+"""Read one eval group into bounded, hash-checked compare projections. No writes or providers."""
 import json
 import re
 from dataclasses import dataclass
@@ -32,7 +32,7 @@ def _plain(doc):
 
 
 class ServiceEvalRunSource:
-    """SP05 adapter; a fresh instance per request keeps its group snapshot isolated."""
+    """Eval-run read adapter; a fresh instance per request keeps its group snapshot isolated."""
     def __init__(self, services, max_runs: int = 499, max_attempts: int = 4990):
         self.services = services
         self.max_runs, self.max_attempts = max_runs, max_attempts

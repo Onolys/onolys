@@ -152,7 +152,7 @@ def options(
 
 
 def read_dataset(bucket, dataset_id: str) -> DatasetManifest:
-    """Validate both SP2 metadata and its identity against the bucket directory."""
+    """Validate both the dataset metadata and its identity against the bucket directory."""
     manifest = DatasetManifest.model_validate(
         bucket.read_json(f"datasets/{dataset_id}/manifest.json")
     )

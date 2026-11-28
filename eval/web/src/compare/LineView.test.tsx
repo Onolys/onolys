@@ -140,7 +140,7 @@ it('wraps long unbroken transcript text in a wrapping cell',()=>{
  const cell=view.container.querySelector('[data-turn="t5"] [data-transcript]') as HTMLElement;expect(cell.textContent).toBe('x'.repeat(500));expect(cell.className).toContain('line-verbatim');
  expect(lineCss).toMatch(/\.line-verbatim[^}]*overflow-wrap:\s*anywhere/);
 });
-it('composes filters, lanes, one verbatim note, ratings toggle and popup in PRD order with ratings closed',()=>{
+it('composes filters, lanes, one verbatim note, ratings toggle and popup in spec order with ratings closed',()=>{
  const p=props();const view=render(<LineView {...p}/>);
  const root=view.container.querySelector('.line-view') as HTMLElement;
  const at=(sel:string)=>{const node=root.querySelector(sel);expect(node,sel).toBeTruthy();return node as Element;};

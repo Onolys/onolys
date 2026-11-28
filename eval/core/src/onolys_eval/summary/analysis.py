@@ -1,4 +1,4 @@
-"""Pure More-analysis calculations and fixed, payload-grounded verdict clauses (SP06 R8/R9).
+"""Pure More-analysis calculations and fixed, payload-grounded verdict clauses.
 
 Inputs contain only final-attempt, completed run projections. Count error is the sum of
 per-code repeat mean misses; sessions carry equal weight. Level agreement also averages

@@ -1,4 +1,4 @@
-"""Session-balanced counts, globals, cohorts and heatmap cells (SP06 R5). Pure: no I/O, no clock.
+"""Session-balanced counts, globals, cohorts and heatmap cells. Pure: no I/O, no clock.
 
 One counting rule: per session and combo, the miss is the mean over that combo's repeats of
 |repeat value - human| (repeat values are never averaged first); sessions then count equally.

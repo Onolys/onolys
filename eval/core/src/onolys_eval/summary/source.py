@@ -1,7 +1,7 @@
-"""Read-side interface the compare calculations depend on (SP06 R1).
+"""Read-side interface the compare calculations depend on.
 
 The protocol lives in core because the pure summary code is typed against it and must be
-testable with no cloud: the backend implements it over SP05's `eval_view`/Firestore/GCS, tests
+testable with no cloud: the backend implements it over the eval-run `eval_view`/Firestore/GCS, tests
 implement it over synthetic fixtures (`eval/fixtures/compare/fakes.py`). Methods return the plain
 documents (dicts) of the prod pipeline, never storage pointers. An unknown id raises
 `SourceNotFound`.

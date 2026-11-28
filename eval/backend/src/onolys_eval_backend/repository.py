@@ -21,7 +21,7 @@ def _utc_iso():
 
 
 def _respect_cancel(saved, updates):
-    """Cancellation and terminal save share a transaction: accepted cancellation wins R7."""
+    """Cancellation and terminal save share a transaction: accepted cancellation wins."""
     terminal = {'done', 'partial', 'failed', 'cancelled'}
     if saved.get('cancel_requested') and updates.get('status') in terminal:
         human = len(saved['sessions']) if 'human' in saved['engines'] else 0
@@ -46,7 +46,7 @@ class EvalRepository(Protocol):
     ) -> tuple[dict[str, Record], bool]: ...
     def update_run(self, run_id: str, updates: Record) -> None: ...
     def cancel_run(self, run_id: str, at: str | None = None) -> bool: ...
-    # Scheduler (05 R6): the `eval_slots/{provider}` doc, `{holders: {run_id: eval_run_id}}`.
+    # Scheduler: the `eval_slots/{provider}` doc, `{holders: {run_id: eval_run_id}}`.
     def claim_slot(
         self, provider: str, run_id: str, eval_run_id: str, cap: int, *, owner=None
     ) -> bool: ...
@@ -94,7 +94,7 @@ class InMemoryEvalRepository:
             return True
 
     def create_group(self, run_id, data):
-        """The rollup doc alone (05 R4): refs are embedded, there is no units subcollection."""
+        """The rollup doc alone: refs are embedded, there is no units subcollection."""
         with self._lock:
             if run_id in self._runs:
                 raise ValueError('Run already exists')
@@ -105,7 +105,7 @@ class InMemoryEvalRepository:
             return deepcopy(self._runs.get(run_id))
 
     def delete_run(self, run_id):
-        """The group doc alone (05 R8 step 4); idempotent."""
+        """The group doc alone; idempotent."""
         with self._lock:
             self._runs.pop(run_id, None)
 

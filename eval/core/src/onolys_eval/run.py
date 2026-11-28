@@ -122,7 +122,7 @@ async def run_session(
 ) -> dict:
     """Complete one comparison; accuracy is descriptive, never an exit threshold.
 
-    Span forwarding uses the SP1 run_miti contract (merged at integration). The
+    Span forwarding uses the run_miti contract (merged at integration). The
     CASAA manifest uses full sessions. No speaker identification call is needed.
     """
     if n_runs < 1:

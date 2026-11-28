@@ -1,4 +1,4 @@
-"""Gold projection (SP06 R3): allowed fields only, plus the per-dataset label coverage table.
+"""Gold projection: allowed fields only, plus the per-dataset label coverage table.
 
 Pure. Never carries `source` (URLs, hashes) or `parse` warnings. Missing or null counts/globals
 mean "not labeled" and are omitted from the projection. Coverage is derived from the dataset
@@ -20,7 +20,7 @@ class LabelCoverage:
 
 
 _MITI = LabelCoverage(tuple(COUNT_IDS), tuple(GLOBAL_IDS), True)
-# Per dataset: what human gold labels (SP06 R3). No dataset here has a second human coder.
+# Per dataset: what human gold labels. No dataset here has a second human coder.
 LABEL_COVERAGE: dict[str, LabelCoverage] = {
     "casaa-miti421-video2013": _MITI,
     "casaa-miti-practice": _MITI,

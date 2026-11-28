@@ -1,4 +1,4 @@
-"""The `eval_runs/{id}` grouping doc (05 R4): the single rollup record of an eval run.
+"""The `eval_runs/{id}` grouping doc: the single rollup record of an eval run.
 
 Run refs are embedded (no units subcollection). The doc is bounded by `MAX_UNITS` cells x at
 most 8 attempts, which stays well under Firestore's 1 MiB document limit.

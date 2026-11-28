@@ -1,4 +1,4 @@
-/** `eval/web/firebase.json` CSP must let the Firebase auth iframe load from the configured authDomain (D5). */
+/** `eval/web/firebase.json` CSP must let the Firebase auth iframe load from the configured authDomain. */
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";

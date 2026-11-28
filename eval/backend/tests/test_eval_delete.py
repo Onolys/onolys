@@ -1,5 +1,5 @@
 # ruff: noqa: F811
-"""Delete flow (05 R8, Decision 7): refuse while active, ordered resumable steps, group doc last.
+"""Delete flow: refuse while active, ordered resumable steps, group doc last.
 
 Reuses the fake harness of test_eval_scheduler (no LLM, no network).
 """

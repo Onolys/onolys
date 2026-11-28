@@ -1,4 +1,4 @@
-"""Provider resilience on the tick scheduler (05 R6b-R6d): overload backoff, isolation, breaker.
+"""Provider resilience on the tick scheduler: overload backoff, isolation, breaker.
 
 Reuses the fake harness of test_eval_scheduler. Fake clock + fixed jitter: no sleeping, no RNG.
 """

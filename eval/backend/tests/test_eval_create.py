@@ -1,4 +1,4 @@
-"""Eval run create/rerun on the grouping doc (05 R4/R5/R9): no RunDocs at create time."""
+"""Eval run create/rerun on the grouping doc: no RunDocs at create time."""
 
 import json
 from copy import deepcopy

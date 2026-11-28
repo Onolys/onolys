@@ -1,4 +1,4 @@
-"""Session import and gold copy (05 R3): one shared prod session per distinct input."""
+"""Session import and gold copy: one shared prod session per distinct input."""
 
 import hashlib
 import json

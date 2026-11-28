@@ -1,4 +1,4 @@
-"""Deterministic generator of the synthetic compare scenarios (SP06 Task 1).
+"""Deterministic generator of the synthetic compare scenarios.
 
 Run `python eval/fixtures/compare/builder.py` to rewrite the committed `<scenario>.json` files; a
 test fails when they drift from this code. Every text is invented placeholder text

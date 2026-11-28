@@ -1,4 +1,4 @@
-"""Import a dataset session or ready upload as ONE shared prod session (05 R3).
+"""Import a dataset session or ready upload as ONE shared prod session.
 
 `sid = fingerprint[:32]`: the same inputs reuse the session, a changed transcript/goal/span
 makes a new one. A server-only input hash on the shared session survives group deletion and

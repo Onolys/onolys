@@ -1,4 +1,4 @@
-"""SP06 Task 2: report parsing, gold and transcript projections (pure, synthetic fixtures)."""
+"""Report parsing, gold and transcript projections (pure, synthetic fixtures)."""
 import copy
 
 import pytest

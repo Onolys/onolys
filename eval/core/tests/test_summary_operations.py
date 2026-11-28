@@ -1,4 +1,4 @@
-"""Selection, cost, time, coverage, excluded and status gating (SP06 R1/R6/R10). Offline, pure."""
+"""Selection, cost, time, coverage, excluded and status gating. Offline, pure."""
 from compare.fakes import FakePriceBook, load_scenario
 from onolys_eval.summary import operations as ops
 from onolys_eval.summary.run_report import ParsedRun
