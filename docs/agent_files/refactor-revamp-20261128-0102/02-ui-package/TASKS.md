@@ -9,17 +9,17 @@ Source of truth: /root/projects/onolys/onolys/.worktrees/refactor/revamp/docs/ag
 
 | # | Task | Depends on | Status |
 |---|---|---|---|
-| 1 | Rename repo and package; package CI gets the emulator | none | todo |
-| 2 | Package cleanup: legacy.css, privacy guard, rules copy | 1 | todo |
-| 3 | Move shared components and helpers to the root entry | 2 | todo |
-| 4 | Move sign-in to `/auth` with injected config | 3 | todo |
-| 5 | Add `/auth/firebase` and `/auth/testing`, emulator tests | 4 | todo |
-| 6 | Package build, peers, stories, CHANGELOG, tag v0.4.0 | 3, 4, 5 | todo |
-| 7 | Auth emulator block in `api/firebase.json` | none | todo |
-| 8 | Rewire web to `@onolys/common` | 6, 7 | todo |
-| 9 | Rewire eval/web, drop all `@prod-*` | 6, 7 | todo |
-| 10 | CI: emulator wrapper, drop prod-web install | 8, 9 | todo |
-| 11 | Final verification (acceptance greps, clean install) | 8, 9, 10 | todo |
+| 1 | Rename repo and package; package CI gets the emulator | none | done |
+| 2 | Package cleanup: legacy.css, privacy guard, rules copy | 1 | done |
+| 3 | Move shared components and helpers to the root entry | 2 | done |
+| 4 | Move sign-in to `/auth` with injected config | 3 | done |
+| 5 | Add `/auth/firebase` and `/auth/testing`, emulator tests | 4 | done |
+| 6 | Package build, peers, stories, CHANGELOG, tag v0.4.0 | 3, 4, 5 | done |
+| 7 | Auth emulator block in `api/firebase.json` | none | done |
+| 8 | Rewire web to `@onolys/common` | 6, 7 | done |
+| 9 | Rewire eval/web, drop all `@prod-*` | 6, 7 | done |
+| 10 | CI: emulator wrapper, drop prod-web install | 8, 9 | done |
+| 11 | Final verification (acceptance greps, clean install) | 8, 9, 10 | done |
 
 ## Task 1 — Rename repo and package; package CI gets the emulator
 What it is / what it means: The owner chose `onolys-common` / `@onolys/common` (PRD R10, Decision 7). The agent does the rename; GitHub redirects the old URL.
