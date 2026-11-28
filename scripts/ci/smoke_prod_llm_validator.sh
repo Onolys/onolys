@@ -2,7 +2,7 @@
 # CI smoke for the prod LLM validator: runs the exact `docker run` shape deploy-prod.yml
 # uses (read-only, no network, bind-mounted validator, prod routes at /app/config) against
 # an image. Usage: smoke_prod_llm_validator.sh IMAGE [VALIDATOR]
-# Keep the docker flags identical to deploy-prod.yml; scripts/ci/test_deploy_prod_llm.py enforces it.
+# Keep the docker flags identical to deploy-prod.yml.
 set -euo pipefail
 IMAGE=${1:?usage: smoke_prod_llm_validator.sh IMAGE [VALIDATOR]}
 VALIDATOR=${2:-$(cd "$(dirname "$0")" && pwd)/validate_staging_llm.py}

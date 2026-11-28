@@ -64,7 +64,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python: ["3.12"] # must satisfy api/pyproject.toml requires-python (scripts/ci/test_workflow_python_versions.py)
+        python: ["3.12"] # must satisfy api/pyproject.toml requires-python
     runs-on: ubuntu-latest
     timeout-minutes: 12
     steps:

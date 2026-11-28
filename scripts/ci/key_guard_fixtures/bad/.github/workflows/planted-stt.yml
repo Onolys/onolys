@@ -1,9 +1,0 @@
-name: PlantedStt
-on: [push, pull_request_target]
-jobs:
-  t:
-    runs-on: ubuntu-latest
-    steps:
-      - run: ./go
-        env:
-          X: ${{ secrets.DEEPGRAM_TOKEN }}

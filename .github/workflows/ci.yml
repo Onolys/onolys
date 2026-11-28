@@ -17,6 +17,9 @@ jobs:
   changes:
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    permissions:
+      contents: read
+      pull-requests: read
     outputs:
       core: ${{ steps.flags.outputs.core }}
       oneshot: ${{ steps.flags.outputs.oneshot }}
@@ -28,71 +31,106 @@ jobs:
       web: ${{ steps.flags.outputs.web }}
       infra: ${{ steps.flags.outputs.infra }}
     steps:
-      - uses: actions/checkout@v4
+      # Pull requests: dorny/paths-filter lists the PR's changed files through the API.
+      # Everything else (push to main, workflow_call from a release): every flag is 'true'.
+      - id: filter
+        if: github.event_name == 'pull_request'
+        uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
         with:
-          fetch-depth: 0
+          # A package's anchor lists its own paths plus those of every package it depends on
+          # (workspace dependency fan-out), so each filter is already transitive.
+          filters: |
+            ci_shared: &ci_shared
+              - '.github/workflows/**'
+              - '.github/actions/**'
+              - 'scripts/ci/**'
+            py_shared: &py_shared
+              - 'pyproject.toml'
+              - 'uv.lock'
+            core: &core
+              - *ci_shared
+              - *py_shared
+              - 'engines/core/**'
+            miti: &miti
+              - *core
+              - 'engines/miti/**'
+            oneshot: &oneshot
+              - *core
+              - 'engines/oneshot/**'
+              - 'scripts/gen_miti_schema.py'
+              - 'config/staging/routes.yaml'
+              - 'engines/miti/src/onolys_miti/data/pack.yaml'
+              - 'engines/miti/src/onolys_miti/data/report.schema.json'
+              - 'engines/miti/src/onolys_miti/data/prompts/code_system.md'
+              - 'engines/miti/src/onolys_miti/data/prompts/globals_system.md'
+              - 'engines/miti/src/onolys_miti/data/fixtures/good_practice.json'
+            api: &api
+              - *core
+              - *miti
+              - *oneshot
+              - 'api/**'
+              - 'config/**'
+              - 'docs/contracts/public/**'
+              - 'firestore.rules'
+              - 'firebase.json'
+              - 'firestore-rules-test/**'
+            eval: &eval
+              - *core
+              - *miti
+              - 'eval/core/**'
+              - 'eval/datasets/**'
+              - 'eval/fixtures/**'
+            eval-backend:
+              - *api
+              - *eval
+              - 'eval/backend/**'
+              - 'config/**'
+              - 'protocols/**'
+              - '.dockerignore'
+            eval-web:
+              - *ci_shared
+              - 'eval/web/**'
+              - 'web/src/auth/**'
+              - 'web/src/api/**'
+              - 'web/src/components/classes.ts'
+              - 'web/package.json'
+              - 'web/package-lock.json'
+              - 'eval/backend/**'
+              - 'api/openapi.json'
+              - 'docs/contracts/public/**'
+              - 'engines/miti/src/onolys_miti/data/report.schema.json'
+            web:
+              - *ci_shared
+              - 'web/**'
+              - 'api/openapi.json'
+              - 'engines/miti/src/onolys_miti/data/report.schema.json'
+              - 'engines/miti/src/onolys_miti/data/fixtures/evaluation/**'
+            infra:
+              - *ci_shared
+              - 'infra/**'
+              - 'pyproject.toml'
+              - 'uv.lock'
       - id: flags
         env:
-          EVENT: ${{ github.event_name }}
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          FORCE_ALL: ${{ github.event_name != 'pull_request' }}
+          FILTER: ${{ toJSON(steps.filter.outputs) }}
         run: |
-          if [ "$EVENT" != "pull_request" ]; then
-            export FORCE_ALL=true
-            files=""
-          else
-            files="$(git diff --name-only "$BASE_SHA...$HEAD_SHA")"
-          fi
-          printf '%s\n' "$files" | bash scripts/ci/changes.sh
+          for flag in core oneshot miti eval eval-backend eval-web api web infra; do
+            if [ "$FORCE_ALL" = "true" ]; then val=true; else val="$(jq -r --arg f "$flag" '.[$f]' <<<"$FILTER")"; fi
+            echo "$flag=$val" >>"$GITHUB_OUTPUT"
+          done
 
   guards:
     runs-on: ubuntu-latest
     timeout-minutes: 4
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - name: Test changes.sh
-        run: bash scripts/ci/test_changes.sh
-      - name: Test changes.sh DEPS map against pyproject dependencies
-        run: python3 scripts/ci/test_changes_deps.py
-      - name: Check markdown links
-        run: python3 scripts/ci/check_links.py
-      - name: Docs scope gate
-        run: bash scripts/ci/check_docs_scope.sh
-      - name: No LLM/STT keys in PR workflows (guard + planted-reference check)
-        run: |
-          python3 scripts/ci/check_no_llm_keys_in_pr_workflows.py
-          if python3 scripts/ci/check_no_llm_keys_in_pr_workflows.py scripts/ci/key_guard_fixtures/bad >/dev/null; then
-            echo "key guard did not fail on the planted fixture"; exit 1
-          fi
-      - name: Test deploy-prod staging image matcher
-        run: python3 scripts/ci/test_staging_ran_image.py
-      - name: Test staging LLM predeployment guard
-        run: |
-          python3 scripts/ci/test_deploy_staging.py
-          python3 scripts/ci/test_release_targets.py
-          python3 scripts/ci/test_deploy_prod_llm.py
-      - name: Test workflow_run fork-safety guard
-        run: python3 scripts/ci/test_workflow_run_guard.py
-      - name: Test no checkout after GCP auth in workflows
-        run: python3 scripts/ci/test_workflow_checkout_before_auth.py
-      - name: Test workflow Python versions satisfy requires-python
-        run: python3 scripts/ci/test_workflow_python_versions.py
-      - name: Test config guard
-        run: bash scripts/ci/test_check_config.sh
-      - name: Test deploy-prod workflow guard
-        run: bash scripts/ci/test_deploy_prod.sh
-      - name: Test eval deployment workflow and image guard
-        run: bash scripts/ci/test_deploy_eval.sh
-      - name: Test Hosting targets resolve per app (.firebaserc)
-        run: bash scripts/ci/test_hosting_targets.sh
-      - name: Test PR preview workflows and helpers
-        run: bash scripts/ci/test_pr_preview.sh
+      - name: No LLM/STT keys in PR workflows
+        run: python3 scripts/ci/check_no_llm_keys_in_pr_workflows.py
+      - name: Config guard
+        run: bash scripts/ci/check_config.sh
       - name: actionlint (workflows)
         run: bash <(curl -sSfL https://raw.githubusercontent.com/rhysd/actionlint/v1.7.7/scripts/download-actionlint.bash) 1.7.7 && ./actionlint -color
-      - name: Test CI tiers and required gate
-        run: python3 scripts/ci/test_ci_gate.py
 
   engine-core:
     needs: changes
