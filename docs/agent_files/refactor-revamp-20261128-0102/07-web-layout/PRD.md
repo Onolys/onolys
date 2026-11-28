@@ -1,6 +1,6 @@
 ---
 status: draft
-summary: Regroup web/src into app/ + features/ (+ api/, constants.ts with a ROUTES constant), split the leftover auth folder, and move all 85 unit tests and the Playwright suite into one web/tests/ mirror. Pure move/rename, mocks stay until 08. No visual change.
+summary: Regroup web/src into app/ + features/ (+ api/, constants.ts with a ROUTES constant), split the leftover auth folder, and move the unit tests and the Playwright suite into one web/tests/ mirror. Pure move/rename, mocks stay until 08. No visual change.
 date: 2026-11-28
 ---
 # PRD: 07 Web layout (app/ + features/, one tests/ folder)
@@ -13,7 +13,7 @@ Repo/branch: Onolys/onolys / `refactor/revamp` · Depends on: 02 (hard: `compone
 ## Problem
 | Gap | Evidence |
 |---|---|
-| Layout: tests beside source (85 files), `e2e_review/` (review-era name, finding ids in titles), `routes/` holds the app shell, `__fuzz_review__/`, `src/test/`, `src/flows/` | [verified: `find web`] |
+| Layout: tests beside source, `e2e_review/` (review-era name, finding ids in titles), `routes/` holds the app shell, `__fuzz_review__/`, `src/test/`, `src/flows/` | [verified: `find web`] |
 | Product code is grouped by layer, not screen; auth remainder (`useApiClient`, `createAuthService`) is two unrelated files in one folder | [verified after 02: only these two files remain] |
 | URL path strings and fixed values (Firestore collection name, retry/stale/poll numbers, contact address) are scattered | [from the owner decision O1; to count at T7] |
 | `sample.ts` (shipped on `/sample`) lives in `mocks/fixtures/` | [verified: `SampleReportPage.tsx:9`] |
@@ -60,11 +60,11 @@ tests/  mirrors src/ ; helpers/ (setup, renderApp, csp) ; e2e/ (Playwright, .cjs
 ## Migration (one commit per batch, each: typecheck, lint, touched tests green)
 | # | Batch | Gate |
 |---|---|---|
-| T0 | Baseline: unit and e2e pass counts (no screenshot baseline: [RESOLVED 2026-11-28: owner rule 17], a pure move is gated by typecheck + test count + e2e smoke; Playwright `toHaveScreenshot` is the vendor option if a visual check is ever wanted) | counts recorded in the task log |
+| T0 | Baseline: unit and e2e pass counts (no screenshot baseline: [RESOLVED 2026-11-28: owner rule 17], a pure move is gated by typecheck + test count + e2e smoke; Playwright `toHaveScreenshot` is the vendor option if a visual check is ever wanted) | counts recorded in the task log, plus the number of tests in the files T3 deletes |
 | T1 | `routes/` + shell files -> `app/` | tsc, tests |
 | T2 | `auth/useApiClient` -> `api/`, `auth/createAuthService` -> `app/`; `protocol/` -> `features/rating/`; `sample.ts` -> `features/report/` | tsc, tests |
-| T3 | Test config + `tests/helpers` (setup, renderApp, csp) + `tests/{app,api}` moves | `vitest run` count equals T0 |
-| T4-T5 | `tests/features/*` moves + `tests/flows/` (two commits) | count equals T0 |
+| T3 | Test config + `tests/helpers` (setup, renderApp, csp) + `tests/{app,api}` moves | `vitest run` count equals T0 minus the deleted tests (recorded in T0) |
+| T4-T5 | `tests/features/*` moves + `tests/flows/` (two commits) | count unchanged from T3 |
 | T6 | `e2e_review` -> `tests/e2e` (still mock mode): configs, scripts, eslint, CI paths, README, `@smoke` tags, ids out of titles | e2e smoke green |
 | T7 | `constants.ts` / `ROUTES` sweep (one commit); `web/` READMEs; final AC | full web gate (dev-ship) |
 T1-T6 can start once 02's rewire commit landed. No dependency on 06.
@@ -85,7 +85,7 @@ T1-T6 can start once 02's rewire commit landed. No dependency on 06.
 None.
 
 ## Risks / Open Questions
-- Risk: a move silently drops or duplicates a test. Mitigation: `vitest run` count must equal the T0 count after T3-T5; e2e smoke after T6.
+- Risk: a move silently drops or duplicates a test. Mitigation: `vitest run` count must equal the T0 count minus the deleted tests (recorded in T0) after T3-T5; e2e smoke after T6.
 - Risk: import churn collides with 02's rewire commit series. Mitigation: T1 starts only after 02's rewire landed; one `git mv` batch per commit.
 - [RESOLVED: all paths] O1: `ROUTES` holds ALL web URL paths; state names stay schema types.
 - [RESOLVED: split] O2: `useApiClient` -> `api/`, `createAuthService` -> `app/`; no `features/auth`.
@@ -95,6 +95,6 @@ None.
 - `src/routes`, `src/auth`, `src/components`, `src/lib`, `src/hosting`, `src/test`, `src/flows`, `src/protocol`, `src/__fuzz_review__`, `web/nightly/fast-check.ts`, `stryker.conf.json` and `e2e_review` do not exist; `src/mocks` still exists (08 deletes it) and contains no `sample.ts`.
 - No `*.test.*` under `web/src`; `web/tests/` mirrors `src/`; no test or spec title carries a finding/task id; `@smoke` tag selects the smoke subset.
 - `git grep -nE "['\"]/(dashboard|upload|settings|usage|sample|legal)" web/src` shows paths only in `constants.ts` (`ROUTES`) and `schema.d.ts`/`api` request paths; adjust the list to the real route table at T7.
-- `npm run typecheck`, `lint`, `test`, `build`, `check:api` green; `src/api/schema.d.ts`/`report.d.ts` unchanged by 07 commits; unit test count equals the T0 count; e2e (mock mode) and smoke subset green.
+- `npm run typecheck`, `lint`, `test`, `build`, `check:api` green; `src/api/schema.d.ts`/`report.d.ts` unchanged by 07 commits; unit test count equals the T0 count minus the deleted tests; e2e (mock mode) and smoke subset green.
 - No-UX-change evidence: moves only; `git diff -M` shows renames plus import-path edits, no `className` diffs; e2e smoke green (no pixel-compare script).
 - Rules cited: 1, 14, 15, 16, 17.

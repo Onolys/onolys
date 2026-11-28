@@ -61,7 +61,7 @@ def get_session(db, uid, sid): return get_doc(db, paths.session(sid), SessionDoc
 | Client | prod / staging | combined-local, PR preview | tests |
 |---|---|---|---|
 | Firestore | Admin SDK | emulator (`FIRESTORE_EMULATOR_HOST`) | emulator, fresh project id per test |
-| Auth | Identity Platform ID tokens, Admin `verify_id_token` | **Auth emulator**: `FIREBASE_AUTH_EMULATOR_HOST` set (Firebase's documented switch; prod never sets it; no `AUTH_MODE`, no startup guard, no extra branch) | same emulator; `tests/helpers/` mints a real emulator token per test user (REST sign-up); no stub verifier, no `test:<uid>` |
+| Auth | Identity Platform ID tokens, Admin `verify_id_token` | **Auth emulator**: `FIREBASE_AUTH_EMULATOR_HOST` set (Firebase's documented switch; prod never sets it; no `AUTH_MODE`, no startup guard, no extra branch) | same emulator; from T4 `tests/helpers/` mints a real emulator token per test user (REST sign-up); no stub verifier, no `test:<uid>` (through T2/T3 tests keep the existing fake-auth path) |
 | Blobs | GCS | `LocalBlobStore` (local folder + signed-URL routes) | same, tmp dir |
 | Queue | Cloud Tasks | `InProcessQueue` | same |
 | Email / auth links | Resend / Admin SDK | `RecordingSender` (logs the link) | same, asserts on recorded mail |
@@ -96,9 +96,9 @@ pipeline.run -> Engine.load("miti").run(RunRequest, RunOptions(llm=client)) ; st
 |---|---|---|
 | T0 | Baseline: time `api-unit` and `api-emulator` jobs; the O1 (CI job merge: keep two jobs) and O3 (Admin SDK on Auth-emulator tokens: use `verify_id_token`) spikes ran in phase 0 (`spikes/PRD.md`) and the owner decided; re-check the unit/emulator split on the new layout with these timings; per-test emulator project id isolation is checked here; note `openapi.json`/contracts/`schema.d.ts` blob ids | findings recorded and reported to owner |
 | T1 | R5 eval-mode deletion (smaller code first); delete one-off harnesses and docs-grep tests (R7 list) | api suite; contract diff empty |
-| T2 | Fakes out: `tests/conftest` + `tests/helpers` run every test on the emulator through the existing `FirestoreRepo` (project id per test); delete `FakeRepo`, parity test, twin params, `MemoryRateStore`, adapter fakes (STT/LLM/voice/email stubs per R4); `storage/fake.py` -> `LocalBlobStore` | whole suite on emulator; CI emulator job covers it |
+| T2 | Fakes out: `tests/conftest` + `tests/helpers` run every test on the emulator through the existing `FirestoreRepo` (project id per test); delete `FakeRepo`, parity test, twin params, `MemoryRateStore`, adapter fakes (STT/LLM/voice/email stubs per R4); `storage/fake.py` -> `LocalBlobStore` | whole suite on emulator (data only; auth stays on the existing fake-auth path until T4); CI emulator job covers it |
 | T3 | `constants.py`, `data/{store,paths,docs,models,blobs}.py`; `FirestoreRepo` thin methods now delegate to them; vendor transaction retry replaces the custom rounds and locks (R2a); pydantic-settings `config.py` (R1); `test_repo_contract` -> `tests/data/` | data tests; no caller changed |
-| T4 | usage/ + auth/ + email/ (small, few callers); email rate limit removed (R10 inventory, entrypoint flags per grep) | their tests, moved to mirrored paths; R10 grep returns 0 |
+| T4 | usage/ + auth/ + email/ (small, few callers); auth swapped to `verify_id_token`, fake auth deleted, tests switched to emulator tokens and the Auth emulator started in CI; email rate limit removed (R10 inventory, entrypoint flags per grep) | their tests, moved to mirrored paths; R10 grep returns 0 |
 | T5 | audio/ + transcription/ (merges 04's moved STT files) | audio, STT, transcribe tests |
 | T6 | sessions/ (state machine, lifecycle, sweep, txns) | session, cancel, delete, sweep tests |
 | T7 | pipeline/ + tasks/ (start_run txns, claim, queue, runner, handlers table); `app.py` mode table | run, retry, first-run, worker tests |
@@ -125,7 +125,7 @@ pipeline.run -> Engine.load("miti").run(RunRequest, RunOptions(llm=client)) ; st
 None for cloud. Owner/dev machine: install `firebase-tools` (Java is present) to run api tests locally; a `Needs emulator` message from `tests/conftest.py` prints the exact command.
 
 ## Risks / Open Questions
-- Risk: emulator-only tests are slower and `Transaction lock timeout` flakes appear when tests run in parallel (serial today for that reason). Mitigation: per-test project ids, T0 timing, serial run as an option to present, keep `flaky` marker lane.
+- Risk: emulator-only tests are slower and `Transaction lock timeout` flakes appear when tests run in parallel (serial today for that reason). Mitigation: per-test project ids, T0 timing, serial run as an option to present, `api-flaky` lane dropped (R8).
 - Risk: txn semantics drift while rewriting (`start_run`, `cancel_session`). Mitigation: `test_repo_contract` and `test_firestore_cross_instance` run on the emulator before T3 and stay as the oracle.
 - Risk: PR preview (`ADAPTERS=stub` on staging Firestore) breaks. Mitigation: a test boots the app with that exact settings set and runs a session to `report_ready`.
 - [RESOLVED: owner D-C 2026-11-28, spike 5] O1: keep `api-unit` and `api-emulator` as two jobs (no merge); coverage gate stays 94.

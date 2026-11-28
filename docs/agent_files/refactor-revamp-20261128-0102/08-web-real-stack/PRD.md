@@ -76,7 +76,7 @@ None for cloud. Dev machine: `firebase-tools` + Java on PATH for `npm test` and 
 ## Acceptance Criteria
 - `git grep -nEi "mocks/|VITE_USE_MOCKS|VITE_AUTH_MODE|mockServiceWorker|dev:mock|FakeRelay|mockBackend" web .github scripts` returns 0 (excl. lockfile, `docs/`); `src/mocks`, `src/relay/fakeRelay*`, `tests/flows` do not exist.
 - `npm run typecheck`, `lint`, `test` (emulator), `build`, `check:api` green; `src/api/schema.d.ts`/`report.d.ts` unchanged by 08 commits; test count per T0 checklist accounted for (every removed `it` has a logged reason).
-- `npm run e2e` (stack) and smoke subset green in CI; csp project reports zero violations; csp project reports zero violations on the stack build.
+- `npm run e2e` (stack) and smoke subset green in CI; csp project reports zero violations on the stack build.
 - No-UX-change evidence: after T4 (different data) axe gate, journey e2e and an owner glance at the e2e `visual.spec` shots; no `className` diffs.
 - `tests/hosting` proves nothing here; it does not exist after 07.
 - Rules cited: 9, 14, 16, 17 (Auth emulator + MSW + Playwright `page.route` are the vendor hooks; no custom fakes).

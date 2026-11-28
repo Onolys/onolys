@@ -188,7 +188,7 @@ Tests move with their code (73 test files: core 32, miti 38, oneshot 3); tests o
 - `engines/` does not exist; `git grep -nE "onolys_(engine_core|miti|oneshot)|engines/(core|miti|oneshot)"` outside `docs/` returns 0 (incl. `web/package.json`, workflows, Dockerfile, root `pyproject.toml`).
 - `onolys_engine` exposes only R7 names; the boundary test fails on a planted `from onolys_engine.steps import x` in `api/`; `api/` has no import of `onolys_miti`-era private names.
 - `engine/` contains no STT, voice, rating-card, scenario or upload-parser code; `api/` holds them at the R8 locations.
-- `miti` and `oneshot-single` each run from one `pipeline.yaml`; `Engine.load("nope")`, an unknown step, a bad `with` key, and a mis-ordered read each fail at load with a named error (one test each).
+- `miti` and `oneshot-single` each run from one `pipeline.yaml`; `Engine.load("nope")`, an unknown step and a bad `with` key each fail at load with a named error (one test each).
 - No route named `miti_code|miti_globals|tips|oneshot` in code or either `config/*/routes.yaml`; `git grep "complete_json\|LLMRequest(tier"` returns 0.
 - Equivalence suite (R11) green: provider payloads and masked reports equal the T0 baselines for all listed fixtures, one-shot goldens pass, reports validate against the unchanged schemas.
 - Every literal in R10's list appears once, in `constants.py` or a `pipeline.yaml`; no `25 * 60`, `0.20`, or `300`-style magic in steps.

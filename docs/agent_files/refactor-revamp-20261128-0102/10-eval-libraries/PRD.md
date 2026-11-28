@@ -80,7 +80,7 @@ Shipped reports: `overview`, `deep-dive`, `analysis` reproducing today's tabs. E
 datasets/<id>/{manifest,mapping}.yaml -> Converter subclass -> transcript.v1 + gold.v1 (bucket)
 eval run -> scheduler -> eval_cells -> /tasks/cell -> Engine.run (onolys-engine, tag) -> report
 reports/*.yaml --load/validate--> backend: CompareData -> metrics registry -> rows
-      -> GET /reports/{id} -> web ReportView -> chart registry (reports/charts.yaml checks both ends)
+      -> GET /reports/{id} -> web ReportView -> chart registry (one web test checks every shipped `chart.use` is registered)
 onolys-api (tag): data, auth, tasks, transcription (leaf features)   onolys-engine (tag): Engine.run, output_schema, protocol.yaml formulas
 ```
 
