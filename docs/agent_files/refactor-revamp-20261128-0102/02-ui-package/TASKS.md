@@ -23,17 +23,17 @@ Source of truth: /root/projects/onolys/onolys/.worktrees/refactor/revamp/docs/ag
 
 ## Task 1 — Rename repo and package; package CI gets the emulator
 What it is / what it means: The owner chose `onolys-common` / `@onolys/common` (PRD R10, Decision 7). The agent does the rename; GitHub redirects the old URL.
-What changes at a high level: `gh repo rename` Onolys/onolys-ui to onolys-common; update the local clone remote (and folder name if practical); set the package name `@onolys/common` and repo URLs in `package.json`, README, workflows. Add to the package test workflow a firebase-tools + Java step and run auth tests under `firebase emulators:exec --only auth` (model it on the `api-emulator` job in `ci.yml`), with a package-local `firebase.json` containing the Auth block.
-Done when: `gh repo view Onolys/onolys-common` succeeds; the package's existing suite and build pass under the new name on its CI; the emulator job runs (even with a trivial smoke test) and is green.
+What changes at a high level: `gh repo rename` Onolys/onolys-ui to onolys-common; update the local clone remote (and folder name if practical); set the package name `@onolys/common` and repo URLs in `package.json`, README, workflows. Add to the package test workflow a firebase-tools + Java step and run auth tests under `firebase emulators:exec --only auth` (model it on the `api-emulator` job in `ci.yml`), with a package-local `firebase.json` containing the Auth block. The emulator tests themselves arrive in tasks 4-5.
+Done when: `gh repo view Onolys/onolys-common` succeeds; the package's existing suite and build pass under the new name on its CI; the workflow runs `emulators:exec --only auth` (command succeeds; first real emulator tests land in task 4/5).
 
 ## Task 2 — Package cleanup: legacy.css, privacy guard, rules copy
 What it is / what it means: Remove everything legacy unconditionally, with no pre-check or confirm step (rule 16, R6, Decision 7), loosen the privacy guard by exactly one named exception (Decision 8), and give the package its own rules (R10).
 What changes at a high level: Delete `legacy.css` and its export; remove the landing page's import of it if present. Privacy guard keeps all rules and adds one named exception (the theme storage file); still no console, no absolute-URL literals (emulator URL is injected). Copy `docs/rules/` into the package repo (synced by hand) and add the line "UI pieces come from `@onolys/common`" to its `design-rules.md`.
-Done when: `package.test` asserts no `legacy.css` export; the privacy-scan test passes with the exception listed and fails on a planted `console.log`; grep for "legacy" in the package returns nothing.
+Done when: grep for "legacy" in the package returns nothing (no guard test for absence, rule 16); the existing privacy-scan test passes with the exception listed; package build and tests pass.
 
 ## Task 3 — Move shared components and helpers to the root entry
 What it is / what it means: R2 root-entry items: no router, no firebase. `lib/spans.ts` is deleted, not moved (Decision 10); `codepoints.ts` moves only if another importer needs it, else is deleted with it.
-What changes at a high level: Move `Field`, `Notice`, `ErrorNote`, `StatusChip`, `SlowStartNotice`/`useSlowPending`, `ErrorRecovery` (props `status`, `reference`; `ApiError` mapping stays in web), `classes` constants, `ThemeToggle` + theme helpers, `AccountMenu` (takes `links` + `renderLink`, router-agnostic), `format`. `AppHeader` gains `centerNavigation`; export the nav-link class; `Footer` gains `compact` and a `themeToggle` slot. Ship `theme-init.js` (Decision 11). Moved tests travel with the code.
+What changes at a high level: Move `Field`, `Notice`, `ErrorNote`, `StatusChip`, `SlowStartNotice`/`useSlowPending`, `ErrorRecovery` (props `status`, `reference`; `ApiError` mapping stays in web), `classes` constants (all package constants in one `constants.ts`, rule 10), `ThemeToggle` + theme helpers, `AccountMenu` (takes `links` + `renderLink`, router-agnostic), `format`. `AppHeader` gains `centerNavigation`; export the nav-link class; `Footer` gains `compact` and a `themeToggle` slot. Ship `theme-init.js` (Decision 11). Moved tests travel with the code.
 Done when: moved component/helper tests plus new tests for `centerNavigation`, `compact` Footer, and `AccountMenu` links injection pass in jsdom in the package; typecheck and lint pass; no `import.meta.env` or app constant in `src/`.
 
 ## Task 4 — Move sign-in to `/auth` with injected config
@@ -43,7 +43,7 @@ Done when: moved/ported auth tests pass in the package, existing assertions pres
 
 ## Task 5 — Add `/auth/firebase` and `/auth/testing`, emulator tests
 What it is / what it means: R4/R5: the only module importing `firebase`, plus a thin helper to drive the emulator. Replaces `fake.ts` and `fakeService.ts` (not carried over; no stub, no fallback; rules 9, 17).
-What changes at a high level: `createFirebaseAuthService(config, { emailApi, emulatorUrl })`, with `emailApi` `{ sendVerification(getIdToken, next), sendPasswordReset(email) } | null` returning an HTTP status. `auth/testing` is a plain function over the SDK and the emulator REST API (documented `oobCodes`): `connectAuthEmulator(getAuth(initializeApp(cfg)), "http://127.0.0.1:9099")`, sign up/in/verify a user, read action codes; no wrapper classes. Stateful flows run on the real service; failure paths (popup blocked, network) use `vi.spyOn` on it. Old SDK-mock tests are replaced where the emulator can express the case.
+What changes at a high level: `createFirebaseAuthService(config, { emailApi, emulatorUrl })` (when `emulatorUrl` is set it calls the vendor `connectAuthEmulator` once, here only; prod passes none), with `emailApi` `{ sendVerification(getIdToken, next), sendPasswordReset(email) } | null` returning an HTTP status. `auth/testing` is a plain function over the SDK and the emulator REST API (documented `oobCodes`): builds the service with `emulatorUrl: "http://127.0.0.1:9099"`, signs up/in/verifies a user, reads action codes; no wrapper classes. Stateful flows run on the real service; failure paths (popup blocked, network) use `vi.spyOn` on it. Old SDK-mock tests are replaced where the emulator can express the case.
 Done when: emulator-backed tests for sign up, sign in, verify email, reset password, sign out pass under `emulators:exec --only auth` in package CI; spyOn failure-path tests pass; `emailApi: null` path tested.
 
 ## Task 6 — Package build, peers, stories, CHANGELOG, tag v0.4.0
@@ -54,11 +54,11 @@ Done when: `package.test` and consumer-fixture tests pass for every subpath; Sto
 ## Task 7 — Auth emulator block in `api/firebase.json`
 What it is / what it means: R7: add the Auth emulator (port 9099) to the existing emulator config; nothing else in that file changes (09 moves it later; 03 mirrors it for eval; 06/08 CI also need it).
 What changes at a high level: One block added to `api/firebase.json`.
-Done when: a test or script check asserts the file parses and has `emulators.auth.port` 9099 beside the existing Firestore entry; `firebase emulators:exec --only auth --config api/firebase.json "true"` exits 0.
+Done when: `firebase emulators:exec --only auth --config api/firebase.json "true"` exits 0 and the Firestore entry is unchanged (no config test, rule 17).
 
 ## Task 8 — Rewire web to `@onolys/common`
 What it is / what it means: R7 for `web/`: one atomic series that ends green. During development use `file:` plus `build:watch` (never committed), then pin the tag.
-What changes at a high level: Replace `@onolys/ui` with `@onolys/common#v0.4.0` (https `resolved`, lock regenerated); update every import, including the landing page's. Delete moved files, `lib/spans.ts` and its tests, `web/public/theme-init.js` (copied from the package at build). `web/src/auth` keeps only `useApiClient` and `createAuthService` (fake branch deleted, `emailApi` wired to the typed client). `Layout` and `Footer` use the new package pieces. `renderApp` and the 22 test files use the emulator helper. Dev mode uses `VITE_FIREBASE_AUTH_EMULATOR_URL`; `VITE_AUTH_MODE=fake` is deleted. Delete `hosting/privacy.test.ts`, `stryker.conf.json`, the `NIGHTLY_MUTATION` include and `@stryker-mutator/*` devDeps (audit #3, #8); keep `mocks/handlers.test.ts` compiling.
+What changes at a high level: Replace `@onolys/ui` with `@onolys/common#v0.4.0` (https `resolved`, lock regenerated); update every import, including the landing page's. Delete moved files, `lib/spans.ts` and its tests, `web/public/theme-init.js` (copied from the package at build). `web/src/auth` keeps only `useApiClient` and `createAuthService` (fake branch deleted, `emailApi` wired to the typed client). `Layout` and `Footer` use the new package pieces. `renderApp` and the 22 test files use the emulator helper. Dev mode uses `VITE_FIREBASE_AUTH_EMULATOR_URL`; `VITE_AUTH_MODE=fake` is deleted. Delete `hosting/privacy.test.ts`, `lint.test.ts`, `test/radixShims.test.tsx`, `stryker.conf.json`, `__fuzz_review__/auth.property.test.ts`, the `NIGHTLY_MUTATION` include and `@stryker-mutator/*` devDeps (audit #3, #8); keep `mocks/handlers.test.ts` compiling.
 Done when: web unit suite, typecheck, lint, build pass; `web/src/components` and `web/src/lib` are gone; ported sign-in, verify-email, forgot-password and email-action assertions pass; web e2e green; `GIT_SSH_COMMAND=false npm ci` passes in `web/`.
 
 ## Task 9 — Rewire eval/web, drop all `@prod-*`
@@ -69,7 +69,7 @@ Done when: eval-web tests, typecheck, lint, build pass; the `@prod-` / `../web` 
 ## Task 10 — CI: emulator wrapper, drop prod-web install
 What it is / what it means: R7/R9: CI must start the Auth emulator and stop installing web deps for eval.
 What changes at a high level: In `ci.yml`, run web and eval-web test steps through `firebase emulators:exec --only auth --config api/firebase.json "<test cmd>"` (firebase-tools and Java as in the api-emulator job); remove "install prod web deps" from the eval-web job. Flag `deploy-eval.yml:199` and `eval/web/README.md:3` to 03 (left untouched; deferred).
-Done when: a CI run on the branch has web and eval-web jobs green with the emulator wrapper; the eval-web job has no web install step; workflow file passes `actionlint` if available.
+Done when: a CI run on the branch has web and eval-web jobs green with the emulator wrapper, each finishing within 5 minutes; the eval-web job has no web install step; workflow file passes `actionlint` if available.
 
 ## Task 11 — Final verification
 What it is / what it means: Walk the PRD Acceptance Criteria once, read-only, after everything lands.

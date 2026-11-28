@@ -38,13 +38,13 @@ Done when: `uv sync --frozen` works with this repo absent and the lock holds onl
 
 ## Task 4 — New repo CI
 What it is / what it means: The new repo needs its own CI so tests run on push and PR (PRD R4; dev-common CI default).
-What changes at a high level: `ci.yml` with the `eval-core`, `eval-backend`, `eval-web` jobs ported, plus actionlint and a config guard. Run everything on every push (or simple paths-filter); no `changes.sh`. Add an image-build step that builds `backend/Dockerfile` in the flat layout (context = repo root, `config/` copied into the image) directly with `docker build`; the `test_eval_image.sh` script is not ported (rule 17, tooling test). Deploy trigger later depends on this workflow's green on `main`.
-Done when: `ci.yml` runs green on a PR in the new repo; `actionlint` passes; the CI image-build step builds `backend/Dockerfile`; eval core, backend and web jobs include the ported `test_repo_guard`.
+What changes at a high level: `ci.yml` with the `eval-core`, `eval-backend`, `eval-web` jobs ported, plus actionlint and the config guard (`check_config.sh`). Every job must finish within 5 minutes (lower today's `timeout-minutes: 10`); `eval-web` tests run under `firebase emulators:exec --only auth` (02). Run everything on every push (or simple paths-filter); no `changes.sh`. Add an image-build step that builds `backend/Dockerfile` in the flat layout (context = repo root, `config/` copied into the image) directly with `docker build`; the `test_eval_image.sh` script is not ported (rule 17, tooling test). Deploy trigger later depends on this workflow's green on `main`.
+Done when: `ci.yml` runs green on a PR in the new repo, each job within 5 minutes; `actionlint` passes; the CI image-build step builds `backend/Dockerfile`; eval core, backend and web jobs include the ported `test_repo_guard`.
 
 ## Task 5 — Config, Firebase, rules and docs copies
 What it is / what it means: Eval keeps its own copies of shared files (PRD R6, R8, D11, D12; copies [ACCEPTED]).
-What changes at a high level: Copy `config/models.yaml` and `config/staging/{routes,stt_providers}.yaml` to `config/`. Add own `firebase.json` (Hosting `eval-staging`, Firestore named `eval` database as today; 10 switches it to `(default)`), `.firebaserc`, a snapshot `firestore.indexes.json`, and deny-all Firestore rules (O4). Copy `docs/rules/{coding-rules,design-rules}.md`, eval docs, eval parts of `isolated-environments.md`, plus short `AGENTS.md` and `CLAUDE.md` (`@AGENTS.md`).
-Done when: tests that read `config/` (e.g. catalog test) pass; Firestore rules file is deny-all and a minimal `@firebase/rules-unit-testing` check against the emulator asserts it (rule 17, no custom fake); `firebase.json` target names match the deploy workflow.
+What changes at a high level: Copy `config/models.yaml` and `config/staging/{routes,stt_providers}.yaml` to `config/`. Add own `firebase.json` (Hosting `eval-staging`, Firestore named `eval` database as today, plus the Auth emulator block, port 9099, as 02 adds for web; 10 switches the database to `(default)`), `.firebaserc`, a snapshot `firestore.indexes.json`, and deny-all Firestore rules (O4). Copy `docs/rules/{coding-rules,design-rules}.md` (eval's `design-rules.md` first line reads "`web/`" only), eval docs, eval parts of `isolated-environments.md`, plus short `AGENTS.md` and `CLAUDE.md` (`@AGENTS.md`).
+Done when: tests that read `config/` (e.g. catalog test) pass; Firestore rules file is deny-all (no test of it: config, rule 17); `firebase.json` has the Auth emulator block and its target names match the deploy workflow.
 
 ## Task 6 — Port deploy workflow and CI scripts
 What it is / what it means: Same pipeline, same service names and Hosting site, now from the new repo (PRD R5, O5).
@@ -58,7 +58,7 @@ Done when: copied infra tests and `terraform fmt -check` / `validate` pass; `ide
 
 ## Task 8 — Cut-over: identity apply, deploy, verify
 What it is / what it means: Move the live eval pipeline to the new repo with the old one still intact (PRD Manual steps 3-5, D9, D10).
-What changes at a high level: Set `EVAL_*` and `GCP_REGION` repo variables in the new repo (owner if `gh` lacks rights). Set `github_repository = "Onolys/onolys-eval"` and apply (agent), moving WIF trust. In a window with no eval run in progress, `gh workflow disable deploy-eval` here, run `deploy-eval` via `workflow_dispatch` in the new repo. On failure, fix forward in the new repo.
+What changes at a high level: Set `EVAL_*` and `GCP_REGION` repo variables in the new repo (owner if `gh` lacks rights). Set `github_repository = "Onolys/onolys-eval"` and apply (agent), moving WIF trust. `gh workflow disable deploy-eval` here, run `deploy-eval` via `workflow_dispatch` in the new repo. On failure, fix forward in the new repo.
 Done when: smoke passes (`/v1/me` 401, CSP lists backend); same service names and URLs; `eval.onolys.com` loads in a browser; one small eval run completes end to end; backend and worker revisions carry the same `GIT_SHA`.
 
 ## Task 9 — Removal here: workflows, scripts, workspace
@@ -76,4 +76,4 @@ What it is / what it means: Prove the PRD acceptance criteria and finish the clo
 What changes at a high level: No new edits unless a check fails. Run `git grep -il "onolys_eval\|eval/" -- . ':!docs'` and review hits; `uv lock --check`; CI green. After the removal PR merges, the agent deletes the now-unused `EVAL_*` repo variables here and adds the eval repo ruleset (owner if no rights).
 Done when: all acceptance criteria hold (tag, new repo green, no big blobs, plan no-op earlier recorded, deploy smoke, this repo grep clean, no `.tf` edits); CI on the removal PR passes.
 
-Owner-only: push tag `engine-v0` and create repo/vars/ruleset if the agent lacks rights; eval-project credentials for Terraform plan/apply if missing; choose an idle window for the cut-over; delete old `EVAL_*` variables if `gh` lacks rights.
+Owner-only: push tag `engine-v0` and create repo/vars/ruleset if the agent lacks rights; eval-project credentials for Terraform plan/apply if missing; delete old `EVAL_*` variables if `gh` lacks rights.
