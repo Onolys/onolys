@@ -1,9 +1,8 @@
 import { QueryClientProvider } from "@tanstack/react-query";
 import { useState } from "react";
 import { createBrowserRouter, RouterProvider } from "react-router";
-import { AuthProvider } from "./auth/AuthProvider";
+import { AuthProvider, type AuthService } from "@onolys/common/auth";
 import { clearJobs } from "./features/upload/uploader";
-import type { AuthService } from "./auth/types";
 import { makeQueryClient } from "./queryClient";
 import { routes } from "./routes/routes";
 

@@ -1,5 +1,7 @@
 import "@testing-library/jest-dom/vitest";
 import { cleanup } from "@testing-library/react";
+import { EMULATOR_URL } from "@onolys/common/auth/testing";
+import { HttpNetworkFrame } from "msw/experimental";
 import { afterAll, afterEach, beforeAll, vi } from "vitest";
 import { setStatusListener } from "../api/statusListener";
 import { mockBackend, mockEmitter, server } from "../mocks/server";
@@ -21,7 +23,7 @@ if (
 if (!Element.prototype.scrollIntoView)
   Element.prototype.scrollIntoView = vi.fn();
 
-// Radix (via @onolys/ui) needs these jsdom lacks: ResizeObserver, matchMedia, pointer capture, DOMRect.
+// Radix (via @onolys/common) needs these jsdom lacks: ResizeObserver, matchMedia, pointer capture, DOMRect.
 if (typeof globalThis.ResizeObserver === "undefined") {
   globalThis.ResizeObserver = class ResizeObserver {
     observe() {}
@@ -62,7 +64,13 @@ if (typeof globalThis.DOMRect === "undefined") {
 }
 
 beforeAll(() => {
-  server.listen({ onUnhandledFrame: "error" });
+  // Any request without a handler fails the test, except the Firebase Auth emulator (real sign-in, not an API fake).
+  server.listen({
+    onUnhandledFrame({ frame, defaults }) {
+      if (frame instanceof HttpNetworkFrame && new URL(frame.data.request.url).origin === EMULATOR_URL) return;
+      defaults.error();
+    },
+  });
   setStatusListener(mockEmitter); // the in-memory status doc stands in for Firestore
 });
 afterEach(() => {

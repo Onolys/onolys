@@ -6,7 +6,7 @@ import { renderApp } from "../test/renderApp";
 // Focus is an effect: await its observable result after a same-tab SPA navigation.
 describe("route focus", () => {
   it("moves focus to the h1 on navigation", async () => {
-    const { router } = renderApp("/login");
+    const { router } = await renderApp("/login");
     await waitFor(() => expect(screen.getByRole("heading", { level: 1, name: "Log in" })).toHaveFocus());
     await userEvent.click(screen.getByRole("link", { name: "Sign up" }));
     expect(router.state.location.pathname).toBe("/signup");

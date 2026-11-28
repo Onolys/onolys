@@ -7,7 +7,19 @@ import { MockHttpError, type MockBackend } from "./stateMachine";
 
 const V1 = "*/v1";
 const REQUEST_ID = "req_mock";
-const FAKE_BEARER = /^Bearer test:([A-Za-z0-9_.-]+)$/;
+const BEARER = /^Bearer (\S+)$/;
+const UID = /^[A-Za-z0-9_.-]+$/;
+
+/** The user id (`sub`) of a Firebase ID token. The Auth emulator issues unsigned JWTs, so the payload is read, not verified. */
+export function uidFromToken(token: string): string | undefined {
+  try {
+    const payload = token.split(".")[1] ?? "";
+    const sub = (JSON.parse(atob(payload.replace(/-/g, "+").replace(/_/g, "/"))) as { sub?: unknown }).sub;
+    return typeof sub === "string" && UID.test(sub) ? sub : undefined;
+  } catch {
+    return undefined;
+  }
+}
 
 function errorResponse(status: number, details: components["schemas"]["ErrorDetailModel"][], message: string) {
   return HttpResponse.json(
@@ -19,15 +31,16 @@ function errorResponse(status: number, details: components["schemas"]["ErrorDeta
 type Ctx = { uid: string; params: Record<string, string>; request: Request };
 type Fn = (c: Ctx) => Response | Promise<Response>;
 
-/** Fake auth (`Bearer test:<uid>`, as SP04 AUTH_MODE=fake) + MockHttpError -> public-error-response. */
+/** The caller is the `sub` of the emulator ID token in the bearer header; MockHttpError -> public-error-response. */
 function guarded(fn: Fn) {
   return async ({ request, params }: { request: Request; params: Record<string, unknown> }) => {
-    const m = FAKE_BEARER.exec(request.headers.get("authorization") ?? "");
-    if (!m)
+    const token = BEARER.exec(request.headers.get("authorization") ?? "")?.[1];
+    const uid = token ? uidFromToken(token) : undefined;
+    if (!uid)
       return errorResponse(401, [{ code: "unauthenticated", message: "Sign-in required." }], "Sign-in required.");
     try {
       const p = Object.fromEntries(Object.entries(params).map(([k, v]) => [k, String(v)]));
-      return await fn({ uid: m[1], params: p, request });
+      return await fn({ uid, params: p, request });
     } catch (e) {
       if (e instanceof MockHttpError) return errorResponse(e.status, e.details, e.message);
       throw e;
@@ -111,6 +124,9 @@ export function createHandlers(b: MockBackend): HttpHandler[] {
     http.post(`${V1}/interviews/:id/end`, guarded(async ({ uid, params, request }) =>
       json(b.endInterview(uid, params.id, await body(request))),
     )),
+    // The two email routes: accepted, nothing is sent (the Auth emulator keeps the action codes).
+    http.post(`${V1}/auth/email/verification`, () => new HttpResponse(null, { status: 202 })),
+    http.post(`${V1}/auth/email/password-reset`, () => new HttpResponse(null, { status: 202 })),
     http.get(`${V1}/upload-limits`, guarded(() => json(UPLOAD_LIMITS))),
     http.get(`${V1}/usage`, guarded(({ uid }) => json(b.getUsage(uid)))),
 

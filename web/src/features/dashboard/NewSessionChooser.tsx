@@ -1,10 +1,8 @@
 /** `/new`: the two landing cards, AI interview and rate a recording, with usage and cap behaviour. */
-import { Button, Card, CardContent, CardDescription, CardFooter, CardHeader, Section } from "@onolys/ui";
+import { Button, Card, CardContent, CardDescription, CardFooter, CardHeader, Section, H1, PAGE, Notice } from "@onolys/common";
 import { Link } from "react-router";
-import { useAuth } from "../../auth/AuthProvider";
+import { useAuth } from "@onolys/common/auth";
 import { messageForCode } from "../../api/errors";
-import { H1, PAGE } from "../../components/classes";
-import { Notice } from "../../components/Notice";
 import { interviewCapText } from "../interview/capText";
 import { UsageCount } from "../usage/UsageCount";
 import { blockingPeriod, formatBlockingReset } from "../usage/usage";

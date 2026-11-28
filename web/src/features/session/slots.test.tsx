@@ -37,7 +37,7 @@ afterEach(() => vi.unstubAllEnvs());
 
 describe("speaker gate slot: first confirmation only", () => {
   it("shows the gate for a ready, unconfirmed transcript awaiting input", async () => {
-    mount(awaiting(), failed({ state: "awaiting_input", error_code: null, error_kind: null }));
+    await mount(awaiting(), failed({ state: "awaiting_input", error_code: null, error_kind: null }));
     expect(await screen.findAllByRole("button", { name: "This is the clinician" })).toHaveLength(2);
   });
 
@@ -50,8 +50,8 @@ describe("speaker gate slot: first confirmation only", () => {
     { state: "report_ready" },
     { state: "transcribing" },
     { state: "deleting" },
-  ] satisfies Partial<SessionStatusDoc>[])("hides the gate for %j", (patch) => {
-    mount(awaiting(), failed(patch));
+  ] satisfies Partial<SessionStatusDoc>[])("hides the gate for %j", async (patch) => {
+    await mount(awaiting(), failed(patch));
     expect(document.querySelector('[data-slot="speaker-gate"]')).toBeNull();
     expect(screen.queryByRole("button", { name: "Change who the clinician is" })).not.toBeInTheDocument();
   });
@@ -66,7 +66,7 @@ describe("rating card slot: locked inputs", () => {
   ] satisfies Partial<SessionStatusDoc>[])("locks the card for %j", async (patch) => {
     vi.stubEnv("VITE_RATING_ENABLED", "true");
     const sid = awaiting();
-    renderPage(<RatingCardSlot sessionId={sid} doc={failed(patch)} />, "/x", { user: USER });
+    await renderPage(<RatingCardSlot sessionId={sid} doc={failed(patch)} />, "/x", { user: USER });
     expect(await screen.findByLabelText("Change goal")).toBeDisabled();
     expect(screen.queryByRole("button", { name: "Submit rating" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /No rating/ })).not.toBeInTheDocument();
@@ -75,17 +75,17 @@ describe("rating card slot: locked inputs", () => {
   it("keeps an unsubmitted awaiting-input card editable", async () => {
     vi.stubEnv("VITE_RATING_ENABLED", "true");
     const sid = awaiting();
-    renderPage(<RatingCardSlot sessionId={sid} doc={failed({ state: "awaiting_input" })} />, "/x", { user: USER });
+    await renderPage(<RatingCardSlot sessionId={sid} doc={failed({ state: "awaiting_input" })} />, "/x", { user: USER });
     expect(await screen.findByLabelText("Change goal")).toBeEnabled();
     expect(screen.getByRole("button", { name: "Submit rating" })).toBeEnabled();
   });
 });
 
 describe.each([undefined, "false"])("rating-disabled slot: locked change goal (flag %s)", (flag) => {
-  it.each(["running", "failed", "report_ready", "deleting"] as const)("hides the goal fallback in %s", (state) => {
+  it.each(["running", "failed", "report_ready", "deleting"] as const)("hides the goal fallback in %s", async (state) => {
     vi.stubEnv("VITE_RATING_ENABLED", flag);
     const sid = awaiting();
-    renderPage(<RatingCardSlot sessionId={sid} doc={failed({ state })} />, "/x", { user: USER });
+    await renderPage(<RatingCardSlot sessionId={sid} doc={failed({ state })} />, "/x", { user: USER });
     expect(document.querySelector('[data-slot="rating-fallback"]')).toBeNull();
     expect(screen.queryByLabelText("Change goal")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Continue" })).not.toBeInTheDocument();
@@ -94,7 +94,7 @@ describe.each([undefined, "false"])("rating-disabled slot: locked change goal (f
   it("keeps the unsubmitted awaiting-input goal editable", async () => {
     vi.stubEnv("VITE_RATING_ENABLED", flag);
     const sid = awaiting();
-    renderPage(<RatingCardSlot sessionId={sid} doc={failed({ state: "awaiting_input" })} />, "/x", { user: USER });
+    await renderPage(<RatingCardSlot sessionId={sid} doc={failed({ state: "awaiting_input" })} />, "/x", { user: USER });
     expect(await screen.findByLabelText("Change goal")).toBeEnabled();
     expect(screen.getByRole("button", { name: "Continue" })).toBeEnabled();
   });

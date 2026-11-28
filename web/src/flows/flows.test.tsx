@@ -2,18 +2,19 @@
  * End-to-end flow tests. Every flow starts at a route, drives the real
  * router and pages through user-visible steps, and MSW serves /v1 from the in-memory mock backend. The only
  * out-of-band moves are the ones the real worker does: `mockBackend.advance` stands in for transcription/run stages,
- * `service.markVerified` for clicking the email link. Page-level detail lives next to each page; these tests cover
+ * `clickVerificationLink` for clicking the email link. Page-level detail lives next to each page; these tests cover
  * the journeys across pages.
  */
 import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { mockBackend, server } from "../mocks/server";
-import { here, renderApp } from "../test/renderApp";
+import { clickVerificationLink, newTestEmail } from "@onolys/common/auth/testing";
+import { here, renderApp, stubEmailApi, uidForEmail, uidOf } from "../test/renderApp";
 
-const EMAIL = "rater@clinic.org";
-const UID = "u_rater_clinic_org";
-const USER = { email: EMAIL, verified: true };
+const USER = { email: "rater@clinic.org", verified: true };
+/** The mock-backend id of the signed-in user: `u_rater_clinic_org` for the provisioned user, the real one after a sign-up. */
+let UID = uidForEmail(USER.email);
 
 /**
  * jsdom's XMLHttpRequest is not intercepted by MSW (and would hit the network), so the upload PUT goes through a
@@ -55,6 +56,7 @@ class FetchXhr {
 }
 
 beforeEach(() => {
+  UID = uidForEmail(USER.email);
   vi.stubGlobal("XMLHttpRequest", FetchXhr);
   // jsdom never loads media metadata; report a 15 minute recording.
   vi.stubGlobal(
@@ -86,7 +88,7 @@ const withRatingOn = () => {
 };
 
 const user = () => userEvent.setup();
-const h1 = (name: string) => screen.findByRole("heading", { level: 1, name });
+const h1 = (name: string | RegExp) => screen.findByRole("heading", { level: 1, name });
 const nav = (name: string) => within(screen.getByRole("navigation", { name: "Main" })).getByRole("link", { name });
 const mp3 = () => new File([new Uint8Array(100)], "visit.mp3", { type: "audio/mpeg" });
 const sessionId = (router: Parameters<typeof here>[0]) => here(router).split("/")[2]!;
@@ -96,7 +98,7 @@ const settle = (sid: string) => act(() => mockBackend.settle(sid));
 /** Dashboard -> New session -> choose file -> Start; ends on /sessions/:id. */
 async function uploadViaUi(u: ReturnType<typeof user>, router: Parameters<typeof here>[0], title?: string) {
   await u.click(nav("New Session"));
-  await h1("Welcome rater");
+  await h1(/^Welcome rater/);
   await u.click(within(screen.getByRole("main")).getByRole("link", { name: "New session" }));
   await h1("New session");
   if (title) await u.type(screen.getByLabelText(/title/i), title);
@@ -130,16 +132,19 @@ async function confirmSpeakerViaUi(u: ReturnType<typeof user>, sid: string) {
 describe("flow: one submit, no rating card (default)", () => {
   it("sign-up, verify, goal + audio, Start, confirm speaker, coding, then a report without comparison", async () => {
     const u = user();
-    const { router, service } = renderApp("/signup");
+    const email = newTestEmail("rater");
+    const emailApi = stubEmailApi();
+    const { router, service } = await renderApp("/signup", { emailApi });
     await h1("Sign up");
-    await u.type(screen.getByLabelText("Email"), EMAIL);
+    await u.type(screen.getByLabelText("Email"), email);
     await u.type(screen.getByLabelText("Password"), "longenough1");
     await u.type(screen.getByLabelText("Confirm password"), "longenough1");
     await u.click(screen.getByRole("button", { name: "Create account" }));
     await h1("Verify your email");
-    service.markVerified(EMAIL);
+    await clickVerificationLink(service, email);
     await u.click(screen.getByRole("button", { name: "I've verified" }));
-    await h1("Welcome rater");
+    await h1(/^Welcome rater/);
+    UID = await uidOf(service);
 
     const sid = await uploadViaUi(u, router, "Visit 3");
     expect(screen.queryByLabelText("Cultivating Change Talk score")).toBeNull();
@@ -164,7 +169,7 @@ describe("flow: one submit, no rating card (default)", () => {
 
   it("system failure, then Try again re-runs", async () => {
     const u = user();
-    const { router } = renderApp("/sessions", { user: USER });
+    const { router } = await renderApp("/sessions", { user: USER });
     await h1("Sessions");
     const sid = await uploadViaUi(u, router, "fail-transient");
     await confirmSpeakerViaUi(u, sid);
@@ -182,22 +187,25 @@ describe("flow (rating on): sign-up, verify, upload, speaker + rating during tra
   withRatingOn();
   it("runs end to end, and the submitted rating is final (no edit, no Run again)", async () => {
     const u = user();
-    const { router, service } = renderApp("/signup");
+    const email = newTestEmail("rater");
+    const emailApi = stubEmailApi();
+    const { router, service } = await renderApp("/signup", { emailApi });
     await h1("Sign up");
-    await u.type(screen.getByLabelText("Email"), EMAIL);
+    await u.type(screen.getByLabelText("Email"), email);
     await u.type(screen.getByLabelText("Password"), "longenough1");
     await u.type(screen.getByLabelText("Confirm password"), "longenough1");
     await u.click(screen.getByRole("button", { name: "Create account" }));
     await h1("Verify your email");
     expect(screen.getByText(/spam/i)).toBeInTheDocument();
-    expect(service.calls.verificationEmails).toBe(1);
+    expect(emailApi.sendVerification).toHaveBeenCalledTimes(1);
 
     // not verified yet: the app stays put and explains
     await u.click(screen.getByRole("button", { name: "I've verified" }));
     expect(await screen.findByRole("status")).toHaveTextContent("haven't seen your verification");
-    service.markVerified(EMAIL);
+    await clickVerificationLink(service, email);
     await u.click(screen.getByRole("button", { name: "I've verified" }));
-    await h1("Welcome rater");
+    await h1(/^Welcome rater/);
+    UID = await uidOf(service);
     await u.click(nav("Sessions"));
     await h1("Sessions");
     expect(await screen.findByRole("link", { name: "Start a new session" })).toBeInTheDocument(); // empty state
@@ -237,7 +245,7 @@ describe("flow (rating on): no-rating run is final too", () => {
   withRatingOn();
   it("shows an Onolys-only report and offers no way to add a rating or run again", async () => {
     const u = user();
-    const { router } = renderApp("/sessions", { user: USER });
+    const { router } = await renderApp("/sessions", { user: USER });
     await h1("Sessions");
     const sid = await uploadViaUi(u, router);
     await confirmSpeakerViaUi(u, sid);
@@ -261,7 +269,7 @@ describe("flow (rating on): system failure, then Try again", () => {
   withRatingOn();
   it("shows the failure card with a reference id, Try again re-runs the same rating", async () => {
     const u = user();
-    const { router } = renderApp("/sessions", { user: USER });
+    const { router } = await renderApp("/sessions", { user: USER });
     await h1("Sessions");
     const sid = await uploadViaUi(u, router, "fail-transient");
     await confirmSpeakerViaUi(u, sid);
@@ -284,7 +292,7 @@ describe("flow (rating on): daily cap reached at auto-start, then Start", () => 
   withRatingOn();
   it("says so with the reset time; Start runs once allowed", async () => {
     const u = user();
-    const { router } = renderApp("/sessions", { user: USER });
+    const { router } = await renderApp("/sessions", { user: USER });
     await h1("Sessions");
     const sid = await uploadViaUi(u, router, "cap-held");
     await rateViaUi(u);
@@ -310,7 +318,7 @@ describe("flow: delete a session", () => {
     mockBackend.confirmSpeaker(UID, sid, "spk_0");
     mockBackend.putRating(UID, sid, { final: true, no_rating: true, card: { change_goal: "Walk more" } });
     mockBackend.settle(sid);
-    const { router } = renderApp("/sessions", { user: USER });
+    const { router } = await renderApp("/sessions", { user: USER });
     await u.click(await screen.findByRole("link", { name: /Doomed visit/ }));
     await h1("Report");
     expect(here(router)).toBe(`/sessions/${sid}/reports/1`);
@@ -327,7 +335,7 @@ describe("flow: delete a session", () => {
 describe("flow: settings from the account menu", () => {
   it("opens usage and account information without API tools, then returns to sessions", async () => {
     const u = user();
-    renderApp("/sessions", { user: USER });
+    await renderApp("/sessions", { user: USER });
     await h1("Sessions");
     await u.click(screen.getByRole("button", { name: "Account menu" }));
     await u.click(screen.getByRole("menuitem", { name: "Settings" }));
@@ -346,7 +354,7 @@ describe("flow: sample report works with no network", () => {
   it("login -> Sample report renders the report and transcript, with zero requests", async () => {
     const requests: string[] = [];
     server.events.on("request:start", ({ request }) => void requests.push(request.url));
-    const { router } = renderApp("/login");
+    const { router } = await renderApp("/login");
     await h1("Log in");
     // opens in a new tab (target=_blank), so assert the link, then the public route
     const sample = within(screen.getByRole("contentinfo")).getByRole("link", { name: "Sample report" });

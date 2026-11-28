@@ -1,13 +1,10 @@
 /** Upload progress, cancel, "Retry upload" and "Resume upload" on the session page. */
-import { Button, Input } from "@onolys/ui";
+import { Button, Input, NOTE, Field, ErrorNote, Notice } from "@onolys/common";
 import { useMutation } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef, useSyncExternalStore } from "react";
 import { describeError } from "../../api/errors";
 import type { SessionStatusDoc } from "../../api/statusListener";
 import { useApiClient } from "../../auth/useApiClient";
-import { NOTE } from "../../components/classes";
-import { Field } from "../../components/Field";
-import { ErrorNote, Notice } from "../../components/Notice";
 import { ErrorCard } from "../session/ErrorCard";
 import { FileNotices } from "./FileNotices";
 import { prepareUpload } from "./startUpload";

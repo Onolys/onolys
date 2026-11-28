@@ -1,4 +1,4 @@
-import { Badge } from "@onolys/ui";
+import { Badge } from "@onolys/common";
 import { CODE_META, GROUP_CLASS, SHORT } from "./codeMeta";
 
 /** Group colour from semantic tokens only; the chip text always names the code. */

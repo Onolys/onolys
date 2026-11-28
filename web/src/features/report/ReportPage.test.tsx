@@ -57,7 +57,7 @@ describe("report page", () => {
     serve(clone());
     serveTranscript();
     const sid = reported({ final: true, card: SCORED });
-    open(sid);
+    await open(sid);
     expect(await screen.findByRole("heading", { level: 1, name: "Report" })).toBeInTheDocument();
     expect(await screen.findByText(/Cut down on drinking/)).toBeInTheDocument();
     expect(screen.getAllByText(/MITI 4\.2\.1/).length).toBeGreaterThan(0);
@@ -82,7 +82,7 @@ describe("report page", () => {
     serve(clone());
     serveTranscript();
     const sid = reported({ final: true, card: SCORED });
-    open(sid);
+    await open(sid);
     const btn = await screen.findByRole("button", { name: "Open coded transcript" });
     expect(screen.getAllByRole("button", { name: /^Open utterance \d+$/ }).length).toBeGreaterThan(0);
     await userEvent.click(btn);
@@ -99,7 +99,7 @@ describe("report page", () => {
       ),
     );
     const sid = reported({ final: true, card: SCORED });
-    open(sid);
+    await open(sid);
     const retry = await screen.findByRole("button", { name: "Try again" });
     expect(screen.getByRole("heading", { name: "At a glance" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: /Feedback/ })).toBeInTheDocument();
@@ -116,7 +116,7 @@ describe("report page", () => {
     serve(clone());
     server.use(http.get("*/v1/sessions/:id/transcript", () => new Promise(() => {})));
     const sid = reported({ final: true, card: SCORED });
-    open(sid);
+    await open(sid);
     expect(await screen.findByRole("heading", { name: "At a glance" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Loading transcript…" })).toBeDisabled();
   });
@@ -125,7 +125,7 @@ describe("report page", () => {
 describe("report page, deletion", () => {
   it("requires confirmation, allows cancellation, then deletes and returns to sessions", async () => {
     const sid = reported({ final: true, card: SCORED });
-    const { router } = open(sid);
+    const { router } = await open(sid);
     const user = userEvent.setup();
     await user.click(await screen.findByRole("button", { name: "Delete session" }));
     expect(screen.getByRole("alertdialog", { name: "Delete this session?" })).toBeVisible();
@@ -143,7 +143,7 @@ describe("report page, deletion", () => {
       attempts += 1;
       return HttpResponse.json({ status: 503, details: [{ code: "upstream_unavailable", message: "unavailable" }], request_id: "req_delete" }, { status: 503 });
     }));
-    const { router } = open(sid);
+    const { router } = await open(sid);
     const user = userEvent.setup();
     await user.click(await screen.findByRole("button", { name: "Delete session" }));
     await user.click(screen.getByRole("button", { name: "Delete permanently" }));
@@ -160,7 +160,7 @@ describe("report page, tolerance", () => {
     serve(clone(), "1.2.0");
     serveTranscript();
     const sid = reported({ final: true, card: SCORED });
-    open(sid);
+    await open(sid);
     expect(await screen.findByText(/This report was made by a newer version/)).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "At a glance" })).toBeInTheDocument();
   });
@@ -169,7 +169,7 @@ describe("report page, tolerance", () => {
     serve(clone(), "0.9.0");
     serveTranscript();
     const sid = reported({ final: true, card: SCORED });
-    open(sid);
+    await open(sid);
     await screen.findByRole("heading", { name: "At a glance" });
     expect(screen.queryByText(/newer version/)).toBeNull();
   });
@@ -182,7 +182,7 @@ describe("report page, tolerance", () => {
     serve(r);
     serveTranscript();
     const sid = reported({ final: true, card: SCORED });
-    open(sid);
+    await open(sid);
     const table = within(await screen.findByRole("table", { name: "Behaviour counts" }));
     expect(within(table.getByRole("row", { name: /Complex reflection/i })).getByText("7")).toBeInTheDocument();
   });
@@ -196,19 +196,19 @@ describe("report page, tolerance", () => {
         ),
       ),
     );
-    open("not-hex");
+    await open("not-hex");
     expect(await screen.findByText("We couldn't find that report.")).toBeInTheDocument();
   });
 
   it("a version that is not a whole number shows a not-found message", async () => {
     const sid = reported({ final: true, card: SCORED });
-    open(sid, "abc");
+    await open(sid, "abc");
     expect(await screen.findByText(/couldn't find that report/i)).toBeInTheDocument();
   });
 
   it("an unknown version shows a not-found message with a link back to the session", async () => {
     const sid = reported({ final: true, card: SCORED });
-    open(sid, 9);
+    await open(sid, 9);
     expect(await screen.findByText(/couldn't find that report/i)).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Back to the session" })).toHaveAttribute("href", `/sessions/${sid}`);
   });

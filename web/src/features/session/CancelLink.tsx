@@ -1,6 +1,5 @@
-import { Spinner } from "@onolys/ui";
+import { Spinner, LINK } from "@onolys/common";
 import { useRef, useState } from "react";
-import { LINK } from "../../components/classes";
 import { ConfirmDialog } from "./ConfirmDialog";
 
 const CANCELLABLE = new Set(["created", "uploading", "upload_incomplete", "validating", "transcribing", "awaiting_input", "running"]);

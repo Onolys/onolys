@@ -10,6 +10,11 @@ import type { ApiPaths } from "./types";
 
 export const DEFAULT_BASE_URL = "/v1";
 
+/** The API base URL as an absolute same-origin URL: `VITE_API_BASE_URL`, else `/v1`. */
+export function apiBaseUrl(): string {
+  return new URL(import.meta.env.VITE_API_BASE_URL ?? DEFAULT_BASE_URL, window.location.origin).href.replace(/\/$/, "");
+}
+
 /** `forceRefresh` maps to Firebase `getIdToken(true)`; null = signed out. */
 export type TokenProvider = (forceRefresh?: boolean) => Promise<string | null>;
 

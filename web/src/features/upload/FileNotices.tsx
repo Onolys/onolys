@@ -1,5 +1,4 @@
-import { ErrorNote, Notice } from "../../components/Notice";
-import { NOTE } from "../../components/classes";
+import { ErrorNote, Notice, NOTE } from "@onolys/common";
 import type { FilePick } from "./useFilePick";
 
 /** Block / warning / "Checking file…" under a file input, shared by the form and Resume upload. */

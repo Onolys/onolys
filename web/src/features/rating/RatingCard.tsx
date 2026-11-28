@@ -2,13 +2,11 @@
  * In-app rating card: filled while transcription runs, autosaved as a draft,
  * submitted with `final:true`. Only "Submit rating" / "No rating" satisfy the run gate.
  */
-import { Button, Card, CardContent, Input, Label, Select, Textarea } from "@onolys/ui";
+import { Button, Card, CardContent, Input, Label, Select, Textarea, LINK_BTN, NOTE, ErrorNote, Notice } from "@onolys/common";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { unwrap } from "../../api/client";
 import { ApiError, describeError } from "../../api/errors";
 import { useApiClient } from "../../auth/useApiClient";
-import { LINK_BTN, NOTE } from "../../components/classes";
-import { ErrorNote, Notice } from "../../components/Notice";
 import { COUNTS, GLOBALS, LIMITS } from "../../protocol/miti-items";
 import { createAutosaver, type Autosaver, type SaveStatus } from "./autosave";
 import {

@@ -1,24 +1,20 @@
 import { useEffect, useRef, type ReactNode } from "react";
 import { Link, NavLink, Outlet, useLocation } from "react-router";
-import { AppHeader, SkipLink } from "@onolys/ui";
-import { useAuth } from "../auth/AuthProvider";
-import { useSignOut } from "../auth/useSignOut";
-import { AccountMenu } from "./AccountMenu";
+import { AccountMenu, AppHeader, NAV_LINK, SkipLink } from "@onolys/common";
+import { useAuth, useSignOut } from "@onolys/common/auth";
 import { Footer } from "./Footer";
 import { RouteTitle } from "./routeTitle";
 
-/** Plain text nav link (not a button): muted, subtle hover, current page = primary colour + underline. AppHeader's nav supplies the even gap. */
+/** Plain text nav link (not a button); the shared NAV_LINK classes mute it and mark the current page. */
 function NavItem({ to, children }: { to: string; children: ReactNode }) {
   return (
-    <NavLink
-      to={to}
-      end
-      className="text-sm font-medium text-muted-foreground no-underline hover:text-foreground aria-[current=page]:text-primary aria-[current=page]:underline aria-[current=page]:decoration-2 aria-[current=page]:underline-offset-8"
-    >
+    <NavLink to={to} end className={NAV_LINK}>
       {children}
     </NavLink>
   );
 }
+
+const ACCOUNT_LINKS = [{ href: "/settings", label: "Settings" }];
 
 export function Layout() {
   const { pathname } = useLocation();
@@ -58,14 +54,23 @@ export function Layout() {
       <SkipLink />
       <AppHeader
         // verified: page nav sits at the true centre of the bar (brand left, account menu right); signed-out nav stays right via the brand's mr-auto
-        className={phase === "verified" ? "relative [&>nav]:absolute [&>nav]:left-1/2 [&>nav]:-translate-x-1/2" : undefined}
+        centerNavigation={phase === "verified"}
         brand={
           <Link to="/" className="font-bold text-primary no-underline">
             Onolys
           </Link>
         }
         navigation={navigation}
-        accountMenu={phase === "verified" ? <AccountMenu email={user?.email ?? null} onSignOut={() => void signOut()} /> : undefined}
+        accountMenu={
+          phase === "verified" ? (
+            <AccountMenu
+              email={user?.email ?? null}
+              links={ACCOUNT_LINKS}
+              renderLink={(link) => <Link to={link.href}>{link.label}</Link>}
+              onSignOut={() => void signOut()}
+            />
+          ) : undefined
+        }
       />
       {signOutError && <p role="alert">{signOutError}</p>}
       <main

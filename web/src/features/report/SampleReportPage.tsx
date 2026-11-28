@@ -7,7 +7,7 @@ import {
   drinkingSampleReport,
   drinkingSampleTurns,
 } from "../../mocks/fixtures/sample";
-import { NOTE } from "../../components/classes";
+import { NOTE } from "@onolys/common";
 import { ReportView, type TurnsState } from "./ReportView";
 
 const TURNS: TurnsState = { status: "ready", turns: drinkingSampleTurns };

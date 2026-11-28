@@ -1,9 +1,7 @@
 /** `/settings`: usage and account-removal contact. */
-import { Button } from "@onolys/ui";
+import { Button, H1, LINK, NOTE, formatResetTime } from "@onolys/common";
 import { describeError } from "../../api/errors";
-import { H1, LINK, NOTE } from "../../components/classes";
 import { CONTACT_EMAIL } from "../../config";
-import { formatResetTime } from "../../lib/format";
 import { UsageLeft } from "../usage/UsageLeft";
 import { useUsage } from "../usage/useUsage";
 import { ErrorCard } from "../session/ErrorCard";

@@ -2,7 +2,7 @@
  * `/interviews/new`: pick a practice scenario and a voice, read the headphone tip, check the
  * microphone, then start. Starting reserves one interview unit and opens the live page.
  */
-import { Badge, Button, Label, Select, Skeleton } from "@onolys/ui";
+import { Badge, Button, Label, Select, Skeleton, ACTIONS, H1, LINK, LINK_BTN, NOTE, PAGE, Field, ErrorNote, Notice } from "@onolys/common";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { Link, useNavigate } from "react-router";
@@ -10,9 +10,6 @@ import { pageLoadError } from "../../pageLoadError";
 import { unwrap } from "../../api/client";
 import { describeError } from "../../api/errors";
 import { useApiClient } from "../../auth/useApiClient";
-import { ACTIONS, H1, LINK, LINK_BTN, NOTE, PAGE } from "../../components/classes";
-import { Field } from "../../components/Field";
-import { ErrorNote, Notice } from "../../components/Notice";
 import { ErrorCard } from "../session/ErrorCard";
 import { UsageBar } from "../usage/UsageBar";
 import { blockingPeriod } from "../usage/usage";

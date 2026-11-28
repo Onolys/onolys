@@ -9,7 +9,7 @@ describe("legal pages", () => {
     ["/privacy", "Privacy Policy"],
     ["/terms", "Terms of Service"],
   ])("%s renders signed out with an updated date", async (path, heading) => {
-    renderApp(path);
+    await renderApp(path);
     await h1(heading);
     expect(screen.getByText(/Last updated: 2026-11-23/)).toBeInTheDocument();
   });
@@ -18,12 +18,12 @@ describe("legal pages", () => {
     ["/privacy", "Privacy Policy"],
     ["/terms", "Terms of Service"],
   ])("%s is reachable when signed in (no redirect)", async (path, heading) => {
-    renderApp(path, { user: { email: "a@clinic.org", verified: true } });
+    await renderApp(path, { user: { email: "a@clinic.org", verified: true } });
     await h1(heading);
   });
 
   it("privacy page states the four data-control commitments", async () => {
-    renderApp("/privacy");
+    await renderApp("/privacy");
     await h1("Privacy Policy");
     const main = screen.getByRole("main");
     expect(within(main).getByText(/stored only for you/i)).toBeInTheDocument();
@@ -35,7 +35,7 @@ describe("legal pages", () => {
 
 describe("privacy accuracy", () => {
   it("covers interview audio, API keys and what deletion keeps", async () => {
-    renderApp("/privacy");
+    await renderApp("/privacy");
     await h1("Privacy Policy");
     const main = within(screen.getByRole("main"));
     expect(main.getByText(/practice-interview audio/i)).toBeInTheDocument();
@@ -46,7 +46,7 @@ describe("privacy accuracy", () => {
 
 describe("footer", () => {
   it.each([[undefined], [{ email: "a@clinic.org", verified: true }]])("shows legal links and copyright (%o)", async (user) => {
-    renderApp("/sample", user ? { user } : {});
+    await renderApp("/sample", user ? { user } : {});
     await screen.findByRole("heading", { level: 1, name: "Sample report" });
     const footer = screen.getByRole("contentinfo");
     expect(within(footer).getByRole("link", { name: "Privacy" })).toHaveAttribute("href", "/privacy");

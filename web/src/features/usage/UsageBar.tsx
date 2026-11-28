@@ -1,4 +1,4 @@
-import { UsageMeter } from "@onolys/ui";
+import { UsageMeter } from "@onolys/common";
 import { useUsage } from "./useUsage";
 import type { UsageKind } from "./usage";
 

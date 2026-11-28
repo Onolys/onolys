@@ -3,7 +3,7 @@
  * while the rating UI is off. Reuses the card helpers for validation and the PUT payload; the
  * rating card itself is untouched. The coded span is never sent (the engine picks it, D3d).
  */
-import { Label, Textarea } from "@onolys/ui";
+import { Label, Textarea } from "@onolys/common";
 import { useId } from "react";
 import { unwrap } from "../../api/client";
 import { ApiError } from "../../api/errors";

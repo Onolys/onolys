@@ -118,7 +118,7 @@ async function startLive(u: ReturnType<typeof userEvent.setup>, router: Paramete
 describe("landing cards", () => {
   it("shows both cards with usage, the interview card linking to the picker", async () => {
     const u = userEvent.setup();
-    const { router } = renderApp("/", { user: USER });
+    const { router } = await renderApp("/", { user: USER });
     const interviewCard = within(await main().findByRole("region", { name: /Practise with an AI client/ }));
     expect(await interviewCard.findByRole("button", { name: "5 of 5 left today" })).toHaveTextContent("5/5");
     expect(interviewCard.queryByText(/this month/)).toBeNull();
@@ -133,7 +133,7 @@ describe("landing cards", () => {
     ["day", { interview: { day: 0 } }, /today's AI interview limit\. It resets at/],
   ])("disables Start AI Interview at the %s cap with the period message", async (_n, caps, text) => {
     mockBackend.configure({ caps });
-    renderApp("/", { user: USER });
+    await renderApp("/", { user: USER });
     const btn = await main().findByRole("button", { name: "Start AI Interview" });
     expect(btn).toBeDisabled();
     expect(main().queryByRole("link", { name: "Start AI Interview" })).toBeNull();
@@ -151,7 +151,7 @@ describe("landing cards", () => {
         }),
       ),
     );
-    renderApp("/sessions", { user: USER });
+    await renderApp("/sessions", { user: USER });
     const row = (await main().findByRole("link", { name: "Practice" })).closest("li") as HTMLElement;
     expect(within(row).getByText("AI interview")).toBeInTheDocument();
     expect(within((main().getByRole("link", { name: "Recorded" })).closest("li") as HTMLElement).queryByText("AI interview")).toBeNull();
@@ -163,7 +163,7 @@ describe("picker", () => {
     const u = userEvent.setup();
     const track = { stop: vi.fn() };
     vi.stubGlobal("navigator", { ...navigator, mediaDevices: { getUserMedia: vi.fn(async () => ({ getTracks: () => [track] })) } });
-    renderApp("/interviews/new", { user: USER });
+    await renderApp("/interviews/new", { user: USER });
     const voice = (await main().findByLabelText("Voice")) as HTMLSelectElement;
     expect(voice.value).toBe("Kore");
     expect(within(voice).getAllByRole("option")).toHaveLength(9);
@@ -181,7 +181,7 @@ describe("picker", () => {
       if (input instanceof Request && input.method === "POST" && input.url.endsWith("/interviews")) bodies.push(await input.clone().text());
       return realFetch(input, init);
     });
-    const { router } = renderApp("/interviews/new", { user: USER });
+    const { router } = await renderApp("/interviews/new", { user: USER });
     const voice = (await main().findByLabelText("Voice")) as HTMLSelectElement;
     expect(voice.value).toBe("Kore"); // first scenario's voice
     await u.click(main().getByRole("radio", { name: /Reluctant patient/ }));
@@ -195,14 +195,14 @@ describe("picker", () => {
   it("explains a denied microphone", async () => {
     const u = userEvent.setup();
     vi.stubGlobal("navigator", { ...navigator, mediaDevices: { getUserMedia: vi.fn(async () => Promise.reject(new Error("no"))) } });
-    renderApp("/interviews/new", { user: USER });
+    await renderApp("/interviews/new", { user: USER });
     await u.click(await main().findByRole("button", { name: "Test microphone" }));
     expect(await main().findByRole("alert")).toHaveTextContent(/couldn't use your microphone/);
   });
 
   it("starts with the chosen voice and spends a unit", async () => {
     const u = userEvent.setup();
-    const { router } = renderApp("/interviews/new", { user: USER });
+    const { router } = await renderApp("/interviews/new", { user: USER });
     await u.selectOptions(await main().findByLabelText("Voice"), "Puck");
     await u.click(main().getByRole("button", { name: "Start interview" }));
     await waitFor(() => expect(here(router)).toMatch(/^\/interviews\/iv_/));
@@ -213,7 +213,7 @@ describe("picker", () => {
 
   it("is blocked at the interview cap", async () => {
     mockBackend.configure({ caps: { interview: { day: 0 } } });
-    renderApp("/interviews/new", { user: USER });
+    await renderApp("/interviews/new", { user: USER });
     expect(await main().findByRole("button", { name: "Start interview" })).toBeDisabled();
     expect(main().getByText(/today's AI interview limit/)).toBeInTheDocument();
   });
@@ -222,7 +222,7 @@ describe("picker", () => {
 describe("live interview", () => {
   it("runs picker -> live -> End -> upload -> session page with the linked change goal", async () => {
     const u = userEvent.setup();
-    const { router } = renderApp("/interviews/new", { user: USER });
+    const { router } = await renderApp("/interviews/new", { user: USER });
     const iid = await startLive(u, router);
     const fake = lastFakeRelay()!;
     act(() => fake.advance(2)); // AI speaks: frames reach the engine
@@ -258,7 +258,7 @@ describe("live interview", () => {
       if (request.method === "PUT" && path.endsWith("/rating")) void request.clone().json().then((b) => puts.push(b));
     });
     const u = userEvent.setup();
-    const { router } = renderApp("/interviews/new", { user: USER });
+    const { router } = await renderApp("/interviews/new", { user: USER });
     await startLive(u, router);
     await u.click(main().getByRole("button", { name: "End interview" }));
     await waitFor(() => expect(here(router)).toMatch(/^\/sessions\/(?!new)[^/]+$/));
@@ -277,7 +277,7 @@ describe("live interview", () => {
       }),
     );
     const u = userEvent.setup();
-    const { router } = renderApp("/interviews/new", { user: USER });
+    const { router } = await renderApp("/interviews/new", { user: USER });
     await startLive(u, router);
     await u.click(main().getByRole("button", { name: "End interview" }));
     await waitFor(() => expect(here(router)).toMatch(/^\/sessions\/(?!new)[^/]+$/));
@@ -294,7 +294,7 @@ describe("live interview", () => {
       ),
     );
     const u = userEvent.setup();
-    const { router } = renderApp("/interviews/new", { user: USER });
+    const { router } = await renderApp("/interviews/new", { user: USER });
     await startLive(u, router);
     await u.click(main().getByRole("button", { name: "End interview" }));
     await waitFor(() => expect(here(router)).toMatch(/^\/sessions\/(?!new)[^/]+$/));
@@ -309,7 +309,7 @@ describe("live interview", () => {
       }),
     );
     const u = userEvent.setup();
-    const { router } = renderApp("/interviews/new", { user: USER });
+    const { router } = await renderApp("/interviews/new", { user: USER });
     await startLive(u, router);
     await u.click(main().getByRole("button", { name: "End interview" }));
     // first End: PUT done, audio failed -> still on the interview page; retry
@@ -321,7 +321,7 @@ describe("live interview", () => {
 
   it("shows the warning toast at warn_s and auto-Ends at the limit", async () => {
     const u = userEvent.setup();
-    const { router } = renderApp("/interviews/new", { user: USER });
+    const { router } = await renderApp("/interviews/new", { user: USER });
     await startLive(u, router);
     const fake = lastFakeRelay()!;
     act(() => fake.advance(480));
@@ -333,7 +333,7 @@ describe("live interview", () => {
 
   it("shows reconnecting after a drop, retries the same url, and keeps the recorder running", async () => {
     const u = userEvent.setup();
-    const { router } = renderApp("/interviews/new", { user: USER });
+    const { router } = await renderApp("/interviews/new", { user: USER });
     await startLive(u, router);
     const first = lastFakeRelay()!;
     act(() => first.drop());
@@ -352,7 +352,7 @@ describe("live interview", () => {
 
   it("flushes queued AI audio on interrupted", async () => {
     const u = userEvent.setup();
-    const { router } = renderApp("/interviews/new", { user: USER });
+    const { router } = await renderApp("/interviews/new", { user: USER });
     await startLive(u, router);
     const fake = lastFakeRelay()!;
     act(() => fake.onmessage?.(new MessageEvent("message", { data: JSON.stringify({ type: "interrupted" }) })));
@@ -362,7 +362,7 @@ describe("live interview", () => {
   it("explains a denied microphone and stays on the start screen", async () => {
     denyMic = true;
     const u = userEvent.setup();
-    const { router } = renderApp("/interviews/new", { user: USER });
+    const { router } = await renderApp("/interviews/new", { user: USER });
     await u.click(await main().findByRole("radio", { name: /Reluctant patient/ }));
     await u.click(main().getByRole("button", { name: "Start interview" }));
     await waitFor(() => expect(here(router)).toMatch(/^\/interviews\/iv_/));
@@ -375,7 +375,7 @@ describe("live interview", () => {
 describe("discard and leave prompt", () => {
   it("Discard abandons the interview, uploads nothing, creates no session and returns to /sessions", async () => {
     const u = userEvent.setup();
-    const { router } = renderApp("/interviews/new", { user: USER });
+    const { router } = await renderApp("/interviews/new", { user: USER });
     const iid = await startLive(u, router);
     await u.click(main().getByRole("button", { name: "Discard" }));
     await waitFor(() => expect(here(router)).toBe("/sessions"));
@@ -387,7 +387,7 @@ describe("discard and leave prompt", () => {
 
   it("leaving mid-interview asks first: Keep talking stays, Discard leaves without a session", async () => {
     const u = userEvent.setup();
-    const { router } = renderApp("/interviews/new", { user: USER });
+    const { router } = await renderApp("/interviews/new", { user: USER });
     const iid = await startLive(u, router);
     await act(() => router.navigate("/settings"));
     const dialog = await screen.findByRole("alertdialog");
@@ -404,7 +404,7 @@ describe("discard and leave prompt", () => {
 
   it("Keep talking returns focus to the element focused before the prompt", async () => {
     const u = userEvent.setup();
-    const { router } = renderApp("/interviews/new", { user: USER });
+    const { router } = await renderApp("/interviews/new", { user: USER });
     await startLive(u, router);
     const opener = main().getByRole("button", { name: "Discard" });
     opener.focus();
@@ -417,7 +417,7 @@ describe("discard and leave prompt", () => {
 
   it("Settings from the account menu: Keep talking returns focus to the account menu trigger", async () => {
     const u = userEvent.setup();
-    const { router } = renderApp("/interviews/new", { user: USER });
+    const { router } = await renderApp("/interviews/new", { user: USER });
     await startLive(u, router);
     const trigger = screen.getByRole("button", { name: "Account menu" });
     await u.click(trigger);
@@ -430,7 +430,7 @@ describe("discard and leave prompt", () => {
 
   it("falls back to the page heading when the opener is gone", async () => {
     const u = userEvent.setup();
-    const { router } = renderApp("/interviews/new", { user: USER });
+    const { router } = await renderApp("/interviews/new", { user: USER });
     await startLive(u, router);
     const gone = document.createElement("button");
     main().getByRole("button", { name: "Discard" }).parentElement!.appendChild(gone);
@@ -445,7 +445,7 @@ describe("discard and leave prompt", () => {
 
   it("Escape also returns focus to the opener", async () => {
     const u = userEvent.setup();
-    const { router } = renderApp("/interviews/new", { user: USER });
+    const { router } = await renderApp("/interviews/new", { user: USER });
     await startLive(u, router);
     const opener = main().getByRole("button", { name: "Discard" });
     opener.focus();
@@ -466,7 +466,7 @@ describe("discard and leave prompt", () => {
       }),
     );
     const u = userEvent.setup();
-    const { router } = renderApp("/interviews/new", { user: USER });
+    const { router } = await renderApp("/interviews/new", { user: USER });
     const iid = await startLive(u, router);
     await act(() => router.navigate("/settings"));
     const dialog = within(await screen.findByRole("alertdialog"));
@@ -481,7 +481,7 @@ describe("discard and leave prompt", () => {
 
   it("leaving with Evaluate what I have ends, uploads and opens the session", async () => {
     const u = userEvent.setup();
-    const { router } = renderApp("/interviews/new", { user: USER });
+    const { router } = await renderApp("/interviews/new", { user: USER });
     const iid = await startLive(u, router);
     await act(() => router.navigate("/settings"));
     await u.click(within(await screen.findByRole("alertdialog")).getByRole("button", { name: "Evaluate what I have" }));
@@ -493,7 +493,7 @@ describe("discard and leave prompt", () => {
 describe("leaving ends the interview", () => {
   it("warns on tab close/reload while live", async () => {
     const u = userEvent.setup();
-    const { router } = renderApp("/interviews/new", { user: USER });
+    const { router } = await renderApp("/interviews/new", { user: USER });
     await startLive(u, router);
     const ev = new Event("beforeunload", { cancelable: true });
     window.dispatchEvent(ev);
@@ -502,13 +502,13 @@ describe("leaving ends the interview", () => {
 
   it("a fresh page load of a live interview shows Interview ended, ends it, and does not reconnect", async () => {
     const u = userEvent.setup();
-    const first = renderApp("/interviews/new", { user: USER });
+    const first = await renderApp("/interviews/new", { user: USER });
     const iid = await startLive(u, first.router);
     mockBackend.setInterviewState(iid, "live"); // the relay marked it live before the page went away
     cleanup();
     resetFakeRelay();
     engines.length = 0;
-    renderApp(`/interviews/${iid}`, { user: USER });
+    await renderApp(`/interviews/${iid}`, { user: USER });
     expect(await main().findByText("Interview ended")).toBeInTheDocument();
     await waitFor(() => expect(mockBackend.getInterview(UID, iid).state).toBe("ended"));
     expect(main().queryByRole("button", { name: "Start talking" })).toBeNull();
@@ -518,26 +518,26 @@ describe("leaving ends the interview", () => {
 
   it("Back to your sessions on the ended page goes to /sessions", async () => {
     const u = userEvent.setup();
-    const first = renderApp("/interviews/new", { user: USER });
+    const first = await renderApp("/interviews/new", { user: USER });
     const iid = await startLive(u, first.router);
     mockBackend.setInterviewState(iid, "live");
     cleanup();
     resetFakeRelay();
-    const { router } = renderApp(`/interviews/${iid}`, { user: USER });
+    const { router } = await renderApp(`/interviews/${iid}`, { user: USER });
     await u.click(await main().findByRole("link", { name: "Back to your sessions" }));
     await waitFor(() => expect(here(router)).toBe("/sessions"));
   });
 
   it("Back to your sessions on the load-error card goes to /sessions", async () => {
     const u = userEvent.setup();
-    const { router } = renderApp("/interviews/iv_nope", { user: USER });
+    const { router } = await renderApp("/interviews/iv_nope", { user: USER });
     await u.click(await main().findByRole("link", { name: "Back to your sessions" }));
     await waitFor(() => expect(here(router)).toBe("/sessions"));
   });
 
   it("Not now on the pre-start page goes to /new", async () => {
     const u = userEvent.setup();
-    const { router } = renderApp("/interviews/new", { user: USER });
+    const { router } = await renderApp("/interviews/new", { user: USER });
     await u.click(await main().findByRole("radio", { name: /Reluctant patient/ }));
     await u.click(main().getByRole("button", { name: "Start interview" }));
     await waitFor(() => expect(here(router)).toMatch(/^\/interviews\/iv_/));
@@ -547,7 +547,7 @@ describe("leaving ends the interview", () => {
 
   it("Cancel on the scenario picker goes to /new", async () => {
     const u = userEvent.setup();
-    const { router } = renderApp("/interviews/new", { user: USER });
+    const { router } = await renderApp("/interviews/new", { user: USER });
     await u.click(await main().findByRole("link", { name: "Cancel" }));
     await waitFor(() => expect(here(router)).toBe("/new"));
   });
@@ -555,7 +555,7 @@ describe("leaving ends the interview", () => {
   it("double Start talking makes one engine and one socket", async () => {
     slowMic = true;
     const u = userEvent.setup();
-    const { router } = renderApp("/interviews/new", { user: USER });
+    const { router } = await renderApp("/interviews/new", { user: USER });
     await u.click(await main().findByRole("radio", { name: /Reluctant patient/ }));
     await u.click(main().getByRole("button", { name: "Start interview" }));
     await waitFor(() => expect(here(router)).toMatch(/^\/interviews\/iv_/));
@@ -566,7 +566,7 @@ describe("leaving ends the interview", () => {
 
   it("says so when the relay ends it without time up", async () => {
     const u = userEvent.setup();
-    const { router } = renderApp("/interviews/new", { user: USER });
+    const { router } = await renderApp("/interviews/new", { user: USER });
     await startLive(u, router);
     act(() => lastFakeRelay()!.close(1000));
     expect(await main().findByText(/interview has ended/i)).toBeInTheDocument();
@@ -583,7 +583,7 @@ describe("leaving ends the interview", () => {
       }),
     );
     const u = userEvent.setup();
-    const { router } = renderApp("/interviews/new", { user: USER });
+    const { router } = await renderApp("/interviews/new", { user: USER });
     await startLive(u, router);
     act(() => lastFakeRelay()!.advance(480));
     act(() => lastFakeRelay()!.advance(120)); // time_up -> auto-end
@@ -603,7 +603,7 @@ describe("leaving ends the interview", () => {
     let release!: () => void;
     micGate = new Promise<void>((r) => (release = r));
     const u = userEvent.setup();
-    const { router } = renderApp("/interviews/new", { user: USER });
+    const { router } = await renderApp("/interviews/new", { user: USER });
     await u.click(await main().findByRole("radio", { name: /Reluctant patient/ }));
     await u.click(main().getByRole("button", { name: "Start interview" }));
     await waitFor(() => expect(here(router)).toMatch(/^\/interviews\/iv_/));
@@ -621,7 +621,7 @@ describe("leaving ends the interview", () => {
 
   it("tells the user the recording is paused while reconnecting", async () => {
     const u = userEvent.setup();
-    const { router } = renderApp("/interviews/new", { user: USER });
+    const { router } = await renderApp("/interviews/new", { user: USER });
     await startLive(u, router);
     act(() => lastFakeRelay()!.drop());
     expect(await main().findByText(/recording is paused/i)).toBeInTheDocument();

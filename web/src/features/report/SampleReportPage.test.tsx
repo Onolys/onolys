@@ -14,7 +14,7 @@ describe("/sample", () => {
   it("renders the new view with zero network requests, signed out", async () => {
     const requests: string[] = [];
     server.events.on("request:start", ({ request }) => void requests.push(`${request.method} ${request.url}`));
-    renderApp("/sample");
+    await renderApp("/sample");
     const main = within(screen.getByRole("main"));
     expect(await main.findByRole("heading", { level: 1, name: "Sample report" })).toBeInTheDocument();
     expect(main.getAllByRole("heading", { level: 2 }).map((h) => h.textContent)).toEqual([
@@ -30,7 +30,7 @@ describe("/sample", () => {
   });
 
   it("shows the fictional example line and warns about the short session", async () => {
-    renderApp("/sample");
+    await renderApp("/sample");
     const main = within(screen.getByRole("main"));
     expect(await main.findByText("Example report from a made-up role-play conversation.")).toBeInTheDocument();
     expect(main.queryByText(/^Sample$/)).toBeNull();
@@ -42,7 +42,7 @@ describe("/sample", () => {
   });
 
   it("opens the coded transcript with the closing pleasantry marked Not coded", async () => {
-    renderApp("/sample");
+    await renderApp("/sample");
     const main = within(screen.getByRole("main"));
     await userEvent.click(await main.findByRole("button", { name: "Open coded transcript" }));
     const dialog = within(await screen.findByRole("dialog"));
@@ -50,7 +50,7 @@ describe("/sample", () => {
   });
 
   it("has no Run again, rating, delete or version controls", async () => {
-    renderApp("/sample");
+    await renderApp("/sample");
     const main = within(screen.getByRole("main"));
     await main.findByRole("heading", { name: "At a glance" });
     expect(main.queryByRole("button", { name: /run again|rating|delete/i })).toBeNull();

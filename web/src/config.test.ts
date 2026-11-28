@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { ratingEnabled } from "./config";
+import { appHosts, ratingEnabled } from "./config";
 
 afterEach(() => vi.unstubAllEnvs());
 
@@ -19,5 +19,24 @@ describe("ratingEnabled", () => {
     expect(ratingEnabled()).toBe(true);
     vi.stubEnv("VITE_RATING_ENABLED", "false");
     expect(ratingEnabled()).toBe(false);
+  });
+});
+
+describe("appHosts", () => {
+  it("is the auth domain plus the configured VITE_APP_HOSTS, trimmed and lowercased", () => {
+    expect(appHosts({ VITE_APP_HOSTS: " Staging.Example , other.example", VITE_FIREBASE_AUTH_DOMAIN: "auth.example" })).toEqual([
+      "auth.example",
+      "staging.example",
+      "other.example",
+    ]);
+  });
+
+  it("falls back to the default app hosts when VITE_APP_HOSTS is unset or empty", () => {
+    for (const v of [undefined, "", " , "]) {
+      const hosts = appHosts({ VITE_APP_HOSTS: v, VITE_FIREBASE_AUTH_DOMAIN: "auth.example" });
+      expect(new Set(hosts)).toEqual(new Set(["auth.example", "app.onolys.com", "onolys-app.web.app", "onolys-staging-app.web.app"]));
+      expect(hosts).not.toContain("onolys-app-staging.web.app");
+    }
+    expect(appHosts({ VITE_APP_HOSTS: "x.example" })).not.toContain("app.onolys.com");
   });
 });

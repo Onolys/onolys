@@ -1,5 +1,5 @@
 const { test, expect, devices } = require("@playwright/test");
-const { shot, FIX, signUp, spa, openUpload, hasHScroll, accountMenu } = require("./helpers.cjs");
+const { shot, FIX, signUp, verifyEmail, confirmVerified, spa, openUpload, hasHScroll, accountMenu } = require("./helpers.cjs");
 
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 const { defaultBrowserType, ...iphone } = devices["iPhone 13"]; // keep viewport/touch coverage across the nightly browser matrix
@@ -27,7 +27,8 @@ test.describe("mobile (iPhone 13 viewport)", () => {
     await signUp(page, "m@example.com");
     await shot(page, "m-verify");
     expect(await hasHScroll(page), "verify-email").toBe(false);
-    await page.getByRole("button", { name: "I've verified" }).click();
+    await verifyEmail(page, "m@example.com");
+    await confirmVerified(page);
     await expect(page.getByRole("heading", { name: /^Welcome/ })).toBeVisible();
     await shot(page, "m-dashboard");
     expect(await hasHScroll(page), "dashboard").toBe(false);

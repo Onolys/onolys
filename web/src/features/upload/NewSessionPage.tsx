@@ -2,15 +2,13 @@
  * New session: choose audio or a transcript, save the change goal, then upload.
  * Audio runs through the app-level uploader; transcript files go directly to the API.
  */
-import { Button, Input, Label, Select } from "@onolys/ui";
+import { Button, Input, Label, Select, H1, NOTE, PAGE, Field } from "@onolys/common";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useEffect, useRef, useState, type DragEvent } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 import { unwrap } from "../../api/client";
 import { ApiError, describeError } from "../../api/errors";
 import { useApiClient } from "../../auth/useApiClient";
-import { H1, NOTE, PAGE } from "../../components/classes";
-import { Field } from "../../components/Field";
 import { ratingEnabled } from "../../config";
 import { issuesFromApi } from "../rating/card";
 import { goalIssues, saveGoal, SetupFields } from "../rating/SetupFields";

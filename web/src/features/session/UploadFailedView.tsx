@@ -1,4 +1,4 @@
-import { Button } from "@onolys/ui";
+import { Button } from "@onolys/common";
 import { Link } from "react-router";
 import { messageForCode } from "../../api/errors";
 import { ErrorCard } from "./ErrorCard";

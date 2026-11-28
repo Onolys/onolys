@@ -1,5 +1,4 @@
-import { Button } from "@onolys/ui";
-import { LINK_BTN } from "../../components/classes";
+import { Button, LINK_BTN } from "@onolys/common";
 import { useCodedDialog } from "./codedDialogContext";
 
 /** Button showing an utterance number; opens the coded transcript at that row. */

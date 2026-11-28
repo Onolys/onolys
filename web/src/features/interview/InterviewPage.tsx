@@ -13,7 +13,15 @@ import {
   AlertDialogTitle,
   Button,
   Skeleton,
-} from "@onolys/ui";
+  ACTIONS,
+  H1,
+  LINK,
+  LINK_BTN,
+  NOTE,
+  PAGE,
+  ErrorNote,
+  Notice,
+} from "@onolys/common";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { Link, useBlocker, useLocation, useNavigate, useParams } from "react-router";
@@ -21,11 +29,9 @@ import { pageLoadError } from "../../pageLoadError";
 import { unwrap } from "../../api/client";
 import { ApiError, describeError } from "../../api/errors";
 import type { Schemas } from "../../api/types";
-import { useAuth } from "../../auth/AuthProvider";
+import { useAuth } from "@onolys/common/auth";
 import { useApiClient } from "../../auth/useApiClient";
 import { ratingEnabled } from "../../config";
-import { ACTIONS, H1, LINK, LINK_BTN, NOTE, PAGE } from "../../components/classes";
-import { ErrorNote, Notice } from "../../components/Notice";
 import { cardToForm } from "../rating/card";
 import { saveGoal } from "../rating/SetupFields";
 import { ErrorCard } from "../session/ErrorCard";

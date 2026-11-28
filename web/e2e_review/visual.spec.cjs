@@ -1,7 +1,7 @@
 // Visual + a11y evidence: light/dark screenshots (no pixel diff) and an axe gate
 // (color-contrast + critical violations) per screen in both schemes. Runs in the `csp` project (built app, prod CSP).
 const { test, expect } = require("@playwright/test");
-const { FIX, signUp, spa, openUpload, accountMenu } = require("./helpers.cjs");
+const { FIX, signUp, verifyEmail, confirmVerified, spa, openUpload, accountMenu } = require("./helpers.cjs");
 const { watchCsp, axeGate, shotTo } = require("./csp-helpers.cjs");
 
 /**
@@ -14,7 +14,9 @@ const wait = (page) => page.waitForLoadState("networkidle").catch(() => {});
 
 async function verified(page, email) {
   await signUp(page, email);
-  await page.getByRole("button", { name: "I've verified" }).click();
+  await expect(page).toHaveURL(/verify-email/);
+  await verifyEmail(page, email);
+  await confirmVerified(page);
   await expect(page.getByRole("heading", { name: /^Welcome/ })).toBeVisible();
 }
 

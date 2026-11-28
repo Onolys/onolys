@@ -45,7 +45,7 @@ describe("sessions page: list", () => {
         HttpResponse.json({ items: cases.map(([s], i) => item(`s${i}`, s, s === "report_ready" ? { latest_report_version: 2 } : {})) }),
       ),
     );
-    render({ user: USER });
+    await render({ user: USER });
     for (const [i, [, label]] of cases.entries()) {
       const li = await waitFor(() => rowOf(`Session s${i}`));
       expect(within(li).getByText(label)).toBeInTheDocument();
@@ -66,7 +66,7 @@ describe("sessions page: list", () => {
       ),
     );
     const user = userEvent.setup();
-    const { router } = render({ user: USER });
+    const { router } = await render({ user: USER });
     expect(await main().findByRole("link", { name: "Session run1" })).toHaveAttribute("href", "/sessions/run1");
     expect(main().getByRole("link", { name: "Session bad1" })).toHaveAttribute("href", "/sessions/bad1");
     expect(within(rowOf("Session run1")).queryByRole("link", { name: /Report v/ })).toBeNull();
@@ -83,7 +83,7 @@ describe("sessions page: list", () => {
 
   it("uses the date when a session has no title", async () => {
     server.use(http.get("*/v1/sessions", () => HttpResponse.json({ items: [item("x1", "failed", { title: null })] })));
-    render({ user: USER });
+    await render({ user: USER });
     const link = await main().findByRole("link", { name: /Nov 18, 2026/ });
     expect(link).toHaveAttribute("href", "/sessions/x1");
   });
@@ -96,7 +96,7 @@ describe("sessions page: list", () => {
       const u = new URL(request.url);
       if (u.pathname.endsWith("/v1/sessions")) calls.push(u.search);
     });
-    render({ user: USER });
+    await render({ user: USER });
     await main().findByRole("link", { name: "S23" });
     expect(main().getAllByRole("listitem")).toHaveLength(20);
     expect(main().queryByRole("link", { name: "S03" })).toBeNull();
@@ -121,7 +121,7 @@ describe("sessions page: list", () => {
       ),
     );
     const user = userEvent.setup();
-    render({ user: USER });
+    await render({ user: USER });
     const btn = await main().findByRole("button", { name: "Try again" });
     fail = false;
     await user.click(btn);
@@ -131,7 +131,7 @@ describe("sessions page: list", () => {
 
 describe("sessions page: heading", () => {
   it("has the Sessions h1 and no landing cards", async () => {
-    render({ user: USER });
+    await render({ user: USER });
     expect(await screen.findByRole("heading", { level: 1, name: "Sessions" })).toBeInTheDocument();
     expect(screen.queryByRole("heading", { level: 2 })).toBeNull();
   });
@@ -140,7 +140,7 @@ describe("sessions page: heading", () => {
 describe("sessions page: empty state", () => {
   it("explains Onolys in one line and links to /new, with no sample link", async () => {
     const user = userEvent.setup();
-    const { router } = render({ user: USER });
+    const { router } = await render({ user: USER });
     expect(await main().findByText(/Onolys .*MITI/i)).toBeInTheDocument();
     expect(main().getByText(/evidence from your transcript and tips to improve/i)).toBeInTheDocument();
     expect(main().queryByText(/your own rating/i)).toBeNull();
@@ -169,7 +169,7 @@ describe("sessions page: freshness", () => {
         return HttpResponse.json({ error: { code: "internal", message: "x" } }, { status: 500 });
       }),
     );
-    render({ user: USER });
+    await render({ user: USER });
     await userEvent.click(await screen.findByRole("button", { name: "Load more" }));
     expect(await screen.findByRole("alert")).toBeInTheDocument();
     expect(main().getByRole("link", { name: "Session a1" })).toBeInTheDocument();
@@ -180,7 +180,7 @@ describe("sessions page: empty state, rating flag on", () => {
   afterEach(() => vi.unstubAllEnvs());
   it("keeps the comparison sentence", async () => {
     vi.stubEnv("VITE_RATING_ENABLED", "true");
-    render({ user: USER });
+    await render({ user: USER });
     expect(await main().findByText(/agrees with your own rating/i)).toBeInTheDocument();
   });
 });
@@ -188,7 +188,7 @@ describe("sessions page: empty state, rating flag on", () => {
 describe("sessions page: unknown status (C17)", () => {
   it("renders a neutral chip instead of crashing the dashboard", async () => {
     server.use(http.get("*/v1/sessions", () => HttpResponse.json({ items: [item("s0", "brand_new_state"), item("s1", "report_ready", { latest_report_version: 1 })] })));
-    render({ user: USER });
+    await render({ user: USER });
     const li = await waitFor(() => rowOf("Session s0"));
     expect(within(li).getByText("Status unavailable")).toBeInTheDocument();
     expect(within(rowOf("Session s1")).getByText("Report ready")).toBeInTheDocument();

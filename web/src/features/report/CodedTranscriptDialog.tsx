@@ -8,8 +8,7 @@ import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CodedRow, TurnsState } from "./codedRows";
 import { CODE_META, SHORT } from "./codeMeta";
-import { Badge, Button, Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@onolys/ui";
-import { LINK_BTN, NOTE } from "../../components/classes";
+import { Badge, Button, Table, TableBody, TableCell, TableHead, TableHeader, TableRow, LINK_BTN, NOTE } from "@onolys/common";
 import { CodeChip, PLAIN_CODE } from "./CodeChip";
 import { CodedDialogContext } from "./codedDialogContext";
 

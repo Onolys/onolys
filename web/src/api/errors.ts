@@ -191,3 +191,9 @@ export function describeError(err: unknown, ctx: MessageContext = {}): ErrorDesc
   }
   return { code: "unknown", message: GENERIC_MESSAGE, requestId: undefined };
 }
+
+/** What the shared recovery screen may show for a failure: an HTTP status and a request reference, never the message. */
+export function recoveryDetails(error: unknown, status?: number): { status?: number; reference?: string } {
+  if (error instanceof ApiError) return { status: error.status, reference: error.requestId };
+  return { status };
+}

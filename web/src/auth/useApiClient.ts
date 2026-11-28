@@ -1,6 +1,6 @@
 import { useMemo } from "react";
-import { createApiClient, DEFAULT_BASE_URL } from "../api/client";
-import { useAuth } from "./AuthProvider";
+import { useAuth } from "@onolys/common/auth";
+import { apiBaseUrl, createApiClient } from "../api/client";
 
 /** API client wired to the auth service: per-request token, one forced refresh on 401, then sign-out. */
 export function useApiClient() {
@@ -8,7 +8,7 @@ export function useApiClient() {
   return useMemo(
     () =>
       createApiClient({
-        baseUrl: new URL(import.meta.env.VITE_API_BASE_URL ?? DEFAULT_BASE_URL, window.location.origin).href.replace(/\/$/, ""),
+        baseUrl: apiBaseUrl(),
         getToken: (force) => service.getToken(force),
         onSessionExpired: () => void signOut(),
       }),

@@ -1,6 +1,6 @@
 /** Usage helpers: pure functions over the `GET /usage` shape. */
 import type { components } from "../../api/schema";
-import { formatResetTime } from "../../lib/format";
+import { formatResetTime } from "@onolys/common";
 
 export type Usage = components["schemas"]["Usage"];
 export type Period = components["schemas"]["Period"];

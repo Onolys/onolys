@@ -2,7 +2,7 @@ import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import { mockBackend } from "../../mocks/server";
-import { here } from "../../test/renderApp";
+import { here, signInTestUser, testService } from "../../test/renderApp";
 import { renderPage } from "../../test/renderPage";
 import { NewSessionChooser } from "./NewSessionChooser";
 
@@ -12,7 +12,7 @@ const main = () => within(screen.getByRole("main"));
 
 describe("new session chooser", () => {
   it("has the Welcome h1, no Sessions heading, and both cards", async () => {
-    render();
+    await render();
     expect(await screen.findByRole("heading", { level: 1, name: "Welcome rater" })).toBeInTheDocument();
     expect(screen.queryByRole("heading", { level: 1, name: "Sessions" })).toBeNull();
     expect(main().getByRole("heading", { level: 2, name: "Practise with an AI client" })).toBeInTheDocument();
@@ -21,22 +21,26 @@ describe("new session chooser", () => {
   });
 
   it("greets by Firebase displayName (trimmed) when set", async () => {
-    renderPage(<NewSessionChooser />, "/new", { user: { ...USER, displayName: "  Dana Lee " } });
+    await renderPage(<NewSessionChooser />, "/new", { user: { ...USER, displayName: "  Dana Lee " } });
     expect(await screen.findByRole("heading", { level: 1, name: "Welcome Dana Lee" })).toBeInTheDocument();
   });
 
   it("falls back to the email local part when displayName is blank", async () => {
-    renderPage(<NewSessionChooser />, "/new", { user: { ...USER, displayName: "   " } });
+    await renderPage(<NewSessionChooser />, "/new", { user: { ...USER, displayName: "   " } });
     expect(await screen.findByRole("heading", { level: 1, name: "Welcome rater" })).toBeInTheDocument();
   });
 
   it("is just Welcome when there is neither name nor email", async () => {
-    renderPage(<NewSessionChooser />, "/new", { user: { ...USER, email: "" } });
+    const service = testService();
+    await signInTestUser(service, USER);
+    const onAuthStateChanged = service.onAuthStateChanged.bind(service);
+    service.onAuthStateChanged = (cb) => onAuthStateChanged((u) => cb(u && { ...u, email: null })); // an account without an address
+    await renderPage(<NewSessionChooser />, "/new", { service });
     expect(await screen.findByRole("heading", { level: 1, name: "Welcome" })).toBeInTheDocument();
   });
 
   it("shows the usage lines and a New session link", async () => {
-    const { router } = render();
+    const { router } = await render();
     expect(await main().findByRole("button", { name: "20 of 20 left today" })).toHaveTextContent("20/20");
     expect(main().getByRole("button", { name: "5 of 5 left today" })).toHaveTextContent("5/5");
     expect(main().queryAllByRole("meter")).toHaveLength(0);
@@ -48,7 +52,7 @@ describe("new session chooser", () => {
 
   it("over the eval cap: says so with the reset time", async () => {
     mockBackend.configure({ caps: { eval: { day: 0 } } });
-    render();
+    await render();
     const count = await main().findByRole("button", { name: "0 of 0 left today" });
     expect(count).toHaveTextContent("0/0");
     expect(count.querySelector(".text-destructive")).not.toBeNull();
@@ -57,7 +61,7 @@ describe("new session chooser", () => {
 
   it("over the interview cap: disables Start AI Interview and explains", async () => {
     mockBackend.configure({ caps: { interview: { day: 0 } } });
-    const { router } = render();
+    const { router } = await render();
     const btn = await main().findByRole("button", { name: "Start AI Interview" });
     expect(btn).toBeDisabled();
     expect(main().queryByRole("link", { name: "Start AI Interview" })).toBeNull();

@@ -1,4 +1,4 @@
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@onolys/ui";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@onolys/common";
 import { useUsage } from "./useUsage";
 import { remaining, usageLeftText, type Period, type UsageKind } from "./usage";
 

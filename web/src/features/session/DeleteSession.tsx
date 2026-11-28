@@ -1,4 +1,4 @@
-import { Button } from "@onolys/ui";
+import { Button } from "@onolys/common";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRef, useState } from "react";
 import { useNavigate } from "react-router";

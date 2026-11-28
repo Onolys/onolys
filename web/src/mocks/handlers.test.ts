@@ -1,17 +1,21 @@
 import { describe, expect, it, vi } from "vitest";
 import { createApiClient, unwrap, type ApiClient } from "../api/client";
 import { ApiError } from "../api/errors";
-import { fakeToken } from "../auth/fake";
+import { uidFromToken } from "./handlers";
 import { mockBackend } from "./server";
 
 const BASE = "http://localhost/v1";
 const MP3 = { content_type: "audio/mpeg", size_bytes: 5_000_000, filename_ext: "mp3" };
 
+/** An unsigned JWT shaped like the Auth emulator's ID tokens: the mock handlers read only the payload's `sub`. */
+const b64url = (o: object) => btoa(JSON.stringify(o)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+const tokenFor = (uid: string) => `${b64url({ alg: "none", typ: "JWT" })}.${b64url({ sub: uid })}.`;
+
 function clientFor(uid: string, getToken?: () => Promise<string | null>) {
   const onSessionExpired = vi.fn();
   const client = createApiClient({
     baseUrl: BASE,
-    getToken: getToken ?? (async () => fakeToken(uid)),
+    getToken: getToken ?? (async () => tokenFor(uid)),
     onSessionExpired,
   });
   return { client, onSessionExpired };
@@ -22,7 +26,17 @@ async function create(client: ApiClient, title?: string) {
   return session.id;
 }
 
-describe("MSW handlers over HTTP (fake auth)", () => {
+describe("uidFromToken", () => {
+  it("reads the sub of an unsigned emulator-style JWT", () => {
+    expect(uidFromToken(tokenFor("u_rater_clinic_org"))).toBe("u_rater_clinic_org");
+  });
+
+  it.each(["", "not-a-token", "a.b.c", `x.${b64url({ sub: 5 })}.`, `x.${b64url({ sub: "has space" })}.`, `x.${b64url({})}.`])("rejects %j", (token) => {
+    expect(uidFromToken(token)).toBeUndefined();
+  });
+});
+
+describe("MSW handlers over HTTP (emulator ID tokens)", () => {
   it("rejects missing or malformed auth with a public-error-response 401", async () => {
     const { client } = clientFor("u1", async () => null);
     const res = await client.GET("/usage");
@@ -36,7 +50,7 @@ describe("MSW handlers over HTTP (fake auth)", () => {
     expect((await bad.GET("/usage")).response.status).toBe(401);
   });
 
-  it("accepts `Bearer test:<uid>` and isolates users", async () => {
+  it("reads the user from the ID token `sub` and isolates users", async () => {
     const a = clientFor("alice").client;
     const b = clientFor("bob").client;
     const sid = await create(a, "mine");

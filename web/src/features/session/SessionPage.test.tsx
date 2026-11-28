@@ -63,14 +63,14 @@ const failedDoc = (sid: string, code: string): SessionStatusDoc => ({
 describe("session page: navigation and heading", () => {
   it("uses the session name in the heading", async () => {
     const sid = create("Walking practice");
-    open(sid);
+    await open(sid);
     expect(await screen.findByRole("heading", { level: 1, name: "Session - Walking practice" })).toBeInTheDocument();
   });
 
   it("falls back to the first 20 characters of the saved change goal", async () => {
     const sid = create();
     mockBackend.putRating(UID, sid, { final: true, no_rating: true, card: { change_goal: "Walk outside every afternoon" } });
-    open(sid);
+    await open(sid);
     expect(await screen.findByRole("heading", { level: 1, name: "Session - Walk outside every a…" })).toBeInTheDocument();
   });
 
@@ -80,7 +80,7 @@ describe("session page: navigation and heading", () => {
     mockBackend.confirmSpeaker(UID, sid, "spk_0");
     mockBackend.putRating(UID, sid, { final: true, no_rating: true, card: { change_goal: "g" } });
     mockBackend.settle(sid);
-    const { router } = open(sid);
+    const { router } = await open(sid);
     await waitFor(() => expect(here(router)).toBe(`/sessions/${sid}/reports/1`));
     expect(router.state.historyAction).toBe("REPLACE");
   });
@@ -92,20 +92,20 @@ describe("session page: navigation and heading", () => {
     mockBackend.putRating(UID, sid, { final: true, no_rating: true, card: { change_goal: "g" } });
     mockBackend.settle(sid);
     setStatusListener({ subscribe: () => () => {} });
-    const { router } = open(sid);
+    const { router } = await open(sid);
     await waitFor(() => expect(here(router)).toBe(`/sessions/${sid}/reports/1`));
   });
 
   it("keeps whole Unicode characters in the change-goal heading", async () => {
     const sid = create();
     mockBackend.putRating(UID, sid, { final: true, no_rating: true, card: { change_goal: `${"🙂".repeat(19)}🧠hello` } });
-    open(sid);
+    await open(sid);
     expect(await screen.findByRole("heading", { level: 1, name: `Session - ${"🙂".repeat(19)}🧠…` })).toBeInTheDocument();
   });
 
   it("keeps cancel below the steps and does not offer deletion before a report", async () => {
     const sid = create();
-    open(sid);
+    await open(sid);
     await ready();
     const cancel = screen.getByRole("button", { name: "Cancel session" });
     expect(progress().compareDocumentPosition(cancel) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
@@ -116,7 +116,7 @@ describe("session page: navigation and heading", () => {
 describe("session page: status listener", () => {
   it("attaches to the status doc and follows it while loading session metadata", async () => {
     const sid = create();
-    open(sid);
+    await open(sid);
     expect(await screen.findByRole("heading", { level: 1, name: "Session" })).toBeInTheDocument();
     expect(await ready()).toHaveTextContent("Getting ready to upload your recording.");
     act(() => void mockBackend.requestAudio(UID, sid, { content_type: "audio/mpeg", size_bytes: 1, filename_ext: "mp3" }));
@@ -133,7 +133,7 @@ describe("session page: status listener", () => {
   it("names what is missing in awaiting_input: both, then each one", async () => {
     const sid = create();
     toAwaiting(sid);
-    open(sid);
+    await open(sid);
     const status = await ready();
     await waitFor(() => {
       expect(status).toHaveTextContent("Confirm who the clinician is");
@@ -148,7 +148,7 @@ describe("session page: status listener", () => {
     const sid = create();
     toAwaiting(sid);
     mockBackend.confirmSpeaker(UID, sid, "spk_0");
-    open(sid);
+    await open(sid);
     await ready();
     expect(screen.queryByText(/close this tab/)).not.toBeInTheDocument();
     act(() => void mockBackend.putRating(UID, sid, { final: true, no_rating: true, card: { change_goal: "g" } }));
@@ -171,7 +171,7 @@ describe("session page: status listener", () => {
     toAwaiting(sid);
     mockBackend.confirmSpeaker(UID, sid, "spk_0");
     mockBackend.putRating(UID, sid, { final: true, no_rating: true, card: { change_goal: "g" } });
-    open(sid);
+    await open(sid);
     await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Coding the session"));
     for (let i = 0; i < 3; i++) {
       tick(sid);
@@ -183,7 +183,7 @@ describe("session page: status listener", () => {
   it("on a listener error polls the detail and resubscribes; no stopped notice until retries run out", async () => {
     const sid = create();
     toAwaiting(sid);
-    open(sid);
+    await open(sid);
     await ready();
     act(() => mockEmitter.emitError(sid, new Error("permission-denied")));
     await waitFor(() => expect(getCalls).toHaveLength(1));
@@ -205,7 +205,7 @@ describe("session page: status listener", () => {
         return inner.subscribe(id, a, b);
       },
     });
-    open("s_nope");
+    await open("s_nope");
     await screen.findByRole("heading", { level: 1, name: "Session" });
     await waitFor(() => expect(subscribed).toBeGreaterThanOrEqual(1));
     act(() => mockEmitter.emitError("s_nope", new Error("permission-denied")));
@@ -216,7 +216,7 @@ describe("session page: status listener", () => {
   });
 
   it("an unknown session id ends in the not-found card, not an endless spinner (E21)", async () => {
-    open("s_nope");
+    await open("s_nope");
     const card = await screen.findByRole("alert", undefined, { timeout: 4000 });
     expect(card).toHaveTextContent(/we couldn't find this session/i);
     expect(card).not.toHaveTextContent(/upload/i);
@@ -231,7 +231,7 @@ describe("session page: status listener", () => {
         ),
       ),
     );
-    open("not-hex");
+    await open("not-hex");
     const card = await screen.findByRole("alert", undefined, { timeout: 4000 });
     expect(card).toHaveTextContent(/we couldn't find this session/i);
     expect(card).not.toHaveTextContent(/upload/i);
@@ -251,7 +251,7 @@ describe("session page: status listener", () => {
         };
       },
     });
-    const { router } = open(sid);
+    const { router } = await open(sid);
     await ready();
     expect(active).toBe(1);
     await act(() => router.navigate("/settings"));
@@ -262,7 +262,7 @@ describe("session page: status listener", () => {
 describe("session page: slots", () => {
   it("renders the upload slot while uploading and the speaker gate when needed, no rating card", async () => {
     const sid = create();
-    open(sid);
+    await open(sid);
     await ready();
     expect(document.querySelector('[data-slot="upload"]')).not.toBeNull();
     expect(document.querySelector('[data-slot="speaker-gate"]')).toBeNull();
@@ -280,7 +280,7 @@ describe("session page: rating slot (flag off) and fallback", () => {
 
   it("renders no card and no #rating-globals-* with the flag off", async () => {
     const sid = create();
-    open(sid);
+    await open(sid);
     await ready();
     expect(document.querySelector('[data-slot="rating-card"]')).toBeNull();
     expect(document.querySelector('[id^="rating-globals-"]')).toBeNull();
@@ -290,7 +290,7 @@ describe("session page: rating slot (flag off) and fallback", () => {
   it("shows the Continue fallback for an unsubmitted session, prefilled from the draft, PUT only", async () => {
     const sid = create();
     mockBackend.putRating(UID, sid, { final: false, card: { change_goal: "Draft goal" } }); // draft, read via GET /rating
-    open(sid);
+    await open(sid);
     const field = await screen.findByLabelText("Change goal");
     await waitFor(() => expect(field).toHaveValue("Draft goal"));
     expect(document.querySelector('[data-slot="rating-fallback"]')).not.toBeNull();
@@ -301,7 +301,7 @@ describe("session page: rating slot (flag off) and fallback", () => {
 
   it("shows the fallback with an empty field when there is no draft, and blocks a blank goal", async () => {
     const sid = create();
-    open(sid);
+    await open(sid);
     const field = await screen.findByLabelText("Change goal");
     expect(field).toHaveValue("");
     await userEvent.click(screen.getByRole("button", { name: "Continue" }));
@@ -313,7 +313,7 @@ describe("session page: rating slot (flag off) and fallback", () => {
     const sid = create();
     toAwaiting(sid);
     mockBackend.putRating(UID, sid, { final: true, no_rating: true, card: { change_goal: "g" } });
-    open(sid);
+    await open(sid);
     await ready();
     expect(document.querySelector('[data-slot="rating-fallback"]')).toBeNull();
     expect(screen.queryByLabelText("Change goal")).not.toBeInTheDocument();
@@ -322,7 +322,7 @@ describe("session page: rating slot (flag off) and fallback", () => {
   it("shows the original card with the flag on, and no fallback", async () => {
     vi.stubEnv("VITE_RATING_ENABLED", "true");
     const sid = create();
-    open(sid);
+    await open(sid);
     await ready();
     expect(document.querySelector('[data-slot="rating-card"]')).not.toBeNull();
     expect(document.querySelector('[data-slot="rating-fallback"]')).toBeNull();
@@ -360,7 +360,7 @@ describe("session page: upload incomplete", () => {
     );
     vi.stubGlobal("URL", Object.assign(URL, { createObjectURL: () => "blob:x", revokeObjectURL: () => {} }));
     const sid = create();
-    open(sid);
+    await open(sid);
     await ready();
     act(() => mockEmitter.emit(sid, incompleteDoc()));
     expect(await screen.findByText(/upload didn't finish/i)).toBeInTheDocument();
@@ -384,7 +384,7 @@ describe("session page: failure cards", () => {
     ({ ...failedDoc(sid, code), ...extra }) as SessionStatusDoc;
   const show = async (extra: Record<string, unknown>, code = "upstream_unavailable") => {
     const sid = create();
-    open(sid);
+    await open(sid);
     await ready();
     act(() => mockEmitter.emit(sid, withKind(sid, code, extra)));
     return { sid, card: await screen.findByRole("alert") };
@@ -392,7 +392,7 @@ describe("session page: failure cards", () => {
 
   it("a failed session offers Delete (every kind), which confirms and returns to the list", async () => {
     const sid = create();
-    const { router } = open(sid);
+    const { router } = await open(sid);
     await ready();
     act(() => mockEmitter.emit(sid, withKind(sid, "upstream_unavailable", { error_kind: "transient", retries_left: 2 })));
     await screen.findByRole("alert");
@@ -410,7 +410,7 @@ describe("session page: failure cards", () => {
   it("the in-progress steps view never offers Delete", async () => {
     const sid = create();
     toAwaiting(sid);
-    open(sid);
+    await open(sid);
     await ready();
     for (const state of ["created", "validating", "transcribing", "awaiting_input", "running"] as const) {
       act(() => mockEmitter.emit(sid, { ...failedDoc(sid, "x"), state, error_code: null }));
@@ -566,7 +566,7 @@ describe("session page: interview-linked first run (free, works at a full eval c
 
   it("keeps Start enabled at a full eval cap for an interview-linked session", async () => {
     const sid = heldAtCap(true);
-    open(sid);
+    await open(sid);
     await ready();
     const start = await screen.findByRole("button", { name: "Start" });
     await waitFor(() => expect(getCalls.length).toBeGreaterThan(0)); // the detail (interview_id) loads
@@ -575,7 +575,7 @@ describe("session page: interview-linked first run (free, works at a full eval c
 
   it("still disables Start at a full eval cap for a normal session", async () => {
     const sid = heldAtCap(false);
-    open(sid);
+    await open(sid);
     await ready();
     const start = await screen.findByRole("button", { name: "Start" });
     await waitFor(() => expect(start).toBeDisabled());
@@ -599,7 +599,7 @@ describe("session page: free_run gates Start (review round 2)", () => {
     toAwaiting(sid);
     mockBackend.configure({ caps: { eval: { day: 0 } } });
     detailOverride(true);
-    const { queryClient } = open(sid);
+    const { queryClient } = await open(sid);
     queryClient.setQueryData(["usage"], mockBackend.getUsage(UID));
     await ready();
     act(() =>
@@ -615,7 +615,7 @@ describe("session page: free_run gates Start (review round 2)", () => {
     toAwaiting(sid);
     mockBackend.configure({ caps: { eval: { day: 0 } } });
     detailOverride(false);
-    const { queryClient } = open(sid);
+    const { queryClient } = await open(sid);
     queryClient.setQueryData(["usage"], mockBackend.getUsage(UID));
     await ready();
     act(() =>
@@ -631,7 +631,7 @@ describe("session page: start held by an active run", () => {
   it("shows the concurrent message with Start enabled, not the daily limit or reset time", async () => {
     const sid = create();
     toAwaiting(sid);
-    open(sid);
+    await open(sid);
     await ready();
     act(() =>
       mockEmitter.emit(sid, {
@@ -660,7 +660,7 @@ describe("transcript speaker gate", () => {
         { id: "t2", speaker: "Sam", role: confirmed ? "client" : null, text: "I want to walk more." },
       ],
     });
-    open(sid);
+    await open(sid);
     await ready();
     if (confirmed) {
       expect(screen.queryByRole("heading", { name: "Who is the clinician?" })).toBeNull();
@@ -678,7 +678,7 @@ describe("session page: upload failed", () => {
 
   it("shows UploadFailedView (reason, way back, Reference) when the status is upload_failed", async () => {
     const sid = create();
-    open(sid);
+    await open(sid);
     await ready();
     act(() => mockEmitter.emit(sid, stub("audio_too_long")));
     const card = await screen.findByRole("alert");
@@ -696,12 +696,12 @@ describe("session page: upload failed", () => {
         return () => {};
       },
     });
-    open("s_gone");
+    await open("s_gone");
     expect(await screen.findByRole("alert")).toHaveTextContent(/^Upload failed: We couldn't read this audio file/);
   });
 
   it("a stale link without a stub shows generic not-found copy (no upload blame, C7) with a way to start a new session", async () => {
-    open("s_nope");
+    await open("s_nope");
     const card = await screen.findByRole("alert", undefined, { timeout: 4000 });
     expect(card).toHaveTextContent("We couldn't find this session. It may have been deleted, or the link may be mistyped.");
     expect(card).not.toHaveTextContent(/upload/i);
@@ -720,7 +720,7 @@ describe("session page: cancel", () => {
 
   it("link is blue with red hover and shown only in the seven states", async () => {
     const sid = create();
-    open(sid);
+    await open(sid);
     await ready();
     expect(link()).toHaveClass("text-primary", "hover:text-destructive");
     for (const state of ["report_ready", "failed", "cancelled"] as const) {
@@ -732,7 +732,7 @@ describe("session page: cancel", () => {
   it("variant A copy before transcription, variant B once it started", async () => {
     const sid = create();
     upload(sid);
-    open(sid);
+    await open(sid);
     await ready();
     let dlg = await confirm();
     expect(dlg).toHaveTextContent("Your upload stays until you delete the session. This won't count toward your limit.");
@@ -753,7 +753,7 @@ describe("session page: cancel", () => {
         return HttpResponse.json(mockBackend.cancelSession(UID, sid));
       }),
     );
-    open(sid);
+    await open(sid);
     await ready();
     await userEvent.click(confirmBtn(await confirm()));
     const busy = await screen.findByRole("button", { name: /Cancelling…/ });
@@ -768,19 +768,19 @@ describe("session page: cancel", () => {
   it("a counted cancel says so, and a reload shows the persisted message", async () => {
     const sid = create();
     toAwaiting(sid);
-    open(sid);
+    await open(sid);
     await ready();
     await userEvent.click(confirmBtn(await confirm()));
     expect(await screen.findByText("Session cancelled. This counted toward your limit.")).toBeInTheDocument();
     cleanup();
-    open(sid);
+    await open(sid);
     expect(await screen.findByText("Session cancelled. This counted toward your limit.")).toBeInTheDocument();
   });
 
   it("the cancelled view offers Delete, and no rating, speaker gate, retry or cancel link", async () => {
     const sid = create();
     toAwaiting(sid);
-    open(sid);
+    await open(sid);
     await ready();
     await userEvent.click(confirmBtn(await confirm()));
     await screen.findByRole("heading", { name: "Cancelled" });
@@ -796,7 +796,7 @@ describe("session page: cancel", () => {
   it("deleting a cancelled session confirms, calls DELETE and returns to the list", async () => {
     const sid = create();
     toAwaiting(sid);
-    const { router } = open(sid);
+    const { router } = await open(sid);
     await ready();
     await userEvent.click(confirmBtn(await confirm()));
     await screen.findByRole("heading", { name: "Cancelled" });
@@ -809,7 +809,7 @@ describe("session page: cancel", () => {
 
   it("an omitted counted shows no sentence", async () => {
     const sid = create();
-    open(sid);
+    await open(sid);
     await ready();
     act(() => mockEmitter.emit(sid, { ...failedDoc(sid, "x"), state: "cancelled", counted: null }));
     expect(await screen.findByRole("heading", { name: "Cancelled" })).toBeInTheDocument();
@@ -820,7 +820,7 @@ describe("session page: cancel", () => {
     const sid = create();
     upload(sid);
     server.use(http.post("*/v1/sessions/:id/cancel", () => new HttpResponse(null, { status: 500 })));
-    open(sid);
+    await open(sid);
     await ready();
     await userEvent.click(confirmBtn(await confirm()));
     const card = await screen.findByRole("alert");
@@ -838,7 +838,7 @@ describe("session page: cancel", () => {
         HttpResponse.json({ schema_version: "0.0.1", status: 409, message: "x", details: [{ code: "invalid_state", message: "x" }], request_id: "r" }, { status: 409 }),
       ),
     );
-    const { router } = open(sid);
+    const { router } = await open(sid);
     await ready();
     await userEvent.click(confirmBtn(await confirm()));
     expect(await screen.findByRole("alert")).toHaveTextContent("This session already finished or failed.");
@@ -857,7 +857,7 @@ describe("session page: processing screen", () => {
 
   it("shows the hint per phase, outside the live region", async () => {
     const sid = create();
-    open(sid);
+    await open(sid);
     const status = await ready();
     const cases: [SessionStatusDoc["state"], RegExp][] = [
       ["created", /Keep this tab open until upload finishes/],
@@ -881,7 +881,7 @@ describe("session page: processing screen", () => {
 
   it("shows bar, N% and Elapsed from created through transcribing; none at report_ready, failed, cancelled", async () => {
     const sid = create();
-    open(sid);
+    await open(sid);
     await ready();
     const startedAt = new Date(Date.now() - 65_000).toISOString();
     for (const state of ["created", "uploading", "transcribing"] as const) {
@@ -900,7 +900,7 @@ describe("session page: processing screen", () => {
 
   it("bar has an accessible name, value and valuetext, outside the live region", async () => {
     const sid = create();
-    open(sid);
+    await open(sid);
     const status = await ready();
     emit(sid, { state: "awaiting_input", progress: 40 });
     await waitFor(() => expect(bar()).toBeInTheDocument());
@@ -913,7 +913,7 @@ describe("session page: processing screen", () => {
 
   it("marks the current step with In progress, a spinner and the accent; done has a check; pending is muted", async () => {
     const sid = create();
-    open(sid);
+    await open(sid);
     await ready();
     emit(sid, { state: "transcribing", progress: 20, transcript_ready: false, speaker_confirmed: false, rating_submitted: false });
     await waitFor(() => expect(stepItem("Transcribe")).toHaveAttribute("data-status", "current"));
@@ -932,7 +932,7 @@ describe("session page: processing screen", () => {
 
   it("spinner honours reduced motion: spin is motion-safe only", async () => {
     const sid = create();
-    open(sid);
+    await open(sid);
     await ready();
     emit(sid, { state: "transcribing" });
     await waitFor(() => expect(stepItem("Transcribe").querySelector('[data-slot="spinner"]')).not.toBeNull());
@@ -943,7 +943,7 @@ describe("session page: processing screen", () => {
 
   it("keeps the live-region text unchanged across ticks and progress changes", async () => {
     const sid = create();
-    open(sid);
+    await open(sid);
     const status = await ready();
     const startedAt = new Date(Date.now() - 65_000).toISOString();
     emit(sid, { state: "transcribing", progress: 20, progress_next: 40, started_at: startedAt, stage_started_at: startedAt });
@@ -963,7 +963,7 @@ describe("session page: processing screen", () => {
 
   it("renders the cancel slot (right-aligned, below the steps) for every cancellable state and no other", async () => {
     const sid = create();
-    open(sid);
+    await open(sid);
     await ready();
     for (const state of CANCELLABLE) {
       emit(sid, { state });
@@ -994,7 +994,7 @@ describe("session page: input locks", () => {
     vi.stubEnv("VITE_RATING_ENABLED", "true");
     const sid = create();
     toAwaiting(sid);
-    open(sid);
+    await open(sid);
     await screen.findByRole("list", { name: "Speakers" });
     act(() => mockEmitter.emit(sid, { ...failedDoc(sid, "x"), state, speaker_confirmed: false, rating_submitted: false }));
     await waitFor(() => expect(document.querySelector('[data-slot="speaker-gate"]')).toBeNull());

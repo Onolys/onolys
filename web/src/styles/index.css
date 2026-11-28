@@ -1,8 +1,8 @@
-/* CSS entry. Cascade order: theme, base (Tailwind preflight + @onolys/ui base), components, utilities. Only the design system styles the app. */
+/* CSS entry. Cascade order: theme, base (Tailwind preflight + @onolys/common base), components, utilities. Only the design system styles the app. */
 @layer theme, base, components, utilities;
 @import "tailwindcss";
-@import "@onolys/ui/theme.css";
-@source "../../node_modules/@onolys/ui/dist";
+@import "@onolys/common/theme.css";
+@source "../../node_modules/@onolys/common/dist";
 
 /* === App overrides ===
    Only rules that Tailwind utilities cannot express: a class toggled from JS on <html>, the native <dialog>

@@ -4,14 +4,12 @@
  * as the client. A successful confirmation keeps the controls locked until the status doc moves on,
  * so a second call cannot race the first.
  */
-import { Button, Card, CardContent } from "@onolys/ui";
+import { Button, Card, CardContent, LINK_BTN, NOTE, Notice } from "@onolys/common";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { unwrap } from "../../api/client";
 import { describeError } from "../../api/errors";
 import { useApiClient } from "../../auth/useApiClient";
-import { LINK_BTN, NOTE } from "../../components/classes";
-import { Notice } from "../../components/Notice";
 import { ErrorCard } from "../session/ErrorCard";
 
 export interface SpeakerGateProps {

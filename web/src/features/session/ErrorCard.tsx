@@ -1,4 +1,4 @@
-import { Alert, AlertDescription } from "@onolys/ui";
+import { Alert, AlertDescription } from "@onolys/common";
 import type { ReactNode } from "react";
 import { messageForCode } from "../../api/errors";
 

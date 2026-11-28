@@ -7,7 +7,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
   Button,
-} from "@onolys/ui";
+} from "@onolys/common";
 import type { ComponentProps, ReactNode } from "react";
 
 /**

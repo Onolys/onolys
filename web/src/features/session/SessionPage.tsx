@@ -4,7 +4,7 @@
  * The upload, rating card and speaker gate mount in
  * `slots.tsx`.
  */
-import { Button, Progress, Spinner } from "@onolys/ui";
+import { Button, Progress, Spinner, H1, LINK, LINK_BTN, NOTE, PAGE, Notice, formatElapsed, formatResetTime } from "@onolys/common";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { Link, Navigate, useParams } from "react-router";
@@ -12,10 +12,7 @@ import { unwrap } from "../../api/client";
 import { cancelErrorMessage, describeError, failureView } from "../../api/errors";
 import type { SessionStatusDoc } from "../../api/statusListener";
 import { useApiClient } from "../../auth/useApiClient";
-import { H1, LINK, LINK_BTN, NOTE, PAGE } from "../../components/classes";
-import { Notice } from "../../components/Notice";
-import { codePointLength, sliceCodePoints } from "../../lib/codepoints";
-import { formatElapsed, formatResetTime } from "../../lib/format";
+import { codePointLength, sliceCodePoints } from "../report/codepoints";
 import { blockingPeriod, formatBlockingReset } from "../usage/usage";
 import { USAGE_KEY, useUsage } from "../usage/useUsage";
 import { CancelLink, isCancellable } from "./CancelLink";

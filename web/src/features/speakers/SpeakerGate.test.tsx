@@ -34,7 +34,7 @@ const reportReady = (title?: string) => {
 describe("speaker gate", () => {
   it("is hidden until the transcript is ready", async () => {
     const sid = create();
-    open(sid);
+    await open(sid);
     await screen.findByRole("list", { name: "Progress" });
     expect(screen.queryByRole("list", { name: "Speakers" })).not.toBeInTheDocument();
   });
@@ -42,7 +42,7 @@ describe("speaker gate", () => {
   it("2 speakers: a card each with 3 sample lines and no 'everyone else' note", async () => {
     const sid = create();
     toAwaiting(sid);
-    open(sid);
+    await open(sid);
     const list = await cards();
     expect(list).toHaveLength(2);
     for (const c of list) {
@@ -55,7 +55,7 @@ describe("speaker gate", () => {
   it("3 speakers: all listed, with the 'everyone else is the client' note", async () => {
     const sid = create("three-speakers");
     toAwaiting(sid);
-    open(sid);
+    await open(sid);
     expect(await cards()).toHaveLength(3);
     expect(screen.getByText(/everyone else is the client/i)).toBeInTheDocument();
     expect(screen.getAllByRole("button", { name: "This is the clinician" })).toHaveLength(3);
@@ -65,7 +65,7 @@ describe("speaker gate", () => {
     const user = userEvent.setup();
     const sid = create();
     toAwaiting(sid);
-    open(sid);
+    await open(sid);
     const list = await cards();
     await user.click(within(list[1]).getByRole("button", { name: "This is the clinician" }));
     await waitFor(() => expect(screen.queryByRole("list", { name: "Speakers" })).not.toBeInTheDocument());
@@ -75,7 +75,7 @@ describe("speaker gate", () => {
   it("shows friendly numbered labels, never the raw speaker id (C9)", async () => {
     const sid = create();
     toAwaiting(sid);
-    open(sid);
+    await open(sid);
     const list = await cards();
     expect(within(list[0]).getByRole("heading", { level: 3, name: "Speaker 1" })).toBeInTheDocument();
     expect(within(list[1]).getByRole("heading", { level: 3, name: "Speaker 2" })).toBeInTheDocument();
@@ -94,7 +94,7 @@ describe("speaker gate", () => {
         return HttpResponse.json({ schema_version: "0.0.1", session: { id: sid, status: "awaiting_input" }, clinician_speaker: "spk_0" }, { status: 202 });
       }),
     );
-    open(sid);
+    await open(sid);
     const list = await cards();
     await user.click(within(list[0]).getByRole("button", { name: "This is the clinician" }));
     await waitFor(() => expect(posts).toBe(1));
@@ -106,7 +106,7 @@ describe("speaker gate", () => {
     const user = userEvent.setup();
     const sid = create();
     toAwaiting(sid);
-    open(sid);
+    await open(sid);
     const list = await cards();
     const btn = within(list[0]).getByRole("button", { name: "This is the clinician" });
     act(() => btn.focus());
@@ -129,7 +129,7 @@ describe("speaker gate", () => {
         }),
       ),
     );
-    open(sid);
+    await open(sid);
     await cards();
     expect(screen.getByText(evil)).toBeInTheDocument();
     expect(document.querySelector('[data-slot="speaker-gate"] img, [data-slot="speaker-gate"] b')).toBeNull();
@@ -147,7 +147,7 @@ describe("speaker gate", () => {
         ),
       ),
     );
-    open(sid);
+    await open(sid);
     const list = await cards();
     await user.click(within(list[0]).getByRole("button", { name: "This is the clinician" }));
     expect(await screen.findByRole("alert")).toBeInTheDocument();
@@ -158,7 +158,7 @@ describe("speaker gate", () => {
 describe("clinician choice is final", () => {
   it.each([undefined, "fail-transient", "fail-code"])("does not offer speaker changes after the first run (%s)", async (title) => {
     const sid = reportReady(title);
-    open(sid);
+    await open(sid);
     if (title === "fail-transient") await screen.findByRole("button", { name: /^Retry/ });
     else if (title === "fail-code") await screen.findByRole("link", { name: "Start a new session" });
     else await screen.findByRole("heading", { level: 1, name: "Report" });

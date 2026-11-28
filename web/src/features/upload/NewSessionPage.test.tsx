@@ -5,7 +5,7 @@ import { http, HttpResponse } from "msw";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { mockBackend, server } from "../../mocks/server";
 import { here, renderApp } from "../../test/renderApp";
-import { UPLOAD_LIMITS } from "../../mocks/handlers";
+import { UPLOAD_LIMITS, uidFromToken } from "../../mocks/handlers";
 import { clearJobs, getJob } from "./uploader";
 
 const USER = { email: "rater@clinic.org", verified: true };
@@ -34,7 +34,7 @@ beforeEach(() => {
 afterEach(() => { clearJobs(); vi.unstubAllGlobals(); });
 
 async function open(path = "/sessions/new") {
-  const r = renderApp(path, { user: USER });
+  const r = await renderApp(path, { user: USER });
   await screen.findByRole("heading", { level: 1, name: "New session" });
   return r;
 }
@@ -325,7 +325,7 @@ describe("Transcript upload", () => {
     const audio = vi.fn();
     const received: unknown[] = [];
     server.use(http.put("*/v1/sessions/:id/transcript", async ({ request, params }) => {
-      received.push({ content: await request.text(), type: request.headers.get("content-type"), auth: request.headers.get("authorization") });
+      received.push({ content: await request.text(), type: request.headers.get("content-type"), uid: uidFromToken((request.headers.get("authorization") ?? "").replace(/^Bearer /, "")) });
       return HttpResponse.json({ session: { id: params.id, status: "awaiting_input" } }, { status: 202 });
     }), http.post("*/v1/sessions/:id/audio", () => { audio(); return HttpResponse.json({}); }));
     const { router } = await open();
@@ -333,7 +333,7 @@ describe("Transcript upload", () => {
     await goal();
     await userEvent.click(screen.getByRole("button", { name: "Start" }));
     await waitFor(() => expect(here(router)).toMatch(/^\/sessions\/(?!new$)[^/]+$/));
-    expect(received).toEqual([{ content, type: contentType, auth: "Bearer test:u_rater_clinic_org" }]);
+    expect(received).toEqual([{ content, type: contentType, uid: "u_rater_clinic_org" }]);
     expect(audio).not.toHaveBeenCalled();
   });
   it.each([

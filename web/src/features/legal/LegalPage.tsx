@@ -1,4 +1,4 @@
-import { Card, CardContent, Separator } from "@onolys/ui";
+import { Card, CardContent, Separator } from "@onolys/common";
 import type { ReactNode } from "react";
 
 export const LEGAL_UPDATED = "2026-11-23";

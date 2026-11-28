@@ -37,7 +37,7 @@ afterEach(() => {
 
 const newSession = () => mockBackend.createSession(UID, {}).session.id;
 const open = async (sid: string) => {
-  const view = renderApp(`/sessions/${sid}`, { user: USER });
+  const view = await renderApp(`/sessions/${sid}`, { user: USER });
   await screen.findByLabelText("Change goal");
   return view;
 };
@@ -162,7 +162,7 @@ describe("rating card: submit", () => {
     vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"], shouldAdvanceTime: true });
     const sid = newSession();
     // Mounted alone: the status doc does not flip `readOnly`, as in the gap before it catches up.
-    renderPage(<RatingCard sessionId={sid} />, "/x", { user: USER });
+    await renderPage(<RatingCard sessionId={sid} />, "/x", { user: USER });
     await screen.findByLabelText("Change goal");
     setValue("Change goal", "Cut down");
     setValue("Empathy score", "5");

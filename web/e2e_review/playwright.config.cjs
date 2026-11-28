@@ -1,4 +1,4 @@
-// Run (mock mode): see README.md.
+// Run (mock mode, needs the Auth emulator): see README.md.
 const { defineConfig } = require("@playwright/test");
 const path = require("path");
 
@@ -9,7 +9,7 @@ const CSP_SPECS = /(csp|visual)\.spec\.cjs$/;
 module.exports = defineConfig({
   testDir: __dirname,
   outputDir: path.join(__dirname, "test-results"), // vite ignores **/test-results/**; other writes under web/ trigger a full reload
-  fullyParallel: true, // every test is independent (own context, in-memory fake auth + MSW state): safe for --shard=i/n
+  fullyParallel: true, // every test is independent (own context, own emulator user, MSW state in the page): safe for --shard=i/n
   forbidOnly: !!process.env.CI,
   retries: 0,
   workers: process.env.CI ? 2 : 4,

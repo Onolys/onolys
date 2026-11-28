@@ -1,7 +1,6 @@
 import { Link } from "react-router";
-import { Footer as UiFooter } from "@onolys/ui";
+import { Footer as UiFooter, ThemeToggle } from "@onolys/common";
 import { CONTACT_EMAIL } from "../config";
-import { ThemeToggle } from "./ThemeToggle";
 
 const NOTICES = ["Not official MITI coding", "Use it to practice and prepare", "Role-play or de-identified transcripts only"];
 
@@ -9,7 +8,8 @@ const NOTICES = ["Not official MITI coding", "Use it to practice and prepare", "
 export function Footer() {
   return (
     <UiFooter
-      className="relative [&_a]:min-w-0! [&_a]:underline flex flex-wrap items-center justify-center gap-x-4 gap-y-0 space-y-0 px-gutter py-3 text-center text-xs [&>nav]:w-full [&>nav]:items-center [&>nav]:justify-center [&>nav]:gap-x-5 [&>nav]:px-9"
+      compact
+      themeToggle={<ThemeToggle />}
       notices={
         <ul className="m-0 flex w-full list-none flex-wrap justify-center gap-x-2 p-0">
           {NOTICES.map((n) => (
@@ -30,8 +30,6 @@ export function Footer() {
           <span className="whitespace-nowrap text-footer-muted">© {new Date().getFullYear()} Onolys</span>
         </>
       }
-    >
-      <ThemeToggle className="absolute right-3 bottom-2" />
-    </UiFooter>
+    />
   );
 }

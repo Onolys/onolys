@@ -1,6 +1,6 @@
 import type { components } from "../../api/schema";
 import type { GlobalEntry, Report } from "../../api/report";
-import { codePointLength } from "../../lib/codepoints";
+import { codePointLength } from "./codepoints";
 
 type Turn = components["schemas"]["TranscriptTurnV1"];
 

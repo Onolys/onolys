@@ -1,4 +1,4 @@
-import { Button } from "@onolys/ui";
+import { Button } from "@onolys/common";
 import { useEffect, useState } from "react";
 
 const COUNTDOWN_S = 5;

@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { Link } from "react-router";
-import { useAuth } from "../auth/AuthProvider";
+import { useAuth } from "@onolys/common/auth";
 
 const LINK = "text-primary underline underline-offset-4";
 

@@ -1,4 +1,4 @@
-/** Property tests (review 2026-11-21) for api/errors and src/lib. See auth.property.test.ts header. */
+/** Property tests (review 2026-11-21) for api/errors and src/lib. */
 import fc from "fast-check";
 import { describe, expect, it } from "vitest";
 import {
@@ -14,9 +14,8 @@ import {
   buildIndexMap,
   codePointLength,
   sliceCodePoints,
-} from "../lib/codepoints";
-import { formatElapsed, formatResetTime } from "../lib/format";
-import { buildSegments } from "../lib/spans";
+} from "../features/report/codepoints";
+import { formatElapsed, formatResetTime } from "@onolys/common";
 
 describe("api/errors", () => {
   it("unknown codes (incl. prototype keys) map to the generic message", () => {
@@ -182,77 +181,4 @@ describe("lib/codepoints", () => {
       expect(sliceCodePoints("abc", 2, 1)).toBe("");
     },
   );
-});
-
-describe("lib/spans buildSegments", () => {
-  const spanFor = (t: string) =>
-    fc
-      .array(
-        fc.record({
-          id: fc.string({ minLength: 1, maxLength: 4 }),
-          start: fc.integer({ min: -2, max: 30 }),
-          end: fc.integer({ min: -2, max: 30 }),
-        }),
-        { maxLength: 6 },
-      )
-      .map((xs) =>
-        xs.map((s) => ({ ...s, quote: sliceSafe(t, s.start, s.end) })),
-      );
-  const sliceSafe = (t: string, a: number, b: number) =>
-    a >= 0 && b >= a && b <= codePointLength(t)
-      ? sliceCodePoints(t, a, b)
-      : "x";
-
-  it("segments always concatenate back to the text; no empty segments for non-empty text", () => {
-    fc.assert(
-      fc.property(
-        anyText.chain((t) => fc.tuple(fc.constant(t), spanFor(t))),
-        ([t, spans]) => {
-          const { segments } = buildSegments(t, spans);
-          expect(segments.map((s) => s.text).join("")).toBe(t);
-          if (t.length > 0)
-            for (const s of segments) expect(s.text.length).toBeGreaterThan(0);
-        },
-      ),
-    );
-  });
-
-  it("every span is either rejected or covered by segments listing its id", () => {
-    fc.assert(
-      fc.property(
-        anyText.chain((t) => fc.tuple(fc.constant(t), spanFor(t))),
-        ([t, spans]) => {
-          const { segments, rejected } = buildSegments(t, spans);
-          const used = new Set(segments.flatMap((s) => s.ids));
-          for (const sp of spans) {
-            if (rejected.includes(sp)) continue;
-            expect(used.has(sp.id)).toBe(true);
-          }
-        },
-      ),
-    );
-  });
-
-  it("rejects exactly the spans whose range or quote is invalid", () => {
-    fc.assert(
-      fc.property(
-        anyText,
-        fc.integer({ min: -3, max: 40 }),
-        fc.integer({ min: -3, max: 40 }),
-        (t, s, e) => {
-          const n = codePointLength(t);
-          const valid = Number.isInteger(s) && s >= 0 && s < e && e <= n;
-          const { rejected } = buildSegments(t, [
-            {
-              id: "a",
-              start: s,
-              end: e,
-              quote: valid ? sliceCodePoints(t, s, e) : "x",
-            },
-          ]);
-          expect(rejected.length).toBe(valid ? 0 : 1);
-        },
-      ),
-    );
-  });
 });

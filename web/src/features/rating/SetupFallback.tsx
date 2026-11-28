@@ -3,12 +3,11 @@
  * build, or an interview whose PUT failed) sets it here. Same field as the upload screen; the
  * "Continue" button only does the final no-rating `PUT /rating` (409 `rating_final` = done).
  */
-import { Button } from "@onolys/ui";
+import { Button, ErrorNote } from "@onolys/common";
 import { useEffect, useState } from "react";
 import { unwrap } from "../../api/client";
 import { ApiError, describeError } from "../../api/errors";
 import { useApiClient } from "../../auth/useApiClient";
-import { ErrorNote } from "../../components/Notice";
 import { cardToForm, issuesFromApi } from "./card";
 import { goalIssues, saveGoal, SetupFields } from "./SetupFields";
 

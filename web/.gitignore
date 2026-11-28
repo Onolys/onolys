@@ -7,7 +7,3 @@ coverage-summary.txt
 
 # e2e (playwright output, optional screenshots with E2E_SHOTS=1)
 e2e_review/test-results/
-
-# mutation reports
-reports/
-.stryker-tmp/

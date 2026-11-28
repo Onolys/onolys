@@ -1,5 +1,5 @@
 const { test, expect } = require("@playwright/test");
-const { collect, field, signUp, spa, navLinks, PW } = require("./helpers.cjs");
+const { collect, field, emailFor, signUp, verifyEmail, confirmVerified, spa, navLinks, PW } = require("./helpers.cjs");
 
 const create = (page) => page.getByRole("button", { name: "Create account" });
 
@@ -10,26 +10,34 @@ test.describe("signup", () => {
 
 
 
-  test("double click and Enter key create one account and land on /verify-email", async ({ page }) => {
+  test("double click creates one account and lands on /verify-email", async ({ page }) => {
     const c = collect(page);
     await page.goto("/signup");
-    await field(page, "Email").fill("dbl@example.com");
+    await field(page, "Email").fill(emailFor(page, "dbl@example.com"));
     await field(page, "Password").fill(PW);
     await field(page, "Confirm password").fill(PW);
     await create(page).dblclick();
     await expect(page).toHaveURL(/verify-email/);
     expect(c.pageerrors).toEqual([]);
-    await page.getByRole("button", { name: "Use a different email" }).click();
-    await expect(page).toHaveURL(/\/signup/);
-    await spa(page, "/signup");
-    await field(page, "Email").fill("enter@example.com");
+  });
+
+  test("the Enter key creates one account and lands on /verify-email", async ({ page }) => {
+    await page.goto("/signup");
+    await field(page, "Email").fill(emailFor(page, "enter@example.com"));
     await field(page, "Password").fill(PW);
     await field(page, "Confirm password").fill(PW);
     await field(page, "Password").press("Enter");
     await expect(page).toHaveURL(/verify-email/);
   });
 
-
+  // Known issue in @onolys/common 0.4.0 (its own suite keeps an `it.fails` for it): "Use a different email" ends on /login,
+  // not /signup. Delete `test.fail()` once the package fixes it.
+  test("Use a different email returns to /signup", async ({ page }) => {
+    test.fail();
+    await signUp(page, "diff@example.com");
+    await page.getByRole("button", { name: "Use a different email" }).click();
+    await expect(page).toHaveURL(/\/signup/);
+  });
 
   test.describe("unverified state", () => {
 
@@ -52,7 +60,8 @@ test.describe("signup", () => {
     test("verifying lands on the dashboard (next restored)", async ({ page }) => {
       await signUp(page, "unv4@example.com");
       await spa(page, "/sessions/new");
-      await page.getByRole("button", { name: "I've verified" }).click();
+      await verifyEmail(page, "unv4@example.com");
+      await confirmVerified(page);
       await expect(page.getByRole("heading", { name: "New session" })).toBeVisible();
     });
   });

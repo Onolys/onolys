@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { drinkingSampleNotCoded, drinkingSampleReport, drinkingSampleTurns } from "../../mocks/fixtures/sample";
-import { formatDate } from "../../lib/format";
+import { formatDate } from "@onolys/common";
 import { ReportView } from "./ReportView";
 
 const ready = { status: "ready" as const, turns: drinkingSampleTurns };

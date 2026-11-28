@@ -1,10 +1,6 @@
 import { Navigate, type RouteObject } from "react-router";
-import { AuthAction } from "../auth/pages/AuthAction";
-import { ForgotPassword } from "../auth/pages/ForgotPassword";
-import { Login } from "../auth/pages/Login";
-import { Signup } from "../auth/pages/Signup";
-import { VerifyEmail } from "../auth/pages/VerifyEmail";
-import { PublicOnly, RequireUnverified, RequireVerified } from "../auth/guards";
+import { AuthAction, ForgotPassword, Login, PublicOnly, RequireUnverified, RequireVerified, Signup, VerifyEmail } from "@onolys/common/auth";
+import { appHosts } from "../config";
 import { NewSessionChooser } from "../features/dashboard/NewSessionChooser";
 import { SessionsPage } from "../features/dashboard/SessionsPage";
 import { SampleReportPage } from "../features/report/SampleReportPage";
@@ -52,7 +48,7 @@ export const routes: RouteObject[] = [
           ],
         },
         // Email action links (verify email, reset password): reachable in every auth state, so no guard.
-        { path: "/auth/action", element: <AuthAction /> },
+        { path: "/auth/action", element: <AuthAction allowedHosts={appHosts()} /> },
         { path: "/privacy", element: <PrivacyPolicy /> },
         { path: "/terms", element: <Terms /> },
         { path: "/sample", element: <SampleReportPage /> },
