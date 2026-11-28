@@ -9,18 +9,18 @@ Source of truth: /root/projects/onolys/onolys/.worktrees/refactor/revamp/docs/ag
 
 | # | Task | Depends on | Status |
 |---|---|---|---|
-| 1 | Delete guard/migration tests + legacy CSS test (R1, R6) | none | todo |
-| 2 | T2 pre-check: count old-shape docs in staging + prod | none | todo |
-| 3 | Delete compat code and eval pre-matrix readers (R2) | 1, 2 | todo |
-| 4 | Spec ids to plain words: api (R3) | 3 | todo |
-| 5 | Spec ids to plain words: engines (R3) | 3 | todo |
-| 6 | Spec ids to plain words: eval (R3) | 3 | todo |
-| 7 | Spec ids to plain words: web (R3) | 3 | todo |
-| 8 | Regenerate contracts (R7 tail) | 4, 5, 6, 7 | todo |
-| 9 | Prune `scripts/ci/`; `changes` job on paths-filter (R4, D3) | 3 | todo |
-| 10 | Remove dead staging fallbacks in workflows + `release_target.py` (R7) | 9 | todo |
-| 11 | Infra: delete `check-staging.py` and removal-guard tests (R5) | 1 | todo |
-| 12 | Final acceptance sweep + post-merge cloud checks | 8, 10, 11 | todo |
+| 1 | Delete guard/migration tests + legacy CSS test (R1, R6) | none | done |
+| 2 | T2 pre-check: count old-shape docs in staging + prod | none | done |
+| 3 | Delete compat code and eval pre-matrix readers (R2) | 1, 2 | done |
+| 4 | Spec ids to plain words: api (R3) | 3 | done |
+| 5 | Spec ids to plain words: engines (R3) | 3 | done |
+| 6 | Spec ids to plain words: eval (R3) | 3 | done |
+| 7 | Spec ids to plain words: web (R3) | 3 | done |
+| 8 | Regenerate contracts (R7 tail) | 4, 5, 6, 7 | done |
+| 9 | Prune `scripts/ci/`; `changes` job on paths-filter (R4, D3) | 3 | done |
+| 10 | Remove dead staging fallbacks in workflows + `release_target.py` (R7) | 9 | done |
+| 11 | Infra: delete `check-staging.py` and removal-guard tests (R5) | 1 | done |
+| 12 | Final acceptance sweep + post-merge cloud checks | 8, 10, 11 | done |
 
 ## Task 1 — Delete guard/migration tests + legacy CSS test
 What it is / what it means: Tests that only assert "the old thing is gone" protect nothing after launch (rule 16). PRD R1, R6, D5.
