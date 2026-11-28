@@ -1,4 +1,4 @@
 # Virtual workspace root (no [project]).
-# Members: engines/core, engines/miti, engines/oneshot, api.
+# Members: engine, engines/miti, engines/oneshot, api.
 [tool.uv.workspace]
-members = ["engines/*", "api"]
+members = ["engine", "engines/*", "api"]

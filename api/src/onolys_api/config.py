@@ -5,7 +5,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from urllib.parse import urlsplit
 
-from onolys_engine_core.errors import ConfigError
+from onolys_engine import ConfigError
 
 ENVS = ("local", "test", "staging", "prod")
 SERVICE_MODES = ("api", "worker", "combined", "voice")

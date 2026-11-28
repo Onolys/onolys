@@ -177,16 +177,15 @@ def swap_eval(env, evaluation):
 
 
 async def test_full_stub_flow_reaches_report_ready_with_progress_table(env, monkeypatch):
-    from onolys_engine_core import validated_run
+    from onolys_engine import validate_output as validate
 
-    validate = validated_run.validate_output
     calls = []
 
     def record(output, schema):
         calls.append(output)
         return validate(output, schema)
 
-    monkeypatch.setattr(validated_run, "validate_output", record)
+    monkeypatch.setattr("onolys_engine.validated_run.validate_output", record)
     sid = await env.start()
     s = env.repo.get_session(env.uid, sid)
     assert s.state == "running"
@@ -720,8 +719,7 @@ async def test_cancel_after_the_last_active_check_publishes_no_report(env, monke
 
 
 async def test_failed_run_persists_completed_call_metrics(env):
-    from onolys_engine_core.errors import InputError
-    from onolys_engine_core.llm import LLMRequest, MetricsCollector, Usage
+    from onolys_engine import InputError, LLMRequest, MetricsCollector, Usage
 
     class RecordedFailure(FakeEvaluation):
         async def run(self, ctx, *args, **kwargs):

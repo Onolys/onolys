@@ -7,8 +7,7 @@ over any language on the entry. Never imports a concrete provider.
 from pathlib import Path
 
 import yaml
-from onolys_engine_core.config import locate_config_file
-from onolys_engine_core.errors import InputError
+from onolys_engine import InputError, locate_config_file
 
 from onolys_api.transcription import SttParams
 

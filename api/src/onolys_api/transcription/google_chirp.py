@@ -10,7 +10,7 @@ import json
 from datetime import timedelta
 from typing import Any, Protocol
 
-from onolys_engine_core.errors import InputError, OnolysError
+from onolys_engine import InputError, OnolysError
 
 from onolys_api.transcription import AudioRef, SttParams, SttRun, Word
 from onolys_api.transcription.base import BaseSttAdapter

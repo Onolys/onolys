@@ -14,7 +14,7 @@ from pathlib import Path
 
 # Script entry point works from any cwd with the workspace packages installed.
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from onolys_engine_core.llm.fixture_client import FixtureClient  # noqa: E402
+from onolys_engine.llm.fixture_client import FixtureClient  # noqa: E402
 
 from audit_report import FIX, load_fixture, render_requests  # noqa: E402
 from onolys_miti import miti  # noqa: E402

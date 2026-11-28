@@ -16,8 +16,7 @@ from audio_helpers import MAGIC, StubTools
 from cards import valid_card
 from google.api_core import exceptions as gexc
 from miti_fixtures import TRANSCRIPT, patch_engine
-from onolys_engine_core.errors import InputError
-from onolys_engine_core.llm import LLMUnavailable, StubClient
+from onolys_engine import InputError, LLMUnavailable, StubClient
 from onolys_miti.run import AllRunsFailed
 from test_transcribe import words
 
@@ -143,16 +142,15 @@ def test_build_adapters_real_returns_real_adapters(settings):
 
 
 async def test_real_flow_reaches_report_ready_with_a_no_rating_report(make_env, monkeypatch):
-    from onolys_engine_core import validated_run
+    from onolys_engine import validate_output as validate
 
-    validate = validated_run.validate_output
     calls = []
 
     def record(output, schema):
         calls.append(output)
         return validate(output, schema)
 
-    monkeypatch.setattr(validated_run, "validate_output", record)
+    monkeypatch.setattr("onolys_engine.validated_run.validate_output", record)
     env = await make_env()
     sid = await env.to_awaiting_input()
     assert (await env.status(sid))["status"] == "awaiting_input"
@@ -238,7 +236,7 @@ async def test_transient_failure_twice_ends_failed_upstream_unavailable(make_env
 async def test_real_invalid_lean_result_fails_once_with_safe_detail(make_env, monkeypatch, caplog):
     import json
 
-    from onolys_engine_core.engine import EngineResult, RunInfo, RunUsage
+    from onolys_engine import EngineResult, RunInfo, RunUsage
     from onolys_miti import MitiEngine
 
     env = await make_env()

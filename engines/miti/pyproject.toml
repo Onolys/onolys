@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "MITI 4.2.1 coding engine: session transcript in, no-rating report out"
 requires-python = ">=3.12,<3.13"
 dependencies = [
-  "onolys-engine-core",
+  "onolys-engine",
   "pydantic>=2.7",
   "pyyaml>=6",
   "litellm>=1.50",
@@ -44,4 +44,4 @@ markers = [
 "tests/**" = ["E501"]
 
 [tool.uv.sources]
-onolys-engine-core = { workspace = true }
+onolys-engine = { workspace = true }

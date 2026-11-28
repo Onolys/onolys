@@ -5,7 +5,7 @@ from collections.abc import Mapping
 from datetime import UTC, datetime
 from typing import Any
 
-from onolys_engine_core.transcript import Transcript
+from onolys_engine.transcript import Transcript
 
 from onolys_miti import miti
 from onolys_miti.compare import (

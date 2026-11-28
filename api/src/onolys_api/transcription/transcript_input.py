@@ -4,7 +4,7 @@ Upload constraints deliberately live outside the portable v1 schema: internal ca
 can represent short transcripts, while uploaded sessions need enough speech to code.
 """
 
-from onolys_engine_core.transcript_v1 import TranscriptV1
+from onolys_engine import TranscriptV1
 from pydantic import ValidationError
 
 MAX_TURNS = 5_000

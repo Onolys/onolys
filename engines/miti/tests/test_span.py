@@ -1,5 +1,5 @@
 import pytest
-from onolys_engine_core.transcript import Transcript, Turn
+from onolys_engine.transcript import Transcript, Turn
 
 from onolys_miti.prepare import prepare
 from onolys_miti.result import CodedSpan
@@ -92,14 +92,14 @@ def test_whole_default_does_not_choose_window():
     {"start_ms": 10, "end_ms": 0}, {"from_s": 0, "to_s": 60},
 ])
 def test_invalid_explicit_spans_fail(span):
-    from onolys_engine_core.errors import InputError
+    from onolys_engine.errors import InputError
     with pytest.raises(InputError, match="invalid_coded_span") as error:
         prepare(session(600), {"speaker_map": SM, "change_goal": "g", "coded_span": span})
     assert error.value.code == "invalid_coded_span"
 
 
 def test_word_limit_applies_to_coded_portion():
-    from onolys_engine_core.errors import InputError
+    from onolys_engine.errors import InputError
     t = Transcript(turns=[Turn(id=str(i), speaker="A" if i % 2 == 0 else "B", text="word " * 501) for i in range(12)])
     with pytest.raises(InputError, match="narrower coded_span") as error:
         prepare(t, {"speaker_map": SM, "change_goal": "g"})
@@ -116,7 +116,7 @@ def test_prepare_applies_engine_span_kwarg():
 
 @pytest.mark.parametrize("word_count", [6000, 6001])
 def test_word_limit_boundary(word_count):
-    from onolys_engine_core.errors import SessionTooLong
+    from onolys_engine.errors import SessionTooLong
     words = ["word"] * word_count
     turns = [Turn(id=str(i), speaker="A" if i % 2 == 0 else "B", text=" ".join(words[i::10])) for i in range(10)]
     t = Transcript(turns=turns)

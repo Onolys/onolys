@@ -21,9 +21,7 @@ jobs:
       contents: read
       pull-requests: read
     outputs:
-      core: ${{ steps.flags.outputs.core }}
-      oneshot: ${{ steps.flags.outputs.oneshot }}
-      miti: ${{ steps.flags.outputs.miti }}
+      engine: ${{ steps.flags.outputs.engine }}
       api: ${{ steps.flags.outputs.api }}
       web: ${{ steps.flags.outputs.web }}
       infra: ${{ steps.flags.outputs.infra }}
@@ -44,27 +42,16 @@ jobs:
             py_shared: &py_shared
               - 'pyproject.toml'
               - 'uv.lock'
-            core: &core
+            # engines/** (miti, one-shot) stays here until their code is ported into engine/.
+            engine: &engine
               - *ci_shared
               - *py_shared
-              - 'engines/core/**'
-            miti: &miti
-              - *core
-              - 'engines/miti/**'
-            oneshot: &oneshot
-              - *core
-              - 'engines/oneshot/**'
+              - 'engine/**'
+              - 'engines/**'
               - 'scripts/gen_miti_schema.py'
-              - 'config/staging/routes.yaml'
-              - 'engines/miti/src/onolys_miti/data/pack.yaml'
-              - 'engines/miti/src/onolys_miti/data/report.schema.json'
-              - 'engines/miti/src/onolys_miti/data/prompts/code_system.md'
-              - 'engines/miti/src/onolys_miti/data/prompts/globals_system.md'
-              - 'engines/miti/src/onolys_miti/data/fixtures/good_practice.json'
+              - 'config/**'
             api: &api
-              - *core
-              - *miti
-              - *oneshot
+              - *engine
               - 'api/**'
               - 'config/**'
               - 'docs/contracts/public/**'
@@ -88,7 +75,7 @@ jobs:
           FORCE_ALL: ${{ github.event_name != 'pull_request' }}
           FILTER: ${{ toJSON(steps.filter.outputs) }}
         run: |
-          for flag in core oneshot miti api web infra; do
+          for flag in engine api web infra; do
             if [ "$FORCE_ALL" = "true" ]; then val=true; else val="$(jq -r --arg f "$flag" '.[$f]' <<<"$FILTER")"; fi
             echo "$flag=$val" >>"$GITHUB_OUTPUT"
           done
@@ -105,32 +92,15 @@ jobs:
       - name: actionlint (workflows)
         run: bash <(curl -sSfL https://raw.githubusercontent.com/rhysd/actionlint/v1.7.7/scripts/download-actionlint.bash) 1.7.7 && ./actionlint -color
 
-  engine-core:
+  # One job for the engine package and, until they are ported into it, miti and one-shot.
+  # Separate pytest runs: each package keeps its own pytest config (asyncio mode, markers).
+  engine:
     needs: changes
-    if: needs.changes.outputs.core == 'true'
+    if: needs.changes.outputs.engine == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 5
     env:
       # Unit tests use bundled model metadata and fixture clients, never provider calls.
-      LITELLM_LOCAL_MODEL_COST_MAP: "True"
-    steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v5
-        with:
-          enable-cache: true
-          cache-dependency-glob: uv.lock
-      - run: uv sync --frozen --package onolys-engine-core
-      - run: uv run --no-sync --package onolys-engine-core ruff check engines/core
-      - name: Offline core tests (including the AST import boundary)
-        run: uv run --no-sync --package onolys-engine-core pytest engines/core -m "not live"
-
-  oneshot:
-    needs: changes
-    if: needs.changes.outputs.oneshot == 'true'
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    env:
-      # Bundled model pricing and replayed synthetic replies; no provider credentials.
       LITELLM_LOCAL_MODEL_COST_MAP: "True"
       MITI_LLM_RECORD: "0"
     steps:
@@ -139,26 +109,15 @@ jobs:
         with:
           enable-cache: true
           cache-dependency-glob: uv.lock
-      # Installs only one-shot and core; MITI reference data is read by path from checkout.
-      - run: uv sync --frozen --package onolys-oneshot
-      - run: uv run --no-sync --package onolys-oneshot ruff check engines/oneshot
-      - name: Offline unit tests, recorded goldens and AST import boundary
-        run: uv run --no-sync --package onolys-oneshot pytest engines/oneshot -m "not live"
-
-  miti:
-    needs: changes
-    if: needs.changes.outputs.miti == 'true'
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v5
-        with:
-          enable-cache: true
-          cache-dependency-glob: uv.lock
-      - run: uv sync --frozen --package onolys-miti
-      - run: uv run --no-sync --package onolys-miti ruff check engines/miti
-      - name: pytest with coverage
+      - run: uv sync --frozen --package onolys-engine --package onolys-miti --package onolys-oneshot
+      - name: ruff
+        run: |
+          uv run --no-sync --package onolys-engine ruff check engine
+          uv run --no-sync --package onolys-miti ruff check engines/miti
+          uv run --no-sync --package onolys-oneshot ruff check engines/oneshot
+      - name: engine tests
+        run: uv run --no-sync --package onolys-engine pytest engine -m "not live"
+      - name: miti tests (with coverage summary)
         run: |
           uv run --no-sync --package onolys-miti pytest engines/miti -m "not live" \
             --cov=engines/miti/src --cov-report=
@@ -166,6 +125,8 @@ jobs:
             echo "### Coverage: onolys-miti"
             uv run --no-sync --package onolys-miti coverage report --format=markdown
           } >> "$GITHUB_STEP_SUMMARY"
+      - name: one-shot tests (recorded goldens)
+        run: uv run --no-sync --package onolys-oneshot pytest engines/oneshot -m "not live"
 
   # api is split so the critical path is max(api-unit, api-emulator) + api-coverage (~30s), not their sum.
   # Selection: conftest.py adds the `firestore` marker to every test that needs the emulator
@@ -404,9 +365,9 @@ jobs:
           docker rm -f onolys-api
       - name: Prod LLM validator runs in the image exactly as deploy-prod runs it
         run: bash scripts/ci/smoke_prod_llm_validator.sh onolys-api:ci
-      - name: Image ships core and MITI without protocols
+      - name: Image ships the engine and MITI without protocols
         run: |
-          docker run --rm --entrypoint python onolys-api:ci -c "import onolys_engine_core, onolys_miti"
+          docker run --rm --entrypoint python onolys-api:ci -c "import onolys_engine, onolys_miti"
           docker run --rm --entrypoint test onolys-api:ci ! -e /app/protocols
           docker image inspect onolys-api:ci --format 'image size bytes: {{.Size}}'
 
@@ -553,12 +514,12 @@ jobs:
       - name: Static infra tests (offline)
         working-directory: .
         run: |
-          uv sync --frozen --package onolys-engine-core
-          uv run --no-sync --package onolys-engine-core pytest infra/scripts -q
+          uv sync --frozen --package onolys-engine
+          uv run --no-sync --package onolys-engine pytest infra/scripts -q
 
   required:
     if: always()
-    needs: [changes, guards, engine-core, oneshot, miti, api-unit, api-emulator, api-coverage, api-flaky, api-rules, api-image, web, web-e2e, infra]
+    needs: [changes, guards, engine, api-unit, api-emulator, api-coverage, api-flaky, api-rules, api-image, web, web-e2e, infra]
     runs-on: ubuntu-latest
     timeout-minutes: 1
     permissions:

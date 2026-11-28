@@ -12,9 +12,7 @@ from types import SimpleNamespace
 import httpx
 import pytest
 from fastapi import Depends, FastAPI
-from onolys_engine_core.llm import LiteLLMClient, LLMConfig, LLMRequest, LLMUnavailable
-from onolys_engine_core.llm.routes import Route
-from onolys_engine_core.safe_log import log_event
+from onolys_engine import LiteLLMClient, LLMConfig, LLMRequest, LLMUnavailable, Route, log_event
 from test_worker import SID, UID, payload, repo, runner_with  # noqa: F401
 
 from onolys_api import logs

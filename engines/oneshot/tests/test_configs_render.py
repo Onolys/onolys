@@ -6,8 +6,8 @@ from pathlib import Path
 
 import pytest
 import yaml
-from onolys_engine_core.errors import ConfigError, InputError
-from onolys_engine_core.transcript_v1 import TranscriptV1
+from onolys_engine.errors import ConfigError, InputError
+from onolys_engine.transcript_v1 import TranscriptV1
 
 from onolys_oneshot.config import config_names, load_config
 from onolys_oneshot.render import CORE_FOOTER, render_prompt
@@ -156,7 +156,7 @@ def test_runtime_dependency_is_core_only():
     import tomllib
 
     metadata = tomllib.loads((Path(__file__).resolve().parents[1] / "pyproject.toml").read_text())
-    assert metadata["project"]["dependencies"] == ["onolys-engine-core"]
+    assert metadata["project"]["dependencies"] == ["onolys-engine"]
 
 
 def test_time_span_preserves_untimed_turns(config_root, transcript):

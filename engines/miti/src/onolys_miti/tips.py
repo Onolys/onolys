@@ -20,8 +20,8 @@ import re
 from dataclasses import dataclass
 from typing import Any
 
-from onolys_engine_core.llm import LLMBadOutput, LLMClient, LLMRequest, MetricsCollector
-from onolys_engine_core.text_limits import (
+from onolys_engine.llm import LLMBadOutput, LLMClient, LLMRequest, MetricsCollector
+from onolys_engine.text_limits import (
     ALTERNATIVE_MAX,
     MAX_TIPS_PROPOSED,
     OBSERVATION_MAX,
@@ -29,7 +29,7 @@ from onolys_engine_core.text_limits import (
     SENTENCE_MAX,
     TITLE_MAX,
 )
-from onolys_engine_core.transcript import Transcript
+from onolys_engine.transcript import Transcript
 from pydantic import BaseModel
 
 from onolys_miti import miti

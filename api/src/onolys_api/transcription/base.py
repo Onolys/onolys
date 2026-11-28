@@ -3,8 +3,7 @@
 import asyncio
 from abc import ABC, abstractmethod
 
-from onolys_engine_core.safe_log import log_event
-from onolys_engine_core.transcript import Transcript, Turn
+from onolys_engine import Transcript, Turn, log_event
 
 from onolys_api.transcription import AudioRef, SttCompletion, SttParams, SttRun, Word
 

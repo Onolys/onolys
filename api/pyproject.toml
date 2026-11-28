@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "Onolys public /v1 API and job worker (one image, SERVICE_MODE api|worker|combined)"
 requires-python = ">=3.12,<3.13"
 dependencies = [
-    "onolys-engine-core",
+    "onolys-engine",
     "onolys-miti",
     "onolys-oneshot",
     "fastapi>=0.115",
@@ -24,7 +24,7 @@ dependencies = [
 ]
 
 [tool.uv.sources]
-onolys-engine-core = { workspace = true }
+onolys-engine = { workspace = true }
 onolys-miti = { workspace = true }
 onolys-oneshot = { workspace = true }
 
@@ -52,7 +52,38 @@ line-length = 100
 target-version = "py312"
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "UP", "B"]
+select = ["E", "F", "I", "UP", "B", "TID251"]
+
+# Engine boundary: the API imports only `from onolys_engine import ...`, never a submodule.
+# ruff matches exact names (no wildcard), so every engine submodule is listed. Add a name here when
+# the engine gains a submodule. Inside engine/ there is no such rule (it has its own ruff config).
+[tool.ruff.lint.flake8-tidy-imports.banned-api]
+"onolys_engine.config".msg = "Import from `onolys_engine` only; submodules are engine-private."
+"onolys_engine.constants".msg = "Import from `onolys_engine` only; submodules are engine-private."
+"onolys_engine.context".msg = "Import from `onolys_engine` only; submodules are engine-private."
+"onolys_engine.engine".msg = "Import from `onolys_engine` only; submodules are engine-private."
+"onolys_engine.errors".msg = "Import from `onolys_engine` only; submodules are engine-private."
+"onolys_engine.evaluations".msg = "Import from `onolys_engine` only; submodules are engine-private."
+"onolys_engine.llm".msg = "Import from `onolys_engine` only; submodules are engine-private."
+"onolys_engine.logging".msg = "Import from `onolys_engine` only; submodules are engine-private."
+"onolys_engine.models".msg = "Import from `onolys_engine` only; submodules are engine-private."
+"onolys_engine.presets".msg = "Import from `onolys_engine` only; submodules are engine-private."
+"onolys_engine.protocols".msg = "Import from `onolys_engine` only; submodules are engine-private."
+"onolys_engine.public".msg = "Import from `onolys_engine` only; submodules are engine-private."
+"onolys_engine.registry".msg = "Import from `onolys_engine` only; submodules are engine-private."
+"onolys_engine.retry".msg = "Import from `onolys_engine` only; submodules are engine-private."
+"onolys_engine.runner".msg = "Import from `onolys_engine` only; submodules are engine-private."
+"onolys_engine.safe_log".msg = "Import from `onolys_engine` only; submodules are engine-private."
+"onolys_engine.scoring".msg = "Import from `onolys_engine` only; submodules are engine-private."
+"onolys_engine.spans".msg = "Import from `onolys_engine` only; submodules are engine-private."
+"onolys_engine.state".msg = "Import from `onolys_engine` only; submodules are engine-private."
+"onolys_engine.steps".msg = "Import from `onolys_engine` only; submodules are engine-private."
+"onolys_engine.text_limits".msg = "Import from `onolys_engine` only; submodules are engine-private."
+"onolys_engine.tools".msg = "Import from `onolys_engine` only; submodules are engine-private."
+"onolys_engine.transcript".msg = "Import from `onolys_engine` only; submodules are engine-private."
+"onolys_engine.transcript_v1".msg = "Import from `onolys_engine` only; submodules are engine-private."
+"onolys_engine.validate".msg = "Import from `onolys_engine` only; submodules are engine-private."
+"onolys_engine.validated_run".msg = "Import from `onolys_engine` only; submodules are engine-private."
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -78,4 +109,4 @@ source_paths = ["src/onolys_api/"]
 do_not_mutate = ["src/onolys_api/adapters/*", "src/onolys_api/voice/*", "src/onolys_api/routes/*", "src/onolys_api/static/*", "src/onolys_api/app.py", "src/onolys_api/audio.py", "src/onolys_api/config.py", "src/onolys_api/contracts.py", "src/onolys_api/docs.py", "src/onolys_api/errors.py", "src/onolys_api/factory.py", "src/onolys_api/logs.py", "src/onolys_api/openapi.py", "src/onolys_api/presets.py", "src/onolys_api/rating/*", "src/onolys_api/transcription/*", "src/onolys_api/storage/*", "src/onolys_api/schemas/*", "src/onolys_api/repo/fake.py", "src/onolys_api/repo/large.py", "src/onolys_api/repo/models.py", "src/onolys_api/repo/base.py", "src/onolys_api/jobs/[!r]*.py", "src/onolys_api/jobs/r[!u]*.py"]
 pytest_add_cli_args = ["-m", "not live and not flaky", "-p", "no:cacheprovider"]
 pytest_add_cli_args_test_selection = ["tests/test_auth.py", "tests/test_limits.py", "tests/test_run.py", "tests/test_caps.py", "tests/test_first_run.py"]
-also_copy = ["../docs", "../config", "../engines", "openapi.json", "tests"]
+also_copy = ["../docs", "../config", "../engine", "../engines", "openapi.json", "tests"]

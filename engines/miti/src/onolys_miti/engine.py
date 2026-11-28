@@ -3,9 +3,9 @@
 import json
 from importlib.metadata import version
 
-from onolys_engine_core.context import RunContext
-from onolys_engine_core.engine import Engine, EngineResult, ProgressCb, RunInfo, RunUsage
-from onolys_engine_core.transcript_v1 import TranscriptV1
+from onolys_engine.context import RunContext
+from onolys_engine.engine import Engine, EngineResult, ProgressCb, RunInfo, RunUsage
+from onolys_engine.transcript_v1 import TranscriptV1
 
 from onolys_miti.report import schema_path
 from onolys_miti.run import run_miti

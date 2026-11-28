@@ -8,7 +8,7 @@ from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from typing import Protocol
 
-from onolys_engine_core.errors import OnolysError
+from onolys_engine import OnolysError
 from pydantic import BaseModel
 
 INPUT_SAMPLE_RATE = 16_000  # PCM16 mono, little-endian, from the client

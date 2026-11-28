@@ -9,7 +9,7 @@ every run fails `AllRunsFailed` is raised (a coding failure never yields a repor
 failure degrades to a warning. `ctx.deadline` (absolute `time.monotonic()` value) bounds the whole
 call: past it a `TimeoutError` is raised.
 
-Logging goes through `onolys_engine_core.safe_log` with ids, counts and statuses only, never text.
+Logging goes through `onolys_engine.safe_log` with ids, counts and statuses only, never text.
 """
 
 import asyncio
@@ -20,12 +20,12 @@ import statistics
 from collections.abc import Awaitable, Callable
 from typing import Any, Literal
 
-from onolys_engine_core.context import RunContext
-from onolys_engine_core.errors import InputError, OnolysError, RunAborted
-from onolys_engine_core.llm import LLMClient, LLMError, MetricsCollector
-from onolys_engine_core.llm.routes import Route, resolve_preset
-from onolys_engine_core.safe_log import log_event
-from onolys_engine_core.transcript import Transcript
+from onolys_engine.context import RunContext
+from onolys_engine.errors import InputError, OnolysError, RunAborted
+from onolys_engine.llm import LLMClient, LLMError, MetricsCollector
+from onolys_engine.llm.routes import Route, resolve_preset
+from onolys_engine.safe_log import log_event
+from onolys_engine.transcript import Transcript
 from pydantic import BaseModel
 
 from onolys_miti import code_pass as code_mod

@@ -3,7 +3,7 @@ import subprocess
 import sys
 
 import pytest
-from onolys_engine_core.transcript import Transcript, Turn
+from onolys_engine.transcript import Transcript, Turn
 from pydantic import ValidationError
 
 from onolys_miti.run_info import SttRun
@@ -53,7 +53,7 @@ def test_miti_imports_no_sibling_packages():
     """Boundary: importing the package pulls in no sibling Onolys packages."""
     forbidden = ("api", "admin", "eval")
     code = (
-        "import sys, onolys_miti, onolys_engine_core.llm;"
+        "import sys, onolys_miti, onolys_engine.llm;"
         f"bad=[m for m in sys.modules if m.split('.')[0] in {forbidden!r}];"
         "print(bad)"
     )

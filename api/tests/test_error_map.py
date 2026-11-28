@@ -15,20 +15,18 @@ from google.api_core.exceptions import (
     TooManyRequests,
     Unauthenticated,
 )
-from onolys_engine_core.errors import (
+from onolys_engine import (
     ConfigError,
+    FixtureMiss,
     InputError,
     InvalidCodedSpan,
-    OnolysError,
-    SessionTooLong,
-)
-from onolys_engine_core.llm.errors import (
-    FixtureMiss,
     LLMBadOutput,
     LLMError,
     LLMRateLimited,
     LLMTimeout,
     LLMUnavailable,
+    OnolysError,
+    SessionTooLong,
 )
 from onolys_miti.code_pass import CodePassFailed
 from onolys_miti.globals_pass import GlobalsPassFailed
@@ -237,8 +235,7 @@ async def test_stubbed_engine_failure_maps_through_run_and_status_body(env, capl
 
 
 def test_output_invalid_has_a_fixed_public_message_and_never_retries():
-    from onolys_engine_core.validate import ValidationIssue
-    from onolys_engine_core.validated_run import OutputInvalid
+    from onolys_engine import OutputInvalid, ValidationIssue
 
     from onolys_api.adapters.error_map import PUBLIC_MESSAGES, to_public
     from onolys_api.errors import ERROR_CODES
@@ -302,8 +299,7 @@ KIND_CASES = [
 
 
 def _output_invalid():
-    from onolys_engine_core.validate import ValidationIssue
-    from onolys_engine_core.validated_run import OutputInvalid
+    from onolys_engine import OutputInvalid, ValidationIssue
 
     return OutputInvalid(1, [ValidationIssue(path="/f", message="bad")])
 

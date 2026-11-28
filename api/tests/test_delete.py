@@ -11,7 +11,7 @@ import logging
 import pytest
 import test_run
 from log_helpers import render
-from onolys_engine_core.transcript import Transcript, Turn
+from onolys_engine import Transcript, Turn
 from test_run import BigEval, Env, swap_eval
 
 from onolys_api.adapters import FakeEvaluation

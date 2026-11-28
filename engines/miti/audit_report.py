@@ -11,9 +11,9 @@ import json
 from pathlib import Path
 
 import yaml
-from onolys_engine_core.llm import LLMRequest
-from onolys_engine_core.llm.fixture_client import FixtureClient
-from onolys_engine_core.transcript import Transcript
+from onolys_engine.llm import LLMRequest
+from onolys_engine.llm.fixture_client import FixtureClient
+from onolys_engine.transcript import Transcript
 
 from onolys_miti import code_pass, globals_pass, miti
 from onolys_miti.coverage import coverage as word_coverage

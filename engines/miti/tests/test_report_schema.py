@@ -7,7 +7,7 @@ import json
 import pytest
 from _report_fixtures import REPORT_NAMES, SCHEMA_PATH, load
 from jsonschema import Draft202012Validator
-from onolys_engine_core.transcript import Transcript
+from onolys_engine.transcript import Transcript
 from pydantic import ValidationError
 
 from onolys_miti.report import (

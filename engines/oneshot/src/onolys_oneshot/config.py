@@ -11,7 +11,7 @@ from typing import Any, Literal
 import yaml
 from jsonschema.exceptions import SchemaError
 from jsonschema.validators import validator_for
-from onolys_engine_core.errors import ConfigError, InputError
+from onolys_engine.errors import ConfigError, InputError
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 _FILES = ("config.yaml", "instructions.md", "schema.json")

@@ -5,7 +5,7 @@ from datetime import timedelta
 from types import SimpleNamespace as NS
 
 import pytest
-from onolys_engine_core.errors import InputError
+from onolys_engine import InputError
 
 from onolys_api.transcription import AudioRef, SttParams, Word
 from onolys_api.transcription.base import transcribe, words_to_turns

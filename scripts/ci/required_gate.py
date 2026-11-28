@@ -8,7 +8,7 @@ import os
 import urllib.request
 
 JOB_FLAGS = {
-    "engine-core": "core", "oneshot": "oneshot", "miti": "miti",
+    "engine": "engine",
     "api-unit": "api", "api-emulator": "api", "api-coverage": "api",
     "api-flaky": "api", "api-rules": "api", "api-image": "api",
     "web": "web", "web-e2e": "web", "infra": "infra",

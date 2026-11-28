@@ -4,16 +4,16 @@ MITI 4.2.1 coding engine: a session transcript in, the no-rating report out
 (`run_miti(ctx, transcript, speaker_map, params, progress_cb)`). The MITI definition, prompts,
 fixtures and report schema ship inside the package under `src/onolys_miti/data/`.
 
-`MitiEngine` implements the shared `onolys_engine_core.engine.Engine` interface and
+`MitiEngine` implements the shared `onolys_engine.engine.Engine` interface and
 wraps `run_miti` without changing its signature or report. `MitiEngine.output_schema()`
 returns the report schema; `run()` returns an `EngineResult` with the report, artifacts
 and usage. The API registers it explicitly and selects it through the engine registry.
 
-Shared infrastructure lives in the `onolys-engine-core` workspace package. Import
-`RunContext` from `onolys_engine_core.context`, `Turn` from
-`onolys_engine_core.transcript`, `TranscriptV1` from
-`onolys_engine_core.transcript_v1`, and LLM clients/routes from
-`onolys_engine_core.llm`. Retry helpers and `log_event` also live in core. MITI keeps its coding passes, schemas,
+Shared infrastructure lives in the `onolys-engine` workspace package. Import
+`RunContext` from `onolys_engine.context`, `Turn` from
+`onolys_engine.transcript`, `TranscriptV1` from
+`onolys_engine.transcript_v1`, and LLM clients/routes from
+`onolys_engine.llm`. Retry helpers and `log_event` also live in core. MITI keeps its coding passes, schemas,
 prompts, fixture data and code-point spans. STT, voice, scenarios, rating-card validation and
 upload parsers live in `api/` (`onolys_api.transcription`, `.voice`, `.rating`).
 
@@ -25,10 +25,10 @@ From the repo root (`uv sync --frozen --package onolys-miti` first):
 uv run --no-sync --package onolys-miti pytest engines/miti -m "not live"
 uv run --no-sync --package onolys-miti ruff check engines/miti
 
-# Shared infrastructure and its AST import-boundary guard have their own CI job.
-uv sync --frozen --package onolys-engine-core
-LITELLM_LOCAL_MODEL_COST_MAP=True uv run --no-sync --package onolys-engine-core pytest engines/core -m "not live"
-uv run --no-sync --package onolys-engine-core ruff check engines/core
+# Shared infrastructure (engine/) has its own tests; the `engine` CI job runs them with miti and one-shot.
+uv sync --frozen --package onolys-engine
+LITELLM_LOCAL_MODEL_COST_MAP=True uv run --no-sync --package onolys-engine pytest engine -m "not live"
+uv run --no-sync --package onolys-engine ruff check engine
 ```
 
 `-m "not live"` is also the default (`addopts`), so a plain `pytest engines/miti` is offline too.

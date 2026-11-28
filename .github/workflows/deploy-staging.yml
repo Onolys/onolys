@@ -76,7 +76,7 @@ jobs:
           LLM_PROVIDER: ${{ vars.LLM_PROVIDER }}
           LLM_MODEL: ${{ vars.LLM_MODEL }}
           LLM_EFFORT: ${{ vars.LLM_EFFORT }}
-        run: uv run --frozen --package onolys-engine-core python scripts/ci/validate_staging_llm.py
+        run: uv run --frozen --package onolys-engine python scripts/ci/validate_staging_llm.py
       - name: Validate isolated staging release target before cloud authentication
         env:
           STAGING_GCP_PROJECT: ${{ vars.STAGING_GCP_PROJECT }}

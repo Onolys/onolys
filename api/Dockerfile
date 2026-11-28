@@ -11,13 +11,13 @@ RUN pip install --no-cache-dir uv==0.13.4
 WORKDIR /src
 # Dependency layer: manifests only (every workspace member's pyproject must exist for uv).
 COPY pyproject.toml uv.lock ./
-COPY engines/core/pyproject.toml engines/core/pyproject.toml
+COPY engine/pyproject.toml engine/pyproject.toml
 COPY engines/oneshot/pyproject.toml engines/oneshot/pyproject.toml
 COPY engines/miti/pyproject.toml engines/miti/pyproject.toml
 COPY api/pyproject.toml api/pyproject.toml
 RUN uv sync --frozen --no-dev --package onolys-api --no-install-workspace
-# Source: core, oneshot, miti (schemas and fixtures in its wheel), and api (vendored Redoc in static/).
-COPY engines/core engines/core
+# Source: engine, oneshot, miti (schemas and fixtures in its wheel), and api (vendored Redoc in static/).
+COPY engine engine
 COPY engines/miti engines/miti
 COPY engines/oneshot engines/oneshot
 COPY api/src api/src

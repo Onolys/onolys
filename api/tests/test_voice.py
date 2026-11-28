@@ -10,8 +10,7 @@ from types import SimpleNamespace as NS
 import pytest
 import yaml
 from log_helpers import Capture
-from onolys_engine_core.errors import ConfigError, InputError
-from onolys_engine_core.safe_log import log
+from onolys_engine import ConfigError, InputError
 
 from onolys_api.voice import (
     AudioOut,
@@ -33,6 +32,7 @@ from onolys_api.voice.select import (
     validate_voice_config,
 )
 
+log = logging.getLogger("miti")
 pytestmark = pytest.mark.unit
 
 REPO = pathlib.Path(__file__).resolve().parents[2]

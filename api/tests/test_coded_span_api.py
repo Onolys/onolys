@@ -4,7 +4,7 @@ import json
 
 import pytest
 from cards import valid_card
-from onolys_engine_core.errors import InvalidCodedSpan, SessionTooLong
+from onolys_engine import InvalidCodedSpan, SessionTooLong
 from test_transcript_upload import AUTH, Queue, create, document, upload
 
 from onolys_api.adapters.error_map import to_public
@@ -139,12 +139,12 @@ def test_engine_span_errors_keep_public_code(exc, code):
     ({"start_ms": 3_599_999, "end_ms": 3_600_000}, 6001, 3_600_000, True),
 ])
 def test_shared_portion_limits_match_core_and_lean(span, words, duration, allowed, monkeypatch):
-    from onolys_engine_core.spans import (
+    from onolys_engine import (
+        Transcript,
         apply_coded_span,
         selected_duration_ms,
         validate_portion_limits,
     )
-    from onolys_engine_core.transcript import Transcript
     from onolys_miti import miti
     from onolys_miti.prepare import prepare
     from onolys_miti.result import CodedSpan

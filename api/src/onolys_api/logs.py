@@ -23,8 +23,7 @@ from types import MappingProxyType
 from typing import Any
 
 from google.cloud.logging_v2.handlers import StructuredLogHandler
-from onolys_engine_core.llm.quiet import LITELLM_LOGGERS, quiet_litellm
-from onolys_engine_core.safe_log import LOG_FIELDS, PROVIDER_ERROR_MAX_CHARS
+from onolys_engine import LITELLM_LOGGERS, LOG_FIELDS, PROVIDER_ERROR_MAX_CHARS, quiet_litellm
 from starlette.requests import HTTPConnection
 
 from onolys_api.config import Settings

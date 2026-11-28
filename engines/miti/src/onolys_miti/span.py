@@ -6,8 +6,8 @@ import random
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
-from onolys_engine_core.errors import InvalidCodedSpan
-from onolys_engine_core.transcript import Transcript
+from onolys_engine.errors import InvalidCodedSpan
+from onolys_engine.transcript import Transcript
 from pydantic import ValidationError
 
 from onolys_miti.result import CodedSpan, ResultWarning

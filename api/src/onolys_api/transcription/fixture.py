@@ -2,7 +2,7 @@
 
 import hashlib
 
-from onolys_engine_core.errors import InputError
+from onolys_engine import InputError
 
 from onolys_api.transcription import AudioRef, SttParams, SttRun, Word
 from onolys_api.transcription.base import BaseSttAdapter

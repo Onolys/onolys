@@ -4,7 +4,7 @@ the session's stored `stt.provider`. Unit tests use `FixtureStt`; no live STT.""
 import json
 
 import pytest
-from onolys_engine_core.errors import ConfigError
+from onolys_engine import ConfigError
 from test_transcribe import SID, UID, Env, words
 
 from onolys_api.adapters.error_map import INTERNAL, to_public

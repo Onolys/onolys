@@ -4,10 +4,10 @@ import os
 from pathlib import Path
 
 import pytest
-from onolys_engine_core.context import RunContext
-from onolys_engine_core.llm import LLMConfig, MetricsCollector, make_client
-from onolys_engine_core.transcript_v1 import TranscriptV1
-from onolys_engine_core.validate import validate_output
+from onolys_engine.context import RunContext
+from onolys_engine.llm import LLMConfig, MetricsCollector, make_client
+from onolys_engine.transcript_v1 import TranscriptV1
+from onolys_engine.validate import validate_output
 
 from onolys_oneshot import OneshotEngine
 

@@ -1,10 +1,7 @@
 """Production engine selection stays in API settings and explicit registration."""
 
 import pytest
-from onolys_engine_core.context import RunContext
-from onolys_engine_core.engine import EngineResult, RunInfo
-from onolys_engine_core.errors import InputError
-from onolys_engine_core.registry import EngineRegistry
+from onolys_engine import EngineRegistry, EngineResult, InputError, RunContext, RunInfo
 from onolys_miti import MitiEngine
 
 from onolys_api.adapters import build_adapters

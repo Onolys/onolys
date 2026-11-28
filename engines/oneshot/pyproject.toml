@@ -3,7 +3,7 @@ name = "onolys-oneshot"
 version = "0.1.0"
 description = "Config-driven one-call structured-output engine"
 requires-python = ">=3.12,<3.13"
-dependencies = ["onolys-engine-core"]
+dependencies = ["onolys-engine"]
 
 [dependency-groups]
 dev = ["pytest>=8", "pytest-asyncio>=0.23", "ruff>=0.6"]
@@ -16,7 +16,7 @@ build-backend = "hatchling.build"
 packages = ["src/onolys_oneshot"]
 
 [tool.uv.sources]
-onolys-engine-core = { workspace = true }
+onolys-engine = { workspace = true }
 
 [tool.ruff]
 line-length = 100

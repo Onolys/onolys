@@ -17,11 +17,11 @@ import json
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
-from onolys_engine_core.errors import OnolysError
-from onolys_engine_core.llm import LLMBadOutput, LLMClient, LLMRequest, MetricsCollector
-from onolys_engine_core.llm.warm import warm_then_fanout
-from onolys_engine_core.text_limits import SENTENCE_MAX, clip
-from onolys_engine_core.transcript import Turn
+from onolys_engine.errors import OnolysError
+from onolys_engine.llm import LLMBadOutput, LLMClient, LLMRequest, MetricsCollector
+from onolys_engine.llm.warm import warm_then_fanout
+from onolys_engine.text_limits import SENTENCE_MAX, clip
+from onolys_engine.transcript import Turn
 from pydantic import BaseModel, create_model
 
 from onolys_miti import miti

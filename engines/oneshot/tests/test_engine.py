@@ -5,14 +5,14 @@ import json
 
 import pytest
 import yaml
-from onolys_engine_core.context import RunContext
-from onolys_engine_core.errors import ConfigError, InputError
-from onolys_engine_core.llm.errors import LLMBadOutput
-from onolys_engine_core.llm.fixture_client import RecordingClient
-from onolys_engine_core.llm.routes import Route
-from onolys_engine_core.llm.types import LLMResult, MetricsCollector, Usage
-from onolys_engine_core.registry import EngineRegistry
-from onolys_engine_core.transcript_v1 import TranscriptV1
+from onolys_engine.context import RunContext
+from onolys_engine.errors import ConfigError, InputError
+from onolys_engine.llm.errors import LLMBadOutput
+from onolys_engine.llm.fixture_client import RecordingClient
+from onolys_engine.llm.routes import Route
+from onolys_engine.llm.types import LLMResult, MetricsCollector, Usage
+from onolys_engine.registry import EngineRegistry
+from onolys_engine.transcript_v1 import TranscriptV1
 
 from onolys_oneshot import OneshotEngine
 from onolys_oneshot.config import load_config
@@ -204,7 +204,7 @@ async def test_unknown_route_fails_before_call(configs, transcript):
     ({"start_ms": 0, "end_ms": 1_500_001}, 2, 1_500_001),
 ])
 async def test_oversized_coded_portion_rejected_before_model_call(configs, span, words, duration):
-    from onolys_engine_core.errors import SessionTooLong
+    from onolys_engine.errors import SessionTooLong
 
     tx = TranscriptV1.model_validate({"turns": [
         {"id": "a", "speaker": "A", "text": "word " * words,
@@ -244,7 +244,7 @@ async def test_coded_portion_boundaries_and_narrow_long_sources_pass(configs, sp
 
 
 async def test_untimed_whole_session_uses_header_duration(configs, transcript):
-    from onolys_engine_core.errors import SessionTooLong
+    from onolys_engine.errors import SessionTooLong
 
     transcript.duration_ms = 1_500_001
     llm = FakeLLM()

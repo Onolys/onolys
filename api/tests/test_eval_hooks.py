@@ -4,7 +4,7 @@ never reaches a public session view or the OpenAPI document."""
 import json
 
 import pytest
-from onolys_engine_core.transcript import Transcript, Turn
+from onolys_engine import Transcript, Turn
 
 from onolys_api import openapi
 from onolys_api.errors import ApiError

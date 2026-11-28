@@ -4,11 +4,16 @@ import os
 from collections.abc import Mapping
 from typing import Any
 
-from onolys_engine_core.engine import Engine
-from onolys_engine_core.errors import InputError
-from onolys_engine_core.llm.models import EFFORTS, load_models, models_path
-from onolys_engine_core.llm.routes import combo_routes, resolve_preset
-from onolys_engine_core.registry import EngineRegistry
+from onolys_engine import (
+    EFFORTS,
+    Engine,
+    EngineRegistry,
+    InputError,
+    combo_routes,
+    load_models,
+    models_path,
+    resolve_preset,
+)
 from onolys_miti import MitiEngine
 from onolys_oneshot import OneshotEngine, config_names
 

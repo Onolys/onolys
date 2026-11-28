@@ -78,7 +78,7 @@ def test_audit_all_fixtures_have_no_persuasion_double_or_count_drift():
 def test_generated_six_thousand_word_portion_has_disjoint_batches():
     import json
 
-    from onolys_engine_core.transcript import Transcript, Turn
+    from onolys_engine.transcript import Transcript, Turn
 
     from onolys_miti.prepare import prepare
 

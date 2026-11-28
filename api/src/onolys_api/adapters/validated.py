@@ -6,8 +6,7 @@ custom test fakes) are bridged here, keeping one validation per API evaluation.
 The main API serves MITI only, so the bridge uses MitiEngine's public schema.
 """
 
-from onolys_engine_core.engine import Engine, EngineResult, RunInfo
-from onolys_engine_core.validated_run import run_validated
+from onolys_engine import Engine, EngineResult, RunInfo, run_validated
 from onolys_miti import MitiEngine
 
 from .base import Evaluation, EvaluationOutput

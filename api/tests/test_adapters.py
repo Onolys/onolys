@@ -2,8 +2,7 @@ import json
 
 import pytest
 from jsonschema import Draft202012Validator
-from onolys_engine_core.context import RunContext
-from onolys_engine_core.transcript import Transcript
+from onolys_engine import RunContext, Transcript
 from onolys_miti import miti
 
 from onolys_api.adapters import AdapterError, FakeEvaluation, FakeStt, build_adapters

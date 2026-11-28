@@ -4,7 +4,7 @@ never card text. Drafts (`final=False`) check shape and limits; final adds a non
 from typing import Any
 
 from jsonschema import Draft202012Validator
-from onolys_engine_core.safe_log import log_event
+from onolys_engine import log_event
 from onolys_miti import miti
 from onolys_miti.report import Issue
 

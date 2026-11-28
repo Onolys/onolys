@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from jsonschema import Draft202012Validator
-from onolys_engine_core.errors import ConfigError
+from onolys_engine import ConfigError
 
 from onolys_api.voice.select import allowed_voices
 

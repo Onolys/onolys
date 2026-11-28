@@ -31,12 +31,12 @@ from unittest.mock import patch
 
 import litellm
 import yaml
-from onolys_engine_core.context import RunContext
-from onolys_engine_core.llm import LiteLLMClient, LLMConfig, MetricsCollector
-from onolys_engine_core.llm.fixture_client import FixtureClient
-from onolys_engine_core.llm.routes import load_registry, resolve_preset
-from onolys_engine_core.text_limits import QUOTE_MAX
-from onolys_engine_core.transcript import Transcript
+from onolys_engine.context import RunContext
+from onolys_engine.llm import LiteLLMClient, LLMConfig, MetricsCollector
+from onolys_engine.llm.fixture_client import FixtureClient
+from onolys_engine.llm.routes import load_registry, resolve_preset
+from onolys_engine.text_limits import QUOTE_MAX
+from onolys_engine.transcript import Transcript
 
 from onolys_miti import miti
 from onolys_miti.run import run_miti

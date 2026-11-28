@@ -7,7 +7,7 @@ from collections.abc import Callable
 from datetime import datetime
 from typing import Any, Literal
 
-from onolys_engine_core.transcript import Transcript
+from onolys_engine import Transcript
 
 from onolys_api import logs
 from onolys_api.progress import entry_fields

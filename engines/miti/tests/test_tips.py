@@ -6,9 +6,9 @@ import re
 
 import pytest
 from _report_fixtures import load
-from onolys_engine_core.llm import LLMBadOutput, StubClient
-from onolys_engine_core.llm.fixture_client import FailingClient
-from onolys_engine_core.transcript import Transcript
+from onolys_engine.llm import LLMBadOutput, StubClient
+from onolys_engine.llm.fixture_client import FailingClient
+from onolys_engine.transcript import Transcript
 
 from onolys_miti.result import MitiResult
 from onolys_miti.tips import LIMITS_MESSAGE, ROUTE, generate_tips

@@ -2,10 +2,10 @@ import asyncio
 
 import pytest
 from conftest import install_demo
-from onolys_engine_core.llm import LLMBadOutput, LLMRequest, LLMResult, MetricsCollector
-from onolys_engine_core.llm.litellm_client import LiteLLMClient
-from onolys_engine_core.llm.routes import Route
-from onolys_engine_core.transcript import Turn
+from onolys_engine.llm import LLMBadOutput, LLMRequest, LLMResult, MetricsCollector
+from onolys_engine.llm.litellm_client import LiteLLMClient
+from onolys_engine.llm.routes import Route
+from onolys_engine.transcript import Turn
 from pydantic import ValidationError
 
 from onolys_miti.code_pass import (

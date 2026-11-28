@@ -10,7 +10,7 @@ from importlib import resources
 from pathlib import Path
 
 import yaml
-from onolys_engine_core.errors import ConfigError, InputError
+from onolys_engine import ConfigError, InputError
 
 from onolys_api.voice import VoiceParams
 

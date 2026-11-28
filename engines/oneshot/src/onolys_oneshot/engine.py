@@ -3,8 +3,8 @@
 from copy import deepcopy
 from importlib.metadata import version
 
-from onolys_engine_core.context import RunContext
-from onolys_engine_core.engine import (
+from onolys_engine.context import RunContext
+from onolys_engine.engine import (
     Engine,
     EngineResult,
     EngineVariant,
@@ -12,19 +12,19 @@ from onolys_engine_core.engine import (
     RunInfo,
     RunUsage,
 )
-from onolys_engine_core.errors import ConfigError, InputError
-from onolys_engine_core.llm.errors import LLMBadOutput
-from onolys_engine_core.llm.fixture_client import RecordingClient
-from onolys_engine_core.llm.routes import Route, resolve_preset
-from onolys_engine_core.llm.types import LLMRequest
-from onolys_engine_core.text_limits import (
+from onolys_engine.errors import ConfigError, InputError
+from onolys_engine.llm.errors import LLMBadOutput
+from onolys_engine.llm.fixture_client import RecordingClient
+from onolys_engine.llm.routes import Route, resolve_preset
+from onolys_engine.llm.types import LLMRequest
+from onolys_engine.text_limits import (
     ALTERNATIVE_MAX,
     MAX_TIPS_PROPOSED,
     OBSERVATION_MAX,
     SENTENCE_MAX,
     clip,
 )
-from onolys_engine_core.transcript_v1 import TranscriptV1
+from onolys_engine.transcript_v1 import TranscriptV1
 
 from .config import config_names, load_config
 from .render import render_prompt

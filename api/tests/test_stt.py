@@ -3,8 +3,7 @@ from importlib.resources import files
 
 import pytest
 from jsonschema import Draft202012Validator
-from onolys_engine_core.config import locate_config_file
-from onolys_engine_core.errors import InputError
+from onolys_engine import InputError, locate_config_file
 
 from onolys_api.transcription import AudioRef, SttParams, Word
 from onolys_api.transcription.base import transcribe, words_to_turns
@@ -142,13 +141,12 @@ async def test_stt_output_validates_generated_transcript_v1_schema():
     transcript = completion.transcript
     assert completion.run.provider == "fixture"
     assert "stt_run" not in transcript.model_dump()
-    path = files("onolys_engine_core").joinpath("data/transcript.v1.schema.json")
+    path = files("onolys_engine").joinpath("data/transcript.v1.schema.json")
     Draft202012Validator(json.loads(path.read_text())).validate(transcript.model_dump())
 
 
 def test_engine_uses_shared_v1_model_and_default_language():
-    from onolys_engine_core.transcript import Transcript, Turn
-    from onolys_engine_core.transcript_v1 import TranscriptTurnV1, TranscriptV1
+    from onolys_engine import Transcript, TranscriptTurnV1, TranscriptV1, Turn
 
     assert Transcript is TranscriptV1
     assert Turn is TranscriptTurnV1

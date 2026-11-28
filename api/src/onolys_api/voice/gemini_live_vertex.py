@@ -12,7 +12,7 @@ from collections.abc import AsyncIterator, Callable
 from datetime import timedelta
 from typing import Any
 
-from onolys_engine_core.safe_log import log_event
+from onolys_engine import log_event
 
 from onolys_api.voice import (
     AudioOut,

@@ -10,7 +10,7 @@ from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 from fastapi.security import HTTPAuthorizationCredentials
 from google.auth import _helpers, crypt, jwt
-from onolys_engine_core.errors import ConfigError
+from onolys_engine import ConfigError
 
 from onolys_api.app import create_app
 from onolys_api.auth import deps

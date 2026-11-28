@@ -5,7 +5,7 @@
 import uuid
 
 import pytest
-from onolys_engine_core.transcript import Transcript, Turn
+from onolys_engine import Transcript, Turn
 from pydantic import ValidationError
 from test_first_run import new_session, repo, user_counters  # noqa: F401
 

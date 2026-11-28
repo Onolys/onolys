@@ -4,7 +4,7 @@ route and the eval session import. Prod behaviour is unchanged; the route keeps
 
 from uuid import uuid4
 
-from onolys_engine_core.transcript import Transcript
+from onolys_engine import Transcript
 
 from onolys_api.jobs.machine import transition_plan
 from onolys_api.jobs.transcribe import TRANSCRIPT_ID

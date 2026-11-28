@@ -5,11 +5,7 @@ import time
 from pathlib import Path
 
 import pytest
-from onolys_engine_core.context import RunContext
-from onolys_engine_core.engine import EngineResult, RunInfo
-from onolys_engine_core.errors import InputError
-from onolys_engine_core.registry import EngineRegistry
-from onolys_engine_core.transcript import Transcript
+from onolys_engine import EngineRegistry, EngineResult, InputError, RunContext, RunInfo, Transcript
 
 from onolys_api.adapters import real
 from onolys_api.adapters.base import EvaluationOutput
@@ -109,7 +105,7 @@ async def test_unknown_preset_is_input_error_and_no_engine_call():
 
 
 async def test_default_llm_factory_builds_litellm_client_from_routes():
-    from onolys_engine_core.llm import LiteLLMClient
+    from onolys_engine import LiteLLMClient
 
     engine = Engine()
     ev = RealEvaluation(registry=registry_for(engine))
@@ -152,7 +148,7 @@ async def test_session_stt_provenance_passes_outside_transcript():
 
 
 async def test_invalid_engine_output_is_not_retried_or_exposed():
-    from onolys_engine_core.validated_run import OutputInvalid
+    from onolys_engine import OutputInvalid
 
     class Invalid(Engine):
         async def run(self, *args, **kw):
@@ -168,7 +164,7 @@ async def test_invalid_engine_output_is_not_retried_or_exposed():
 
 
 async def test_bad_provider_output_propagates_unchanged_without_wrapper_retry():
-    from onolys_engine_core.llm import LLMBadOutput
+    from onolys_engine import LLMBadOutput
 
     failure = LLMBadOutput("PHI-provider-output")
 
@@ -190,7 +186,7 @@ async def test_validation_metadata_is_preserved_outside_report():
 
 
 async def test_failed_engine_keeps_completed_call_metrics_on_caller_context():
-    from onolys_engine_core.llm import LLMRequest, Usage
+    from onolys_engine import LLMRequest, Usage
 
     class Fails(Engine):
         async def run(self, c, *args):

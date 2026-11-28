@@ -4,11 +4,7 @@ import time
 from pathlib import Path
 
 import pytest
-from onolys_engine_core.context import RunContext
-from onolys_engine_core.engine import EngineResult, RunInfo
-from onolys_engine_core.errors import InputError
-from onolys_engine_core.registry import EngineRegistry
-from onolys_engine_core.transcript import Transcript
+from onolys_engine import EngineRegistry, EngineResult, InputError, RunContext, RunInfo, Transcript
 from onolys_oneshot.engine import OneshotEngine
 
 from onolys_api.adapters.real import RealEvaluation

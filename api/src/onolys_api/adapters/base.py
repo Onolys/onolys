@@ -8,9 +8,7 @@ per-stage adapters. Fake implementations live in `fake.py`; real ones live in `r
 from dataclasses import dataclass
 from typing import Any, Protocol
 
-from onolys_engine_core.context import RunContext
-from onolys_engine_core.errors import OnolysError
-from onolys_engine_core.transcript import Transcript
+from onolys_engine import OnolysError, RunContext, Transcript
 from onolys_miti.run import ProgressCb, Stage, StageStatus
 from pydantic import BaseModel, Field
 

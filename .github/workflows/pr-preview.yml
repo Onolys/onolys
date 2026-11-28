@@ -38,6 +38,7 @@ on:
     paths:
       - api/**
       - web/**
+      - engine/**
       - engines/**
       - infra/**
       - config/**

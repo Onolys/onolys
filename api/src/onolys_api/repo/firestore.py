@@ -22,7 +22,7 @@ from google.api_core.exceptions import Aborted, AlreadyExists, InvalidArgument
 from google.api_core.exceptions import NotFound as GoogleNotFound
 from google.cloud import firestore
 from google.cloud.firestore_v1 import FieldFilter, Increment
-from onolys_engine_core.transcript import Transcript
+from onolys_engine import Transcript
 
 from onolys_api import logs
 from onolys_api.config import Settings

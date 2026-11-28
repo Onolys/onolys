@@ -49,7 +49,7 @@ def test_regen_is_byte_and_mtime_noop_on_current_goldens():
 
 def test_regen_rejects_changed_volley_ids_before_writing(tmp_path):
     regen = load("regen_goldens", ROOT / "tools" / "regen_goldens.py")
-    from onolys_engine_core.llm.fixture_client import FixtureClient
+    from onolys_engine.llm.fixture_client import FixtureClient
 
     requests = regen.golden_requests()
     response = {"volleys": [{"volley_id": "v999", "utterances": []}]}
@@ -65,7 +65,7 @@ def test_regen_rejects_changed_volley_ids_before_writing(tmp_path):
 def test_regen_rekeys_changed_requests_preserving_stub_bytes(tmp_path, monkeypatch):
     from dataclasses import replace
 
-    from onolys_engine_core.llm.fixture_client import FixtureClient
+    from onolys_engine.llm.fixture_client import FixtureClient
 
     regen = load("regen_goldens", ROOT / "tools" / "regen_goldens.py")
     for attr in ("GOLD", "GOLDEN_TEST", "DATA_TEST", "PACK_TEST", "REPORT"):
@@ -94,7 +94,7 @@ def test_regen_rekeys_changed_requests_preserving_stub_bytes(tmp_path, monkeypat
 def test_coverage_counts_union_including_uncoded_spans():
     from types import SimpleNamespace
 
-    from onolys_engine_core.transcript import Turn
+    from onolys_engine.transcript import Turn
 
     from onolys_miti.coverage import coverage
     from onolys_miti.prepare import Prepared, Volley

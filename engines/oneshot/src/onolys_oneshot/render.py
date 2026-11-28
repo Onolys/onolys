@@ -4,14 +4,14 @@ import json
 from dataclasses import dataclass
 from typing import Literal
 
-from onolys_engine_core.errors import InputError
-from onolys_engine_core.spans import (
+from onolys_engine.errors import InputError
+from onolys_engine.spans import (
     apply_coded_span,
     selected_duration_ms,
     validate_portion_limits,
 )
-from onolys_engine_core.transcript_v1 import TranscriptV1
-from onolys_engine_core.validate import validate_output
+from onolys_engine.transcript_v1 import TranscriptV1
+from onolys_engine.validate import validate_output
 
 from .config import OneshotConfig
 

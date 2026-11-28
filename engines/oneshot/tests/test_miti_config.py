@@ -8,12 +8,12 @@ from pathlib import Path
 
 import pytest
 import yaml
-from onolys_engine_core.errors import InputError
-from onolys_engine_core.llm.litellm_client import LiteLLMClient
-from onolys_engine_core.llm.routes import load_registry, resolve_preset
-from onolys_engine_core.llm.types import LLMRequest
-from onolys_engine_core.transcript_v1 import TranscriptV1
-from onolys_engine_core.validate import validate_output
+from onolys_engine.errors import InputError
+from onolys_engine.llm.litellm_client import LiteLLMClient
+from onolys_engine.llm.routes import load_registry, resolve_preset
+from onolys_engine.llm.types import LLMRequest
+from onolys_engine.transcript_v1 import TranscriptV1
+from onolys_engine.validate import validate_output
 
 from onolys_oneshot.config import load_config
 from onolys_oneshot.render import render_prompt
@@ -76,7 +76,7 @@ def test_model_params_exclude_known_engine_controls_but_reject_unknowns():
             render_prompt(config, transcript, params)
 
 
-@pytest.mark.parametrize("path", [ROOT / "config/staging/routes.yaml", ROOT / "engines/core/src/onolys_engine_core/llm/routes.default.yaml"])
+@pytest.mark.parametrize("path", [ROOT / "config/staging/routes.yaml", ROOT / "engine/src/onolys_engine/llm/routes.default.yaml"])
 @pytest.mark.parametrize("preset", ["default", "claude"])
 def test_oneshot_route_has_explicit_output_cap(path, preset):
     registry = load_registry(path, env={})

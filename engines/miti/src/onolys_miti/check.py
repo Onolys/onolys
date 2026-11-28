@@ -21,9 +21,9 @@ from dataclasses import dataclass, field
 from typing import Any
 
 import yaml
-from onolys_engine_core.context import RunContext
-from onolys_engine_core.llm import LLMConfig, MetricsCollector, make_client
-from onolys_engine_core.transcript import Transcript
+from onolys_engine.context import RunContext
+from onolys_engine.llm import LLMConfig, MetricsCollector, make_client
+from onolys_engine.transcript import Transcript
 
 from onolys_miti import miti
 from onolys_miti import tips as tips_mod

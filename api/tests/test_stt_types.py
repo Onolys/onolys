@@ -3,7 +3,7 @@
 from pathlib import Path
 
 import pytest
-from onolys_engine_core.transcript import Transcript
+from onolys_engine import Transcript
 from pydantic import ValidationError
 
 from onolys_api.transcription import AudioRef, SttAdapter, SttCompletion, SttParams, SttRun, Word

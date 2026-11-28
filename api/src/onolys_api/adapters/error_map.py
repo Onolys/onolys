@@ -15,9 +15,7 @@ on every attempt (the file is not at fault).
 from typing import Literal, NamedTuple
 
 from google.api_core import exceptions as gexc
-from onolys_engine_core.errors import InputError, OnolysError
-from onolys_engine_core.llm.errors import LLMError, is_transient
-from onolys_engine_core.validated_run import OutputInvalid
+from onolys_engine import InputError, LLMError, OnolysError, OutputInvalid, is_transient
 
 from onolys_api.transcription.google_chirp import SttProviderError
 
@@ -166,5 +164,5 @@ def _llm_cause(exc: BaseException) -> LLMError | None:
 
 
 def _classify_llm(exc: LLMError) -> Failure:
-    # status/type rules live in engine-core `is_transient`; FixtureMiss/LLMBadOutput are permanent
+    # status/type rules live in the engine `is_transient`; FixtureMiss/LLMBadOutput are permanent
     return _failure(UPSTREAM if is_transient(exc) else INTERNAL)

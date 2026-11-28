@@ -2,7 +2,7 @@
 
 import re
 
-from onolys_engine_core.transcript_v1 import TranscriptV1
+from onolys_engine import TranscriptV1
 
 from onolys_api.transcription.transcript_input import (
     TranscriptInputError,

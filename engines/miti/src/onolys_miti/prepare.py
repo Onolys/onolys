@@ -6,9 +6,9 @@ import unicodedata
 from dataclasses import dataclass, field
 from typing import Any
 
-from onolys_engine_core.errors import InputError, InvalidCodedSpan, SessionTooLong
-from onolys_engine_core.spans import selected_duration_ms, validate_portion_limits
-from onolys_engine_core.transcript import Transcript, Turn
+from onolys_engine.errors import InputError, InvalidCodedSpan, SessionTooLong
+from onolys_engine.spans import selected_duration_ms, validate_portion_limits
+from onolys_engine.transcript import Transcript, Turn
 
 from onolys_miti import miti, rules
 from onolys_miti.result import CodedSpan, ResultWarning

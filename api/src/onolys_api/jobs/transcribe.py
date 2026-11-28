@@ -24,7 +24,7 @@ from collections import Counter
 from collections.abc import Callable
 from typing import Any
 
-from onolys_engine_core.transcript import Transcript
+from onolys_engine import Transcript
 
 from onolys_api import logs
 from onolys_api.adapters.base import AdapterError, Stt

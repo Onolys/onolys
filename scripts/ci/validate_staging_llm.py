@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Validate app repository LLM vars with the selected runtime loader before deployment.
 
-Run with `uv run --frozen --package onolys-engine-core python scripts/ci/validate_staging_llm.py`.
+Run with `uv run --frozen --package onolys-engine python scripts/ci/validate_staging_llm.py`.
 Only these three vars are CI inputs. Staging uses checked-out config; production runs
 the trusted validator inside the promoted image against its own config/runtime.
 """
@@ -10,8 +10,8 @@ import os
 import sys
 from pathlib import Path
 
-from onolys_engine_core.errors import ConfigError
-from onolys_engine_core.llm import routes
+from onolys_engine.errors import ConfigError
+from onolys_engine.llm import routes
 
 ROOT = Path(__file__).resolve().parent.parent.parent
 

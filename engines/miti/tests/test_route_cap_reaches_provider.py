@@ -7,9 +7,9 @@ from types import SimpleNamespace
 
 import pytest
 from conftest import install_demo
-from onolys_engine_core.llm import LiteLLMClient, LLMConfig, LLMError
-from onolys_engine_core.llm.routes import load_registry, resolve_preset
-from onolys_engine_core.transcript import Turn
+from onolys_engine.llm import LiteLLMClient, LLMConfig, LLMError
+from onolys_engine.llm.routes import load_registry, resolve_preset
+from onolys_engine.transcript import Turn
 
 from onolys_miti.code_pass import code_pass
 from onolys_miti.globals_pass import globals_pass

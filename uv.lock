@@ -5,7 +5,7 @@ requires-python = "==3.12.*"
 [manifest]
 members = [
     "onolys-api",
-    "onolys-engine-core",
+    "onolys-engine",
     "onolys-miti",
     "onolys-oneshot",
 ]
@@ -1219,7 +1219,7 @@ dependencies = [
     { name = "google-cloud-tasks" },
     { name = "google-genai" },
     { name = "jsonschema" },
-    { name = "onolys-engine-core" },
+    { name = "onolys-engine" },
     { name = "onolys-miti" },
     { name = "onolys-oneshot" },
     { name = "pydantic" },
@@ -1252,7 +1252,7 @@ requires-dist = [
     { name = "google-cloud-tasks", specifier = ">=2.16" },
     { name = "google-genai", specifier = ">=1.0" },
     { name = "jsonschema", specifier = ">=4" },
-    { name = "onolys-engine-core", editable = "engines/core" },
+    { name = "onolys-engine", editable = "engine" },
     { name = "onolys-miti", editable = "engines/miti" },
     { name = "onolys-oneshot", editable = "engines/oneshot" },
     { name = "pydantic", specifier = ">=2.7" },
@@ -1274,14 +1274,16 @@ dev = [
 ]
 
 [[package]]
-name = "onolys-engine-core"
+name = "onolys-engine"
 version = "0.1.0"
-source = { editable = "engines/core" }
+source = { editable = "engine" }
 dependencies = [
+    { name = "jinja2" },
     { name = "jsonschema" },
     { name = "litellm" },
     { name = "pydantic" },
     { name = "pyyaml" },
+    { name = "rapidfuzz" },
 ]
 
 [package.dev-dependencies]
@@ -1294,10 +1296,12 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "jinja2", specifier = ">=3.1" },
     { name = "jsonschema", specifier = ">=4.22" },
     { name = "litellm", specifier = ">=1.50" },
     { name = "pydantic", specifier = ">=2.7" },
     { name = "pyyaml", specifier = ">=6" },
+    { name = "rapidfuzz", specifier = ">=3.14.6" },
 ]
 
 [package.metadata.requires-dev]
@@ -1315,7 +1319,7 @@ source = { editable = "engines/miti" }
 dependencies = [
     { name = "jsonschema" },
     { name = "litellm" },
-    { name = "onolys-engine-core" },
+    { name = "onolys-engine" },
     { name = "pydantic" },
     { name = "pyyaml" },
     { name = "rapidfuzz" },
@@ -1333,7 +1337,7 @@ dev = [
 requires-dist = [
     { name = "jsonschema", specifier = ">=4.22" },
     { name = "litellm", specifier = ">=1.50" },
-    { name = "onolys-engine-core", editable = "engines/core" },
+    { name = "onolys-engine", editable = "engine" },
     { name = "pydantic", specifier = ">=2.7" },
     { name = "pyyaml", specifier = ">=6" },
     { name = "rapidfuzz", specifier = ">=3.14.6" },
@@ -1352,7 +1356,7 @@ name = "onolys-oneshot"
 version = "0.1.0"
 source = { editable = "engines/oneshot" }
 dependencies = [
-    { name = "onolys-engine-core" },
+    { name = "onolys-engine" },
 ]
 
 [package.dev-dependencies]
@@ -1363,7 +1367,7 @@ dev = [
 ]
 
 [package.metadata]
-requires-dist = [{ name = "onolys-engine-core", editable = "engines/core" }]
+requires-dist = [{ name = "onolys-engine", editable = "engine" }]
 
 [package.metadata.requires-dev]
 dev = [

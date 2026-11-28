@@ -19,7 +19,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Literal
 
-from onolys_engine_core.errors import RunAborted
+from onolys_engine import RunAborted
 
 from onolys_api import logs
 from onolys_api.adapters.error_map import kind_for_code, to_public

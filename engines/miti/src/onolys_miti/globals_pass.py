@@ -17,9 +17,9 @@ import json
 from dataclasses import dataclass, field
 from typing import Any
 
-from onolys_engine_core.errors import OnolysError
-from onolys_engine_core.llm import LLMBadOutput, LLMClient, LLMRequest, MetricsCollector
-from onolys_engine_core.text_limits import MAX_CITED, SENTENCE_MAX, clip
+from onolys_engine.errors import OnolysError
+from onolys_engine.llm import LLMBadOutput, LLMClient, LLMRequest, MetricsCollector
+from onolys_engine.text_limits import MAX_CITED, SENTENCE_MAX, clip
 from pydantic import BaseModel, create_model
 
 from onolys_miti import miti

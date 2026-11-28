@@ -8,7 +8,7 @@ import json
 from datetime import UTC, datetime, timedelta
 from typing import Any, Literal
 
-from onolys_engine_core.transcript import Transcript
+from onolys_engine import Transcript
 from onolys_miti.result import CodedSpan
 from pydantic import BaseModel, Field, field_validator
 

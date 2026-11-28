@@ -3,7 +3,7 @@ from pathlib import Path
 
 import httpx
 import pytest
-from onolys_engine_core.errors import ConfigError
+from onolys_engine import ConfigError
 
 from onolys_api.config import Settings
 

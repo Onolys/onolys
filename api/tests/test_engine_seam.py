@@ -37,8 +37,7 @@ async def test_real_adapter_forwards_seed_and_caller_span():
 
     from types import SimpleNamespace
 
-    from onolys_engine_core.context import RunContext
-    from onolys_engine_core.registry import EngineRegistry
+    from onolys_engine import EngineRegistry, RunContext
 
     registry = EngineRegistry()
     registry.register(SimpleNamespace(name="miti", run=run_engine, accepts_feedback=False))

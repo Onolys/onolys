@@ -13,7 +13,7 @@ import sys
 from types import SimpleNamespace
 
 import pytest
-from onolys_engine_core.safe_log import LOG_FIELDS, log_event
+from onolys_engine import LOG_FIELDS, log_event
 
 from onolys_api import logs
 
@@ -164,7 +164,7 @@ def test_explicit_field_beats_context(cfg):
 
 def test_litellm_warning_kept_debug_dropped_no_duplicates(cfg):
     import litellm
-    from onolys_engine_core.llm.quiet import quiet_litellm
+    from onolys_engine import quiet_litellm
 
     quiet_litellm()  # what the lazy-import sites do right after `import litellm`
     for name in ("LiteLLM", "LiteLLM Router", "LiteLLM Proxy", "litellm"):
@@ -183,7 +183,7 @@ def test_third_party_info_dropped_warning_kept_first_party_info_kept(cfg):
     for name in ("google_genai.models", "httpx", "httpcore", "somelib"):
         logging.getLogger(name).info("i-%s", name)
         logging.getLogger(name).warning("w-%s", name)
-    for name in ("onolys_api.routes.x", "onolys_engine_core.llm", "onolys_miti.run", "miti.x"):
+    for name in ("onolys_api.routes.x", "onolys_engine.llm", "onolys_miti.run", "miti.x"):
         logging.getLogger(name).info("first-%s", name)
     msgs = [d["message"] for d in cfg()]
     assert not [m for m in msgs if m.startswith("i-")]

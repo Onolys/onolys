@@ -6,13 +6,13 @@ from datetime import UTC, datetime
 from importlib.metadata import version
 
 import pytest
-from onolys_engine_core.context import RunContext
-from onolys_engine_core.engine import Engine, EngineResult, RunInfo, RunUsage
-from onolys_engine_core.llm import LLMBadOutput, MetricsCollector
-from onolys_engine_core.llm.types import LLMRequest, Usage
-from onolys_engine_core.registry import EngineRegistry
-from onolys_engine_core.transcript_v1 import TranscriptV1
-from onolys_engine_core.validate import validate_output
+from onolys_engine.context import RunContext
+from onolys_engine.engine import Engine, EngineResult, RunInfo, RunUsage
+from onolys_engine.llm import LLMBadOutput, MetricsCollector
+from onolys_engine.llm.types import LLMRequest, Usage
+from onolys_engine.registry import EngineRegistry
+from onolys_engine.transcript_v1 import TranscriptV1
+from onolys_engine.validate import validate_output
 from pydantic import BaseModel
 from test_golden import FIX, GOLDEN_REPORT, PARAMS, SMAP, GoldenClient, masked
 
@@ -131,7 +131,7 @@ async def test_current_run_cost_sums_prices_and_preserves_unknown(prices, expect
 
 
 async def test_shared_validated_run_accepts_lean_golden_report():
-    from onolys_engine_core.validated_run import run_validated
+    from onolys_engine.validated_run import run_validated
 
     result = await run_validated(
         MitiEngine(), context(), transcript(), {**PARAMS, "speaker_map": SMAP}

@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from onolys_engine_core.transcript import Transcript
+from onolys_engine.transcript import Transcript
 
 from onolys_miti import miti
 from onolys_miti.hashes import evaluation_prompt_hashes

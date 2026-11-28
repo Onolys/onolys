@@ -143,14 +143,14 @@ def test_retryable_error_after_cancel_answers_cancelled_not_pending(blobs):
 
 
 def test_cancelled_is_an_engine_abort():
-    from onolys_engine_core.errors import RunAborted
+    from onolys_engine import RunAborted
 
     assert issubclass(Cancelled, RunAborted)
 
 
 async def test_cancel_stops_a_run_whose_engine_swallows_callback_errors(env):  # noqa: F811
     """Mirrors miti `_emit`: it catches every Exception from the callback except RunAborted."""
-    from onolys_engine_core.errors import RunAborted
+    from onolys_engine import RunAborted
 
     from onolys_api.adapters import Adapters, FakeEvaluation
 
