@@ -1,6 +1,6 @@
 import { Settings, SquareArrowOutUpRight } from 'lucide-react';
 import { useId, type ReactNode } from 'react';
-import { Button } from '@onolys/ui';
+import { Button } from '@onolys/common';
 import type { RunDetail } from '../api';
 import { canCancelRun } from '../CancelRunDialog';
 import { CompareLink, EvalLink, type CompareNavigate } from '../compare/CompareLink';

@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { Button } from '@onolys/ui';
+import { Button } from '@onolys/common';
 import type { RunDetail } from '../api';
 import { PartialBadge, ProviderSkipNotices } from '../RunStatus';
 import { RunConfigDialog } from '../RunConfigDialog';

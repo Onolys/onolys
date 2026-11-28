@@ -1,11 +1,7 @@
 @layer theme, base, components, utilities;
 @import "tailwindcss";
-@import "@onolys/ui/theme.css";
-@source "../node_modules/@onolys/ui/dist";
-/* Shared prod sources (sign-in pages, class constants, ThemeToggle): Tailwind must scan them or their utilities are never generated here. */
-@source "../../../web/src/auth";
-@source "../../../web/src/components";
-@source "../../../web/src/routes/ThemeToggle.tsx";
+@import "@onolys/common/theme.css";
+@source "../node_modules/@onolys/common/dist";
 @layer components {
 .eval-main h1 { font-size: 1.5rem; font-weight: 600; line-height: var(--leading-heading); margin: 0 0 1rem; }
 .eval-main h2 { font-size: 1.25rem; font-weight: 600; margin: 1.5rem 0 .75rem; }

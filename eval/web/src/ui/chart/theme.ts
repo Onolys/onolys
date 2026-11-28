@@ -1,4 +1,4 @@
-/** Chart theme: light mode only. Values mirror the mockup tokens (mockups/lib.js) and `@onolys/ui`. */
+/** Chart theme: light mode only. Values mirror the mockup tokens (mockups/lib.js) and `@onolys/common`. */
 export const CHART_COLORS = {
   ink: "#171c1c",
   muted: "#536160",

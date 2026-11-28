@@ -1,10 +1,9 @@
 import { useEffect, useId, useRef, useState } from 'react';
-import { Badge, Button, Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, Input } from '@onolys/ui';
+import { Badge, Button, Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, Input, SlowStartNotice } from '@onolys/common';
 import { ApiError } from './api';
 import { CancelRunDialog, CancellationNote, canCancelRun, isActiveRun, mergeRunStatus } from './CancelRunDialog';
 import { PartialBadge, ProviderSkipNotices, partialStatusText } from './RunStatus';
 import { RunConfigDialog, savedConfiguration } from './RunConfigDialog';
-import { SlowStartNotice } from '@prod-components/SlowStart';
 import './runs.css';
 import { CompareLink, type CompareNavigate } from './compare/CompareLink';
 import { RunHeader } from './run/RunHeader';

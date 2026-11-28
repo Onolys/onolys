@@ -1,4 +1,4 @@
-import { Badge } from '@onolys/ui';
+import { Badge } from '@onolys/common';
 import type { RunSummary } from './api';
 
 export type PartialRunStatus = Pick<RunSummary, 'status' | 'cancelled_at' | 'done_units' | 'total_units' | 'skipped_units'>;

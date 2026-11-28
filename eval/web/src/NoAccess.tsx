@@ -1,5 +1,5 @@
-import { Button } from '@onolys/ui';
-import { useSignOut } from '@prod-auth/useSignOut';
+import { Button } from '@onolys/common';
+import { useSignOut } from '@onolys/common/auth';
 
 /** Signed in, but the eval backend answered 403. Sign-out stays available. */
 export function NoAccess({ code }: { code?: string }) {

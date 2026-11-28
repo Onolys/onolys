@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Button } from '@onolys/ui';
+import { Button } from '@onolys/common';
 import { Loader2 } from 'lucide-react';
 import type { EvalApi, RunDetail, RunUnit } from '../api';
 import { JsonDialog } from '../JsonViewer';

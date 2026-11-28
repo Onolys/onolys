@@ -1,5 +1,5 @@
 import { useRef, useState, type RefObject } from 'react';
-import { Button, Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@onolys/ui';
+import { Button, Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@onolys/common';
 import { ApiError, type EvalApi, type RunDetail, type RunSummary } from './api';
 
 export const isActiveRun = (run: Pick<RunSummary, 'status'>) => run.status === 'queued' || run.status === 'running';

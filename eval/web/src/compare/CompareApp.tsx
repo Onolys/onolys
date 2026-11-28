@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Button } from '@onolys/ui';
+import { Button } from '@onolys/common';
 import { ApiError, type EvalApi, type RunDetail } from '../api';
 import type { CompareAnalysis, CompareDeepDive, CompareLines, CompareOverview } from './compareApi';
 import { EvalLink, type CompareNavigate } from './CompareLink';
