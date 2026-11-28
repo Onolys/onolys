@@ -1,7 +1,7 @@
 import { Component, useEffect, useRef, type ReactNode } from 'react';
-import { Button } from '@onolys/ui';
+import { Button } from '@onolys/common';
 
-/** Same panel as prod's ErrorRecovery (web/src/components/ErrorRecovery.tsx): fixed copy, never the exception message. */
+/** Same panel as the shared ErrorRecovery in @onolys/common: fixed copy, never the exception message. */
 export function ErrorPage({ notFound = false, reload = () => window.location.reload() }: { notFound?: boolean; reload?: () => void }) {
   const heading = useRef<HTMLHeadingElement>(null);
   useEffect(() => { heading.current?.focus(); }, []);

@@ -15,7 +15,7 @@
     "dev": "vite"
   },
   "dependencies": {
-    "@onolys/ui": "git+https://github.com/Onolys/onolys-ui.git#v0.3.0",
+    "@onolys/common": "git+https://github.com/Onolys/onolys-common.git#v0.4.0",
     "@tailwindcss/vite": "4.3.5",
     "@tanstack/react-query": "5.108.1",
     "@visx/axis": "4.0.0",

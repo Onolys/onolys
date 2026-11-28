@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
-import { Button, Checkbox, Input, Select, Textarea } from '@onolys/ui';
-import { SlowStartNotice } from '@prod-components/SlowStart';
+import { Button, Checkbox, Input, Select, SlowStartNotice, Textarea } from '@onolys/common';
 import { sourceLine, originalMedia } from './sourceMedia';
 import type { CodedSpan, Dataset, DatasetMetadata, EvalApi, Mode, Options, RunInput, RunSummary, Selection, Upload, UploadInput } from './api';
 import { MAX_UNITS, countText, effortsFor, modelMap, planCount, skippedText, tiersFor, tooLargeMessage, validateSelection, comboKey } from './matrix';
@@ -15,7 +14,7 @@ const toggle = (values: string[], value: string) => values.includes(value) ? val
 
 const DEFAULT_SESSIONS = 50;
 
-/** Labelled @onolys/ui checkbox (as in prod forms). */
+/** Labelled @onolys/common checkbox (as in prod forms). */
 function Check({ checked, disabled, onChange, children }: { checked: boolean; disabled?: boolean; onChange: (checked: boolean) => void; children: React.ReactNode }) {
   return <label><Checkbox className="size-5 min-h-5 min-w-5" checked={checked} disabled={disabled} onCheckedChange={value => onChange(value === true)} />{children}</label>;
 }

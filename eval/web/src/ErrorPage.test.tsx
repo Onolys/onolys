@@ -3,7 +3,7 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
 import { ErrorBoundary, ErrorPage } from './ErrorPage';
 import { Root } from './Root';
-import { createFakeAuthService } from '@prod-auth/fakeService';
+import { signedInService } from './testAuth';
 
 afterEach(() => { cleanup(); window.history.replaceState({}, '', '/'); });
 
@@ -43,8 +43,7 @@ it('error boundary recovers when its reset key changes', () => {
 });
 it('tabs and brand link to the app root from an unknown path', async () => {
   window.history.replaceState({}, '', '/foo');
-  const service = createFakeAuthService();
-  service.signedInAs('a@example.com', { verified: true });
+  const service = await signedInService();
   render(<Root service={service} baseFetch={vi.fn()} />);
   await screen.findByRole('heading', { name: 'Page not found' });
   expect(screen.getByRole('link', { name: 'New Run' }).getAttribute('href')).toBe('/');
@@ -53,8 +52,7 @@ it('tabs and brand link to the app root from an unknown path', async () => {
 });
 it.each(['/nope', '/a/b'])('unknown path %s renders the 404 page inside the shell when signed in', async path => {
   window.history.replaceState({}, '', path);
-  const service = createFakeAuthService();
-  service.signedInAs('a@example.com', { verified: true });
+  const service = await signedInService();
   const baseFetch = vi.fn();
   render(<Root service={service} baseFetch={baseFetch} />);
   expect(await screen.findByRole('heading', { name: 'Page not found' })).toBeTruthy();

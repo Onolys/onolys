@@ -1,4 +1,4 @@
-/* Shared primitives. Light mode only; tokens mirror @onolys/ui + mockups/lib.js. */
+/* Shared primitives. Light mode only; tokens mirror @onolys/common + mockups/lib.js. */
 :root {
   --ui-good: #175b42; --ui-good-bg: #e5f4ec; --ui-good-border: #bfe3cf;
   --ui-fair: #71500a; --ui-fair-bg: #fff3d6; --ui-fair-border: #f0d9a0;

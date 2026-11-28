@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Button } from '@onolys/ui';
+import { Button } from '@onolys/common';
 import { Chip, type ChipTone } from '../../ui/Chip';
 import { ComboTag } from '../../ui/ComboTag';
 import { DataTable, type Column } from '../../ui/DataTable';

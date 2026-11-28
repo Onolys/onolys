@@ -35,7 +35,7 @@ it("detects overflow-x auto/scroll in css and inline styles (seeded fixtures)", 
   expect(findHorizontalScroll(".a { overflow: hidden; } .b { overflow-y: scroll; }")).toHaveLength(0);
 });
 
-it("no css or inline style under eval/web/src scrolls horizontally", () => {
+it("no css or inline style under the eval UI sources scrolls horizontally", () => {
   const hits = walk(src)
     .filter((f) => /\.(css|tsx?)$/.test(f) && !f.endsWith("overflowGuard.test.ts"))
     .flatMap((f) => findHorizontalScroll(readFileSync(f, "utf8")).map((h) => `${f.slice(src.length + 1)}:${h}`));

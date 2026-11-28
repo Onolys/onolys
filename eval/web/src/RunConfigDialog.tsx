@@ -1,6 +1,6 @@
 import { Copy } from 'lucide-react';
 import { useState, type RefObject } from 'react';
-import { Button } from '@onolys/ui';
+import { Button } from '@onolys/common';
 import type { RunSummary } from './api';
 import { prettyJson } from './JsonViewer';
 import { AppDialog } from './ui/AppDialog';

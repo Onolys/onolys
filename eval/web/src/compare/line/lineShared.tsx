@@ -1,4 +1,4 @@
-import { Button } from '@onolys/ui';
+import { Button } from '@onolys/common';
 import { ApiError } from '../../api';
 import type { Snippet } from '../compareApi';
 

@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react';
-import { Button, Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@onolys/ui';
+import { Button, Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@onolys/common';
 
 /** Pretty-printed text for any JSON value (JSON.stringify returns undefined for functions and undefined). */
 export const prettyJson = (value: unknown) => JSON.stringify(value, null, 2) ?? '';

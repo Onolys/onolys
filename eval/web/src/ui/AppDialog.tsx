@@ -1,5 +1,5 @@
 import type { ReactNode, RefObject } from "react";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@onolys/ui";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@onolys/common";
 import "./ui.css";
 
 /** Modal wrapper (design rule 2: configs and details open in a popup). The trigger is the caller's verb-labelled button; pass `returnFocus` when the trigger is not a Radix trigger. */

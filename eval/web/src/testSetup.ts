@@ -1,4 +1,4 @@
-// Radix (via @onolys/ui Checkbox) needs ResizeObserver, which jsdom lacks (same stand-in as web/src/test/setup.ts).
+// Radix (via @onolys/common Checkbox) needs ResizeObserver, which jsdom lacks (same stand-in the shared package's tests use).
 if (typeof globalThis.ResizeObserver === 'undefined') {
   globalThis.ResizeObserver = class ResizeObserver {
     observe() {}
