@@ -5,7 +5,7 @@ date: 2026-11-28
 ---
 # PRD: 04 Engine package
 
-Repo/branch: Onolys/onolys / `refactor/revamp` · Depends on: 01-legacy-purge (hard); 03-eval-split (assumed landed first, see D13) · Owns: `engine/` (new), `engines/` (deleted), root `pyproject.toml` + `uv.lock`, `api/Dockerfile` + `api/pyproject.toml` (deps/COPY lines), engine jobs and path lists in `.github/workflows/{ci,pr-preview}.yml`, `scripts/gen_miti_schema.py` (moves to `engine/tools/`), `web/package.json` (`gen:api` schema path, one token), one-line engine links in `README.md` + `AGENTS.md`, `config/*/routes.yaml` (route-name entries only), api import lines and the physical move of STT/voice/rating/scenarios/log setup into `api/`. Does not own: behaviour changes (05), api folder design (06), `infra/`/`config/` relocation (08), `docs/`.
+Repo/branch: Onolys/onolys / `refactor/revamp` · Depends on: 01-legacy-purge (hard); 03-eval-split (hard: lands first and creates tag `engine-v0`, see D13) · Owns: `engine/` (new), `engines/` (deleted), root `pyproject.toml` + `uv.lock`, `api/Dockerfile` + `api/pyproject.toml` (deps/COPY lines), engine jobs and path lists in `.github/workflows/{ci,pr-preview}.yml`, `scripts/gen_miti_schema.py` (moves to `engine/tools/`), `web/package.json` (`gen:api` schema path, one token), one-line engine links in `README.md` + `AGENTS.md`, `config/*/routes.yaml` (route-name entries only), api import lines and the physical move of STT/voice/rating/scenarios/log setup into `api/`. Does not own: behaviour changes (05), api folder design (06), `infra/`/`config/` relocation (08), `docs/`.
 
 ## TL;DR
 Three packages (`core`, `miti`, `oneshot`; 18.7k lines incl. tests) become one: `engine/`, import `onolys_engine`. A pipeline YAML per evaluation folder lists named steps; a runner loops them over one typed `State`. The API imports `Engine` plus one public types/errors surface (today 89 names from three packages). Product code that lives in the engine by accident (STT, voice, rating, scenarios, upload parsers, log setup) is moved into `api/` by `git mv`. This is a structural refactor: the bytes sent to the model and the reports built from the same replies stay identical, proven by a harness captured on the old code first. Behaviour changes are 05's.
@@ -161,7 +161,7 @@ Tests move with their code (73 test files: core 32, miti 38, oneshot 3); tests o
 | D10 | Typed request | `RunRequest` replaces `params` dict | Keep dict | Removes `speaker_map.pop`, `engine`, `route_override` side channels |
 | D11 | Equivalence oracle | Provider payload + masked golden report, captured on old code first | Hash-keyed fixtures only | Hash keys change when tier names go; payload equality is the stronger claim |
 | D12 | `oneshot-split` | 05 creates its folder | 04 adds a stub | Needs new behaviour (parallel calls, third tips call) |
-| D13 | Eval | Assumes 03 landed and eval pins tag `engine-v0` (not in the workspace) | 04 edits eval imports | Eval is the only other caller of core/miti internals (44 names); editing it is 03's job |
+| D13 | Eval | 03 lands first, creates `engine-v0`; eval pins it (not in the workspace); `engine-v1` is cut after 04-06 for 09 | 04 edits eval imports | Eval is the only other caller of core/miti internals (44 names); editing it is 03's job |
 | D14 | `engine/README.md` | Keep, rewritten (layout, tests, public surface) | Delete | It lives under the engine folder, so it is code-adjacent; `docs/` stays frozen |
 | D15 | Evaluation identity | `run_info.engine` = evaluation name (`miti`, `oneshot-single`); `config` field dropped | Keep `oneshot` + `config: miti` | One name, no variants concept |
 
@@ -170,14 +170,15 @@ Tests move with their code (73 test files: core 32, miti 38, oneshot 3); tests o
 - Risk: `parallel` merge differs from today's gather (warning order); mitigation: branch order fixed, covered by `batch_edge` golden.
 - Risk: web/type-gen and CI path filters still name old paths; mitigation: AC grep.
 - Docs under `docs/` keep stale `engines/...` paths until the freeze lifts [DEFERRED].
-- [OPEN] O1: 03 must land first (delete step T2 needs eval out of the workspace); if not, T2-T5 also edit eval imports. Default: 03 first; `engine-v0` tag created by 03.
-- [OPEN] O2: `presets:` in routes carries an `stt:` key the engine should not know. Default: engine passes unknown preset keys through as `PresetInfo.extra`; 06/08 decide whether STT choice moves to its own file.
-- [OPEN] O3: evaluation folders ship fixtures in the wheel (as today's `data/fixtures`), used by api tests. Default: keep; goldens stay in `engine/tests/golden/`.
-- [OPEN] O4: rename of eval-stored ids `oneshot:miti` to `oneshot-single` (D15). Default: rename; 03/09 map old stored runs or drop them.
-- [OPEN] O5: provenance hashes (`run_info.pack.hash`, prompt hash keys) change value and keys. Default: accept; shape and schema unchanged.
-- [OPEN] O6: `oneshot-raw` (model-counted baseline) kept as a separate evaluation? Default: no (05 decides).
+- [RESOLVED: 03 first] O1: 03 lands first (T2 needs eval out of the workspace) and creates `engine-v0`.
+- [RESOLVED: pass through] O2: engine passes unknown preset keys (e.g. `stt:`) through as `PresetInfo.extra`; 06/08 decide whether STT choice moves to its own file.
+- [RESOLVED: ship in wheel] O3: evaluation folders ship fixtures in the wheel (as today's `data/fixtures`), used by api tests; goldens stay in `engine/tests/golden/`.
+- [RESOLVED: rename, drop old runs] O4: rename `oneshot:miti` to `oneshot-single` (D15); old stored runs dropped, no mapping.
+- [RESOLVED: accepted] O5: provenance hashes (`run_info.pack.hash`, prompt hash keys) change value and keys; shape and schema unchanged.
+- [RESOLVED: drop] O6: `oneshot-raw` (model-counted baseline) dropped, not kept as an evaluation.
+- [RESOLVED: approved] Pipeline deviation from the brainstorm sample (no `verify.map_units` step; counting rules/caps in `protocol.yaml`).
 - [RESOLVED: D13/AGENTS] 04 edits the engine link line in `AGENTS.md` and `README.md` only.
-- [RESOLVED: locked] One pipeline YAML per evaluation; no re-export shims; `constants.py` per package; STT/voice/rating/scenarios leave the engine.
+- [RESOLVED: locked] One pipeline YAML per evaluation; no re-export shims; `constants.py` per package; STT/voice/rating/scenarios leave the engine (moved to api as-is in T1, consolidated in 06; accepted).
 - [DEFERRED] Verify/locate as its own step, reflection break, in-order context, numbered units: 05. Api folder consolidation, fakes: 06. `config/` to `infra/<env>/`: 08.
 
 ## Acceptance Criteria

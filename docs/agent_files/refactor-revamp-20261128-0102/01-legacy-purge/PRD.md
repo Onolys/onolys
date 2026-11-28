@@ -45,7 +45,7 @@ Kept on purpose: `api/tests/test_fake_real_parity.py` (06 deletes it with the fa
 | Re-export shim | `api/.../jobs/machine.py:16-24` (`progress` tables); re-point `first_run.py:24`, `run.py` to `onolys_api.progress` | |
 | Back-compat env | `core/llm/routes.py` `MITI_MODEL_CHEAP/MID/STRONG` (+ tests `test_routes.py:142`, `test_llm_override.py`) | set nowhere outside tests [verified: grep → tests + routes.py only]. Keep `LLM_PROVIDER/MODEL/EFFORT` (deploy workflows set them) and `MITI_LLM_RESPONSE_FORMAT` (oneshot golden test; 04 decides) |
 | Stale text | `api/.../errors.py:34` "admin pack routes"; `scripts/README.md:8` retired-admin line; `ci.yml:468` old names in the image-import loop (keep `onolys_eval`) | |
-| Eval old-run readers | `eval/backend/read_runs.py` `is_legacy`, scheduler `tick_seq` legacy docs, `eval/web` `legacy_selection` paths | [OPEN] O2 |
+| Eval old-run readers | `eval/backend/read_runs.py` `is_legacy`, scheduler `tick_seq` legacy docs, `eval/web` `legacy_selection` paths | [RESOLVED: delete] O2; old eval runs/data dropped, no migration |
 Left for others: `adapters/validated.py` "legacy/fake adapter bridge" and `adapters/fake.py` (06); core `Turn = TranscriptTurnV1` aliases (04); eval `REMOVED_ENV` (tied to `test_eval_image.sh`, 03); eval `upload.py` bucket defaults and the ≤25 MiB multipart upload path (03/09).
 
 **R3 Spec/planning ids in code and comments.** Rewrite each to plain words (rule 12), never blind-delete a sentence. Counts [verified: `git grep -nE '\b(PRD|SP[0-9]{1,2}|FX[0-9]+|AC[0-9]+|R[0-9]{1,2}[a-z]?|D[0-9]{1,2}|ADR ?[0-9]+)\b'`, non-md, excluding generated/fixtures; upper bound, a few false hits]:
@@ -95,7 +95,7 @@ Batches, in order, one commit each, and the checks to run:
 |---|---|---|---|---|
 | D1 | Eval legacy in this SP | Purge in place (spec ids, guards); defer eval-only scripts and `REMOVED_ENV` to 03 | Leave all eval to 03 | 03 would copy dead code into the new repo |
 | D2 | Terraform | Zero `.tf` edits | Delete `removed {}` / retired domains now | Each can change real cloud state; needs owner plan/apply |
-| D3 | Replace `changes.sh` | One `changes` job using `dorny/paths-filter` (pinned), same output names, so `required_gate.py` is unchanged | Workflow `paths:` only; keep `changes.sh` minus tests | `paths:` selects workflows not jobs, and a skipped workflow can never feed `required`; third-party actions are allowed [verified: `gh api actions/permissions` → all] |
+| D3 | Replace `changes.sh` | One `changes` job using `dorny/paths-filter` (pinned), same output names, so `required_gate.py` is unchanged. Owner-approved (verified: 3.4k stars, release v4.0.3 Aug 2026, maintained, not archived) | Workflow `paths:` only; keep `changes.sh` minus tests | `paths:` selects workflows not jobs, and a skipped workflow can never feed `required`; third-party actions are allowed [verified: `gh api actions/permissions` → all] |
 | D4 | `gen_miti_schema.py` | Leave for 04 | Move now | Engine schema layout is 04's; `oneshot` test reads it by path [verified: `test_miti_config.py`] |
 | D5 | Mixed test files | Delete only the legacy functions | Delete whole files | Boundary tests protect rule 5 until 04/06 replace them |
 | D6 | Dead operator script | Delete `check-staging.py` | Keep | Targets the retired layout; no caller |
@@ -106,9 +106,9 @@ Batches, in order, one commit each, and the checks to run:
 3. Owner retires old staging resources in project `onolys` (Hosting site `onolys-app-staging`, old Cloud Run/DB) and the retired auth domains. Agents never apply or delete cloud resources.
 
 ## Risks / Open Questions
-- [OPEN] O1: `dorny/paths-filter` vs the guideline "GitHub `paths:` filters". Default D3. Fallback: keep `changes.sh` without its tests.
-- [OPEN] O2: delete eval readers for pre-matrix runs (`is_legacy`, `legacy_selection`, no-`tick_seq` docs)? Old eval history in `onolys-eval` would stop rendering. Default: delete.
-- [OPEN] O3: `web/README.md:8` and `scripts/README.md:8` are outside `docs/`; edit one line each. Default: yes.
+- [RESOLVED: approved D3] O1: `dorny/paths-filter` instead of `paths:` filters.
+- [RESOLVED: delete] O2: delete eval readers for pre-matrix runs (`is_legacy`, `legacy_selection`, no-`tick_seq` docs); old eval run data is dropped anyway.
+- [RESOLVED: yes] O3: edit one line each in `web/README.md:8` and `scripts/README.md:8` (outside `docs/`).
 - [RESOLVED: ruleset `main` lists `required_status_checks: []`, so no check name is enforced; changing job structure cannot block merges] [verified: `gh api rulesets/24909559`].
 - [RESOLVED: dropping `test_deploy_prod.sh` loses pins on deploy-prod invariants (production environment, sha format); accepted by the brainstorm "drop tests of tests"].
 - [DEFERRED: 08] `removed {}`, retired domains, `deployer_staging`, `.firebaserc`, `firebase.json`.

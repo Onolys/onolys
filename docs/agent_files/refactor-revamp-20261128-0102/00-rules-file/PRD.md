@@ -19,7 +19,7 @@ Write the 16 agreed rules as a short, enforceable doc every later sub-project an
 | No `CLAUDE.md`; Claude Code reads that name, not `AGENTS.md` | [verified: `ls CLAUDE.md` -> absent; loader behaviour from Claude Code docs, ~90% confident, not re-run here] |
 
 ## Goals / Non-Goals
-**Goals:** one citable rules doc (stable numbers 1-16); design rules moved with history and references fixed; agents reliably pointed at both; open "(proposed)" items surfaced for the owner.
+**Goals:** one citable rules doc (stable numbers 1-16); design rules moved with history and references fixed; agents reliably pointed at both; owner decisions on rules 2, 7, 10 recorded in the doc.
 **Non-Goals:** applying the rules to code (01, 04-09 do); rewriting design rules' content; ADR fold-in / `architecture.md` (rule 13 is stated but applies after the docs freeze); new lint/CI checks; docs changes beyond the files above.
 
 ## Requirements
@@ -28,12 +28,12 @@ Write the 16 agreed rules as a short, enforceable doc every later sub-project an
 | # | Rule | Example in doc | Reviewer |
 |---|---|---|---|
 | 1 | Organize by feature, not layer | `audio/{validate,ffmpeg,transcode}.py`, not `services/`+`models/`+`utils/` | Block |
-| 2 | Fewer files: one per feature; split past ~300 lines *(proposed)* | `audio/validate.py` stays one file until it passes 300 lines | Flag |
+| 2 | Fewer files: one per feature; split past ~300 lines (guidance only, not a CI gate) | `audio/validate.py` stays one file until it passes ~300 lines | Flag |
 | 3 | Libraries + YAML; runner loops the list, no `if/elif` on kinds | `- use: rules.max_per_volley {with: {n: 1}}` resolved by `@step` name | Block |
 | 4 | One folder per evaluation type; one pipeline YAML per evaluation (no base+overrides) | `evaluations/miti/{pipeline.yaml,prompts/,fewshot/}`; shared protocols in `protocols/` | Block |
 | 5 | Package boundary: engine = `Engine.run` + one public types module; product features (STT, voice, rating, scenarios) live in the product | `from onolys_engine import Engine, EngineError`, never `...steps.prepare` | Block |
 | 6 | Dev tools in `tools/`, not shipped | `engine/tools/` | Flag |
-| 7 | Base + derived; one level; base only after two real variants *(proposed)* | converter base + 1 small class per dataset | Flag |
+| 7 | Use a class for a major concept even if only one variant exists today (future variants likely); plain or static functions otherwise; apply judgment and the code principles, don't over-engineer; max one level of inheritance | converter base + 1 small class per dataset | Flag |
 | 8 | Generic base fn + thin named wrappers; wrappers only fill parameters | `get_doc(path, Model, uid)` -> `get_session(uid, sid)` | Flag |
 | 9 | One implementation per piece of logic; tests/dev inject a stub client at the lowest layer. **Firestore stub = the emulator** (not in-memory); no parallel fake classes | LLM fixture client, local-folder blob client, in-process queue, email recorder; no `repo/fake.py` | Block |
 | 10 | Constants: one `constants.py` per package (engine, api; eval in its own repo); per-environment values in env YAML/env vars; no literals elsewhere | collection names, storage paths, limits, model ids, state names | Block |
@@ -41,10 +41,10 @@ Write the 16 agreed rules as a short, enforceable doc every later sub-project an
 | 12 | Plain-words docstrings: what, and why if not obvious; no spec/planning ids | no `PRD R6`, `SP09`, `FX46` | Flag |
 | 13 | One `architecture.md`, kept current, instead of ADRs. **Not applied in the revamp (docs frozen); doc states this** | n/a | Defer |
 | 14 | Tests mirror source; behaviour-named files; shared helpers in `tests/helpers/` | `src/x/audio/validate.py` -> `tests/audio/test_validate.py`; `web/src/features/x` -> `web/tests/features/x` | Flag |
-| 15 | `@onolys/ui` is the design system: themes, tokens, every reusable component and common shell piece, generic UI helpers; products keep only product-specific parts | header, footer, account menu, theme toggle, sign-in, `format`/`spans` live in the package | Block |
+| 15 | `@onolys/common` is the design system: themes, tokens, every reusable component and common shell piece, generic UI helpers; products keep only product-specific parts | header, footer, account menu, theme toggle, sign-in, `format` live in the package | Block |
 | 16 | No legacy/compat code before launch; git history is the archive | old setups, shims, migration/guard tests, legacy CSS layers deleted, not kept | Block |
 
-"Reviewer" = how a reviewer treats a violation (see D6). Proposed values stay tagged `(proposed)` in the doc until the owner confirms (Risks).
+"Reviewer" = how a reviewer treats a violation (see D6). Rules 2, 7, 10 carry the owner decisions (Risks).
 
 **R2 Move.** `git mv docs/design-rules.md docs/rules/design-rules.md` (content verbatim, history preserved). Update every live reference [verified: `grep -rIn design-rules . --exclude-dir=agent_files` -> exactly 2: `AGENTS.md:28`, `docs/README.md:6`]. `docs/agent_files/*` mentions stay (frozen history; check_links excludes them [verified: `scripts/ci/check_links.py:md_files`]).
 
@@ -62,7 +62,7 @@ CLAUDE.md  (@AGENTS.md)  ->  AGENTS.md  --all code-->  docs/rules/coding-rules.m
                                          --UI code-->   docs/rules/design-rules.md  (moved, unchanged)
 docs/README.md rows -> both files            later PRDs/TASKS cite "rule N"; reviewer checks diff against them
 ```
-coding-rules.md layout: 3-line header (scope, enforcement, "proposed" tag meaning) -> four groups -> rules in the Do/Don't form. Estimated ~120 lines, no code beyond 2-3 snippets (YAML runner, base+wrapper).
+coding-rules.md layout: 3-line header (scope, enforcement, copied-per-repo note) -> four groups -> rules in the Do/Don't form. Estimated ~120 lines, no code beyond 2-3 snippets (YAML runner, base+wrapper).
 
 ## Decisions
 | # | Decision | Choice | Alternatives considered | Why |
@@ -74,18 +74,19 @@ coding-rules.md layout: 3-line header (scope, enforcement, "proposed" tag meanin
 | 5 | CLAUDE.md | Add, content exactly `@AGENTS.md` | Do nothing; duplicate AGENTS.md text; symlink | Claude Code loads CLAUDE.md, not AGENTS.md; import keeps one source (rule 11); other agent tools still read AGENTS.md; symlink breaks on some checkouts |
 | 6 | Enforcement | Reviewer reads rules; rules tagged Block (structural) vs Flag (style/convention) | CI lint guards | Revamp prunes `scripts/ci/`. Note dev-review's feedback bar bans style/naming findings [verified: `dev-common.md` "Feedback bar"], so Flag rules (2, 6-8, 12, 14) only surface if the reviewer is pointed at this doc; PRDs/TASKS must cite them |
 | 7 | docs/rules/README.md | None; docs/README.md rows are the index | Add index README | Owner: no docs changes beyond the rules files; `check_docs_scope` does not require one [verified: globs only existing `docs/*/README.md`] |
-| 8 | Proposed items | Ship with default values, tagged `(proposed)` | Leave out until confirmed | Later sub-projects need a value now; one-line edit to confirm |
+| 8 | Owner-decided items | Rule 2 guidance only (~300, no CI gate); rule 7 per owner wording; TS `constants.ts` adopted | Hard gate; base only after two variants | Owner decision 2026-11-28 |
 | 9 | Non-Python | Rules apply to web/TS too; constants -> `constants.ts`, tests -> `web/tests/` mirroring `src/` | Python-only | Brainstorm says "all code"; 07 already agreed `web/tests/` |
+| 10 | Rules per repo | Rules files are COPIED into each repo (this repo `docs/rules/`; eval repo and onolys-common keep own copies, synced by hand); no cross-repo pull | Pull at CI time; shared repo | Owner dislikes cross-repo copies/deps but accepts this one |
 
 ## Manual steps
-- Owner confirms the three proposals (below); optional: in a fresh Claude Code session, run `/memory` and confirm `AGENTS.md` is loaded through `CLAUDE.md`.
+- Optional: in a fresh Claude Code session, run `/memory` and confirm `AGENTS.md` is loaded through `CLAUDE.md`.
 
 ## Risks / Open Questions
-- [OPEN] Rule 2 split threshold ~300 lines. Default: keep 300 as a guide, not a hard gate.
-- [OPEN] Rule 7 one level of inheritance, base only with two real variants. Default: adopt.
-- [OPEN] No registry release for the engine (eval pins a git tag, as `@onolys/ui` does). Owned by 03, not a coding rule, so not in the doc. Default: git tag dep.
-- [OPEN] Eval moves to its own repo (03) but must follow the same rules. Default: 03 copies `coding-rules.md` into the eval repo at split time and links the source; no cross-repo sync mechanism.
-- [OPEN] TS counterpart of rule 10 (`constants.ts` per app/package). Default: adopt, as in D9.
+- [RESOLVED: guidance only, ~300 lines, not a CI gate] Rule 2 split threshold.
+- [RESOLVED: rewritten] Rule 7: class for a major concept even with one variant today; plain/static functions otherwise; judgment, no over-engineering; max one inheritance level.
+- [RESOLVED: git tag, no registry] Engine shared via git tag (eval pins `engine-v0`, later `engine-v1`; as `@onolys/common` does). Owned by 03, not a coding rule.
+- [RESOLVED: copied per repo] Rules COPIED into each repo (this repo `docs/rules/`; eval repo and onolys-common keep own copies, synced by hand); no cross-repo pull.
+- [RESOLVED: adopted] TS counterpart of rule 10: `constants.ts` per app/package (D9).
 - [RESOLVED: locked] Emulator stubs; `constants.py` per package; voice stays in api; one pipeline YAML per evaluation; English only.
 - [RESOLVED: D5] CLAUDE.md pointer added.
 - [DEFERRED] Rule 13 (`architecture.md`, ADR fold-in): docs frozen in the revamp.
@@ -94,7 +95,7 @@ coding-rules.md layout: 3-line header (scope, enforcement, "proposed" tag meanin
 - Interplay: 01 may prune `check_docs_scope.sh` / `check_links.py`. This SP's README edits satisfy both either way; no ordering constraint.
 
 ## Acceptance Criteria
-- `docs/rules/coding-rules.md` has rules numbered 1-16, each with Do/Don't; rules 2 and 7 tagged `(proposed)`; rule 13 states it is not applied during the revamp; rule 9 names the Firestore emulator; rule 10 says one `constants.py` per package; rule 4 says one pipeline YAML per evaluation.
+- `docs/rules/coding-rules.md` has rules numbered 1-16, each with Do/Don't; rule 2 says ~300 lines is guidance only; rule 7 uses the owner wording; rule 13 states it is not applied during the revamp; rule 9 names the Firestore emulator; rule 10 says one `constants.py` per package; rule 4 says one pipeline YAML per evaluation.
 - `docs/design-rules.md` gone; `git log --follow docs/rules/design-rules.md` shows prior history; content identical apart from the path.
 - `grep -rIn "design-rules" . --exclude-dir=agent_files --exclude-dir=node_modules` returns only `docs/rules/design-rules.md` paths.
 - `AGENTS.md` names both rules files with the all-code / UI split; `CLAUDE.md` is exactly `@AGENTS.md`.
