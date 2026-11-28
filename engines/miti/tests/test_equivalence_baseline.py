@@ -90,6 +90,17 @@ def test_good_practice_baseline_equals_the_existing_golden_report():
     assert want == _normal(masked(GOLDEN_REPORT))
 
 
+def test_poor_practice_baseline_shows_the_global_cap():
+    report = _baseline("poor_practice")["report"]
+    capped = [w for w in report["warnings"] if w.get("code") == "capped"]
+    assert {w["item_id"] for w in capped} == {"cct", "partnership"}
+    onolys = {g["item_id"]: g["onolys"] for g in report["globals"]}
+    assert onolys["cct"]["score"] == onolys["partnership"]["score"] == 4
+    sources = {k: v["source"] for k, v in onolys.items()}
+    assert sources["cct"] == sources["partnership"] == "capped"
+    assert sources["sst"] == sources["empathy"] == "model"
+
+
 def test_three_runs_aggregate_has_a_representative_run():
     agg = _baseline("good_practice_n3")["aggregate"]
     assert agg["representative_run"] in (0, 1, 2)

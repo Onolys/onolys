@@ -60,6 +60,12 @@ CASES = {
 }
 FIXTURES = ("good_practice", "poor_practice", "batch_edge")
 
+# Raw global scores replacing the ones in expected.yaml, per fixture: {fixture: {global id: score}}.
+# expected.yaml scores poor_practice at 1-2, below the poor-practice cap (max 4, which only lowers a
+# raw 5), so no cap would fire. The replies are synthetic model output, not transcript content;
+# the cited poor-practice evidence is unchanged. cct and partnership both cite poor practice.
+RESPONSE_OVERRIDES = {"poor_practice": {"cct": 5, "partnership": 5}}
+
 # test_golden.py's mask: run provenance and environment, not coding output.
 VOLATILE_TOP = ("created_at", "request_id", "run_info")
 VOLATILE_HEADER = ("code_version", "params", "models", "preset", "stt")
@@ -175,7 +181,10 @@ def build_responses(fixture: str) -> dict[str, dict]:
         return out
     out = _code_responses(spec, requests)
     glob = next(r for r in requests if r.tier == "miti_globals")
-    out[glob.call_tag] = _globals_response(spec)
+    response = _globals_response(spec)
+    for gid, score in RESPONSE_OVERRIDES.get(fixture, {}).items():
+        response["globals"][gid]["score"] = score
+    out[glob.call_tag] = response
     out[_tip_request_tag()] = _tips_from_utterances(spec["utterances"])
     return out
 

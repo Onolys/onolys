@@ -84,11 +84,11 @@
   },
   "globals": {
    "cct": {
-    "max": 1.0,
-    "mean": 1.0,
-    "min": 1.0,
+    "max": 4.0,
+    "mean": 4.0,
+    "min": 4.0,
     "values": [
-     1.0
+     4.0
     ]
    },
    "empathy": {
@@ -100,11 +100,11 @@
     ]
    },
    "partnership": {
-    "max": 1.0,
-    "mean": 1.0,
-    "min": 1.0,
+    "max": 4.0,
+    "mean": 4.0,
+    "min": 4.0,
     "values": [
-     1.0
+     4.0
     ]
    },
    "sst": {
@@ -146,28 +146,28 @@
    },
    "relational": {
     "label": "below_fair",
-    "max": 1.5,
-    "mean": 1.5,
-    "min": 1.5,
+    "max": 3.0,
+    "mean": 3.0,
+    "min": 3.0,
     "reference": {
      "fair": 3.5,
      "good": 4.0
     },
     "values": [
-     1.5
+     3.0
     ]
    },
    "technical": {
     "label": "below_fair",
-    "max": 1.0,
-    "mean": 1.0,
-    "min": 1.0,
+    "max": 2.5,
+    "mean": 2.5,
+    "min": 2.5,
     "reference": {
      "fair": 3.0,
      "good": 4.0
     },
     "values": [
-     1.0
+     2.5
     ]
    },
    "total_mia": {
@@ -305,7 +305,7 @@
      "role": "system"
     },
     {
-     "content": "{\"change_goal\": \"cut back on evening drinking\", \"onolys\": {\"counts\": {\"gi\": 2, \"persuade\": 5, \"persuade_permission\": 0, \"question\": 3, \"sr\": 0, \"cr\": 0, \"affirm\": 0, \"seek_collab\": 0, \"emphasize_autonomy\": 0, \"confront\": 4}, \"instances\": [{\"turn_id\": \"t2\", \"code\": \"question\", \"quote\": \"How many drinks do you have a night?\", \"rationale\": \"Intended code: question (synthetic).\"}, {\"turn_id\": \"t4\", \"code\": \"confront\", \"quote\": \"I doubt that's the real number.\", \"rationale\": \"Intended code: confront (synthetic).\"}, {\"turn_id\": \"t6\", \"code\": \"persuade\", \"quote\": \"Four glasses a night is a problem, and you need to cut it down right away.\", \"rationale\": \"Intended code: persuade (synthetic).\"}, {\"turn_id\": \"t8\", \"code\": \"confront\", \"quote\": \"Not ready? Then what are you doing here?\", \"rationale\": \"Intended code: confront (synthetic).\"}, {\"turn_id\": \"t10\", \"code\": \"persuade\", \"quote\": \"Here is what you should do: pour out everything in the house and go to a meeting every night.\", \"rationale\": \"Intended code: persuade (synthetic).\"}, {\"turn_id\": \"t12\", \"code\": \"gi\", \"quote\": \"The guidelines say men should have no more than fourteen units a week.\", \"rationale\": \"Intended code: gi (synthetic).\"}, {\"turn_id\": \"t12\", \"code\": \"question\", \"quote\": \"Do you know how many units that is?\", \"rationale\": \"Intended code: question (synthetic).\"}, {\"turn_id\": \"t14\", \"code\": \"gi\", \"quote\": \"It's a lot less.\", \"rationale\": \"Intended code: gi (synthetic).\"}, {\"turn_id\": \"t14\", \"code\": \"question\", \"quote\": \"Do you drink on weekends too?\", \"rationale\": \"Intended code: question (synthetic).\"}, {\"turn_id\": \"t16\", \"code\": \"confront\", \"quote\": \"You drink alone every night and you think that's fine?\", \"rationale\": \"Intended code: confront (synthetic).\"}, {\"turn_id\": \"t18\", \"code\": \"persuade\", \"quote\": \"Plenty of people manage without drinking, so you can too. Just stop.\", \"rationale\": \"Intended code: persuade (synthetic).\"}, {\"turn_id\": \"t20\", \"code\": \"persuade\", \"quote\": \"It is easy if you want it badly enough.\", \"rationale\": \"Intended code: persuade (synthetic).\"}, {\"turn_id\": \"t20\", \"code\": \"confront\", \"quote\": \"Maybe you don't.\", \"rationale\": \"Intended code: confront (synthetic).\"}, {\"turn_id\": \"t22\", \"code\": \"persuade\", \"quote\": \"Write down every drink for the next month and bring it back, no excuses.\", \"rationale\": \"Intended code: persuade (synthetic).\"}], \"globals\": {\"cct\": {\"score\": 1, \"reason\": \"Never evokes the client's own reasons; argues for change instead.\", \"evidence\": [\"Four glasses a night is a problem\", \"Here is what you should do\"]}, \"sst\": {\"score\": 1, \"reason\": \"Direction is imposed by the clinician, not built on the client's language.\", \"evidence\": [\"I doubt that's the real number.\", \"Just stop.\"]}, \"partnership\": {\"score\": 1, \"reason\": \"Clinician holds the power; client's view is overridden and challenged.\", \"evidence\": [\"Here is what you should do\", \"It is easy if you want it badly enough.\"]}, \"empathy\": {\"score\": 2, \"reason\": \"Little effort to understand; the client's perspective is dismissed.\", \"evidence\": [\"Then what are you doing here?\", \"You drink alone every night and you think that's fine?\"]}}, \"summaries\": {\"technical\": {\"value\": 1.0, \"label\": \"below_fair\", \"reference\": {\"fair\": 3.0, \"good\": 4.0}}, \"relational\": {\"value\": 1.5, \"label\": \"below_fair\", \"reference\": {\"fair\": 3.5, \"good\": 4.0}}, \"pct_cr\": {\"value\": null, \"label\": null, \"reference\": {\"fair\": 0.4, \"good\": 0.5}}, \"reflection_question_ratio\": {\"value\": 0.0, \"label\": \"below_fair\", \"reference\": {\"fair\": 1.0, \"good\": 2.0}}, \"total_mia\": {\"value\": 0.0, \"label\": null, \"reference\": null}, \"total_mina\": {\"value\": 9.0, \"label\": null, \"reference\": null}}}, \"clinician_turns\": [{\"turn_id\": \"t2\", \"text\": \"Let's get started. How many drinks do you have a night?\", \"preceding_client_turn\": {\"turn_id\": \"t1\", \"text\": \"Hi. My wife asked me to come and talk about my drinking, so here I am.\"}}, {\"turn_id\": \"t4\", \"text\": \"A couple? People always say a couple. I doubt that's the real number. How about being honest with me?\", \"preceding_client_turn\": {\"turn_id\": \"t3\", \"text\": \"A couple of glasses of wine, usually. It helps me unwind after work.\"}}, {\"turn_id\": \"t6\", \"text\": \"Four glasses a night is a problem, and you need to cut it down right away. Alcohol will wreck your liver and your sleep.\", \"preceding_client_turn\": {\"turn_id\": \"t5\", \"text\": \"Okay, maybe closer to four. But I don't think it's a big problem. I never miss work.\"}}, {\"turn_id\": \"t8\", \"text\": \"Not ready? Then what are you doing here?\", \"preceding_client_turn\": {\"turn_id\": \"t7\", \"text\": \"I hear that a lot, honestly. I'm just not sure I'm ready to stop completely.\"}}, {\"turn_id\": \"t10\", \"text\": \"Your wife is right to worry. Here is what you should do: pour out everything in the house and go to a meeting every night.\", \"preceding_client_turn\": {\"turn_id\": \"t9\", \"text\": \"That's not fair. I came because my wife asked me to. She worries.\"}}, {\"turn_id\": \"t12\", \"text\": \"The guidelines say men should have no more than fourteen units a week. Do you know how many units that is?\", \"preceding_client_turn\": {\"turn_id\": \"t11\", \"text\": \"That seems like a lot. I don't know if I can do that.\"}}, {\"turn_id\": \"t14\", \"text\": \"It's a lot less. Do you drink on weekends too? Do you drink alone? Do you drink before noon?\", \"preceding_client_turn\": {\"turn_id\": \"t13\", \"text\": \"Not really, no. I guess it's less than I have.\"}}, {\"turn_id\": \"t16\", \"text\": \"You drink alone every night and you think that's fine?\", \"preceding_client_turn\": {\"turn_id\": \"t15\", \"text\": \"Weekends, yes. Alone, mostly. Not before noon, no.\"}}, {\"turn_id\": \"t18\", \"text\": \"Plenty of people manage without drinking, so you can too. Just stop.\", \"preceding_client_turn\": {\"turn_id\": \"t17\", \"text\": \"I never said it was fine. I just don't know what else to do at night.\"}}, {\"turn_id\": \"t20\", \"text\": \"It is easy if you want it badly enough. Maybe you don't.\", \"preceding_client_turn\": {\"turn_id\": \"t19\", \"text\": \"It sounds easy when you say it.\"}}, {\"turn_id\": \"t22\", \"text\": \"Good. Write down every drink for the next month and bring it back, no excuses.\", \"preceding_client_turn\": {\"turn_id\": \"t21\", \"text\": \"I do want to. I'm tired of feeling guilty.\"}}, {\"turn_id\": \"t24\", \"text\": \"Come back next week. Don't miss the appointment.\", \"preceding_client_turn\": {\"turn_id\": \"t23\", \"text\": \"Fine. I'll try.\"}}]}",
+     "content": "{\"change_goal\": \"cut back on evening drinking\", \"onolys\": {\"counts\": {\"gi\": 2, \"persuade\": 5, \"persuade_permission\": 0, \"question\": 3, \"sr\": 0, \"cr\": 0, \"affirm\": 0, \"seek_collab\": 0, \"emphasize_autonomy\": 0, \"confront\": 4}, \"instances\": [{\"turn_id\": \"t2\", \"code\": \"question\", \"quote\": \"How many drinks do you have a night?\", \"rationale\": \"Intended code: question (synthetic).\"}, {\"turn_id\": \"t4\", \"code\": \"confront\", \"quote\": \"I doubt that's the real number.\", \"rationale\": \"Intended code: confront (synthetic).\"}, {\"turn_id\": \"t6\", \"code\": \"persuade\", \"quote\": \"Four glasses a night is a problem, and you need to cut it down right away.\", \"rationale\": \"Intended code: persuade (synthetic).\"}, {\"turn_id\": \"t8\", \"code\": \"confront\", \"quote\": \"Not ready? Then what are you doing here?\", \"rationale\": \"Intended code: confront (synthetic).\"}, {\"turn_id\": \"t10\", \"code\": \"persuade\", \"quote\": \"Here is what you should do: pour out everything in the house and go to a meeting every night.\", \"rationale\": \"Intended code: persuade (synthetic).\"}, {\"turn_id\": \"t12\", \"code\": \"gi\", \"quote\": \"The guidelines say men should have no more than fourteen units a week.\", \"rationale\": \"Intended code: gi (synthetic).\"}, {\"turn_id\": \"t12\", \"code\": \"question\", \"quote\": \"Do you know how many units that is?\", \"rationale\": \"Intended code: question (synthetic).\"}, {\"turn_id\": \"t14\", \"code\": \"gi\", \"quote\": \"It's a lot less.\", \"rationale\": \"Intended code: gi (synthetic).\"}, {\"turn_id\": \"t14\", \"code\": \"question\", \"quote\": \"Do you drink on weekends too?\", \"rationale\": \"Intended code: question (synthetic).\"}, {\"turn_id\": \"t16\", \"code\": \"confront\", \"quote\": \"You drink alone every night and you think that's fine?\", \"rationale\": \"Intended code: confront (synthetic).\"}, {\"turn_id\": \"t18\", \"code\": \"persuade\", \"quote\": \"Plenty of people manage without drinking, so you can too. Just stop.\", \"rationale\": \"Intended code: persuade (synthetic).\"}, {\"turn_id\": \"t20\", \"code\": \"persuade\", \"quote\": \"It is easy if you want it badly enough.\", \"rationale\": \"Intended code: persuade (synthetic).\"}, {\"turn_id\": \"t20\", \"code\": \"confront\", \"quote\": \"Maybe you don't.\", \"rationale\": \"Intended code: confront (synthetic).\"}, {\"turn_id\": \"t22\", \"code\": \"persuade\", \"quote\": \"Write down every drink for the next month and bring it back, no excuses.\", \"rationale\": \"Intended code: persuade (synthetic).\"}], \"globals\": {\"cct\": {\"score\": 4, \"reason\": \"Never evokes the client's own reasons; argues for change instead.\", \"evidence\": [\"Four glasses a night is a problem\", \"Here is what you should do\"]}, \"sst\": {\"score\": 1, \"reason\": \"Direction is imposed by the clinician, not built on the client's language.\", \"evidence\": [\"I doubt that's the real number.\", \"Just stop.\"]}, \"partnership\": {\"score\": 4, \"reason\": \"Clinician holds the power; client's view is overridden and challenged.\", \"evidence\": [\"Here is what you should do\", \"It is easy if you want it badly enough.\"]}, \"empathy\": {\"score\": 2, \"reason\": \"Little effort to understand; the client's perspective is dismissed.\", \"evidence\": [\"Then what are you doing here?\", \"You drink alone every night and you think that's fine?\"]}}, \"summaries\": {\"technical\": {\"value\": 2.5, \"label\": \"below_fair\", \"reference\": {\"fair\": 3.0, \"good\": 4.0}}, \"relational\": {\"value\": 3.0, \"label\": \"below_fair\", \"reference\": {\"fair\": 3.5, \"good\": 4.0}}, \"pct_cr\": {\"value\": null, \"label\": null, \"reference\": {\"fair\": 0.4, \"good\": 0.5}}, \"reflection_question_ratio\": {\"value\": 0.0, \"label\": \"below_fair\", \"reference\": {\"fair\": 1.0, \"good\": 2.0}}, \"total_mia\": {\"value\": 0.0, \"label\": null, \"reference\": null}, \"total_mina\": {\"value\": 9.0, \"label\": null, \"reference\": null}}}, \"clinician_turns\": [{\"turn_id\": \"t2\", \"text\": \"Let's get started. How many drinks do you have a night?\", \"preceding_client_turn\": {\"turn_id\": \"t1\", \"text\": \"Hi. My wife asked me to come and talk about my drinking, so here I am.\"}}, {\"turn_id\": \"t4\", \"text\": \"A couple? People always say a couple. I doubt that's the real number. How about being honest with me?\", \"preceding_client_turn\": {\"turn_id\": \"t3\", \"text\": \"A couple of glasses of wine, usually. It helps me unwind after work.\"}}, {\"turn_id\": \"t6\", \"text\": \"Four glasses a night is a problem, and you need to cut it down right away. Alcohol will wreck your liver and your sleep.\", \"preceding_client_turn\": {\"turn_id\": \"t5\", \"text\": \"Okay, maybe closer to four. But I don't think it's a big problem. I never miss work.\"}}, {\"turn_id\": \"t8\", \"text\": \"Not ready? Then what are you doing here?\", \"preceding_client_turn\": {\"turn_id\": \"t7\", \"text\": \"I hear that a lot, honestly. I'm just not sure I'm ready to stop completely.\"}}, {\"turn_id\": \"t10\", \"text\": \"Your wife is right to worry. Here is what you should do: pour out everything in the house and go to a meeting every night.\", \"preceding_client_turn\": {\"turn_id\": \"t9\", \"text\": \"That's not fair. I came because my wife asked me to. She worries.\"}}, {\"turn_id\": \"t12\", \"text\": \"The guidelines say men should have no more than fourteen units a week. Do you know how many units that is?\", \"preceding_client_turn\": {\"turn_id\": \"t11\", \"text\": \"That seems like a lot. I don't know if I can do that.\"}}, {\"turn_id\": \"t14\", \"text\": \"It's a lot less. Do you drink on weekends too? Do you drink alone? Do you drink before noon?\", \"preceding_client_turn\": {\"turn_id\": \"t13\", \"text\": \"Not really, no. I guess it's less than I have.\"}}, {\"turn_id\": \"t16\", \"text\": \"You drink alone every night and you think that's fine?\", \"preceding_client_turn\": {\"turn_id\": \"t15\", \"text\": \"Weekends, yes. Alone, mostly. Not before noon, no.\"}}, {\"turn_id\": \"t18\", \"text\": \"Plenty of people manage without drinking, so you can too. Just stop.\", \"preceding_client_turn\": {\"turn_id\": \"t17\", \"text\": \"I never said it was fine. I just don't know what else to do at night.\"}}, {\"turn_id\": \"t20\", \"text\": \"It is easy if you want it badly enough. Maybe you don't.\", \"preceding_client_turn\": {\"turn_id\": \"t19\", \"text\": \"It sounds easy when you say it.\"}}, {\"turn_id\": \"t22\", \"text\": \"Good. Write down every drink for the next month and bring it back, no excuses.\", \"preceding_client_turn\": {\"turn_id\": \"t21\", \"text\": \"I do want to. I'm tired of feeling guilty.\"}}, {\"turn_id\": \"t24\", \"text\": \"Come back next week. Don't miss the appointment.\", \"preceding_client_turn\": {\"turn_id\": \"t23\", \"text\": \"Fine. I'll try.\"}}]}",
      "role": "user"
     }
    ],
@@ -847,7 +847,7 @@
     },
     "explanation": {
      "body": [
-      "Onolys scored 1.",
+      "Onolys scored 4.",
       "Never evokes the client's own reasons; argues for change instead."
      ],
      "clinician_support_lines": [],
@@ -884,8 +884,8 @@
       }
      ],
      "reason": "Never evokes the client's own reasons; argues for change instead.",
-     "score": 1,
-     "source": "model"
+     "score": 4,
+     "source": "capped"
     }
    },
    {
@@ -959,7 +959,7 @@
     },
     "explanation": {
      "body": [
-      "Onolys scored 1.",
+      "Onolys scored 4.",
       "Clinician holds the power; client's view is overridden and challenged."
      ],
      "clinician_support_lines": [],
@@ -996,8 +996,8 @@
       }
      ],
      "reason": "Clinician holds the power; client's view is overridden and challenged.",
-     "score": 1,
-     "source": "model"
+     "score": 4,
+     "source": "capped"
     }
    },
    {
@@ -1158,12 +1158,12 @@
     "kind": "global",
     "label": "Cultivating Change Talk",
     "onolys": {
-     "max": 1.0,
-     "mean": 1.0,
-     "min": 1.0,
-     "value": 1.0,
+     "max": 4.0,
+     "mean": 4.0,
+     "min": 4.0,
+     "value": 4.0,
      "values": [
-      1.0
+      4.0
      ]
     }
    },
@@ -1206,12 +1206,12 @@
     "kind": "global",
     "label": "Partnership",
     "onolys": {
-     "max": 1.0,
-     "mean": 1.0,
-     "min": 1.0,
-     "value": 1.0,
+     "max": 4.0,
+     "mean": 4.0,
+     "min": 4.0,
+     "value": 4.0,
      "values": [
-      1.0
+      4.0
      ]
     }
    },
@@ -1488,7 +1488,7 @@
     "note": "Onolys values only. Reference levels, not pass marks.",
     "onolys": {
      "label": "below_fair",
-     "value": 1.0
+     "value": 2.5
     },
     "reference": {
      "fair": 3.0,
@@ -1502,7 +1502,7 @@
     "note": "Onolys values only. Reference levels, not pass marks.",
     "onolys": {
      "label": "below_fair",
-     "value": 1.5
+     "value": 3.0
     },
     "reference": {
      "fair": 3.5,
@@ -1604,7 +1604,16 @@
     "why_it_matters": "Synthetic fixture reason."
    }
   ],
-  "warnings": []
+  "warnings": [
+   {
+    "code": "capped",
+    "item_id": "cct"
+   },
+   {
+    "code": "capped",
+    "item_id": "partnership"
+   }
+  ]
  },
  "warm_up": {
   "first_code_call": "miti_code:r0:b1",

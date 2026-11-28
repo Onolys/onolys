@@ -202,7 +202,7 @@
      }
     ],
     "reason": "Never evokes the client's own reasons; argues for change instead.",
-    "score": 1
+    "score": 5
    },
    "empathy": {
     "evidence": [
@@ -246,7 +246,7 @@
      }
     ],
     "reason": "Clinician holds the power; client's view is overridden and challenged.",
-    "score": 1
+    "score": 5
    },
    "sst": {
     "evidence": [
