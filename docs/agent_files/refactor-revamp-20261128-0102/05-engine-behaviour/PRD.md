@@ -116,4 +116,5 @@ Numbered clinician units instead of quotes: `segment.units` writes `u1..uN` over
 - All three pipelines load (`Engine.load`), share steps, and name no model; oneshot output validates against the report schema.
 - Prompt-source test green; T1 shows MITI payloads byte-equal before T2.
 - Goldens re-recorded per R8 with one commit per change; `expected.yaml` counts unchanged except the new fixture and justified `batch_edge` edits.
+- When 05 re-records fixture goldens, the api stub-mode run (`FixtureClient`) and the web preview/stub tests stay green (05 and 06 may land in either order); checked in the same commit as each re-recording.
 - No LLM call made during build; ruff clean; dev-ship full gate.

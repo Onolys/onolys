@@ -8,7 +8,7 @@ date: 2026-11-28
 Repo/branch: Onolys/onolys / `refactor/revamp` · Depends on: 00-rules-file (rule 16 and rule 12 text exist) · Owns: the test files, compat code, spec-id text and CI scripts listed below. Edits only the minimum other lines needed to stay green. Docs untouched (`docs/` incl. ADRs and `docs/agent_files`), except regenerated contract files (R7).
 
 ## TL;DR
-Rule 16 says delete retired, superseded and "for compatibility" code before launch. This SP does that as pure deletion in six batches, each leaving lint and tests green. It touches no Terraform and no cloud state. Candidate cloud-state deletions (`removed {}` blocks, retired auth domains, old deployer SA) are listed and handed to 09 with owner steps. The legacy CSS layer is already gone from code; only a guard test and one README line remain.
+Rule 16 says delete retired, superseded and "for compatibility" code before launch. This SP does that as pure deletion in six batches, each leaving lint and tests green. It touches no Terraform and no cloud state. Candidate cloud-state deletions (`removed {}` blocks, retired auth domains, old deployer SA) are listed and handed to 09 (agent plans and applies). The legacy CSS layer is already gone from code; only a guard test and one README line remain.
 
 ## Problem
 Later SPs would move and rewrite code that is already dead. Evidence:
@@ -22,7 +22,7 @@ Later SPs would move and rewrite code that is already dead. Evidence:
 
 ## Goals / Non-Goals
 **Goals:** everything in R1-R6 removed; CI green after every batch; ids and compat gone from code.
-**Non-goals:** any `.tf`, `.firebaserc`, `firebase.json` change (09); folder moves, renames, fakes (04/06/07/08); eval split items (03); `docs/` edits; deleting cloud resources or GitHub variables (Manual steps).
+**Non-goals:** any `.tf`, `.firebaserc`, `firebase.json` change (09); any edit to `infra/scripts/identity-config.py` (its "PRD R4"/"SP00" comments stay: its hash feeds a trigger in `infra/identity.tf:75`, so editing it would plan a change; 03 copies it unedited and gates on "plan = no changes"; 09 cleans it later); folder moves, renames, fakes (04/06/07/08); eval split items (03); `docs/` edits; deleting cloud resources or GitHub variables (Manual steps).
 
 ## Requirements
 **R1 Guard, migration and parity tests (delete).**
@@ -41,14 +41,14 @@ Kept on purpose: `api/tests/test_fake_real_parity.py` (06 deletes it with the fa
 | Item | Where | Notes |
 |---|---|---|
 | Legacy `daily_cap` field | `api/.../repo/limits.py:62-67`, `models.py:91`, `api/tests/test_limits.py` (4 tests) | no deploy or infra sets it [verified: grep infra/.github → 0] |
-| Old-doc derivations | `models.py` `_derive_old_failure`, `kind` fill-on-read, `interviews` default; `test_failure_kind.py:164`; `test_charging.py:107` (`free_run_void`) | prelaunch, no old docs to read |
+| Old-doc derivations | `models.py` `_derive_old_failure`, `kind` fill-on-read, `interviews` default; `test_failure_kind.py:164`; `test_charging.py:107` (`free_run_void`) | "prelaunch, no old docs" is unverified (prod tags `prod-2026-11-2x` exist). **T2 pre-check, before deleting these:** one-off count query in staging and prod Firestore for docs lacking the new fields (`kind`, `interviews`, new failure fields). Count 0: delete. Count > 0: stop this item and report counts to owner |
 | Re-export shim | `api/.../jobs/machine.py:16-24` (`progress` tables); re-point `first_run.py:24`, `run.py` to `onolys_api.progress` | |
 | Back-compat env | `core/llm/routes.py` `MITI_MODEL_CHEAP/MID/STRONG` (+ tests `test_routes.py:142`, `test_llm_override.py`) | set nowhere outside tests [verified: grep → tests + routes.py only]. Keep `LLM_PROVIDER/MODEL/EFFORT` (deploy workflows set them) and `MITI_LLM_RESPONSE_FORMAT` (oneshot golden test; 04 decides) |
 | Stale text | `api/.../errors.py:34` "admin pack routes"; `scripts/README.md:8` retired-admin line; `ci.yml:468` old names in the image-import loop (keep `onolys_eval`) | |
 | Eval old-run readers | `eval/backend/read_runs.py` `is_legacy`, scheduler `tick_seq` legacy docs, `eval/web` `legacy_selection` paths | [RESOLVED: delete] O2; old eval runs/data dropped, no migration |
 Left for others: `adapters/validated.py` "legacy/fake adapter bridge" and `adapters/fake.py` (06); core `Turn = TranscriptTurnV1` aliases (04); eval `REMOVED_ENV` (tied to `test_eval_image.sh`, 03); eval `upload.py` bucket defaults and the ≤25 MiB multipart upload path (03/10).
 
-**R3 Spec/planning ids in code and comments.** Rewrite each to plain words (rule 12), never blind-delete a sentence. Counts [verified: `git grep -nE '\b(PRD|SP[0-9]{1,2}|FX[0-9]+|AC[0-9]+|R[0-9]{1,2}[a-z]?|D[0-9]{1,2}|ADR ?[0-9]+)\b'`, non-md, excluding generated/fixtures; upper bound, a few false hits]:
+**R3 Spec/planning ids in code and comments.** Rewrite each to plain words (rule 12), never blind-delete a sentence. Scope is api, engines, eval, web only: `infra/` is excluded, notably `infra/scripts/identity-config.py` (see Non-goals). Counts [verified: `git grep -nE '\b(PRD|SP[0-9]{1,2}|FX[0-9]+|AC[0-9]+|R[0-9]{1,2}[a-z]?|D[0-9]{1,2}|ADR ?[0-9]+)\b'`, non-md, excluding generated/fixtures; upper bound, a few false hits]:
 | Package | src lines/files | tests lines/files |
 |---|---|---|
 | api | 163/59 | 122/67 |
@@ -67,7 +67,7 @@ Also task-slug refs ("05-processing-screen R4", "03-failure-policy") and engine 
 | Left for 03 (eval-only) | `set_eval_origin.sh`, `test_deploy_eval.sh`, `test_eval_image.sh`, `test_hosting_targets.sh`, `test_verify_staging_release.cjs`, `test_workflow_run_guard.py` (only `deploy-eval.yml` uses `workflow_run` [verified]) |
 `ci.yml` `guards` job shrinks to: key guard (no planted-fixture step), a direct `bash scripts/ci/check_config.sh`, actionlint. Remove the old-name import loop entries (R2). Callers of kept scripts verified: `deploy-prod.yml:84,129-131`, `deploy-staging.yml:69-118`, `pr-preview*.yml`. `gen_miti_schema.py` stays in `scripts/` for 04 (D4).
 
-**R5 `infra/`: tests and one script only.** Delete `infra/scripts/check-staging.py` + `test_check_staging.py` (hard-codes `PROJECT="onolys"` for the retired in-prod-project staging; no caller in workflows/docs [verified: grep]). Delete the guards in R1. No `.tf` file changes, so `terraform plan` is unchanged by this SP. Kept and handed to 09:
+**R5 `infra/`: tests and one script only.** Delete `infra/scripts/check-staging.py` + `test_check_staging.py` (hard-codes `PROJECT="onolys"` for the retired in-prod-project staging; no caller in workflows/docs [verified: grep]). Delete the guards in R1. No `.tf` file changes and `infra/scripts/identity-config.py` is not edited (explicit exclusion: its hash feeds a trigger in `infra/identity.tf:75`), so `terraform plan` is unchanged by this SP. Kept and handed to 09:
 | Item | Why not deleted here |
 |---|---|
 | `removed {}` blocks (`main.tf`, `budget.tf`) | deleting while the resource is still in state makes the next plan destroy it |
@@ -84,7 +84,7 @@ Batches, in order, one commit each, and the checks to run:
 | # | Batch | Check |
 |---|---|---|
 | 1 | R1 tests + R6 | touched packages' pytest/vitest, `ruff` |
-| 2 | R2 compat code + tests | api (unit + emulator marker), core, eval; `api-coverage --fail-under=94` still passes |
+| 2 | T2 pre-check (R2 old-doc count query), then R2 compat code + tests | count reported; api (unit + emulator marker), core, eval; `api-coverage --fail-under=94` still passes |
 | 3 | R3 ids per package (api, engines, eval, web: 4 commits; can run 2 parallel) | lint, tests, contract regen diff clean |
 | 4 | R4 + `ci.yml` | `actionlint`; dry-read `changes` flags vs old `changes.sh` on 5 sample diffs |
 | 5 | R7 workflows + `release_target.py` | `actionlint`, `release_target.py staging|preview` run with the real var set |
@@ -94,16 +94,17 @@ Batches, in order, one commit each, and the checks to run:
 | # | Decision | Choice | Alternatives | Why |
 |---|---|---|---|---|
 | D1 | Eval legacy in this SP | Purge in place (spec ids, guards); defer eval-only scripts and `REMOVED_ENV` to 03 | Leave all eval to 03 | 03 would copy dead code into the new repo |
-| D2 | Terraform | Zero `.tf` edits | Delete `removed {}` / retired domains now | Each can change real cloud state; needs owner plan/apply |
+| D2 | Terraform | Zero `.tf` edits; `identity-config.py` untouched | Delete `removed {}` / retired domains now | Each can change real cloud state; belongs with 09's plan/apply |
 | D3 | Replace `changes.sh` | One `changes` job using `dorny/paths-filter` (pinned), same output names, so `required_gate.py` is unchanged. Owner-approved (verified: 3.4k stars, release v4.0.3 Aug 2026, maintained, not archived) | Workflow `paths:` only; keep `changes.sh` minus tests | `paths:` selects workflows not jobs, and a skipped workflow can never feed `required`; third-party actions are allowed [verified: `gh api actions/permissions` → all] |
 | D4 | `gen_miti_schema.py` | Leave for 04 | Move now | Engine schema layout is 04's; `oneshot` test reads it by path [verified: `test_miti_config.py`] |
 | D5 | Mixed test files | Delete only the legacy functions | Delete whole files | Boundary tests protect rule 5 until 04/06 replace them |
 | D6 | Dead operator script | Delete `check-staging.py` | Keep | Targets the retired layout; no caller |
 
 ## Manual steps
-1. After merge, owner deletes stale GitHub repo variables `STAGING_VITE_FIREBASE_*` and `STAGING_VITE_CONTACT_EMAIL` if unused. Keep `WIF_PROVIDER`, `DEPLOYER_STAGING_SA`, `DEPLOYER_PROD_SA`.
-2. Owner confirms `terraform state list` (prod root) lacks `google_secret_manager_secret.provider` and `google_billing_budget.monthly` before 09 removes the `removed {}` blocks.
-3. Owner retires old staging resources in project `onolys` (Hosting site `onolys-app-staging`, old Cloud Run/DB) and the retired auth domains. Agents never apply or delete cloud resources.
+Agents run Terraform plan and apply and other cloud actions (owner granted this). Only steps needing credentials the agent lacks stay with the owner.
+1. After merge, agent deletes stale GitHub repo variables `STAGING_VITE_FIREBASE_*` and `STAGING_VITE_CONTACT_EMAIL` if unused (owner only if `gh` lacks rights). Keep `WIF_PROVIDER`, `DEPLOYER_STAGING_SA`, `DEPLOYER_PROD_SA`.
+2. Agent confirms with `terraform state list` (prod root) that `google_secret_manager_secret.provider` and `google_billing_budget.monthly` are absent before 09 removes the `removed {}` blocks.
+3. Agent retires old staging resources in project `onolys` (Hosting site `onolys-app-staging`, old Cloud Run/DB) and the retired auth domains, via 09's plan/apply or one-off commands.
 
 ## Risks / Open Questions
 - [RESOLVED: approved D3] O1: `dorny/paths-filter` instead of `paths:` filters.
@@ -113,6 +114,7 @@ Batches, in order, one commit each, and the checks to run:
 - [RESOLVED: dropping `test_deploy_prod.sh` loses pins on deploy-prod invariants (production environment, sha format); accepted by the brainstorm "drop tests of tests"].
 - [DEFERRED: 09] `removed {}`, retired domains, `deployer_staging`, `.firebaserc`, `firebase.json`.
 - [DEFERRED: 09] moving `deploy-prod` `resolve` to `STAGING_DEPLOYER_SA` (needs new IAM in the staging project).
+- Risk: old-doc derivations may still be needed if the T2 pre-check finds docs without the new fields; then that item is reported to owner and not deleted.
 - Risk: deleting compat code may drop api coverage below 94 (CI gate); batch 2 runs the combined gate locally first.
 
 ## Acceptance Criteria
@@ -123,3 +125,5 @@ Batches, in order, one commit each, and the checks to run:
 5. No `|| vars.WIF_PROVIDER`/`'onolys-app-staging'` fallback in the four workflows; `gh variable` unchanged.
 6. `git diff --stat` shows zero `infra/**/*.tf` and zero `docs/` changes other than regenerated `docs/contracts/public`.
 7. Each batch commit passes lint and its impacted tests; final `api-coverage` ≥ 94.
+8. T2 pre-check count (staging + prod) is recorded; old-doc derivations deleted only if both are 0.
+9. `infra/scripts/identity-config.py` is byte-identical to `main`.
