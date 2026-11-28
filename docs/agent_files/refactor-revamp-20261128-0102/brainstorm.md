@@ -43,7 +43,7 @@ These apply to all code: `api/`, `engines/`, `eval/`, `web/`, and anything new. 
 ### Docs and tests
 
 12. **Docstrings in plain words:** what the code does and, where not obvious, why. No spec or planning ids (`PRD R6`, `SP09`, `FX46`...).
-13. **One `architecture.md`** kept current, instead of a folder of ADRs.
+13. **One `architecture.md`** kept current, instead of a folder of ADRs. *(applies later; no docs changes in the revamp)*
 14. **Tests mirror the source layout:** `src/x/audio/validate.py` → `tests/audio/test_validate.py`. File names describe behaviour, never task ids. Shared helpers go in `tests/helpers/`.
 
 ### UI and clean-up
@@ -191,8 +191,8 @@ These values are scattered today:
 ### Clean-up
 
 - Remove spec ids from every docstring.
-- Fold the useful ADRs (10 files) into `architecture.md`.
-- Decide on `docs/agent_files/` (569 of the 631 files in `docs/`).
+- Fold the useful ADRs (10 files) into `architecture.md`. *(deferred: no docs changes in the revamp)*
+- Decide on `docs/agent_files/` (569 of the 631 files in `docs/`). *(decided: keep for now)*
 - Remove leftover migration and guard tests (`test_no_old_imports`, `test_naming_guard`, `test_transcript_migration`).
 - Regroup tests to mirror the source layout.
 - Done 2026-11-27: deleted the local, untracked `backend/` leftover.
@@ -282,6 +282,8 @@ Five issues so far: three are one-shot drifting from the manual and the MITI eng
 | 5 | Context is out of order, capped at 150 / 100 words | `prepare.py` `_client_context` | PRD D6 "eng sizes" | Order lost, text repeated across volleys |
 
 ## Research: Jev, per-volley and per-global calls
+
+> Out of scope for the revamp; to be done in a separate PR.
 
 Recommendation: try Jev as a cheap **checker** of which codes each volley has, not as the coder. Test per-volley and per-global calls as eval A/Bs first. Agent findings from vendor and secondary pages; nothing was run.
 
@@ -384,14 +386,14 @@ This is the staging evaluation tool: it runs engines on human-coded datasets and
 | STT, voice, rating, scenarios | Move out of the engine | Agreed |
 | Docs | Two earlier docs merged into this one | Done 2026-11-28 |
 | Eval | Split into its own repo; staging stays | Agreed |
+| Rules file | Coding rules go in their own doc, `docs/rules/coding-rules.md`. Design rules stay a separate doc in the same `docs/rules/` folder. | Agreed |
+| Test stubs | Firestore emulator (not an in-memory client) | Agreed |
+| Constants | One `constants.py` per package (engine, api, eval) | Agreed (default) |
+| Voice | `voice/` stays in the `api` package, run as its `voice` mode | Agreed (default) |
+| Docs | No docs changes in the revamp except the rules files. ADR fold-in and other docs clean-up are out of scope for now. | Agreed |
+| `docs/agent_files/` | Keep the folder as it is for now | Agreed |
+| Pipeline YAML | One file per evaluation; no base + overrides | Agreed |
+| Eval sign-in | Eval uses the sign-in pieces from `@onolys/ui` (moved there from `web/src/auth`), not its own copy | Agreed |
+| Jev, per-volley / per-global calls, per-slot eval metrics | Not part of the revamp; a separate PR later | Deferred |
 
-- [ ] Is Jev = TypeSafe Jev on OpenRouter? Is an alpha API and an extra vendor acceptable? Coder or checker?
-- [ ] Per-volley calls: goal = speed, cost or accuracy? Can concurrency go above 8? What are the Gemini rate limits?
-- [ ] Run `prepare.py` on real eval sessions to get the true volleys-per-session count.
-- [ ] Eval: add per-volley, per-slot metrics next to the line metrics?
-- [ ] Test stubs: Firestore emulator, or a small in-memory client?
-- [ ] Constants: one file per package, or one shared?
-- [ ] Should `voice/` stay in the `api` package or become its own service?
-- [ ] `docs/agent_files/`: delete after merge, or move out of the main tree?
-- [ ] Where does the rules file live: `AGENTS.md`, `.claude/` rules, or both?
-- [ ] Pipeline YAML: one file per evaluation, or a base file + overrides?
+- [ ] Run `prepare.py` on real eval sessions to get the true volleys-per-session count (a measurement task, not a decision).
