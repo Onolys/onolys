@@ -1,0 +1,310 @@
+{
+ "miti_code:r0:b1": {
+  "volleys": [
+   {
+    "utterances": [
+     {
+      "code": null,
+      "quote": "Let's get started.",
+      "rationale": "Intended code: none (synthetic)."
+     },
+     {
+      "code": "question",
+      "quote": "How many drinks do you have a night?",
+      "rationale": "Intended code: question (synthetic)."
+     }
+    ],
+    "volley_id": "v1"
+   },
+   {
+    "utterances": [
+     {
+      "code": null,
+      "quote": "A couple? People always say a couple.",
+      "rationale": "Intended code: none (synthetic)."
+     },
+     {
+      "code": "confront",
+      "quote": "I doubt that's the real number.",
+      "rationale": "Intended code: confront (synthetic)."
+     },
+     {
+      "code": "confront",
+      "quote": "How about being honest with me?",
+      "rationale": "Intended code: confront (synthetic)."
+     }
+    ],
+    "volley_id": "v2"
+   },
+   {
+    "utterances": [
+     {
+      "code": "persuade",
+      "quote": "Four glasses a night is a problem, and you need to cut it down right away.",
+      "rationale": "Intended code: persuade (synthetic)."
+     },
+     {
+      "code": "persuade",
+      "quote": "Alcohol will wreck your liver and your sleep.",
+      "rationale": "Intended code: persuade (synthetic)."
+     }
+    ],
+    "volley_id": "v3"
+   },
+   {
+    "utterances": [
+     {
+      "code": "confront",
+      "quote": "Not ready? Then what are you doing here?",
+      "rationale": "Intended code: confront (synthetic)."
+     }
+    ],
+    "volley_id": "v4"
+   },
+   {
+    "utterances": [
+     {
+      "code": null,
+      "quote": "Your wife is right to worry.",
+      "rationale": "Intended code: none (synthetic)."
+     },
+     {
+      "code": "persuade",
+      "quote": "Here is what you should do: pour out everything in the house and go to a meeting every night.",
+      "rationale": "Intended code: persuade (synthetic)."
+     }
+    ],
+    "volley_id": "v5"
+   },
+   {
+    "utterances": [
+     {
+      "code": "gi",
+      "quote": "The guidelines say men should have no more than fourteen units a week.",
+      "rationale": "Intended code: gi (synthetic)."
+     },
+     {
+      "code": "question",
+      "quote": "Do you know how many units that is?",
+      "rationale": "Intended code: question (synthetic)."
+     }
+    ],
+    "volley_id": "v6"
+   },
+   {
+    "utterances": [
+     {
+      "code": "gi",
+      "quote": "It's a lot less.",
+      "rationale": "Intended code: gi (synthetic)."
+     },
+     {
+      "code": "question",
+      "quote": "Do you drink on weekends too?",
+      "rationale": "Intended code: question (synthetic)."
+     },
+     {
+      "code": "question",
+      "quote": "Do you drink alone?",
+      "rationale": "Intended code: question (synthetic)."
+     },
+     {
+      "code": "question",
+      "quote": "Do you drink before noon?",
+      "rationale": "Intended code: question (synthetic)."
+     }
+    ],
+    "volley_id": "v7"
+   },
+   {
+    "utterances": [
+     {
+      "code": "confront",
+      "quote": "You drink alone every night and you think that's fine?",
+      "rationale": "Intended code: confront (synthetic)."
+     }
+    ],
+    "volley_id": "v8"
+   },
+   {
+    "utterances": [
+     {
+      "code": "persuade",
+      "quote": "Plenty of people manage without drinking, so you can too. Just stop.",
+      "rationale": "Intended code: persuade (synthetic)."
+     }
+    ],
+    "volley_id": "v9"
+   },
+   {
+    "utterances": [
+     {
+      "code": "persuade",
+      "quote": "It is easy if you want it badly enough.",
+      "rationale": "Intended code: persuade (synthetic)."
+     },
+     {
+      "code": "confront",
+      "quote": "Maybe you don't.",
+      "rationale": "Intended code: confront (synthetic)."
+     }
+    ],
+    "volley_id": "v10"
+   },
+   {
+    "utterances": [
+     {
+      "code": null,
+      "quote": "Good.",
+      "rationale": "Intended code: none (synthetic)."
+     },
+     {
+      "code": "persuade",
+      "quote": "Write down every drink for the next month and bring it back, no excuses.",
+      "rationale": "Intended code: persuade (synthetic)."
+     }
+    ],
+    "volley_id": "v11"
+   },
+   {
+    "utterances": [
+     {
+      "code": null,
+      "quote": "Come back next week. Don't miss the appointment.",
+      "rationale": "Intended code: none (synthetic)."
+     }
+    ],
+    "volley_id": "v12"
+   }
+  ]
+ },
+ "miti_globals:r0:g": {
+  "globals": {
+   "cct": {
+    "evidence": [
+     {
+      "quote": "Four glasses a night is a problem",
+      "turn_id": "t6"
+     },
+     {
+      "quote": "Here is what you should do",
+      "turn_id": "t10"
+     }
+    ],
+    "poor_practice_cited": [
+     {
+      "quote": "you need to cut it down right away",
+      "turn_id": "t6"
+     },
+     {
+      "quote": "Then what are you doing here?",
+      "turn_id": "t8"
+     }
+    ],
+    "reason": "Never evokes the client's own reasons; argues for change instead.",
+    "score": 1
+   },
+   "empathy": {
+    "evidence": [
+     {
+      "quote": "Then what are you doing here?",
+      "turn_id": "t8"
+     },
+     {
+      "quote": "You drink alone every night and you think that's fine?",
+      "turn_id": "t16"
+     }
+    ],
+    "poor_practice_cited": [
+     {
+      "quote": "you think that's fine?",
+      "turn_id": "t16"
+     }
+    ],
+    "reason": "Little effort to understand; the client's perspective is dismissed.",
+    "score": 2
+   },
+   "partnership": {
+    "evidence": [
+     {
+      "quote": "Here is what you should do",
+      "turn_id": "t10"
+     },
+     {
+      "quote": "It is easy if you want it badly enough.",
+      "turn_id": "t20"
+     }
+    ],
+    "poor_practice_cited": [
+     {
+      "quote": "How about being honest with me?",
+      "turn_id": "t4"
+     },
+     {
+      "quote": "Maybe you don't.",
+      "turn_id": "t20"
+     }
+    ],
+    "reason": "Clinician holds the power; client's view is overridden and challenged.",
+    "score": 1
+   },
+   "sst": {
+    "evidence": [
+     {
+      "quote": "I doubt that's the real number.",
+      "turn_id": "t4"
+     },
+     {
+      "quote": "Just stop.",
+      "turn_id": "t18"
+     }
+    ],
+    "poor_practice_cited": [
+     {
+      "quote": "Just stop.",
+      "turn_id": "t18"
+     }
+    ],
+    "reason": "Direction is imposed by the clinician, not built on the client's language.",
+    "score": 1
+   }
+  }
+ },
+ "tips:r0": {
+  "tips": [
+   {
+    "alternative": "Synthetic fixture alternative wording.",
+    "item_id": "question",
+    "observation": "Synthetic fixture observation for question.",
+    "quote": {
+     "text": "How many drinks do you have a night?",
+     "turn_id": "t2"
+    },
+    "title": "Synthetic tip for question",
+    "why_it_matters": "Synthetic fixture reason."
+   },
+   {
+    "alternative": "Synthetic fixture alternative wording.",
+    "item_id": "confront",
+    "observation": "Synthetic fixture observation for confront.",
+    "quote": {
+     "text": "I doubt that's the real number.",
+     "turn_id": "t4"
+    },
+    "title": "Synthetic tip for confront",
+    "why_it_matters": "Synthetic fixture reason."
+   },
+   {
+    "alternative": "Synthetic fixture alternative wording.",
+    "item_id": "persuade",
+    "observation": "Synthetic fixture observation for persuade.",
+    "quote": {
+     "text": "Four glasses a night is a problem, and you need to cut it down right away.",
+     "turn_id": "t6"
+    },
+    "title": "Synthetic tip for persuade",
+    "why_it_matters": "Synthetic fixture reason."
+   }
+  ]
+ }
+}

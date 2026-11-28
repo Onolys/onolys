@@ -1,0 +1,1614 @@
+{
+ "aggregate": {
+  "counts": {
+   "affirm": {
+    "max": 0.0,
+    "mean": 0.0,
+    "min": 0.0,
+    "values": [
+     0.0
+    ]
+   },
+   "confront": {
+    "max": 4.0,
+    "mean": 4.0,
+    "min": 4.0,
+    "values": [
+     4.0
+    ]
+   },
+   "cr": {
+    "max": 0.0,
+    "mean": 0.0,
+    "min": 0.0,
+    "values": [
+     0.0
+    ]
+   },
+   "emphasize_autonomy": {
+    "max": 0.0,
+    "mean": 0.0,
+    "min": 0.0,
+    "values": [
+     0.0
+    ]
+   },
+   "gi": {
+    "max": 2.0,
+    "mean": 2.0,
+    "min": 2.0,
+    "values": [
+     2.0
+    ]
+   },
+   "persuade": {
+    "max": 5.0,
+    "mean": 5.0,
+    "min": 5.0,
+    "values": [
+     5.0
+    ]
+   },
+   "persuade_permission": {
+    "max": 0.0,
+    "mean": 0.0,
+    "min": 0.0,
+    "values": [
+     0.0
+    ]
+   },
+   "question": {
+    "max": 3.0,
+    "mean": 3.0,
+    "min": 3.0,
+    "values": [
+     3.0
+    ]
+   },
+   "seek_collab": {
+    "max": 0.0,
+    "mean": 0.0,
+    "min": 0.0,
+    "values": [
+     0.0
+    ]
+   },
+   "sr": {
+    "max": 0.0,
+    "mean": 0.0,
+    "min": 0.0,
+    "values": [
+     0.0
+    ]
+   }
+  },
+  "globals": {
+   "cct": {
+    "max": 1.0,
+    "mean": 1.0,
+    "min": 1.0,
+    "values": [
+     1.0
+    ]
+   },
+   "empathy": {
+    "max": 2.0,
+    "mean": 2.0,
+    "min": 2.0,
+    "values": [
+     2.0
+    ]
+   },
+   "partnership": {
+    "max": 1.0,
+    "mean": 1.0,
+    "min": 1.0,
+    "values": [
+     1.0
+    ]
+   },
+   "sst": {
+    "max": 1.0,
+    "mean": 1.0,
+    "min": 1.0,
+    "values": [
+     1.0
+    ]
+   }
+  },
+  "representative_run": 0,
+  "summaries": {
+   "pct_cr": {
+    "label": null,
+    "max": null,
+    "mean": null,
+    "min": null,
+    "reference": {
+     "fair": 0.4,
+     "good": 0.5
+    },
+    "values": [
+     null
+    ]
+   },
+   "reflection_question_ratio": {
+    "label": "below_fair",
+    "max": 0.0,
+    "mean": 0.0,
+    "min": 0.0,
+    "reference": {
+     "fair": 1.0,
+     "good": 2.0
+    },
+    "values": [
+     0.0
+    ]
+   },
+   "relational": {
+    "label": "below_fair",
+    "max": 1.5,
+    "mean": 1.5,
+    "min": 1.5,
+    "reference": {
+     "fair": 3.5,
+     "good": 4.0
+    },
+    "values": [
+     1.5
+    ]
+   },
+   "technical": {
+    "label": "below_fair",
+    "max": 1.0,
+    "mean": 1.0,
+    "min": 1.0,
+    "reference": {
+     "fair": 3.0,
+     "good": 4.0
+    },
+    "values": [
+     1.0
+    ]
+   },
+   "total_mia": {
+    "label": null,
+    "max": 0.0,
+    "mean": 0.0,
+    "min": 0.0,
+    "reference": null,
+    "values": [
+     0.0
+    ]
+   },
+   "total_mina": {
+    "label": null,
+    "max": 9.0,
+    "mean": 9.0,
+    "min": 9.0,
+    "reference": null,
+    "values": [
+     9.0
+    ]
+   }
+  }
+ },
+ "case": "poor_practice",
+ "payloads": [
+  {
+   "call_tag": "miti_code:r0:b1",
+   "drop_params": true,
+   "max_tokens": 64000,
+   "messages": [
+    {
+     "content": [
+      {
+       "cache_control": {
+        "type": "ephemeral"
+       },
+       "text": "<!-- DRAFT v1: wording pending certified-coder review. -->\nYou are assisting with a Motivational Interviewing Treatment Integrity (MITI 4.2.1) style\nreview of a session transcript. You propose behavior codes for the clinician's speech; software\nverifies every quote against the transcript and applies the counting rules. This is a research\naid, not an official MITI coding.\n\n## What you code\n- Code only the clinician's speech, grouped into volleys (uninterrupted clinician speech).\n  `context_before` contains recent client turns and the previous clinician volley as\n  read-only text. Use it to interpret meaning or permission; never code or quote it.\n  Code and quote only this volley's `clinician_turns`. Context may cross batch boundaries.\n- Split each volley into utterances: a complete thought or thought unit. Each utterance gets at\n  most one code, or null when it earns none.\n- Quote each utterance verbatim, in the transcript's original language, exactly as written.\n  Never paraphrase, merge across turns, or quote client speech.\n- Give a one-sentence rationale in English for each utterance.\n\n## Decision rules (from the manual; follow them)\n- When unsure whether to split an utterance, prefer fewer splits.\n- Prefer null over a weak code. Good practice that does not clearly fit a code stays uncoded.\n- Persuade vs Giving Information: if undecided, use Giving Information.\n- Persuade and Persuade with Permission in the same utterance: use Persuade with Permission\n  (manual p. 20). Software counts one persuasion slot per volley (manual p. 13). Giving\n  Persuade with Permission precedence across separate utterances is an engineering extension,\n  not a manual rule specifying which code wins across utterances.\n- Simple vs Complex Reflection: if undecided, use Simple Reflection.\n- Affirm / Seeking Collaboration / Emphasizing Autonomy: when unsure, use the lower of the\n  three (Affirm is lowest, Emphasizing Autonomy highest). When unsure whether an utterance is one\n  of these or a Question or Reflection, do not use these codes.\n- Confront vs Reflection: if truly unsure, use null. Confront outranks Persuade and Question.\n- Not coded (null): structuring statements, greetings, facilitative comments (\"okay, all\n  right, good\"), content from a previous session, incomplete thoughts, off-topic material,\n  non-specific praise, statements of support, self-disclosure that is not persuading.\n- A statement that only cues the client for the question that follows it is a structuring\n  statement, not a reflection.\n\nReport every utterance you split off, including uncoded ones only when they are clinician\nspeech you considered. Do not invent text. Counting limits per volley are enforced by software;\nyou may still report every utterance you judge to qualify.\n\n## Codes\n- gi (Giving Information): Manual p. 16: the clinician gives information, educates, provides feedback, or expresses a professional opinion without persuading, advising, or warning. Typically the tone is neutral and the language does not imply the information is specifically relevant to the client or that the client must act on it. Structuring statements (what will happen in the session, exercise instructions, scheduling) are not coded as Giving Information (manual p. 16). If the coder cannot decide between Persuade and Giving Information, use Giving Information (manual p. 17).\n    - example: \"The guidelines state that women should not drink more than seven drinks per week. (manual p. 16)\"\n    - example: \"Well, we know that sons of alcoholics carry an increased risk of problem drinking. (manual p. 18)\"\n- persuade (Persuade): Manual p. 17: the clinician makes overt attempts to change the client's opinions, attitudes, or behavior using logic, compelling arguments, self-disclosure, or facts (with an explicit link to an overt message to change). Also coded when the clinician gives biased information, advice, suggestions, tips, opinions, or solutions without an explicit statement or strong contextual cue emphasizing the client's autonomy in receiving the recommendation. Neutral information without an explicit focus on influencing is Giving Information. Persuade sets a relatively high bar: if undecided between Persuade and Giving Information, use Giving Information (manual p. 17). Persuade is a MI Non-Adherent code (manual p. 29); Confront trumps Persuade (manual p. 31). When Persuade and Persuade with Permission occur in the same utterance, assign only Persuade with Permission (manual p. 20).\n    - example: \"You just don't know how good your life can be if you quit drinking altogether. (manual p. 17)\"\n    - example: \"Continuing to drink at these levels can really harm your liver. (manual p. 17)\"\n- persuade_permission (Persuade with Permission): Manual p. 18: assigned when the interviewer includes an emphasis on collaboration or autonomy support while persuading. Permission may be present when (1) the client asks directly for the clinician's opinion, (2) the clinician asks the client directly for permission to advise, suggest, give opinion, offer feedback, express concerns, make recommendations, or discuss a topic, or (3) the clinician uses autonomy-supportive language to preface or qualify the advice so the client may discount, ignore, or evaluate it. Permission may come before, during, or after persuasion but must be close in time; a general permission may last several minutes, but a topic change, a more directive stance, significant added content, or prescribing a plan without asking again may earn Persuade instead (manual pp. 18-19). When Persuade and Persuade with Permission both occur in the same utterance, assign only Persuade with Permission (manual p. 20). The engine also gives Persuade with Permission precedence across utterances in a volley: an engineering extension of the single persuasion slot (manual p. 13), not a manual rule specifying which code wins across utterances. If accompanied by an explicit Seeking Collaboration or Emphasizing Autonomy, assign both (manual p. 18). If the coder is uncertain, prefer Giving Information (manual p. 19).\n    - example: \"I've had good luck with clients using the nicotine gum. (after the client has agreed to hear information; manual p. 20)\"\n- question (Question): Manual p. 20: all questions from clinicians (open, closed, evocative, fact-finding, etc.) receive the Question code, but only one question per volley is coded. Open and closed questions are not differentiated. Asking about the client's knowledge or understanding of a topic is a Question, not Seeking Collaboration (manual p. 27). Confront trumps Question (manual p. 30). A statement that only sets up a following question is a structuring statement and is not coded as a separate reflection (manual p. 23).\n    - example: \"What have you already been told about drinking during pregnancy? (manual p. 27)\"\n- sr (Simple Reflection): Manual pp. 20-21: reflective listening statements made in response to client statements that essentially capture and return something the client has just said. Simple reflections typically convey understanding or facilitate exchanges and add little or no meaning or emphasis; they may mark important or intense emotions but do not go far beyond the client's original statement. Summaries of several client statements may be simple reflections if the clinician does not use the summary to add a point or direction. If the coder cannot distinguish simple from complex (including summaries), code Simple Reflection (manual p. 22). Only one reflection code is given per volley (manual p. 13).\n    - example: \"You're furious about this. (manual p. 21)\"\n- cr (Complex Reflection): Manual p. 21: reflections that typically add substantial meaning or emphasis to what the client has said, conveying a deeper or more complex picture. The clinician may emphasize a particular part of what the client said to make a point or take the conversation in a different direction, may add subtle or obvious content to the client's words, or may combine client statements into summaries that are directional. Only one reflection code is given per volley; if any reflection in the volley is complex, code Complex Reflection (manual pp. 13, 22). A reflection followed by a question to check it: code both (manual p. 23).\n    - example: \"This is the last straw for you. (manual p. 21)\"\n    - example: \"You're having a hard time figuring out what your mother really wants. (manual p. 21)\"\n- affirm (Affirm): Manual p. 25: a clinician utterance that accentuates something positive about the client: the client's strengths, efforts, intentions, or worth. It must be given in a genuine manner, reflect something genuine about the client, and be explicitly linked to client behaviors or specific characteristics; it need not focus on the change goal. Agreement, approval, cheerleading, non-specific praise (\"You did great!\") and statements of support are not coded (manual pp. 25-26). Affirms are often complex reflections; then prefer Affirm. If unsure whether it is specific or strong enough, do not assign it (manual p. 26). Three strikes rule: after the first two or three, repeated affirmations are typically not coded (manual p. 26). Trumping order for the MI-Adherent codes: Emphasize over Seek over Affirm; when unsure use the lower code (manual pp. 24-25).\n    - example: \"You came up with a lot of great ideas on how to reduce your drinking. Great job brainstorming today. (manual p. 26)\"\n- seek_collab (Seeking Collaboration): Manual p. 26: assigned when the clinician explicitly attempts to share power or acknowledge the expertise of the client, or genuinely seeks consensus with the client on tasks, goals, or directions of the session. It may be assigned when the clinician asks what the client thinks about information provided; when permission to give information or advice is sought, Seeking Collaboration is typically assigned (manual pp. 26-27). Asking about the client's knowledge of a topic is a Question instead (manual p. 27). Withhold the code for rhetorical, rote, or superficial questions or if no genuine effort to share power is perceived; defer the code when undecided (manual p. 39).\n    - example: \"How can I help you with this? (manual p. 27)\"\n- emphasize_autonomy (Emphasizing Autonomy): Manual p. 28: utterances that clearly focus the responsibility with the client for decisions about and actions pertaining to change. They highlight the client's sense of control, freedom of choice, personal autonomy, or ability or obligation to decide about attitudes and actions. They are not statements that specifically emphasize the client's self-efficacy, confidence, or ability to perform a specific action. It is the highest in the MI-Adherent trumping order; the bar is intentionally set higher (manual pp. 24-25).\n    - example: \"The number of fruits and vegetables you choose to eat is really up to you. (manual p. 28)\"\n- confront (Confront): Manual p. 30: the clinician directly and unambiguously disagrees, argues, corrects, shames, blames, criticizes, labels, warns, moralizes, ridicules, or questions the client's honesty, with the quality of uneven power sharing accompanied by disapproval or negativity. Includes questions or reflections whose voice tone clearly indicates confrontation; most Confronts can be identified from tone and context. If the coder is not certain whether an utterance is Confront or Reflection, assign no code. Confront trumps Persuade (manual p. 31) and Question (manual p. 30). When confrontation is used to emphasize a client strength, consider Affirm (manual p. 31). Confront is a MI Non-Adherent code (manual p. 29).\n    - example: \"You have no concerns whatsoever about your drinking? (manual p. 30)\"\n\n## Examples\n### Example 1\nInput:\n{\n  \"volleys\": [\n    {\n      \"volley_id\": \"v1\",\n      \"context_before\": {\n        \"client_turns\": [\n          \"I keep saying I'll walk every morning and then I just don't.\"\n        ],\n        \"previous_clinician_volley\": null\n      },\n      \"clinician_turns\": [\n        {\n          \"turn_id\": \"t2\",\n          \"text\": \"It sounds like you really want that routine and something keeps getting in the way. What gets in the way most mornings?\"\n        }\n      ]\n    }\n  ]\n}\nOutput:\n{\n  \"volleys\": [\n    {\n      \"volley_id\": \"v1\",\n      \"utterances\": [\n        {\n          \"quote\": \"It sounds like you really want that routine and something keeps getting in the way.\",\n          \"code\": \"cr\",\n          \"rationale\": \"Adds the meaning that the client wants the routine, beyond what was said.\"\n        },\n        {\n          \"quote\": \"What gets in the way most mornings?\",\n          \"code\": \"question\",\n          \"rationale\": \"An open question.\"\n        }\n      ]\n    }\n  ]\n}\n\n### Example 2\nInput:\n{\n  \"volleys\": [\n    {\n      \"volley_id\": \"v2\",\n      \"context_before\": {\n        \"client_turns\": [\n          \"I guess I could try the stairs at work.\"\n        ],\n        \"previous_clinician_volley\": null\n      },\n      \"clinician_turns\": [\n        {\n          \"turn_id\": \"t4\",\n          \"text\": \"Okay. Would it be all right if I shared a few ideas other people have used? You can take or leave any of them.\"\n        }\n      ]\n    }\n  ]\n}\nOutput:\n{\n  \"volleys\": [\n    {\n      \"volley_id\": \"v2\",\n      \"utterances\": [\n        {\n          \"quote\": \"Okay.\",\n          \"code\": null,\n          \"rationale\": \"Facilitative comment.\"\n        },\n        {\n          \"quote\": \"Would it be all right if I shared a few ideas other people have used?\",\n          \"code\": \"seek_collab\",\n          \"rationale\": \"Asks permission before giving information.\"\n        },\n        {\n          \"quote\": \"You can take or leave any of them.\",\n          \"code\": \"emphasize_autonomy\",\n          \"rationale\": \"Highlights the client's freedom of choice.\"\n        }\n      ]\n    }\n  ]\n}\n\n## Output format\nReply with JSON only: {\"volleys\": [{\"volley_id\": \"...\", \"utterances\": [{\"quote\": \"...\", \"code\": \"<code id or null>\", \"rationale\": \"...\"}]}]}.\nReturn one entry per volley you were given: every volley id appears exactly once, in the order given. A volley with nothing to code still appears, with an empty \"utterances\" list (an empty list is allowed). Utterances are in text order. `quote` is copied verbatim from one clinician turn and never spans two turns. Use null for an utterance that earns no code.",
+       "type": "text"
+      },
+      {
+       "cache_control": {
+        "type": "ephemeral"
+       },
+       "text": "## Session\nTranscript language: en\nChange goal: cut back on evening drinking\nQuotes stay in the transcript's language; rationales are in English.",
+       "type": "text"
+      },
+      {
+       "text": "Code the clinician volleys in the user message.",
+       "type": "text"
+      }
+     ],
+     "role": "system"
+    },
+    {
+     "content": "{\"volleys\": [{\"volley_id\": \"v1\", \"context_before\": {\"client_turns\": [\"Hi. My wife asked me to come and talk about my drinking, so here I am.\"], \"previous_clinician_volley\": null}, \"clinician_turns\": [{\"turn_id\": \"t2\", \"text\": \"Let's get started. How many drinks do you have a night?\"}]}, {\"volley_id\": \"v2\", \"context_before\": {\"client_turns\": [\"Hi. My wife asked me to come and talk about my drinking, so here I am.\", \"A couple of glasses of wine, usually. It helps me unwind after work.\"], \"previous_clinician_volley\": \"Let's get started. How many drinks do you have a night?\"}, \"clinician_turns\": [{\"turn_id\": \"t4\", \"text\": \"A couple? People always say a couple. I doubt that's the real number. How about being honest with me?\"}]}, {\"volley_id\": \"v3\", \"context_before\": {\"client_turns\": [\"Hi. My wife asked me to come and talk about my drinking, so here I am.\", \"A couple of glasses of wine, usually. It helps me unwind after work.\", \"Okay, maybe closer to four. But I don't think it's a big problem. I never miss work.\"], \"previous_clinician_volley\": \"A couple? People always say a couple. I doubt that's the real number. How about being honest with me?\"}, \"clinician_turns\": [{\"turn_id\": \"t6\", \"text\": \"Four glasses a night is a problem, and you need to cut it down right away. Alcohol will wreck your liver and your sleep.\"}]}, {\"volley_id\": \"v4\", \"context_before\": {\"client_turns\": [\"Hi. My wife asked me to come and talk about my drinking, so here I am.\", \"A couple of glasses of wine, usually. It helps me unwind after work.\", \"Okay, maybe closer to four. But I don't think it's a big problem. I never miss work.\", \"I hear that a lot, honestly. I'm just not sure I'm ready to stop completely.\"], \"previous_clinician_volley\": \"Four glasses a night is a problem, and you need to cut it down right away. Alcohol will wreck your liver and your sleep.\"}, \"clinician_turns\": [{\"turn_id\": \"t8\", \"text\": \"Not ready? Then what are you doing here?\"}]}, {\"volley_id\": \"v5\", \"context_before\": {\"client_turns\": [\"A couple of glasses of wine, usually. It helps me unwind after work.\", \"Okay, maybe closer to four. But I don't think it's a big problem. I never miss work.\", \"I hear that a lot, honestly. I'm just not sure I'm ready to stop completely.\", \"That's not fair. I came because my wife asked me to. She worries.\"], \"previous_clinician_volley\": \"Not ready? Then what are you doing here?\"}, \"clinician_turns\": [{\"turn_id\": \"t10\", \"text\": \"Your wife is right to worry. Here is what you should do: pour out everything in the house and go to a meeting every night.\"}]}, {\"volley_id\": \"v6\", \"context_before\": {\"client_turns\": [\"Okay, maybe closer to four. But I don't think it's a big problem. I never miss work.\", \"I hear that a lot, honestly. I'm just not sure I'm ready to stop completely.\", \"That's not fair. I came because my wife asked me to. She worries.\", \"That seems like a lot. I don't know if I can do that.\"], \"previous_clinician_volley\": \"Your wife is right to worry. Here is what you should do: pour out everything in the house and go to a meeting every night.\"}, \"clinician_turns\": [{\"turn_id\": \"t12\", \"text\": \"The guidelines say men should have no more than fourteen units a week. Do you know how many units that is?\"}]}, {\"volley_id\": \"v7\", \"context_before\": {\"client_turns\": [\"I hear that a lot, honestly. I'm just not sure I'm ready to stop completely.\", \"That's not fair. I came because my wife asked me to. She worries.\", \"That seems like a lot. I don't know if I can do that.\", \"Not really, no. I guess it's less than I have.\"], \"previous_clinician_volley\": \"The guidelines say men should have no more than fourteen units a week. Do you know how many units that is?\"}, \"clinician_turns\": [{\"turn_id\": \"t14\", \"text\": \"It's a lot less. Do you drink on weekends too? Do you drink alone? Do you drink before noon?\"}]}, {\"volley_id\": \"v8\", \"context_before\": {\"client_turns\": [\"That's not fair. I came because my wife asked me to. She worries.\", \"That seems like a lot. I don't know if I can do that.\", \"Not really, no. I guess it's less than I have.\", \"Weekends, yes. Alone, mostly. Not before noon, no.\"], \"previous_clinician_volley\": \"It's a lot less. Do you drink on weekends too? Do you drink alone? Do you drink before noon?\"}, \"clinician_turns\": [{\"turn_id\": \"t16\", \"text\": \"You drink alone every night and you think that's fine?\"}]}, {\"volley_id\": \"v9\", \"context_before\": {\"client_turns\": [\"That seems like a lot. I don't know if I can do that.\", \"Not really, no. I guess it's less than I have.\", \"Weekends, yes. Alone, mostly. Not before noon, no.\", \"I never said it was fine. I just don't know what else to do at night.\"], \"previous_clinician_volley\": \"You drink alone every night and you think that's fine?\"}, \"clinician_turns\": [{\"turn_id\": \"t18\", \"text\": \"Plenty of people manage without drinking, so you can too. Just stop.\"}]}, {\"volley_id\": \"v10\", \"context_before\": {\"client_turns\": [\"Not really, no. I guess it's less than I have.\", \"Weekends, yes. Alone, mostly. Not before noon, no.\", \"I never said it was fine. I just don't know what else to do at night.\", \"It sounds easy when you say it.\"], \"previous_clinician_volley\": \"Plenty of people manage without drinking, so you can too. Just stop.\"}, \"clinician_turns\": [{\"turn_id\": \"t20\", \"text\": \"It is easy if you want it badly enough. Maybe you don't.\"}]}, {\"volley_id\": \"v11\", \"context_before\": {\"client_turns\": [\"Weekends, yes. Alone, mostly. Not before noon, no.\", \"I never said it was fine. I just don't know what else to do at night.\", \"It sounds easy when you say it.\", \"I do want to. I'm tired of feeling guilty.\"], \"previous_clinician_volley\": \"It is easy if you want it badly enough. Maybe you don't.\"}, \"clinician_turns\": [{\"turn_id\": \"t22\", \"text\": \"Good. Write down every drink for the next month and bring it back, no excuses.\"}]}, {\"volley_id\": \"v12\", \"context_before\": {\"client_turns\": [\"I never said it was fine. I just don't know what else to do at night.\", \"It sounds easy when you say it.\", \"I do want to. I'm tired of feeling guilty.\", \"Fine. I'll try.\"], \"previous_clinician_volley\": \"Good. Write down every drink for the next month and bring it back, no excuses.\"}, \"clinician_turns\": [{\"turn_id\": \"t24\", \"text\": \"Come back next week. Don't miss the appointment.\"}]}]}",
+     "role": "user"
+    }
+   ],
+   "model": "anthropic/claude-sonnet-5-5",
+   "num_retries": 0,
+   "reasoning_effort": "low",
+   "response_format": {
+    "type": "json_object"
+   },
+   "timeout": 300
+  },
+  {
+   "call_tag": "miti_globals:r0:g",
+   "drop_params": true,
+   "max_tokens": 64000,
+   "messages": [
+    {
+     "content": [
+      {
+       "cache_control": {
+        "type": "ephemeral"
+       },
+       "text": "<!-- DRAFT v1: wording pending certified-coder review. -->\nYou are assisting with a Motivational Interviewing Treatment Integrity (MITI 4.2.1) style\nreview. Rate four global dimensions for the whole coded span of the clinician's session, using\nthe definitions and anchors provided. This is a research aid, not an official MITI coding.\n\n## How to rate\n- Rate the clinician's overall impression on each scale, 1 to 5. Start from the default 3\n  (which may also reflect mixed practice) and move up or down only when the transcript\n  supports it.\n- Low scores need evidence of clinician behavior that meets the low-score anchors.\n- The overall (gestalt) judgment matters most; do not average individual behaviors.\n- Cite evidence: for each global, give the turn ids and short verbatim quotes (original\n  language, exactly as written) that support the score. Quote clinician speech; the client's\n  words may be cited only where they show the effect of the clinician's behavior.\n- Write one concise English sentence for each score, aiming for about 20 words. Preserve uncertainty and any important qualification. Keep turn IDs and utterance numbers out of the reason; supply all supporting references in the structured evidence field.\n- Do not invent text, turn ids, or timestamps. If the transcript lacks evidence for a global,\n  say so and stay at the default.\n- Cultivating Change Talk: do not penalize the clinician when the client offers no change talk\n  or does not respond to efforts to evoke it.\n- Softening Sustain Talk: a high score is allowed when no sustain talk occurs, provided the\n  clinician did not elicit it; lower it when the clinician responds inappropriately to the\n  sustain talk that does occur.\n- A 5 is generally not given when there are prominent examples of poor practice in the segment.\n  List any such examples you see for a global in `poor_practice_cited` (turn id and quote);\n  leave it empty if there are none.\n- Do not use counts or tallies of behaviors; you are not given them.\n\n## Globals\n- cct (Cultivating Change Talk), scale 1-5, default 3: Manual p. 5: the extent to which the clinician actively encourages the client's own language in favor of the change goal, and confidence for making that change. For higher ratings the change goal must be obvious in the session and the conversation largely focused on change, with the clinician actively cultivating change talk when possible. Low scores occur when the clinician is inattentive to the client's language about change (fails to recognize and follow up on it, or prioritizes history-taking, assessment or non-directive listening). Manual p. 5: do not penalize the clinician if the client does not offer change talk or does not respond to efforts to evoke it. Anchors (manual pp. 5-6): 1 no explicit attention to or preference for the client's language in favor of changing; 2 sporadic attention, frequently misses opportunities; 3 often attends but misses some opportunities; 4 consistently attends and makes efforts to encourage it; 5 marked and consistent effort to increase the depth, strength, or momentum of the client's language in favor of change.\n- sst (Softening Sustain Talk), scale 1-5, default 3: Manual p. 7: the extent that the clinician avoids a focus on the reasons against changing or for maintaining the status quo. To achieve high scores the clinician should avoid lingering in discussions of the difficulty or undesirability of change, spending only as much time on sustain talk as needed to bring the discussion into more favorable territory. High scores may also be achieved when no sustain talk occurs, if the clinician does not engage in behaviors to evoke it (manual p. 7; FAQ 6, p. 38). Lower the rating when sustain talk is infrequent but the clinician responds inappropriately to it (manual p. 38). Anchors (manual pp. 7-8): 1 consistently facilitates the frequency or depth of arguments for the status quo; 2 usually explores or responds to the status quo; 3 gives preference to status-quo language but shows some shifting away; 4 typically avoids an emphasis on status-quo language; 5 marked and consistent effort to decrease the depth, strength, or momentum of status-quo language.\n- partnership (Partnership), scale 1-5, default 3: Manual p. 9: the extent to which the clinician conveys an understanding that expertise and wisdom about change reside mostly within the client. Clinicians high on the scale behave as if the interview is between two equal partners; clinicians low on the scale assume the expert role for a majority of the interaction and have a high degree of influence on its nature. Anchors (manual pp. 9-10): 1 actively assumes the expert role, partnership absent; 2 superficially responds to opportunities to collaborate; 3 incorporates the client's contributions in a lukewarm or erratic fashion; 4 fosters collaboration and power sharing so the client's contributions impact the session; 5 actively fosters and encourages power sharing so the client's contributions substantially influence the session. Manual pp. 37-38 (FAQ 5): the rating may be lowered even when Persuade with Permission is counted, e.g. permission asked for virtually every comment, perfunctory or insincere permission, no time for the client to respond, or overstretched or \"dumped\" information.\n- empathy (Empathy), scale 1-5, default 3: Manual p. 11: the extent to which the clinician understands or makes an effort to grasp the client's perspective and experience (tries to \"try on\" what the client feels or thinks). Empathy is not sympathy, warmth, acceptance, genuineness, support, or client advocacy. Reflective listening is an important part, but the rating captures all efforts to understand the client's perspective and convey that understanding. Anchors (manual pp. 11-12): 1 little or no attention to the client's perspective; 2 sporadic efforts, understanding may be inaccurate; 3 actively trying to understand, with modest success; 4 active and repeated efforts, accurate understanding mostly limited to explicit content; 5 deep understanding of the client's point of view, not just what has been stated but what the client means and has not yet said.\n\n## Examples\n### Example 1\nInput:\n{\n  \"change_goal\": \"walk more each day\",\n  \"turns\": [\n    {\n      \"turn_id\": \"t1\",\n      \"speaker\": \"client\",\n      \"text\": \"I keep meaning to walk more and I don't.\"\n    },\n    {\n      \"turn_id\": \"t2\",\n      \"speaker\": \"clinician\",\n      \"text\": \"You want to walk more and it keeps slipping. What would be different if it happened?\"\n    },\n    {\n      \"turn_id\": \"t3\",\n      \"speaker\": \"client\",\n      \"text\": \"I'd have more energy, I think.\"\n    },\n    {\n      \"turn_id\": \"t4\",\n      \"speaker\": \"clinician\",\n      \"text\": \"More energy matters to you. You decide what fits your week; where would you like to start?\"\n    }\n  ]\n}\nOutput:\n{\n  \"globals\": {\n    \"cct\": {\n      \"score\": 4,\n      \"reason\": \"Asks what would be different and returns to the client's reason for change.\",\n      \"evidence\": [\n        {\n          \"turn_id\": \"t2\",\n          \"quote\": \"What would be different if it happened?\"\n        }\n      ],\n      \"poor_practice_cited\": []\n    },\n    \"sst\": {\n      \"score\": 3,\n      \"reason\": \"Little sustain talk appears; no evidence either way, so the default is kept.\",\n      \"evidence\": [],\n      \"poor_practice_cited\": []\n    },\n    \"partnership\": {\n      \"score\": 4,\n      \"reason\": \"Hands the decision to the client.\",\n      \"evidence\": [\n        {\n          \"turn_id\": \"t4\",\n          \"quote\": \"You decide what fits your week\"\n        }\n      ],\n      \"poor_practice_cited\": []\n    },\n    \"empathy\": {\n      \"score\": 4,\n      \"reason\": \"Accurate reflections of what the client said.\",\n      \"evidence\": [\n        {\n          \"turn_id\": \"t2\",\n          \"quote\": \"You want to walk more and it keeps slipping.\"\n        },\n        {\n          \"turn_id\": \"t4\",\n          \"quote\": \"More energy matters to you.\"\n        }\n      ],\n      \"poor_practice_cited\": []\n    }\n  }\n}\n\n## Output format\nReply with JSON only: {\"globals\": {\"<id>\": {\"score\": <integer on the scale>, \"reason\": \"...\", \"evidence\": [{\"turn_id\": \"...\", \"quote\": \"...\"}], \"poor_practice_cited\": [{\"turn_id\": \"...\", \"quote\": \"...\"}]}}}.\nInclude every global id. Each `quote` is copied verbatim from one turn and never spans two turns. Use empty lists when there is nothing to cite.",
+       "type": "text"
+      },
+      {
+       "cache_control": {
+        "type": "ephemeral"
+       },
+       "text": "## Session\nTranscript language: en\nQuotes stay in the transcript's language; reasons are in English.",
+       "type": "text"
+      },
+      {
+       "text": "Rate the globals for the span in the user message.",
+       "type": "text"
+      }
+     ],
+     "role": "system"
+    },
+    {
+     "content": "{\"change_goal\": \"cut back on evening drinking\", \"turns\": [{\"turn_id\": \"t1\", \"speaker\": \"client\", \"text\": \"Hi. My wife asked me to come and talk about my drinking, so here I am.\"}, {\"turn_id\": \"t2\", \"speaker\": \"clinician\", \"text\": \"Let's get started. How many drinks do you have a night?\"}, {\"turn_id\": \"t3\", \"speaker\": \"client\", \"text\": \"A couple of glasses of wine, usually. It helps me unwind after work.\"}, {\"turn_id\": \"t4\", \"speaker\": \"clinician\", \"text\": \"A couple? People always say a couple. I doubt that's the real number. How about being honest with me?\"}, {\"turn_id\": \"t5\", \"speaker\": \"client\", \"text\": \"Okay, maybe closer to four. But I don't think it's a big problem. I never miss work.\"}, {\"turn_id\": \"t6\", \"speaker\": \"clinician\", \"text\": \"Four glasses a night is a problem, and you need to cut it down right away. Alcohol will wreck your liver and your sleep.\"}, {\"turn_id\": \"t7\", \"speaker\": \"client\", \"text\": \"I hear that a lot, honestly. I'm just not sure I'm ready to stop completely.\"}, {\"turn_id\": \"t8\", \"speaker\": \"clinician\", \"text\": \"Not ready? Then what are you doing here?\"}, {\"turn_id\": \"t9\", \"speaker\": \"client\", \"text\": \"That's not fair. I came because my wife asked me to. She worries.\"}, {\"turn_id\": \"t10\", \"speaker\": \"clinician\", \"text\": \"Your wife is right to worry. Here is what you should do: pour out everything in the house and go to a meeting every night.\"}, {\"turn_id\": \"t11\", \"speaker\": \"client\", \"text\": \"That seems like a lot. I don't know if I can do that.\"}, {\"turn_id\": \"t12\", \"speaker\": \"clinician\", \"text\": \"The guidelines say men should have no more than fourteen units a week. Do you know how many units that is?\"}, {\"turn_id\": \"t13\", \"speaker\": \"client\", \"text\": \"Not really, no. I guess it's less than I have.\"}, {\"turn_id\": \"t14\", \"speaker\": \"clinician\", \"text\": \"It's a lot less. Do you drink on weekends too? Do you drink alone? Do you drink before noon?\"}, {\"turn_id\": \"t15\", \"speaker\": \"client\", \"text\": \"Weekends, yes. Alone, mostly. Not before noon, no.\"}, {\"turn_id\": \"t16\", \"speaker\": \"clinician\", \"text\": \"You drink alone every night and you think that's fine?\"}, {\"turn_id\": \"t17\", \"speaker\": \"client\", \"text\": \"I never said it was fine. I just don't know what else to do at night.\"}, {\"turn_id\": \"t18\", \"speaker\": \"clinician\", \"text\": \"Plenty of people manage without drinking, so you can too. Just stop.\"}, {\"turn_id\": \"t19\", \"speaker\": \"client\", \"text\": \"It sounds easy when you say it.\"}, {\"turn_id\": \"t20\", \"speaker\": \"clinician\", \"text\": \"It is easy if you want it badly enough. Maybe you don't.\"}, {\"turn_id\": \"t21\", \"speaker\": \"client\", \"text\": \"I do want to. I'm tired of feeling guilty.\"}, {\"turn_id\": \"t22\", \"speaker\": \"clinician\", \"text\": \"Good. Write down every drink for the next month and bring it back, no excuses.\"}, {\"turn_id\": \"t23\", \"speaker\": \"client\", \"text\": \"Fine. I'll try.\"}, {\"turn_id\": \"t24\", \"speaker\": \"clinician\", \"text\": \"Come back next week. Don't miss the appointment.\"}, {\"turn_id\": \"t25\", \"speaker\": \"client\", \"text\": \"Okay.\"}]}",
+     "role": "user"
+    }
+   ],
+   "model": "anthropic/claude-sonnet-5-5",
+   "num_retries": 0,
+   "reasoning_effort": "low",
+   "response_format": {
+    "type": "json_object"
+   },
+   "timeout": 300
+  },
+  {
+   "call_tag": "tips:r0",
+   "drop_params": true,
+   "max_tokens": 64000,
+   "messages": [
+    {
+     "content": [
+      {
+       "cache_control": {
+        "type": "ephemeral"
+       },
+       "text": "<!-- DRAFT v1: wording pending certified-coder review. -->\nYou are helping a clinician learn from their own session. You receive Onolys's own reading of\nthe session (counted behaviors with quotes, global scores with reasons, summary values against\nreference levels) and the clinician's turns, each with the client turn just before it. This is a\nresearch aid, not an official MITI coding.\n\n## Task\nPropose up to 7 short, practical tips, most useful first. Each tip is tied to ONE item of the\nprotocol and ONE clinician turn.\n\n## What makes a good tip\n- Start from what Onolys's reading shows: a counted behavior that was rare or heavy, a global\n  with a low score or a stated reason, or a summary value below its reference level. Pick the\n  turns where a different wording would most plausibly change that picture.\n- Each tip is one concrete change to wording or approach. No praise-only tips and no \"keep doing\n  this\"; if a turn already works, leave it out.\n- `title`: a specific, action-oriented idea title in 3–8 words, such as \"Reflect the feeling before asking\".\n- `observation`: one concise sentence describing what Onolys reads in that turn, beginning \"Onolys reads this as ...\". Aim for 1–2 lines; preserve important qualifications.\n- `quote`: copy a short passage from the clinician's turn exactly as written. It must sit inside\n  one clinician turn. Never quote the client, never invent or tidy up wording.\n- `alternative`: example wording, one or two sentences the clinician could say instead, ready to say\n  as written, in the same language as the quote and fitting the client's last words. It must\n  differ from the quote.\n- `why_it_matters`: one sentence on the likely effect on the client, linked to the item.\n- At most two tips per item, and only one tip per item and turn. Cover different items where\n  the reading allows it.\n\n## Tone\nBe warm, specific and brief. Describe the wording, not the person. No verdicts, no blame, no\n\"you should have\". Use phrasing such as \"Onolys reads this as ...\" and \"one option is ...\".\nOffer tips only where the reading supports them; do not pad the list.\n\n## Example (synthetic)\nReading: question count high, reflections low. Clinician turn: \"Do you exercise? How often?\nWhat gets in the way?\" Client before: \"I have been feeling flat lately.\"\nTip: item `cr`; title \"Reflect the feeling before asking\"; observation \"Onolys reads this as three questions following a shared feeling\";\nquote \"Do you exercise?\"; alternative \"It sounds like the flat feeling has been weighing on you.\nWhat would you like to look at first?\"; why_it_matters \"A reflection first shows the feeling was\nheard before the conversation moves on.\"\n\n## Items\n- cct (Cultivating Change Talk, global)\n- sst (Softening Sustain Talk, global)\n- partnership (Partnership, global)\n- empathy (Empathy, global)\n- gi (Giving Information, count)\n- persuade (Persuade, count)\n- persuade_permission (Persuade with Permission, count)\n- question (Question, count)\n- sr (Simple Reflection, count)\n- cr (Complex Reflection, count)\n- affirm (Affirm, count)\n- seek_collab (Seeking Collaboration, count)\n- emphasize_autonomy (Emphasizing Autonomy, count)\n- confront (Confront, count)\n\n## Output format\nReply with JSON only: {\"tips\": [{\"title\": \"...\", \"item_id\": \"...\", \"observation\": \"...\", \"quote\": {\"turn_id\": \"...\", \"text\": \"...\"}, \"alternative\": \"...\", \"why_it_matters\": \"...\"}]}.\nPropose at most 7 tips, ordered by expected impact. `item_id` is one id from the list of items. `quote.text` is copied verbatim from the one clinician turn named by `turn_id`. `alternative` is one or two sentences of replacement wording, not a copy of the quote. Use at most two tips per item and one tip per item and turn. If the user message lists `violations`, propose a corrected set that avoids them. Write in English, except quotes, which stay in the transcript's language.",
+       "type": "text"
+      },
+      {
+       "cache_control": {
+        "type": "ephemeral"
+       },
+       "text": "## Session\nTranscript language: en",
+       "type": "text"
+      },
+      {
+       "text": "Propose coaching tips from the rating in the user message.",
+       "type": "text"
+      }
+     ],
+     "role": "system"
+    },
+    {
+     "content": "{\"change_goal\": \"cut back on evening drinking\", \"onolys\": {\"counts\": {\"gi\": 2, \"persuade\": 5, \"persuade_permission\": 0, \"question\": 3, \"sr\": 0, \"cr\": 0, \"affirm\": 0, \"seek_collab\": 0, \"emphasize_autonomy\": 0, \"confront\": 4}, \"instances\": [{\"turn_id\": \"t2\", \"code\": \"question\", \"quote\": \"How many drinks do you have a night?\", \"rationale\": \"Intended code: question (synthetic).\"}, {\"turn_id\": \"t4\", \"code\": \"confront\", \"quote\": \"I doubt that's the real number.\", \"rationale\": \"Intended code: confront (synthetic).\"}, {\"turn_id\": \"t6\", \"code\": \"persuade\", \"quote\": \"Four glasses a night is a problem, and you need to cut it down right away.\", \"rationale\": \"Intended code: persuade (synthetic).\"}, {\"turn_id\": \"t8\", \"code\": \"confront\", \"quote\": \"Not ready? Then what are you doing here?\", \"rationale\": \"Intended code: confront (synthetic).\"}, {\"turn_id\": \"t10\", \"code\": \"persuade\", \"quote\": \"Here is what you should do: pour out everything in the house and go to a meeting every night.\", \"rationale\": \"Intended code: persuade (synthetic).\"}, {\"turn_id\": \"t12\", \"code\": \"gi\", \"quote\": \"The guidelines say men should have no more than fourteen units a week.\", \"rationale\": \"Intended code: gi (synthetic).\"}, {\"turn_id\": \"t12\", \"code\": \"question\", \"quote\": \"Do you know how many units that is?\", \"rationale\": \"Intended code: question (synthetic).\"}, {\"turn_id\": \"t14\", \"code\": \"gi\", \"quote\": \"It's a lot less.\", \"rationale\": \"Intended code: gi (synthetic).\"}, {\"turn_id\": \"t14\", \"code\": \"question\", \"quote\": \"Do you drink on weekends too?\", \"rationale\": \"Intended code: question (synthetic).\"}, {\"turn_id\": \"t16\", \"code\": \"confront\", \"quote\": \"You drink alone every night and you think that's fine?\", \"rationale\": \"Intended code: confront (synthetic).\"}, {\"turn_id\": \"t18\", \"code\": \"persuade\", \"quote\": \"Plenty of people manage without drinking, so you can too. Just stop.\", \"rationale\": \"Intended code: persuade (synthetic).\"}, {\"turn_id\": \"t20\", \"code\": \"persuade\", \"quote\": \"It is easy if you want it badly enough.\", \"rationale\": \"Intended code: persuade (synthetic).\"}, {\"turn_id\": \"t20\", \"code\": \"confront\", \"quote\": \"Maybe you don't.\", \"rationale\": \"Intended code: confront (synthetic).\"}, {\"turn_id\": \"t22\", \"code\": \"persuade\", \"quote\": \"Write down every drink for the next month and bring it back, no excuses.\", \"rationale\": \"Intended code: persuade (synthetic).\"}], \"globals\": {\"cct\": {\"score\": 1, \"reason\": \"Never evokes the client's own reasons; argues for change instead.\", \"evidence\": [\"Four glasses a night is a problem\", \"Here is what you should do\"]}, \"sst\": {\"score\": 1, \"reason\": \"Direction is imposed by the clinician, not built on the client's language.\", \"evidence\": [\"I doubt that's the real number.\", \"Just stop.\"]}, \"partnership\": {\"score\": 1, \"reason\": \"Clinician holds the power; client's view is overridden and challenged.\", \"evidence\": [\"Here is what you should do\", \"It is easy if you want it badly enough.\"]}, \"empathy\": {\"score\": 2, \"reason\": \"Little effort to understand; the client's perspective is dismissed.\", \"evidence\": [\"Then what are you doing here?\", \"You drink alone every night and you think that's fine?\"]}}, \"summaries\": {\"technical\": {\"value\": 1.0, \"label\": \"below_fair\", \"reference\": {\"fair\": 3.0, \"good\": 4.0}}, \"relational\": {\"value\": 1.5, \"label\": \"below_fair\", \"reference\": {\"fair\": 3.5, \"good\": 4.0}}, \"pct_cr\": {\"value\": null, \"label\": null, \"reference\": {\"fair\": 0.4, \"good\": 0.5}}, \"reflection_question_ratio\": {\"value\": 0.0, \"label\": \"below_fair\", \"reference\": {\"fair\": 1.0, \"good\": 2.0}}, \"total_mia\": {\"value\": 0.0, \"label\": null, \"reference\": null}, \"total_mina\": {\"value\": 9.0, \"label\": null, \"reference\": null}}}, \"clinician_turns\": [{\"turn_id\": \"t2\", \"text\": \"Let's get started. How many drinks do you have a night?\", \"preceding_client_turn\": {\"turn_id\": \"t1\", \"text\": \"Hi. My wife asked me to come and talk about my drinking, so here I am.\"}}, {\"turn_id\": \"t4\", \"text\": \"A couple? People always say a couple. I doubt that's the real number. How about being honest with me?\", \"preceding_client_turn\": {\"turn_id\": \"t3\", \"text\": \"A couple of glasses of wine, usually. It helps me unwind after work.\"}}, {\"turn_id\": \"t6\", \"text\": \"Four glasses a night is a problem, and you need to cut it down right away. Alcohol will wreck your liver and your sleep.\", \"preceding_client_turn\": {\"turn_id\": \"t5\", \"text\": \"Okay, maybe closer to four. But I don't think it's a big problem. I never miss work.\"}}, {\"turn_id\": \"t8\", \"text\": \"Not ready? Then what are you doing here?\", \"preceding_client_turn\": {\"turn_id\": \"t7\", \"text\": \"I hear that a lot, honestly. I'm just not sure I'm ready to stop completely.\"}}, {\"turn_id\": \"t10\", \"text\": \"Your wife is right to worry. Here is what you should do: pour out everything in the house and go to a meeting every night.\", \"preceding_client_turn\": {\"turn_id\": \"t9\", \"text\": \"That's not fair. I came because my wife asked me to. She worries.\"}}, {\"turn_id\": \"t12\", \"text\": \"The guidelines say men should have no more than fourteen units a week. Do you know how many units that is?\", \"preceding_client_turn\": {\"turn_id\": \"t11\", \"text\": \"That seems like a lot. I don't know if I can do that.\"}}, {\"turn_id\": \"t14\", \"text\": \"It's a lot less. Do you drink on weekends too? Do you drink alone? Do you drink before noon?\", \"preceding_client_turn\": {\"turn_id\": \"t13\", \"text\": \"Not really, no. I guess it's less than I have.\"}}, {\"turn_id\": \"t16\", \"text\": \"You drink alone every night and you think that's fine?\", \"preceding_client_turn\": {\"turn_id\": \"t15\", \"text\": \"Weekends, yes. Alone, mostly. Not before noon, no.\"}}, {\"turn_id\": \"t18\", \"text\": \"Plenty of people manage without drinking, so you can too. Just stop.\", \"preceding_client_turn\": {\"turn_id\": \"t17\", \"text\": \"I never said it was fine. I just don't know what else to do at night.\"}}, {\"turn_id\": \"t20\", \"text\": \"It is easy if you want it badly enough. Maybe you don't.\", \"preceding_client_turn\": {\"turn_id\": \"t19\", \"text\": \"It sounds easy when you say it.\"}}, {\"turn_id\": \"t22\", \"text\": \"Good. Write down every drink for the next month and bring it back, no excuses.\", \"preceding_client_turn\": {\"turn_id\": \"t21\", \"text\": \"I do want to. I'm tired of feeling guilty.\"}}, {\"turn_id\": \"t24\", \"text\": \"Come back next week. Don't miss the appointment.\", \"preceding_client_turn\": {\"turn_id\": \"t23\", \"text\": \"Fine. I'll try.\"}}]}",
+     "role": "user"
+    }
+   ],
+   "model": "anthropic/claude-sonnet-5-5",
+   "num_retries": 0,
+   "reasoning_effort": "low",
+   "response_format": {
+    "type": "json_object"
+   },
+   "timeout": 300
+  }
+ ],
+ "report": {
+  "aggregates": {
+   "avg_abs_global_difference": null,
+   "counts_flagged": null,
+   "globals_compared": 0,
+   "within_one_share": null
+  },
+  "behaviours": [
+   {
+    "clinician_count": null,
+    "clinician_note": null,
+    "diff": {
+     "abs": null,
+     "direction": null,
+     "signed": null,
+     "status": "not_rated",
+     "within_one": null
+    },
+    "explanation": {
+     "body": [
+      "Onolys counted 2."
+     ],
+     "clinician_support_lines": [],
+     "headline": "Onolys's reading",
+     "onolys_lines": [
+      {
+       "end": 70,
+       "quote": "The guidelines say men should have no more than fourteen units a week.",
+       "start": 0,
+       "turn_id": "t12"
+      },
+      {
+       "end": 16,
+       "quote": "It's a lot less.",
+       "start": 0,
+       "turn_id": "t14"
+      }
+     ]
+    },
+    "instances": [
+     {
+      "end": 70,
+      "id": "i11",
+      "quote": "The guidelines say men should have no more than fourteen units a week.",
+      "rationale": "Intended code: gi (synthetic).",
+      "start": 0,
+      "turn_id": "t12"
+     },
+     {
+      "end": 16,
+      "id": "i13",
+      "quote": "It's a lot less.",
+      "rationale": "Intended code: gi (synthetic).",
+      "start": 0,
+      "turn_id": "t14"
+     }
+    ],
+    "instances_total": 2,
+    "item_id": "gi",
+    "onolys_count": {
+     "max": 2.0,
+     "mean": 2.0,
+     "min": 2.0,
+     "values": [
+      2.0
+     ]
+    }
+   },
+   {
+    "clinician_count": null,
+    "clinician_note": null,
+    "diff": {
+     "abs": null,
+     "direction": null,
+     "signed": null,
+     "status": "not_rated",
+     "within_one": null
+    },
+    "explanation": {
+     "body": [
+      "Onolys counted 5."
+     ],
+     "clinician_support_lines": [],
+     "headline": "Onolys's reading",
+     "onolys_lines": [
+      {
+       "end": 74,
+       "quote": "Four glasses a night is a problem, and you need to cut it down right away.",
+       "start": 0,
+       "turn_id": "t6"
+      },
+      {
+       "end": 122,
+       "quote": "Here is what you should do: pour out everything in the house and go to a meeting every night.",
+       "start": 29,
+       "turn_id": "t10"
+      },
+      {
+       "end": 68,
+       "quote": "Plenty of people manage without drinking, so you can too. Just stop.",
+       "start": 0,
+       "turn_id": "t18"
+      },
+      {
+       "end": 39,
+       "quote": "It is easy if you want it badly enough.",
+       "start": 0,
+       "turn_id": "t20"
+      },
+      {
+       "end": 78,
+       "quote": "Write down every drink for the next month and bring it back, no excuses.",
+       "start": 6,
+       "turn_id": "t22"
+      }
+     ]
+    },
+    "instances": [
+     {
+      "end": 74,
+      "id": "i6",
+      "quote": "Four glasses a night is a problem, and you need to cut it down right away.",
+      "rationale": "Intended code: persuade (synthetic).",
+      "start": 0,
+      "turn_id": "t6"
+     },
+     {
+      "end": 122,
+      "id": "i10",
+      "quote": "Here is what you should do: pour out everything in the house and go to a meeting every night.",
+      "rationale": "Intended code: persuade (synthetic).",
+      "start": 29,
+      "turn_id": "t10"
+     },
+     {
+      "end": 68,
+      "id": "i18",
+      "quote": "Plenty of people manage without drinking, so you can too. Just stop.",
+      "rationale": "Intended code: persuade (synthetic).",
+      "start": 0,
+      "turn_id": "t18"
+     },
+     {
+      "end": 39,
+      "id": "i19",
+      "quote": "It is easy if you want it badly enough.",
+      "rationale": "Intended code: persuade (synthetic).",
+      "start": 0,
+      "turn_id": "t20"
+     },
+     {
+      "end": 78,
+      "id": "i22",
+      "quote": "Write down every drink for the next month and bring it back, no excuses.",
+      "rationale": "Intended code: persuade (synthetic).",
+      "start": 6,
+      "turn_id": "t22"
+     }
+    ],
+    "instances_total": 5,
+    "item_id": "persuade",
+    "onolys_count": {
+     "max": 5.0,
+     "mean": 5.0,
+     "min": 5.0,
+     "values": [
+      5.0
+     ]
+    }
+   },
+   {
+    "clinician_count": null,
+    "clinician_note": null,
+    "diff": {
+     "abs": null,
+     "direction": null,
+     "signed": null,
+     "status": "not_rated",
+     "within_one": null
+    },
+    "explanation": {
+     "body": [
+      "Onolys counted 0."
+     ],
+     "clinician_support_lines": [],
+     "headline": "Onolys's reading",
+     "onolys_lines": []
+    },
+    "instances": [],
+    "instances_total": 0,
+    "item_id": "persuade_permission",
+    "onolys_count": {
+     "max": 0.0,
+     "mean": 0.0,
+     "min": 0.0,
+     "values": [
+      0.0
+     ]
+    }
+   },
+   {
+    "clinician_count": null,
+    "clinician_note": null,
+    "diff": {
+     "abs": null,
+     "direction": null,
+     "signed": null,
+     "status": "not_rated",
+     "within_one": null
+    },
+    "explanation": {
+     "body": [
+      "Onolys counted 3."
+     ],
+     "clinician_support_lines": [],
+     "headline": "Onolys's reading",
+     "onolys_lines": [
+      {
+       "end": 55,
+       "quote": "How many drinks do you have a night?",
+       "start": 19,
+       "turn_id": "t2"
+      },
+      {
+       "end": 106,
+       "quote": "Do you know how many units that is?",
+       "start": 71,
+       "turn_id": "t12"
+      },
+      {
+       "end": 46,
+       "quote": "Do you drink on weekends too?",
+       "start": 17,
+       "turn_id": "t14"
+      }
+     ]
+    },
+    "instances": [
+     {
+      "end": 55,
+      "id": "i2",
+      "quote": "How many drinks do you have a night?",
+      "rationale": "Intended code: question (synthetic).",
+      "start": 19,
+      "turn_id": "t2"
+     },
+     {
+      "end": 106,
+      "id": "i12",
+      "quote": "Do you know how many units that is?",
+      "rationale": "Intended code: question (synthetic).",
+      "start": 71,
+      "turn_id": "t12"
+     },
+     {
+      "end": 46,
+      "id": "i14",
+      "quote": "Do you drink on weekends too?",
+      "rationale": "Intended code: question (synthetic).",
+      "start": 17,
+      "turn_id": "t14"
+     }
+    ],
+    "instances_total": 3,
+    "item_id": "question",
+    "onolys_count": {
+     "max": 3.0,
+     "mean": 3.0,
+     "min": 3.0,
+     "values": [
+      3.0
+     ]
+    }
+   },
+   {
+    "clinician_count": null,
+    "clinician_note": null,
+    "diff": {
+     "abs": null,
+     "direction": null,
+     "signed": null,
+     "status": "not_rated",
+     "within_one": null
+    },
+    "explanation": {
+     "body": [
+      "Onolys counted 0."
+     ],
+     "clinician_support_lines": [],
+     "headline": "Onolys's reading",
+     "onolys_lines": []
+    },
+    "instances": [],
+    "instances_total": 0,
+    "item_id": "sr",
+    "onolys_count": {
+     "max": 0.0,
+     "mean": 0.0,
+     "min": 0.0,
+     "values": [
+      0.0
+     ]
+    }
+   },
+   {
+    "clinician_count": null,
+    "clinician_note": null,
+    "diff": {
+     "abs": null,
+     "direction": null,
+     "signed": null,
+     "status": "not_rated",
+     "within_one": null
+    },
+    "explanation": {
+     "body": [
+      "Onolys counted 0."
+     ],
+     "clinician_support_lines": [],
+     "headline": "Onolys's reading",
+     "onolys_lines": []
+    },
+    "instances": [],
+    "instances_total": 0,
+    "item_id": "cr",
+    "onolys_count": {
+     "max": 0.0,
+     "mean": 0.0,
+     "min": 0.0,
+     "values": [
+      0.0
+     ]
+    }
+   },
+   {
+    "clinician_count": null,
+    "clinician_note": null,
+    "diff": {
+     "abs": null,
+     "direction": null,
+     "signed": null,
+     "status": "not_rated",
+     "within_one": null
+    },
+    "explanation": {
+     "body": [
+      "Onolys counted 0."
+     ],
+     "clinician_support_lines": [],
+     "headline": "Onolys's reading",
+     "onolys_lines": []
+    },
+    "instances": [],
+    "instances_total": 0,
+    "item_id": "affirm",
+    "onolys_count": {
+     "max": 0.0,
+     "mean": 0.0,
+     "min": 0.0,
+     "values": [
+      0.0
+     ]
+    }
+   },
+   {
+    "clinician_count": null,
+    "clinician_note": null,
+    "diff": {
+     "abs": null,
+     "direction": null,
+     "signed": null,
+     "status": "not_rated",
+     "within_one": null
+    },
+    "explanation": {
+     "body": [
+      "Onolys counted 0."
+     ],
+     "clinician_support_lines": [],
+     "headline": "Onolys's reading",
+     "onolys_lines": []
+    },
+    "instances": [],
+    "instances_total": 0,
+    "item_id": "seek_collab",
+    "onolys_count": {
+     "max": 0.0,
+     "mean": 0.0,
+     "min": 0.0,
+     "values": [
+      0.0
+     ]
+    }
+   },
+   {
+    "clinician_count": null,
+    "clinician_note": null,
+    "diff": {
+     "abs": null,
+     "direction": null,
+     "signed": null,
+     "status": "not_rated",
+     "within_one": null
+    },
+    "explanation": {
+     "body": [
+      "Onolys counted 0."
+     ],
+     "clinician_support_lines": [],
+     "headline": "Onolys's reading",
+     "onolys_lines": []
+    },
+    "instances": [],
+    "instances_total": 0,
+    "item_id": "emphasize_autonomy",
+    "onolys_count": {
+     "max": 0.0,
+     "mean": 0.0,
+     "min": 0.0,
+     "values": [
+      0.0
+     ]
+    }
+   },
+   {
+    "clinician_count": null,
+    "clinician_note": null,
+    "diff": {
+     "abs": null,
+     "direction": null,
+     "signed": null,
+     "status": "not_rated",
+     "within_one": null
+    },
+    "explanation": {
+     "body": [
+      "Onolys counted 4."
+     ],
+     "clinician_support_lines": [],
+     "headline": "Onolys's reading",
+     "onolys_lines": [
+      {
+       "end": 69,
+       "quote": "I doubt that's the real number.",
+       "start": 38,
+       "turn_id": "t4"
+      },
+      {
+       "end": 40,
+       "quote": "Not ready? Then what are you doing here?",
+       "start": 0,
+       "turn_id": "t8"
+      },
+      {
+       "end": 54,
+       "quote": "You drink alone every night and you think that's fine?",
+       "start": 0,
+       "turn_id": "t16"
+      },
+      {
+       "end": 56,
+       "quote": "Maybe you don't.",
+       "start": 40,
+       "turn_id": "t20"
+      }
+     ]
+    },
+    "instances": [
+     {
+      "end": 69,
+      "id": "i4",
+      "quote": "I doubt that's the real number.",
+      "rationale": "Intended code: confront (synthetic).",
+      "start": 38,
+      "turn_id": "t4"
+     },
+     {
+      "end": 40,
+      "id": "i8",
+      "quote": "Not ready? Then what are you doing here?",
+      "rationale": "Intended code: confront (synthetic).",
+      "start": 0,
+      "turn_id": "t8"
+     },
+     {
+      "end": 54,
+      "id": "i17",
+      "quote": "You drink alone every night and you think that's fine?",
+      "rationale": "Intended code: confront (synthetic).",
+      "start": 0,
+      "turn_id": "t16"
+     },
+     {
+      "end": 56,
+      "id": "i20",
+      "quote": "Maybe you don't.",
+      "rationale": "Intended code: confront (synthetic).",
+      "start": 40,
+      "turn_id": "t20"
+     }
+    ],
+    "instances_total": 4,
+    "item_id": "confront",
+    "onolys_count": {
+     "max": 4.0,
+     "mean": 4.0,
+     "min": 4.0,
+     "values": [
+      4.0
+     ]
+    }
+   }
+  ],
+  "globals": [
+   {
+    "clinician": {
+     "example": null,
+     "reason": null,
+     "value": null
+    },
+    "diff": {
+     "abs": null,
+     "direction": null,
+     "signed": null,
+     "status": "not_rated",
+     "within_one": null
+    },
+    "explanation": {
+     "body": [
+      "Onolys scored 1.",
+      "Never evokes the client's own reasons; argues for change instead."
+     ],
+     "clinician_support_lines": [],
+     "headline": "Onolys's reading",
+     "onolys_lines": [
+      {
+       "end": 33,
+       "quote": "Four glasses a night is a problem",
+       "start": 0,
+       "turn_id": "t6"
+      },
+      {
+       "end": 55,
+       "quote": "Here is what you should do",
+       "start": 29,
+       "turn_id": "t10"
+      }
+     ]
+    },
+    "item_id": "cct",
+    "onolys": {
+     "evidence": [
+      {
+       "end": 33,
+       "quote": "Four glasses a night is a problem",
+       "start": 0,
+       "turn_id": "t6"
+      },
+      {
+       "end": 55,
+       "quote": "Here is what you should do",
+       "start": 29,
+       "turn_id": "t10"
+      }
+     ],
+     "reason": "Never evokes the client's own reasons; argues for change instead.",
+     "score": 1,
+     "source": "model"
+    }
+   },
+   {
+    "clinician": {
+     "example": null,
+     "reason": null,
+     "value": null
+    },
+    "diff": {
+     "abs": null,
+     "direction": null,
+     "signed": null,
+     "status": "not_rated",
+     "within_one": null
+    },
+    "explanation": {
+     "body": [
+      "Onolys scored 1.",
+      "Direction is imposed by the clinician, not built on the client's language."
+     ],
+     "clinician_support_lines": [],
+     "headline": "Onolys's reading",
+     "onolys_lines": [
+      {
+       "end": 69,
+       "quote": "I doubt that's the real number.",
+       "start": 38,
+       "turn_id": "t4"
+      },
+      {
+       "end": 68,
+       "quote": "Just stop.",
+       "start": 58,
+       "turn_id": "t18"
+      }
+     ]
+    },
+    "item_id": "sst",
+    "onolys": {
+     "evidence": [
+      {
+       "end": 69,
+       "quote": "I doubt that's the real number.",
+       "start": 38,
+       "turn_id": "t4"
+      },
+      {
+       "end": 68,
+       "quote": "Just stop.",
+       "start": 58,
+       "turn_id": "t18"
+      }
+     ],
+     "reason": "Direction is imposed by the clinician, not built on the client's language.",
+     "score": 1,
+     "source": "model"
+    }
+   },
+   {
+    "clinician": {
+     "example": null,
+     "reason": null,
+     "value": null
+    },
+    "diff": {
+     "abs": null,
+     "direction": null,
+     "signed": null,
+     "status": "not_rated",
+     "within_one": null
+    },
+    "explanation": {
+     "body": [
+      "Onolys scored 1.",
+      "Clinician holds the power; client's view is overridden and challenged."
+     ],
+     "clinician_support_lines": [],
+     "headline": "Onolys's reading",
+     "onolys_lines": [
+      {
+       "end": 55,
+       "quote": "Here is what you should do",
+       "start": 29,
+       "turn_id": "t10"
+      },
+      {
+       "end": 39,
+       "quote": "It is easy if you want it badly enough.",
+       "start": 0,
+       "turn_id": "t20"
+      }
+     ]
+    },
+    "item_id": "partnership",
+    "onolys": {
+     "evidence": [
+      {
+       "end": 55,
+       "quote": "Here is what you should do",
+       "start": 29,
+       "turn_id": "t10"
+      },
+      {
+       "end": 39,
+       "quote": "It is easy if you want it badly enough.",
+       "start": 0,
+       "turn_id": "t20"
+      }
+     ],
+     "reason": "Clinician holds the power; client's view is overridden and challenged.",
+     "score": 1,
+     "source": "model"
+    }
+   },
+   {
+    "clinician": {
+     "example": null,
+     "reason": null,
+     "value": null
+    },
+    "diff": {
+     "abs": null,
+     "direction": null,
+     "signed": null,
+     "status": "not_rated",
+     "within_one": null
+    },
+    "explanation": {
+     "body": [
+      "Onolys scored 2.",
+      "Little effort to understand; the client's perspective is dismissed."
+     ],
+     "clinician_support_lines": [],
+     "headline": "Onolys's reading",
+     "onolys_lines": [
+      {
+       "end": 40,
+       "quote": "Then what are you doing here?",
+       "start": 11,
+       "turn_id": "t8"
+      },
+      {
+       "end": 54,
+       "quote": "You drink alone every night and you think that's fine?",
+       "start": 0,
+       "turn_id": "t16"
+      }
+     ]
+    },
+    "item_id": "empathy",
+    "onolys": {
+     "evidence": [
+      {
+       "end": 40,
+       "quote": "Then what are you doing here?",
+       "start": 11,
+       "turn_id": "t8"
+      },
+      {
+       "end": 54,
+       "quote": "You drink alone every night and you think that's fine?",
+       "start": 0,
+       "turn_id": "t16"
+      }
+     ],
+     "reason": "Little effort to understand; the client's perspective is dismissed.",
+     "score": 2,
+     "source": "model"
+    }
+   }
+  ],
+  "header": {
+   "change_goal": "cut back on evening drinking",
+   "coded_span": null,
+   "has_clinician_rating": false,
+   "language": "en",
+   "n_runs": 1,
+   "protocol": {
+    "id": "miti",
+    "label": "MITI 4.2.1",
+    "pack_hash": "c444e3c6d4f26e33",
+    "version": "4.2.1"
+   },
+   "rating_coverage": {
+    "rated": 0,
+    "total": 14
+   },
+   "subject_speaker": "A"
+  },
+  "layout": [
+   {
+    "items": [
+     "cct",
+     "sst",
+     "partnership",
+     "empathy"
+    ],
+    "section": "globals",
+    "title": "Global ratings"
+   },
+   {
+    "items": [
+     "gi",
+     "persuade",
+     "persuade_permission",
+     "question",
+     "sr",
+     "cr",
+     "affirm",
+     "seek_collab",
+     "emphasize_autonomy",
+     "confront"
+    ],
+    "section": "counts",
+    "title": "Behavior counts"
+   },
+   {
+    "items": [
+     "technical",
+     "relational",
+     "pct_cr",
+     "reflection_question_ratio",
+     "total_mia",
+     "total_mina"
+    ],
+    "section": "summaries",
+    "title": "Summary scores"
+   },
+   {
+    "items": [],
+    "section": "tips",
+    "title": "Ideas to try next time"
+   },
+   {
+    "items": [],
+    "section": "method",
+    "title": "How Onolys reads this"
+   }
+  ],
+  "method": {
+   "citation": "Moyers, T. B., Manuel, J. K., & Ernst, D. (2014). Motivational Interviewing Treatment Integrity Coding Manual 4.2.1.",
+   "limits": [
+    "Onolys reads the transcript only; tone of voice, pauses and body language are not available to it.",
+    "Speaker labels and timestamps come from automatic transcription and can contain errors.",
+    "A difference between two readings is a prompt to look at the session again, not a verdict on either one.",
+    "Behaviour counts depend on where each utterance is split, so small differences are expected.",
+    "This is Onolys's reading of the session, not an official coding."
+   ],
+   "not_official_miti_coding": true,
+   "statement": "Onolys reads the recording against the MITI 4.2.1 coding manual. It codes each clinician utterance, rates the four global items, and shows the lines of the session each reading is based on."
+  },
+  "reasons_audit": {
+   "items": [],
+   "status": "skipped"
+  },
+  "schema_version": "0.0.1",
+  "scorecard": [
+   {
+    "clinician": {
+     "value": null
+    },
+    "diff": {
+     "abs": null,
+     "direction": null,
+     "signed": null,
+     "status": "not_rated",
+     "within_one": null
+    },
+    "item_id": "cct",
+    "kind": "global",
+    "label": "Cultivating Change Talk",
+    "onolys": {
+     "max": 1.0,
+     "mean": 1.0,
+     "min": 1.0,
+     "value": 1.0,
+     "values": [
+      1.0
+     ]
+    }
+   },
+   {
+    "clinician": {
+     "value": null
+    },
+    "diff": {
+     "abs": null,
+     "direction": null,
+     "signed": null,
+     "status": "not_rated",
+     "within_one": null
+    },
+    "item_id": "sst",
+    "kind": "global",
+    "label": "Softening Sustain Talk",
+    "onolys": {
+     "max": 1.0,
+     "mean": 1.0,
+     "min": 1.0,
+     "value": 1.0,
+     "values": [
+      1.0
+     ]
+    }
+   },
+   {
+    "clinician": {
+     "value": null
+    },
+    "diff": {
+     "abs": null,
+     "direction": null,
+     "signed": null,
+     "status": "not_rated",
+     "within_one": null
+    },
+    "item_id": "partnership",
+    "kind": "global",
+    "label": "Partnership",
+    "onolys": {
+     "max": 1.0,
+     "mean": 1.0,
+     "min": 1.0,
+     "value": 1.0,
+     "values": [
+      1.0
+     ]
+    }
+   },
+   {
+    "clinician": {
+     "value": null
+    },
+    "diff": {
+     "abs": null,
+     "direction": null,
+     "signed": null,
+     "status": "not_rated",
+     "within_one": null
+    },
+    "item_id": "empathy",
+    "kind": "global",
+    "label": "Empathy",
+    "onolys": {
+     "max": 2.0,
+     "mean": 2.0,
+     "min": 2.0,
+     "value": 2.0,
+     "values": [
+      2.0
+     ]
+    }
+   },
+   {
+    "clinician": {
+     "value": null
+    },
+    "diff": {
+     "abs": null,
+     "direction": null,
+     "signed": null,
+     "status": "not_rated",
+     "within_one": null
+    },
+    "item_id": "gi",
+    "kind": "count",
+    "label": "Giving Information",
+    "onolys": {
+     "max": 2.0,
+     "mean": 2.0,
+     "min": 2.0,
+     "value": 2.0,
+     "values": [
+      2.0
+     ]
+    }
+   },
+   {
+    "clinician": {
+     "value": null
+    },
+    "diff": {
+     "abs": null,
+     "direction": null,
+     "signed": null,
+     "status": "not_rated",
+     "within_one": null
+    },
+    "item_id": "persuade",
+    "kind": "count",
+    "label": "Persuade",
+    "onolys": {
+     "max": 5.0,
+     "mean": 5.0,
+     "min": 5.0,
+     "value": 5.0,
+     "values": [
+      5.0
+     ]
+    }
+   },
+   {
+    "clinician": {
+     "value": null
+    },
+    "diff": {
+     "abs": null,
+     "direction": null,
+     "signed": null,
+     "status": "not_rated",
+     "within_one": null
+    },
+    "item_id": "persuade_permission",
+    "kind": "count",
+    "label": "Persuade with Permission",
+    "onolys": {
+     "max": 0.0,
+     "mean": 0.0,
+     "min": 0.0,
+     "value": 0.0,
+     "values": [
+      0.0
+     ]
+    }
+   },
+   {
+    "clinician": {
+     "value": null
+    },
+    "diff": {
+     "abs": null,
+     "direction": null,
+     "signed": null,
+     "status": "not_rated",
+     "within_one": null
+    },
+    "item_id": "question",
+    "kind": "count",
+    "label": "Question",
+    "onolys": {
+     "max": 3.0,
+     "mean": 3.0,
+     "min": 3.0,
+     "value": 3.0,
+     "values": [
+      3.0
+     ]
+    }
+   },
+   {
+    "clinician": {
+     "value": null
+    },
+    "diff": {
+     "abs": null,
+     "direction": null,
+     "signed": null,
+     "status": "not_rated",
+     "within_one": null
+    },
+    "item_id": "sr",
+    "kind": "count",
+    "label": "Simple Reflection",
+    "onolys": {
+     "max": 0.0,
+     "mean": 0.0,
+     "min": 0.0,
+     "value": 0.0,
+     "values": [
+      0.0
+     ]
+    }
+   },
+   {
+    "clinician": {
+     "value": null
+    },
+    "diff": {
+     "abs": null,
+     "direction": null,
+     "signed": null,
+     "status": "not_rated",
+     "within_one": null
+    },
+    "item_id": "cr",
+    "kind": "count",
+    "label": "Complex Reflection",
+    "onolys": {
+     "max": 0.0,
+     "mean": 0.0,
+     "min": 0.0,
+     "value": 0.0,
+     "values": [
+      0.0
+     ]
+    }
+   },
+   {
+    "clinician": {
+     "value": null
+    },
+    "diff": {
+     "abs": null,
+     "direction": null,
+     "signed": null,
+     "status": "not_rated",
+     "within_one": null
+    },
+    "item_id": "affirm",
+    "kind": "count",
+    "label": "Affirm",
+    "onolys": {
+     "max": 0.0,
+     "mean": 0.0,
+     "min": 0.0,
+     "value": 0.0,
+     "values": [
+      0.0
+     ]
+    }
+   },
+   {
+    "clinician": {
+     "value": null
+    },
+    "diff": {
+     "abs": null,
+     "direction": null,
+     "signed": null,
+     "status": "not_rated",
+     "within_one": null
+    },
+    "item_id": "seek_collab",
+    "kind": "count",
+    "label": "Seeking Collaboration",
+    "onolys": {
+     "max": 0.0,
+     "mean": 0.0,
+     "min": 0.0,
+     "value": 0.0,
+     "values": [
+      0.0
+     ]
+    }
+   },
+   {
+    "clinician": {
+     "value": null
+    },
+    "diff": {
+     "abs": null,
+     "direction": null,
+     "signed": null,
+     "status": "not_rated",
+     "within_one": null
+    },
+    "item_id": "emphasize_autonomy",
+    "kind": "count",
+    "label": "Emphasizing Autonomy",
+    "onolys": {
+     "max": 0.0,
+     "mean": 0.0,
+     "min": 0.0,
+     "value": 0.0,
+     "values": [
+      0.0
+     ]
+    }
+   },
+   {
+    "clinician": {
+     "value": null
+    },
+    "diff": {
+     "abs": null,
+     "direction": null,
+     "signed": null,
+     "status": "not_rated",
+     "within_one": null
+    },
+    "item_id": "confront",
+    "kind": "count",
+    "label": "Confront",
+    "onolys": {
+     "max": 4.0,
+     "mean": 4.0,
+     "min": 4.0,
+     "value": 4.0,
+     "values": [
+      4.0
+     ]
+    }
+   }
+  ],
+  "summaries": [
+   {
+    "clinician": null,
+    "id": "technical",
+    "label": "Technical Global",
+    "note": "Onolys values only. Reference levels, not pass marks.",
+    "onolys": {
+     "label": "below_fair",
+     "value": 1.0
+    },
+    "reference": {
+     "fair": 3.0,
+     "good": 4.0
+    }
+   },
+   {
+    "clinician": null,
+    "id": "relational",
+    "label": "Relational Global",
+    "note": "Onolys values only. Reference levels, not pass marks.",
+    "onolys": {
+     "label": "below_fair",
+     "value": 1.5
+    },
+    "reference": {
+     "fair": 3.5,
+     "good": 4.0
+    }
+   },
+   {
+    "clinician": null,
+    "id": "pct_cr",
+    "label": "% Complex Reflections",
+    "note": "Onolys values only. Reference levels, not pass marks.",
+    "onolys": {
+     "label": null,
+     "value": null
+    },
+    "reference": {
+     "fair": 0.4,
+     "good": 0.5
+    }
+   },
+   {
+    "clinician": null,
+    "id": "reflection_question_ratio",
+    "label": "Reflection-to-Question Ratio",
+    "note": "Onolys values only. Reference levels, not pass marks.",
+    "onolys": {
+     "label": "below_fair",
+     "value": 0.0
+    },
+    "reference": {
+     "fair": 1.0,
+     "good": 2.0
+    }
+   },
+   {
+    "clinician": null,
+    "id": "total_mia",
+    "label": "Total MI-Adherent",
+    "note": "Onolys values only. Reference levels, not pass marks.",
+    "onolys": {
+     "label": null,
+     "value": 0.0
+    },
+    "reference": null
+   },
+   {
+    "clinician": null,
+    "id": "total_mina",
+    "label": "Total MI Non-Adherent",
+    "note": "Onolys values only. Reference levels, not pass marks.",
+    "onolys": {
+     "label": null,
+     "value": 9.0
+    },
+    "reference": null
+   }
+  ],
+  "tips": [
+   {
+    "alternative": "Synthetic fixture alternative wording.",
+    "item_id": "question",
+    "observation": "Synthetic fixture observation for question.",
+    "quote": {
+     "end": 55,
+     "start": 19,
+     "text": "How many drinks do you have a night?",
+     "turn_id": "t2"
+    },
+    "rank": 1,
+    "title": "Synthetic tip for question",
+    "why_it_matters": "Synthetic fixture reason."
+   },
+   {
+    "alternative": "Synthetic fixture alternative wording.",
+    "item_id": "confront",
+    "observation": "Synthetic fixture observation for confront.",
+    "quote": {
+     "end": 69,
+     "start": 38,
+     "text": "I doubt that's the real number.",
+     "turn_id": "t4"
+    },
+    "rank": 2,
+    "title": "Synthetic tip for confront",
+    "why_it_matters": "Synthetic fixture reason."
+   },
+   {
+    "alternative": "Synthetic fixture alternative wording.",
+    "item_id": "persuade",
+    "observation": "Synthetic fixture observation for persuade.",
+    "quote": {
+     "end": 74,
+     "start": 0,
+     "text": "Four glasses a night is a problem, and you need to cut it down right away.",
+     "turn_id": "t6"
+    },
+    "rank": 3,
+    "title": "Synthetic tip for persuade",
+    "why_it_matters": "Synthetic fixture reason."
+   }
+  ],
+  "warnings": []
+ },
+ "warm_up": {
+  "first_code_call": "miti_code:r0:b1",
+  "started_after_first_returned": [],
+  "started_before_first_returned": []
+ }
+}

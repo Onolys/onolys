@@ -1,0 +1,279 @@
+{
+ "miti_code:r0:b1": {
+  "volleys": [
+   {
+    "utterances": [
+     {
+      "code": null,
+      "quote": "Thanks for coming in.",
+      "rationale": "Intended code: none (synthetic)."
+     },
+     {
+      "code": "seek_collab",
+      "quote": "Is it all right if we spend our time on that?",
+      "rationale": "Intended code: seek_collab (synthetic)."
+     }
+    ],
+    "volley_id": "v1"
+   },
+   {
+    "utterances": [
+     {
+      "code": "question",
+      "quote": "What makes walking more important to you right now?",
+      "rationale": "Intended code: question (synthetic)."
+     }
+    ],
+    "volley_id": "v2"
+   },
+   {
+    "utterances": [
+     {
+      "code": "cr",
+      "quote": "You want to be there for your kids, and you remember feeling great when walking was part of your day.",
+      "rationale": "Intended code: cr (synthetic)."
+     },
+     {
+      "code": "question",
+      "quote": "What was different back then?",
+      "rationale": "Intended code: question (synthetic)."
+     }
+    ],
+    "volley_id": "v3"
+   },
+   {
+    "utterances": [
+     {
+      "code": "affirm",
+      "quote": "A forty-minute loop on a Saturday took real commitment, and it shows you can do it when you set your mind to it.",
+      "rationale": "Intended code: affirm (synthetic)."
+     },
+     {
+      "code": "sr",
+      "quote": "You're tired in the evenings.",
+      "rationale": "Intended code: sr (synthetic)."
+     },
+     {
+      "code": "question",
+      "quote": "Where would a walk fit best in your week?",
+      "rationale": "Intended code: question (synthetic)."
+     }
+    ],
+    "volley_id": "v4"
+   },
+   {
+    "utterances": [
+     {
+      "code": "sr",
+      "quote": "Three days a week at lunchtime feels doable to you.",
+      "rationale": "Intended code: sr (synthetic)."
+     },
+     {
+      "code": "cr",
+      "quote": "You also want to protect that time from meetings.",
+      "rationale": "Intended code: cr (synthetic)."
+     },
+     {
+      "code": "question",
+      "quote": "How confident are you, from one to ten, that you can make three lunch walks happen?",
+      "rationale": "Intended code: question (synthetic)."
+     }
+    ],
+    "volley_id": "v5"
+   },
+   {
+    "utterances": [
+     {
+      "code": "question",
+      "quote": "Why a six and not a three?",
+      "rationale": "Intended code: question (synthetic)."
+     },
+     {
+      "code": "affirm",
+      "quote": "You've already thought about blocking your calendar, which shows you're taking this seriously.",
+      "rationale": "Intended code: affirm (synthetic)."
+     }
+    ],
+    "volley_id": "v6"
+   },
+   {
+    "utterances": [
+     {
+      "code": "seek_collab",
+      "quote": "Would it be helpful if I shared some ideas other people have used for rainy days?",
+      "rationale": "Intended code: seek_collab (synthetic)."
+     },
+     {
+      "code": "persuade_permission",
+      "quote": "Some people keep walking shoes at the office, walk indoor laps, or take a call while walking.",
+      "rationale": "Intended code: persuade_permission (synthetic)."
+     },
+     {
+      "code": "gi",
+      "quote": "The guidelines suggest about thirty minutes of activity on most days.",
+      "rationale": "Intended code: gi (synthetic)."
+     },
+     {
+      "code": "gi",
+      "quote": "Even ten-minute walks count toward that.",
+      "rationale": "Intended code: gi (synthetic)."
+     },
+     {
+      "code": "emphasize_autonomy",
+      "quote": "Both ideas are only options, and you know your workplace best.",
+      "rationale": "Intended code: emphasize_autonomy (synthetic)."
+     }
+    ],
+    "volley_id": "v7"
+   },
+   {
+    "utterances": [
+     {
+      "code": "cr",
+      "quote": "You have a plan for sunny and rainy days, and the confidence you're showing comes from what you already did on those Saturdays.",
+      "rationale": "Intended code: cr (synthetic)."
+     },
+     {
+      "code": "question",
+      "quote": "What would you like to do first?",
+      "rationale": "Intended code: question (synthetic)."
+     }
+    ],
+    "volley_id": "v8"
+   },
+   {
+    "utterances": [
+     {
+      "code": "emphasize_autonomy",
+      "quote": "It's entirely your decision how to start.",
+      "rationale": "Intended code: emphasize_autonomy (synthetic)."
+     },
+     {
+      "code": null,
+      "quote": "Blocking those days sounds like a strong first step.",
+      "rationale": "Intended code: none (synthetic)."
+     },
+     {
+      "code": "cr",
+      "quote": "So you want to be there for your kids, you miss how you felt when you walked, and you have a plan: three lunch walks, with indoor laps when it rains.",
+      "rationale": "Intended code: cr (synthetic)."
+     }
+    ],
+    "volley_id": "v9"
+   },
+   {
+    "utterances": [
+     {
+      "code": "sr",
+      "quote": "You came in tired and you're leaving hopeful.",
+      "rationale": "Intended code: sr (synthetic)."
+     },
+     {
+      "code": null,
+      "quote": "Let's check in again in two weeks.",
+      "rationale": "Intended code: none (synthetic)."
+     }
+    ],
+    "volley_id": "v10"
+   }
+  ]
+ },
+ "miti_globals:r0:g": {
+  "globals": {
+   "cct": {
+    "evidence": [
+     {
+      "quote": "my blood pressure is creeping up",
+      "turn_id": "t5"
+     },
+     {
+      "quote": "I think I can really do this",
+      "turn_id": "t16"
+     }
+    ],
+    "poor_practice_cited": [],
+    "reason": "Attends to and evokes the client's own language about walking and confidence.",
+    "score": 4
+   },
+   "empathy": {
+    "evidence": [
+     {
+      "quote": "You want to be there for your kids",
+      "turn_id": "t6"
+     },
+     {
+      "quote": "You came in tired and you're leaving hopeful.",
+      "turn_id": "t21"
+     }
+    ],
+    "poor_practice_cited": [],
+    "reason": "Reflects the client's feelings and view accurately and often.",
+    "score": 4
+   },
+   "partnership": {
+    "evidence": [
+     {
+      "quote": "you know your workplace best",
+      "turn_id": "t15"
+     },
+     {
+      "quote": "It's entirely your decision how to start.",
+      "turn_id": "t19"
+     }
+    ],
+    "poor_practice_cited": [],
+    "reason": "Asks permission, treats the client as the expert on their own week.",
+    "score": 5
+   },
+   "sst": {
+    "evidence": [
+     {
+      "quote": "What makes walking more important to you right now?",
+      "turn_id": "t4"
+     },
+     {
+      "quote": "Would it be helpful if I shared some ideas",
+      "turn_id": "t15"
+     }
+    ],
+    "poor_practice_cited": [],
+    "reason": "Keeps a clear, client-centred direction toward the walking goal.",
+    "score": 4
+   }
+  }
+ },
+ "tips:r0": {
+  "tips": [
+   {
+    "alternative": "How confident are you that you can make three lunch walks happen?",
+    "item_id": "question",
+    "observation": "Several prompts sit in one turn, which can make it hard for the client to know which to answer.",
+    "quote": {
+     "text": "How confident are you, from one to ten, that you can make three lunch walks happen?",
+     "turn_id": "t11"
+    },
+    "why_it_matters": "One clear question leaves room for the client's own answer."
+   },
+   {
+    "alternative": "You're tired by evening, and still you found the energy for those Saturday walks.",
+    "item_id": "sr",
+    "observation": "A short repeat of what the client said earlier adds little new.",
+    "quote": {
+     "text": "You're tired in the evenings.",
+     "turn_id": "t8"
+    },
+    "why_it_matters": "A reflection that adds meaning keeps the client exploring."
+   },
+   {
+    "alternative": "What gives you a six and keeps it from being lower?",
+    "item_id": "question",
+    "observation": "A why question can sound like a challenge to the client's answer.",
+    "quote": {
+     "text": "Why a six and not a three?",
+     "turn_id": "t13"
+    },
+    "why_it_matters": "Open phrasing invites the client's own reasons for change."
+   }
+  ]
+ }
+}

@@ -1,0 +1,355 @@
+{
+ "miti_code:r0:b1": {
+  "volleys": [
+   {
+    "utterances": [
+     {
+      "code": "gi",
+      "quote": "The information sheet lists opening hours for the surrounding area. It includes the published times and locations, together with a telephone number for checking details when the schedule changes.",
+      "rationale": "Manual pp.13, 16–17: neutral information, once per volley."
+     },
+     {
+      "code": "gi",
+      "quote": "The same sheet is available at the front desk.",
+      "rationale": "Manual pp.13, 16–17: neutral information, once per volley."
+     }
+    ],
+    "volley_id": "v1"
+   },
+   {
+    "utterances": [
+     {
+      "code": "gi",
+      "quote": "The information sheet lists walking routes for the surrounding area. It includes the published times and locations, together with a telephone number for checking details when the schedule changes.",
+      "rationale": "Manual pp.13, 16–17: neutral information, once per volley."
+     }
+    ],
+    "volley_id": "v2"
+   },
+   {
+    "utterances": [
+     {
+      "code": "gi",
+      "quote": "The information sheet lists indoor corridors for the surrounding area. It includes the published times and locations, together with a telephone number for checking details when the schedule changes.",
+      "rationale": "Manual pp.13, 16–17: neutral information, once per volley."
+     }
+    ],
+    "volley_id": "v3"
+   },
+   {
+    "utterances": [
+     {
+      "code": "gi",
+      "quote": "The information sheet lists building entrances for the surrounding area. It includes the published times and locations, together with a telephone number for checking details when the schedule changes.",
+      "rationale": "Manual pp.13, 16–17: neutral information, once per volley."
+     }
+    ],
+    "volley_id": "v4"
+   },
+   {
+    "utterances": [
+     {
+      "code": "gi",
+      "quote": "The information sheet lists local maps for the surrounding area. It includes the published times and locations, together with a telephone number for checking details when the schedule changes.",
+      "rationale": "Manual pp.13, 16–17: neutral information, once per volley."
+     }
+    ],
+    "volley_id": "v5"
+   },
+   {
+    "utterances": [
+     {
+      "code": "gi",
+      "quote": "The information sheet lists weather reports for the surrounding area. It includes the published times and locations, together with a telephone number for checking details when the schedule changes.",
+      "rationale": "Manual pp.13, 16–17: neutral information, once per volley."
+     }
+    ],
+    "volley_id": "v6"
+   },
+   {
+    "utterances": [
+     {
+      "code": "gi",
+      "quote": "The information sheet lists work calendars for the surrounding area. It includes the published times and locations, together with a telephone number for checking details when the schedule changes.",
+      "rationale": "Manual pp.13, 16–17: neutral information, once per volley."
+     }
+    ],
+    "volley_id": "v7"
+   },
+   {
+    "utterances": [
+     {
+      "code": "gi",
+      "quote": "The information sheet lists lunch schedules for the surrounding area. It includes the published times and locations, together with a telephone number for checking details when the schedule changes.",
+      "rationale": "Manual pp.13, 16–17: neutral information, once per volley."
+     }
+    ],
+    "volley_id": "v8"
+   },
+   {
+    "utterances": [
+     {
+      "code": "gi",
+      "quote": "The information sheet lists public benches for the surrounding area. It includes the published times and locations, together with a telephone number for checking details when the schedule changes.",
+      "rationale": "Manual pp.13, 16–17: neutral information, once per volley."
+     }
+    ],
+    "volley_id": "v9"
+   },
+   {
+    "utterances": [
+     {
+      "code": "gi",
+      "quote": "The information sheet lists park paths for the surrounding area. It includes the published times and locations, together with a telephone number for checking details when the schedule changes.",
+      "rationale": "Manual pp.13, 16–17: neutral information, once per volley."
+     }
+    ],
+    "volley_id": "v10"
+   },
+   {
+    "utterances": [
+     {
+      "code": "gi",
+      "quote": "The information sheet lists office stairs for the surrounding area. It includes the published times and locations, together with a telephone number for checking details when the schedule changes.",
+      "rationale": "Manual pp.13, 16–17: neutral information, once per volley."
+     }
+    ],
+    "volley_id": "v11"
+   },
+   {
+    "utterances": [
+     {
+      "code": "gi",
+      "quote": "The information sheet lists crossing signals for the surrounding area. It includes the published times and locations, together with a telephone number for checking details when the schedule changes.",
+      "rationale": "Manual pp.13, 16–17: neutral information, once per volley."
+     }
+    ],
+    "volley_id": "v12"
+   },
+   {
+    "utterances": [
+     {
+      "code": "gi",
+      "quote": "The information sheet lists water fountains for the surrounding area. It includes the published times and locations, together with a telephone number for checking details when the schedule changes.",
+      "rationale": "Manual pp.13, 16–17: neutral information, once per volley."
+     }
+    ],
+    "volley_id": "v13"
+   },
+   {
+    "utterances": [
+     {
+      "code": "gi",
+      "quote": "The information sheet lists notice boards for the surrounding area. It includes the published times and locations, together with a telephone number for checking details when the schedule changes.",
+      "rationale": "Manual pp.13, 16–17: neutral information, once per volley."
+     }
+    ],
+    "volley_id": "v14"
+   },
+   {
+    "utterances": [
+     {
+      "code": "gi",
+      "quote": "The information sheet lists meeting rooms for the surrounding area. It includes the published times and locations, together with a telephone number for checking details when the schedule changes.",
+      "rationale": "Manual pp.13, 16–17: neutral information, once per volley."
+     }
+    ],
+    "volley_id": "v15"
+   },
+   {
+    "utterances": [
+     {
+      "code": "gi",
+      "quote": "The information sheet lists reception desks for the surrounding area. It includes the published times and locations, together with a telephone number for checking details when the schedule changes.",
+      "rationale": "Manual pp.13, 16–17: neutral information, once per volley."
+     }
+    ],
+    "volley_id": "v16"
+   },
+   {
+    "utterances": [
+     {
+      "code": "gi",
+      "quote": "The information sheet lists walking distances for the surrounding area. It includes the published times and locations, together with a telephone number for checking details when the schedule changes.",
+      "rationale": "Manual pp.13, 16–17: neutral information, once per volley."
+     }
+    ],
+    "volley_id": "v17"
+   },
+   {
+    "utterances": [
+     {
+      "code": "gi",
+      "quote": "The information sheet lists bus stops for the surrounding area. It includes the published times and locations, together with a telephone number for checking details when the schedule changes.",
+      "rationale": "Manual pp.13, 16–17: neutral information, once per volley."
+     }
+    ],
+    "volley_id": "v18"
+   },
+   {
+    "utterances": [
+     {
+      "code": "gi",
+      "quote": "The information sheet lists station exits for the surrounding area. It includes the published times and locations, together with a telephone number for checking details when the schedule changes.",
+      "rationale": "Manual pp.13, 16–17: neutral information, once per volley."
+     }
+    ],
+    "volley_id": "v19"
+   },
+   {
+    "utterances": [
+     {
+      "code": "gi",
+      "quote": "The information sheet lists library hours for the surrounding area. It includes the published times and locations, together with a telephone number for checking details when the schedule changes.",
+      "rationale": "Manual pp.13, 16–17: neutral information, once per volley."
+     }
+    ],
+    "volley_id": "v20"
+   },
+   {
+    "utterances": [
+     {
+      "code": "gi",
+      "quote": "The information sheet lists shared calendars for the surrounding area. It includes the published times and locations, together with a telephone number for checking details when the schedule changes.",
+      "rationale": "Manual pp.13, 16–17: neutral information, once per volley."
+     }
+    ],
+    "volley_id": "v21"
+   },
+   {
+    "utterances": [
+     {
+      "code": "gi",
+      "quote": "The information sheet lists nearby squares for the surrounding area. It includes the published times and locations, together with a telephone number for checking details when the schedule changes.",
+      "rationale": "Manual pp.13, 16–17: neutral information, once per volley."
+     }
+    ],
+    "volley_id": "v22"
+   },
+   {
+    "utterances": [
+     {
+      "code": "gi",
+      "quote": "The information sheet lists covered passages for the surrounding area. It includes the published times and locations, together with a telephone number for checking details when the schedule changes.",
+      "rationale": "Manual pp.13, 16–17: neutral information, once per volley."
+     }
+    ],
+    "volley_id": "v23"
+   },
+   {
+    "utterances": [
+     {
+      "code": "gi",
+      "quote": "The information sheet lists community maps for the surrounding area. It includes the published times and locations, together with a telephone number for checking details when the schedule changes.",
+      "rationale": "Manual pp.13, 16–17: neutral information, once per volley."
+     }
+    ],
+    "volley_id": "v24"
+   },
+   {
+    "utterances": [
+     {
+      "code": "seek_collab",
+      "quote": "May I offer a suggestion about fitting a short walk into your lunch break?",
+      "rationale": "Manual pp.26–27: asking permission before advice shares power."
+     }
+    ],
+    "volley_id": "v25"
+   }
+  ]
+ },
+ "miti_code:r0:b2": {
+  "volleys": [
+   {
+    "utterances": [
+     {
+      "code": "persuade",
+      "quote": "You should put a walk on your calendar today.",
+      "rationale": "Manual pp.13, 17–20: one persuasion slot; permission takes precedence (volley extension)."
+     },
+     {
+      "code": "persuade_permission",
+      "quote": "With your permission, I suggest trying a ten minute walk after lunch tomorrow.",
+      "rationale": "Manual pp.18–20: advice after explicit permission; one persuasion slot at p.13."
+     }
+    ],
+    "volley_id": "v26"
+   },
+   {
+    "utterances": [
+     {
+      "code": "emphasize_autonomy",
+      "quote": "Whether you try this is entirely your decision.",
+      "rationale": "Manual pp.27–28: explicit client control over decisions."
+     }
+    ],
+    "volley_id": "v27"
+   }
+  ]
+ },
+ "miti_globals:r0:g": {
+  "globals": {
+   "cct": {
+    "evidence": [],
+    "poor_practice_cited": [],
+    "reason": "Manual p.4: hand-set starting point for this batch-structure example.",
+    "score": 3
+   },
+   "empathy": {
+    "evidence": [],
+    "poor_practice_cited": [],
+    "reason": "Manual p.4: hand-set starting point for this batch-structure example.",
+    "score": 3
+   },
+   "partnership": {
+    "evidence": [],
+    "poor_practice_cited": [],
+    "reason": "Manual p.4: hand-set starting point for this batch-structure example.",
+    "score": 3
+   },
+   "sst": {
+    "evidence": [],
+    "poor_practice_cited": [],
+    "reason": "Manual p.4: hand-set starting point for this batch-structure example.",
+    "score": 3
+   }
+  }
+ },
+ "tips:r0": {
+  "tips": [
+   {
+    "alternative": "Synthetic fixture alternative wording.",
+    "item_id": "gi",
+    "observation": "Synthetic fixture observation for gi.",
+    "quote": {
+     "text": "The information sheet lists opening hours for the surrounding area. It includes the published times and locations, together with a telephone number for checking details when the schedule changes.",
+     "turn_id": "b01a"
+    },
+    "title": "Synthetic tip for gi",
+    "why_it_matters": "Synthetic fixture reason."
+   },
+   {
+    "alternative": "Synthetic fixture alternative wording.",
+    "item_id": "seek_collab",
+    "observation": "Synthetic fixture observation for seek_collab.",
+    "quote": {
+     "text": "May I offer a suggestion about fitting a short walk into your lunch break?",
+     "turn_id": "b25"
+    },
+    "title": "Synthetic tip for seek_collab",
+    "why_it_matters": "Synthetic fixture reason."
+   },
+   {
+    "alternative": "Synthetic fixture alternative wording.",
+    "item_id": "persuade",
+    "observation": "Synthetic fixture observation for persuade.",
+    "quote": {
+     "text": "You should put a walk on your calendar today.",
+     "turn_id": "b26"
+    },
+    "title": "Synthetic tip for persuade",
+    "why_it_matters": "Synthetic fixture reason."
+   }
+  ]
+ }
+}
