@@ -139,7 +139,7 @@ def test_dockerfile_is_slim_miti_only():
     for pat in ws["members"]:  # every workspace member manifest, derived so it cannot drift
         members.update(p.parent.relative_to(REPO).as_posix() for p in REPO.glob(f"{pat}/pyproject.toml"))
     members -= excluded
-    assert {"api", "engines/core", "eval/core", "eval/backend"} <= members and "eval/auth" not in members
+    assert {"api", "engines/core"} <= members and not any(m.startswith("eval") for m in members)
     copied = set(re.findall(r"^COPY\s+(\S+)/pyproject\.toml\s", code, re.M)) - {"."}
     assert copied == members, f"Dockerfile manifests drifted from workspace: {copied ^ members}"
     for member in sorted(members):

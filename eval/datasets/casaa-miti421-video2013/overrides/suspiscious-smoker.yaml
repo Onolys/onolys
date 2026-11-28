@@ -1,5 +1,0 @@
-utterance_codes:
-  # Coded p1: SEEK assigned after a structuring note; GI is only discussed.
-  - {turn_id: t7, codes: [seek_collab]}
-  # Coded p3-p4: GI and SR assigned around the explanation rejecting Seek.
-  - {turn_id: t67, codes: [gi, sr]}

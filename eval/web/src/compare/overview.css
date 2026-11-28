@@ -1,6 +1,0 @@
-.overview-tab { min-width: 0; max-width: 100%; display: grid; gap: .75rem; }
-.overview-tab .overview-claim { display: inline-block; margin-inline-start: .6rem; border: 1px solid currentColor; border-radius: .25rem; padding-inline: .3rem; font-size: .72rem; }
-.overview-tab a:focus-visible, .overview-tab button:focus-visible { outline: 3px solid var(--ring); outline-offset: 2px; }
-.overview-tab .overview-verdict-block { display: grid; gap: .3rem; margin-block: 0; }
-.overview-tab .overview-verdict { margin: 0; font-size: .95rem; }
-.overview-tab .overview-empty { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; padding: .5rem .75rem; border: 1px solid var(--ui-info-border, #c2d6f2); border-radius: var(--radius, .5rem); background: var(--ui-info-bg, #e8f0fb); font-size: .85rem; }

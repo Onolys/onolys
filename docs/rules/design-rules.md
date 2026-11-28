@@ -1,6 +1,6 @@
 # Frontend design rules
 
-Apply to every UI: `web/`, `eval/web`. Read before changing frontend code.
+Apply to every UI: `web/`. Read before changing frontend code.
 
 ## Rules
 

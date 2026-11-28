@@ -1,4 +1,0 @@
-.compare-legend ul { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: .4rem .75rem; min-width: 0; }
-.compare-legend li { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem; min-width: 0; padding: .2rem .55rem; border: 1px solid var(--border, #d3dbda); border-radius: var(--radius, .5rem); background: var(--card, #fff); font-size: .875rem; }
-.compare-legend li.is-failed { background: var(--ui-low-bg, #fbe9e9); border-color: var(--ui-low-border, #efc4c4); }
-.compare-legend-label { min-width: 0; overflow-wrap: anywhere; }

@@ -1,9 +1,0 @@
-.rel-card, .rel-baseline { min-width: 0; max-width: 100%; padding: 1rem; border: 1px solid var(--border, #d3dbda); border-radius: var(--radius, .5rem); background: var(--card, #fff); }
-.rel-title { margin: 0; font-size: 1rem; font-weight: 600; }
-.rel-caption { margin: .2rem 0 .6rem; font-size: .85rem; color: var(--ui-muted-fg); }
-.rel-baseline .ui-stat { margin-top: .6rem; }
-.rel-table .ui-cell { display: grid; gap: .1rem; justify-items: start; overflow: visible; text-overflow: clip; white-space: normal; overflow-wrap: anywhere; }
-.rel-table .ui-table th { overflow: visible; text-overflow: clip; white-space: normal; overflow-wrap: anywhere; vertical-align: bottom; }
-.rel-table small, .rel-na { font-size: .75rem; color: var(--ui-muted-fg); }
-.rel-line { font-size: .8125rem; }
-.rel-best { font-size: .72rem; font-weight: 650; color: var(--ui-good); }

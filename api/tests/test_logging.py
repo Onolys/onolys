@@ -290,5 +290,5 @@ def test_images_running_litellm_use_local_cost_map():
     import pathlib
 
     root = pathlib.Path(__file__).resolve().parents[2]
-    for df in ("api/Dockerfile", "eval/backend/Dockerfile"):
+    for df in ("api/Dockerfile",):
         assert "LITELLM_LOCAL_MODEL_COST_MAP=True" in (root / df).read_text(), df

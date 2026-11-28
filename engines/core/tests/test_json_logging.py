@@ -183,7 +183,7 @@ def test_third_party_info_dropped_warning_kept_first_party_info_kept(cfg):
     for name in ("google_genai.models", "httpx", "httpcore", "somelib"):
         logging.getLogger(name).info("i-%s", name)
         logging.getLogger(name).warning("w-%s", name)
-    for name in ("onolys_api.routes.x", "onolys_engine_core.llm", "onolys_eval.run", "miti.x"):
+    for name in ("onolys_api.routes.x", "onolys_engine_core.llm", "onolys_miti.run", "miti.x"):
         logging.getLogger(name).info("first-%s", name)
     logging.getLogger("litellm").warning("lw")
     msgs = [d["message"] for d in cfg()]

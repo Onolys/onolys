@@ -22,7 +22,7 @@ def test_new_root_is_separate_and_refuses_production_or_state_reuse():
     assert 'triggers_replace = [var.project, var.environment]' in main
     assert 'prevent_destroy = true' in main
     assert 'var.project == "onolys-${var.environment}"' in (ROOT / 'variables.tf').read_text()
-    for env in ['staging', 'eval']:
+    for env in ['staging']:
         backend = (ROOT / 'examples' / f'backend-{env}.hcl.example').read_text()
         assert f'bucket = "onolys-{env}-tfstate"' in backend
         assert 'prefix = "environment"' in backend
@@ -78,8 +78,6 @@ def test_eval_has_its_own_identity_project_domain_and_site():
     # Issuer defaults to the runtime project for every environment: eval never uses the prod onolys project.
     assert 'coalesce(var.auth_project, var.project)' in main
     assert '? "onolys" :' not in main and '? "onolys" :' not in variables
-    example = (ROOT / 'examples/environment-eval.tfvars.example').read_text()
-    assert 'auth_project      = "onolys-eval"' in example and 'manage_identity   = true' in example
     # Authorized domains in onolys-eval: the site and eval.onolys.com (eval only).
     assert 'eval.onolys.com' in identity and 'var.environment == "eval"' in identity
     domain = block(identity, 'resource', 'google_firebase_hosting_custom_domain" "eval')

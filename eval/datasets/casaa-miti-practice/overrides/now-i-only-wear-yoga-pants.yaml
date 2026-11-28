@@ -1,8 +1,0 @@
-# Parenthetical notes mention SEEK/reflection; assigned code is Q only.
-utterance_codes:
-- turn_id: t1
-  codes: [question]
-- turn_id: t9
-  codes: [question]
-- turn_id: t27
-  codes: [question]

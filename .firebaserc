@@ -8,11 +8,6 @@
         "app": ["onolys-app"],
         "app-staging": ["onolys-app-staging"]
       }
-    },
-    "onolys-eval": {
-      "hosting": {
-        "eval-staging": ["onolys-eval-app"]
-      }
     }
   }
 }

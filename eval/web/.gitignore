@@ -1,6 +1,0 @@
-node_modules
-dist
-coverage
-.env*.local
-*.tsbuildinfo
-public/theme-init.js
