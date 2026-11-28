@@ -18,10 +18,7 @@ test.describe("login / logout", () => {
 
 
 
-  // Known issue in @onolys/common 0.4.0: the SDK reports the sign-out after the app has navigated to /login, and the guard's
-  // redirect then wins, so the user lands on /login?next=%2Fsettings. The old in-memory fake auth hid it. Delete `test.fail()` once fixed.
   test("E9: signing out from Settings lands on plain /login (no next=/settings)", async ({ page }) => {
-    test.fail();
     await signUpVerified(page, "so@example.com");
     await signOutViaSettings(page);
     await expect(page).toHaveURL(/\/login$/);

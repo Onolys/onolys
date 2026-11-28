@@ -2,7 +2,7 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, render } from "@testing-library/react";
 import { AuthProvider, type AuthService } from "@onolys/common/auth";
 import type { EmailApi } from "@onolys/common/auth/firebase";
-import { createTestAuthService, EMULATOR_URL, TEST_PASSWORD, TEST_PROJECT_ID } from "@onolys/common/auth/testing";
+import { createTestAuthService, EMULATOR_URL, signOutTestServices, TEST_PASSWORD, TEST_PROJECT_ID } from "@onolys/common/auth/testing";
 import { createMemoryRouter, RouterProvider, type RouteObject } from "react-router";
 import { afterEach, expect, vi } from "vitest";
 import { clearJobs } from "../features/upload/uploader";
@@ -36,25 +36,16 @@ export function stubEmailApi(status: number | Error = 202) {
   } satisfies EmailApi;
 }
 
-const made: AuthService[] = [];
 // Every service in a test file shares one Firebase app: leave nobody signed in for the next test.
 // Unmount first: pages flush pending work (autosave) on unmount and that still needs the signed-in user.
 afterEach(async () => {
   cleanup();
-  await Promise.all(made.splice(0).map((s) => s.signOut()));
+  await signOutTestServices();
 });
-
-/** jsdom cannot finish the SDK's redirect check (it answers auth/operation-not-supported-in-this-environment). */
-function noRedirectCheck(service: AuthService) {
-  service.consumeRedirectError = async () => undefined;
-}
 
 /** A new emulator-backed service, signed out again after the test. */
 export function testService(emailApi: EmailApi | null = null): AuthService {
-  const service = createTestAuthService(emailApi);
-  noRedirectCheck(service);
-  made.push(service);
-  return service;
+  return createTestAuthService(emailApi);
 }
 
 /** The user id (`sub`) of the signed-in user's ID token. */
@@ -112,8 +103,6 @@ export async function signInTestUser(service: AuthService, user: NonNullable<Ren
 
 export async function renderApp(path: string, opts: RenderOptions = {}) {
   const service = opts.service ?? testService(opts.emailApi ?? null);
-  if (!made.includes(service)) made.push(service);
-  noRedirectCheck(service);
   if (opts.user) await signInTestUser(service, opts.user);
   const queryClient = makeQueryClient();
   const router = createMemoryRouter(opts.routes ?? routes, { initialEntries: [path] });

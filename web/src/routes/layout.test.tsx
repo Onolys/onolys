@@ -171,7 +171,7 @@ describe("header nav by auth phase", () => {
     await userEvent.click(screen.getByRole("menuitem", { name: "Sign out" }));
     await h1("Log in");
     expect(spy).toHaveBeenCalledTimes(1);
-    expect(router.state.location.pathname).toBe("/login"); // the exact URL is the known-issue test below
+    expect(here(router)).toBe("/login");
   });
 
   it("loading: brand only", async () => {
@@ -189,19 +189,16 @@ describe("header nav by auth phase", () => {
     await userEvent.click(screen.getByRole("button", { name: "Account menu" }));
     await userEvent.click(screen.getByRole("menuitem", { name: "Sign out" }));
     await h1("Log in");
-    expect(router.state.location.pathname).toBe("/login"); // the exact URL is the known-issue test below
+    expect(here(router)).toBe("/login");
   });
 
-  // Known issue in @onolys/common 0.4.0 (found when the in-memory fake auth was replaced by the real SDK on the emulator):
-  // the SDK reports the sign-out after useSignOut has navigated to /login, and the guard's redirect wins, so the user lands
-  // on /login?next=%2Fsettings instead of the plain /login. Turn this into a plain `it` once the package fixes it.
-  it.fails("header Sign out lands on the plain /login, not /login?next=", async () => {
+  it("header Sign out lands on the plain /login, not /login?next=", async () => {
     const { router } = await renderApp("/settings", { user: { email: "a@clinic.org", verified: true } });
     await h1("Settings");
     await userEvent.click(screen.getByRole("button", { name: "Account menu" }));
     await userEvent.click(screen.getByRole("menuitem", { name: "Sign out" }));
     await h1("Log in");
-    await new Promise((r) => setTimeout(r, 300));
+    await new Promise((r) => setTimeout(r, 300)); // a late guard redirect would still change the URL
     expect(here(router)).toBe("/login");
   });
 

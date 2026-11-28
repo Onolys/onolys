@@ -30,10 +30,7 @@ test.describe("signup", () => {
     await expect(page).toHaveURL(/verify-email/);
   });
 
-  // Known issue in @onolys/common 0.4.0 (its own suite keeps an `it.fails` for it): "Use a different email" ends on /login,
-  // not /signup. Delete `test.fail()` once the package fixes it.
   test("Use a different email returns to /signup", async ({ page }) => {
-    test.fail();
     await signUp(page, "diff@example.com");
     await page.getByRole("button", { name: "Use a different email" }).click();
     await expect(page).toHaveURL(/\/signup/);

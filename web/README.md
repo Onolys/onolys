@@ -4,7 +4,7 @@ React 19 + Vite + TypeScript. Scripts: `npm run dev:mock`, `npm run build`, `npm
 
 ## Design system and sign-in (`@onolys/common`)
 
-- Dependency: `git+https://github.com/Onolys/onolys-common.git#v0.4.0` (public repo, https, no SSH or token; the tag commit ships `dist/`, so install needs no build). Keep the lockfile `resolved` as `git+https://...`: after `npm i`, npm may rewrite it to `git+ssh://`; change it back and check `GIT_SSH_COMMAND=false npm ci` still works.
+- Dependency: `git+https://github.com/Onolys/onolys-common.git#v0.4.1` (public repo, https, no SSH or token; the tag commit ships `dist/`, so install needs no build). Keep the lockfile `resolved` as `git+https://...`: after `npm i`, npm may rewrite it to `git+ssh://`; change it back and check `GIT_SSH_COMMAND=false npm ci` still works.
 - It owns the theme, tokens, shared components, the account/theme/footer shell pieces and the whole sign-in feature (`@onolys/common/auth`, `/auth/firebase`, `/auth/testing`). This app keeps only `src/auth/createAuthService.ts` (wires the email routes into the Firebase service) and `src/auth/useApiClient.ts`.
 - CSS entry: `src/styles/index.css` (cascade layers `theme, base, components, utilities`). Fonts come from `@onolys/common/theme.css`; keep `build.assetsInlineLimit` default so the font stays a `.woff2` file (CSP).
 - `/theme-init.js` is not in this repo: `vite.config.ts` serves it in dev and emits it into the build from the installed package.

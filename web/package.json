@@ -20,7 +20,7 @@
     "e2e": "playwright test -c e2e_review/playwright.config.cjs"
   },
   "dependencies": {
-    "@onolys/common": "git+https://github.com/Onolys/onolys-common.git#v0.4.0",
+    "@onolys/common": "git+https://github.com/Onolys/onolys-common.git#v0.4.1",
     "@tailwindcss/vite": "4.3.5",
     "@tanstack/react-query": "5.108.1",
     "firebase": "13.4.0",

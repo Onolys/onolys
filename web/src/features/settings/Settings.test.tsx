@@ -60,7 +60,7 @@ describe("settings", () => {
     expect(queryClient.getQueryCache().getAll().length).toBeGreaterThan(0);
     await user.click(screen.getByRole("button", { name: "Account menu" }));
     await user.click(screen.getByRole("menuitem", { name: "Sign out" }));
-    await waitFor(() => expect(router.state.location.pathname).toBe("/login")); // plain /login vs ?next=: known issue, see layout.test.tsx
+    await waitFor(() => expect(router.state.location.pathname + router.state.location.search).toBe("/login"));
     expect(queryClient.getQueryCache().getAll()).toHaveLength(0);
   });
 });
