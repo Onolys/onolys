@@ -5,7 +5,7 @@ date: 2026-11-28
 ---
 # PRD: 07 Web layout (app/ + features/, tests/, no mocks)
 
-Repo/branch: Onolys/onolys / `refactor/revamp` · Depends on: 02 (hard: `components/ lib/` and auth core already in `@onolys/ui`; `features/auth` holds only the remainder), 06 (hard: `api/scripts/dev.sh` combined mode with Firestore + Auth emulators and stubs on :8000), 01 (soft: ids and guard tests already cleaned), 08 (soft: Firebase config path) · Owns: `web/**` except generated `src/api/{schema,report}.d.ts` content, `web/package.json` scripts + MSW block (02 owns deps, 04 owns the `gen:api` token), the `web` / `web-e2e` jobs and web steps of `nightly.yml`, one new composite action. Does not own: `@onolys/ui` (02), eval/web (03), `docs/` (except `web/` READMEs).
+Repo/branch: Onolys/onolys / `refactor/revamp` · Depends on: 02 (hard: `components/ lib/` and auth core already in `@onolys/common`; no `features/auth`), 06 (hard: `api/scripts/dev.sh` combined mode with Firestore + Auth emulators and stubs on :8000), 01 (soft: ids and guard tests already cleaned), 08 (soft: Firebase config path) · Owns: `web/**` except generated `src/api/{schema,report}.d.ts` content, `web/package.json` scripts + MSW block (02 owns deps, 04 owns the `gen:api` token), the `web` / `web-e2e` jobs and web steps of `nightly.yml`, one new composite action. Does not own: `@onolys/common` (02), eval/web (03), `docs/` (except `web/` READMEs).
 
 ## TL;DR
 `web/src` becomes `main.tsx`, `constants.ts`, `config.ts`, `app/` (shell + route table), `api/`, `features/<screen>/`, `styles/`. Every test moves to `web/tests/` mirroring `src/`; Playwright moves to `web/tests/e2e/`. `src/mocks/` (15 files, 3,691 lines) is deleted: dev and e2e run `api/scripts/dev.sh` + the web dev server; unit tests stub only HTTP (MSW node server, typed response builders from `schema.d.ts`), with cross-page journeys moved to e2e. Moves first (`git mv`, green each commit), mock removal second.
@@ -29,16 +29,17 @@ Repo/branch: Onolys/onolys / `refactor/revamp` · Depends on: 02 (hard: `compone
 **R1 Target tree.**
 ```
 web/src/  main.tsx  constants.ts  config.ts  styles/index.css
-  app/       App ErrorBoundary routes Layout Footer RouteError routeTitle placeholders bootError pageLoadError queryClient
-  api/       client errors types buildInfo firestoreListener statusListener schema.d.ts report.d.ts
-  features/  auth dashboard interview legal rating report session settings speakers upload usage
+  app/       App ErrorBoundary routes Layout Footer RouteError routeTitle placeholders bootError pageLoadError queryClient createAuthService
+  api/       client useApiClient errors types buildInfo firestoreListener statusListener schema.d.ts report.d.ts
+  features/  dashboard interview legal rating report session settings speakers upload usage
 web/tests/   (mirrors src: app/ api/ features/<x>/)  hosting/  helpers/  e2e/
 ```
 **R2 Mapping (today -> new).**
 | Today | New |
 |---|---|
 | `routes/*` (not the files 02 moved), `App.tsx`, `ErrorBoundary.tsx`, `bootError.ts`, `pageLoadError.ts`, `queryClient.ts` | `app/` same names |
-| `auth/{useApiClient,createAuthService}.ts` (what 02 leaves) | `features/auth/` (see D9) |
+| `auth/useApiClient.ts` (what 02 leaves) | `api/useApiClient.ts` (D9) |
+| `auth/createAuthService.ts` (what 02 leaves) | `app/createAuthService.ts` (D9) |
 | `protocol/{miti-items.ts,rating.schema.json}` | `features/rating/` (only rating imports them; `api/types.ts` comment reworded) |
 | `mocks/fixtures/sample.ts` (+ its `Turn` type) | `features/report/sample.ts` (shipped product data) |
 | rest of `mocks/`, `public/mockServiceWorker.js`, `.env.mock`, `relay/fakeRelay*.ts`, `src/flows/` | deleted (R5) |
@@ -48,12 +49,12 @@ web/tests/   (mirrors src: app/ api/ features/<x>/)  hosting/  helpers/  e2e/
 | `__fuzz_review__/api-lib.property.test.ts` | `tests/api/errors.property.test.ts` (codepoints/format/spans parts went with 02) |
 | `e2e_review/*` (specs, helpers, fixtures, 2 configs, README) | `tests/e2e/*` |
 **R3 Test config.** `vite.config.ts`: `test.include tests/**/*.test.{ts,tsx}`, exclude `tests/e2e/**`, `setupFiles tests/helpers/setup.ts`, alias `@` -> `src` (tests import `@/features/...`; `tsconfig` `paths` + `include` add `tests`); FLAKY/NIGHTLY include globs repointed; `eslint.config.js` e2e glob repointed, `mockServiceWorker.js` ignore dropped; `stryker.conf.json` mutate list = `src/api/errors.ts` (auth files left in 02).
-**R4 Unit tests without mocks (rule 9).** Only the network edge is stubbed: `tests/helpers/server.ts` = MSW `setupServer()` with **no default handlers**, `onUnhandledRequest: error`. `tests/helpers/api.ts` = typed builders (`sessionDetail({state})`, `reportView()`, `uploadLimits()`, `usage()`...) typed from `components["schemas"][...]`, so an OpenAPI change breaks typecheck, plus `respond.*(...)` handler helpers. No state machine: a page test gives the page the exact responses for its state (sequence = `once` handlers). Status doc: `tests/helpers/statusSource.ts` pushes docs through the existing `setStatusListener` seam (real Firestore path is covered by e2e + `firestoreListener.test`). Interview: `tests/helpers/socket.ts` scripted `WebSocket` stub passed to the controller's existing `createSocket` option. Sign-in: `renderApp` uses 02's emulator-backed service. Journey-level tests (`flows.test.tsx`, multi-step `settle` chains) become e2e. `stateMachine`/`handlers`/`fixtures` tests are deleted (logic now has one implementation, tested in api `tests/sessions/`); `schema.test.ts` becomes `tests/features/report/sample.test.ts` (sample vs report schema).
+**R4 Unit tests without mocks (rule 9).** Only the network edge is stubbed: `tests/helpers/server.ts` = MSW `setupServer()` with **no default handlers**, `onUnhandledRequest: error`. `tests/helpers/api.ts` = typed builders (`sessionDetail({state})`, `reportView()`, `uploadLimits()`, `usage()`...) typed from `components["schemas"][...]`, so an OpenAPI change breaks typecheck, plus `respond.*(...)` handler helpers. No state machine: a page test gives the page the exact responses for its state (sequence = `once` handlers). Status doc: `tests/helpers/statusSource.ts` pushes docs through the existing `setStatusListener` seam (real Firestore path is covered by e2e + `firestoreListener.test`). Interview: `tests/helpers/socket.ts` scripted `WebSocket` stub passed to the controller's existing `createSocket` option. Sign-in: `renderApp` uses 02's emulator-backed service (subject to the 02 spike, O7). Journey-level tests (`flows.test.tsx`, multi-step `settle` chains) become e2e. `stateMachine`/`handlers`/`fixtures` tests are deleted (logic now has one implementation, tested in api `tests/sessions/`); `schema.test.ts` becomes `tests/features/report/sample.test.ts` (sample vs report schema).
 **R5 Delete mocks.** `main.tsx` loses `enableMocking`; `createRelaySocket` returns `new WebSocket(url)` (the `RelaySocket` type moves next to it); `vite.config` loses `dropMockWorker`; `package.json` loses `dev:mock`, the `msw.workerDirectory` block (MSW stays, node only); `firebase.json` loses the two `**/mockServiceWorker.js` ignores; delete the "no mock worker" cases in `build.test.ts`/`hosting.test.ts`; `.env.example` loses `VITE_USE_MOCKS`/`VITE_AUTH_MODE` and gains 02's Auth-emulator var.
 **R6 Local dev.** `npm run dev:local` = `vite --mode stack`; committed `.env.stack`: `VITE_API_BASE_URL=http://127.0.0.1:8000/v1`, `VITE_FIREBASE_PROJECT_ID=demo-onolys`, 02's `VITE_FIREBASE_AUTH_EMULATOR_URL`, `VITE_FIRESTORE_EMULATOR=127.0.0.1:8080`. Flow: `api/scripts/dev.sh` in one terminal, `npm run dev:local` in another. `dev:live` unchanged. Privacy guard: `.env.example` keeps its "no emulator host" rule; `.env.stack` is loopback-only (asserted) and only read by `--mode stack`.
-**R7 e2e on the real stack.** `tests/e2e/playwright.config.cjs` `webServer`s: `api/scripts/dev.sh` (wait on its health URL) + `npm run dev:local --port 5173`; `csp` project builds `--mode stack` and previews with the prod `firebase.json` header **plus loopback sources only** (`connect-src` for :8000/:8080/:9099, added in `vite.config` when mode is `stack`; a test asserts the production header is unchanged). Each test signs up a fresh email through the UI; verification reads the oobCode from the Auth emulator REST API (helper in `helpers.cjs`). Real sessions run the stub pipeline to `report_ready`; transient states it passes too fast for (visual shots of upload/processing phases) use `page.route` to hold or shape one response. Failure paths use 06's `[fail:*]` title hook. PR runs the smoke subset selected by a `@smoke` title tag (replaces the finding-id grep in `playwright.smoke.config.cjs`; ids dropped from titles); main/nightly run all.
-**R8 Constants.** `src/constants.ts`: values with no env dependence - Firestore collection name `session_status`, trusted app hosts (from 02), retry/stale/poll numbers, shared route paths (`ROUTES`), default contact address. `config.ts` stays the only reader of `import.meta.env`.
-**R9 CI.** `web`: `npm test` runs under the Auth emulator (`firebase emulators:exec --config <08 path> --only auth`); `check:api` untouched. `web-e2e`: new composite `.github/actions/setup-emulators` (Java 21 + cached firebase-tools, lifted from `api-emulator`) + `uv sync --frozen --package onolys-api` + ffmpeg action; runs when `web` **or** `api` changed; timeout raised after T0 timing. `nightly.yml` repoints e2e/artifact paths, runs the stack for firefox/webkit, repoints campaigns to `tests/api/errors.property.test.ts` + `src/api/errors.ts`. PR preview/deploy workflows unchanged.
+**R7 e2e on the real stack.** `tests/e2e/playwright.config.cjs` `webServer`s: `api/scripts/dev.sh` (wait on its health URL) + `npm run dev:local --port 5173`; `csp` project builds `--mode stack` and previews with the prod `firebase.json` header **plus loopback sources only** (`connect-src` for :8000/:8080/:9099, added in `vite.config` when mode is `stack`; a test asserts the production header is unchanged). Each test signs up a fresh email through the UI; verification reads the oobCode from the Auth emulator REST API (helper in `helpers.cjs`). Real sessions run the stub pipeline to `report_ready`; transient states it passes too fast for (visual shots of upload/processing phases) use `page.route` to hold or shape one response. Failure paths use 06's `[fail:*]` title hook (`fail-no_speech`). Processing-state screens pause status requests via `page.route` (no API stub change). Interview is unit-only until 06's voice stub exists. PR runs the smoke subset selected by a `@smoke` title tag (replaces the finding-id grep in `playwright.smoke.config.cjs`; ids dropped from titles); main/nightly run all.
+**R8 Constants.** `src/constants.ts`: values with no env dependence - Firestore collection name `session_status`, trusted app hosts (from 02), retry/stale/poll numbers, all web URL paths (`ROUTES`; no path string anywhere else), default contact address. `config.ts` stays the only reader of `import.meta.env`.
+**R9 CI.** `web`: `npm test` runs under the Auth emulator (`firebase emulators:exec --config <08 path> --only auth` (subject to 08 O3 and 02 spikes)); `check:api` untouched. `web-e2e`: new composite `.github/actions/setup-emulators` (Java 21 + cached firebase-tools, lifted from `api-emulator`) + `uv sync --frozen --package onolys-api` + ffmpeg action; runs when `web` **or** `api` changed; timeout raised after T0 timing. `nightly.yml` repoints e2e/artifact paths, runs the stack for firefox/webkit, repoints campaigns to `tests/api/errors.property.test.ts` + `src/api/errors.ts`. PR preview/deploy workflows unchanged.
 
 ## Architecture
 ```
@@ -61,14 +62,14 @@ vitest (jsdom):  page/hook under test -> openapi-fetch -> MSW stub (typed builde
 dev / e2e:       browser -> vite :5173 -> API combined :8000 (stub STT/LLM/voice) -> Firestore + Auth emulators
                           \-> Firestore listener + sign-in talk to the emulators directly
 ```
-Dependency rule: `features/*` may import `api/`, `constants.ts`, `config.ts`, `@onolys/ui`; `app/` imports features; features never import `app/` or each other except through a named export of the owning feature.
+Dependency rule: `features/*` may import `api/`, `constants.ts`, `config.ts`, `@onolys/common`; `app/` imports features; features never import `app/` or each other except through a named export of the owning feature.
 
 ## Migration (one commit per batch, each: typecheck, lint, touched tests green)
 | # | Batch | Gate |
 |---|---|---|
 | T0 | Baseline: light/dark shots of every route (existing `visual.spec` shot code, `E2E_SHOTS=1`) kept **outside the repo**; per-file checklist of every `it` in the 22 mock-using files with its new home (builder test / e2e / deleted-with-reason); e2e and unit pass counts; time `web`/`web-e2e` | checklist committed to `agent_files` |
 | T1 | `routes/` + shell files -> `app/` | tsc, tests |
-| T2 | `auth/` remainder -> `features/auth/`; `protocol/` -> `features/rating/` | tsc, tests |
+| T2 | `auth/useApiClient` -> `api/`, `auth/createAuthService` -> `app/`; `protocol/` -> `features/rating/` | tsc, tests |
 | T3 | Test config + `tests/helpers` (setup, renderApp, csp) + `tests/{app,api,hosting}` moves | `vitest run` count equals T0 |
 | T4-T5 | `tests/features/*` moves (two commits) | count equals T0 |
 | T6 | `e2e_review` -> `tests/e2e` (still mock mode): configs, scripts, eslint, CI paths, README, `@smoke` tags | e2e smoke green |
@@ -89,7 +90,7 @@ T8 needs 06 T9 + 02 emulator helper; T1-T6 can start once 02's rewire commit lan
 | D6 | Sample report | Product data `features/report/sample.ts` | Keep a `fixtures/` dir; fetch from API | It ships to users on `/sample`; not a fixture |
 | D7 | e2e language/location | Stay `.cjs` Playwright, `tests/e2e/` | Port to TS | No benefit asked for; moves only |
 | D8 | Constants | `constants.ts` (fixed) + `config.ts` (env) | Per-feature constants; none | Mirrors rule 10's split with `config/` |
-| D9 | `features/auth` | Holds `createAuthService` + `useApiClient` (locked) | `useApiClient` -> `api/`, `createAuthService` -> `app/` | See OPEN O4 |
+| D9 | Auth remainder | `useApiClient` -> `api/`, `createAuthService` -> `app/`; no `features/auth` | One `features/auth` holding two unrelated files | Owner decision (O4) |
 | D10 | `dev:live` / stryker | Keep, repoint paths | Delete | Not asked |
 
 ## Manual steps
@@ -99,13 +100,13 @@ None for cloud. Dev machine: `firebase-tools` + Java on PATH for `npm test` and 
 - Risk: ~110 `mockBackend` calls ported by hand lose assertions. Mitigation: T0 per-`it` checklist; pass-count equality gates; no `it` removed without a logged reason.
 - Risk: e2e on JVM + Python is slower/flakier in CI. Mitigation: PR runs smoke only, unique user per test, serial fallback; T0 timing sets the timeout.
 - Risk: stub pipeline finishes too fast for processing-screen shots. Mitigation: `page.route` holds in `visual.spec` only (see O5).
-- [OPEN] O1: API in `ENV=local` must allow origin `http://localhost:5173` (CORS), and 02's Auth-emulator env var name. Default: 06/02 confirm before T8.
-- [OPEN] O2: `[fail:*]` title hook (06 O2) kept? Default: yes; web e2e uses `fail-no_speech`.
-- [OPEN] O3: scope of `ROUTES`. Default: only paths used by 2+ files; state names stay schema types.
-- [OPEN] O4: `features/auth` ends as two unrelated files. Recommend `useApiClient` -> `api/`, `createAuthService` -> `app/` (no `features/auth`); default follows the lock.
-- [OPEN] O5: pacing knob in the API stub for processing states instead of `page.route`. Default: no API change.
-- [OPEN] O6: interview e2e needs stub voice reachable over WebSocket in combined mode (06 voice stub). Default: unit-only until 06 confirms.
-- [OPEN] O7: emulator-backed `npm test` (02 spike ~80% sure). Default if slow: 02's logic-free signed-in stub for incidental tests.
+- [RESOLVED: default] O1: API in `ENV=local` allows origin `http://localhost:5173` (CORS); env var names (incl. 02's Auth-emulator var) confirmed with 02/06 before T8.
+- [RESOLVED: yes] O2: `[fail:*]` title hook (06 O2) kept; web e2e uses `fail-no_speech`.
+- [RESOLVED: all paths] O3: `ROUTES` holds ALL web URL paths; state names stay schema types.
+- [RESOLVED: split] O4: `useApiClient` -> `api/`, `createAuthService` -> `app/`; no `features/auth`.
+- [RESOLVED: page.route] O5: e2e pauses status requests via `page.route`; no API stub change.
+- [RESOLVED: unit-only until 06 voice stub exists] O6: interview e2e needs stub voice over WebSocket in combined mode.
+- [RESOLVED: decided after 02 spike] O7: emulator-backed `npm test` depends on 02's Auth-emulator spike; result goes to the owner, who decides. 02's logic-free signed-in stub is an option to present, not an automatic fallback.
 - [DEFERRED] Legacy `app-staging -> onolys-app-staging` mapping in `web/.firebaserc` (needs `test_hosting_targets.sh` change; 08/owner after the old site is retired); stryker/nightly campaigns review.
 
 ## Acceptance Criteria

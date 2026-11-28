@@ -5,10 +5,10 @@ date: 2026-11-28
 ---
 # PRD: 06 API by feature
 
-Repo/branch: Onolys/onolys / `refactor/revamp` · Depends on: 04-engine-package (hard: `onolys_engine` public surface, STT/voice/rating already moved into `api/`); 03-eval-split (hard: eval gone, eval-mode code is ours to delete); 01-legacy-purge · Owns: `api/**` (src, tests, `scripts/dev.sh`, `README.md`, `firebase`-using test fixtures), the `api-*` jobs in `.github/workflows/ci.yml`, `api/openapi.json` + `docs/contracts/public` (regenerate only; must not change) · Does not own: engine (04/05), web (07), `infra/`, `config/` relocation and `firebase.json` consolidation (08), `docs/`.
+Repo/branch: Onolys/onolys / `refactor/revamp` · Depends on: 04-engine-package (hard: `onolys_engine` public surface, STT/voice/rating already moved into `api/`); 03-eval-split (hard: eval gone, eval-mode code is ours to delete; eval keeps its own `config/` copy); 01-legacy-purge · Owns: `api/**` (src, tests, `scripts/dev.sh`, `README.md`, `firebase`-using test fixtures), the `api-*` jobs in `.github/workflows/ci.yml`, `api/openapi.json` + `docs/contracts/public` (regenerate only; must not change) · Does not own: engine (04/05), web (07), `infra/`, `config/` relocation and `firebase.json` consolidation (08), `docs/`.
 
 ## TL;DR
-`api/src/onolys_api` becomes one folder per feature (`sessions/ audio/ transcription/ pipeline/ tasks/ data/ usage/ auth/ email/ voice/ rating/ routes/`); `jobs/ adapters/ repo/ storage/` disappear. Data access is five base functions (`get_doc set_doc update_doc query in_transaction`, owner check inside) plus one-line wrappers, written once. No fakes: tests and local dev run the real code against the Firestore and Auth emulators plus small stub clients (local-folder blobs, in-process queue, recording email, fixture STT/LLM/voice). CI already runs the Firestore emulator (Java 21 + firebase-tools, cached), so the cost is test time, not new tooling. The public HTTP contract does not change; CI's existing regeneration diff proves it.
+`api/src/onolys_api` becomes one folder per feature (`sessions/ audio/ transcription/ pipeline/ tasks/ data/ usage/ auth/ email/ voice/ rating/ routes/`); `jobs/ adapters/ repo/ storage/` disappear. Data access is five base functions (`get_doc set_doc update_doc query in_transaction`, owner check inside) plus one-line wrappers, written once. The leaf features `data/ auth/ tasks/ transcription/` import nothing from `routes/ sessions/ pipeline/`, take explicit settings/clients, allow ownerless docs in `data` base functions and ship an in-process queue stub, so the eval repo (09) imports them instead of copying. No fakes: tests and local dev run the real code against the Firestore and Auth emulators plus small stub clients (local-folder blobs, in-process queue, recording email, fixture STT/LLM/voice). CI already runs the Firestore emulator (Java 21 + firebase-tools, cached), so the cost is test time, not new tooling. The public HTTP contract does not change; CI's existing regeneration diff proves it.
 
 ## Problem
 | Gap | Evidence |
@@ -37,10 +37,10 @@ Repo/branch: Onolys/onolys / `refactor/revamp` · Depends on: 04-engine-package 
 | `jobs/run.py`, `jobs/first_run.py`, `adapters/real.py` RealEvaluation, `engines.py`, `presets.py`, `coded_span.py`, `start_run`/`start_first_run`/`retry_step` txns | `pipeline/{run,start,presets}.py` calling `Engine.load/run/check_input/protocol` only; `adapters/validated.py`, `coded_span.py`, `engines.py` deleted |
 | `jobs/queue.py`, `jobs/worker.py`, `adapters/error_map.py`, `claim_step`/`claim_run` | `tasks/{queue,runner,handlers,errors}.py` (`handlers.py` = task kind -> handler table; replaces the `register(...)` block) |
 | `repo/*`, `storage/*` | `data/{store,paths,docs,models,blobs}.py` (see R2); `repo/limits.py`, `jobs/caps.py`, `jobs/charging.py`, usage txns -> `usage/{limits,charge}.py` |
-| `auth/` 4 files, `routes/api_key.py` | `auth/{verify,deps}.py` (verify = ID token + OIDC + emulator verifier; deps = `current_user`, API-key parse, rotate txn) |
+| `auth/` 4 files, `routes/api_key.py` | `auth/{verify,deps}.py` (verify = ID token + OIDC + emulator verifier, subject to the Admin SDK spike; deps = `current_user`, API-key parse, rotate txn) |
 | `email/` 3 files, `jobs/reset_email.py`, Resend/auth-link adapters | `email/{service,rate}.py` |
 | `voice/` 4 + 04's moved voice/scenarios, `jobs/interviews*.py`, interview txns | `voice/{relay,providers,interviews}.py` (3 files; interview lifecycle is its own doc type) |
-| `rating.py` + 04's moved rating | `rating/{validate}.py` (+ schema per O6) |
+| `rating.py` + 04's moved rating | `rating/validate.py`; schema built from `Engine.protocol()` at startup (no committed `rating.schema.json`) |
 | `contracts.py`, `openapi.py` | `api/tools/gen_contracts.py` (rule 6: dev tool; CI/README command updated) |
 | `config.py` 295, loose limits | `config.py` (env -> `Settings`, config-file paths in one `CONFIG_ROOT`) + `constants.py` |
 **R2 Data layer** (`data/`). `Db` = `{client, blobs}` built once (`build_db(settings)`), passed as first argument.
@@ -53,12 +53,13 @@ in_transaction(db, fn)                   # owns the per-uid lock + Aborted retry
 def get_session(db, uid, sid): return get_doc(db, paths.session(sid), SessionDoc, uid)
 ```
 42 of today's methods become one-line wrappers in `data/docs.py`. The 24 transactional ones (start/cancel/stale/reserve/claim/rotate...) are written once as functions in their feature folder on top of `in_transaction` (the FirestoreRepo version is the source of truth; FakeRepo's copy is deleted). `paths.py` is the only file composing Firestore paths from collection names in `constants.py`. Large-object rule (500 KB inline else blob pointer) lives in `data/blobs.py`.
+**R2b Leaf modules (for 09).** `data/`, `auth/`, `tasks/`, `transcription/` are leaf modules: no import of `routes/`, `sessions/`, `pipeline/`; they accept explicit settings/clients (no global `Settings` read); `data` base functions allow ownerless docs (uid optional; eval docs have none); `tasks/` ships an in-process queue stub. A test lists their allowed imports.
 **R3 Constants.** `constants.py`: collection names, blob key templates (`uploads/{uid}/{sid}/{upload_id}`, canonical audio, transcript, report), 300 MB / 1 s / 500 KB, 20 min fallback, session/run/step state names, task kinds, retry/lease numbers, header names. Per-env values stay in `config/` YAML (loader path in one place, 08 changes it) or env vars.
 **R4 Stubs, no fakes.**
 | Client | prod / staging | combined-local, PR preview | tests |
 |---|---|---|---|
 | Firestore | Admin SDK | emulator (`FIRESTORE_EMULATOR_HOST`) | emulator, fresh project id per test |
-| Auth | Identity Platform ID tokens | **Auth emulator** (`AUTH_MODE=emulator`, local/test only) | `StubTokenVerifier` (`test:<uid>`) injected via `create_app(token_verifier=)`, moved to `tests/helpers/`; real emulator tokens in `tests/auth/` |
+| Auth | Identity Platform ID tokens | **Auth emulator** (`AUTH_MODE=emulator`, local/test only) | `StubTokenVerifier` (`test:<uid>`) injected via `create_app(token_verifier=)`, moved to `tests/helpers/`; real emulator tokens in `tests/auth/` (verifier choice depends on the O3 spike) |
 | Blobs | GCS | `LocalBlobStore` (local folder + signed-URL routes) | same, tmp dir |
 | Queue | Cloud Tasks | `InProcessQueue` | same |
 | Email / auth links | Resend / Admin SDK | `RecordingSender` (logs the link) | same, asserts on recorded mail |
@@ -66,8 +67,8 @@ def get_session(db, uid, sid): return get_doc(db, paths.session(sid), SessionDoc
 Selection stays by endpoint env for infra clients (emulator host, `AUDIO_BUCKET`, `TASKS_QUEUE`, `RESEND_API_KEY`) and by `ADAPTERS=stub|real` for providers; names unchanged because Terraform, deploy workflows and PR previews set them (`infra/modules/environment/services.tf:42`, `pr-preview.yml:199`: preview runs `ADAPTERS=stub` on real staging Firestore). Fakes deleted: `repo/fake.py`, `adapters/fake.py`, `storage/fake.py` rename-and-slim to `LocalBlobStore`, `MemoryRateStore`, `test_fake_real_parity.py`, `adapters/validated.py`.
 **R5 Eval-mode deletion** (03 hand-over): `eval_mode`, `EVAL_MODE`, `RunDoc.eval`, `EvalRunInfo`, `EvalGold/EvalSessionInfo`, `reject_eval_write`, `eval_session_input_sha256`, `create_run(is_eval, eval_spec)`, `EvalDisabled`, `engines.eval_snapshot/resolve_engine`, the drift guard, the first-run skip, route override in the run adapter, and their tests (`test_eval_*`, `test_start_run_eval`, `test_engine_registry`); drop the `onolys-oneshot` dependency if 04/05 leave none. Prod `params` equal today's.
 **R6 Local combined mode (for 07).** `api/scripts/dev.sh` (keeps `--check`/`--quickstart`): starts Firestore + Auth emulators from one `FIREBASE_CONFIG` path variable (08 repoints it to `firebase/firebase.json`; ports 8080/9099), then `ENV=local SERVICE_MODE=combined ADAPTERS=stub AUTH_MODE=emulator FIRESTORE_EMULATOR_HOST AUTH_PROJECT=demo-onolys` uvicorn on `:8000`. Web uses `VITE_API_BASE_URL=http://127.0.0.1:8000/v1` and the Auth-emulator URL from 02. `--quickstart` mints a token through the Auth emulator and runs the OpenAPI quickstart end to end (upload -> `report_ready`). Needs Java + `firebase-tools` locally (documented in `api/README.md`).
-**R7 Tests mirror source (rule 14).** `tests/{audio,transcription,pipeline,tasks,sessions,data,usage,auth,email,voice,rating,routes}/test_<behaviour>.py`, helpers in `tests/helpers/` (emulator fixture, stub verifier, audio/voice/card builders; `miti_fixtures` replaced by the engine's public fixtures), app-level files (`test_app`, `test_config`, `test_public_contract`, `test_logging`) at the root. Tests move with their feature commit; `test_repo_contract` (1,292 lines) becomes emulator-only `tests/data/` tests plus per-feature txn tests; `[fake]` params and `FAKE_*` fixtures disappear; names lose task ids; spec-id file `test_acceptance_checklist.py` goes (O4).
-**R8 CI.** Keep jobs `api-unit` (no emulator), `api-emulator`, `api-rules`, `api-flaky`, `api-coverage` (gate 94, combined data) and `api-image`; the emulator job also starts the Auth emulator (`--only firestore,auth`, matching 02 R9). The OpenAPI/contract regeneration step uses `api/tools/gen_contracts.py`. Whether to merge unit + emulator into one job is decided from T0 timings (O1).
+**R7 Tests mirror source (rule 14).** `tests/{audio,transcription,pipeline,tasks,sessions,data,usage,auth,email,voice,rating,routes}/test_<behaviour>.py`, helpers in `tests/helpers/` (emulator fixture, stub verifier, audio/voice/card builders; `miti_fixtures` replaced by the engine's public fixtures), app-level files (`test_app`, `test_config`, `test_public_contract`, `test_logging`) at the root. Tests move with their feature commit; `test_repo_contract` (1,292 lines) becomes emulator-only `tests/data/` tests plus per-feature txn tests; `[fake]` params and `FAKE_*` fixtures disappear; names lose task ids; spec-id file `test_acceptance_checklist.py` is deleted.
+**R8 CI.** Keep jobs `api-unit` (no emulator), `api-emulator`, `api-rules`, `api-flaky`, `api-coverage` (gate 94, combined data) and `api-image`; the emulator job also starts the Auth emulator (`--only firestore,auth`, matching 02 R9). The OpenAPI/contract regeneration step uses `api/tools/gen_contracts.py`. Whether to merge unit + emulator into one job is decided after the test run (T0 timings) and reported to the owner (O1).
 **R9 Contract unchanged.** No edit to `api/openapi.json`, `docs/contracts/public/**`, `web/src/api/schema.d.ts` in any 06 commit. Route path, method, `operation_id`, model names stay (explicit in route decorators).
 
 ## Architecture
@@ -79,7 +80,7 @@ pipeline.run -> Engine.load("miti").run(RunRequest, RunOptions(llm=client)) ; st
 **Migration (strangler; each commit green; one commit per feature; no shim survives T10).**
 | Task | Work | Gate |
 |---|---|---|
-| T0 | Baseline: time `api-unit` and `api-emulator` jobs; spikes: per-test emulator project id isolation, Admin-SDK `verify_id_token` on Auth-emulator tokens (O1, O3); note `openapi.json`/contracts/`schema.d.ts` blob ids | findings recorded |
+| T0 | Baseline: time `api-unit` and `api-emulator` jobs; spikes (results reported to the owner, who decides; no automatic fallback): per-test emulator project id isolation, Admin-SDK `verify_id_token` on Auth-emulator tokens (O3), CI job merge (O1); note `openapi.json`/contracts/`schema.d.ts` blob ids | findings recorded and reported to owner |
 | T1 | R5 eval-mode deletion (smaller code first) | api suite; contract diff empty |
 | T2 | Fakes out: `tests/conftest` + `tests/helpers` run every test on the emulator through the existing `FirestoreRepo` (project id per test); delete `FakeRepo`, parity test, twin params, `MemoryRateStore`, adapter fakes (STT/LLM/voice/email stubs per R4); `storage/fake.py` -> `LocalBlobStore` | whole suite on emulator; CI emulator job covers it |
 | T3 | `constants.py`, `data/{store,paths,docs,models,blobs}.py`; `FirestoreRepo` thin methods now delegate to them; `test_repo_contract` -> `tests/data/` | data tests; no caller changed |
@@ -98,7 +99,7 @@ pipeline.run -> Engine.load("miti").run(RunRequest, RunOptions(llm=client)) ; st
 | D2 | Firestore in tests | Emulator for every test needing data | Keep `FakeRepo` for speed; in-memory client | Locked; one logic copy; removes the 59-file fake coupling |
 | D3 | Test isolation | Fresh emulator project id per test (no clearing, xdist-safe if lock timeouts stay absent) | Wipe via REST between tests; one shared project | Cheap; unique uids alone miss cross-user scans (sweep, stuck sessions) |
 | D4 | Mode selection | Endpoint env for infra clients, `ADAPTERS` for providers (names kept) | New `STUBS` switch; per-client flags | Terraform/CI/PR previews already set these; infra is 08's |
-| D5 | Fake auth | `AUTH_MODE=emulator` replaces `fake`; `test:<uid>` verifier only in `tests/helpers/` | Keep `fake` in src for curl; emulator everywhere in tests | 02 needs emulator tokens; stub verifier is a lowest-level seam, keeps 72 test files untouched |
+| D5 | Fake auth | `AUTH_MODE=emulator` replaces `fake` (verifier per O3 spike); `test:<uid>` verifier only in `tests/helpers/` | Keep `fake` in src for curl; emulator everywhere in tests | 02 needs emulator tokens; stub verifier is a lowest-level seam, keeps 72 test files untouched; subject to O3 spike |
 | D6 | Stub inference | Stub mode runs the real `Engine` with the fixture LLM client | Re-implement a `FakeEvaluation` | Rule 9; fixture replies match the fixture STT transcript |
 | D7 | Order | Fakes first (T2) on the existing repo, data layer second, features third | Rewrite data layer first | Separates "swap test backend" from "rewrite txns"; contract tests already pass on both backends today |
 | D8 | Path templates | Collection names + blob keys in `constants.py`; Firestore paths composed only in `data/paths.py` | All in `constants.py` | One place each for names and composition |
@@ -110,20 +111,20 @@ pipeline.run -> Engine.load("miti").run(RunRequest, RunOptions(llm=client)) ; st
 None for cloud. Owner/dev machine: install `firebase-tools` (Java is present) to run api tests locally; a `Needs emulator` message from `tests/conftest.py` prints the exact command.
 
 ## Risks / Open Questions
-- Risk: emulator-only tests are slower and `Transaction lock timeout` flakes appear when tests run in parallel (serial today for that reason). Mitigation: per-test project ids, T0 timing, serial fallback, keep `flaky` marker lane.
+- Risk: emulator-only tests are slower and `Transaction lock timeout` flakes appear when tests run in parallel (serial today for that reason). Mitigation: per-test project ids, T0 timing, serial run as an option to present, keep `flaky` marker lane.
 - Risk: txn semantics drift while rewriting (`start_run`, `cancel_session`). Mitigation: `test_repo_contract` and `test_firestore_cross_instance` run on the emulator before T3 and stay as the oracle.
 - Risk: PR preview (`ADAPTERS=stub` on staging Firestore) breaks. Mitigation: a test boots the app with that exact settings set and runs a session to `report_ready`.
-- [OPEN] O1: merge `api-unit` + `api-emulator` into one emulator job? Default: decide at T0 (merge if >70% of tests need the emulator); coverage gate stays 94.
-- [OPEN] O2: keep `[fail:*]` magic session titles (stub failure injection used by `test_acceptance_flow`, `test_run`, `test_transcribe`, `test_delete`)? Default: keep, carried as one `stub_hint` only when `ADAPTERS=stub` (today's `stub_title` leaks into real adapters' signatures); drop if 07's e2e does not use them.
-- [OPEN] O3: Admin SDK accepts Auth-emulator tokens (~85% sure, unrun). Default: use `verify_id_token`; fallback: local/test-only unsigned-JWT decode checking `aud`, `iss`, `exp`.
-- [OPEN] O4: delete `test_acceptance_checklist.py` (maps spec ids AC1-AC18; rule 12/14)? Default: delete, behaviour already covered by named tests.
-- [OPEN] O5: engine `FixtureClient` and the fixture evaluation reachable from api via public `make_client` (04 R9, O3). Default: yes; 04 confirms the name.
-- [OPEN] O6: rating schema location. Default: api builds its validation from `Engine.protocol()` (`ProtocolInfo`) at startup, so no committed `rating.schema.json` in `api/`; 04 R8 decides if the file must stay.
+- [RESOLVED: decide after test, report to owner] O1: merge `api-unit` + `api-emulator` into one emulator job? No automatic percentage rule; coverage gate stays 94.
+- [RESOLVED: keep as one `stub_hint`, only when `ADAPTERS=stub`] O2: `[fail:*]` magic session titles (used by `test_acceptance_flow`, `test_run`, `test_transcribe`, `test_delete`, 07 e2e).
+- [RESOLVED: decide after spike, report to owner] O3: Admin SDK accepts Auth-emulator tokens (~85% sure, unrun). Plan: `verify_id_token`. Option to present if it fails (not automatic): local/test-only unsigned-JWT decode checking `aud`, `iss`, `exp`.
+- [RESOLVED: delete] O4: `test_acceptance_checklist.py` (maps spec ids AC1-AC18; rule 12/14); behaviour already covered by named tests.
+- [RESOLVED: yes] O5: engine `FixtureClient` and the fixture evaluation reachable from api via public `make_client` (04 R9, O3).
+- [RESOLVED: built at startup] O6: api builds the rating validation from `Engine.protocol()` (`ProtocolInfo`) at startup; no committed `rating.schema.json` in `api/`.
 - [RESOLVED: locked] Firestore emulator not in-memory; voice stays in api; constants one file per package; no compat shims.
 - [DEFERRED] `ADAPTERS`/`PROD_ENGINE` renames and Terraform variable names (08); `docs/testing/local-setup.md` rewrite (docs freeze); merging `voice/` to 2 files.
 
 ## Hand-offs
-01 -> 06: `adapters/validated.py`, `adapters/fake.py`, parity test, `jobs/machine.py` note (done T2/T6). 02 -> 06: API accepts Auth-emulator tokens in combined mode (R4/R6). 03 -> 06: eval-mode deletion list (R5). 04 -> 06: moved folders arrive unmerged; api imports only `onolys_engine`; AST guard stays. 05 -> 06: `Engine.output_schema()` is the report schema, so the api keeps no copy of it (`api/src/onolys_api/schemas/report.local.schema.json` re-checked at T7). 06 -> 07: `dev.sh` + env above. 06 -> 08: one `CONFIG_ROOT`, one `FIREBASE_CONFIG` variable, `api/Dockerfile` COPY lines unchanged by 06.
+01 -> 06: `adapters/validated.py`, `adapters/fake.py`, parity test, `jobs/machine.py` note (done T2/T6). 02 -> 06: API accepts Auth-emulator tokens in combined mode (R4/R6). 03 -> 06: eval-mode deletion list (R5). 04 -> 06: moved folders arrive unmerged; api imports only `onolys_engine`; AST guard stays. 05 -> 06: `Engine.output_schema()` is the report schema, so the api keeps no copy of it (`api/src/onolys_api/schemas/report.local.schema.json` re-checked at T7). 06 -> 07: `dev.sh` + env above. 06 -> 09: leaf modules (R2b). 06 -> 08: one `CONFIG_ROOT`, one `FIREBASE_CONFIG` variable, `api/Dockerfile` COPY lines unchanged by 06.
 
 ## Acceptance Criteria
 - `repo/ adapters/ storage/ jobs/` do not exist; `git grep -nE "FakeRepo|FakeBlobStore|FakeEvaluation|FakeStt|FakeVoice|FakeEmailSender|FakeAuthLinks|MemoryRateStore|class FirestoreRepo|class Repo\b" api` returns 0; `test_fake_real_parity.py` gone.
@@ -133,6 +134,7 @@ None for cloud. Owner/dev machine: install `firebase-tools` (Java is present) to
 - Layout matches R1; no src file over ~300 lines except named exceptions in the task list; `auth/`, `email/` at most 2 files, `voice/` at most 3.
 - `tests/` mirrors src; no `tests/test_t*`; no test name contains a task or spec id; root holds only app-level files and `conftest.py`.
 - `api/openapi.json`, `docs/contracts/public`, `web/src/api/schema.d.ts` unchanged: `git diff <T0 sha> -- <them>` empty and CI regeneration diff green.
+- Leaf-module guard (R2b) passes: `data/ auth/ tasks/ transcription/` import nothing from `routes/ sessions/ pipeline/`; ownerless docs and in-process queue stub tested.
 - `api/scripts/dev.sh --quickstart` passes with both emulators; `test_combined_integration` and the PR-preview-settings test pass.
 - Boundary guard from 04 passes (api imports `onolys_engine` top level only); ruff clean; coverage >= 94; all `api-*` jobs green, with before/after job times in the PR description.
 - Every task commit passed its listed gate.
