@@ -9,13 +9,13 @@ Source of truth: /root/projects/onolys/onolys/.worktrees/refactor/revamp/docs/ag
 
 | # | Task | Depends on | Status |
 |---|---|---|---|
-| 1 | Preflight: tooling check | none | todo |
-| 2 | Spike 1: Auth emulator under vitest + jsdom | 1 | todo |
-| 3 | Spike 2: Admin SDK accepts emulator tokens | 1 | todo |
-| 4 | Spike 3: uv git-subdirectory deps | 1 | todo |
-| 5 | Spike 4: firebase-tools `--config` paths | 1 | todo |
-| 6 | Spike 5: api tests vs Firestore emulator | 1 | todo |
-| 7 | Cleanup and combined owner report | 2-6 | todo |
+| 1 | Preflight: tooling check | none | done |
+| 2 | Spike 1: Auth emulator under vitest + jsdom | 1 | done |
+| 3 | Spike 2: Admin SDK accepts emulator tokens | 1 | done |
+| 4 | Spike 3: uv git-subdirectory deps | 1 | done |
+| 5 | Spike 4: firebase-tools `--config` paths | 1 | done |
+| 6 | Spike 5: api tests vs Firestore emulator | 1 | done |
+| 7 | Cleanup and combined owner report | 2-6 | done |
 
 ## Task 1 — Preflight: tooling check
 What it is / what it means: Spikes 1, 2, 4 need firebase-tools and Java on the dev machine (PRD Manual steps). Confirm before any probe so a missing tool is not mistaken for a spike failure.
