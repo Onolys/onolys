@@ -12,7 +12,6 @@
 **/dist
 docs
 web
-frontend
 infra
 **/eval
 # uv resolves every workspace member; include only the eval manifests, never its data/source.

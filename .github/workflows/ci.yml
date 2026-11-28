@@ -25,7 +25,6 @@ jobs:
       eval-backend: ${{ steps.flags.outputs.eval-backend }}
       eval-web: ${{ steps.flags.outputs.eval-web }}
       api: ${{ steps.flags.outputs.api }}
-      frontend: ${{ steps.flags.outputs.frontend }}
       web: ${{ steps.flags.outputs.web }}
       infra: ${{ steps.flags.outputs.infra }}
     steps:
@@ -477,26 +476,6 @@ jobs:
           docker run --rm --entrypoint test onolys-api:ci ! -e /src/eval/datasets
           docker image inspect onolys-api:ci --format 'image size bytes: {{.Size}}'
 
-  frontend:
-    needs: changes
-    if: needs.changes.outputs.frontend == 'true'
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    defaults:
-      run:
-        working-directory: frontend
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-          cache-dependency-path: frontend/package-lock.json
-      - run: npm ci
-      - run: npm run typecheck
-      - run: npm test
-      - run: npm run build
-
   web:
     needs: changes
     if: needs.changes.outputs.web == 'true'
@@ -606,7 +585,7 @@ jobs:
 
   required:
     if: always()
-    needs: [changes, guards, engine-core, oneshot, miti, eval-core, eval-backend, eval-web, api-unit, api-emulator, api-coverage, api-flaky, api-rules, api-image, frontend, web, web-e2e, infra]
+    needs: [changes, guards, engine-core, oneshot, miti, eval-core, eval-backend, eval-web, api-unit, api-emulator, api-coverage, api-flaky, api-rules, api-image, web, web-e2e, infra]
     runs-on: ubuntu-latest
     timeout-minutes: 1
     permissions:

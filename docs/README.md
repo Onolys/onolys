@@ -3,7 +3,7 @@
 | Path | Purpose | Audience |
 |---|---|---|
 | [mission.md](mission.md) | Governing mission and scope | Everyone |
-| [design-rules.md](design-rules.md) | Frontend design rules for every UI (`web/`, `eval/web`, admin) | Contributors and coding agents |
+| [design-rules.md](design-rules.md) | Frontend design rules for every UI (`web/`, `eval/web`) | Contributors and coding agents |
 | [architecture.md](architecture.md) | High-level design: how the system fits together | Everyone |
 | [concepts/](concepts/) | How should I think about this? Behavior that crosses components | Users and contributors |
 | [implementation/](implementation/) | How is this implemented? Private implementation details | Maintainers and coding agents |

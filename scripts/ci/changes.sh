@@ -19,7 +19,6 @@ PACKAGES=(
   "eval:eval/core:python"
   "eval-backend:eval/backend:python"
   "eval-web:eval/web:node"
-  "frontend:frontend:other"
   "web:web:node"
   "infra:infra:other"
 )
