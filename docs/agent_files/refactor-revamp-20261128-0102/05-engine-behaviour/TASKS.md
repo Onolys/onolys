@@ -1,6 +1,6 @@
 ---
 status: draft
-summary: Engine behaviour in 7 tasks - one instruction source, in-order uncapped context, reflection split, shared one-shot-ready steps, oneshot-single, oneshot-split, final sweep; one reviewed golden re-recording per behaviour change.
+summary: Engine behaviour in 7 tasks (Jinja2 StrictUndefined and pydantic schema per rule 17, no prompt-source test) - one instruction source, in-order uncapped context, reflection split, shared one-shot-ready steps, oneshot-single, oneshot-split, final sweep; one reviewed golden re-recording per behaviour change.
 date: 2026-11-28
 ---
 # Tasks: 05 Engine behaviour
@@ -18,9 +18,9 @@ Source of truth: /root/projects/onolys/onolys/.worktrees/refactor/revamp/docs/ag
 | 7 | Final acceptance sweep (R7, AC) | 6 | todo |
 
 ## Task 1 — One instruction source for MITI
-What it is / what it means: Prompt and rule text must live once (rule 11). This moves MITI's existing wording into protocol fragments with no change in what the model receives. PRD R4, D7, T1.
-What changes at a high level: Create `instructions/` (`coding_rules.md`, `globals_rules.md`, `tips_rules.md`) and `fewshot/` in `protocols/miti-4.2.1/`. MITI prompts keep only framing plus the `{{...}}` placeholders; `output_format` is rendered from the response models. The loader rejects unresolved placeholders. Wording stays text-for-text, so the lower-code rule is only added if it already exists in MITI text.
-Done when: MITI provider payloads are byte-equal to 04's output on all fixtures (no golden change); new prompt-source test passes (shared fragment byte-identical in every prompt using it, no fragment sentence copied literally into a prompt); loader test for unresolved placeholders; ruff clean.
+What it is / what it means: Prompt and rule text must live once (rule 11). This moves MITI's existing wording into protocol fragments with no change in what the model receives. Rendering uses the library (rule 17), not custom code. PRD R4, D7, T1.
+What changes at a high level: Create `instructions/` (`coding_rules.md`, `globals_rules.md`, `tips_rules.md`) and `fewshot/` in `protocols/miti-4.2.1/`. MITI prompts keep only framing plus the `{{...}}` placeholders, rendered by Jinja2 with `StrictUndefined` (04 R6), so an unresolved placeholder is a render error and no separate loader check exists. `output_format` is generated from the response models via pydantic `model_json_schema()`. Wording stays text-for-text, so the lower-code rule is only added if it already exists in MITI text.
+Done when: MITI provider payloads are byte-equal to 04's output on all fixtures (no golden change); a render test shows an unresolved placeholder raises (StrictUndefined); no prompt-source test (byte-identity or literal-sentence checks) is added; ruff clean.
 
 ## Task 2 — In-order uncapped context, batch 25
 What it is / what it means: Today context is out of order, repeated per volley and word-capped. Fix issue 5. PRD R1, R2, D2, D8.
@@ -50,7 +50,7 @@ Done when: loads via `Engine.load`; tests for `n_runs>1` in both variants (repre
 ## Task 7 — Final acceptance sweep
 What it is / what it means: Prove the PRD acceptance list as a whole. PRD Acceptance Criteria, R7.
 What changes at a high level: Fix any gaps found; no new scope. Check `tools/regen_goldens.py` covers all three evaluations.
-Done when: all three pipelines load, share steps, validate against the report schema; prompt-source test green; each fix (#1-#5) has its test; `expected.yaml` counts changed only for the new fixture and justified `batch_edge` edits; no LLM call in build; ruff clean; dev-ship full gate and CI pass.
+Done when: all three pipelines load, share steps, validate against the report schema; each fix (#1-#5) has its test; `expected.yaml` counts changed only for the new fixture and justified `batch_edge` edits; no LLM call in build; ruff clean; dev-ship full gate and CI pass.
 
 ## Owner-only
 - Certified-coder wording review of `instructions/` (prompts still say DRAFT).
