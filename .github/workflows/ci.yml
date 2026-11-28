@@ -90,11 +90,7 @@ jobs:
             eval-web:
               - *ci_shared
               - 'eval/web/**'
-              - 'web/src/auth/**'
-              - 'web/src/api/**'
-              - 'web/src/components/classes.ts'
-              - 'web/package.json'
-              - 'web/package-lock.json'
+              - 'api/firebase.json'
               - 'eval/backend/**'
               - 'api/openapi.json'
               - 'docs/contracts/public/**'
@@ -102,6 +98,7 @@ jobs:
             web:
               - *ci_shared
               - 'web/**'
+              - 'api/firebase.json'
               - 'api/openapi.json'
               - 'engines/miti/src/onolys_miti/data/report.schema.json'
               - 'engines/miti/src/onolys_miti/data/fixtures/evaluation/**'
@@ -241,6 +238,8 @@ jobs:
     if: needs.changes.outputs.eval-web == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    env:
+      FIREBASE_TOOLS_VERSION: 15.37.0
     defaults:
       run:
         working-directory: eval/web
@@ -250,16 +249,27 @@ jobs:
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: |
-            eval/web/package-lock.json
-            web/package-lock.json
-      # eval/web aliases web/src/auth and imports web/src/api and web/src/components/classes.ts (prod sources),
-      # so web/package.json and web/package-lock.json dependencies must be installed for the typecheck and build.
-      - name: Install prod web dependencies (types for the shared prod sources)
-        working-directory: web
-        run: npm ci
+          cache-dependency-path: eval/web/package-lock.json
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - name: Cache firebase-tools and emulator jars
+        id: fbcache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.firebase-tools
+            ~/.cache/firebase/emulators
+          key: firebase-${{ runner.os }}-${{ env.FIREBASE_TOOLS_VERSION }}
+      - name: Install firebase-tools (skipped on cache hit)
+        if: steps.fbcache.outputs.cache-hit != 'true'
+        run: npm install --prefix ~/.firebase-tools firebase-tools@${{ env.FIREBASE_TOOLS_VERSION }}
+      - run: echo "$HOME/.firebase-tools/node_modules/.bin" >> "$GITHUB_PATH"
       - run: npm ci
-      - run: npm test
+      # Auth tests run against the Auth emulator (no prod web sources are installed or imported).
+      - name: vitest (Auth emulator)
+        run: firebase emulators:exec --only auth --config ../../api/firebase.json --project demo-onolys "npm test"
       - run: npm run typecheck
       - run: npm run lint
       - run: npm run build
@@ -519,6 +529,8 @@ jobs:
     if: needs.changes.outputs.web == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    env:
+      FIREBASE_TOOLS_VERSION: 15.37.0
     defaults:
       run:
         working-directory: web
@@ -529,16 +541,33 @@ jobs:
           node-version: 22
           cache: npm
           cache-dependency-path: web/package-lock.json
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - name: Cache firebase-tools and emulator jars
+        id: fbcache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.firebase-tools
+            ~/.cache/firebase/emulators
+          key: firebase-${{ runner.os }}-${{ env.FIREBASE_TOOLS_VERSION }}
+      - name: Install firebase-tools (skipped on cache hit)
+        if: steps.fbcache.outputs.cache-hit != 'true'
+        run: npm install --prefix ~/.firebase-tools firebase-tools@${{ env.FIREBASE_TOOLS_VERSION }}
+      - run: echo "$HOME/.firebase-tools/node_modules/.bin" >> "$GITHUB_PATH"
       - run: npm ci
       - name: gen:api staleness (generated types must match api/openapi.json and report.schema.json)
         run: npm run check:api
       - run: npm run typecheck
       - run: npm run lint
-      - name: vitest with coverage
+      - name: vitest with coverage (Auth emulator)
         shell: bash   # pipefail: a failing test fails the step despite tee
         run: |
           # needs @vitest/coverage-v8 in web/devDependencies
-          npm test -- --coverage --coverage.reporter=text-summary | tee coverage-summary.txt
+          firebase emulators:exec --only auth --config ../api/firebase.json --project demo-onolys \
+            "npm test -- --coverage --coverage.reporter=text-summary" | tee coverage-summary.txt
           {
             echo "### Coverage: web"
             echo '```'
@@ -553,6 +582,8 @@ jobs:
     if: needs.changes.outputs.web == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    env:
+      FIREBASE_TOOLS_VERSION: 15.37.0
     defaults:
       run:
         working-directory: web
@@ -563,6 +594,22 @@ jobs:
           node-version: 22
           cache: npm
           cache-dependency-path: web/package-lock.json
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - name: Cache firebase-tools and emulator jars
+        id: fbcache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.firebase-tools
+            ~/.cache/firebase/emulators
+          key: firebase-${{ runner.os }}-${{ env.FIREBASE_TOOLS_VERSION }}
+      - name: Install firebase-tools (skipped on cache hit)
+        if: steps.fbcache.outputs.cache-hit != 'true'
+        run: npm install --prefix ~/.firebase-tools firebase-tools@${{ env.FIREBASE_TOOLS_VERSION }}
+      - run: echo "$HOME/.firebase-tools/node_modules/.bin" >> "$GITHUB_PATH"
       - run: npm ci
       - name: Read installed Playwright version
         id: pw
@@ -579,12 +626,14 @@ jobs:
         if: steps.pwcache.outputs.cache-hit != 'true'
         timeout-minutes: 3
         run: npx playwright install chromium
-      - name: Playwright e2e (dev server project + CSP/visual/axe project on the built app under the prod CSP)
+      - name: Playwright e2e (dev server project + CSP/visual/axe project on the built app under the prod CSP; Auth emulator)
         run: |
           if [ "${{ github.event_name }}" = "pull_request" ]; then
-            npm run e2e -- --config e2e_review/playwright.smoke.config.cjs --trace off
+            firebase emulators:exec --only auth --config ../api/firebase.json --project demo-onolys \
+              "npm run e2e -- --config e2e_review/playwright.smoke.config.cjs --trace off"
           else
-            npm run e2e -- --trace off
+            firebase emulators:exec --only auth --config ../api/firebase.json --project demo-onolys \
+              "npm run e2e -- --trace off"
           fi
       - name: Upload Playwright results and light/dark screenshots
         if: always()
