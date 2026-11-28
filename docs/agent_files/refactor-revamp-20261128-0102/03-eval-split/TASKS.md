@@ -17,9 +17,9 @@ Source of truth: /root/projects/onolys/onolys/.worktrees/refactor/revamp/docs/ag
 | 6 | Port deploy workflow and CI scripts, no tooling tests (R5) | 3, 5 | done |
 | 7 | Copy Terraform; plan = no changes (R7) | 5 | done |
 | 8 | Cut-over: identity apply, deploy, verify (Manual steps 3-5) | 4, 6, 7 | done |
-| 9 | Removal here: workflows, scripts, workspace (R9) | 8 | in-progress |
-| 10 | Removal here: eval dirs, Firebase, Terraform examples, tests, docs line (R9, R8) | 9 | todo |
-| 11 | Acceptance sweep and post-merge cleanup | 10 | todo |
+| 9 | Removal here: workflows, scripts, workspace (R9) | 8 | done |
+| 10 | Removal here: eval dirs, Firebase, Terraform examples, tests, docs line (R9, R8) | 9 | done |
+| 11 | Acceptance sweep and post-merge cleanup | 10 | done |
 
 ## Task 1 — Verify preconditions; tag `engine-v0`; re-check uv lock
 What it is / what it means: The new repo pins api + engines + config to one immutable snapshot (PRD R1, D1). The tag must be cut after 01 and 02 land, so eval and `@onolys/common` v0.4.0 are already clean.
