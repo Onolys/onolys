@@ -28,7 +28,7 @@ The MITI engine documents itself in `engines/miti/README.md`.
 
 All agents must read and follow `docs/rules/coding-rules.md` every time, before changing code.
 
-Agents working on UI (`web/`, `eval/web`, any UI) must also read and follow `docs/rules/design-rules.md`.
+Agents working on UI (`web/`, any UI) must also read and follow `docs/rules/design-rules.md`.
 
 ## Agent-generated files
 
