@@ -9,15 +9,15 @@ Source of truth: /root/projects/onolys/onolys/.worktrees/refactor/revamp/docs/ag
 
 | # | Task | Depends on | Status |
 |---|---|---|---|
-| 1 | Verify preconditions; tag `engine-v0`; re-check uv lock (R1, O3) | 01, 02 | todo |
-| 2 | Create new repo from eval history (R2) | 1 | todo |
-| 3 | Wire dependencies on `engine-v0` and fix paths (R3) | 2 | todo |
-| 4 | New repo CI (R4) | 3 | todo |
-| 5 | Config, Firebase, rules and docs copies (R6, R8) | 2 | todo |
-| 6 | Port deploy workflow and CI scripts, no tooling tests (R5) | 3, 5 | todo |
-| 7 | Copy Terraform; plan = no changes (R7) | 5 | todo |
-| 8 | Cut-over: identity apply, deploy, verify (Manual steps 3-5) | 4, 6, 7 | todo |
-| 9 | Removal here: workflows, scripts, workspace (R9) | 8 | todo |
+| 1 | Verify preconditions; tag `engine-v0`; re-check uv lock (R1, O3) | 01, 02 | done |
+| 2 | Create new repo from eval history (R2) | 1 | done |
+| 3 | Wire dependencies on `engine-v0` and fix paths (R3) | 2 | done |
+| 4 | New repo CI (R4) | 3 | done |
+| 5 | Config, Firebase, rules and docs copies (R6, R8) | 2 | done |
+| 6 | Port deploy workflow and CI scripts, no tooling tests (R5) | 3, 5 | done |
+| 7 | Copy Terraform; plan = no changes (R7) | 5 | done |
+| 8 | Cut-over: identity apply, deploy, verify (Manual steps 3-5) | 4, 6, 7 | done |
+| 9 | Removal here: workflows, scripts, workspace (R9) | 8 | in-progress |
 | 10 | Removal here: eval dirs, Firebase, Terraform examples, tests, docs line (R9, R8) | 9 | todo |
 | 11 | Acceptance sweep and post-merge cleanup | 10 | todo |
 
