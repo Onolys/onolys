@@ -11,7 +11,7 @@ _FIELDS = {"start_ms", "end_ms", "start_turn", "end_turn"}
 def apply_coded_span(transcript: TranscriptV1, span: dict | None) -> TranscriptV1:
     """Keep whole turns in a turn slice or overlapping a millisecond range.
 
-    SP1 retains turns without a start timestamp alongside selected timed turns. Missing
+    Selection retains turns without a start timestamp alongside selected timed turns. Missing
     end timestamps fall back to start timestamps. Metadata and source turns stay intact.
     """
     if span is None:

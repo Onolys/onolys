@@ -1,4 +1,4 @@
-"""Typed report (PRD R3). `data/report.schema.json` is generated from these models
+"""Typed report. `data/report.schema.json` is generated from these models
 (`python -m onolys_miti.report --write`); a test keeps the two in sync. The model still holds the
 rated and partial variants (trimming it is a later cleanup); this engine only builds the
 no-rating one.
@@ -50,7 +50,7 @@ class Issue(_Model):
     code: str
 
 
-class Warning(_Model):  # noqa: A001 - name from the PRD
+class Warning(_Model):  # noqa: A001 - name matches the report format
     code: WarningCode = Field(
         json_schema_extra={"examples": list(WARNING_CODES)},
         description="Report code (see WARNING_CODES), a result warning code or a pack code.",

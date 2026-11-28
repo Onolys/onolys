@@ -1,4 +1,4 @@
-"""Globals pass (PRD R2 step 8, Decisions 6-9): one call rates every global item of MITI.
+"""Globals pass: one call rates every global item of MITI.
 
 The model sees the selected span (turn ids and text), the change goal and the MITI global
 definitions, never counts. It returns per global a score, a reason, evidence quotes and
@@ -44,7 +44,7 @@ _OUTPUT_FORMAT = (
 
 class GlobalsPassFailed(OnolysError):
     """The globals pass cannot produce trustworthy output: invalid or truncated output after one
-    retry, or a score outside the item's scale. The run fails (ADR 0012)."""
+    retry, or a score outside the item's scale. The run fails."""
 
     code = "run_failed"
 

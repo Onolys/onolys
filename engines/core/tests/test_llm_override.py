@@ -1,4 +1,4 @@
-"""LLM_PROVIDER / LLM_MODEL override (01-llm-outage-claude R6, D2-D5)."""
+"""LLM_PROVIDER / LLM_MODEL override."""
 
 from pathlib import Path
 

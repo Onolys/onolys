@@ -1,4 +1,4 @@
-"""03-failure-policy R2/D8: `is_transient` is the LLM half of the failure taxonomy."""
+"""`is_transient` is the LLM half of the failure taxonomy."""
 
 import ast
 from pathlib import Path

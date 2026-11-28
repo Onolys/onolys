@@ -1,4 +1,4 @@
-"""Route-driven LiteLLM client behaviour (PRD R3 client behaviour, D13, AC5, AC9). Offline."""
+"""Route-driven LiteLLM client behaviour. Offline."""
 
 import asyncio
 import json

@@ -1,4 +1,4 @@
-"""Google Speech-to-Text v2 (Chirp 3) adapter (PRD R4, D9).
+"""Google Speech-to-Text v2 (Chirp 3) adapter.
 
 `BatchRecognize` standard recognition, inline response, words only. The `google-cloud-speech`
 package (extra `stt-google`) is imported lazily so `onolys_miti.stt` works without it. Auth is

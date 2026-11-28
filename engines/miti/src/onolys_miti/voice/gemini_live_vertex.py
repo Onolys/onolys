@@ -1,4 +1,4 @@
-"""Gemini Live on Vertex AI voice adapter (ai-interview PRD R3, D5-D7).
+"""Gemini Live on Vertex AI voice adapter.
 
 The only module that names this provider's SDK. `google-genai` (extra `voice-gemini`) is
 imported lazily so `onolys_miti.voice` works without it. Auth is Application Default

@@ -1,4 +1,4 @@
-"""Task 3: one JSON shape for our code, miti, LiteLLM and other libraries (02-logging R3-R5)."""
+"""One JSON shape for our code, miti, LiteLLM and other libraries."""
 
 import json
 import logging

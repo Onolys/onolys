@@ -1,4 +1,4 @@
-"""Golden parity (PRD R4, D6): `run_miti` on good_practice, code and globals replayed from the
+"""Golden parity: `run_miti` on good_practice, code and globals replayed from the
 recorded fixtures (`data/fixtures/golden/good_practice`, keyed by the real request content), tips
 answered with the golden report's own tips, must equal `report_no_rating.json` after masking the
 volatile keys. The report also validates against the report schema and the API's local copy."""
@@ -71,14 +71,14 @@ async def test_golden_report_validates_against_report_schema():
 
 async def test_golden_report_against_api_local_schema():
     """The API's stand-in schema predates the rename: it still requires two old `run_info` keys
-    and not `run_info.miti`. Until SP02 refreshes the copy, exactly those two "required property"
+    and not `run_info.miti`. Until the copy is refreshed, exactly those two "required property"
     errors on `run_info` are allowed; after it, none. Anything else is a real regression."""
     path = Path(__file__).resolve().parents[3] / "api/src/onolys_api/schemas/report.local.schema.json"
     if not path.is_file():
         pytest.skip("api checkout not present")
     validator = jsonschema.Draft202012Validator(json.loads(path.read_text("utf-8")))
     errors = list(validator.iter_errors(await _run()))
-    if errors:  # pre-SP02: only the two old-key `run_info` required-property errors
+    if errors:  # before the refresh: only the two old-key `run_info` required-property errors
         assert [list(e.absolute_path) for e in errors] == [["run_info"], ["run_info"]]
         assert all(e.message.endswith("is a required property") for e in errors)
         assert not any("'miti'" in e.message for e in errors)
@@ -148,10 +148,10 @@ async def _adapter_run() -> dict:
 
 
 async def test_adapter_fixture_bytes_match_manual_alignment():
-    """Current deterministic manual-alignment baseline after SP02 Task 6.
+    """Current deterministic manual-alignment baseline after the adapter context change.
 
-    Historical SP01 assertion and adapter_pre_input_locks.json are preserved at
-    commit ce65eef. Task 6 bounds client/previous-clinician context in user
+    The earlier assertion and adapter_pre_input_locks.json are preserved at
+    commit ce65eef. That change bounds client/previous-clinician context in user
     messages, adds the context-only quote guard and updates code prompt guidance.
     For this synthetic fixture only pack/prompt hashes change; counts, globals
     and volley groupings remain unchanged.

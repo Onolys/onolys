@@ -1,10 +1,10 @@
-"""MITI quote spans measured in code-point offsets (ADR 0002)."""
+"""MITI quote spans measured in code-point offsets."""
 
 from pydantic import BaseModel
 
 
 class Span(BaseModel):
-    """Code-point offsets into the turn text (ADR 0002)."""
+    """Code-point offsets into the turn text."""
 
     turn_id: str
     start: int

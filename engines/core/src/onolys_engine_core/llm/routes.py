@@ -1,4 +1,4 @@
-"""Model-route registry and presets (PRD R3, D6, D11, D12).
+"""Model-route registry and presets.
 
 Model choice is data: a YAML file (packaged default, or the path in env ROUTES_FILE).
 Engines ask for a route by name. Env overrides (applied to the base routes, before a
@@ -291,7 +291,7 @@ def output_timeout_s(max_output_tokens: int) -> float:
 
 
 def combo_routes(base: dict[str, Route], model: Model, tier: str, effort: str) -> dict[str, Route]:
-    """Pure: every route of `base` re-pointed at one (model, tier, effort) combo (PRD R6, D2, D9).
+    """Pure: every route of `base` re-pointed at one (model, tier, effort) combo.
 
     `model` is the models.yaml block owning `tier`. Structured-output mode, concurrency and
     retries are inherited; output cap is the model's max output.

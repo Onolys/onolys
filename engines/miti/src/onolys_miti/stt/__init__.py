@@ -1,4 +1,4 @@
-"""Provider-neutral STT interface types (PRD R4). Adapters live in later tasks."""
+"""Provider-neutral STT interface types. Adapters live in later tasks."""
 
 from collections.abc import Callable
 from pathlib import Path

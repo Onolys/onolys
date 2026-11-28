@@ -1,4 +1,4 @@
-"""STT selection (PRD R4, D10): one yaml file, no STT env vars.
+"""STT selection: one yaml file, no STT env vars.
 
 Precedence: preset stt key -> by_language[lang] -> default. The session language wins
 over any language on the entry. Never imports a concrete provider.

@@ -1,4 +1,4 @@
-"""Shared STT base class, `transcribe()` helper and `words_to_turns` (PRD R4, D9)."""
+"""Shared STT base class, `transcribe()` helper and `words_to_turns`."""
 
 import asyncio
 from abc import ABC, abstractmethod

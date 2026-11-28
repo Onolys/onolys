@@ -1,4 +1,4 @@
-"""`build_report_no_rating` assembly (PRD R3): schema validity, no-rating shape, run_info
+"""`build_report_no_rating` assembly: schema validity, no-rating shape, run_info
 renames, parity with the golden fixture."""
 
 import json

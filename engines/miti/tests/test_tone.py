@@ -1,4 +1,4 @@
-"""R6/D6/AC6: tone lint driven by the pack's banned list; every static report string passes it."""
+"""Tone lint driven by the pack's banned list; every static report string passes it."""
 
 
 import pytest

@@ -1,4 +1,4 @@
-"""The public entry point: `run_miti` (PRD R2, R7, D6).
+"""The public entry point: `run_miti`.
 
 Applies the speaker map, selects the caller's span or whole transcript once, runs the code and
 globals passes `n_runs` times, averages them (mean/min/max kept), generates tips and assembles

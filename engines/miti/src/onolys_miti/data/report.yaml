@@ -1,4 +1,4 @@
-# Report layout and static strings (SP03 R6/R7). Owner wording sign-off pending.
+# Report layout and static strings. Owner wording sign-off pending.
 # Every string here is linted against pack.yaml > evaluation.tone.banned by a unit test.
 # `sections[].id/label/items` are the report layout; only the miti engine reads this file.
 headline: "Onolys's reading of the session"

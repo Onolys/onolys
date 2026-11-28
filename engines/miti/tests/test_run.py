@@ -1,4 +1,4 @@
-"""`run_miti` (PRD R2, R7, D6): stages, n_runs averaging, deadline, coding vs tips failure.
+"""`run_miti`: stages, n_runs averaging, deadline, coding vs tips failure.
 
 The client is a handler-based fixture client: code and globals replies come from the recorded
 good_practice replies (data/fixtures/golden), tips replies are built here."""

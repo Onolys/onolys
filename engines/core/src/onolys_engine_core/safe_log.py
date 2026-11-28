@@ -45,13 +45,13 @@ ALLOWED_FIELDS: set[str] = {
     "speakers",
     "job_id",
     "step",
-    # provider errors (SP02 R8)
+    # provider errors
     "provider",
     "model",
     "http_status",
     "error_type",
     "provider_error",
-    # interview audio check (R12) and version fields (R13)
+    # interview audio check and version fields
     "interview_id",
     "uploaded_s",
     "relay_s",

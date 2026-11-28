@@ -1,4 +1,4 @@
-"""Code pass (PRD R2 steps 4-5): the model proposes utterances and codes, code verifies them.
+"""Code pass: the model proposes utterances and codes, code verifies them.
 
 Volleys are sent in batches of `volleys_per_call` on the `miti_code` route. The first batch goes
 alone (core `warm_then_fanout`) so later batches can read the prompt cache. A truncated or
@@ -50,7 +50,7 @@ _OUTPUT_FORMAT = (
 
 class CodePassFailed(OnolysError):
     """The code pass cannot produce trustworthy output: a batch stayed invalid after halving or
-    kept dropping more than 20% of its utterances after one retry. The run fails (ADR 0012)."""
+    kept dropping more than 20% of its utterances after one retry. The run fails."""
 
     code = "run_failed"
 
@@ -130,7 +130,7 @@ def _opt_int(value: Any) -> int | None:
 
 
 def _overrides(params: dict[str, Any]) -> dict[str, Any]:
-    """Run params beat MITI `params`, which beat the engine defaults (PRD R2)."""
+    """Run params beat MITI `params`, which beat the engine defaults."""
     return {k: params[k] for k in _PARAM_KEYS if params.get(k) is not None}
 
 

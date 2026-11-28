@@ -1,4 +1,4 @@
-# Packaged default voice provider map (ai-interview PRD R3, D16). Used when no
+# Packaged default voice provider map. Used when no
 # voice_providers.yaml is found (see select.locate_config_file). Edit this file, not env vars.
 providers:
   gemini_live:

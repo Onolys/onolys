@@ -1,4 +1,4 @@
-"""Deterministic no-rating compare helpers and explanation templates (PRD R3). No model call:
+"""Deterministic no-rating compare helpers and explanation templates. No model call:
 summary formulas come from `pack.yaml > summaries` (through `formula.evaluate`), the headline
 from `report.yaml`. There is no clinician value here, so every diff is `not_rated` (or
 `no_onolys_value` when Onolys has none)."""

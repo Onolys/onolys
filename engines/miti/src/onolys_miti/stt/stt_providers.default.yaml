@@ -1,4 +1,4 @@
-# Packaged default STT provider map (PRD R4, D10). Used when no stt_providers.yaml
+# Packaged default STT provider map. Used when no stt_providers.yaml
 # sits next to the file named by ROUTES_FILE. No STT env vars: edit this file.
 providers:
   google_chirp3:

@@ -1,4 +1,4 @@
-"""Report assembly (PRD R3): `build_report_no_rating` turns an engine result and tips into the
+"""Report assembly: `build_report_no_rating` turns an engine result and tips into the
 no-rating `Report`. Pure: no model call, nothing truncated."""
 
 from collections.abc import Mapping

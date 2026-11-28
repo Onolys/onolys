@@ -1,4 +1,4 @@
-"""D3/D4: MITI data copied into the package loads and keeps today's pack hash."""
+"""MITI data copied into the package loads and keeps today's pack hash."""
 
 import hashlib
 import json
@@ -9,11 +9,11 @@ import yaml
 PKG = Path(__file__).resolve().parents[1] / "src" / "onolys_miti"
 DATA = PKG / "data"
 # Current pack_hash (re-pinned after dropping dead reasons_audit config; also in the golden report fixture).
-KNOWN_PACK_HASH = "c13785af2f3da30d"
+KNOWN_PACK_HASH = "c444e3c6d4f26e33"
 
 
 def _hash_paths():
-    # Same file order as the old pack loader; rules.py lives next to the code (R1).
+    # Same file order as the old pack loader; rules.py lives next to the code.
     return [
         DATA / "pack.yaml",
         PKG / "rules.py",

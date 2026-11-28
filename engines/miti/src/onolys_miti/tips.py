@@ -1,4 +1,4 @@
-"""Tips (SP03 R5, D7-D9): the model proposes, code validates.
+"""Tips: the model proposes, code validates.
 
 One call on route `tips` sees only Onolys's own representative run (counted instances, globals
 with reasons, summaries against their reference) and the clinician's turns, each with the
@@ -321,7 +321,7 @@ async def generate_tips(
                 break
         if failed:
             return TipsArtifact(valid=[], proposals=proposals), [Warning(code="tips_failed")]
-    except Exception:  # noqa: BLE001 - a tips failure never blocks the report (R5)
+    except Exception:  # noqa: BLE001 - a tips failure never blocks the report
         return TipsArtifact(valid=[], proposals=proposals), [Warning(code="tips_failed")]
     warnings = [Warning(code="fewer_tips")] if len(valid) < MIN_TIPS else []
     return TipsArtifact(valid=valid, proposals=proposals), warnings

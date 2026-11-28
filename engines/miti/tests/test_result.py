@@ -1,4 +1,4 @@
-"""MitiResult models + miti-result.schema.json (PRD R3): validity, strictness, round trip,
+"""MitiResult models + miti-result.schema.json: validity, strictness, round trip,
 and sync between the committed schema and the models."""
 
 import json

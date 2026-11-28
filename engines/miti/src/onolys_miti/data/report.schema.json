@@ -1091,7 +1091,7 @@
     },
     "RunInfo": {
       "additionalProperties": false,
-      "description": "Provenance of one engine run (PRD R10). Never holds text or key values.",
+      "description": "Provenance of one engine run. Never holds text or key values.",
       "properties": {
         "engine": {
           "title": "Engine",
@@ -1325,7 +1325,7 @@
     },
     "SpanInfo": {
       "additionalProperties": false,
-      "description": "How the coded span was chosen (PRD R7).",
+      "description": "How the coded span was chosen.",
       "properties": {
         "mode": {
           "enum": [

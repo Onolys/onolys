@@ -1,4 +1,4 @@
-"""R2: rating-card validation, code only (no parser, no model). Issues carry a path and a code,
+"""Rating-card validation, code only (no parser, no model). Issues carry a path and a code,
 never card text. Drafts (`final=False`) check shape and limits; final adds a non-empty goal."""
 
 from typing import Any

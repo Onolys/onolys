@@ -1,4 +1,4 @@
-"""Typed, versioned engine output (PRD R3). `data/miti-result.schema.json` is generated
+"""Typed, versioned engine output. `data/miti-result.schema.json` is generated
 from these models (`python -m onolys_miti.result --write`); a test keeps the two in sync.
 
 Protocol-agnostic: item ids, codes and summary ids are free strings defined by the pack."""

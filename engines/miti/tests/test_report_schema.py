@@ -1,4 +1,4 @@
-"""report.schema.json (SP03 R7): fixtures validate, malformed docs are rejected, the schema is
+"""report.schema.json : fixtures validate, malformed docs are rejected, the schema is
 generated from the models and in sync, quotes in fixtures are real transcript substrings."""
 
 import copy
@@ -113,7 +113,7 @@ def test_schema_version_pinned():
 
 
 def test_types_load_from_schema_keys():
-    """The typed Report has exactly the R7 top-level keys that the schema lists."""
+    """The typed Report has exactly the top-level keys that the schema lists."""
     schema = json.loads(SCHEMA_PATH.read_text())
     keys = set(schema["properties"])
     assert keys == set(Report.model_fields)

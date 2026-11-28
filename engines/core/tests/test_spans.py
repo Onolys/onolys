@@ -1,4 +1,4 @@
-"""Core selection uses SP1 half-open turn/time semantics without MITI imports."""
+"""Core selection uses half-open turn/time semantics without MITI imports."""
 
 import pytest
 

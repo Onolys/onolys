@@ -72,7 +72,7 @@ def test_value_cap_and_escaping(caplog):
     assert "\nforged" not in out  # json.dumps escapes the newline in the rendered view
 
 
-# --- SP02 T2: JSON fields, caps, sanitizer ---------------------------------
+# --- JSON fields, caps, sanitizer ---------------------------------
 
 from onolys_engine_core.safe_log import (  # noqa: E402
     FIELD_CAPS,

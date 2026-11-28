@@ -1,4 +1,4 @@
-"""R5/D7/D8/D9/AC7: tips proposed by the model, validated in code; stub client only."""
+"""Tips proposed by the model, validated in code; stub client only."""
 
 import asyncio
 import json

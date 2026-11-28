@@ -1,4 +1,4 @@
-"""Typed errors shared by all engines. SP02/SP04 map them to results/HTTP."""
+"""Typed errors shared by all engines. The engines and the API map them to results or HTTP."""
 
 
 class OnolysError(Exception):

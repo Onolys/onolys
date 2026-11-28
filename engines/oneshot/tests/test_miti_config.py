@@ -83,7 +83,7 @@ def test_oneshot_route_has_explicit_output_cap(path, preset):
     assert registry.raw_routes["oneshot"]["max_output_tokens"] == load_config("miti").max_output_tokens
     routes, _ = resolve_preset(preset, registry, env={})
     if path.parts[-3:-1] == ("config", "staging") and preset == "default":
-        # 01-llm-outage-claude R5: staging text routes moved to Claude; the oneshot eval baseline
+        # staging text routes moved to Claude; the oneshot eval baseline
         # deliberately stays on its Gemini anchor.
         assert routes["oneshot"].litellm_id == "gemini/gemini-4-neon"
     else:

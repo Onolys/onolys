@@ -1,4 +1,4 @@
-"""Provider-neutral realtime voice interface types (ai-interview PRD R3).
+"""Provider-neutral realtime voice interface types.
 
 Adapters live in sibling modules; nothing here names a provider.
 """

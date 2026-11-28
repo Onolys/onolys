@@ -1,4 +1,4 @@
-"""Rules, counts and summaries: "code decides" after the model proposes (PRD R2 steps 6-7).
+"""Rules, counts and summaries: "code decides" after the model proposes.
 
 Protocol-agnostic: everything comes from the pack's `rules[]`, `items[]` and `summaries[]`.
 Violations never delete an instance: it stays with `counted=False` and an `uncounted_reason`.

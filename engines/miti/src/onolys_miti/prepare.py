@@ -1,4 +1,4 @@
-"""Pure steps before any model call (PRD R2 steps 1-3): role marking, span selection,
+"""Pure steps before any model call: role marking, span selection,
 input checks and volley building. Protocol-agnostic: "subject" / "other" roles only."""
 
 import re
@@ -133,7 +133,7 @@ def _size(text: str) -> tuple[int, bool]:
 
 
 def _asks_question(text: str) -> bool:
-    # A short tail after the final question is still a direct question (R1).
+    # A short tail after the final question is still a direct question.
     text = text.rstrip()
     while text and (text[-1] in "\"'" or unicodedata.category(text[-1]) in {"Pe", "Pf"}):
         text = text[:-1].rstrip()

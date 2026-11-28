@@ -44,7 +44,7 @@ _TRANSIENT_ERROR_TYPES = frozenset(
 
 
 def is_transient(exc: BaseException) -> bool:
-    """True when retrying the same call may succeed (03-failure-policy R1/R2, D8).
+    """True when retrying the same call may succeed.
 
     Looks at `exc` and its `__cause__`/`__context__` chain for the nearest `LLMError`; any
     other exception is not an LLM failure, so False. Reads only the structured fields set by the

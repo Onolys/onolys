@@ -1,4 +1,4 @@
-"""SP03 T2 (R2, D11, D16, AC1): validate_rating, draft vs final. Code only; Issues carry no text."""
+"""validate_rating, draft vs final. Code only; Issues carry no text."""
 
 import copy
 import logging

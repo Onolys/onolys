@@ -551,7 +551,7 @@ fixtures:
       confront: 0
     count_reasons: &id002
       gi: 'Manual pp.13, 16–17: neutral information, once per volley.'
-      persuade: 'Manual pp.13, 17–20: one persuasion slot; permission takes precedence (volley extension: PRD D3).'
+      persuade: 'Manual pp.13, 17–20: one persuasion slot; permission takes precedence (volley extension).'
       persuade_permission: 'Manual pp.18–20: advice after explicit permission; one persuasion slot at p.13.'
       question: 'Manual pp.13, 21: information-seeking question, once per volley; asking permission is collaboration.'
       sr: 'Manual pp.13, 22–23: repeats client meaning without adding meaning, once per volley.'
@@ -708,7 +708,7 @@ fixtures:
     - turn_id: b26
       quote: You should put a walk on your calendar today.
       code: persuade
-      rationale: 'Manual pp.13, 17–20: one persuasion slot; permission takes precedence (volley extension: PRD D3).'
+      rationale: 'Manual pp.13, 17–20: one persuasion slot; permission takes precedence (volley extension).'
     - turn_id: b26
       quote: With your permission, I suggest trying a ten minute walk after lunch tomorrow.
       code: persuade_permission

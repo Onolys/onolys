@@ -1,6 +1,7 @@
 """Whitelisted arithmetic expressions over item ids (pack `summaries[].expr`).
 
-Public API (stable, reused by SP03): `evaluate`, `check`, `names`, `label_for`, `FormulaError`.
+Public API (stable, reused by the report builder): `evaluate`, `check`, `names`, `label_for`,
+`FormulaError`.
 No `eval`: the tree is walked by a whitelist evaluator.
 """
 

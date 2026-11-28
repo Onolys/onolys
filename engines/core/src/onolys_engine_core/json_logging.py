@@ -59,7 +59,7 @@ class FirstPartyInfoFilter(logging.Filter):
 
 
 class NoExceptionDetail(logging.Filter):
-    """Reduce a record carrying an exception to its class name (PRD R5, S1).
+    """Reduce a record carrying an exception to its class name.
 
     The message and args may embed exception text or PHI (a FastAPI ResponseValidationError
     embeds the offending ``input``), so the whole message is replaced, not just the traceback.

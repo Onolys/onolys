@@ -50,7 +50,7 @@ class RunUsage(_Model):
 
 
 class SpanInfo(_Model):
-    """How the coded span was chosen (PRD R7)."""
+    """How the coded span was chosen."""
 
     mode: Literal["whole", "explicit", "random_window"]
     start_ms: int | None = None
@@ -68,7 +68,7 @@ class SpanInfo(_Model):
 
 
 class RunInfo(_Model):
-    """Provenance of one engine run (PRD R10). Never holds text or key values."""
+    """Provenance of one engine run. Never holds text or key values."""
 
     engine: str
     code_version: str

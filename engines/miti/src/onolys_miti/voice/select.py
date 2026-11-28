@@ -1,4 +1,4 @@
-"""Voice config loading and selection (ai-interview PRD R3, D16): one yaml file.
+"""Voice config loading and selection: one yaml file.
 
 Located like `stt_providers.yaml`: env VOICE_PROVIDERS_FILE (explicit path), else
 `voice_providers.yaml` next to the file named by ROUTES_FILE, else the packaged default.
