@@ -5,13 +5,13 @@ date: 2026-11-28
 ---
 # refactor/revamp
 
-Design stage. PRDs reviewed, over-engineering audit applied (4 `[OPEN]` items with defaults, see audit file); next dev-critique then dev-tasks. Nothing implemented. Base: main. Scope: English transcripts only.
+Design stage. PRDs reviewed, over-engineering audit applied (the 4 former open items were answered by the owner 2026-11-28, see audit file); next dev-critique then dev-tasks. Nothing implemented. Base: main. Scope: English transcripts only.
 
 ## Files
 
 | File | What |
 | --- | --- |
-| [audit-overengineering-2026-11-28.md](audit-overengineering-2026-11-28.md) | Rule 17 audit: 11 code findings + per-PRD findings, owners, `[OPEN]` list; applied to PRDs 02-10 |
+| [audit-overengineering-2026-11-28.md](audit-overengineering-2026-11-28.md) | Rule 17 audit: 11 code findings + per-PRD findings, owners, owner-resolved former-open list; applied to PRDs 02-10 |
 | [brainstorm.md](brainstorm.md) | Agreed rules (1-16) + changes; snapshot of the Claude doc, 2026-11-28 |
 | [owner-follow-ups.md](owner-follow-ups.md) | Things only the owner can do (committed copy; the original is untracked in the primary checkout) |
 | [00-rules-file/PRD.md](00-rules-file/PRD.md) | Rules 1-16 into `docs/rules/coding-rules.md` (copied per repo); `design-rules.md` moves beside it; `AGENTS.md` + one-line `CLAUDE.md` point at both; no new CI |
@@ -81,7 +81,7 @@ Design stage. PRDs reviewed, over-engineering audit applied (4 `[OPEN]` items wi
 - [RESOLVED 2026-11-28] **D-D Spike 3 PASS:** uv git-subdirectory deps work; re-check once `engine-v0` exists (03) and `engine-v1` (06 T10); wheels fallback not needed (03, 10).
 - [RESOLVED 2026-11-28] **D-E Spike 1 PASS:** Auth emulator works under vitest+jsdom; fallback options (`signedInService` stub, keep fake) removed (02, 08).
 - Coding rule 17 "Use the library; don't rebuild it" (Block) is added to `docs/rules/coding-rules.md` in parallel; D-A is its first application.
-- [RESOLVED 2026-11-28: owner rule 17] **Over-engineering audit** ([audit file](audit-overengineering-2026-11-28.md)) applied: pydantic-settings for api and eval config (06, 10); vendor Firestore transaction retry, no custom rounds/locks (06); LiteLLM `mock_response` and one stub seam instead of ~6 fake LLM clients (04); Jinja2 prompt templating, no prompt-source test (04, 05); ruff `banned-api` instead of custom AST/import-graph boundary tests (04, 06, 10); one-off fuzz/mutation/schemathesis harnesses, docs-grep tests and tests of tooling deleted (02, 03, 06, 07, 08); `cachetools.TTLCache` (10); runner load checks cut to unknown step + bad `with` keys, equivalence fixtures cut to 3 (04); no pixel baseline for 07's pure move; `api-flaky` lane, `state_identity` resource and `charts.yaml` manifest dropped (06, 09, 10). `[OPEN]` with defaults: 04 LiteLLM retries, 04 structured logging, 06 client IP on Cloud Run, 10 scheduler breaker -> Router cooldowns. 06's emulator-share `[OPEN]` is RESOLVED (two jobs; T0 re-measures).
+- [RESOLVED 2026-11-28: owner rule 17] **Over-engineering audit** ([audit file](audit-overengineering-2026-11-28.md)) applied: pydantic-settings for api and eval config (06, 10); vendor Firestore transaction retry, no custom rounds/locks (06); LiteLLM `mock_response` and one stub seam instead of ~6 fake LLM clients (04); Jinja2 prompt templating, no prompt-source test (04, 05); ruff `banned-api` instead of custom AST/import-graph boundary tests (04, 06, 10); one-off fuzz/mutation/schemathesis harnesses, docs-grep tests and tests of tooling deleted (02, 03, 06, 07, 08); `cachetools.TTLCache` (10); runner load checks cut to unknown step + bad `with` keys, equivalence fixtures cut to 3 (04); no pixel baseline for 07's pure move; `api-flaky` lane, `state_identity` resource and `charts.yaml` manifest dropped (06, 09, 10). Owner decisions 2026-11-28 on the four former open items: [RESOLVED 2026-11-28: owner] 04 LiteLLM built-in retries replace `retry.py` and the custom 429/529 loop; [RESOLVED 2026-11-28: owner] 04 `StructuredLogHandler` + PHI `logging.Filter`, alert fields unchanged; [RESOLVED 2026-11-28: owner] 06 email rate limit removed entirely (06 R10, 08 R6, 09 R6c; proxy-headers flags dropped if unused); [RESOLVED 2026-11-28: owner] 10 eval goes through LiteLLM Router, custom breaker deleted. 06's emulator-share question is RESOLVED (two jobs; T0 re-measures).
 - No cross-repo copies/random deps, except those listed under "Accepted cross-repo copies" below.
 - Agents run Terraform plan and apply and other cloud actions (owner granted this); only steps needing credentials the agent lacks stay with the owner.
 - Pin tag `engine-v0` (not `eval-base-v0`), created by 03 (snapshot still has api + engine packages + config). Second tag `engine-v1` after 04-06 merge, for 10 P4.
