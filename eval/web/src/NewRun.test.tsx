@@ -140,19 +140,6 @@ describe('new run', () => {
     expect(screen.queryByText(/the maximum is 499/)).toBeNull();
     expect(start().disabled).toBe(false);
   });
-  it('legacy rerun opens the picker empty with a notice and keeps the saved engines', async () => {
-    const api = makeApi(); const onRunCreated = vi.fn();
-    const legacy = { run_id: 'old', status: 'done', created_at: '', input: { dataset_id: 'sample', session_ids: ['s1'] }, engines: ['miti'], repeats: 1, selection: null, combos: null, presets: ['default'], legacy_selection: true, combo_keys: ['preset:default'], combo_labels: { 'preset:default': 'preset: default (legacy)' } } as unknown as RunSummary;
-    render(<NewRun api={api} initialRun={legacy} onRunCreated={onRunCreated} />);
-    expect(await screen.findByText(/older run chose models by preset/)).toBeTruthy();
-    expect(checked('MITI lean (prod)')).toBe(true); expect(checked('Human score')).toBe(false);
-    expect(checked('Claude')).toBe(false); expect(checked('Gemini')).toBe(false);
-    expect(start().disabled).toBe(true);
-    fireEvent.click(screen.getByLabelText('Claude')); fireEvent.click(screen.getByLabelText('claude-haiku-5-5')); fireEvent.click(screen.getByLabelText('high'));
-    expect(start().disabled).toBe(false);
-    fireEvent.click(start());
-    await waitFor(() => expect(api.rerun).toHaveBeenCalledWith('old', { engines: ['miti'], selection: { models: ['claude'], tiers: ['claude-haiku-5-5'], efforts: ['high'] }, repeats: 1 }));
-  });
   it('requires a combo when an AI engine is selected and allows Human only', async () => {
     await mount();
     fireEvent.click(screen.getByLabelText('low'));

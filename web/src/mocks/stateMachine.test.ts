@@ -357,14 +357,6 @@ describe("failure injection by title", () => {
     expect(backend.listRuns(U, sid)[1].rating_id).toBe(backend.listRuns(U, sid)[0].rating_id);
   });
 
-  it("the old fail-paudit / fail-eaudit markers are plain titles now (no failure, no reasons audit)", () => {
-    for (const t of ["fail-paudit", "fail-eaudit"]) {
-      const { backend, sid } = ready(t);
-      expect(status(backend, sid).status).toBe("report_ready");
-      expect(backend.getReport(U, sid, 1).warnings.map((w) => w.code)).not.toContain("reasons_audit_failed");
-    }
-  });
-
   it("walks code, tips, assemble only (weights 40/8/3) and the report names run_info.miti", () => {
     const { backend } = ctx;
     const sid = started(backend, "plain");

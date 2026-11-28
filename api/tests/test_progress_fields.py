@@ -57,11 +57,11 @@ def test_expected_for_other_states_comes_from_the_one_table():
 
 
 def test_the_weights_and_progress_table_are_unchanged():
-    assert m.STATE_PROGRESS == {
+    assert p.STATE_PROGRESS == {
         "created": 0, "uploading": 5, "validating": 10, "transcribing": 20,
         "awaiting_input": 40, "running": 45, "report_ready": 100,
     }  # fmt: skip
-    assert m.STAGE_WEIGHTS == {"code": 40, "tips": 8, "assemble": 3}
+    assert p.STAGE_WEIGHTS == {"code": 40, "tips": 8, "assemble": 3}
 
 
 # ---- progress_next ----------------------------------------------------------------------------
@@ -181,7 +181,7 @@ def test_repo_transaction_start_updates_the_same_fields(repo, clock):
         LimitDefaults(eval_day=50, interview_day=5),
         5,
         "v",
-        m.RUN_START_PROGRESS,
+        p.RUN_START_PROGRESS,
     )
     assert out == "started"
     s = st(repo)

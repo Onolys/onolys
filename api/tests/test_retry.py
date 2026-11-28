@@ -24,6 +24,7 @@ from test_worker import SID, UID, runner_with
 from test_worker import repo as worker_repo  # noqa: F401  (fixture)
 
 from onolys_api import config
+from onolys_api.adapters.error_map import kind_for_code
 from onolys_api.audio import staging_key
 from onolys_api.config import MAX_SESSION_RETRIES, Settings
 from onolys_api.jobs import caps
@@ -50,7 +51,7 @@ def failed(repo, uid, *, step="transcribe", code=TRANSIENT, retry_count=0, ready
     sid = new_session(repo, uid, state="failed", ready=ready, **extra)
     repo.update_session(
         uid, sid,
-        {"error": {"code": code, "step": step}, "retry_count": retry_count,
+        {"error": {"code": code, "step": step, "kind": kind_for_code(code)}, "retry_count": retry_count,
          "step": step, **fields},
         status={"error_code": code},
     )  # fmt: skip

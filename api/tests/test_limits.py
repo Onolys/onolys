@@ -28,20 +28,8 @@ def test_partial_limits():
     assert effective_cap(u, "interview", "day", D) == 5
 
 
-def test_limits_beat_legacy():
-    u = {"daily_cap": 3, "limits": {"eval": {"day": 25}}}
-    assert effective_cap(u, "eval", "day", D) == 25
-
-
-def test_legacy_alone_is_eval_day_only():
-    u = {"daily_cap": 3}
-    assert effective_cap(u, "eval", "day", D) == 3
-    assert effective_cap(u, "interview", "day", D) == 5
-
-
 def test_zero_is_valid_override():
     assert effective_cap({"limits": {"interview": {"day": 0}}}, "interview", "day", D) == 0
-    assert effective_cap({"daily_cap": 0}, "eval", "day", D) == 0
 
 
 @pytest.mark.parametrize("bad", ["12", -1, 1.5, True, False, [], {}, "secret-value"])
@@ -58,19 +46,9 @@ def test_malformed_leaf_falls_back_without_logging_value(bad, caplog):
         assert "secret-value" not in dumped and "12" not in dumped
 
 
-def test_malformed_leaf_falls_through_to_legacy():
-    u = {"daily_cap": 3, "limits": {"eval": {"day": "x"}}}
-    assert effective_cap(u, "eval", "day", D) == 3
-
-
 @pytest.mark.parametrize("limits", ["x", 5, ["a"], {"eval": "x"}, {"eval": 3}])
 def test_malformed_structure_never_raises(limits):
     assert effective_cap({"limits": limits}, "eval", "day", D) == 10
-
-
-def test_bad_legacy_ignored():
-    assert effective_cap({"daily_cap": "3"}, "eval", "day", D) == 10
-    assert effective_cap({"daily_cap": -2}, "eval", "day", D) == 10
 
 
 def test_models():
@@ -138,4 +116,3 @@ def test_effective_cap_override_branches():
     assert effective_cap({"limits": "x"}, "eval", "day", d) == 10
     assert effective_cap({"limits": {"eval": 5}}, "eval", "day", d) == 10
     assert effective_cap({"limits": {"eval": {"day": True}}}, "eval", "day", d) == 10
-    assert effective_cap({"daily_cap": 4}, "eval", "day", d) == 4

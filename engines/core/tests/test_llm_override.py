@@ -123,13 +123,6 @@ def test_anthropic_override_and_oneshot_untouched(baseline):
     assert r["oneshot"].litellm_id == baseline["oneshot"].litellm_id == GEMINI
 
 
-def test_beats_miti_model_env():
-    r = routes(
-        {"MITI_MODEL_MID": "x/y", "LLM_PROVIDER": "anthropic", "LLM_MODEL": "claude-sonnet-5-5"}
-    )
-    assert r["mid"].litellm_id == CLAUDE
-
-
 def test_broken_preset_beats_env_override():
     env = {"LLM_PROVIDER": "anthropic", "LLM_MODEL": "claude-sonnet-5-5"}
     r = routes(env, "test-broken-llm")
@@ -167,13 +160,6 @@ def test_invalid_effort_is_rejected(effort):
 def test_effort_must_be_supported_by_selected_model():
     with pytest.raises(ConfigError, match="LLM_EFFORT.*max"):
         routes({"LLM_PROVIDER": "gemini", "LLM_MODEL": "gemini-4-neon", "LLM_EFFORT": "max"})
-
-
-def test_effort_only_validates_effective_miti_model():
-    with pytest.raises(ConfigError, match="LLM_EFFORT"):
-        routes({"MITI_MODEL_MID": "gemini/gemini-4-neon", "LLM_EFFORT": "max"})
-    with pytest.raises(ConfigError, match="LLM_EFFORT"):
-        routes({"MITI_MODEL_MID": "unknown/model", "LLM_EFFORT": "low"})
 
 
 @pytest.mark.parametrize("field,value", [("LLM_PROVIDER", "anthropic\n"), ("LLM_MODEL", "claude-sonnet-5-5\n"), ("LLM_MODEL", "claude-sonnet-5-5,EVIL=1")])

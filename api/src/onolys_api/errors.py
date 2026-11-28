@@ -31,7 +31,7 @@ ERROR_CODES = (
     "upstream_unavailable",
     "deadline_exceeded",
     "internal_error",
-    # added to the shared contract for the admin pack routes
+    # input and run errors
     "missing_parameter",
     "unknown_pack",
     "input_rejected",

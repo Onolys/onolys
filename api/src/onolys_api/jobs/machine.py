@@ -13,8 +13,7 @@ from collections.abc import Callable
 from typing import Any, get_args
 
 from onolys_api.errors import ApiError
-from onolys_api.progress import (  # noqa: F401  (re-exported: the tables moved to `progress`)
-    MAX_PROGRESS,
+from onolys_api.progress import (
     RUN_START_PROGRESS,
     STAGE_WEIGHTS,
     STAGES,

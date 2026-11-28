@@ -5,6 +5,7 @@ import typing
 import pytest
 from onolys_miti.run import Stage as EngineStage
 
+from onolys_api import progress
 from onolys_api.adapters.base import Stage as ApiStage
 from onolys_api.errors import ApiError
 from onolys_api.jobs import machine as m
@@ -108,12 +109,12 @@ def test_error_is_cleared_when_leaving_failed(repo):
 
 def test_stage_weights_keys_match_engine_stages():
     assert ApiStage is EngineStage
-    assert set(m.STAGE_WEIGHTS) == set(typing.get_args(EngineStage))
+    assert set(progress.STAGE_WEIGHTS) == set(typing.get_args(EngineStage))
 
 
 def test_stage_weights_sum_and_never_decrease_in_any_order(repo):
     assert (
-        m.STAGE_WEIGHTS == {"code": 40, "tips": 8, "assemble": 3} and m.RUN_START_PROGRESS + 51 < 99
+        progress.STAGE_WEIGHTS == {"code": 40, "tips": 8, "assemble": 3} and progress.RUN_START_PROGRESS + 51 < 99
     )
     walk(repo, "uploading", "validating", "transcribing", "awaiting_input", "running")
     order = ["code", "tips", "assemble"]

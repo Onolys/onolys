@@ -24,8 +24,7 @@ TASK = ("miti_code", "miti_globals", "tips")
 @pytest.fixture(autouse=True)
 def clean_env(monkeypatch):
     for v in (
-        "ROUTES_FILE", "DEFAULT_PRESET", "MITI_MODEL_CHEAP", "MITI_MODEL_MID",
-        "MITI_MODEL_STRONG", "MITI_LLM_RESPONSE_FORMAT",
+        "ROUTES_FILE", "DEFAULT_PRESET", "MITI_LLM_RESPONSE_FORMAT",
     ):  # fmt: skip
         monkeypatch.delenv(v, raising=False)
 

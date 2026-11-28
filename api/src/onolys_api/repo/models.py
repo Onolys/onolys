@@ -11,7 +11,7 @@ from typing import Any, Literal
 from onolys_engine_core.transcript import Transcript
 from onolys_miti.result import CodedSpan
 from onolys_miti.stt import SttRun
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, Field, field_validator
 
 SessionState = Literal[
     "created",
@@ -88,7 +88,6 @@ class UserDoc(Doc):
     prefs: dict[str, Any] = Field(default_factory=dict)
     expiry_days: int | None = None
     # Raw console values: any shape loads (never a 500, SP11 D6); `effective_cap` validates.
-    daily_cap: Any = None  # legacy eval day override (D5, deprecated)
     limits: Any = None  # {eval|interview: {day: int}} (SP11 R3)
     max_active_runs: int | None = None  # per-user override of MAX_ACTIVE_RUNS (R8)
     active_runs: int = 0  # runs reserved and not yet released (R8 concurrent limit)
@@ -124,12 +123,6 @@ class UploadInfo(BaseModel):
 FailureKind = Literal["transient", "permanent_internal", "user_file"]
 
 
-def _derive_kind(code: str | None) -> FailureKind:
-    from onolys_api.adapters.error_map import kind_for_code  # lazy: error_map pulls the engines
-
-    return kind_for_code(code)
-
-
 def error_status_fields(error: "SessionError | None", retry_count: int) -> dict[str, Any]:
     """The status-doc mirror of a session error: `error_code`, `error_kind`, `counted`,
     `retries_left` (retries still allowed when the kind is transient, else 0). One place for
@@ -138,7 +131,7 @@ def error_status_fields(error: "SessionError | None", retry_count: int) -> dict[
 
     if error is None:
         return {"error_code": None, "error_kind": None, "retries_left": 0, "counted": None}
-    kind = error.kind or _derive_kind(error.code)
+    kind = error.kind
     left = max(0, MAX_SESSION_RETRIES - retry_count) if kind == "transient" else 0
     return {"error_code": error.code, "error_kind": kind, "retries_left": left,
             "counted": error.counted}  # fmt: skip
@@ -146,7 +139,7 @@ def error_status_fields(error: "SessionError | None", retry_count: int) -> dict[
 
 def retry_allowed(sess: dict[str, Any], max_retries: int, step: str | None = None) -> bool:
     """The one retry rule (R4) on a stored session dict, for the repo transactions: `failed`, a
-    `transient` error (derived from the code on old docs), room under the cap, and the failed
+    `transient` error, room under the cap, and the failed
     `step` when the caller names one."""
     if sess.get("state") != "failed" or not sess.get("error"):
         return False
@@ -159,14 +152,8 @@ def retry_allowed(sess: dict[str, Any], max_retries: int, step: str | None = Non
 class SessionError(BaseModel):
     code: str
     step: str | None = None
-    kind: FailureKind | None = None  # filled from the code on write and on read (old docs)
+    kind: FailureKind | None = None  # set by the writer from the code (`kind_for_code`)
     counted: bool | None = None  # did this failure use a unit of the user's limit (None: n/a)
-
-    @model_validator(mode="after")
-    def _fill_kind(self) -> "SessionError":
-        if self.kind is None:
-            self.kind = _derive_kind(self.code)
-        return self
 
 
 class SessionCancel(BaseModel):
@@ -257,18 +244,6 @@ class SessionStatusDoc(Doc):
     speaker_confirmed: bool = False
     rating_submitted: bool = False
     has_rating: bool = False
-
-    @model_validator(mode="after")
-    def _derive_old_failure(self) -> "SessionStatusDoc":
-        """A failed doc written before `error_kind` existed: derive it from the code. Such a
-        doc has never been retried, so a transient one has every retry left."""
-        if self.state == "failed" and self.error_code and self.error_kind is None:
-            self.error_kind = _derive_kind(self.error_code)
-            if self.error_kind == "transient":
-                from onolys_api.config import MAX_SESSION_RETRIES
-
-                self.retries_left = MAX_SESSION_RETRIES
-        return self
 
 
 def upload_failed_stub(uid: str, code: str, now: datetime) -> SessionStatusDoc:
@@ -435,8 +410,8 @@ class ApiKeyDoc(Doc):
 class UsageDoc(Doc):
     uid: str = ""
     date: str = ""
-    runs: int = 0  # eval count (name kept: old docs hold it)
-    interviews: int = 0  # missing on old docs reads 0
+    runs: int = 0  # eval count (the stored field name)
+    interviews: int = 0  # absent until the first interview of the day (eval writes create the doc)
     interview_refunds: int = 0  # short-interview refunds given this day (capped, A9)
     tokens: int = 0
 

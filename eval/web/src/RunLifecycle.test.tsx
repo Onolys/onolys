@@ -4,7 +4,7 @@ import { afterEach, expect, it, vi } from 'vitest';
 import { History, RunView } from './Runs';
 import { ApiError, createEvalApi, type RunDetail, type RunStatus } from './api';
 afterEach(() => { cleanup(); vi.useRealTimers(); });
-const run = (status: RunStatus = 'running'): RunDetail => ({ run_id: 'r1', name: 'Morning', status, created_at: '2026-11-23T10:00:00Z', input: { dataset_id: 'saved', session_ids: ['s1'] }, engines: ['miti'], selection: null, combos: null, legacy_selection: true, combo_keys: [], combo_labels: {}, repeats: 1, total_units: 7, completed_units: 4, done_units: 3, failed_units: 1, cancelled_units: 0, usage: { input_tokens: 0, output_tokens: 0 }, cost_usd_est: null, unpriced_units: 0, engine_versions: {}, engine_git_sha: {}, resolved_presets: {}, units: [] });
+const run = (status: RunStatus = 'running'): RunDetail => ({ run_id: 'r1', name: 'Morning', status, created_at: '2026-11-23T10:00:00Z', input: { dataset_id: 'saved', session_ids: ['s1'] }, engines: ['miti'], selection: null, combos: null, combo_keys: [], combo_labels: {}, repeats: 1, total_units: 7, completed_units: 4, done_units: 3, failed_units: 1, cancelled_units: 0, usage: { input_tokens: 0, output_tokens: 0 }, cost_usd_est: null, unpriced_units: 0, engine_versions: {}, engine_git_sha: {}, resolved_presets: {}, units: [] });
 const apiFor = (value = run()) => ({ ...createEvalApi('', vi.fn()), run: vi.fn().mockResolvedValue(value), runs: vi.fn().mockResolvedValue({ runs: [value] }), cancel: vi.fn().mockResolvedValue({ run_id: 'r1', status: 'running' }) });
 async function openCancel(page: string) {
  if (page === 'detail') { const button = await screen.findByRole('button', { name: 'Cancel run' }); button.focus(); fireEvent.click(button); return button; }

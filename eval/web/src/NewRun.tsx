@@ -60,7 +60,7 @@ export function NewRun({ api, onRunCreated, initialRun }: { api: EvalApi; onRunC
       if (!active) return;
       setOptions(result);
       setEngines(initialRun?.engines ?? result.defaults[mode].engines);
-      setSelection(initialRun ? (initialRun.legacy_selection || !initialRun.selection ? emptySelection : initialRun.selection) : result.defaults[mode].selection);
+      setSelection(initialRun ? (!initialRun.selection ? emptySelection : initialRun.selection) : result.defaults[mode].selection);
       setOptionsLoading(false);
     }).catch(e => { if (active) { setErrorKind('load'); setError(message(e)); setOptions(undefined); setEngines([]); setSelection(emptySelection); setOptionsLoading(false); } });
     return () => { active = false; };
@@ -230,7 +230,6 @@ export function NewRun({ api, onRunCreated, initialRun }: { api: EvalApi; onRunC
           </fieldset>}
         </>}
       </fieldset>}
-      {initialRun?.legacy_selection && <p role="status">This older run chose models by preset, which can no longer be recreated. Pick a model, tier and effort below; saved input and engines are kept.</p>}
       <div className="configuration-row">
       <fieldset disabled={busy || optionsLoading}><legend>Engines</legend>{optionsLoading && <p role="status">Loading choices…</p>}<SlowStartNotice pending={optionsLoading && !error} />{unavailableEngines.map(id => <Check key={id} checked onChange={() => setEngines(ids => ids.filter(e => e !== id))}>{id} (unavailable)</Check>)}{visibleEngines.map(e => <Check key={e.id} checked={finalEngines.includes(e.id)} disabled={e.id === 'human' && !humanAvailable} onChange={() => setEngines(ids => toggle(ids, e.id))}>{e.label}</Check>)}</fieldset>
       <fieldset disabled={busy || optionsLoading}><legend>Models</legend>{unavailableModels.map(id => <Check key={id} checked onChange={() => toggleModel(id)}>{id} (unavailable)</Check>)}{options?.models.map(m => <Check key={m.id} checked={selection.models.includes(m.id)} onChange={() => toggleModel(m.id)}>{m.label}</Check>)}</fieldset>

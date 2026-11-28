@@ -68,26 +68,12 @@ def _run(repository, rid):
     return run
 
 
-def is_legacy(run):
-    """Stored pre-matrix runs carry preset names and no combo selection."""
-    return bool(run.get("presets"))
-
-
-def _label(key):
-    if key.startswith("preset:"):
-        return f"preset: {key[len('preset:'):]} (legacy)"
-    return key
-
-
 def _run_keys(run):
-    if is_legacy(run):
-        return [f"preset:{name}" for name in run["presets"]]
     return [combo_key(c) for c in run.get("combos") or []]
 
 
 def run_summary(rid, run):
     """Allowlist the public saved fields so storage paths never become API fields."""
-    legacy = is_legacy(run)
     keys = _run_keys(run)
     out = {"run_id": rid, **{key: run.get(key) for key in SUMMARY_FIELDS}}
     error = run.get("error")
@@ -97,13 +83,10 @@ def run_summary(rid, run):
     out["provider_skips"] = eval_view.provider_skips(run)
     if out["resolved_combos"] is None:
         out["resolved_combos"] = (run.get("saved_config") or {}).get("resolved_combos")
-    if legacy:
-        out["selection"] = out["combos"] = None
     return {
         **out,
-        "legacy_selection": legacy,
         "combo_keys": keys,
-        "combo_labels": {key: _label(key) for key in keys},
+        "combo_labels": {key: key for key in keys},
     }
 
 

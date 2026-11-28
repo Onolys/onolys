@@ -71,7 +71,6 @@ const ROWS: Row[] = [
   ["running, assemble", "running", { ...T, ...S, ...R }, { step: "assemble" }, "ddddcp", ["Building the report"]],
   ["running, no step yet", "running", { ...T, ...S, ...R }, { step: null }, "ddddcp", ["Coding the session"]],
   ["running, unknown step", "running", { ...T, ...S, ...R }, { step: "zzz" }, "ddddcp", ["Coding the session"]],
-  ["running, legacy step name", "running", { ...T, ...S, ...R }, { step: "paudit" }, "ddddcp", ["Coding the session"]],
   ["report_ready", "report_ready", { ...T, ...S, ...R }, {}, "dddddd", ["Your report is ready."]],
   [
     "failed, file-check code, pre-transcript",

@@ -14,7 +14,7 @@ from onolys_api.config import Settings
 Kind = Literal["eval", "interview"]
 Period = Literal["day"]
 
-# Kind -> usage-doc counter field. Day docs predate interviews: `runs` stays the eval count.
+# Kind -> usage-doc counter field. `runs` is the stored eval count.
 KIND_FIELD: dict[Kind, str] = {"eval": "runs", "interview": "interviews"}
 
 
@@ -40,7 +40,7 @@ def _warn(kind: Kind, period: Period) -> None:
 
 
 def effective_cap(user: dict[str, Any] | None, kind: Kind, period: Period, d: LimitDefaults) -> int:
-    """`limits.<kind>.<period>` > legacy `daily_cap` (eval day only) > default.
+    """`limits.<kind>.<period>` > default.
 
     A malformed leaf (non-int, bool, negative) is ignored with a value-free warning: never raises.
     """
@@ -59,12 +59,6 @@ def effective_cap(user: dict[str, Any] | None, kind: Kind, period: Period, d: Li
         if _valid(leaf):
             return leaf
         _warn(kind, period)
-    if kind == "eval" and period == "day":
-        legacy = user.get("daily_cap")
-        if legacy is not None:
-            if _valid(legacy):
-                return legacy
-            _warn(kind, period)
     return d.get(kind, period)
 
 

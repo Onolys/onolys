@@ -53,7 +53,7 @@ def _post(app, h, sid, barrier, path="runs"):
 
 def _fail_run_step(repo_, uid, sid):
     """A transient failure of the run step: the only thing `POST /retry` re-enters as a run."""
-    repo_.update_session(uid, sid, {"error": {"code": "upstream_unavailable", "step": "run"}})
+    repo_.update_session(uid, sid, {"error": {"code": "upstream_unavailable", "step": "run", "kind": "transient"}})
 
 
 @pytest.mark.parametrize("state", ["awaiting_input", "failed"])
@@ -229,7 +229,7 @@ def test_try_again_after_a_system_failure_reuses_the_stored_rating(repo):  # noq
     sid = _linked_ready(repo, uid)
     rid = rate(repo, uid, sid)
     repo.update_session(
-        uid, sid, {"state": "failed", "error": {"code": "upstream_unavailable", "step": "run"}}
+        uid, sid, {"state": "failed", "error": {"code": "upstream_unavailable", "step": "run", "kind": "transient"}}
     )
     r = _post_retry(make_client(repo, mk_settings(), RecordingQueue()), uid, sid)
     assert r.status_code == 202, r.text
@@ -321,7 +321,7 @@ def _fail_system(repo_, uid, sid, run_id):
     repo_.update_run(uid, sid, run_id, {"status": "failed", "error": "upstream_unavailable"})
     release_once(repo_, uid, sid, run_id, True, caps.utc_date())  # refund: free run, nothing given
     repo_.update_session(
-        uid, sid, {"state": "failed", "error": {"code": "upstream_unavailable", "step": "run"}}
+        uid, sid, {"state": "failed", "error": {"code": "upstream_unavailable", "step": "run", "kind": "transient"}}
     )
 
 

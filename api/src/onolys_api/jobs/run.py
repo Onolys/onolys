@@ -38,14 +38,7 @@ from onolys_api.adapters.validated import evaluate_validated
 from onolys_api.engines import eval_snapshot
 from onolys_api.jobs.alive import ensure_active
 from onolys_api.jobs.charging import invalid_run_snapshot, release_failed_run, release_once
-from onolys_api.jobs.machine import (
-    RUN_START_PROGRESS,
-    STAGE_WEIGHTS,
-    STAGES,
-    advance,
-    stage_fields,
-    transition_plan,
-)
+from onolys_api.jobs.machine import advance, transition_plan
 from onolys_api.jobs.queue import MAX_ATTEMPTS
 from onolys_api.jobs.transcribe import TRANSCRIPT_ID
 from onolys_api.jobs.transcribe import _run as run_coro
@@ -56,6 +49,7 @@ from onolys_api.jobs.worker import (
     TaskContext,
     TaskError,
 )
+from onolys_api.progress import RUN_START_PROGRESS, STAGE_WEIGHTS, STAGES, stage_fields
 from onolys_api.repo.base import NotFoundError
 from onolys_api.repo.models import ReportDoc, transcript_sha256, utcnow
 from onolys_api.storage.base import BlobNotFoundError, BlobStore

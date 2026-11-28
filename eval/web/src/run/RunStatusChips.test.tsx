@@ -7,7 +7,7 @@ import { UsageTiles } from './UsageTiles';
 import { AlertsStrip } from './AlertsStrip';
 
 afterEach(cleanup);
-const run = (patch: Partial<RunDetail> = {}): RunDetail => ({ run_id: 'r1', name: 'Pilot', status: 'running', created_at: '2026-11-23T10:00:00Z', input: { dataset_id: 'saved', session_ids: ['s1'] }, engines: ['miti'], selection: null, combos: null, legacy_selection: false, combo_keys: [], combo_labels: {}, repeats: 1, total_units: 3, completed_units: 1, done_units: 1, running_units: 1, queued_units: 1, failed_units: 0, cancelled_units: 0, usage: { input_tokens: 0, output_tokens: 0 }, cost_usd_est: 0, unpriced_units: 0, engine_versions: {}, engine_git_sha: {}, resolved_presets: {}, units: [], ...patch });
+const run = (patch: Partial<RunDetail> = {}): RunDetail => ({ run_id: 'r1', name: 'Pilot', status: 'running', created_at: '2026-11-23T10:00:00Z', input: { dataset_id: 'saved', session_ids: ['s1'] }, engines: ['miti'], selection: null, combos: null, combo_keys: [], combo_labels: {}, repeats: 1, total_units: 3, completed_units: 1, done_units: 1, running_units: 1, queued_units: 1, failed_units: 0, cancelled_units: 0, usage: { input_tokens: 0, output_tokens: 0 }, cost_usd_est: 0, unpriced_units: 0, engine_versions: {}, engine_git_sha: {}, resolved_presets: {}, units: [], ...patch });
 const chip = (text: string) => screen.getByText(text).closest('.ui-chip')!;
 
 it('shows one chip per state with tone and icon; zero counts are muted', () => {

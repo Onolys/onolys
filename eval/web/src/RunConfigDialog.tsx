@@ -14,7 +14,7 @@ export function savedConfiguration(run: RunSummary) {
     name: run.name, description: run.description, input: run.input,
     change_goal: run.change_goal, language: run.language, coded_span: run.coded_span,
     engines: run.engines, selection: run.selection, combos: run.combos,
-    combo_keys: run.combo_keys, combo_labels: run.combo_labels, legacy_selection: run.legacy_selection,
+    combo_keys: run.combo_keys, combo_labels: run.combo_labels,
     presets: run.presets, repeats: run.repeats, engine_versions: run.engine_versions,
     engine_git_sha: run.engine_git_sha, base_preset: run.base_preset,
     resolved_combos: run.resolved_combos, resolved_presets: run.resolved_presets,

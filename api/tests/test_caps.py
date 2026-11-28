@@ -79,7 +79,7 @@ def test_new_utc_day_starts_a_fresh_count(repo):
 
 def test_per_user_override_beats_the_config_default(repo):
     u, s = uid(), settings(eval_cap_day=20, max_active_runs=1000)
-    set_user_fields(repo, u, daily_cap=2)
+    set_user_fields(repo, u, limits={"eval": {"day": 2}})
     caps.reserve_run(repo, s, u, NOON)
     caps.reserve_run(repo, s, u, NOON)
     with pytest.raises(ApiError) as e:
@@ -177,7 +177,7 @@ def test_usage_view_and_reset_time(repo):
     assert (v.eval.day.used, v.eval.day.cap) == (0, 20)
     assert v.eval.day.resets_at == datetime(2026, 11, 21, tzinfo=UTC)
     caps.reserve_run(repo, s, u, NOON)
-    set_user_fields(repo, u, daily_cap=7)
+    set_user_fields(repo, u, limits={"eval": {"day": 7}})
     v = caps.usage_view(repo, s, u, NOON)
     assert (v.eval.day.used, v.eval.day.cap) == (1, 7)
 

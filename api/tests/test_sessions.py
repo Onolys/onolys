@@ -286,7 +286,7 @@ async def test_get_failed_session_carries_kind_and_retries_left(client, repo):
         sid = (await create(client)).json()["session"]["id"]
         for to in ("uploading", "validating"):
             m.advance(repo, "alice", sid, to=to)
-        m.advance(repo, "alice", sid, to="failed", error=SessionError(code=code, step=step))
+        m.advance(repo, "alice", sid, to="failed", error=SessionError(code=code, step=step, kind=kind))
         d = (await client.get(f"/v1/sessions/{sid}", headers=A)).json()
         assert (d["error"], d["error_kind"], d["retries_left"]) == ({"code": code}, kind, left)
     ok = (await create(client)).json()["session"]["id"]

@@ -148,37 +148,6 @@ async def test_compensate_write_site_persists_transient(repo):  # noqa: F811
     assert (st.error_kind, st.retries_left) == ("transient", MAX_SESSION_RETRIES)
 
 
-# ---- reads of old docs ----
-
-
-def test_old_failed_docs_without_kind_read_as_derived(repo):  # noqa: F811
-    uid, sid = seed_state(repo, "transcribing", T_OLD)
-    repo.update_session(
-        uid, sid,
-        {"state": "failed", "error": {"code": "no_speech", "step": "transcribe"}},
-        status={"state": "failed", "error_code": "no_speech"},
-    )  # fmt: skip
-    s, st = repo.get_session(uid, sid), repo.get_status(uid, sid)
-    assert s.error.kind == "user_file" and s.error.counted is None
-    assert (st.error_kind, st.retries_left, st.counted) == ("user_file", 0, None)
-
-    repo.update_session(
-        uid, sid,
-        {"error": {"code": "upstream_unavailable", "step": "run"}, "retry_count": 1},
-        status={"error_code": "upstream_unavailable"},
-    )  # fmt: skip
-    st = repo.get_status(uid, sid)
-    assert repo.get_session(uid, sid).error.kind == "transient"
-    assert (st.error_kind, st.retries_left) == ("transient", MAX_SESSION_RETRIES)
-
-    repo.update_session(
-        uid, sid, {"error": {"code": "totally_new", "step": None}},
-        status={"error_code": "totally_new"},
-    )  # fmt: skip
-    assert repo.get_status(uid, sid).error_kind == "permanent_internal"
-    assert repo.get_session(uid, sid).error.kind == "permanent_internal"
-
-
 def test_non_failed_status_has_no_error_kind(repo):  # noqa: F811
     uid, sid = seed_state(repo, "transcribing", T_OLD)
     st = repo.get_status(uid, sid)

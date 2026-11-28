@@ -21,8 +21,9 @@ from onolys_api.adapters.error_map import kind_for_code
 from onolys_api.config import Settings
 from onolys_api.jobs import caps
 from onolys_api.jobs.charging import release_once
-from onolys_api.jobs.machine import RUN_START_PROGRESS, advance
+from onolys_api.jobs.machine import advance
 from onolys_api.jobs.queue import TaskPayload, TaskQueue
+from onolys_api.progress import RUN_START_PROGRESS
 from onolys_api.repo.base import Repo
 from onolys_api.repo.limits import HELD_ERROR_CODE, LimitDefaults
 from onolys_api.repo.models import SessionError

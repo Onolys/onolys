@@ -5,7 +5,7 @@ import { History, RunView } from './Runs';
 import { PartialBadge, ProviderSkipNotices } from './RunStatus';
 import { createEvalApi, type RunDetail } from './api';
 afterEach(cleanup);
-const saved = (patch: Partial<RunDetail> = {}): RunDetail => ({ run_id: 'r1', name: 'Morning', status: 'partial', created_at: '2026-11-23T10:00:00Z', input: { dataset_id: 'saved', session_ids: ['s1'] }, engines: ['miti'], selection: null, combos: null, legacy_selection: true, combo_keys: [], combo_labels: {}, repeats: 1, total_units: 9, completed_units: 8, done_units: 3, failed_units: 2, cancelled_units: 3, usage: { input_tokens: 0, output_tokens: 0 }, cost_usd_est: null, unpriced_units: 0, engine_versions: {}, engine_git_sha: {}, resolved_presets: {}, units: [], ...patch });
+const saved = (patch: Partial<RunDetail> = {}): RunDetail => ({ run_id: 'r1', name: 'Morning', status: 'partial', created_at: '2026-11-23T10:00:00Z', input: { dataset_id: 'saved', session_ids: ['s1'] }, engines: ['miti'], selection: null, combos: null, combo_keys: [], combo_labels: {}, repeats: 1, total_units: 9, completed_units: 8, done_units: 3, failed_units: 2, cancelled_units: 3, usage: { input_tokens: 0, output_tokens: 0 }, cost_usd_est: null, unpriced_units: 0, engine_versions: {}, engine_git_sha: {}, resolved_presets: {}, units: [], ...patch });
 it.each(['detail', 'history'])('%s shows each partial/cancelled variant with API done counters', async page => {
  for (const [patch, expected] of [
   [{ cancelled_at: '2026-11-23T12:34:00Z', skipped_units: 2 }, `Partial — cancelled at ${new Date('2026-11-23T12:34:00Z').toLocaleString()}, 3 of 9 runs done, 2 skipped`],

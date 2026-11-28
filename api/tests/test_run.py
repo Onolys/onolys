@@ -298,7 +298,7 @@ async def test_try_again_after_a_failure_reuses_transcript_and_stored_rating(env
     (first,) = env.repo.list_runs(env.uid, sid)
     # the stub's `[fail:code]` is a permanent failure (no retry): make it the transient kind
     env.repo.update_session(
-        env.uid, sid, {"error": {"code": "upstream_unavailable", "step": "run"}}
+        env.uid, sid, {"error": {"code": "upstream_unavailable", "step": "run", "kind": "transient"}}
     )
     # the retry re-runs the SAME submission (the failed run's preset / n_runs), one capped path
     r = await env.c.post(f"/v1/sessions/{sid}/retry", headers=env.h)

@@ -103,7 +103,7 @@ async def test_per_user_isolation(api, repo):
 
 
 @pytest.mark.parametrize(
-    "raw", [{"limits": "oops"}, {"limits": [1]}, {"limits": 5}, {"daily_cap": "3"}]
+    "raw", [{"limits": "oops"}, {"limits": [1]}, {"limits": 5}]
 )
 async def test_malformed_user_limits_never_500_and_use_defaults(api, repo, raw):
     repo._put("users/alice", raw)

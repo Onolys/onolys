@@ -155,7 +155,7 @@ def test_retry_keeps_failed_run_and_inputs_or_refuses_changed_hash(repo, changed
     repo.update_run(uid, sid, "r1", {"status": "failed"})
     repo.release_run_slot(uid, sid, "r1", True, DATE)
     repo.update_session(
-        uid, sid, {"state": "failed", "error": {"code": "upstream_unavailable", "step": "run"}}
+        uid, sid, {"state": "failed", "error": {"code": "upstream_unavailable", "step": "run", "kind": "transient"}}
     )
     old = repo.get_run(uid, sid, "r1")
     if changed:

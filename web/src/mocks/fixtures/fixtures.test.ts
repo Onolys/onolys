@@ -155,7 +155,7 @@ describe("transcripts", () => {
   });
 });
 
-describe("run_info names the lean engine (no paudit/eaudit)", () => {
+describe("run_info names the lean engine", () => {
   it.each([
     ["sample", sampleReport],
     ["no-rating", noRatingReport],

@@ -39,9 +39,6 @@ def clean_env(monkeypatch):
     for v in (
         "ROUTES_FILE",
         "DEFAULT_PRESET",
-        "MITI_MODEL_CHEAP",
-        "MITI_MODEL_MID",
-        "MITI_MODEL_STRONG",
         "MITI_LLM_RESPONSE_FORMAT",
     ):
         monkeypatch.delenv(v, raising=False)
@@ -139,15 +136,9 @@ def test_unknown_preset_raises_input_error(monkeypatch):
         resolve_preset()
 
 
-def test_env_overrides_back_compat(monkeypatch):
-    monkeypatch.setenv("MITI_MODEL_MID", "anthropic/other")
-    monkeypatch.setenv("MITI_MODEL_CHEAP", "anthropic/small")
+def test_response_format_env_applies_to_every_route(monkeypatch):
     monkeypatch.setenv("MITI_LLM_RESPONSE_FORMAT", "json_schema")
     routes, _ = resolve_preset()
-    assert routes["mid"].litellm_id == "anthropic/other"
-    assert routes["tips"].litellm_id == "anthropic/other"  # alias follows mid
-    assert routes["cheap"].litellm_id == "anthropic/small"
-    assert routes["strong"].litellm_id == NEON
     assert all(r.structured_output_mode == "json_schema" for r in routes.values())
 
 

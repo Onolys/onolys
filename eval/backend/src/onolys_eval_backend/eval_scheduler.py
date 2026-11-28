@@ -719,7 +719,7 @@ def _run_owned_tick(services, eval_run_id, doc):
 
 def ensure_tick(services, eval_run_id: str, doc: dict) -> bool:
     """Safety net for `GET /v1/runs/{id}`: re-enqueue the current tick if the chain stalled."""
-    if doc.get("status") not in ACTIVE or "tick_seq" not in doc:  # legacy docs have no chain
+    if doc.get("status") not in ACTIVE:
         return False
     last = doc.get("last_tick_at") or doc.get("created_at")
     try:

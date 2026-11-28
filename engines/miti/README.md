@@ -129,6 +129,6 @@ What the api imports from this package:
   `params["speaker_map"]` supplies the speaker roles. Direct callers may still use
   `run_miti(ctx, transcript, speaker_map, params, progress_cb)`.
 - Session selection: the entire transcript is coded unless `params["coded_span"]` narrows it.
-- Env vars: `MITI_MODEL_CHEAP`, `MITI_MODEL_MID`, `MITI_MODEL_STRONG`, `MITI_LLM_RESPONSE_FORMAT`,
+- Env vars: `MITI_LLM_RESPONSE_FORMAT`,
   `MITI_LLM_RECORD`.
 - LLM routes: `miti_code`, `miti_globals`, `tips`.

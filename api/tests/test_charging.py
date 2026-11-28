@@ -1,5 +1,5 @@
 """03-failure-policy Task 3: the charging module (`should_refund`, `release_once`), `counted` on
-the failed session, interview sessions never counted, `free_run_void` retired.
+the failed session, interview sessions never counted.
 
 Repo-level tests run on FakeRepo always and on the Firestore emulator when set.
 """
@@ -20,7 +20,6 @@ from test_first_run import (
 from onolys_api.jobs import caps
 from onolys_api.jobs.charging import release_once, should_refund
 from onolys_api.jobs.first_run import maybe_start_first_run
-from onolys_api.repo.models import SessionDoc
 
 pytestmark = pytest.mark.unit
 READY = {"transcript_ready": True, "speaker_confirmed": True, "clinician_speaker": "S1"}
@@ -104,23 +103,8 @@ def test_interview_first_run_is_never_counted_nor_refunded(repo, refund):  # noq
     assert user_counters(repo, uid, date) == (0, 0)
 
 
-def test_legacy_free_run_void_flag_is_ignored_interview_still_free(repo):  # noqa: F811
-    uid, date = "ul" + uuid.uuid4().hex[:6], caps.utc_date()
-    sid, run = _start(repo, uid, interview_id="iv1", free_run_void=True)
-    assert run.counted is False
-    assert user_counters(repo, uid, date) == (1, 0)
-
-
 def test_non_interview_first_run_is_counted(repo):  # noqa: F811
     uid, date = "un" + uuid.uuid4().hex[:6], caps.utc_date()
     _, run = _start(repo, uid)
     assert run.counted is True
     assert user_counters(repo, uid, date) == (1, 1)
-
-
-def test_doc_carrying_free_run_void_still_loads_and_is_not_kept():
-    s = SessionDoc.model_validate(
-        {"uid": "u", "interview_id": "iv1", "free_run_void": True, "n_runs": 1}
-    )
-    assert not hasattr(s, "free_run_void")
-    assert "free_run_void" not in s.to_store()

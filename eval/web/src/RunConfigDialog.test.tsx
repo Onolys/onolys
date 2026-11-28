@@ -10,7 +10,7 @@ const run = (over: Partial<RunSummary> = {}): RunSummary => ({
   run_id: 'run_7f3a', status: 'done', created_at: '2026-11-26T09:00:00Z', name: 'Pilot 4',
   input: { dataset_id: 'annomi-sample', session_ids: ['gi', 'persuade'] }, engines: ['miti', 'oneshot:miti', 'human'],
   selection: null, combos: [{ model: 'claude-sonnet-4.5', tier: 'standard', effort: 'medium' }, { model: 'gpt-5', tier: 'standard', effort: 'high' }],
-  legacy_selection: false, combo_keys: ['a', 'b'], combo_labels: {}, repeats: 3, change_goal: 'reduce alcohol use', language: 'en',
+  combo_keys: ['a', 'b'], combo_labels: {}, repeats: 3, change_goal: 'reduce alcohol use', language: 'en',
   total_units: 4, completed_units: 4, done_units: 4, failed_units: 0, cancelled_units: 0, usage: { input_tokens: 1, output_tokens: 1 }, cost_usd_est: null, unpriced_units: 0,
   engine_versions: { miti: '4.2.1', 'oneshot:miti': '0.3.0' }, engine_git_sha: { miti: 'abc123' }, resolved_presets: {}, ...over,
 });
@@ -50,11 +50,6 @@ it('shows no combo letters with 1 or 2+ AI engines (they would mismatch the Comp
     unmount();
   }
 });
-it('lists legacy combos by label', () => {
-  open(run({ combos: null, legacy_selection: true, combo_keys: ['preset:default'], combo_labels: { 'preset:default': 'preset: default (legacy)' } }));
-  expect(screen.getByText('preset: default (legacy)')).toBeTruthy();
-  expect(screen.queryByRole('img', { name: 'Combo A' })).toBeNull();
-});
 it('hides raw JSON until the disclosure is toggled, and omits private refs', () => {
   open(run({ description: '<script>x</script>', ...({ output_ref: 'private-location' } as object) }));
   const d = screen.getByRole('dialog');
@@ -88,7 +83,7 @@ it('closes via Escape', async () => {
   await waitFor(() => expect(onClose).toHaveBeenCalled());
 });
 it('uses an upload label and tolerates missing optional fields', () => {
-  open(run({ input: { upload_id: 'u1' }, change_goal: undefined, language: undefined, engine_versions: {}, engine_git_sha: {}, combos: null, combo_keys: [], legacy_selection: false }));
+  open(run({ input: { upload_id: 'u1' }, change_goal: undefined, language: undefined, engine_versions: {}, engine_git_sha: {}, combos: null, combo_keys: [] }));
   const d = screen.getByRole('dialog');
   expect(within(d).getByText('Uploaded recording')).toBeTruthy();
   expect(within(d).queryByText('Combos')).toBeNull();

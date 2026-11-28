@@ -465,7 +465,7 @@ jobs:
         run: bash scripts/ci/smoke_prod_llm_validator.sh onolys-api:ci
       - name: Image ships core and MITI without eval packages or datasets
         run: |
-          for m in paudit onolys_core eaudit onolys_evaluation onolys_eval; do
+          for m in onolys_eval; do
             if docker run --rm --entrypoint python onolys-api:ci -c "import $m" 2>/dev/null; then
               echo "unexpected import $m in image"; exit 1
             fi

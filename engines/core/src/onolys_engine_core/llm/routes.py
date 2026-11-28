@@ -1,10 +1,10 @@
 """Model-route registry and presets (PRD R3, D6, D11, D12).
 
 Model choice is data: a YAML file (packaged default, or the path in env ROUTES_FILE).
-Engines ask for a route by name. Back-compat env overrides (applied to the base routes,
-before a preset's overrides): MITI_MODEL_CHEAP/MID/STRONG set that route's `litellm_id`;
+Engines ask for a route by name. Env overrides (applied to the base routes, before a
+preset's overrides):
 LLM_PROVIDER + LLM_MODEL (both or neither; validated against models.yaml) set the text routes'
-`litellm_id`, `api_key_env` and `caching_mode`, and win over MITI_MODEL_*;
+`litellm_id`, `api_key_env` and `caching_mode`;
 LLM_EFFORT overrides reasoning_effort on concrete text routes, validated for their models;
 MITI_LLM_RESPONSE_FORMAT sets `structured_output_mode` on every full route.
 """
@@ -27,11 +27,6 @@ DEFAULT_PRESET_NAME = "default"
 DEFAULT_RESOURCE = "routes.default.yaml"
 _MODES = ("json_object", "json_schema")
 _CACHING = ("none", "provider_implicit", "anthropic_ephemeral")
-_TIER_ENV = {
-    "cheap": "MITI_MODEL_CHEAP",
-    "mid": "MITI_MODEL_MID",
-    "strong": "MITI_MODEL_STRONG",
-}
 _FORMAT_ENV = "MITI_LLM_RESPONSE_FORMAT"
 PROVIDER_ENV = "LLM_PROVIDER"
 MODEL_ENV = "LLM_MODEL"
@@ -157,9 +152,6 @@ def _apply_env(
             if not re.fullmatch(r"[a-z0-9][a-z0-9._-]*", value):
                 raise ConfigError(f"{key} must be a lowercase configuration token")
     out = {k: dict(v) for k, v in raw.items()}
-    for name, var in _TIER_ENV.items():
-        if env.get(var) and name in out and "alias" not in out[name]:
-            out[name]["litellm_id"] = env[var]
     override = _llm_override(env, models_path)
     if override:
         # Aliases follow their target, so only concrete text routes are rewritten.
