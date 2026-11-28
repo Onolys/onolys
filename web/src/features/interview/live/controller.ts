@@ -1,5 +1,5 @@
 /**
- * Live interview controller (SP10 R8, R4): drives the relay socket and the audio engine, no UI.
+ * Live interview controller: drives the relay socket and the audio engine, no UI.
  * Protocol: first message `{type:"auth", id_token}`; binary PCM16 16 kHz up; `ready`, binary PCM16 24 kHz,
  * `ai_speaking`, `interrupted`, `warn`, `time_up`, `error` down. A close that is not 1000 or 44xx is a dropped
  * connection: the same URL is retried for `reconnectWindowMs`; the recorder is paused meanwhile and resumed on

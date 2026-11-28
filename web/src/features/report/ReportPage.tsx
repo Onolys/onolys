@@ -1,5 +1,5 @@
 /**
- * `/sessions/:id/reports/:version` (PRD R4, D17): the report as a single-column document. The
+ * `/sessions/:id/reports/:version`: the report as a single-column document. The
  * transcript is fetched in parallel; while it loads or fails, the rest of the report still shows
  * and the utterance links / Evidence rows (which need turn numbers) are omitted until it is ready.
  */

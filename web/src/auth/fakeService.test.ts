@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { createFakeAuthService } from "./fakeService";
 
 describe("fake auth service", () => {
-  it("signs up unverified, sends a verification email, and issues SP04 fake tokens", async () => {
+  it("signs up unverified, sends a verification email, and issues API fake tokens", async () => {
     const s = createFakeAuthService();
     await s.signUp("a@b.co", "password1");
     expect(s.calls.verificationEmails).toBe(1);

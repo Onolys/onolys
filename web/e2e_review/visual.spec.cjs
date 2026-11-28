@@ -1,11 +1,11 @@
-// Visual + a11y evidence (PRD R10, Decision 5): light/dark screenshots (no pixel diff) and an axe gate
+// Visual + a11y evidence: light/dark screenshots (no pixel diff) and an axe gate
 // (color-contrast + critical violations) per screen in both schemes. Runs in the `csp` project (built app, prod CSP).
 const { test, expect } = require("@playwright/test");
 const { FIX, signUp, spa, openUpload, accountMenu } = require("./helpers.cjs");
 const { watchCsp, axeGate, shotTo } = require("./csp-helpers.cjs");
 
 /**
- * Screens whose axe gate is waived in a scheme until the task that migrates them (Tasks 3-8 of 02-app-migration).
+ * Screens whose axe gate is waived in a scheme until the task that migrates them.
  * Key `<screen>@<scheme>` -> task. Anything not listed here must be axe-clean. Empty = fully gated.
  */
 const TODO = {};
@@ -122,7 +122,7 @@ for (const scheme of ["light", "dark"]) {
       });
     }
 
-    // 05-processing-screen: one shot per phase (upload / background / waiting). Mock steps advance every 1.5s.
+    // Processing screen: one shot per phase (upload / background / waiting). Mock steps advance every 1.5s.
     test("processing screen: upload, background, waiting phases", async ({ page }) => {
       const csp = await watchCsp(page);
       // Hold the upload PUT so the upload phase stays visible. The mock answers it from the MSW service worker, which

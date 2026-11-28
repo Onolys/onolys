@@ -77,7 +77,7 @@ describe("/auth/action verifyEmail", () => {
   });
 });
 
-describe("/auth/action pre-check failures and already verified (FX17)", () => {
+describe("/auth/action pre-check failures and already verified", () => {
   it("verifyEmail: a signed-in verified user sees Already verified + Continue, not invalid-link copy", async () => {
     const service = createFakeAuthService();
     service.signedInAs("a@clinic.org", { verified: true });
@@ -142,7 +142,7 @@ describe("resolveContinue", () => {
     expect(resolveContinue("https://app.onolys.com/verify-email?x=1", o)).toEqual({ kind: "path", path: "/verify-email?x=1" });
     expect(resolveContinue("/settings", o)).toEqual({ kind: "path", path: "/settings" });
   });
-  it("allows only configured app hosts as external (FX34)", () => {
+  it("allows only configured app hosts as external", () => {
     expect(resolveContinue("https://evil.example/verify-email", o)).toEqual({ kind: "path", path: "/" });
     expect(appHosts({ VITE_APP_HOSTS: " Staging.Example , other.example", VITE_FIREBASE_AUTH_DOMAIN: "auth.example" })).toEqual(
       new Set(["staging.example", "other.example", "auth.example"]),
@@ -152,7 +152,7 @@ describe("resolveContinue", () => {
       href: "https://onolys-staging-app.web.app/verify-email",
     });
   });
-  it("falls back to the default app hosts when VITE_APP_HOSTS is unset or empty (FX34 follow-up)", () => {
+  it("falls back to the default app hosts when VITE_APP_HOSTS is unset or empty", () => {
     for (const v of [undefined, "", " , "]) {
       const hosts = appHosts({ VITE_APP_HOSTS: v, VITE_FIREBASE_AUTH_DOMAIN: "auth.example" });
       expect(hosts).toEqual(new Set(["auth.example", "app.onolys.com", "onolys-app.web.app", "onolys-staging-app.web.app"]));

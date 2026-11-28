@@ -1,5 +1,5 @@
 /**
- * Live status listener (PRD R4, R7, R8, D7): Firestore `onSnapshot` on the PHI-free
+ * Live status listener: Firestore `onSnapshot` on the PHI-free
  * `session_status/{id}` doc. Firestore is initialised with a memory cache (no IndexedDB),
  * the named database from `VITE_FIRESTORE_DATABASE` and, in dev, the emulator from
  * `VITE_FIRESTORE_EMULATOR` (`host:port`). `firebase/firestore` loads lazily.

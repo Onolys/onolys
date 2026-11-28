@@ -63,18 +63,18 @@ export const STALE_NUDGE_EVERY_MS = 60_000;
 /** How often a held-back update is checked for release (the `quiet` ref has no change event). */
 const QUIET_CHECK_MS = 250;
 
-/** Resubscribe delays after a listener drop (D7); when they run out the page shows "Live updates stopped". */
+/** Resubscribe delays after a listener drop; when they run out the page shows "Live updates stopped". */
 export const RESUBSCRIBE_DELAYS_MS = [1_000, 2_000, 4_000, 8_000, 16_000];
 /** While the listener is down, poll the session detail this often. */
 export const FALLBACK_POLL_MS = 5_000;
 
 /**
- * Overall progress for a doc, re-derived once a second only while Elapsed or the % can move (timed states, and uploading once started_at is set)
- * (05-processing-screen R3, R8). `uploadFraction` is the uploader's byte fraction, if this tab has one.
+ * Overall progress for a doc, re-derived once a second only while Elapsed or the % can move (timed states, and uploading once started_at is set).
+ * `uploadFraction` is the uploader's byte fraction, if this tab has one.
  */
 export function useProgress(doc: SessionStatusDoc | null, uploadFraction?: number | null): DerivedProgress | null {
   const [now, setNow] = useState(() => Date.now());
-  // Elapsed ticks in every state but awaiting_input and the finished/hidden ones (R3); the % only moves in timed states (deriveProgress).
+  // Elapsed ticks in every state but awaiting_input and the finished/hidden ones; the % only moves in timed states (deriveProgress).
   const timed = doc !== null && (isTimedState(doc.state) || (isUploadState(doc.state) && doc.started_at != null));
   useEffect(() => {
     if (!timed) return;
@@ -100,7 +100,7 @@ function keepMax(floor: Floor | null, doc: SessionStatusDoc): [SessionStatusDoc,
 type Link = "up" | "retrying" | "exhausted";
 
 /**
- * Subscribe to `session_status/{id}` for the life of the page (PRD R4, D7). When the listener errors
+ * Subscribe to `session_status/{id}` for the life of the page. When the listener errors
  * (or the doc is missing) it resubscribes with backoff and, while it is down, polls
  * `["session-detail", id]`; after the last retry the poll continues and `fallback.exhausted` is set.
  * Mount with `key={id}` so each session starts from `loading`.

@@ -7,7 +7,7 @@ function retryTransient(failureCount: number, error: Error): boolean {
   return failureCount < 1;
 }
 
-/** In-memory only, short-lived cache: no PHI persisted (PRD R8, D3). */
+/** In-memory only, short-lived cache: no PHI persisted. */
 export function makeQueryClient(): QueryClient {
   return new QueryClient({
     defaultOptions: {

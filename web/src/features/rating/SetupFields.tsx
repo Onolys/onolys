@@ -1,5 +1,5 @@
 /**
- * Session setup on the upload screen (PRD R3, D3): one required "Change goal" field, shown only
+ * Session setup on the upload screen: one required "Change goal" field, shown only
  * while the rating UI is off. Reuses the card helpers for validation and the PUT payload; the
  * rating card itself is untouched. The coded span is never sent (the engine picks it, D3d).
  */

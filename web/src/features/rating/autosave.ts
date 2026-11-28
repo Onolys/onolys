@@ -1,4 +1,4 @@
-/** Debounced, serialised draft saver (PRD R4 Autosave, D15). Framework-free so it is easy to test. */
+/** Debounced, serialised draft saver. Framework-free so it is easy to test. */
 export type SaveStatus = "idle" | "saving" | "saved" | "error" | "invalid";
 
 export interface AutosaverOptions {

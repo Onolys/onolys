@@ -1,4 +1,4 @@
-/** Rating form state <-> API card (`rating.schema.json`), local checks and 422 mapping (PRD R4). */
+/** Rating form state <-> API card (`rating.schema.json`), local checks and 422 mapping. */
 import type { ApiError } from "../../api/errors";
 import type { RatingCard } from "../../api/types";
 import { COUNTS, GLOBALS, LIMITS } from "../../protocol/miti-items";
@@ -160,7 +160,7 @@ function messageForIssue(path: string, issue: string): string {
  * Per-field messages from a 422 `rating_invalid`. Real API details carry `field` (a `/`-joined card
  * path, `$` = whole card) and `issue`; both are mapped to the form's dotted keys. Details without
  * `field` fall back to a leading dotted path in `message` (older mock shape). The message shown is
- * always chosen locally, server text is never shown (no PHI, R8).
+ * always chosen locally, server text is never shown (no PHI).
  */
 export function issuesFromApi(err: ApiError): Issues {
   const out: Issues = {};

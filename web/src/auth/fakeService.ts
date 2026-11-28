@@ -1,6 +1,6 @@
 /**
  * In-memory AuthService for mock mode and tests (`VITE_AUTH_MODE=fake`).
- * Tokens match SP04 `AUTH_MODE=fake` (`Bearer test:<uid>`). No persistence.
+ * Tokens match the API `AUTH_MODE=fake` (`Bearer test:<uid>`). No persistence.
  */
 import { fakeToken } from "./fake";
 import { AuthError, type AuthService, type AuthUser, type EmailChangeKind } from "./types";

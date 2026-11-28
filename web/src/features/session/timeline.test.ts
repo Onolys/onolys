@@ -186,7 +186,7 @@ describe("deriveTimeline: sub-labels", () => {
   });
 });
 
-describe("deriveTimeline: hint (PRD R5)", () => {
+describe("deriveTimeline: hint", () => {
   const UPLOAD = "Keep this tab open until upload finishes";
   const BACKGROUND = "You can close this tab \u2014 we'll keep working";
   const WAITING = "We'll wait here for your choice";

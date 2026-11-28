@@ -1,5 +1,5 @@
 /**
- * SP10 Task 11: landing cards, picker, live page, End -> upload -> session, warn toast, reconnect, discard (AC9).
+ * Interview: landing cards, picker, live page, End -> upload -> session, warn toast, reconnect, discard.
  * MSW serves /v1, the fake relay plays the socket, the audio engine is a stub (no browser audio in jsdom).
  */
 import { act, cleanup, screen, waitFor, within } from "@testing-library/react";
@@ -372,7 +372,7 @@ describe("live interview", () => {
   });
 });
 
-describe("discard and leave prompt (AC9)", () => {
+describe("discard and leave prompt", () => {
   it("Discard abandons the interview, uploads nothing, creates no session and returns to /sessions", async () => {
     const u = userEvent.setup();
     const { router } = renderApp("/interviews/new", { user: USER });
@@ -490,7 +490,7 @@ describe("discard and leave prompt (AC9)", () => {
   });
 });
 
-describe("leaving ends the interview (D6)", () => {
+describe("leaving ends the interview", () => {
   it("warns on tab close/reload while live", async () => {
     const u = userEvent.setup();
     const { router } = renderApp("/interviews/new", { user: USER });

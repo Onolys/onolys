@@ -152,7 +152,7 @@ describe("sessions page: empty state", () => {
   });
 });
 
-describe("sessions page: freshness (W25, D8)", () => {
+describe("sessions page: freshness", () => {
   it("polls every 10 s only while a session is in progress", () => {
     expect(sessionsRefetchInterval([{ status: "report_ready" }, { status: "running" }])).toBe(DASHBOARD_POLL_MS);
     expect(DASHBOARD_POLL_MS).toBe(10_000);

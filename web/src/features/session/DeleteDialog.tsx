@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { ConfirmDialog } from "./ConfirmDialog";
 
 /**
- * Confirm dialog for permanent deletion (PRD R4 Delete): a thin wrapper over `ConfirmDialog`.
+ * Confirm dialog for permanent deletion: a thin wrapper over `ConfirmDialog`.
  * The caller owns the open state and returns focus to the opener.
  */
 export function DeleteDialog({

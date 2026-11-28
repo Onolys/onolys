@@ -37,7 +37,7 @@ describe("action-code errors", () => {
   });
 });
 
-describe("per-code messages (FX19/FX56)", () => {
+describe("per-code messages", () => {
   const GENERIC = "Something went wrong. Please try again.";
   it.each([
     ["auth/missing-email", /enter your email/i, "email"],
@@ -68,7 +68,7 @@ describe("per-code messages (FX19/FX56)", () => {
 });
 
 describe("email endpoint codes", () => {
-  it("maps rate limit and unavailable to the PRD copy", () => {
+  it("maps rate limit and unavailable to the specified copy", () => {
     expect(mapAuthError("email/rate-limited").message).toBe("Too many requests. Wait a minute and try again.");
     expect(mapAuthError("email/unavailable").message).toBe("We couldn't send the email. Try again in a moment.");
   });

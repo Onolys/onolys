@@ -1,5 +1,5 @@
 /**
- * Typed API client (PRD R7, D4, D8): openapi-fetch over `/v1`, bearer token
+ * Typed API client: openapi-fetch over `/v1`, bearer token
  * from a provider, `Idempotency-Key` on `POST /sessions` only, and exactly one
  * forced-refresh retry on 401 before signalling sign-out.
  */
@@ -45,7 +45,7 @@ export function createApiClient(opts: ApiClientOptions) {
   const doFetch = opts.fetch ?? ((r: Request) => globalThis.fetch(r));
 
   const authedFetch = async (input: Request): Promise<Response> => {
-    // The key is only meaningful on create; strip it everywhere else (R7).
+    // The key is only meaningful on create; strip it everywhere else.
     if (isCreateSession(input, baseUrl)) {
       if (!input.headers.has(IDEMPOTENCY_HEADER)) {
         input.headers.set(IDEMPOTENCY_HEADER, globalThis.crypto.randomUUID());

@@ -1,5 +1,5 @@
 /**
- * Static MITI 4.2.1 rating-card items (PRD R4, D13): ids match `rating.schema.json` keys
+ * Static MITI 4.2.1 rating-card items: ids match `rating.schema.json` keys
  * (parity-tested in `miti-items.test.ts`); labels and 1-5 anchors are UI copy only.
  */
 export interface GlobalItem {

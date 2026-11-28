@@ -1,4 +1,4 @@
-/** The one `/usage` consumer (SP11 R9). Invalidate `USAGE_KEY` after a run starts. */
+/** The one `/usage` consumer. Invalidate `USAGE_KEY` after a run starts. */
 import { useQuery } from "@tanstack/react-query";
 import { unwrap } from "../../api/client";
 import { useApiClient } from "../../auth/useApiClient";

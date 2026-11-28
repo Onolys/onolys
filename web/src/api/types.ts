@@ -29,13 +29,13 @@ export type ReportBody = Report;
 type StripV1<P> = P extends `/v1${infer R}` ? R : P;
 /**
  * The generated `paths` keys carry the `/v1` prefix; the client's base URL is
- * already `/v1` (PRD R7), so call sites use the unprefixed path.
+ * already `/v1`, so call sites use the unprefixed path.
  */
 export type ApiPaths = { [K in keyof paths as StripV1<K>]: paths[K] };
 
 /**
  * The rating card is an opaque object in OpenAPI (`card: {[key]: unknown}`); its
- * shape is `rating.schema.json` (SP02), mirrored here for the form and mock.
+ * shape is `rating.schema.json`, mirrored here for the form and mock.
  * Parity with the schema is asserted in `protocol/miti-items.test.ts`.
  */
 export type RatingCard = {

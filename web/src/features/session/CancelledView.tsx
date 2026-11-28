@@ -1,5 +1,5 @@
 /**
- * Terminal view of a cancelled session (04-cancel R9): heading, whether it counted toward the limit
+ * Terminal view of a cancelled session: heading, whether it counted toward the limit
  * (`counted` null/undefined omits the sentence). No rating, speaker gate or retry.
  */
 export function CancelledView({

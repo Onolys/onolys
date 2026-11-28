@@ -12,7 +12,7 @@ export const FORM = "mt-4 grid max-w-sm grid-cols-1 gap-4 break-words";
 /** Stack for non-form states (results, expired links): heading, notice, action. */
 export const STACK = "grid max-w-sm grid-cols-1 gap-4 break-words";
 
-/** Error summary: role=alert, takes focus when it appears or changes (R8 a11y). */
+/** Error summary: role=alert, takes focus when it appears or changes (accessibility). */
 export function ErrorSummary({ error, search }: { error: MappedAuthError; search: string }) {
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {

@@ -4,7 +4,7 @@ import { messageForCode } from "../../api/errors";
 import { ErrorCard } from "./ErrorCard";
 
 /**
- * A file that failed validation is an upload failure, not a session (PRD R11): the session is gone,
+ * A file that failed validation is an upload failure, not a session: the session is gone,
  * only a data-free status stub remains. The reason is the existing per-code copy.
  */
 export function UploadFailedView({ code, reference }: { code: string | null | undefined; reference: string }) {

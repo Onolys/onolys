@@ -10,7 +10,7 @@ function Loading() {
   );
 }
 
-/** Signed-in and email-verified only (R1 guards). */
+/** Signed-in and email-verified only. */
 export function RequireVerified() {
   const { phase } = useAuth();
   const { pathname, search } = useLocation();

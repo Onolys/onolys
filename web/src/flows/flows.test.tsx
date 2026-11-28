@@ -1,5 +1,5 @@
 /**
- * SP05 Task 14: end-to-end flow tests (PRD R9, D12, AC2, AC9, AC10). Every flow starts at a route, drives the real
+ * End-to-end flow tests. Every flow starts at a route, drives the real
  * router and pages through user-visible steps, and MSW serves /v1 from the in-memory mock backend. The only
  * out-of-band moves are the ones the real worker does: `mockBackend.advance` stands in for transcription/run stages,
  * `service.markVerified` for clicking the email link. Page-level detail lives next to each page; these tests cover
@@ -178,7 +178,7 @@ describe("flow: one submit, no rating card (default)", () => {
   }, 15_000);
 });
 
-describe("flow (rating on): sign-up, verify, upload, speaker + rating during transcription, report (AC2, AC9)", () => {
+describe("flow (rating on): sign-up, verify, upload, speaker + rating during transcription, report", () => {
   withRatingOn();
   it("runs end to end, and the submitted rating is final (no edit, no Run again)", async () => {
     const u = user();
@@ -222,7 +222,7 @@ describe("flow (rating on): sign-up, verify, upload, speaker + rating during tra
     expect(screen.getByRole("region", { name: "Feedback: ideas to try" })).toBeInTheDocument();
     expect(screen.getByRole("region", { name: "Behaviour counts" })).toBeInTheDocument();
 
-    // FX45: the report is final: no Run again, no rating edit, a single version
+    // The report is final: no Run again, no rating edit, a single version
     expect(screen.queryByRole("button", { name: /run again|edit my rating|submit/i })).toBeNull();
     expect(screen.queryByRole("combobox", { name: "Version" })).not.toBeInTheDocument();
     await u.click(nav("Sessions"));
@@ -233,7 +233,7 @@ describe("flow (rating on): sign-up, verify, upload, speaker + rating during tra
   });
 });
 
-describe("flow (rating on): no-rating run is final too (AC3)", () => {
+describe("flow (rating on): no-rating run is final too", () => {
   withRatingOn();
   it("shows an Onolys-only report and offers no way to add a rating or run again", async () => {
     const u = user();
@@ -257,7 +257,7 @@ describe("flow (rating on): no-rating run is final too (AC3)", () => {
   });
 });
 
-describe("flow (rating on): system failure, then Try again (AC6a)", () => {
+describe("flow (rating on): system failure, then Try again", () => {
   withRatingOn();
   it("shows the failure card with a reference id, Try again re-runs the same rating", async () => {
     const u = user();
@@ -280,7 +280,7 @@ describe("flow (rating on): system failure, then Try again (AC6a)", () => {
   }, 15_000);
 });
 
-describe("flow (rating on): daily cap reached at auto-start, then Start (AC6a)", () => {
+describe("flow (rating on): daily cap reached at auto-start, then Start", () => {
   withRatingOn();
   it("says so with the reset time; Start runs once allowed", async () => {
     const u = user();
@@ -300,7 +300,7 @@ describe("flow (rating on): daily cap reached at auto-start, then Start (AC6a)",
   });
 });
 
-describe("flow: delete a session (AC2)", () => {
+describe("flow: delete a session", () => {
   it("dashboard -> report -> confirm delete -> dashboard without it", async () => {
     const u = user();
     const sid = mockBackend.createSession(UID, { title: "Doomed visit" }).session.id;
@@ -342,7 +342,7 @@ describe("flow: settings from the account menu", () => {
   });
 });
 
-describe("flow: sample report works with no network (AC3a)", () => {
+describe("flow: sample report works with no network", () => {
   it("login -> Sample report renders the report and transcript, with zero requests", async () => {
     const requests: string[] = [];
     server.events.on("request:start", ({ request }) => void requests.push(request.url));

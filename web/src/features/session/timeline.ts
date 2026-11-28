@@ -1,5 +1,5 @@
 /**
- * Session timeline derived from `state` + flags (PRD R4, D14). There is no per-gate
+ * Session timeline derived from `state` + flags. There is no per-gate
  * state: speaker and rating are flags, and `awaiting_input` is the one wait state.
  */
 import { messageForCode } from "../../api/errors";
@@ -22,7 +22,7 @@ export interface Timeline {
   lines: string[];
   /** Show the run-progress block (elapsed time, bar) once the run has started. */
   showRunCopy: boolean;
-  /** One-line leave/stay hint for the phase (PRD R5); null in terminal states. */
+  /** One-line leave/stay hint for the phase; null in terminal states. */
   hint: string | null;
   /** `awaiting_input` stopped by the daily cap: offer Start. */
   capReached: boolean;
@@ -63,7 +63,7 @@ const HINT_UPLOAD = "Keep this tab open until upload finishes";
 const HINT_BACKGROUND = "You can close this tab — we'll keep working";
 const HINT_WAITING = "We'll wait here for your choice";
 
-/** PRD R5: the one-line leave/stay hint per phase; null for terminal states. */
+/** The one-line leave/stay hint per phase; null for terminal states. */
 function hintFor(state: TimelineInput["state"]): string | null {
   switch (state) {
     case "created":

@@ -9,7 +9,7 @@ export interface Chip {
 const signedText = (n: number) => (n > 0 ? `+${n}` : `${n}`);
 
 /**
- * Scorecard chip for one item (PRD R4). The text says it; the tone only adds colour, so colour is
+ * Scorecard chip for one item. The text says it; the tone only adds colour, so colour is
  * never the only signal. `agree` shows the signed gap (or "Same as you"); `differs`/`flagged` add
  * the status word.
  */

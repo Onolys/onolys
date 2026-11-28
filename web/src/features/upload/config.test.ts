@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { DEFAULT_LANGUAGE, LANGUAGES, SP01_GATE, languagesForGate } from "./config";
 
-describe("language list vs the recorded SP01 gate (ADR 0017)", () => {
-  it("records the gate as pending, so the PRD default list applies (provisional)", () => {
+describe("language list vs the recorded language gate", () => {
+  it("records the gate as pending, so the default list applies (provisional)", () => {
     expect(SP01_GATE).toEqual({ adr: "0017", status: "pending", autoDiarizationOk: null });
   });
 

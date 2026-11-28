@@ -5,7 +5,7 @@ import { RetryButton } from "./RetryButton";
 beforeEach(() => vi.useFakeTimers());
 afterEach(() => vi.useRealTimers());
 
-describe("RetryButton countdown (PRD R6, D7)", () => {
+describe("RetryButton countdown", () => {
   it("starts at Retry (5), aria-disabled, and counts down to Retry", () => {
     const onRetry = vi.fn();
     render(<RetryButton onRetry={onRetry} />);

@@ -1,4 +1,4 @@
-/** Provider-neutral auth seam (PRD R2, D8). Firebase and fake mode both implement it. */
+/** Provider-neutral auth seam. Firebase and fake mode both implement it. */
 
 export interface AuthUser {
   uid: string;

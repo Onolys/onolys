@@ -8,7 +8,7 @@ import { H1, LINK } from "../../components/classes";
 import { ErrorSummary, FORM, Field, StatusNote } from "./parts";
 import { useFormError } from "./useFormError";
 
-/** Same confirmation for every email: no account enumeration (R2). */
+/** Same confirmation for every email: no account enumeration. */
 export const RESET_CONFIRMATION = "If an account exists for that address, we've emailed a link.";
 
 // Only failures that say nothing about the account are shown; everything else gets the confirmation.

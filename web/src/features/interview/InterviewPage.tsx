@@ -1,5 +1,5 @@
 /**
- * `/interviews/:id` (SP10 R8): the live practice interview. Timer from relay events, a warning toast, auto-End
+ * `/interviews/:id`: the live practice interview. Timer from relay events, a warning toast, auto-End
  * at the limit, an End button, a "reconnecting…" state, and a leave prompt (evaluate what I have / discard).
  * After End the recording goes through the ordinary upload path and the session opens with its prefilled goal.
  */
@@ -237,7 +237,7 @@ function InterviewView({ id }: { id: string }) {
     }
   }, [phase, timeUp, finishMutate, discard.isPending, discard.isSuccess]);
 
-  // Owner rule D6: leaving ends the interview. A live interview found on page load was left earlier: no rejoin.
+  // Owner rule: leaving ends the interview. A live interview found on page load was left earlier: no rejoin.
   const staleLive = interview.data?.state === "live" && !startingUi && !active;
   const endedStale = useRef(false);
   const [wasStale, setWasStale] = useState(false);

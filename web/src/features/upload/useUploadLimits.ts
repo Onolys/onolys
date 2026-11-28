@@ -1,4 +1,4 @@
-/** Server-published upload limits for the client pre-checks (PRD R10). Fetched once, kept long. */
+/** Server-published upload limits for the client pre-checks. Fetched once, kept long. */
 import { useQuery } from "@tanstack/react-query";
 import { unwrap } from "../../api/client";
 import { useApiClient } from "../../auth/useApiClient";

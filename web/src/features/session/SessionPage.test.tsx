@@ -330,7 +330,7 @@ describe("session page: rating slot (flag off) and fallback", () => {
   });
 });
 
-describe("session page: upload incomplete (D4)", () => {
+describe("session page: upload incomplete", () => {
   const incompleteDoc = (): SessionStatusDoc => ({
     ...failedDoc("x", "x"),
     state: "upload_incomplete",
@@ -379,7 +379,7 @@ describe("session page: upload incomplete (D4)", () => {
   });
 });
 
-describe("session page: failure cards (PRD R6)", () => {
+describe("session page: failure cards", () => {
   const withKind = (sid: string, code: string, extra: Record<string, unknown>): SessionStatusDoc =>
     ({ ...failedDoc(sid, code), ...extra }) as SessionStatusDoc;
   const show = async (extra: Record<string, unknown>, code = "upstream_unavailable") => {
@@ -627,7 +627,7 @@ describe("session page: free_run gates Start (review round 2)", () => {
   });
 });
 
-describe("session page: start held by an active run (review R2)", () => {
+describe("session page: start held by an active run", () => {
   it("shows the concurrent message with Start enabled, not the daily limit or reset time", async () => {
     const sid = create();
     toAwaiting(sid);
@@ -672,7 +672,7 @@ describe("transcript speaker gate", () => {
   });
 });
 
-describe("session page: upload failed (PRD R11)", () => {
+describe("session page: upload failed", () => {
   const stub = (code: string): SessionStatusDoc =>
     ({ ...failedDoc("x", code), state: "upload_failed", progress: 0, transcript_ready: false, speaker_confirmed: false, rating_submitted: false, has_rating: false }) as unknown as SessionStatusDoc;
 
@@ -709,7 +709,7 @@ describe("session page: upload failed (PRD R11)", () => {
   });
 });
 
-describe("session page: cancel (04-cancel R9)", () => {
+describe("session page: cancel", () => {
   const link = () => screen.getByRole("button", { name: "Cancel session" });
   const confirm = async () => {
     await userEvent.click(link());
@@ -848,7 +848,7 @@ describe("session page: cancel (04-cancel R9)", () => {
   });
 });
 
-describe("session page: processing screen (05-processing-screen R4, R5, R7, R8)", () => {
+describe("session page: processing screen", () => {
   const emit = (sid: string, patch: Partial<SessionStatusDoc>) =>
     act(() => mockEmitter.emit(sid, { ...failedDoc(sid, "x"), error_code: null, ...patch } as SessionStatusDoc));
   const bar = () => screen.queryByRole("progressbar", { name: "Overall progress" });

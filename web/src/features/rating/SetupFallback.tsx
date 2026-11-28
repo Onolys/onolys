@@ -1,5 +1,5 @@
 /**
- * Session-page fallback (PRD R3): a session that never got its change goal (created before this
+ * Session-page fallback: a session that never got its change goal (created before this
  * build, or an interview whose PUT failed) sets it here. Same field as the upload screen; the
  * "Continue" button only does the final no-rating `PUT /rating` (409 `rating_final` = done).
  */

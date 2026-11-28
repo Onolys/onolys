@@ -6,7 +6,7 @@ import type { Plugin } from "vite";
 import { configDefaults, defineConfig } from "vitest/config";
 import { cspOf, readHosting } from "./src/hosting/csp";
 
-/** `public/mockServiceWorker.js` is for `dev:mock` only; every build except `--mode mock` drops it from `dist/` (PRD R8). */
+/** `public/mockServiceWorker.js` is for `dev:mock` only; every build except `--mode mock` drops it from `dist/`. */
 function dropMockWorker(mode: string): Plugin {
   return {
     name: "drop-mock-service-worker",
@@ -29,14 +29,14 @@ function prodCspHeader(): string {
 
 export default defineConfig(({ mode }) => ({
   plugins: [react(), tailwindcss(), dropMockWorker(mode)],
-  // Build id for `X-Client-Version` (02-logging R13): an explicit VITE_BUILD_SHA wins, else CI's GITHUB_SHA
+  // Build id for `X-Client-Version`: an explicit VITE_BUILD_SHA wins, else CI's GITHUB_SHA
   // (so no workflow needs an env edit), else `dev`.
   define: {
     "import.meta.env.VITE_BUILD_SHA": JSON.stringify(
       (process.env.VITE_BUILD_SHA || process.env.GITHUB_SHA || "dev").slice(0, 12),
     ),
   },
-  // `vite preview` only: the dev server has no CSP, so the e2e `csp` project builds and previews with the prod header (PRD R9).
+  // `vite preview` only: the dev server has no CSP, so the e2e `csp` project builds and previews with the prod header.
   preview: { headers: { "Content-Security-Policy": prodCspHeader() } },
   test: {
     environment: "jsdom",

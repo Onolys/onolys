@@ -1,4 +1,4 @@
-/** Offsets from the engine are Unicode code points; JS strings index UTF-16 units (PRD D11). */
+/** Offsets from the engine are Unicode code points; JS strings index UTF-16 units. */
 
 export function codePointLength(text: string): number {
   let n = 0;

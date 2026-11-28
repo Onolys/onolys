@@ -1,4 +1,4 @@
-// CSP smoke (PRD R9): the built mock app served by `vite preview` with the exact prod firebase.json CSP; zero violations required.
+// CSP smoke: the built mock app served by `vite preview` with the exact prod firebase.json CSP; zero violations required.
 const { test, expect, devices } = require("@playwright/test");
 const { FIX, signUpVerified, spa, accountMenu, openUpload } = require("./helpers.cjs");
 const { watchCsp, expectStrictPolicy } = require("./csp-helpers.cjs");

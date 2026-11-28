@@ -1,5 +1,5 @@
 /**
- * In-app rating card (PRD R4, D13, D15): filled while transcription runs, autosaved as a draft,
+ * In-app rating card: filled while transcription runs, autosaved as a draft,
  * submitted with `final:true`. Only "Submit rating" / "No rating" satisfy the run gate.
  */
 import { Button, Card, CardContent, Input, Label, Select, Textarea } from "@onolys/ui";
@@ -81,7 +81,7 @@ function Text({ path, label, value, limit, error, rows = 3, hint, onChange }: { 
 export interface RatingCardProps {
   sessionId: string;
   debounceMs?: number;
-  /** The rating is final (FX45): fields are shown but cannot change, and nothing is submitted. */
+  /** The rating is final: fields are shown but cannot change, and nothing is submitted. */
   readOnly?: boolean;
 }
 
@@ -108,7 +108,7 @@ export function RatingCard({ sessionId, debounceMs = 2000, readOnly: readOnlyPro
       try {
         const data = unwrap(await client.GET("/sessions/{id}/rating", { params: { path: { id: sessionId } } }));
         if (!live) return;
-        // A final rating shows what was submitted, never a stale draft (FX45).
+        // A final rating shows what was submitted, never a stale draft.
         const draft = readOnlyProp ? undefined : data.draft;
         const next = cardToForm(draft?.card ?? data.final?.card);
         formRef.current = next;

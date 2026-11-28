@@ -1,4 +1,4 @@
-/** `/new` (PRD SP1): the two landing cards, AI interview and rate a recording, with usage and cap behaviour. */
+/** `/new`: the two landing cards, AI interview and rate a recording, with usage and cap behaviour. */
 import { Button, Card, CardContent, CardDescription, CardFooter, CardHeader, Section } from "@onolys/ui";
 import { Link } from "react-router";
 import { useAuth } from "../../auth/AuthProvider";

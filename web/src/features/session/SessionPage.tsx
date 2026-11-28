@@ -1,5 +1,5 @@
 /**
- * `/sessions/:id` (PRD R4, D7, D14): status timeline derived from the live status doc,
+ * `/sessions/:id`: status timeline derived from the live status doc,
  * gate slots and error cards. Completed sessions open their report automatically.
  * The upload, rating card and speaker gate mount in
  * `slots.tsx`.
@@ -51,7 +51,7 @@ function SessionView({ id }: { id: string }) {
   const view = useSessionStatus(id, quiet);
 
   const doc: SessionStatusDoc | null = view.phase === "live" || view.phase === "fallback" ? view.doc : null;
-  // This tab's upload byte fraction (UploadSlot), so the bar moves during the upload (05-processing-screen D4).
+  // This tab's upload byte fraction (UploadSlot), so the bar moves during the upload.
   const [uploadFraction, setUploadFraction] = useState<number | null>(null);
   const progress = useProgress(doc, uploadFraction);
 
@@ -63,7 +63,7 @@ function SessionView({ id }: { id: string }) {
   // A held start (not a real cap) still shows when the day resets.
   const resetsAt = formatBlockingReset(blocking) ?? formatResetTime(usage.data?.eval.day.resets_at);
 
-  // An interview-linked session's first run is free (SP11 R5), so a held first start is not blocked by
+  // An interview-linked session's first run is free, so a held first start is not blocked by
   // the eval cap. The status doc is PHI-free; session detail supplies the free-run flag.
   const firstStartHeld =
     doc !== null &&
@@ -86,7 +86,7 @@ function SessionView({ id }: { id: string }) {
   const heading = label ? `Session - ${label}` : "Session";
   const freeFirstRun = firstStartHeld && Boolean(detail.data?.free_run);
 
-  // Cancel (04-cancel R9): idempotent, so a failed POST is safe to retry.
+  // Cancel: idempotent, so a failed POST is safe to retry.
   const cancel = useMutation({
     mutationFn: async () => unwrap(await client.POST("/sessions/{id}/cancel", { params: { path: { id } } })),
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: USAGE_KEY }),
@@ -98,7 +98,7 @@ function SessionView({ id }: { id: string }) {
     onError: () => void queryClient.invalidateQueries({ queryKey: USAGE_KEY }),
   });
 
-  // Retry of a failed step (PRD R6).
+  // Retry of a failed step.
   const retry = useMutation({
     mutationFn: async () => unwrap(await client.POST("/sessions/{id}/retry", { params: { path: { id } } })),
   });
@@ -121,7 +121,7 @@ function SessionView({ id }: { id: string }) {
     return (
       <div className={PAGE}>
         <h1 className={H1}>{heading}</h1>
-        {/* A failed upload with a stub shows UploadFailedView; a missing session without one is generic not-found (R11). */}
+        {/* A failed upload with a stub shows UploadFailedView; a missing session without one is generic not-found. */}
         <ErrorCard
           code={view.error.code}
           message={view.error.code === "not_found" ? NOT_FOUND_MESSAGE : undefined}

@@ -1,4 +1,4 @@
-/** Upload progress, cancel, "Retry upload" and "Resume upload" on the session page (PRD R3, D4). */
+/** Upload progress, cancel, "Retry upload" and "Resume upload" on the session page. */
 import { Button, Input } from "@onolys/ui";
 import { useMutation } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef, useSyncExternalStore } from "react";
@@ -67,7 +67,7 @@ function ResumeUpload({ sessionId }: { sessionId: string }) {
 }
 
 /**
- * `onFraction` reports this tab's real byte fraction (0-1) for the overall progress bar (05-processing-screen D4),
+ * `onFraction` reports this tab's real byte fraction (0-1) for the overall progress bar,
  * or null when there is no counter (a reload, no job). This component draws no overall bar itself.
  */
 export function UploadSlot({

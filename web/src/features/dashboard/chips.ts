@@ -7,7 +7,7 @@ export interface StatusChip {
   tone: "progress" | "wait" | "done" | "failed" | "neutral" | "muted";
 }
 
-/** Dashboard status chip (PRD R5): text says it, tone only adds colour. */
+/** Dashboard status chip: text says it, tone only adds colour. */
 export const STATUS_CHIP: Record<State, StatusChip> = {
   created: { text: "Uploading", tone: "progress" },
   uploading: { text: "Uploading", tone: "progress" },
@@ -26,7 +26,7 @@ export const STATUS_CHIP: Record<State, StatusChip> = {
 const UNKNOWN_CHIP: StatusChip = { text: "Status unavailable", tone: "neutral" };
 export const chipFor = (status: State): StatusChip => STATUS_CHIP[status] ?? UNKNOWN_CHIP;
 
-/** Dashboard auto-refresh (D8): poll while any listed session is still moving. */
+/** Dashboard auto-refresh: poll while any listed session is still moving. */
 export const DASHBOARD_POLL_MS = 10_000;
 export function sessionsRefetchInterval(items: { status: State }[] | undefined): number | false {
   return items?.some((s) => chipFor(s.status).tone === "progress") ? DASHBOARD_POLL_MS : false;

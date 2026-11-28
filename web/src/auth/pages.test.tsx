@@ -67,7 +67,7 @@ describe("sign up", () => {
     expect(screen.getByLabelText("Email")).not.toHaveAttribute("aria-invalid");
   });
 
-  it("requires the confirmation to match (FX20) and flags the field", async () => {
+  it("requires the confirmation to match and flags the field", async () => {
     const user = userEvent.setup();
     const { service } = renderApp("/signup");
     await h1("Sign up");
@@ -80,7 +80,7 @@ describe("sign up", () => {
     expect(service.calls.signUps).toBe(0);
   });
 
-  it("toggles password visibility with an accessible button (FX20)", async () => {
+  it("toggles password visibility with an accessible button", async () => {
     const user = userEvent.setup();
     renderApp("/signup");
     await h1("Sign up");
@@ -213,7 +213,7 @@ describe("forgot password", () => {
   });
 });
 
-describe("forgot password errors (FX22)", () => {
+describe("forgot password errors", () => {
   it("clears the confirmation when a later submit fails, so success and error never show together", async () => {
     const user = userEvent.setup();
     const { service } = renderApp("/forgot-password");
@@ -340,7 +340,7 @@ describe("verify email", () => {
     expect(service.calls.forcedRefreshes).toBe(1);
   });
 
-  it("Resend asks the email link to come back to ?next= (FX24)", async () => {
+  it("Resend asks the email link to come back to ?next=", async () => {
     const user = userEvent.setup();
     const { service } = renderApp("/verify-email?next=%2Fsettings", { user: { email: "a@clinic.org", verified: false } });
     await h1("Verify your email");
@@ -349,7 +349,7 @@ describe("verify email", () => {
     expect(service.calls.verificationNexts).toEqual(["/settings"]);
   });
 
-  it("the resend cooldown survives leaving and returning to the page, not stored in the browser (FX24)", async () => {
+  it("the resend cooldown survives leaving and returning to the page, not stored in the browser", async () => {
     const user = userEvent.setup();
     renderApp("/verify-email", { user: { email: "a@clinic.org", verified: false } });
     await h1("Verify your email");
@@ -361,7 +361,7 @@ describe("verify email", () => {
     expect(screen.getByRole("button", { name: /Resend in/ })).toBeDisabled();
   });
 
-  it("\"I've verified\" is busy while checking (FX24)", async () => {
+  it("\"I've verified\" is busy while checking", async () => {
     const user = userEvent.setup();
     const { service } = renderApp("/verify-email", { user: { email: "a@clinic.org", verified: false } });
     await h1("Verify your email");
@@ -373,7 +373,7 @@ describe("verify email", () => {
     expect(await screen.findByRole("button", { name: "I've verified" })).toBeEnabled();
   });
 
-  it("clears the old note on the next action (FX24)", async () => {
+  it("clears the old note on the next action", async () => {
     const user = userEvent.setup();
     const { service } = renderApp("/verify-email", { user: { email: "a@clinic.org", verified: false } });
     await h1("Verify your email");
@@ -386,7 +386,7 @@ describe("verify email", () => {
   });
 });
 
-describe("Google button busy and cancel handling (FX33)", () => {
+describe("Google button busy and cancel handling", () => {
   for (const [path, title] of [["/login", "Log in"], ["/signup", "Sign up"]] as const) {
     it(`${path}: disables both buttons while Google is pending`, async () => {
       const user = userEvent.setup();

@@ -1,4 +1,4 @@
-/** Phase 0 (02-app-migration): the jsdom shims in setup.ts let @onolys/ui's Radix components render. */
+/** The jsdom shims in setup.ts let @onolys/ui's Radix components render. */
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { Button, Dialog, DialogContent, DialogDescription, DialogTitle, DialogTrigger, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@onolys/ui";

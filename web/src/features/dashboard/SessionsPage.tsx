@@ -1,4 +1,4 @@
-/** `/sessions` (PRD R5, D16): the caller's sessions, newest first, with status chips and an empty state. */
+/** `/sessions`: the caller's sessions, newest first, with status chips and an empty state. */
 import { Badge, Button, Card, CardContent, Skeleton } from "@onolys/ui";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { Link } from "react-router";

@@ -183,7 +183,7 @@ describe("useSessionStatus: updates held back while quiet (drop)", () => {
 const detail = { status: "awaiting_input", progress: 50, flags: { transcript_ready: true } };
 const flush = () => act(async () => void (await vi.advanceTimersByTimeAsync(0)));
 
-describe("useSessionStatus: listener drop (W16, AR2, D7)", () => {
+describe("useSessionStatus: listener drop", () => {
   it("polls the detail while down, resubscribes with backoff, and goes live again", async () => {
     get.mockResolvedValue({ data: detail, response: { ok: true } });
     const subscribe = vi.spyOn(emitter, "subscribe");

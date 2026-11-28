@@ -1,5 +1,5 @@
 /**
- * App-level uploader (PRD R3, D6). One PUT of the whole object with XMLHttpRequest, sending exactly
+ * App-level uploader. One PUT of the whole object with XMLHttpRequest, sending exactly
  * the API's `required_headers`; auto-retry with a fresh URL up to 2 times, then the user retries
  * by hand. Jobs live in a module-level registry so they survive navigation to the session page.
  */

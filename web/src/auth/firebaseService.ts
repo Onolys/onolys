@@ -1,4 +1,4 @@
-/** Firebase Auth implementation (modular `firebase/auth` only; PRD R2, D8). */
+/** Firebase Auth implementation (modular `firebase/auth` only). */
 import { initializeApp } from "firebase/app";
 import {
   GoogleAuthProvider,
@@ -43,7 +43,7 @@ const POPUP_FALLBACK = new Set([
 
 const isMobile = () => /Android|iPhone|iPad|iPod/i.test(globalThis.navigator?.userAgent ?? "");
 
-/** Both email routes answer 202 on success; anything else maps to a code `mapAuthError` words (no fallback sender, PRD D3). */
+/** Both email routes answer 202 on success; anything else maps to a code `mapAuthError` words (no fallback sender). */
 async function emailCall(run: () => Promise<{ response: Response }>): Promise<void> {
   let status: number;
   try {

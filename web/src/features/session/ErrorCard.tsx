@@ -2,7 +2,7 @@ import { Alert, AlertDescription } from "@onolys/ui";
 import type { ReactNode } from "react";
 import { messageForCode } from "../../api/errors";
 
-/** Plain message per error code plus the reference id support can look up (PRD R4 Failure, R8). */
+/** Plain message per error code plus the reference id support can look up. */
 export function ErrorCard({
   code,
   reference,

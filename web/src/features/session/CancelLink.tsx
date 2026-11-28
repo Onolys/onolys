@@ -5,12 +5,12 @@ import { ConfirmDialog } from "./ConfirmDialog";
 
 const CANCELLABLE = new Set(["created", "uploading", "upload_incomplete", "validating", "transcribing", "awaiting_input", "running"]);
 
-/** The seven in-progress states a session can be cancelled from (04-cancel R1, R9). */
+/** The seven in-progress states a session can be cancelled from. */
 export function isCancellable(state: string | null | undefined): boolean {
   return state != null && CANCELLABLE.has(state);
 }
 
-// Variant A: nothing was spent yet. Variant B: transcription has started (04-cancel R9, D7).
+// Variant A: nothing was spent yet. Variant B: transcription has started.
 const EARLY = new Set(["created", "uploading", "upload_incomplete", "validating"]);
 const COPY_A = "Processing stops. Your upload stays until you delete the session. This won't count toward your limit.";
 const COPY_B = "Processing stops. Transcription has started, so this counts toward your daily limit.";

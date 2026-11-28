@@ -1,5 +1,5 @@
 /**
- * Status-subscription seam (PRD R4/R7, D7). The session page subscribes to a
+ * Status-subscription seam. The session page subscribes to a
  * PHI-free `session_status/{id}` doc. Live mode backs this with Firestore
  * `onSnapshot` (a later task); mock mode uses the in-memory emitter below,
  * driven by the MSW state machine.
@@ -14,13 +14,13 @@ export interface SessionStatusDoc {
   step: string | null;
   progress: number;
   error_code: string | null;
-  /** The status doc is a Firestore document, not an OpenAPI schema. Absent on docs written before 03-failure-policy. */
+  /** The status doc is a Firestore document, not an OpenAPI schema. Absent on docs written before failure kinds were recorded. */
   error_kind?: FailureKind | null;
   retries_left?: number | null;
   counted?: boolean | null;
   latest_report_version: number | null;
   updated_at: string;
-  /** Progress fields (05-processing-screen R2): PHI-free numbers and ISO timestamps, absent on older docs. */
+  /** Progress fields: PHI-free numbers and ISO timestamps, absent on older docs. */
   /** First entry to `uploading` (a re-run: its start); null before. */
   started_at?: string | null;
   /** When the current state was entered. */

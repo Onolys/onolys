@@ -29,7 +29,7 @@ function expectPlainLink(a: HTMLElement) {
   expect(a.className).not.toMatch(/(^|\s)(border|bg-|rounded|shadow|px-)/);
 }
 
-describe("header nav by auth phase (D1)", () => {
+describe("header nav by auth phase", () => {
   it("signed out: plain Log in and Sign up links at the far right, no Sample report", async () => {
     renderApp("/login");
     await h1("Log in");

@@ -1,4 +1,4 @@
-/** SP05 Task 12: production build output satisfies `style-src 'self'` and ships no mock worker or inline script. */
+/** The production build output satisfies `style-src 'self'` and ships no mock worker or inline script. */
 import { mkdtempSync, readFileSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";

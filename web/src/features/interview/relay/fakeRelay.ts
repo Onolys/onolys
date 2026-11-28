@@ -1,5 +1,5 @@
 /**
- * In-page stand-in for the voice relay (SP10 R10/R11), for mock builds, PR previews and tests.
+ * In-page stand-in for the voice relay, for mock builds, PR previews and tests.
  * Plays the relay protocol over a WebSocket-shaped object: auth -> `ready`, 24 kHz PCM16 frames with
  * `ai_speaking`, `warn` at warn_s, `time_up` at max_s, `end`, and a simulated drop + reconnect (`resumed`).
  * Time is test-controllable: `autoTick: false` then `advance(seconds)`.

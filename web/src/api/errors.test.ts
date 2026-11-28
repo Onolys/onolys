@@ -32,7 +32,7 @@ describe("messageForCode", () => {
     expect(msg).not.toMatch(/\b(4\d\d|5\d\d)\b/);
   });
 
-  it("uses the exact copy the PRD names for the transcription codes", () => {
+  it("uses the exact copy the spec names for the transcription codes", () => {
     expect(messageForCode("no_speech")).toBe("We couldn't hear enough speech in this recording");
     expect(messageForCode("speakers_not_separated")).toBe(
       "We couldn't tell the two speakers apart in this recording",
@@ -110,7 +110,7 @@ describe("parseErrorBody", () => {
   });
 });
 
-describe("parseErrorBody malformed entries (FX56 / M19)", () => {
+describe("parseErrorBody malformed entries", () => {
   it("drops detail entries without a string code and message, keeping the valid ones", () => {
     const err = parseErrorBody(500, {
       details: [
@@ -140,7 +140,7 @@ describe("parseErrorBody malformed entries (FX56 / M19)", () => {
   });
 });
 
-describe("known-code guards (FX56 / M20)", () => {
+describe("known-code guards", () => {
   it("does not treat inherited object keys as known codes", () => {
     for (const c of ["toString", "constructor", "__proto__", "hasOwnProperty"]) {
       expect(messageForCode(c)).toBe(GENERIC_MESSAGE);
@@ -206,7 +206,7 @@ describe("isNotFoundError / describeLookupError", () => {
   });
 });
 
-describe("failureView (PRD R6, D2)", () => {
+describe("failureView", () => {
   const doc = (o: Record<string, unknown>) => ({ error_code: null, ...o }) as Parameters<typeof failureView>[0];
 
   it("transient with retries left: code message, not-counted note, retry action", () => {

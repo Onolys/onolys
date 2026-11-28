@@ -1,5 +1,5 @@
 /**
- * Coded transcript dialog (SP2): a native modal <dialog> with the Utt # | Speaker | Utterance |
+ * Coded transcript dialog: a native modal <dialog> with the Utt # | Speaker | Utterance |
  * Code(s) | Why table. `CodedTranscriptProvider` is mounted only by ReportView, which builds the
  * rows once and passes them in; it owns the dialog and exposes `open(n?)` through context so
  * ReportView's button and every UtteranceLink open it.

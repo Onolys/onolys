@@ -1,5 +1,5 @@
 /**
- * `/interviews/new` (SP10 R8, D16): pick a practice scenario and a voice, read the headphone tip, check the
+ * `/interviews/new`: pick a practice scenario and a voice, read the headphone tip, check the
  * microphone, then start. Starting reserves one interview unit and opens the live page.
  */
 import { Badge, Button, Label, Select, Skeleton } from "@onolys/ui";

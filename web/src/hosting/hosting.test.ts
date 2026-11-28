@@ -1,4 +1,4 @@
-/** SP05 Task 12: `web/firebase.json` carries the CSP, the headers and the rewrite order (PRD R8, D1, AC10). */
+/** `web/firebase.json` carries the CSP, the headers and the rewrite order. */
 import { describe, expect, it } from "vitest";
 import { allowedBy, cspOf, readHosting } from "./csp";
 
@@ -24,7 +24,7 @@ describe("web/firebase.json", () => {
     expect(rewrites[spa].destination).toBe("/index.html");
   });
 
-  it.each(["app", "app-staging"])("%s carries the CSP from PRD R8", (target) => {
+  it.each(["app", "app-staging"])("%s carries the CSP", (target) => {
     const csp = cspOf(byTarget(target));
     expect(csp["default-src"]).toEqual(["'self'"]);
     expect(csp["script-src"]).toEqual(expect.arrayContaining(["'self'"]));
@@ -46,7 +46,7 @@ describe("web/firebase.json", () => {
   it.each([
     ["app", "onolys-voice-prod-1054076260967.us-central1.run.app", "onolys-voice-staging-1054076260967.us-central1.run.app"],
     ["app-staging", "onolys-voice-staging-1054076260967.us-central1.run.app", "onolys-voice-prod-1054076260967.us-central1.run.app"],
-  ])("%s lets connect-src reach only its own voice relay over wss (SP10 R10)", (target, own, other) => {
+  ])("%s lets connect-src reach only its own voice relay over wss", (target, own, other) => {
     const connect = cspOf(byTarget(target))["connect-src"];
     expect(connect).toContain(`wss://${own}`);
     expect(allowedBy(connect, `wss://${own}/v1/voice/iv_1`)).toBe(true);
@@ -55,7 +55,7 @@ describe("web/firebase.json", () => {
     expect(connect.filter((s) => s.startsWith("wss://"))).toHaveLength(1);
   });
 
-  it("allows blob: only in media-src, no data:/blob: script allowance (SP10 AC9)", () => {
+  it("allows blob: only in media-src, no data:/blob: script allowance", () => {
     for (const e of entries) {
       const csp = cspOf(e);
       expect(Object.keys(csp)).not.toContain("worker-src");

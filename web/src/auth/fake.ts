@@ -1,4 +1,4 @@
-/** Fake auth for mock mode (`VITE_AUTH_MODE=fake`): matches SP04 `AUTH_MODE=fake` (`Bearer test:<uid>`). */
+/** Fake auth for mock mode (`VITE_AUTH_MODE=fake`): matches the API `AUTH_MODE=fake` (`Bearer test:<uid>`). */
 import type { TokenProvider } from "../api/client";
 
 export const FAKE_UID = "u_mock";

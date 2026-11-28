@@ -1,5 +1,5 @@
 /**
- * Speaker gate (PRD R4, AC6b): the one machine guess a person confirms. One card per speaker with
+ * Speaker gate: the one machine guess a person confirms. One card per speaker with
  * up to three sample lines (rendered as text, never HTML). Everyone who is not the clinician counts
  * as the client. A successful confirmation keeps the controls locked until the status doc moves on,
  * so a second call cannot race the first.

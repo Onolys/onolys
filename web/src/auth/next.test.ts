@@ -12,7 +12,7 @@ describe("next param", () => {
     }
     expect(readNext("")).toBe("/");
   });
-  it("rejects control characters and auth pages as targets (FX32)", () => {
+  it("rejects control characters and auth pages as targets", () => {
     for (const bad of ["/\t/evil.com", "/\n/evil.com", "/\r/evil.com", "/a\u0000b", "/login", "/login?next=%2F", "/signup", "/forgot-password", "/auth/action?mode=x", "/auth/action"]) {
       expect(readNext(`?next=${encodeURIComponent(bad)}`)).toBe("/");
     }
@@ -24,7 +24,7 @@ describe("next param", () => {
     expect(withNext("/signup", "?next=%2Fsettings")).toBe("/signup?next=%2Fsettings");
     expect(withNext("/signup", "")).toBe("/signup");
   });
-  it("builds the verification continue URL, keeping next (FX24)", () => {
+  it("builds the verification continue URL, keeping next", () => {
     expect(verifyContinueUrl("https://app.example", "/settings?a=1")).toBe("https://app.example/verify-email?next=%2Fsettings%3Fa%3D1");
     expect(verifyContinueUrl("https://app.example", "/")).toBe("https://app.example/verify-email");
     expect(verifyContinueUrl("https://app.example")).toBe("https://app.example/verify-email");

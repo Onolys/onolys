@@ -1,7 +1,7 @@
 /**
- * Error codes (SP04 R9 `public-error-response`, plus the R4 table of the web
- * PRD) mapped to plain, fixed messages. Messages never include server text or
- * instance values (R8: no PHI in error messages).
+ * Error codes (the API public error response, plus the web error table)
+ * mapped to plain, fixed messages. Messages never include server text or
+ * instance values (no PHI in error messages).
  */
 import type { components } from "./schema";
 import type { SessionStatusDoc } from "./statusListener";
@@ -39,7 +39,7 @@ const MESSAGES = {
   rating_final: "Your rating is final. It can't be changed or run again.",
   conflict: "That request clashes with an earlier one. Refresh and try again.",
   internal_error: GENERIC_MESSAGE,
-  // Server-side failure codes (03-failure-policy): internal copy, no detail for the user.
+  // Server-side failure codes: internal copy, no detail for the user.
   output_invalid: GENERIC_MESSAGE,
   deadline_exceeded: GENERIC_MESSAGE,
   run_failed: GENERIC_MESSAGE,
@@ -65,7 +65,7 @@ export function messageForCode(code: string | undefined, ctx: MessageContext = {
   return MESSAGES[code];
 }
 
-/** Cancel copy (04-cancel R9): a 409 means the session already ended; anything else is a retryable failure. */
+/** Cancel copy: a 409 means the session already ended; anything else is a retryable failure. */
 export const CANCEL_CONFLICT_MESSAGE = "This session already finished or failed.";
 export const CANCEL_FAILED_MESSAGE = "We couldn't cancel this session. Try again.";
 
@@ -73,7 +73,7 @@ export function cancelErrorMessage(err: unknown): string {
   return err instanceof ApiError && err.status === 409 ? CANCEL_CONFLICT_MESSAGE : CANCEL_FAILED_MESSAGE;
 }
 
-/** Failure kinds the server persists on the status doc (D2). */
+/** Failure kinds the server persists on the status doc. */
 export type FailureKind = "transient" | "permanent_internal" | "user_file";
 
 /** The status-doc fields `failureView` reads, derived from `SessionStatusDoc`. */
@@ -92,7 +92,7 @@ const NOT_COUNTED = "This did not count toward your limit.";
 const INTERNAL_MESSAGE = `Something went wrong on our side. ${NOT_COUNTED} Please start a new session.`;
 
 /**
- * PRD R6: what a failed session's card says and offers, driven by the server's `error_kind`
+ * What a failed session's card says and offers, driven by the server's `error_kind`
  * (no code lists here). No kind, or an unknown kind, reads as a permanent internal failure.
  */
 export function failureView(doc: FailureDoc): FailureView {

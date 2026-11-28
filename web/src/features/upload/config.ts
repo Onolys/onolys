@@ -1,6 +1,6 @@
 /**
- * Language options for the create form (PRD D18, R3). The list is derived from the recorded
- * SP01 gate result (STT check, SP01 R11 (b)), so changing the gate record is the only edit
+ * Language options for the create form. The list is derived from the recorded
+ * language gate result (speech-to-text check), so changing the gate record is the only edit
  * needed when the gate runs.
  */
 export type LanguageValue = "auto" | "en-US" | "en-GB";
@@ -19,7 +19,7 @@ export interface Sp01Gate {
 
 /**
  * RECORDED GATE RESULT: docs/decisions/0017-workspace-routes-shared-core.md, "Gate result" is
- * still "Pending" (SP01 T13 needs owner audio), so the PRD default applies. PROVISIONAL.
+ * still "Pending" (it needs owner audio), so the default applies. PROVISIONAL.
  * When the gate runs: set `status: "recorded"` and `autoDiarizationOk` from the result.
  */
 export const SP01_GATE: Sp01Gate = { adr: "0017", status: "pending", autoDiarizationOk: null };

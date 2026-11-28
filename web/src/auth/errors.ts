@@ -1,4 +1,4 @@
-/** Plain-text mapping of auth error codes (PRD R2). No raw provider messages reach the UI. */
+/** Plain-text mapping of auth error codes. No raw provider messages reach the UI. */
 
 export const MIN_PASSWORD_LENGTH = 8;
 

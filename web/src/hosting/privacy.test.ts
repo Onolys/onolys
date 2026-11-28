@@ -1,5 +1,5 @@
 /**
- * SP05 Task 12: privacy guarantees as tests (PRD R8, D10, AC8): every host the app can reach is in the CSP,
+ * Privacy guarantees as tests: every host the app can reach is in the CSP,
  * no analytics, no app data in browser storage, no PHI in titles or console output.
  */
 import { readdirSync, readFileSync } from "node:fs";

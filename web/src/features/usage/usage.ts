@@ -1,4 +1,4 @@
-/** Usage helpers (SP11 R9): pure functions over the `GET /usage` shape. */
+/** Usage helpers: pure functions over the `GET /usage` shape. */
 import type { components } from "../../api/schema";
 import { formatResetTime } from "../../lib/format";
 

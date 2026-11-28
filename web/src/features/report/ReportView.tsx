@@ -1,5 +1,5 @@
 /**
- * Single-column report document (SP2): Header, At a glance, Feedback, Behaviour counts, coded
+ * Single-column report document: Header, At a glance, Feedback, Behaviour counts, coded
  * transcript section, Method. Shared by real and sample reports; presentational, no fetching.
  * ReportView owns the coded-transcript dialog: it builds the rows once and mounts the provider, so
  * every utterance link (`useCodedDialog().open(n)`) and the "Open" button reach the same dialog.

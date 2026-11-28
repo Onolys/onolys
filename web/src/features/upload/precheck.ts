@@ -1,4 +1,4 @@
-/** Advisory client pre-checks (PRD R3 step 2). The server stays authoritative. */
+/** Advisory client pre-checks. The server stays authoritative. */
 import { ApiError } from "../../api/errors";
 /** Limits served by `GET /v1/upload-limits`; the only source of numbers and accepted types here. */
 export interface UploadLimits {

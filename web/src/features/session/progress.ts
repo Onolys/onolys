@@ -1,5 +1,5 @@
 /**
- * Overall progress and Elapsed for the processing screen (05-processing-screen R3, D2-D4). Pure: the server owns
+ * Overall progress and Elapsed for the processing screen. Pure: the server owns
  * the base `progress` and `progress_next`; this only interpolates inside a stage.
  */
 import type { SessionStatusDoc } from "../../api/statusListener";
@@ -15,7 +15,7 @@ export interface DerivedProgress {
   hidden: boolean;
 }
 
-/** Expected seconds for a timed stage when the server sent no `stage_expected_s` (the server owns the formula, R6). */
+/** Expected seconds for a timed stage when the server sent no `stage_expected_s` (the server owns the formula). */
 export const DEFAULT_EXPECTED_S = 120;
 
 /** States whose % moves with the clock (the page ticks once a second only while one is active). */

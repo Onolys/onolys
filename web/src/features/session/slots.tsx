@@ -1,5 +1,5 @@
 /**
- * Mount points: the rating card (R4, `features/rating`) and the speaker gate (R4, `features/speakers`). The uploader (R3) lives in
+ * Mount points: the rating card (`features/rating`) and the speaker gate (`features/speakers`). The uploader lives in
  * `features/upload`.
  */
 import type { SessionStatusDoc } from "../../api/statusListener";
@@ -18,7 +18,7 @@ export interface SlotProps {
 export function RatingCardSlot({ sessionId, doc, readOnly = false }: SlotProps & { readOnly?: boolean }) {
   const locked = readOnly || doc.rating_submitted || doc.state === "running" || doc.state === "failed" || doc.state === "report_ready";
   if (!ratingEnabled()) {
-    // Flag off (PRD R2/R3): no card; only an unsubmitted, live session gets the goal-only fallback.
+    // Flag off: no card; only an unsubmitted, live session gets the goal-only fallback.
     if (locked || doc.state === "deleting") return null;
     return (
       <div data-slot="rating-fallback" data-session={sessionId}>

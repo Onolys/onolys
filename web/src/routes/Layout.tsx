@@ -26,7 +26,7 @@ export function Layout() {
   const { signOut, error: signOutError } = useSignOut();
   const mainRef = useRef<HTMLElement>(null);
 
-  // A11y (R8): after each route change move focus to the page h1.
+  // A11y: after each route change move focus to the page h1.
   useEffect(() => {
     const h1 = mainRef.current?.querySelector("h1");
     if (h1) {

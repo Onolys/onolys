@@ -11,7 +11,7 @@ const show = (code: string | null) =>
     </MemoryRouter>,
   );
 
-describe("UploadFailedView (PRD R11)", () => {
+describe("UploadFailedView", () => {
   it.each(["audio_unreadable", "audio_too_large", "unsupported_audio", "audio_too_long", "interview_too_long"])(
     "%s: shows the existing per-code reason, the way back and the Reference",
     (code) => {

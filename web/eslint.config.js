@@ -13,12 +13,12 @@ export default tseslint.config(
   {
     languageOptions: { globals: { ...globals.browser, ...globals.node } },
     rules: {
-      // PRD R8: no raw HTML injection; report text is rendered as text nodes only.
+      // No raw HTML injection; report text is rendered as text nodes only.
       "no-restricted-syntax": [
         "error",
         {
           selector: "JSXAttribute[name.name='dangerouslySetInnerHTML']",
-          message: "dangerouslySetInnerHTML is banned (R8). Render text as React children.",
+          message: "dangerouslySetInnerHTML is banned. Render text as React children.",
         },
       ],
     },
