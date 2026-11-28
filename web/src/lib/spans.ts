@@ -1,5 +1,5 @@
 /**
- * Highlight segmenter (idea copied from `frontend/src/contract/spans.ts`, PRD D2). Spans are
+ * Highlight segmenter (PRD D2). Spans are
  * code-point offsets into one turn's text. Overlapping spans are split so each segment lists every
  * covering id. A span that is invalid or whose quote differs from the slice is rejected (drift
  * between report and transcript): the text stays unhighlighted and the caller shows the quote.

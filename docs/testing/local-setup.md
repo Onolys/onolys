@@ -15,7 +15,6 @@ Set up every component, run the offline checks, and work through the owner live 
 ```bash
 uv sync --all-packages        # from the repo root
 (cd web && npm ci)
-(cd frontend && npm ci)       # admin shell only
 ```
 
 ## Offline checks
@@ -28,14 +27,13 @@ uv run --package onolys-miti ruff check engines/miti
 uv run --package onolys-api pytest api -m "not live"
 
 (cd web && npm test && npm run typecheck && npm run build)
-(cd frontend && npm test && npm run typecheck && npm run build)
 ```
 
 More: [running-tests.md](running-tests.md), [reference/testing.md](../reference/testing.md).
 
-## Retained admin frontend
+## Retired admin frontend
 
-The former admin backend and root admin launcher are retired. To run the retained sign-in shell with mocks: `(cd frontend && VITE_MOCK=true npm run dev)`. Product development uses the [main app setup](#main-app-web--api) below; the API alone also has [`api/scripts/dev.sh`](../../api/scripts/dev.sh).
+The former admin backend, root admin launcher and `frontend/` sign-in shell are removed. Product development uses the [main app setup](#main-app-web--api) below; the API alone also has [`api/scripts/dev.sh`](../../api/scripts/dev.sh).
 
 ## Owner live checks
 

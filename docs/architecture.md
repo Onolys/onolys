@@ -55,9 +55,9 @@ runs MITI, API and eval checks through workspace dependency flags.
 
 A React + TypeScript app. It talks to the api on the same origin (`/v1`), listens to session status in Firestore, and renders the report. Hosting and CSP: [ADR 0021](decisions/0021-web-app-hosting-and-sharing.md). It validates nothing about MITI itself; the api and engine own the report shape.
 
-## Evaluation auth and retained admin frontend
+## Evaluation auth and retired admin frontend
 
-The evaluation backend reuses the prod api auth (`onolys_api.auth` `IdTokenVerifier` / `verify_claims`) to verify Identity Platform tokens, plus an eval email allowlist (`EVAL_ALLOWED_EMAILS`, `eval/backend` `allowlist.py`). See [shared auth](reference/backend-api.md). The former admin backend source and deployment workflow have been retired. `frontend/` remains the legacy sign-in shell; its existing cloud resources and `admin.onolys.com` auth domain are retained. [ADR 0023](decisions/0023-admin-deployment-and-auth.md) records the original deployment design.
+The evaluation backend reuses the prod api auth (`onolys_api.auth` `IdTokenVerifier` / `verify_claims`) to verify Identity Platform tokens, plus an eval email allowlist (`EVAL_ALLOWED_EMAILS`, `eval/backend` `allowlist.py`). See [shared auth](reference/backend-api.md). The former admin backend source and deployment workflow have been retired. The admin frontend (`frontend/`, the legacy sign-in shell) has been removed from the repo; its cloud resources and the `admin.onolys.com` auth domain still exist until the owner retires them. [ADR 0023](decisions/0023-admin-deployment-and-auth.md) records the original deployment design.
 
 ## Infrastructure
 
