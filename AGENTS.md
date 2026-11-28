@@ -25,7 +25,7 @@ The MITI engine documents itself in `engines/miti/README.md`.
 
 ## Frontend work
 
-Any agent working on frontend code (`web/`, `eval/web`, admin, any UI) must read and follow `docs/design-rules.md` every time, before making changes.
+Any agent working on frontend code (`web/`, `eval/web`, admin, any UI) must read and follow `docs/rules/design-rules.md` every time, before making changes.
 
 ## Agent-generated files
 
