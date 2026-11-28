@@ -29,7 +29,7 @@
       "type": "object"
     },
     "SessionCancel": {
-      "description": "The result of a user cancel (04-cancel R7): did it use a unit, how many, and when.",
+      "description": "The result of a user cancel: did it use a unit, how many, and when.",
       "properties": {
         "at": {
           "format": "date-time",

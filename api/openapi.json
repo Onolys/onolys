@@ -164,7 +164,7 @@
         "type": "object"
       },
       "ClientInfo": {
-        "description": "What produced a session or interview (02-logging R13). Client-reported, so every field is\noptional and sanitized, never rejected: non-strings become absent, control characters are\nstripped, and values are cut to a cap. Unknown keys are ignored.",
+        "description": "What produced a session or interview. Client-reported, so every field is\noptional and sanitized, never rejected: non-strings become absent, control characters are\nstripped, and values are cut to a cap. Unknown keys are ignored.",
         "properties": {
           "audio_engine": {
             "anyOf": [
@@ -1435,7 +1435,7 @@
             "type": "array"
           },
           "voices": {
-            "description": "Every voice a practice interview may use (D16)",
+            "description": "Every voice a practice interview may use",
             "items": {
               "type": "string"
             },
@@ -1490,7 +1490,7 @@
         "type": "object"
       },
       "SessionCancel": {
-        "description": "The result of a user cancel (04-cancel R7): did it use a unit, how many, and when.",
+        "description": "The result of a user cancel: did it use a unit, how many, and when.",
         "properties": {
           "at": {
             "format": "date-time",
@@ -4151,7 +4151,7 @@
         ]
       },
       "put": {
-        "description": "`final=false`: overwrites the draft; the shape and size limits are checked (an unset `change_goal` is fine) and nothing else changes. `final=true`: validates the card (`change_goal` required), writes a new revision and sets `rating_submitted`/`has_rating`; `no_rating=true`, or a card with no scores, counts or notes, is a \"no rating\" revision (`has_rating=false`). Over 1,000 chars per reason/note/example or 3,000 for `notes` is 422 `rating_invalid`. Allowed in every state but `deleting` (404) and `cancelled` (409 `invalid_state`); a final card is refused with 409 `rating_final` once a rating was submitted (or a report exists): the rating is final, only drafts stay open. A final card may start the first run (R4).",
+        "description": "`final=false`: overwrites the draft; the shape and size limits are checked (an unset `change_goal` is fine) and nothing else changes. `final=true`: validates the card (`change_goal` required), writes a new revision and sets `rating_submitted`/`has_rating`; `no_rating=true`, or a card with no scores, counts or notes, is a \"no rating\" revision (`has_rating=false`). Over 1,000 chars per reason/note/example or 3,000 for `notes` is 422 `rating_invalid`. Allowed in every state but `deleting` (404) and `cancelled` (409 `invalid_state`); a final card is refused with 409 `rating_final` once a rating was submitted (or a report exists): the rating is final, only drafts stay open. A final card may start the first run.",
         "operationId": "putRating",
         "parameters": [
           {

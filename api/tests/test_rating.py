@@ -448,7 +448,7 @@ def test_has_content_matches_engine_no_rating():
 REPO = Path(__file__).resolve().parents[2]
 
 
-def test_schema_is_the_canonical_sp02_schema():
+def test_schema_is_the_canonical_rating_schema():
     """The API validates against the pack's rating schema: byte-for-byte the web copy's content."""
     web = json.loads((REPO / "web/src/protocol/rating.schema.json").read_text())
     assert rating_mod.load_schema() == web

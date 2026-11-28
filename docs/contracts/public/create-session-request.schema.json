@@ -1,7 +1,7 @@
 {
   "$defs": {
     "ClientInfo": {
-      "description": "What produced a session or interview (02-logging R13). Client-reported, so every field is\noptional and sanitized, never rejected: non-strings become absent, control characters are\nstripped, and values are cut to a cap. Unknown keys are ignored.",
+      "description": "What produced a session or interview. Client-reported, so every field is\noptional and sanitized, never rejected: non-strings become absent, control characters are\nstripped, and values are cut to a cap. Unknown keys are ignored.",
       "properties": {
         "audio_engine": {
           "anyOf": [

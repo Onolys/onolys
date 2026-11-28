@@ -415,7 +415,7 @@ export interface ReportRunInfo {
   miti: RunInfo;
 }
 /**
- * Provenance of one engine run (PRD R10). Never holds text or key values.
+ * Provenance of one engine run. Never holds text or key values.
  */
 export interface RunInfo {
   engine: Engine;
@@ -456,7 +456,7 @@ export interface RunUsage {
   cost_usd?: CostUsd;
 }
 /**
- * How the coded span was chosen (PRD R7).
+ * How the coded span was chosen.
  */
 export interface SpanInfo {
   mode: Mode;
