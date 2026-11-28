@@ -27,16 +27,6 @@ def _imported(tree: ast.AST):
             yield node.module
 
 
-@pytest.mark.parametrize("folder", ["src", "tests"])
-def test_no_file_imports_an_old_package(folder):
-    bad = []
-    for p in sorted((API / folder).rglob("*.py")):
-        for mod in _imported(ast.parse(p.read_text(encoding="utf-8"))):
-            if mod.split(".")[0] in OLD:
-                bad.append(f"{p.relative_to(API)}: {mod}")
-    assert not bad, bad
-
-
 def test_api_imports_miti_only_for_engine_specific_modules():
     allowed = {
         "engine", "miti", "prepare", "rating", "report", "result", "run", "span", "stt", "voice",

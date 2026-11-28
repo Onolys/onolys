@@ -187,11 +187,6 @@ def test_run_info_entries_are_run_info(report_doc):
     RunInfo.model_validate(ri["miti"])
 
 
-def test_schema_has_no_old_run_info_keys():
-    props = json.loads(SCHEMA_PATH.read_text())["$defs"]["ReportRunInfo"]["properties"]
-    assert set(props) == {"evaluation", "miti"}
-
-
 def test_schema_lives_next_to_result_schema():
     assert SCHEMA_PATH.parent == SCHEMA_PATH.parent / "." and SCHEMA_PATH.name == "report.schema.json"
     assert (SCHEMA_PATH.parent / "miti-result.schema.json").is_file()

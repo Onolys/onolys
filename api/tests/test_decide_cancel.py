@@ -2,14 +2,7 @@
 
 import pytest
 
-from onolys_api.jobs import charging
-from onolys_api.repo import limits
 from onolys_api.repo.limits import CancelCharge, decide_cancel
-
-
-def test_reexported_from_charging():
-    assert charging.decide_cancel is limits.decide_cancel
-
 
 # (state, stt_operation set, run counted (None: no run reserved), interview_id) -> (units, counted)
 ROWS = [

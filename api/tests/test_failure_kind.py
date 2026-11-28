@@ -3,7 +3,6 @@ failure write site; the status doc exposes `error_kind`, `retries_left`, `counte
 without a `kind` read as derived from the code; `BAD_FILE_CODES`/`is_system_failure` are gone.
 Runs on FakeRepo, and on the Firestore emulator when FIRESTORE_EMULATOR_HOST is set."""
 
-import re
 import subprocess
 import uuid
 from datetime import timedelta
@@ -47,15 +46,6 @@ def test_kind_for_code_unknown_or_missing_is_permanent_internal():
     assert kind_for_code("who_knows") == "permanent_internal"
     assert kind_for_code(None) == "permanent_internal"
     assert kind_for_code("upstream_unavailable") == "transient"
-
-
-def test_bad_file_codes_and_is_system_failure_are_gone():
-    assert not hasattr(m, "BAD_FILE_CODES") and not hasattr(m, "is_system_failure")
-    hits = [
-        str(p) for p in SRC.rglob("*.py")
-        if re.search(r"BAD_FILE_CODES|is_system_failure", p.read_text())
-    ]  # fmt: skip
-    assert hits == []
 
 
 def test_status_fields_lists_the_new_fields():

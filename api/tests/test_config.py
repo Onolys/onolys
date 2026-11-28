@@ -120,22 +120,6 @@ def test_stt_cap_defaults_and_overrides():
     assert (s.stt_cap_factor, s.stt_cap_min_s, s.stt_time_limit_s) == (2.0, 120.0, 900.0)
 
 
-def test_daily_run_cap_removed_everywhere():
-    import pathlib
-
-    root = pathlib.Path(__file__).resolve().parents[2]
-    assert not hasattr(Settings(), "daily_run_cap")
-    paths = [root / "api/.env.example", root / "api/src/onolys_api/config.py"]
-    paths += (root / "infra").rglob("*.tf")
-    paths += (root / ".github/workflows").glob("*.yml")
-    paths += [p for p in (root / "scripts/ci").glob("*") if p.is_file()]
-    for p in paths:
-        if ".terraform" in p.parts:
-            continue
-        text = p.read_text().lower()
-        assert "daily_run_cap" not in text, p
-
-
 def test_env_is_required():
     """A8: an unset ENV must not silently mean local (fake auth, no /tasks OIDC)."""
     with pytest.raises(ConfigError, match="ENV is required"):

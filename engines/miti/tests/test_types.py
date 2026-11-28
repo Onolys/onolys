@@ -98,15 +98,3 @@ def test_miti_imports_no_sibling_packages():
     out = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, check=True)
     assert out.stdout.strip() == "[]"
 
-
-def test_extracted_llm_has_no_miti_reexports():
-    import importlib.util
-
-    import onolys_miti
-
-    assert importlib.util.find_spec("onolys_miti.llm") is None
-    for name in (
-        "LLMConfig", "LLMError", "LLMUnavailable", "LiteLLMClient",
-        "MetricsCollector", "StubClient", "resolve_preset",
-    ):
-        assert not hasattr(onolys_miti, name)

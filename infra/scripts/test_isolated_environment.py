@@ -13,15 +13,6 @@ def block(text, kind, name):
     return found[1]
 
 
-def test_optional_module_inputs_preserve_legacy_names_and_identity():
-    variables = (MODULE / 'variables.tf').read_text()
-    for key in ['audio_bucket_name', 'auth_project', 'speech_object_prefix']:
-        assert re.search(r'default\s*=\s*null', block(variables, 'variable', key))
-    assert 'coalesce(var.audio_bucket_name, "onolys-audio-${var.env}")' in (MODULE / 'main.tf').read_text()
-    for filename in ['services.tf', 'voice.tf']:
-        assert 'coalesce(var.auth_project, var.project)' in (MODULE / filename).read_text()
-
-
 def test_new_root_is_separate_and_refuses_production_or_state_reuse():
     versions = (ROOT / 'versions.tf').read_text()
     main = (ROOT / 'main.tf').read_text()

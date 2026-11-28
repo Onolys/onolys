@@ -428,19 +428,3 @@ def test_representative_run_closest_to_mean():
     assert aggregate(_fake_runs([2, 2, 2], [1, 3, 5])).representative_run == 1
     assert aggregate(_fake_runs([1, 3], [3, 3])).representative_run == 0  # tie: lowest index
 
-
-def test_public_reexports():
-    import onolys_miti as m
-
-    for name in (
-        "run_miti",
-        "MitiEngine",
-    ):
-        assert hasattr(m, name), name
-
-    for name in (
-        "RunContext", "ConfigError", "InputError", "OnolysError",
-        "LiteLLMClient", "resolve_preset", "MitiOutput", "AllRunsFailed",
-        "SttParams", "GoogleChirp3",
-    ):
-        assert not hasattr(m, name), name

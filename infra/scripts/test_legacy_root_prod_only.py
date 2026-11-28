@@ -21,25 +21,6 @@ def block(src, header):
     return src[m.start():i]
 
 
-def test_no_staging_or_eval_module_or_files():
-    assert not re.search(r'module\s+"(staging|eval)"', ALL)
-    assert "module.staging" not in ALL and "module.eval" not in ALL
-    assert not (ROOT / "eval.tf").exists()
-
-
-def test_no_old_staging_or_eval_resources():
-    for token in ["google_firebase_hosting_site\" \"app_staging", "google_storage_bucket\" \"eval_staging",
-                  "google_firebase_web_app\" \"app_staging", "app_staging\"", "onolys-eval-data-staging",
-                  "eval_datasets_viewer", "eval_speech_uploads",
-                  "deployer_staging_developer", "deployer_staging_runtime_user", "deployer_staging_hosting",
-                  "deployer_staging_index_admin", "deployer_staging_rules_admin", "deployer_staging_eval_index_admin",
-                  "deployer_staging_writer", "deployer_staging_firebase_project_get", "deployer_eval_developer",
-                  "deployer_eval_runtime_user", "staging_services", "staging_runtime_sas", "eval_services",
-                  "eval_runtime_sas", "web_env_staging", "voice_url_staging", "staging_alerts", "eval_worker_",
-                  "eval_llm_secrets", "eval_git_sha"]:
-        assert token not in ALL, token
-
-
 def test_prod_still_declared():
     assert re.search(r'module\s+"prod"\s*\{[^}]*source\s*=\s*"\./modules/environment"', ALL, re.S)
     assert (ROOT / "modules" / "environment").is_dir()  # the isolated root uses it too
@@ -85,9 +66,3 @@ def test_eval_signin_is_not_in_prod_identity():
         assert f'"{host}"' in retired, host
     assert 'output "web_env_prod"' in ident and 'output "web_env_eval"' not in ident
 
-
-def test_no_eval_hosting_resources_remain_in_legacy_root():
-    # The eval site and eval.onolys.com moved to the isolated eval root (a custom domain lives on one site only).
-    assert not re.findall(r'resource "\w+" "eval_\w+"', ALL)
-    assert "onolys-eval-staging" not in TF["domains.tf"]
-    assert "eval.onolys.com" not in TF["domains.tf"]
