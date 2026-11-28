@@ -5,7 +5,7 @@ date: 2026-11-28
 ---
 # PRD: 10 Eval libraries (metrics, charts, report YAML, converters, own run path)
 
-Repo/branch: Onolys/onolys-eval (public; `refactor/libraries`, after 03 created it) · Depends on: 03 (hard); P4 also needs tag `engine-v1`, cut after 04-06 merge (03 created `engine-v0`) · Owns: whole eval repo. Paths below are the new flattened ones; mapping: `eval/core`->`core/`, `eval/backend`->`backend/`, `eval/web`->`web/`, `eval/datasets`->`datasets/`, `eval/fixtures`->`fixtures/`. Does not own: engine (04/05), api features (06), Terraform restructure (09), per-slot metrics, Jev, per-volley experiments (separate PR), docs outside this repo.
+Repo/branch: Onolys/onolys-eval (public; `refactor/libraries`, after 03 created it) · Depends on: 03 (hard); P4 also needs tag `engine-v1`, created by 06 (T10) after it merges (03 created `engine-v0`) · Owns: whole eval repo. Paths below are the new flattened ones; mapping: `eval/core`->`core/`, `eval/backend`->`backend/`, `eval/web`->`web/`, `eval/datasets`->`datasets/`, `eval/fixtures`->`fixtures/`. Does not own: engine (04/05), api features (06), Terraform restructure (09), per-slot metrics, Jev, per-volley experiments (separate PR), docs outside this repo.
 
 ## TL;DR
 Eval gets three libraries and one cut-over. (1) One **converter** base class; each dataset is a small subclass plus a `mapping.yaml` beside its manifest. (2) One **metrics registry**: named functions returning uniform rows. (3) One **chart registry** plus **report YAML** that says which metrics feed which charts; the backend evaluates a report, the web renders it. Phases P1-P3 run on the `engine-v0` pin, change no numbers, and keep eval deployed. P4 is the cut-over: bump to the new engine, give eval its own sessions and run executor (03 O1), and replace eval's copies of auth, Firestore, queue and STT with the api's leaf features (06 makes them importable), pulled by git tag. Out of scope per the brief: per-slot metrics, Jev, per-volley experiments.
@@ -34,14 +34,14 @@ Eval gets three libraries and one cut-over. (1) One **converter** base class; ea
 **P2 Metrics library** (`core/src/onolys_eval/metrics/`): `registry.py`, `agreement.py` (counts, globals, summaries, bias, within-1), `lines.py` (accuracy, macro F1, P/R/F1, confusion, agreement), `operations.py` (cost, time, failures, coverage, frontier), `reliability.py` (repeat agreement, head-to-head, error-vs-length, grid, baseline), `formulas.py` (single seam to the engine's summary formulas: `pack.yaml` now, `protocol.yaml` after P4). `compare_routes.py` metric code moves in; endpoints keep their payloads until P3.
 - Contract:
 ```python
-@metric("globals_within_1", dims=("combo",), better="higher", needs=("human_globals",))
+@metric("globals_within_1", better="higher", needs=("human_globals",))
 def globals_within_1(data: CompareData, combos: Sequence[str], **opts) -> MetricResult: ...
 # MetricResult(rows: list[Row], cohort: {paired, of} | None, notes: list[str])
 # Row: metric, combo, item?, session?, value, n, of, repeats, na: {reason} | None, best: bool, extra: dict
 ```
-`CompareData` = today's `View` (gold projections, parsed runs, cells, prices, group) built by one loader. Registry marks `best` from `better` (replaces three copies). An unmet `needs` yields rows with `na.reason`, never an error (today's "n/a - reason"). Optional per-metric options model validates YAML `with:`.
+`CompareData` = today's `View` (gold projections, parsed runs, cells, prices, group) built by one loader. Registry marks `best` from `better` (replaces three copies). An unmet `needs` yields rows with `na.reason`, never an error (today's "n/a - reason").
 **P3 Charts + report YAML**
-- `reports/*.yaml` (id = filename), `reports/charts.yaml` (chart manifest: id, accepted dims, option names; one source for backend validation and a web test).
+- `reports/*.yaml` (id = filename), `reports/charts.yaml` (chart manifest: just the chart ids; one source for backend validation and a web test).
 ```yaml
 report: overview
 title: Overview
@@ -57,8 +57,8 @@ sections:
     chart: {use: heatmap.grid, with: {rows: item, cols: combo}}
     collapsed: true
 ```
-- Loader (`backend/.../reports.py`, fail-fast at startup): unknown metric or chart, bad `with`, or a metric whose `dims` do not satisfy the chart's `accepts` is a load error (same idea as 04's load-time step checks). Backend evaluates: `GET /v1/eval-runs/{id}/reports` (list) and `/reports/{report_id}?combos=` -> `{title, sections:[{id,title,caption,chart:{use,with},rows,cohort,notes}]}`. The three tab endpoints and their TS types are deleted in the same PR (rule 16). `reasoning`, `lines`, `line-matches` stay, reading numbers from the library.
-- Web: `ChartProps<O> = {rows, options, combos, cohort, notes}`; `registerChart({id, accepts, options, Component, columns})`. Shared `ChartCard` (extends `ChartFrame`) renders title, caption, legend, n/a reasons, cohort line, and auto-builds the "Show data" table from `columns`; one `charts.css` on `@onolys/ui` tokens; `ui/chart/{Axis,scales,theme}` stay as primitives. `ReportView` loops sections; no per-report code.
+- Loader (`backend/.../reports.py`, fail-fast at startup): unknown metric or chart id is a load error; registries are plain dicts with a unique-id check (same idea as 04's load-time step checks). Backend evaluates: `GET /v1/eval-runs/{id}/reports` (list) and `/reports/{report_id}?combos=` -> `{title, sections:[{id,title,caption,chart:{use,with},rows,cohort,notes}]}`. The three tab endpoints and their TS types are deleted in the same PR (rule 16). `reasoning`, `lines`, `line-matches` stay, reading numbers from the library.
+- Web: `ChartProps<O> = {rows, options, combos, cohort, notes}`; `registerChart({id, Component, columns})`. Shared `ChartCard` (extends `ChartFrame`) renders title, caption, legend, n/a reasons, cohort line, and auto-builds the "Show data" table from `columns`; one `charts.css` on `@onolys/common` tokens; `ui/chart/{Axis,scales,theme}` stay as primitives. `ReportView` loops sections; no per-report code.
 | Today | Chart id |
 |---|---|
 | Leaderboard, PrfTable, ReliabilityTable | `table.ranked` |
@@ -69,9 +69,9 @@ sections:
 | BaselineCard, verdict block | `stat.tiles`, `text.clauses` |
 | ComboSelector, ReasoningRollup, `line/*` | stay bespoke (controls and drill-downs, not charts) |
 Shipped reports: `overview`, `deep-dive`, `analysis` reproducing today's tabs. Eval-local `Chip`, `Note`, `ErrorPage`, `theme-init.js` adopt `@onolys/common` (02 deferred item). Eval keeps its own `DataTable`, `Disclosure`, `StatTile` (not promoted).
-**P4 Cut-over** (needs tag `engine-v1`, cut after 04-06 merge; eval started on `engine-v0`).
+**P4 Cut-over** (needs tag `engine-v1`, created by 06 after it merges; eval started on `engine-v0`).
 1. *Engine + own run path.* Pins become `onolys-engine` and `onolys-api` at `engine-v1` (no `snapshot/` worker build). Eval gets `eval_sessions/{sid}` (pinned transcript blob content-addressed like gold, goal, span, language, clinician speaker, gold ref) and `eval_cells/{id}` (replaces `RunDoc`: status, attempt, usage, timing, error, report, engine id, route snapshot, git sha). A `/tasks/cell` handler in the eval backend calls `Engine.run` with the route override and validates against `Engine.output_schema()`. Scheduler creates cells, not api runs; the drift guard goes (one image, one sha). Worker = same eval image as a second Cloud Run service. `eval_sessions.py` no longer imports `onolys_api.repo`. Eval's own `config/` copy (with overlay) follows 04's route format. Old eval runs and data are dropped; no old-run rendering or id mapping. Evaluation ids are `miti`, `oneshot-single`, `oneshot-split` (no mapping from `oneshot:miti`); one `parse_report`; `_parse_oneshot`, `oneshot_scores`, `_OneshotOutput` deleted.
-2. *Shared features (decision D2).* Import `onolys_api.{data,auth,tasks,transcription}` only, through their public surface (06 made them leaf modules; no copies). Delete: `InMemoryEvalRepository` + Protocol, `InMemoryTaskQueue`, `InMemoryBucket`, eval `CloudTasksQueue`, token-verify code in `auth.py` (keep `allowlist.py`), `uploads.py` STT poll chain (keep upload bookkeeping and gold/span validation; target ~250 lines, estimate). Eval repository becomes thin wrappers over `get_doc/set_doc/update_doc/query/in_transaction`; slot/tick claims are `in_transaction` functions. Tests use the Firestore emulator (rule 9); in-memory fixtures and `fixtures/compare/fakes.py` go.
+2. *Shared features (decision D2).* Import `onolys_api.{data,auth,tasks,transcription}` only, through their public surface (06 made them leaf modules; no copies). Delete: `InMemoryEvalRepository` + Protocol, `InMemoryTaskQueue`, `InMemoryBucket`, eval `CloudTasksQueue`, token-verify code in `auth.py` (keep `allowlist.py`), `uploads.py` STT poll chain (keep upload bookkeeping and gold/span validation; target ~250 lines, estimate). Eval's docs have no owner, so its repository becomes thin wrappers over 06's ownerless functions (`get_unowned_doc`, `set_unowned_doc`, `update_unowned_doc`, `query_unowned`) plus `in_transaction` (06 keeps `uid` required in the owned functions; eval never passes a fake uid); slot/tick claims are `in_transaction` functions. Tests use the Firestore emulator (rule 9); in-memory fixtures and `fixtures/compare/fakes.py` go.
 3. *Rule pass.* `constants.py` (collections, paths, limits, states, engine ids, providers); `eval_scheduler.py` (754) splits by feature past ~300 lines (`scheduler/`); `compare_routes.py` becomes the thin `reports_routes.py`; tests mirror source (`tests/metrics/…`, `tests/convert/…`).
 
 ## Architecture
@@ -90,8 +90,8 @@ onolys-api (tag): data, auth, tasks, transcription (leaf features)   onolys-engi
 | D2 | Shared features | Depend on `onolys-api` by tag, import only the four leaf features | Extract a shared package; keep eval's copies restructured | One implementation (rule 9) with no new repo or release process; the api is already a pinned dependency. No copies: if the api is not leaf, fix the api (06) |
 | D3 | Engine upgrade | Part of 10 (P4 step 1), same step as own run path | Separate step | Same change: stop using the api worker = call the new engine directly |
 | D4 | Who renders a report | Backend computes rows, web draws charts | Web computes from raw data; backend renders HTML | Metrics need Python, gold, prices; payload is already server-side today |
-| D5 | Metric contract | Decorated function, uniform `Row`, dims, `better`, `needs` | Class per metric; free-form dict per tab | Uniform rows are what let any chart take any compatible metric; `better` and `needs` replace repeated best/n-a code |
-| D6 | Chart contract | `{rows, options}` + manifest + auto table twin | Keep 13 components, add YAML only | A shared base removes the per-chart table/CSS; merges 15 components into 7 ids |
+| D5 | Metric contract | Decorated function, uniform `Row`, `better`, `needs` | Class per metric; free-form dict per tab | Uniform rows are what let any chart take any metric; `better` and `needs` replace repeated best/n-a code |
+| D6 | Chart contract | `{rows, options}` + id list + auto table twin | Keep 13 components, add YAML only | A shared base removes the per-chart table/CSS; merges 15 components into 7 ids |
 | D7 | Report `inputs:` block (brainstorm sketch) | Dropped; dataset and engines come from the eval run, combos chosen at view time | Pin engines in YAML | An eval run already fixes both; YAML stays reusable across runs |
 | D8 | Converter variation | Python subclass for parsing, `mapping.yaml` for tables | All YAML; all code | Raw formats (CSV, zip, JSON, HTML, PDF) need code; label maps and roles are data |
 | D9 | Non-English | Delete `midas-es`, `phac-fr` and all non-English converters; keep `phac-en` | Port; leave untouched | Owner decision |
@@ -104,8 +104,8 @@ onolys-api (tag): data, auth, tasks, transcription (leaf features)   onolys-engi
 3. Owner runs one small eval run after deploy (live LLM/STT).
 
 ## Risks / Open Questions
-- [RESOLVED: no copies; 06 provides leaf modules] O1: 06 makes `data`, `auth`, `tasks`, `transcription` leaf (no import of routes/sessions/pipeline), accept explicit settings/clients, allow ownerless docs, and ship an in-process queue stub (06 R2b). P4 starts with an import-graph check; if it fails, fix the api, do not copy.
-- [RESOLVED: `engine-v0` then `engine-v1`] O2: eval starts on `engine-v0` (created by 03); `engine-v1` is cut after 04-06 merge for P4.
+- [RESOLVED: no copies; 06 provides leaf modules] O1: 06 makes `data`, `auth`, `tasks`, `transcription` leaf (no import of routes/sessions/pipeline), accept explicit settings/clients, expose separately named ownerless functions, and ship an in-process queue stub (06 R2b). P4 starts with an import-graph check; if it fails, fix the api, do not copy.
+- [RESOLVED: `engine-v0` then `engine-v1`] O2: eval starts on `engine-v0` (created by 03); `engine-v1` is created by 06 (T10) after it merges, for P4.
 - [RESOLVED: yes] O3: delete all old eval run data; no old-run rendering.
 - [RESOLVED: second service] O4: worker is a second Cloud Run service from the same eval image.
 - [RESOLVED: delete] O5: `midas-es`, `phac-fr` and all non-English converters deleted; `phac-en` kept.
@@ -121,6 +121,6 @@ onolys-api (tag): data, auth, tasks, transcription (leaf features)   onolys-engi
 ## Acceptance Criteria
 - P1: all remaining (English) converters subclass `Converter`; `midas-es`, `phac-fr` and non-English converters are gone; outputs byte-identical to the pre-refactor characterization set; `publicsets.py` and per-module `HEADER`/`build_manifest` gone; each subclass is small (target <= 100 lines except PDF).
 - P2: `git grep` finds no metric arithmetic outside `metrics/`; goldens from 14 fixtures match exactly; `core/_formulas.py`, `core/summary/{session_metrics,line_metrics,analysis,operations}` deleted.
-- P3: `overview`, `deep-dive`, `analysis` render from YAML; adding a report = one YAML file with no code (shown by a test report); load rejects an unknown metric, unknown chart, bad option and dim mismatch; web registry equals `charts.yaml`; chart components <= 7 plus bespoke views; old endpoints/types gone; eval deployed and clicked through.
+- P3: `overview`, `deep-dive`, `analysis` render from YAML; adding a report = one YAML file with no code (shown by a test report); load rejects an unknown metric or chart id and a duplicate id; web registry equals `charts.yaml`; chart components <= 7 plus bespoke views; old endpoints/types gone; eval deployed and clicked through.
 - P4: no `onolys_api.repo`, `.routes`, `.jobs`, `.engines`, `.adapters` import; backend/worker revisions share one sha with no drift code; no in-memory repo/queue/bucket class; tests pass against the Firestore emulator; one `parse_report`; one small run completes end to end for miti, oneshot-single, oneshot-split; no old runs or old-id mapping remain.
 - Whole: tests mirror source; no spec ids in docstrings; one `constants.py`; CI green in the eval repo.

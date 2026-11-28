@@ -102,7 +102,7 @@ Batches: (1) Firebase move + workflows, (2) runtime YAML + Dockerfile + tests pa
 None for the owner. Apply procedure (agent):
 1. Before the PR merges: `terraform state list` on prod must lack `google_secret_manager_secret.provider` and `google_billing_budget.monthly` (01 step 2); else apply the current root once to forget them.
 2. `identity-config.py --domains-only --dry-run --remove-domain <retired list>` prints no PATCH; else run it for real.
-3. After merge, staging first, then prod: `infra/tf.sh <env> plan` with live `git_sha`/`llm_*` in `live.tfvars`. Expected: only N moves, `state_identity` add, prod `identity_policy` replaced (01 edits the script, so its hash trigger fires; step 2 makes the re-run empty), and staging gains the identity password-policy/email-URL provisioner (O4, live change). Any other add/change/destroy of a `google_*` resource: stop and report.
+3. After merge, staging first, then prod: `infra/tf.sh <env> plan` with live `git_sha`/`llm_*` in `live.tfvars`. Expected: only N moves, `state_identity` add, prod `identity_policy` replaced (09 cleans `identity-config.py` itself, removing the "PRD R4"/"SP00" comments, so its hash trigger fires; the replace is accepted in the plan; step 2 makes the re-run empty), and staging gains the identity password-policy/email-URL provisioner (O4, live change). Any other add/change/destroy of a `google_*` resource: stop and report.
 4. `apply` (state only plus the staging provisioner), staging then prod. A follow-up commit deletes the moved blocks.
 5. Next `deploy-staging` exercises `firebase/` and the new image; confirm its Firestore step and `check_config.sh --image`.
 
@@ -112,7 +112,7 @@ None for the owner. Apply procedure (agent):
 - Risk: 04/06 land tests and Dockerfile lines that still say `config/`. Mitigation: AC grep, 09 last.
 - [RESOLVED: keep] O1: `create-test-user.py` stays.
 - [RESOLVED: stays in `infra/`] O2: `models.yaml` is not moved into the engine package; 04 keeps `MODELS_FILE`.
-- [RESOLVED: spike, report to owner] O3: firebase-tools path resolution with `--config firebase/firebase.json` for `rules`/`indexes` (~85%, not run). First task is a spike with the local emulator; results go to the owner, who decides. `working-directory: firebase` is an option to present if it fails, not automatic.
+- [RESOLVED: spike, report to owner] O3: firebase-tools path resolution with `--config firebase/firebase.json` for `rules`/`indexes` (~85%, not run). The spike runs in phase 0 (`spikes/PRD.md`) with the local emulator; results are reported to the owner before 02 starts, who decides, and this PRD consumes that decision. `working-directory: firebase` is an option to present if it fails, not automatic.
 - [RESOLVED: staging gets prod's provisioner] O4: staging identity gets prod's password-policy/email-URL provisioner. Live change, applied by the agent after plan (see Manual steps).
 - [DEFERRED] Move deploy-prod `resolve` off `deployer_staging` (needs a read-only identity in the staging project); WIF/IAM convergence; replacing `git_sha`/`llm_*` Terraform ownership.
 - [RESOLVED: verified] States are separate today; `EVAL_CAP_DAY` stays; `.firebaserc` unused.
