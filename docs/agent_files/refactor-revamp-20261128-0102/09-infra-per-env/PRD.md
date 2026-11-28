@@ -3,11 +3,11 @@ status: draft
 summary: One Terraform root (infra/) for prod + staging with a folder per env holding its tfvars, backend and runtime YAML; config/ and isolated-environment/ deleted; Firebase config in one firebase/ folder; infra tests pruned 19 to 3 Python + terraform test. Two states stay separate; every address change is a plan-proven moved block; the agent runs plan, then apply.
 date: 2026-11-28
 ---
-# PRD: 08 Infra per environment
+# PRD: 09 Infra per environment
 
 Repo/branch: Onolys/onolys / `refactor/revamp` · Depends on: 01 (hard), 03 (hard: eval gone), 04 (routes.yaml shape), 06 (api eval code and loaders gone), 02 (Auth emulator) · Owns: `infra/**`, `config/**` (deleted), `firestore.rules`, `firestore-rules-test/`, root `firebase.json` + `.firebaserc`, `api/firebase.json`, `api/firestore.indexes.json`, Firestore/emulator/config lines in `.github/workflows/*`, `api/Dockerfile` (config COPY), `.dockerignore`, `scripts/ci/check_config.sh`, path filters naming `config/`/`infra/`/`firestore*`.
 
-**Order assumption:** 01 → 03 → 04 → 06 → 08. 04 edits `config/*/routes.yaml` in place (drops `miti_code`/`miti_globals`/`tips`/`oneshot`); 08 then only `git mv`s them and fixes paths. 06 may change how api loads STT/voice but not the three discovery names below; if it does, 08 follows.
+**Order assumption:** 01 → 03 → 04 → 06 → 09. 04 edits `config/*/routes.yaml` in place (drops `miti_code`/`miti_globals`/`tips`/`oneshot`); 09 then only `git mv`s them and fixes paths. 06 may change how api loads STT/voice but not the three discovery names below; if it does, 09 follows.
 
 ## TL;DR
 Prod and staging become one Terraform root with two separate states (one backend file per env), so no state is merged. Resource addresses that differ between the old roots are mapped with `moved` blocks: state-only, shown by `terraform plan`, applied by the agent, then deleted. Each env folder also holds the runtime YAML the images bake in; the image keeps its `/app/config/<env>/` layout so no Cloud Run env var changes. Firestore rules, indexes, emulator config and rules tests move to `firebase/`.
@@ -26,7 +26,7 @@ How the api finds YAML today: Terraform sets `ROUTES_FILE=config/<env>/routes.ya
 
 ## Goals / Non-Goals
 **Goals:** one root, env folders, no `config/`, no `isolated-environment/`, one `firebase/`, fewer and sturdier infra tests; every live-state-touching step proven no-op by plan (the agent applies), except the staging identity provisioner, a deliberate live change.
-**Non-goals:** converging prod/staging IAM or WIF models (live change; only the identity provisioner converges, O4); changing YAML content (04/05); web hosting config (`web/firebase.json`, `web/.firebaserc`: 07); eval Terraform (03 copied it); docs edits; applying anything.
+**Non-goals:** converging prod/staging IAM or WIF models (live change; only the identity provisioner converges, O4); changing YAML content (04/05); web hosting config (`web/firebase.json`, `web/.firebaserc`: 07, 08); eval Terraform (03 copied it); docs edits; applying anything.
 
 ## Requirements
 **R1 Target tree.**
@@ -109,7 +109,7 @@ None for the owner. Apply procedure (agent):
 ## Risks / Open Questions
 - Risk: a wrong moved block plans destroy + create of a hosting site, WIF pool or custom domain. Mitigation: plan gate in 3; nothing applies in CI.
 - Risk: `terraform test` with mocks cannot see live drift or provider quirks; only the real plan proves no-op.
-- Risk: 04/06 land tests and Dockerfile lines that still say `config/`. Mitigation: AC grep, 08 last.
+- Risk: 04/06 land tests and Dockerfile lines that still say `config/`. Mitigation: AC grep, 09 last.
 - [RESOLVED: keep] O1: `create-test-user.py` stays.
 - [RESOLVED: stays in `infra/`] O2: `models.yaml` is not moved into the engine package; 04 keeps `MODELS_FILE`.
 - [RESOLVED: spike, report to owner] O3: firebase-tools path resolution with `--config firebase/firebase.json` for `rules`/`indexes` (~85%, not run). First task is a spike with the local emulator; results go to the owner, who decides. `working-directory: firebase` is an option to present if it fails, not automatic.

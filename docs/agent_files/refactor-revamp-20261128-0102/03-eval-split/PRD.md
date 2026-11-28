@@ -5,10 +5,10 @@ date: 2026-11-28
 ---
 # PRD: 03 Eval split (eval into its own repo)
 
-Repo/branch: Onolys/onolys / `refactor/revamp` (removal) and new Onolys/onolys-eval (`main`) · Depends on: 00 (rules docs to copy), 01 (eval purged in place first), 02 (eval/web on `@onolys/common` v0.4.0, no `@prod-*`) · Owns: `eval/**`, `.github/workflows/deploy-eval.yml`, eval jobs in `ci.yml`, eval-only `scripts/ci/*`, eval examples in `infra/isolated-environment/examples/`, eval lines in `uv.lock`/root `pyproject.toml`/`.dockerignore`/`.gitignore`/`pr-preview.yml`/`api/Dockerfile`/`firebase.json`/`.firebaserc`; the whole new repo. Does not own: api/engine code (04-06), Terraform module/root restructure (08), eval refactors (09), docs (frozen).
+Repo/branch: Onolys/onolys / `refactor/revamp` (removal) and new Onolys/onolys-eval (`main`) · Depends on: 00 (rules docs to copy), 01 (eval purged in place first), 02 (eval/web on `@onolys/common` v0.4.0, no `@prod-*`) · Owns: `eval/**`, `.github/workflows/deploy-eval.yml`, eval jobs in `ci.yml`, eval-only `scripts/ci/*`, eval examples in `infra/isolated-environment/examples/`, eval lines in `uv.lock`/root `pyproject.toml`/`.dockerignore`/`.gitignore`/`pr-preview.yml`/`api/Dockerfile`/`firebase.json`/`.firebaserc`; the whole new repo. Does not own: api/engine code (04-06), Terraform module/root restructure (09), eval refactors (10), docs (frozen).
 
 ## TL;DR
-Eval is not just "engine + sign-in + sessions". It also imports `onolys_api` in 41 lines and its worker is the api image in `EVAL_MODE`. So the pin must be a **whole pre-revamp snapshot** (api + core + miti + oneshot), tagged `engine-v0` before 04 starts. The new repo gets eval's history (`git filter-repo`), its Terraform copied verbatim against the **same state bucket**, and is deployed to the **same cloud project and URLs**. Order: tag, build repo, owner wires identity, deploy from new repo, only then delete here. The "own sessions" cut is handed to 09 (O1).
+Eval is not just "engine + sign-in + sessions". It also imports `onolys_api` in 41 lines and its worker is the api image in `EVAL_MODE`. So the pin must be a **whole pre-revamp snapshot** (api + core + miti + oneshot), tagged `engine-v0` before 04 starts. The new repo gets eval's history (`git filter-repo`), its Terraform copied verbatim against the **same state bucket**, and is deployed to the **same cloud project and URLs**. Order: tag, build repo, owner wires identity, deploy from new repo, only then delete here. The "own sessions" cut is handed to 10 (O1).
 
 ## Problem
 | Gap | Evidence |
@@ -21,11 +21,11 @@ Eval is not just "engine + sign-in + sessions". It also imports `onolys_api` in 
 | 04-06 would break eval if it stays in the workspace | [verified: root `pyproject.toml` members `eval/*`; `uv.lock` lists eval + eval-backend] |
 
 ## Goals / Non-Goals
-**Goals:** eval builds, tests, deploys and runs from its own repo with no behaviour change; this repo has no `eval/`, no eval workflow, no eval Terraform entry points; 04-08 free to rewrite api/engines/infra; eval site down for minutes at most.
-**Non-goals:** any eval refactor (metrics/charts/converters/YAML = 09); own-session model (O1); trimming staging/prod parts from the copied Terraform; Terraform root merge (08); docs changes; non-English work; deleting live cloud resources.
+**Goals:** eval builds, tests, deploys and runs from its own repo with no behaviour change; this repo has no `eval/`, no eval workflow, no eval Terraform entry points; 04-09 free to rewrite api/engines/infra; eval site down for minutes at most.
+**Non-goals:** any eval refactor (metrics/charts/converters/YAML = 10); own-session model (O1); trimming staging/prod parts from the copied Terraform; Terraform root merge (09); docs changes; non-English work; deleting live cloud resources.
 
 ## Requirements
-**R1 Snapshot tag (this repo).** After 01 and 02 are merged on the branch and pushed, tag that commit `engine-v0` (annotated). Never move it. It keeps `eval/` manifests, so `api/Dockerfile` (which copies them for the frozen lock) still builds at the tag. The snapshot still contains api + engine packages + config, as eval needs them; the name is `engine-v0` (owner decision). A second tag `engine-v1` is cut after 04-06 merge, for 09's P4 (not this SP).
+**R1 Snapshot tag (this repo).** After 01 and 02 are merged on the branch and pushed, tag that commit `engine-v0` (annotated). Never move it. It keeps `eval/` manifests, so `api/Dockerfile` (which copies them for the frozen lock) still builds at the tag. The snapshot still contains api + engine packages + config, as eval needs them; the name is `engine-v0` (owner decision). A second tag `engine-v1` is cut after 04-06 merge, for 10's P4 (not this SP).
 
 **R2 New repo from history.** `git filter-repo` on a fresh clone: keep `eval/`, `.github/workflows/deploy-eval.yml`, `scripts/ci/{set_eval_origin.sh,test_deploy_eval.sh,test_eval_image.sh,test_workflow_run_guard.py}`; `--path-rename eval/:` (flatten: `core/ backend/ web/ datasets/ fixtures/` at root); `--strip-blobs-bigger-than 500K` (old `eval/tests/datasets/tofueval/.../test_data.zip` is in history [verified: `git rev-list --objects`]). Shared files are copied fresh in one adaptation commit (R4-R7). Mechanical path fixes: `parents[3]` constants in tests, `test_repo_guard` `eval/` prefix, `eval/web/package-lock.json` exemption.
 
@@ -42,7 +42,7 @@ All four are explicit because `tool.uv.sources` of a git dependency is not honou
 
 **R5 Deploy (new repo).** `deploy-eval.yml` ported: same jobs, same service names (`onolys-eval-backend-eval`, `onolys-worker-eval`), same Hosting site `onolys-eval-app` and target `eval-staging`, same smoke. Changes: (a) worker image: shallow-clone `engine-v0` into `snapshot/`, overlay the eval repo's `config/`, build `snapshot/api/Dockerfile`; (b) **both images get the eval repo's SHA** as `GIT_SHA` (the worker drift guard compares `RunDoc.code_version` with it); (c) drop "install prod web deps"; (d) `scripts/ci/{release_target.py (eval role only), check_config.sh (staging only), verify_staging_release.cjs + test, set_eval_origin.sh, test_hosting_targets.sh (eval/web dir only), test_workflow_run_guard.py}` copied; `_deploy-cloudrun.yml` copied and trimmed to eval. GitHub environment `eval`. Vars keep names (`EVAL_GCP_PROJECT`, `EVAL_WIF_PROVIDER`, `EVAL_DEPLOYER_SA`, `EVAL_HOSTING_SITE`, `EVAL_VITE_FIREBASE_*`, `GCP_REGION`); no GitHub secrets exist [verified: no `secrets.` use besides `inherit`].
 
-**R6 Config and Firebase.** Copy `config/models.yaml`, `config/staging/{routes,stt_providers}.yaml` to `config/` (eval keeps its own copy, owner-accepted; 08 will move the originals). Own `firebase.json` (Hosting `eval-staging` + Firestore `eval` database), `.firebaserc`, a snapshot copy of `firestore.indexes.json` (the eval DB uses api's schema, same indexes). Eval Firestore rules = deny-all (eval backend uses the Admin SDK only; the browser never reads Firestore), so no copy of prod `firestore.rules`.
+**R6 Config and Firebase.** Copy `config/models.yaml`, `config/staging/{routes,stt_providers}.yaml` to `config/` (eval keeps its own copy, owner-accepted; 09 will move the originals). Own `firebase.json` (Hosting `eval-staging` + Firestore `eval` database), `.firebaserc`, a snapshot copy of `firestore.indexes.json` (the eval DB uses api's schema, same indexes). Eval Firestore rules = deny-all (eval backend uses the Admin SDK only; the browser never reads Firestore), so no copy of prod `firestore.rules`.
 
 **R7 Terraform.** Copy `infra/isolated-environment/` (root, `tests/`, eval examples) and `infra/modules/environment/` verbatim to `infra/`, plus `infra/scripts/{create-test-user,seed-secrets,identity-config}.py` and their tests; same `backend "gcs"` bucket/prefix, same resource addresses, so no `state mv`. Gate: owner runs `terraform plan` from the new repo: **no changes** (with `github_repository` still the old value). Only then set `github_repository = "Onolys/onolys-eval"` and apply (moves the WIF trust). Trimming staging/prod branches from the copy is deferred.
 
@@ -56,8 +56,8 @@ All four are explicit because `tool.uv.sources` of a git dependency is not honou
 | workspace | root `pyproject.toml` members `eval/*`; `uv lock` must only drop `onolys-eval*` entries; `.dockerignore`, `.gitignore` eval lines; `api/Dockerfile` eval manifest COPYs; `pr-preview.yml` paths `eval/*/pyproject.toml` |
 | tests that name eval | `api/tests/test_dev_script_and_image.py:142` (members), `api/tests/test_logging.py:293` (Dockerfile list), `engines/core/tests/test_json_logging.py:186` (module name) |
 | Firebase/identity | root `.firebaserc` `onolys-eval` target, `firebase.json` `eval` database entry |
-| Terraform | delete `examples/{backend-eval.hcl,environment-eval.tfvars}.example`; adjust `infra/scripts/test_isolated_environment.py:90` (reads the tfvars example). Module/root code untouched (08) |
-Kept for 08/06: `isolated-environment/bootstrap` (`eval` in `projects` map; removing it would plan to destroy a `prevent_destroy` state bucket), module `eval_*` variables, eval tests of the module.
+| Terraform | delete `examples/{backend-eval.hcl,environment-eval.tfvars}.example`; adjust `infra/scripts/test_isolated_environment.py:90` (reads the tfvars example). Module/root code untouched (09) |
+Kept for 09/06: `isolated-environment/bootstrap` (`eval` in `projects` map; removing it would plan to destroy a `prevent_destroy` state bucket), module `eval_*` variables, eval tests of the module.
 
 ## Architecture
 ```
@@ -74,13 +74,13 @@ Deploy trigger stays "CI green on main, then deploy" inside the new repo.
 ## Decisions
 | # | Decision | Choice | Alternatives considered | Why |
 |---|---|---|---|---|
-| 1 | Pin | One immutable tag `engine-v0` for api + 3 engine packages + config (then `engine-v1` after 04-06 for 09) | Engine-only tag; registry release; per-package tags | Eval imports api and runs on the api worker; tags make 04-06 free of eval; no registry cost |
+| 1 | Pin | One immutable tag `engine-v0` for api + 3 engine packages + config (then `engine-v1` after 04-06 for 10) | Engine-only tag; registry release; per-package tags | Eval imports api and runs on the api worker; tags make 04-06 free of eval; no registry cost |
 | 2 | History | `filter-repo` of eval paths, flatten, strip big blobs | Fresh copy | Keeps blame for 21 eval commits; cheap; blob strip handles the one leak risk |
 | 3 | Visibility | PUBLIC repo (owner decision) | Private | Like this repo; deps are public so CI needs no token; `test_repo_guard` + blob strip keep datasets out |
-| 4 | Layout | Flatten (`core/`, `backend/`...) | Keep `eval/` nesting | A few mechanical path fixes now beats a permanent odd nesting; 09 restructures anyway |
-| 5 | Shared features | No shared Python package; eval keeps its own auth/Firestore/storage/queue/uploads untouched | Extract a shared package now | Rule 5 puts these in the product; a package forces 06's design early. 09 decides after 06 (re-pin to a post-06 tag or keep copies) |
-| 6 | Own sessions cut | Hand to 09, first item [OPEN O1] | Do in 03 | Needs an eval run path replacing api's worker (`jobs/run.py`, `create_run`) = a rewrite, not a move; also needs 06's data layer |
-| 7 | Non-English datasets | `midas-es`, `phac-fr` and all non-English converters are deleted (owner decision); keep `phac-en` only (strip non-English parts of `phac.py`). Moved untouched in 03, deleted by 09 (O5) | Move and keep | English only; old eval run data is dropped too, no migration |
+| 4 | Layout | Flatten (`core/`, `backend/`...) | Keep `eval/` nesting | A few mechanical path fixes now beats a permanent odd nesting; 10 restructures anyway |
+| 5 | Shared features | No shared Python package; eval keeps its own auth/Firestore/storage/queue/uploads untouched | Extract a shared package now | Rule 5 puts these in the product; a package forces 06's design early. 10 decides after 06 (re-pin to a post-06 tag or keep copies) |
+| 6 | Own sessions cut | Hand to 10, first item [OPEN O1] | Do in 03 | Needs an eval run path replacing api's worker (`jobs/run.py`, `create_run`) = a rewrite, not a move; also needs 06's data layer |
+| 7 | Non-English datasets | `midas-es`, `phac-fr` and all non-English converters are deleted (owner decision); keep `phac-en` only (strip non-English parts of `phac.py`). Moved untouched in 03, deleted by 10 (O5) | Move and keep | English only; old eval run data is dropped too, no migration |
 | 8 | Terraform | Copy verbatim, same backend and addresses, plan-no-op gate | New state; `terraform state mv`; import | Zero risk to live eval project; no state surgery |
 | 9 | Cut-over | New repo deployed and verified first; old workflow disabled just before; then delete | Delete first | Eval never has zero working pipeline; rollback = re-enable old workflow |
 | 10 | Identity | Re-point existing WIF provider via `github_repository` | Second provider for both repos | One owner apply; old repo is retired anyway |
@@ -95,18 +95,18 @@ Deploy trigger stays "CI green on main, then deploy" inside the new repo.
 6. After the merged removal PR: delete the now-unused `EVAL_*` variables here; add the eval repo ruleset; retire nothing in GCP.
 
 ## Risks / Open Questions
-- [RESOLVED: yes] O1: "own sessions" (stop writing api `SessionDoc`s) moves to 09. Until then eval stays on `engine-v0`.
+- [RESOLVED: yes] O1: "own sessions" (stop writing api `SessionDoc`s) moves to 10. Until then eval stays on `engine-v0`.
 - [RESOLVED: public] O2: new repo `Onolys/onolys-eval` is PUBLIC.
 - [RESOLVED: spike, report to owner, owner decides] O3: uv resolution of four git subdirectory deps whose own pyprojects use `workspace = true` (~75% confident; not run). First task is a spike. Option to present if it fails (no automatic fallback): build wheels in CI from the tag and install from a path.
 - [RESOLVED: deny-all] O4: eval Firestore rules deny-all (Admin SDK only); no copy of prod `firestore.rules`.
 - [RESOLVED: yes] O5: worker image = tag + eval's own `config/` overlay.
 - [RESOLVED: dropped] Old eval runs/data are dropped; no mapping or migration of old ids or runs.
-- [DEFERRED] Trim staging/prod branches from the copied Terraform module; rename `EVAL_*` vars; rewrite stale eval docs here; `bootstrap` eval entry (08).
+- [DEFERRED] Trim staging/prod branches from the copied Terraform module; rename `EVAL_*` vars; rewrite stale eval docs here; `bootstrap` eval entry (09).
 - Risk: drift guard fails runs if backend and worker `GIT_SHA` differ, or a deploy lands mid-run. Mitigation: R5(b), idle window.
 - Risk: dataset content in history. Mitigation: blob strip, `test_repo_guard` ported (repo is public, so this matters).
 - Risk: two roots applying one state. Mitigation: eval examples deleted here (R9); GCS lock.
 - Risk: freeze means eval changes between tag and cut-over must be re-copied; keep the window short, no eval commits during it.
-- Handed on: 06 deletes all api eval-mode code (`Settings.eval_mode`, `RunDoc.eval`/`EvalRunInfo`, `create_run(is_eval)`, `EvalDisabled`, `engines.resolve_engine/eval_snapshot`, `jobs/run.py` drift branch, `first_run` skip, `adapters/real.py` override); 04/05 decide oneshot's api dependency; 08 removes module `eval_*` vars, eval parts of the root, bootstrap `eval`, eval tests; 09 owns O1 and eval's use of shared modules.
+- Handed on: 06 deletes all api eval-mode code (`Settings.eval_mode`, `RunDoc.eval`/`EvalRunInfo`, `create_run(is_eval)`, `EvalDisabled`, `engines.resolve_engine/eval_snapshot`, `jobs/run.py` drift branch, `first_run` skip, `adapters/real.py` override); 04/05 decide oneshot's api dependency; 09 removes module `eval_*` vars, eval parts of the root, bootstrap `eval`, eval tests; 10 owns O1 and eval's use of shared modules.
 
 ## Acceptance Criteria
 - Tag `engine-v0` exists on a pushed commit containing `api/`, `engines/{core,miti,oneshot}`, `config/`.

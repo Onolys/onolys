@@ -3,9 +3,9 @@ status: draft
 summary: In the new eval repo, replace eval's scattered metrics, 15 chart components and the English dataset converters with three libraries (metrics registry, chart registry, converter base class) driven by report YAML; then cut eval off the api worker and prod sessions by bumping to the new engine (`engine-v1`) and importing the api's leaf data, auth, tasks and transcription features by tag. New repo `Onolys/onolys-eval` is public; all old eval runs and data are dropped.
 date: 2026-11-28
 ---
-# PRD: 09 Eval libraries (metrics, charts, report YAML, converters, own run path)
+# PRD: 10 Eval libraries (metrics, charts, report YAML, converters, own run path)
 
-Repo/branch: Onolys/onolys-eval (public; `refactor/libraries`, after 03 created it) · Depends on: 03 (hard); P4 also needs tag `engine-v1`, cut after 04-06 merge (03 created `engine-v0`) · Owns: whole eval repo. Paths below are the new flattened ones; mapping: `eval/core`->`core/`, `eval/backend`->`backend/`, `eval/web`->`web/`, `eval/datasets`->`datasets/`, `eval/fixtures`->`fixtures/`. Does not own: engine (04/05), api features (06), Terraform restructure (08), per-slot metrics, Jev, per-volley experiments (separate PR), docs outside this repo.
+Repo/branch: Onolys/onolys-eval (public; `refactor/libraries`, after 03 created it) · Depends on: 03 (hard); P4 also needs tag `engine-v1`, cut after 04-06 merge (03 created `engine-v0`) · Owns: whole eval repo. Paths below are the new flattened ones; mapping: `eval/core`->`core/`, `eval/backend`->`backend/`, `eval/web`->`web/`, `eval/datasets`->`datasets/`, `eval/fixtures`->`fixtures/`. Does not own: engine (04/05), api features (06), Terraform restructure (09), per-slot metrics, Jev, per-volley experiments (separate PR), docs outside this repo.
 
 ## TL;DR
 Eval gets three libraries and one cut-over. (1) One **converter** base class; each dataset is a small subclass plus a `mapping.yaml` beside its manifest. (2) One **metrics registry**: named functions returning uniform rows. (3) One **chart registry** plus **report YAML** that says which metrics feed which charts; the backend evaluates a report, the web renders it. Phases P1-P3 run on the `engine-v0` pin, change no numbers, and keep eval deployed. P4 is the cut-over: bump to the new engine, give eval its own sessions and run executor (03 O1), and replace eval's copies of auth, Firestore, queue and STT with the api's leaf features (06 makes them importable), pulled by git tag. Out of scope per the brief: per-slot metrics, Jev, per-volley experiments.
@@ -86,9 +86,9 @@ onolys-api (tag): data, auth, tasks, transcription (leaf features)   onolys-engi
 ## Decisions
 | # | Decision | Choice | Alternatives considered | Why |
 |---|---|---|---|---|
-| D1 | Phase order | P1 converters, P2 metrics, P3 charts+YAML, P4 cut-over | 03's "own sessions first" | Own sessions cannot be built on the old pin without writing the executor twice (api worker is the only run path until the new `Engine.run`); P1-P3 need nothing from 04-06 and run on `engine-v0`. If 06 has landed when 09 starts, run P4 first |
+| D1 | Phase order | P1 converters, P2 metrics, P3 charts+YAML, P4 cut-over | 03's "own sessions first" | Own sessions cannot be built on the old pin without writing the executor twice (api worker is the only run path until the new `Engine.run`); P1-P3 need nothing from 04-06 and run on `engine-v0`. If 06 has landed when 10 starts, run P4 first |
 | D2 | Shared features | Depend on `onolys-api` by tag, import only the four leaf features | Extract a shared package; keep eval's copies restructured | One implementation (rule 9) with no new repo or release process; the api is already a pinned dependency. No copies: if the api is not leaf, fix the api (06) |
-| D3 | Engine upgrade | Part of 09 (P4 step 1), same step as own run path | Separate step | Same change: stop using the api worker = call the new engine directly |
+| D3 | Engine upgrade | Part of 10 (P4 step 1), same step as own run path | Separate step | Same change: stop using the api worker = call the new engine directly |
 | D4 | Who renders a report | Backend computes rows, web draws charts | Web computes from raw data; backend renders HTML | Metrics need Python, gold, prices; payload is already server-side today |
 | D5 | Metric contract | Decorated function, uniform `Row`, dims, `better`, `needs` | Class per metric; free-form dict per tab | Uniform rows are what let any chart take any compatible metric; `better` and `needs` replace repeated best/n-a code |
 | D6 | Chart contract | `{rows, options}` + manifest + auto table twin | Keep 13 components, add YAML only | A shared base removes the per-chart table/CSS; merges 15 components into 7 ids |
@@ -111,7 +111,7 @@ onolys-api (tag): data, auth, tasks, transcription (leaf features)   onolys-engi
 - [RESOLVED: delete] O5: `midas-es`, `phac-fr` and all non-English converters deleted; `phac-en` kept.
 - [RESOLVED: no promotion] O6: eval keeps `DataTable`, `Disclosure`, `StatTile`; adopts only existing `@onolys/common` equivalents.
 - [RESOLVED: follow 04] O7: eval's own `config/` copy follows 04's format.
-- [RESOLVED: yes, in P4 step 1] 03 O1 "own sessions" handed to 09.
+- [RESOLVED: yes, in P4 step 1] 03 O1 "own sessions" handed to 10.
 - [DEFERRED] Per-slot metrics, Jev, per-volley/per-global experiments; trimming staging/prod from eval Terraform; a converters mapping for new datasets.
 - Risk: a refactor silently shifts a number. Mitigation: before P2, capture today's `overview/deep-dive/analysis/lines` payloads on all 14 `fixtures/compare` scenarios as goldens; P2 must match exactly, P3 must match value-for-value through the new reports.
 - Risk: converter output drifts. Mitigation: pre-refactor characterization: run old English converters on each test sample and commit outputs; new classes must be byte-identical.

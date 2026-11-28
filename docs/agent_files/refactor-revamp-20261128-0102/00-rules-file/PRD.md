@@ -20,7 +20,7 @@ Write the 16 agreed rules as a short, enforceable doc every later sub-project an
 
 ## Goals / Non-Goals
 **Goals:** one citable rules doc (stable numbers 1-16); design rules moved with history and references fixed; agents reliably pointed at both; owner decisions on rules 2, 7, 10 recorded in the doc.
-**Non-Goals:** applying the rules to code (01, 04-09 do); rewriting design rules' content; ADR fold-in / `architecture.md` (rule 13 is stated but applies after the docs freeze); new lint/CI checks; docs changes beyond the files above.
+**Non-Goals:** applying the rules to code (01, 04-10 do); rewriting design rules' content; ADR fold-in / `architecture.md` (rule 13 is stated but applies after the docs freeze); new lint/CI checks; docs changes beyond the files above.
 
 ## Requirements
 **R1 coding-rules.md.** Same shape as design-rules.md: numbered rules, each with **Do / Don't** and a short example where useful; grouped Structure (1-6), Code shape (7-11), Docs and tests (12-14), UI and clean-up (15-16). Numbers are fixed so PRDs cite "rule 9". Language-neutral wording; examples in Python, with the TS equivalent noted where it differs (`constants.ts`, `web/tests/`). Rule contract (wording locked by brainstorm; examples are this PRD's):
@@ -67,7 +67,7 @@ coding-rules.md layout: 3-line header (scope, enforcement, copied-per-repo note)
 ## Decisions
 | # | Decision | Choice | Alternatives considered | Why |
 |---|---|---|---|---|
-| 1 | Rule numbering | Keep brainstorm 1-16 verbatim | Regroup/renumber | Brainstorm, PRDs 01-09 already cite these numbers |
+| 1 | Rule numbering | Keep brainstorm 1-16 verbatim | Regroup/renumber | Brainstorm, PRDs 01-10 already cite these numbers |
 | 2 | Format | Do/Don't + short example, as design-rules.md | Prose essay | Matches existing doc; checkable by a reviewer |
 | 3 | Two docs | coding-rules and design-rules separate, same folder | One merged file | Locked; agents load only what applies |
 | 4 | Move mechanics | `git mv`, content unchanged | Copy + redirect stub | Rule 16 (no legacy); history kept. The "eval/web" scope line in it is stale after the eval split; 03 edits it then |

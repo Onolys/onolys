@@ -8,7 +8,7 @@ date: 2026-11-28
 Repo/branch: Onolys/onolys / `refactor/revamp` · Depends on: 00-rules-file (rule 16 and rule 12 text exist) · Owns: the test files, compat code, spec-id text and CI scripts listed below. Edits only the minimum other lines needed to stay green. Docs untouched (`docs/` incl. ADRs and `docs/agent_files`), except regenerated contract files (R7).
 
 ## TL;DR
-Rule 16 says delete retired, superseded and "for compatibility" code before launch. This SP does that as pure deletion in six batches, each leaving lint and tests green. It touches no Terraform and no cloud state. Candidate cloud-state deletions (`removed {}` blocks, retired auth domains, old deployer SA) are listed and handed to 08 with owner steps. The legacy CSS layer is already gone from code; only a guard test and one README line remain.
+Rule 16 says delete retired, superseded and "for compatibility" code before launch. This SP does that as pure deletion in six batches, each leaving lint and tests green. It touches no Terraform and no cloud state. Candidate cloud-state deletions (`removed {}` blocks, retired auth domains, old deployer SA) are listed and handed to 09 with owner steps. The legacy CSS layer is already gone from code; only a guard test and one README line remain.
 
 ## Problem
 Later SPs would move and rewrite code that is already dead. Evidence:
@@ -22,7 +22,7 @@ Later SPs would move and rewrite code that is already dead. Evidence:
 
 ## Goals / Non-Goals
 **Goals:** everything in R1-R6 removed; CI green after every batch; ids and compat gone from code.
-**Non-goals:** any `.tf`, `.firebaserc`, `firebase.json` change (08); folder moves, renames, fakes (04/06/07); eval split items (03); `docs/` edits; deleting cloud resources or GitHub variables (Manual steps).
+**Non-goals:** any `.tf`, `.firebaserc`, `firebase.json` change (09); folder moves, renames, fakes (04/06/07/08); eval split items (03); `docs/` edits; deleting cloud resources or GitHub variables (Manual steps).
 
 ## Requirements
 **R1 Guard, migration and parity tests (delete).**
@@ -35,7 +35,7 @@ Later SPs would move and rewrite code that is already dead. Evidence:
 | `web/src/hosting/styles.test.ts` | asserts no `legacy` CSS (R6) |
 | `infra/scripts/test_{no_admin,budget_removed,nightly_gemini_secret}.py` | removal guards |
 | In mixed files delete only the "is gone" functions: `api/tests/test_config.py::test_daily_run_cap_removed_everywhere`, `test_failure_kind.py::…are_gone`, `test_decide_cancel.py::test_reexported_from_charging`, `miti/tests/test_run.py::test_public_reexports`, `test_types.py::test_extracted_llm_has_no_miti_reexports`, `test_report_schema.py::test_schema_has_no_old_run_info_keys`, `infra/scripts/test_legacy_root_prod_only.py::{test_no_staging_or_eval…,test_no_old_staging…,test_no_eval_hosting…}`, `test_isolated_environment.py` legacy-name test | `grep -n "def test.*(removed|gone|reexport|legacy|old_)"` |
-Kept on purpose: `api/tests/test_fake_real_parity.py` (06 deletes it with the fakes); `eval/core/tests/test_repo_guard.py` (dataset-leak guard, 03); `engines/core/tests/test_{claude,openai}_compatibility.py` (LiteLLM behaviour tests, not legacy despite the name); `test_llm_migration.py` (live structure test, rename in 04); positive infra tests (08 reviews them).
+Kept on purpose: `api/tests/test_fake_real_parity.py` (06 deletes it with the fakes); `eval/core/tests/test_repo_guard.py` (dataset-leak guard, 03); `engines/core/tests/test_{claude,openai}_compatibility.py` (LiteLLM behaviour tests, not legacy despite the name); `test_llm_migration.py` (live structure test, rename in 04); positive infra tests (09 reviews them).
 
 **R2 Compat code (delete code and its tests).**
 | Item | Where | Notes |
@@ -46,7 +46,7 @@ Kept on purpose: `api/tests/test_fake_real_parity.py` (06 deletes it with the fa
 | Back-compat env | `core/llm/routes.py` `MITI_MODEL_CHEAP/MID/STRONG` (+ tests `test_routes.py:142`, `test_llm_override.py`) | set nowhere outside tests [verified: grep → tests + routes.py only]. Keep `LLM_PROVIDER/MODEL/EFFORT` (deploy workflows set them) and `MITI_LLM_RESPONSE_FORMAT` (oneshot golden test; 04 decides) |
 | Stale text | `api/.../errors.py:34` "admin pack routes"; `scripts/README.md:8` retired-admin line; `ci.yml:468` old names in the image-import loop (keep `onolys_eval`) | |
 | Eval old-run readers | `eval/backend/read_runs.py` `is_legacy`, scheduler `tick_seq` legacy docs, `eval/web` `legacy_selection` paths | [RESOLVED: delete] O2; old eval runs/data dropped, no migration |
-Left for others: `adapters/validated.py` "legacy/fake adapter bridge" and `adapters/fake.py` (06); core `Turn = TranscriptTurnV1` aliases (04); eval `REMOVED_ENV` (tied to `test_eval_image.sh`, 03); eval `upload.py` bucket defaults and the ≤25 MiB multipart upload path (03/09).
+Left for others: `adapters/validated.py` "legacy/fake adapter bridge" and `adapters/fake.py` (06); core `Turn = TranscriptTurnV1` aliases (04); eval `REMOVED_ENV` (tied to `test_eval_image.sh`, 03); eval `upload.py` bucket defaults and the ≤25 MiB multipart upload path (03/10).
 
 **R3 Spec/planning ids in code and comments.** Rewrite each to plain words (rule 12), never blind-delete a sentence. Counts [verified: `git grep -nE '\b(PRD|SP[0-9]{1,2}|FX[0-9]+|AC[0-9]+|R[0-9]{1,2}[a-z]?|D[0-9]{1,2}|ADR ?[0-9]+)\b'`, non-md, excluding generated/fixtures; upper bound, a few false hits]:
 | Package | src lines/files | tests lines/files |
@@ -54,7 +54,7 @@ Left for others: `adapters/validated.py` "legacy/fake adapter bridge" and `adapt
 | api | 163/59 | 122/67 |
 | engines | 48/35 | 24/18 |
 | eval | 39/22 | 19/18 |
-| web | 98/64 | 65/28 (`web/src/mocks`: 29 more, 07 deletes it) |
+| web | 98/64 | 65/28 (`web/src/mocks`: 29 more, 08 deletes it) |
 Also task-slug refs ("05-processing-screen R4", "03-failure-policy") and engine data files (`pack.yaml`, `miti-result.schema.json`, `rating.schema.json` `$comment`s). Test names carrying ids (`describe("…FX17")`) are reworded, not renamed files (14 is 06/07).
 
 **R4 `scripts/ci/` (36 files).**
@@ -67,13 +67,13 @@ Also task-slug refs ("05-processing-screen R4", "03-failure-policy") and engine 
 | Left for 03 (eval-only) | `set_eval_origin.sh`, `test_deploy_eval.sh`, `test_eval_image.sh`, `test_hosting_targets.sh`, `test_verify_staging_release.cjs`, `test_workflow_run_guard.py` (only `deploy-eval.yml` uses `workflow_run` [verified]) |
 `ci.yml` `guards` job shrinks to: key guard (no planted-fixture step), a direct `bash scripts/ci/check_config.sh`, actionlint. Remove the old-name import loop entries (R2). Callers of kept scripts verified: `deploy-prod.yml:84,129-131`, `deploy-staging.yml:69-118`, `pr-preview*.yml`. `gen_miti_schema.py` stays in `scripts/` for 04 (D4).
 
-**R5 `infra/`: tests and one script only.** Delete `infra/scripts/check-staging.py` + `test_check_staging.py` (hard-codes `PROJECT="onolys"` for the retired in-prod-project staging; no caller in workflows/docs [verified: grep]). Delete the guards in R1. No `.tf` file changes, so `terraform plan` is unchanged by this SP. Kept and handed to 08:
+**R5 `infra/`: tests and one script only.** Delete `infra/scripts/check-staging.py` + `test_check_staging.py` (hard-codes `PROJECT="onolys"` for the retired in-prod-project staging; no caller in workflows/docs [verified: grep]). Delete the guards in R1. No `.tf` file changes, so `terraform plan` is unchanged by this SP. Kept and handed to 09:
 | Item | Why not deleted here |
 |---|---|
 | `removed {}` blocks (`main.tf`, `budget.tf`) | deleting while the resource is still in state makes the next plan destroy it |
 | `retired_authorized_domains` + `app_staging_site_id` (`identity.tf`) | changing the list re-triggers a provisioner that patches live Identity Platform config |
 | `deployer_staging` SA + WIF (`deployer.tf`) | still used: `deploy-prod.yml:88-89` auths with `vars.WIF_PROVIDER` + `vars.DEPLOYER_STAGING_SA` to read staging |
-| `examples/*prod*`, `.firebaserc` `app-staging`/`eval-staging` entries, `firebase.json` `staging`/`eval` DBs | Firebase/infra layout is 08 |
+| `examples/*prod*`, `.firebaserc` `app-staging`/`eval-staging` entries, `firebase.json` `staging`/`eval` DBs | Firebase/infra layout is 09 |
 
 **R6 Legacy CSS layer.** Already removed in code [verified: `web/src/styles/index.css` has `@layer theme, base, components, utilities`, no `legacy-app.css` tracked; `eval/web` has no legacy layer]. Delete `web/src/hosting/styles.test.ts`; fix `web/README.md:8` (names a layer that no longer exists).
 
@@ -102,7 +102,7 @@ Batches, in order, one commit each, and the checks to run:
 
 ## Manual steps
 1. After merge, owner deletes stale GitHub repo variables `STAGING_VITE_FIREBASE_*` and `STAGING_VITE_CONTACT_EMAIL` if unused. Keep `WIF_PROVIDER`, `DEPLOYER_STAGING_SA`, `DEPLOYER_PROD_SA`.
-2. Owner confirms `terraform state list` (prod root) lacks `google_secret_manager_secret.provider` and `google_billing_budget.monthly` before 08 removes the `removed {}` blocks.
+2. Owner confirms `terraform state list` (prod root) lacks `google_secret_manager_secret.provider` and `google_billing_budget.monthly` before 09 removes the `removed {}` blocks.
 3. Owner retires old staging resources in project `onolys` (Hosting site `onolys-app-staging`, old Cloud Run/DB) and the retired auth domains. Agents never apply or delete cloud resources.
 
 ## Risks / Open Questions
@@ -111,8 +111,8 @@ Batches, in order, one commit each, and the checks to run:
 - [RESOLVED: yes] O3: edit one line each in `web/README.md:8` and `scripts/README.md:8` (outside `docs/`).
 - [RESOLVED: ruleset `main` lists `required_status_checks: []`, so no check name is enforced; changing job structure cannot block merges] [verified: `gh api rulesets/24909559`].
 - [RESOLVED: dropping `test_deploy_prod.sh` loses pins on deploy-prod invariants (production environment, sha format); accepted by the brainstorm "drop tests of tests"].
-- [DEFERRED: 08] `removed {}`, retired domains, `deployer_staging`, `.firebaserc`, `firebase.json`.
-- [DEFERRED: 08] moving `deploy-prod` `resolve` to `STAGING_DEPLOYER_SA` (needs new IAM in the staging project).
+- [DEFERRED: 09] `removed {}`, retired domains, `deployer_staging`, `.firebaserc`, `firebase.json`.
+- [DEFERRED: 09] moving `deploy-prod` `resolve` to `STAGING_DEPLOYER_SA` (needs new IAM in the staging project).
 - Risk: deleting compat code may drop api coverage below 94 (CI gate); batch 2 runs the combined gate locally first.
 
 ## Acceptance Criteria

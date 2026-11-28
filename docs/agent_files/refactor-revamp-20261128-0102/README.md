@@ -1,6 +1,6 @@
 ---
 status: draft
-summary: Onolys revamp — index of 10 sub-project PRDs
+summary: Onolys revamp — index of 11 sub-project PRDs
 date: 2026-11-28
 ---
 # refactor/revamp
@@ -19,21 +19,23 @@ Design stage. PRDs reviewed, OPENs resolved; next dev-critique then dev-tasks. N
 | [04-engine-package/PRD.md](04-engine-package/PRD.md) | One `engine/` package (`onolys_engine`): YAML pipelines over step + scoring library, typed state, one public surface; STT/voice/rating/scenarios move to api; same outputs proven by goldens |
 | [05-engine-behaviour/PRD.md](05-engine-behaviour/PRD.md) | In-order uncapped context, volley split after reflection, one instruction source, one-shot rebuilt (`oneshot-single`, `oneshot-split`); no numbered units now (quotes kept; units follow-up) |
 | [06-api-by-feature/PRD.md](06-api-by-feature/PRD.md) | `api/` one folder per feature; one data layer replaces `repo/` + fake; fakes replaced by Firestore + Auth emulators and stubs; combined local mode; HTTP contract unchanged |
-| [07-web-layout/PRD.md](07-web-layout/PRD.md) | `web/src` into `app/` + `features/`; all tests in one `web/tests/`; delete `mocks/`; local dev and e2e run real API stack; no visual change |
-| [08-infra-per-env/PRD.md](08-infra-per-env/PRD.md) | One Terraform root, folder per env (tfvars, backend, runtime YAML); `config/` + isolated-environment deleted; Firebase config in `firebase/`; infra tests 19 to 3; plan-proven `moved` blocks, owner applies |
-| [09-eval-libraries/PRD.md](09-eval-libraries/PRD.md) | In eval repo: metrics registry, chart registry, converter base class, report YAML; then own run path (engine pin `engine-v0` then `engine-v1`, own sessions, reuse api leaf modules by tag) |
+| [07-web-layout/PRD.md](07-web-layout/PRD.md) | `web/src` into `app/` + `features/`; all tests and Playwright in one `web/tests/`; `ROUTES` constant; `features/auth` split; moves only, no visual change |
+| [08-web-real-stack/PRD.md](08-web-real-stack/PRD.md) | Delete web `mocks/` + MSW worker; local dev and e2e run real API stack (06 combined mode); unit tests stub only HTTP; emulator-backed `npm test`; e2e + CI re-platform |
+| [09-infra-per-env/PRD.md](09-infra-per-env/PRD.md) | One Terraform root, folder per env (tfvars, backend, runtime YAML); `config/` + isolated-environment deleted; Firebase config in `firebase/`; infra tests 19 to 3; plan-proven `moved` blocks, owner applies |
+| [10-eval-libraries/PRD.md](10-eval-libraries/PRD.md) | In eval repo: metrics registry, chart registry, converter base class, report YAML; then own run path (engine pin `engine-v0` then `engine-v1`, own sessions, reuse api leaf modules by tag) |
 
 ## Build order
 
 ```
 00 rules → 01 legacy-purge → 02 ui-package → 03 eval-split → 04 engine-package ─┬→ 05 engine-behaviour
-                                                                                 └→ 06 api-by-feature ─┬→ 07 web-layout
-                                                                                                       └→ 08 infra-per-env
-03 → 09 eval-libraries (eval repo; its P4 engine-pin upgrade waits for 04/05/06)
+                                   │                                             └→ 06 api-by-feature ─┬→ 08 web-real-stack (needs 06 + 07)
+                                   └→ 07 web-layout ───────────────────────────────────────────────────┘ └→ 09 infra-per-env
+03 → 10 eval-libraries (eval repo; its P4 engine-pin upgrade waits for 04/05/06)
 ```
 
 - 03 must land before 04: 04 deletes the old engine packages; eval must already be out (04 O1).
-- 08 assumes order 01 → 03 → 04 → 06 → 08. 08 only moves `routes.yaml`; 04 owns its content.
+- 07 needs only 02 (no dependency on 06); 08 needs 06 (combined local mode) and 07.
+- 09 assumes order 01 → 03 → 04 → 06 → 09. 09 only moves `routes.yaml`; 04 owns its content.
 
 ## Locked decisions (brainstorm)
 
@@ -66,30 +68,31 @@ Design stage. PRDs reviewed, OPENs resolved; next dev-critique then dev-tasks. N
 ## Owner decisions (2026-11-28)
 
 **General**
-- Spikes (02 Auth emulator under vitest; 03 uv git-subdir deps; 06 O1 CI job merge; 06 O3 Admin SDK + emulator tokens; 07 O7; 08 O3 firebase-tools `--config`): run, REPORT to owner, owner decides. No automatic fallback; fallbacks are options to present.
+- Spikes (02 Auth emulator under vitest; 03 uv git-subdir deps; 06 O1 CI job merge; 06 O3 Admin SDK + emulator tokens; 08 O5; 09 O3 firebase-tools `--config`): run, REPORT to owner, owner decides. No automatic fallback; fallbacks are options to present.
 - No cross-repo copies/random deps, except accepted: eval keeps own `config/` copy; rules files copied per repo.
-- Pin tag `engine-v0` (not `eval-base-v0`), created by 03 (snapshot still has api + engine packages + config). Second tag `engine-v1` after 04-06 merge, for 09 P4.
+- Pin tag `engine-v0` (not `eval-base-v0`), created by 03 (snapshot still has api + engine packages + config). Second tag `engine-v1` after 04-06 merge, for 10 P4.
 - New repo `Onolys/onolys-eval` is PUBLIC.
 - All old eval runs/data dropped; no mapping/migration of ids or runs.
 - English only: delete `midas-es`, `phac-fr` and all non-English converters; keep `phac-en` (strip non-English parts of `phac.py`).
 - Rename `onolys-ui` to `onolys-common`, `@onolys/ui` to `@onolys/common`, inside 02 (incl. landing imports). Agent does the repo rename (`gh repo rename`).
-- Terraform apply for 08 is done by the agent, not the owner.
+- Terraform apply for 09 is done by the agent, not the owner.
 - STT/voice/rating/scenarios move into api as-is in 04, consolidated in 06: accepted.
 
 **00 rules**: rule 2 (~300 lines) guidance only, not a CI gate. Rule 7 rewritten: class for major concepts even with one variant, plain/static functions otherwise, no over-engineering, max one inheritance level. Engine shared via git tag, no registry. Rules copied into each repo, synced by hand. TS `constants.ts` per app/package adopted.
 **01**: `dorny/paths-filter` approved. Delete eval pre-matrix readers. Edit the 2 README lines.
 **02**: Auth-emulator spike first, report before choosing fallback. `legacy.css` removed entirely, unconditionally (plus landing import if any). `lib/spans.ts` deleted. `theme-init.js` shipped by package, apps copy into `public/`. onolys-common keeps own rules copy; design-rules gains "UI pieces come from `@onolys/common`". 02 owns the rename.
-**03**: Own sessions moves to 09. Eval repo public. uv spike, report. Eval Firestore rules deny-all (Admin SDK only). Worker image = tag + eval's own `config/` overlay.
+**03**: Own sessions moves to 10. Eval repo public. uv spike, report. Eval Firestore rules deny-all (Admin SDK only). Worker image = tag + eval's own `config/` overlay.
 **04**: 03 lands first, creates `engine-v0`. Engine passes unknown preset keys through. Fixtures ship in wheel. `oneshot:miti` renamed `oneshot-single`; old runs dropped. Provenance hash change accepted. `oneshot-raw` dropped. Pipeline deviation (no `verify.map_units`; rules/caps in `protocol.yaml`) approved.
 **05**: No numbered units now; units-vs-quotes is a follow-up (quotes kept; in-order uncapped context stays). No gating, baseline or measurement: comparison gate (O5) and live/eval measurement checks removed; batch size 25 unmeasured. Reflection split reads last 1 clinician utterance. One-shot honours `n_runs`, tips from the representative run.
 **06**: O1 decide after test. Keep `[fail:*]` as `stub_hint` only when `ADAPTERS=stub`. O3 decide after spike. Delete `test_acceptance_checklist.py`. `FixtureClient` via public `make_client`. Rating schema built from `Engine.protocol()` at startup.
-**07**: O1, O2, O6 default; O7 after 02 spike. `ROUTES` holds ALL web URL paths. Split `features/auth` (`useApiClient` to `api/`, `createAuthService` to `app/`). e2e pauses status requests via `page.route`; no API stub change.
-**08**: Keep `create-test-user.py`. `models.yaml` stays in `infra/`. `--config` spike, report. CHANGED: staging gets prod's password-policy/email-URL provisioner (live change; agent applies Terraform).
-**09**: No fallback copies: 06 makes data/auth/tasks/transcription leaf modules, fix api rather than copy. Eval on `engine-v0`, then `engine-v1` for P4. Delete old eval run data. Worker = second Cloud Run service from the same eval image. Delete non-English converters. Keep DataTable/Disclosure/StatTile in eval. Eval config follows 04's format.
+**07**: `ROUTES` holds ALL web URL paths. Split `features/auth` (`useApiClient` to `api/`, `createAuthService` to `app/`).
+**08**: O1, O2, O4 default; O5 after 02 spike. e2e pauses status requests via `page.route`; no API stub change.
+**09**: Keep `create-test-user.py`. `models.yaml` stays in `infra/`. `--config` spike, report. CHANGED: staging gets prod's password-policy/email-URL provisioner (live change; agent applies Terraform).
+**10**: No fallback copies: 06 makes data/auth/tasks/transcription leaf modules, fix api rather than copy. Eval on `engine-v0`, then `engine-v1` for P4. Delete old eval run data. Worker = second Cloud Run service from the same eval image. Delete non-English converters. Keep DataTable/Disclosure/StatTile in eval. Eval config follows 04's format.
 
 ## Owner-only follow-ups
 
-See `/root/projects/onolys/onolys/docs/agent_files/owner-follow-ups.md` (untracked, primary checkout). Owner reviews spike reports (02, 03, 06, 07, 08) and decides. 06/07: dev machine needs `firebase-tools` + Java.
+See `/root/projects/onolys/onolys/docs/agent_files/owner-follow-ups.md` (untracked, primary checkout). Owner reviews spike reports (02, 03, 06, 08, 09) and decides. 06/08: dev machine needs `firebase-tools` + Java.
 
 ## Next steps
 
