@@ -3,7 +3,7 @@ name: pr-preview-cleanup
 # Delete the PR preview (SP00 R3): restore the onolys-api-staging service template to the serving revision (no-op normally),
 # remove tag pr-<N> from it, delete that PR's revisions, delete Hosting channel pr-<N>. Not-found is ignored,
 # so re-running on a clean PR succeeds. Same target and WIF identity as pr-preview.yml (isolated staging with the limited
-# pr-preview-staging identity when vars.STAGING_GCP_PROJECT is set, else the legacy project); same-repo PRs only (fork PRs have none).
+# pr-preview-staging identity in vars.STAGING_GCP_PROJECT); same-repo PRs only (fork PRs have none).
 # Authorized-domain note: firebase-tools may warn that it cannot remove the channel domain from Firebase Auth; the preview identity
 # deliberately has no firebaseauth.admin, so that warning is accepted (previews use email/password, no Google sign-in).
 # Shares the concurrency group with pr-preview.yml and cancels an in-flight deploy for the same PR.
@@ -19,8 +19,8 @@ permissions:
   contents: read
 
 env:
-  GCP_PROJECT: ${{ vars.STAGING_GCP_PROJECT || vars.GCP_PROJECT || 'onolys' }}
-  PREVIEW_SITE: ${{ vars.STAGING_GCP_PROJECT && vars.STAGING_HOSTING_SITE || 'onolys-app-staging' }}
+  GCP_PROJECT: ${{ vars.STAGING_GCP_PROJECT }}
+  PREVIEW_SITE: ${{ vars.STAGING_HOSTING_SITE }}
   GCP_REGION: ${{ vars.GCP_REGION || 'us-central1' }}
   FIREBASE_TOOLS_VERSION: 15.37.0
 
@@ -45,8 +45,8 @@ jobs:
         run: python3 scripts/ci/release_target.py preview-cleanup
       - uses: google-github-actions/auth@v2
         with:
-          workload_identity_provider: ${{ vars.STAGING_GCP_PROJECT && vars.STAGING_PREVIEW_WIF_PROVIDER || vars.WIF_PROVIDER }}
-          service_account: ${{ vars.STAGING_GCP_PROJECT && vars.STAGING_PREVIEW_SA || vars.DEPLOYER_STAGING_SA }}
+          workload_identity_provider: ${{ vars.STAGING_PREVIEW_WIF_PROVIDER }}
+          service_account: ${{ vars.STAGING_PREVIEW_SA }}
       - uses: actions/setup-node@v4
         with:
           node-version: 22

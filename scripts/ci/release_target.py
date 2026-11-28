@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
 """Validate explicit release target bundles and create local Hosting target mappings.
 
-STAGING_GCP_PROJECT is the activation switch for staging: prepare the other repository variables first.
-Eval always runs isolated (EVAL_GCP_PROJECT required).
+Staging and eval always run isolated (STAGING_GCP_PROJECT / EVAL_GCP_PROJECT required).
 No cloud commands or credentials are used here.
 """
 import argparse
@@ -13,20 +12,13 @@ import re
 import sys
 
 
-LEGACY_SITES = {'onolys-app', 'onolys-app-staging', 'onolys-eval-staging'}
-
-
 def validate(role: str, env: dict[str, str]) -> None:
     prefix = role.upper()
     project = env.get(f'{prefix}_GCP_PROJECT', '')
     if not project:
-        if role == 'eval':
-            # Eval has no legacy target (its site and prod sign-in were removed): it always runs in onolys-eval.
-            raise ValueError('EVAL_GCP_PROJECT must be onolys-eval; eval no longer has a legacy target')
-        return
+        raise ValueError(f'{prefix}_GCP_PROJECT must be onolys-{role}')
     if project != f'onolys-{role}':
-        hint = '; clear it to use the legacy target' if role == 'staging' else ''
-        raise ValueError(f'{prefix}_GCP_PROJECT must be onolys-{role}{hint}')
+        raise ValueError(f'{prefix}_GCP_PROJECT must be onolys-{role}')
     values = {field: env.get(f'{prefix}_{field}', '') for field in ('WIF_PROVIDER', 'DEPLOYER_SA', 'HOSTING_SITE')}
     missing = [f'{prefix}_{field}' for field, value in values.items() if not value]
     if missing:
@@ -36,7 +28,6 @@ def validate(role: str, env: dict[str, str]) -> None:
     if not re.fullmatch(r'[a-z][a-z0-9-]*@' + re.escape(project) + r'\.iam\.gserviceaccount\.com', values['DEPLOYER_SA']):
         raise ValueError(f'{prefix}_DEPLOYER_SA must belong to {project}')
     if role == 'staging':
-        # Staged separately so preparing a new web app cannot change the legacy web build.
         for field in ('API_KEY', 'AUTH_DOMAIN', 'APP_ID'):
             value = env.get(f'STAGING_ISOLATED_VITE_FIREBASE_{field}', '')
             if not value or any(char.isspace() for char in value):
@@ -58,17 +49,15 @@ def validate(role: str, env: dict[str, str]) -> None:
     site = values['HOSTING_SITE']
     if role == 'staging' and site != 'onolys-staging-app':
         raise ValueError('STAGING_HOSTING_SITE must be onolys-staging-app (the supported callback origin)')
-    if not re.fullmatch(r'[a-z0-9][a-z0-9-]{2,28}[a-z0-9]', site) or site in LEGACY_SITES:
+    if not re.fullmatch(r'[a-z0-9][a-z0-9-]{2,28}[a-z0-9]', site):
         raise ValueError(f'{prefix}_HOSTING_SITE must name a new isolated Firebase Hosting site')
 
 
 def validate_preview(env: dict[str, str], web: bool = True) -> None:
-    """PR previews follow STAGING_GCP_PROJECT. Isolated mode needs its own limited identity; never fall back to another one."""
+    """PR previews run in the isolated staging project with their own limited identity; never fall back to another one."""
     project = env.get('STAGING_GCP_PROJECT', '')
-    if not project:
-        return
     if project != 'onolys-staging':
-        raise ValueError('STAGING_GCP_PROJECT must be onolys-staging; clear it to use the legacy target')
+        raise ValueError('STAGING_GCP_PROJECT must be onolys-staging')
     provider = env.get('STAGING_PREVIEW_WIF_PROVIDER', '')
     account = env.get('STAGING_PREVIEW_SA', '')
     site = env.get('STAGING_HOSTING_SITE', '')
@@ -93,7 +82,7 @@ def validate_preview(env: dict[str, str], web: bool = True) -> None:
 
 
 def configure_hosting(config: Path, project: str, target: str, site: str) -> None:
-    """Map only the requested target in this job's checkout; retain checked-in legacy mappings."""
+    """Map only the requested target in this job's checkout; retain checked-in mappings."""
     data = json.loads(config.read_text())
     hosting = data.get('hosting', [])
     hosting = [hosting] if isinstance(hosting, dict) else hosting

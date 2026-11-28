@@ -56,7 +56,7 @@ jobs:
   resolve:
     # Registry and staging provenance are read using the staging project and identity.
     env:
-      PROJECT: ${{ vars.STAGING_GCP_PROJECT || vars.GCP_PROJECT || 'onolys' }}
+      PROJECT: ${{ vars.STAGING_GCP_PROJECT }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
