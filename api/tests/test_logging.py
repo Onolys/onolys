@@ -8,8 +8,7 @@ import logging
 import pytest
 import test_run
 import test_worker
-from onolys_engine_core.json_logging import render
-from onolys_engine_core.safe_log import ALLOWED_FIELDS
+from log_helpers import render
 from test_run import CARD
 from test_worker import SID, payload, runner_with
 
@@ -18,6 +17,7 @@ from onolys_api.adapters import FakeEvaluation
 from onolys_api.config import Settings
 from onolys_api.jobs.queue import TaskPayload
 from onolys_api.jobs.worker import PermanentError, RetryableError
+from onolys_api.logs import ALLOWED_FIELDS
 
 # env is parametrized [fake, firestore]; [firestore] twins run only for tests marked
 # @pytest.mark.firestore_smoke (see conftest.py).

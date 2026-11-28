@@ -19,7 +19,6 @@ from miti_fixtures import TRANSCRIPT, patch_engine
 from onolys_engine_core.errors import InputError
 from onolys_engine_core.llm import LLMUnavailable, StubClient
 from onolys_miti.run import AllRunsFailed
-from onolys_miti.stt.fixture import FixtureStt, uri_hash
 from test_transcribe import words
 
 from onolys_api.adapters import build_adapters
@@ -27,6 +26,7 @@ from onolys_api.adapters.real import RealEvaluation, RealStt
 from onolys_api.app import create_app
 from onolys_api.jobs.transcribe import TRANSCRIPT_ID
 from onolys_api.repo.fake import FakeRepo
+from onolys_api.transcription.fixture import FixtureStt, uri_hash
 
 pytestmark = pytest.mark.integration
 ROUTES = (

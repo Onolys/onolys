@@ -24,7 +24,7 @@ from onolys_engine_core.context import RunContext
 from onolys_engine_core.errors import InputError, OnolysError, RunAborted
 from onolys_engine_core.llm import LLMClient, LLMError, MetricsCollector
 from onolys_engine_core.llm.routes import Route, resolve_preset
-from onolys_engine_core.safe_log import log_event, register_fields
+from onolys_engine_core.safe_log import log_event
 from onolys_engine_core.transcript import Transcript
 from pydantic import BaseModel
 
@@ -56,8 +56,6 @@ from onolys_miti.tips import TipsArtifact
 Stage = Literal["code", "tips", "assemble"]
 StageStatus = Literal["started", "done", "failed"]
 ProgressCb = Callable[[Stage, StageStatus], None]
-
-register_fields({"run_index", "n_runs", "runs_ok", "stage", "stage_status"})
 
 ROUTES = (code_mod.ROUTE, globals_mod.ROUTE)
 _FAILURES = (code_mod.CodePassFailed, globals_mod.GlobalsPassFailed, LLMError)

@@ -140,7 +140,7 @@ async def test_a_caller_coded_span_reaches_the_engine_unchanged(coded_span):
 
 
 async def test_session_stt_provenance_passes_outside_transcript():
-    from onolys_miti.stt import SttRun
+    from onolys_api.transcription import SttRun
 
     engine = Engine()
     run = SttRun(provider="fixture", model="fixture", language_requested="en",

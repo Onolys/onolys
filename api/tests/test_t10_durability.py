@@ -12,7 +12,7 @@ from datetime import UTC, datetime
 import httpx
 import pytest
 from audio_helpers import A, StubTools, tiny_wav
-from onolys_engine_core.json_logging import render
+from log_helpers import render
 from test_auth_email_routes import EMAIL, RESET, Env
 from test_voice_relay import Env as VoiceEnv
 from test_voice_relay import connect, expect_close

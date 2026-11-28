@@ -33,7 +33,6 @@ from onolys_engine_core.llm.errors import (
 from onolys_miti.code_pass import CodePassFailed
 from onolys_miti.globals_pass import GlobalsPassFailed
 from onolys_miti.run import AllRunsFailed
-from onolys_miti.stt.google_chirp import SttProviderError
 from test_logging import failed
 from test_run import swap_eval
 from test_worker import SID, payload, runner_with
@@ -42,6 +41,7 @@ from onolys_api.adapters import AdapterError, FakeEvaluation
 from onolys_api.adapters.error_map import KIND_BY_CODE, PUBLIC_MESSAGES, classify, to_public
 from onolys_api.errors import ERROR_CODES
 from onolys_api.jobs.worker import MAX_ATTEMPTS, RetryableError
+from onolys_api.transcription.google_chirp import SttProviderError
 
 # env is parametrized [fake, firestore]; [firestore] twins run only for tests/params marked
 # pytest.mark.firestore_smoke (see conftest.py).

@@ -5,14 +5,14 @@ import asyncio
 import logging
 
 import pytest
-from onolys_engine_core.json_logging import render
-from onolys_miti.voice import AudioOut, Interrupted, TurnComplete
-from onolys_miti.voice.fixture import FixtureVoice
+from log_helpers import render
 from test_voice_relay import TONE, Env, SeqVoice, connect, expect_close, ready
 from voice_helpers import serve
 
 import onolys_api.voice.relay as relay
 from onolys_api.repo.base import NotFoundError
+from onolys_api.voice import AudioOut, Interrupted, TurnComplete
+from onolys_api.voice.fixture import FixtureVoice
 
 pytestmark = pytest.mark.unit
 NOT_LIVE = {"type": "error", "code": "interview_not_live"}

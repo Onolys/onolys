@@ -1,4 +1,4 @@
-"""The api image must ship the Google STT client (core's stt-google extra)."""
+"""The api image must ship the Google STT client (a direct api dependency)."""
 
 import importlib
 

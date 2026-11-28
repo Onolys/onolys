@@ -3,9 +3,7 @@
 from datetime import UTC, datetime, timedelta
 
 import pytest
-from onolys_engine_core.json_logging import render
-from onolys_miti.stt import Word
-from onolys_miti.stt.fixture import FixtureStt, uri_hash
+from log_helpers import render
 
 from onolys_api.adapters import AdapterError, FakeStt
 from onolys_api.audio import canonical_key
@@ -22,6 +20,8 @@ from onolys_api.repo.models import (
     SttInfo,
     transcript_sha256,
 )
+from onolys_api.transcription import Word
+from onolys_api.transcription.fixture import FixtureStt, uri_hash
 
 pytestmark = pytest.mark.unit
 UID, SID = "u1", "s1"

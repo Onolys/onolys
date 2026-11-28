@@ -4,7 +4,7 @@ import random
 
 import pytest
 
-from onolys_engine_core.transcript_txt import parse_transcript_txt
+from onolys_api.transcription.transcript_txt import parse_transcript_txt
 
 pytestmark = pytest.mark.unit
 WORDS = " ".join(["example"] * 30)

@@ -6,8 +6,8 @@ falls back to the body; `user_agent` from the `User-Agent` header; `recorder_mim
 """
 
 from fastapi import Request
-from onolys_engine_core.log_context import snapshot
 
+from onolys_api.logs import snapshot
 from onolys_api.repo.models import ClientInfo
 
 

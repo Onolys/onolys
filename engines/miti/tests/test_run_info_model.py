@@ -8,11 +8,11 @@ from onolys_miti.run_info import (
     PackFacts,
     RunInfo,
     RunUsage,
+    SttRun,
     code_version,
     provider_of,
     route_facts,
 )
-from onolys_miti.stt import SttRun
 
 SECRET = "sk-ant-SECRETVALUE"
 

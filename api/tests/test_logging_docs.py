@@ -1,16 +1,13 @@
 """docs/reference/logging.md matches the code: every public error code is in its table,
 the runbook points at the session id, and relative links resolve."""
 
-import json
 import re
-import subprocess
-import sys
 from pathlib import Path
 
 import pytest
 
 from onolys_api.adapters.error_map import PUBLIC_MESSAGES
-from onolys_api.logs import API_FIELDS
+from onolys_api.logs import ALLOWED_FIELDS
 
 ROOT = Path(__file__).resolve().parents[2]
 LOGGING_MD = ROOT / "docs/reference/logging.md"
@@ -37,19 +34,13 @@ def test_error_code_table_lists_every_public_message_code():
 
 def test_field_list_covers_allowlist_names():
     text = LOGGING_MD.read_text()
-    # base allowlist read in a clean interpreter: engines add their own fields at import time
-    base = json.loads(
-        subprocess.check_output(
-            [
-                sys.executable,
-                "-c",
-                "import json;from onolys_engine_core.safe_log import ALLOWED_FIELDS as A;"
-                "print(json.dumps(sorted(A)))",
-            ],
-            text=True,
-        )
-    )
-    missing = sorted(f for f in {*base, *API_FIELDS} if f"`{f}`" not in text)
+    # engine run/stage, voice and rating fields were never in the doc table (they used to be
+    # registered by those packages at import, outside the base allowlist this test read)
+    undocumented = {
+        "final", "frames", "issues", "n_runs", "no_rating", "run_index", "runs_ok", "stage",
+        "stage_status", "voice", "voice_model", "voice_provider",
+    }
+    missing = sorted(f for f in ALLOWED_FIELDS - undocumented if f"`{f}`" not in text)
     assert not missing, missing
 
 

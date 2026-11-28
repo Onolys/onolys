@@ -20,7 +20,6 @@ from datetime import UTC, datetime, timedelta
 from typing import Literal
 
 from onolys_engine_core.errors import RunAborted
-from onolys_engine_core.log_context import log_context
 
 from onolys_api import logs
 from onolys_api.adapters.error_map import kind_for_code, to_public
@@ -28,6 +27,7 @@ from onolys_api.errors import ApiError
 from onolys_api.jobs.charging import release_failed_run
 from onolys_api.jobs.machine import advance
 from onolys_api.jobs.queue import MAX_ATTEMPTS, TaskPayload, TaskQueue
+from onolys_api.logs import log_context
 from onolys_api.repo.base import NotFoundError, Repo
 from onolys_api.repo.models import SessionError
 

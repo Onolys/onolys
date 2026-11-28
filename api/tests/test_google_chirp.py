@@ -7,9 +7,9 @@ from types import SimpleNamespace as NS
 import pytest
 from onolys_engine_core.errors import InputError
 
-from onolys_miti.stt import AudioRef, SttParams, Word
-from onolys_miti.stt.base import transcribe, words_to_turns
-from onolys_miti.stt.google_chirp import (
+from onolys_api.transcription import AudioRef, SttParams, Word
+from onolys_api.transcription.base import transcribe, words_to_turns
+from onolys_api.transcription.google_chirp import (
     GoogleChirp3,
     SttProviderError,
     build_batch_request,
@@ -17,7 +17,7 @@ from onolys_miti.stt.google_chirp import (
     location_endpoint,
     resolve_location,
 )
-from onolys_miti.stt.select import select_stt
+from onolys_api.transcription.select import select_stt
 
 pytestmark = pytest.mark.unit
 
@@ -160,7 +160,7 @@ async def test_file_error_raises_and_bad_handle():
 
 def test_core_import_does_not_load_google():
     code = (
-        "import sys, onolys_miti.stt, onolys_miti.stt.google_chirp, onolys_miti.stt.select;"
+        "import sys, onolys_api.transcription, onolys_api.transcription.google_chirp, onolys_api.transcription.select;"
         "sys.exit(1 if any(m == 'google' or m.startswith('google.') for m in sys.modules) else 0)"
     )
     assert subprocess.run([sys.executable, "-c", code]).returncode == 0

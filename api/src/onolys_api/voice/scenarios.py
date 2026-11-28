@@ -1,6 +1,6 @@
 """Scenario loader: every file validated at API start, fail fast.
 
-Files live in the engine's packaged `scenarios/` (`scenario.schema.json` + `*.json`).
+Files live in the packaged `data/scenarios/` (`scenario.schema.json` + `*.json`).
 Only `public_view` fields ever leave the server.
 """
 
@@ -10,15 +10,15 @@ from typing import Any
 
 from jsonschema import Draft202012Validator
 from onolys_engine_core.errors import ConfigError
-from onolys_miti.miti import MITI
-from onolys_miti.voice.select import allowed_voices
+
+from onolys_api.voice.select import allowed_voices
 
 SCHEMA_NAME = "scenario.schema.json"
 PUBLIC_FIELDS = ("id", "title", "difficulty", "summary", "language", "voice")
 
 
 def scenarios_dir() -> Path:
-    return MITI.data_dir / "scenarios"
+    return Path(__file__).parent / "data" / "scenarios"
 
 
 def load_scenarios(

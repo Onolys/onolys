@@ -4,12 +4,6 @@ import json
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Request
-from onolys_engine_core.transcript_input import (
-    TranscriptInputError,
-    inferred_clinician_speaker,
-    validate_transcript_input,
-)
-from onolys_engine_core.transcript_txt import parse_transcript_txt
 from starlette.concurrency import run_in_threadpool
 
 from onolys_api.auth.deps import AuthUser, current_user
@@ -21,6 +15,12 @@ from onolys_api.repo.base import NotFoundError
 from onolys_api.routes.ids import ResourceId
 from onolys_api.routes.sessions import CreateSessionResponse, SessionRef
 from onolys_api.transcript_store import store_transcript
+from onolys_api.transcription.transcript_input import (
+    TranscriptInputError,
+    inferred_clinician_speaker,
+    validate_transcript_input,
+)
+from onolys_api.transcription.transcript_txt import parse_transcript_txt
 
 MAX_TRANSCRIPT_BYTES = 1024 * 1024
 router = APIRouter(

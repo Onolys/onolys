@@ -13,10 +13,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
 
-from onolys_miti.stt import AudioRef
-
 from onolys_api.repo.models import RecordingDoc
 from onolys_api.storage.base import BlobStore
+from onolys_api.transcription import AudioRef
 
 MIN_DURATION_S = 1.0
 DEFAULT_MAX_DURATION_S = 20 * 60.0  # fallback; the real limit is `max_audio_s` on the STT provider

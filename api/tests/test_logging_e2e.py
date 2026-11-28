@@ -1,6 +1,6 @@
 """End-to-end log guards.
 
-Everything goes through the real wiring: `configure_logging` installs the root handler, and the
+Everything goes through the real wiring: `logs.configure` installs the root handler, and the
 assertions read the JSON lines that actually reach stderr (not caplog.text).
 """
 
@@ -12,7 +12,6 @@ from types import SimpleNamespace
 import httpx
 import pytest
 from fastapi import Depends, FastAPI
-from onolys_engine_core.json_logging import configure_logging
 from onolys_engine_core.llm import LiteLLMClient, LLMConfig, LLMRequest, LLMUnavailable
 from onolys_engine_core.llm.routes import Route
 from onolys_engine_core.safe_log import log_event
@@ -34,7 +33,7 @@ def stderr_lines(capsys, monkeypatch):
     names = ("miti", "onolys_api.events", "litellm", "LiteLLM", "LiteLLM Router", "LiteLLM Proxy")
     saved = {n: (list(logging.getLogger(n).handlers), logging.getLogger(n).level,
                  logging.getLogger(n).propagate) for n in names}  # fmt: skip
-    configure_logging(SimpleNamespace(git_sha="e2e"))
+    logs.configure(SimpleNamespace(git_sha="e2e", uid_hmac_key="k"))
     capsys.readouterr()
 
     def lines() -> list[dict]:

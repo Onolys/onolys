@@ -16,12 +16,12 @@ from typing import Any
 from pydantic import ValidationError
 
 from onolys_engine_core.errors import ConfigError
-from onolys_engine_core.json_logging import quiet_litellm
 from onolys_engine_core.retry import retry
 from onolys_engine_core.safe_log import log_event, sanitize_provider_text
 
 from .config import LLMConfig
 from .errors import LLMBadOutput, LLMError, LLMRateLimited, LLMTimeout, LLMUnavailable
+from .quiet import quiet_litellm
 from .routes import Route, resolve_preset
 from .schema import to_provider_schema
 from .types import LLMRequest, LLMResult, MetricsCollector, Usage

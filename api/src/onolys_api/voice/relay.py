@@ -16,7 +16,14 @@ from typing import Any
 
 import anyio
 from fastapi import APIRouter, WebSocket
-from onolys_miti.voice import (
+from starlette.websockets import WebSocketDisconnect, WebSocketState
+
+from onolys_api import logs
+from onolys_api.errors import ApiError
+from onolys_api.jobs.interviews import settle_interview
+from onolys_api.repo.base import NotFoundError
+from onolys_api.repo.models import InterviewDoc
+from onolys_api.voice import (
     AudioOut,
     Closed,
     GoAway,
@@ -26,16 +33,9 @@ from onolys_miti.voice import (
     VoiceProviderError,
     VoiceSession,
 )
-from onolys_miti.voice.select import load_voice_config, select_voice
-from starlette.websockets import WebSocketDisconnect, WebSocketState
-
-from onolys_api import logs
-from onolys_api.errors import ApiError
-from onolys_api.jobs.interviews import settle_interview
-from onolys_api.repo.base import NotFoundError
-from onolys_api.repo.models import InterviewDoc
 from onolys_api.voice.clock import Clock, ConnectedTimer
 from onolys_api.voice.prompt import build_system_prompt
+from onolys_api.voice.select import load_voice_config, select_voice
 
 router = APIRouter()
 AUTH_TIMEOUT_S = 10.0

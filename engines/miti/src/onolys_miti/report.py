@@ -15,8 +15,7 @@ from typing import Annotated, Any, Literal
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from onolys_miti.result import CodedSpan, WarningCode
-from onolys_miti.run_info import RunInfo
-from onolys_miti.stt import SttRun
+from onolys_miti.run_info import RunInfo, SttRun
 
 SCHEMA_VERSION = "0.0.1"
 

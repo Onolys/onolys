@@ -2,8 +2,12 @@
 
 import re
 
-from onolys_engine_core.transcript_input import TranscriptInputError, validate_transcript_input
 from onolys_engine_core.transcript_v1 import TranscriptV1
+
+from onolys_api.transcription.transcript_input import (
+    TranscriptInputError,
+    validate_transcript_input,
+)
 
 _LABEL = re.compile(r"^([^:\r\n]{1,40}):[ \t]*(.*)$")
 _ROLES = {"T": "clinician", "C": "client"}

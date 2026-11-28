@@ -473,6 +473,35 @@ requests = [
 ]
 
 [[package]]
+name = "google-cloud-appengine-logging"
+version = "1.11.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "google-api-core", extra = ["grpc"] },
+    { name = "google-auth" },
+    { name = "grpcio" },
+    { name = "proto-plus" },
+    { name = "protobuf" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/ac/34/aec7eca310c84a106a22dfaad076766c2e2ebe0389bdb88270a22c807f9d/google_cloud_appengine_logging-1.11.0.tar.gz", hash = "sha256:ce053792df98fde4790c5f070176088c9ebf0e55a37c754c8f8e11b28ddb4d73", size = 21678, upload-time = "2026-10-01T18:14:43.6Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/2f/a8/da5d9865b0e1ce53194eb1052484303f86e94cd87f3b6d49511690f70ea6/google_cloud_appengine_logging-1.11.0-py3-none-any.whl", hash = "sha256:4d70953a0f35d0295256d977e7e3962242674d64c72fcb3e48b10a1cbf4f9b54", size = 20251, upload-time = "2026-10-01T18:08:00.913Z" },
+]
+
+[[package]]
+name = "google-cloud-audit-log"
+version = "0.6.3"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "googleapis-common-protos" },
+    { name = "protobuf" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/20/cd/5f73ed48869615dfc041368e9846154d61ab60e399adcd18594b73df3dec/google_cloud_audit_log-0.6.3.tar.gz", hash = "sha256:ea963f8327325d53f660aabe3a67ab3fd5c124b3a9fead46e0d2f8c1a444643d", size = 41012, upload-time = "2026-10-22T23:43:18.511Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/99/0c/d5218347d58348ae15e41fd4efadc4c349eef02484d606e290bfcaa2f65d/google_cloud_audit_log-0.6.3-py3-none-any.whl", hash = "sha256:dcb3ac771b48ed09dfdb77e2a3ad229e0a7fcb209253dde6cca3fd4004695c29", size = 40385, upload-time = "2026-10-22T23:42:49.361Z" },
+]
+
+[[package]]
 name = "google-cloud-core"
 version = "2.8.0"
 source = { registry = "https://pypi.org/simple" }
@@ -500,6 +529,27 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/fd/24/c578fe02430fcaa29dd487595463a4a2b7c7fa8879e24032d3d63f558488/google_cloud_firestore-2.34.1.tar.gz", hash = "sha256:d403b12375e4f68176bb638451417330a7a66d11c9cace98f7778109b884d9ab", size = 672743, upload-time = "2026-10-08T18:12:50.095Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/e1/88/e064d77571324edaa78f0523620ad7076a74e5848c05d671fe440f665b67/google_cloud_firestore-2.34.1-py3-none-any.whl", hash = "sha256:6279f049336e49181e8c1d2dbf14e9c0cfb75ddf03c70971adc88fb272cdae29", size = 443943, upload-time = "2026-10-08T18:12:21.536Z" },
+]
+
+[[package]]
+name = "google-cloud-logging"
+version = "3.17.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "google-api-core", extra = ["grpc"] },
+    { name = "google-auth" },
+    { name = "google-cloud-appengine-logging" },
+    { name = "google-cloud-audit-log" },
+    { name = "google-cloud-core" },
+    { name = "grpc-google-iam-v1" },
+    { name = "grpcio" },
+    { name = "opentelemetry-api" },
+    { name = "proto-plus" },
+    { name = "protobuf" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/1d/e4/d3e9a809fc57ec1aa1aaf98e5da740e5b02d97070856c9d70f3f9cfb1c35/google_cloud_logging-3.17.1.tar.gz", hash = "sha256:24af44573642b4c3f0154d34511ddac89589824ee802ee743464022845322327", size = 293812, upload-time = "2026-11-22T01:00:10.067Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/42/26/ed9840af0b2e8da5ed8a7cd0f2b422314827df3fbdce3b0c6177f1f13eec/google_cloud_logging-3.17.1-py3-none-any.whl", hash = "sha256:c347426cc8aea05ad5f6fc12ebd013329c3387c378f4669a8e53e1b44f998981", size = 234217, upload-time = "2026-11-22T01:00:08.38Z" },
 ]
 
 [[package]]
@@ -1163,13 +1213,17 @@ dependencies = [
     { name = "firebase-admin" },
     { name = "google-auth" },
     { name = "google-cloud-firestore" },
+    { name = "google-cloud-logging" },
+    { name = "google-cloud-speech" },
     { name = "google-cloud-storage" },
     { name = "google-cloud-tasks" },
+    { name = "google-genai" },
     { name = "jsonschema" },
     { name = "onolys-engine-core" },
-    { name = "onolys-miti", extra = ["stt-google", "voice-gemini"] },
+    { name = "onolys-miti" },
     { name = "onolys-oneshot" },
     { name = "pydantic" },
+    { name = "pyyaml" },
     { name = "requests" },
     { name = "uvicorn" },
 ]
@@ -1192,13 +1246,17 @@ requires-dist = [
     { name = "firebase-admin", specifier = ">=7.8.0" },
     { name = "google-auth", specifier = ">=2.30" },
     { name = "google-cloud-firestore", specifier = ">=2.19" },
+    { name = "google-cloud-logging", specifier = ">=3.10" },
+    { name = "google-cloud-speech", specifier = ">=2.26" },
     { name = "google-cloud-storage", specifier = ">=2.18" },
     { name = "google-cloud-tasks", specifier = ">=2.16" },
+    { name = "google-genai", specifier = ">=1.0" },
     { name = "jsonschema", specifier = ">=4" },
     { name = "onolys-engine-core", editable = "engines/core" },
-    { name = "onolys-miti", extras = ["stt-google", "voice-gemini"], editable = "engines/miti" },
+    { name = "onolys-miti", editable = "engines/miti" },
     { name = "onolys-oneshot", editable = "engines/oneshot" },
     { name = "pydantic", specifier = ">=2.7" },
+    { name = "pyyaml", specifier = ">=6" },
     { name = "requests", specifier = ">=2.31" },
     { name = "uvicorn", specifier = ">=0.30" },
 ]
@@ -1263,14 +1321,6 @@ dependencies = [
     { name = "rapidfuzz" },
 ]
 
-[package.optional-dependencies]
-stt-google = [
-    { name = "google-cloud-speech" },
-]
-voice-gemini = [
-    { name = "google-genai" },
-]
-
 [package.dev-dependencies]
 dev = [
     { name = "pytest" },
@@ -1281,8 +1331,6 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "google-cloud-speech", marker = "extra == 'stt-google'", specifier = ">=2.26" },
-    { name = "google-genai", marker = "extra == 'voice-gemini'", specifier = ">=1.0" },
     { name = "jsonschema", specifier = ">=4.22" },
     { name = "litellm", specifier = ">=1.50" },
     { name = "onolys-engine-core", editable = "engines/core" },
@@ -1290,7 +1338,6 @@ requires-dist = [
     { name = "pyyaml", specifier = ">=6" },
     { name = "rapidfuzz", specifier = ">=3.14.6" },
 ]
-provides-extras = ["stt-google", "voice-gemini"]
 
 [package.metadata.requires-dev]
 dev = [

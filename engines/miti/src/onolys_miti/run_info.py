@@ -11,7 +11,14 @@ from typing import Literal
 from onolys_engine_core.llm.routes import Route
 from pydantic import BaseModel, ConfigDict, model_serializer
 
-from onolys_miti.stt import SttRun
+
+class SttRun(BaseModel):  # STT provenance carried in the report; the API's STT adapters fill it
+    provider: str
+    model: str
+    location: str | None = None
+    language_requested: str
+    language_detected: str | None = None
+    adapter_version: str
 
 
 def hash_files(paths: Iterable[Path], length: int = 16) -> str:

@@ -1,7 +1,7 @@
 """Rating-card validation: the one seam `PUT /sessions/{id}/rating` goes through.
 
-A thin wrapper over `onolys_miti.rating` (`validate_rating`, `is_no_rating`), so a card the API
-stores is one the engine accepts, with the engine's rules (item ids, score scales, counts and
+A thin wrapper over `onolys_api.rating.rating` (`validate_rating`, `is_no_rating`), so a card the
+API stores is one the engine accepts, with the engine's rules (item ids, score scales, counts and
 spans >= 0, limits) and its issue format (`Issue(path, code)`, `/`-joined paths). The only
 API-only rule is the HTTP size cap `MAX_CARD_BYTES`. The rating schema is the engine's packaged
 `MITI.rating_schema`; `create_app` reads it at startup. Issues are paths and codes only, never
@@ -12,9 +12,10 @@ import json
 from typing import Any
 
 from onolys_miti.miti import MITI
-from onolys_miti.rating import is_no_rating
-from onolys_miti.rating import validate_rating as engine_validate_rating
 from onolys_miti.report import Issue
+
+from onolys_api.rating.rating import is_no_rating
+from onolys_api.rating.rating import validate_rating as engine_validate_rating
 
 SCHEMA_VERSION = "miti-1"
 # Hard cap on a stored card (UTF-8 JSON bytes): bounds unknown keys the shape check does not cover.

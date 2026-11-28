@@ -18,7 +18,8 @@ from google.api_core import exceptions as gexc
 from onolys_engine_core.errors import InputError, OnolysError
 from onolys_engine_core.llm.errors import LLMError, is_transient
 from onolys_engine_core.validated_run import OutputInvalid
-from onolys_miti.stt.google_chirp import SttProviderError
+
+from onolys_api.transcription.google_chirp import SttProviderError
 
 Stage = Literal["validate", "stt", "run"]
 Kind = Literal["transient", "permanent_internal", "user_file"]

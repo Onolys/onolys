@@ -12,7 +12,7 @@ from pathlib import Path
 import yaml
 from onolys_engine_core.errors import ConfigError, InputError
 
-from onolys_miti.voice import VoiceParams
+from onolys_api.voice import VoiceParams
 
 VOICE_FILE_NAME = "voice_providers.yaml"
 DEFAULT_RESOURCE = "voice_providers.default.yaml"
@@ -21,7 +21,7 @@ DEFAULT_RESOURCE = "voice_providers.default.yaml"
 def locate_config_file(
     name: str = VOICE_FILE_NAME,
     default_resource: str = DEFAULT_RESOURCE,
-    package: str = "onolys_miti.voice",
+    package: str = "onolys_api.voice",
 ) -> Path:
     explicit = os.environ.get("VOICE_PROVIDERS_FILE")
     if explicit:

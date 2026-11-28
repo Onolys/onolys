@@ -3,11 +3,10 @@ validation, match or not."""
 
 import dataclasses
 import inspect
-import json
 import logging
 
 import pytest
-from onolys_engine_core.json_logging import ContextFilter, JsonFormatter
+from log_helpers import Capture
 from test_interview_link import interview, upload
 
 from onolys_api.audio import ProbeResult
@@ -28,17 +27,6 @@ VERSIONS = {
 @pytest.fixture
 def repo(blobs):
     return FakeRepo(blobs)
-
-
-class Capture(logging.Handler):
-    def __init__(self) -> None:
-        super().__init__(logging.INFO)
-        self.addFilter(ContextFilter())
-        self.setFormatter(JsonFormatter())
-        self.out: list[dict] = []
-
-    def emit(self, record: logging.LogRecord) -> None:
-        self.out.append(json.loads(self.format(record)))
 
 
 @pytest.fixture

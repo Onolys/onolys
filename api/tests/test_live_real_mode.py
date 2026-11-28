@@ -25,13 +25,13 @@ from audio_helpers import MAGIC, StubTools
 from jsonschema import Draft202012Validator
 from miti_fixtures import TRANSCRIPT
 from onolys_miti import miti
-from onolys_miti.stt.fixture import FixtureStt, uri_hash
 from test_transcribe import words
 
 from onolys_api.adapters import build_adapters
 from onolys_api.app import create_app
 from onolys_api.jobs.transcribe import TRANSCRIPT_ID
 from onolys_api.repo.fake import FakeRepo
+from onolys_api.transcription.fixture import FixtureStt, uri_hash
 
 pytestmark = [pytest.mark.live, pytest.mark.integration]
 REPORT = Draft202012Validator(json.loads((miti.DATA_DIR / "report.schema.json").read_text()))

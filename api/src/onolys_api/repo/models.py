@@ -10,8 +10,9 @@ from typing import Any, Literal
 
 from onolys_engine_core.transcript import Transcript
 from onolys_miti.result import CodedSpan
-from onolys_miti.stt import SttRun
 from pydantic import BaseModel, Field, field_validator
+
+from onolys_api.transcription import SttRun
 
 SessionState = Literal[
     "created",

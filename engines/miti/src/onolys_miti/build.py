@@ -36,9 +36,8 @@ from onolys_miti.report import (
     Warning,
 )
 from onolys_miti.result import MitiResult
-from onolys_miti.run_info import RunInfo, RunUsage
+from onolys_miti.run_info import RunInfo, RunUsage, SttRun
 from onolys_miti.run_info import code_version as _code_version
-from onolys_miti.stt import SttRun
 from onolys_miti.tips import TipsArtifact
 from onolys_miti.tone import ReportConfig, load_report_config, tone_rules
 

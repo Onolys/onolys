@@ -1,11 +1,11 @@
 import logging
 
 import pytest
-from onolys_engine_core.json_logging import render
+from log_helpers import render
 
-from onolys_miti.stt import AudioRef, SttParams, Word
-from onolys_miti.stt.base import transcribe
-from onolys_miti.stt.fixture import FixtureStt, uri_hash
+from onolys_api.transcription import AudioRef, SttParams, Word
+from onolys_api.transcription.base import transcribe
+from onolys_api.transcription.fixture import FixtureStt, uri_hash
 
 pytestmark = pytest.mark.unit
 

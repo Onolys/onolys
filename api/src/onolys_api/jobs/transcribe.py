@@ -25,7 +25,6 @@ from collections.abc import Callable
 from typing import Any
 
 from onolys_engine_core.transcript import Transcript
-from onolys_miti.stt import SttParams
 
 from onolys_api import logs
 from onolys_api.adapters.base import AdapterError, Stt
@@ -45,6 +44,7 @@ from onolys_api.jobs.worker import (
 )
 from onolys_api.repo.base import Repo
 from onolys_api.storage.base import BlobStore
+from onolys_api.transcription import SttParams
 
 TRANSCRIPT_ID = "current"
 POLL_INTERVAL_S = 15.0

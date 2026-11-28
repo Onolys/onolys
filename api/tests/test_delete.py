@@ -10,7 +10,7 @@ import logging
 
 import pytest
 import test_run
-from onolys_engine_core.json_logging import render
+from log_helpers import render
 from onolys_engine_core.transcript import Transcript, Turn
 from test_run import BigEval, Env, swap_eval
 

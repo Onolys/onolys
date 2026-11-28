@@ -31,16 +31,16 @@ from onolys_engine_core.llm.routes import resolve_preset
 from onolys_engine_core.registry import EngineRegistry
 from onolys_engine_core.transcript import Transcript
 from onolys_engine_core.validated_run import run_validated
-from onolys_miti.stt import AudioRef, SttAdapter, SttCompletion, SttParams
-from onolys_miti.stt.fixture import FixtureStt
-from onolys_miti.stt.google_chirp import GoogleChirp3
-from onolys_miti.voice import VoiceAdapter, VoiceParams, VoiceSession
-from onolys_miti.voice.fixture import FixtureVoice
-from onolys_miti.voice.gemini_live_vertex import GeminiLiveVertex
 
 from onolys_api.adapters.base import AdapterError, AuthAccount, EvaluationOutput, ProgressCb
 from onolys_api.config import Settings
 from onolys_api.engines import build_engine_registry, override_routes, resolve_engine
+from onolys_api.transcription import AudioRef, SttAdapter, SttCompletion, SttParams
+from onolys_api.transcription.fixture import FixtureStt
+from onolys_api.transcription.google_chirp import GoogleChirp3
+from onolys_api.voice import VoiceAdapter, VoiceParams, VoiceSession
+from onolys_api.voice.fixture import FixtureVoice
+from onolys_api.voice.gemini_live_vertex import GeminiLiveVertex
 
 SttFactory = Callable[[], SttAdapter]
 

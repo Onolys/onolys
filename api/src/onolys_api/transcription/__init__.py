@@ -1,10 +1,14 @@
-"""Provider-neutral STT interface types. Adapters live in later tasks."""
+"""Provider-neutral STT interface types, upload parsers and the STT adapters.
+
+`SttRun` (the provenance model the report carries) is defined by the engine; re-exported here.
+"""
 
 from collections.abc import Callable
 from pathlib import Path
 from typing import Protocol
 
 from onolys_engine_core.transcript_v1 import TranscriptV1
+from onolys_miti.run_info import SttRun
 from pydantic import BaseModel
 
 
@@ -31,15 +35,6 @@ class Word(BaseModel):
     start_ms: int
     end_ms: int | None  # None when the provider gave no valid end; never guessed
     speaker: str | None = None
-
-
-class SttRun(BaseModel):
-    provider: str
-    model: str
-    location: str | None = None
-    language_requested: str
-    language_detected: str | None = None
-    adapter_version: str
 
 
 class SttCompletion(BaseModel):

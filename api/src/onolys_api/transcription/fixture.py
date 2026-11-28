@@ -4,8 +4,8 @@ import hashlib
 
 from onolys_engine_core.errors import InputError
 
-from onolys_miti.stt import AudioRef, SttParams, SttRun, Word
-from onolys_miti.stt.base import BaseSttAdapter
+from onolys_api.transcription import AudioRef, SttParams, SttRun, Word
+from onolys_api.transcription.base import BaseSttAdapter
 
 ADAPTER_VERSION = "fixture-1"
 

@@ -14,7 +14,6 @@ import jsonschema
 import pytest
 from onolys_engine_core.context import RunContext
 from onolys_engine_core.errors import RunAborted
-from onolys_engine_core.json_logging import render
 from onolys_engine_core.llm import LLMBadOutput, LLMResult, LLMUnavailable, MetricsCollector, Usage
 from onolys_engine_core.transcript import Transcript
 
@@ -158,7 +157,10 @@ async def test_stages_are_emitted_in_order_with_assemble_last():
 
 
 def rendered(caplog):
-    return "\n".join(render(r) for r in caplog.records)
+    """Messages and the fields the engine put on each record."""
+    return "\n".join(
+        f"{r.getMessage()} {getattr(r, 'fields', {})}" for r in caplog.records
+    )
 
 
 async def test_raising_callback_is_ignored(caplog):

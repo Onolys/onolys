@@ -51,7 +51,6 @@ def test_data_files_present():
         "prompts/tips_system.md",
         "fixtures/expected.yaml",
         "fixtures/thresholds.yaml",
-        "scenarios/scenario.schema.json",
     ):
         assert (DATA / rel).is_file(), rel
 

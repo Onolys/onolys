@@ -19,11 +19,11 @@ from onolys_engine_core.llm.routes import (
     resolve_preset,
 )
 from onolys_engine_core.presets import PresetInfo, list_presets
-from onolys_miti.stt.select import STT_FILE_NAME, load_stt_config, select_stt
 
 from onolys_api.audio import DEFAULT_MAX_DURATION_S
 from onolys_api.config import LOCAL_ENVS, Settings
 from onolys_api.repo.models import SttInfo
+from onolys_api.transcription.select import STT_FILE_NAME, load_stt_config, select_stt
 
 log = logging.getLogger(__name__)
 TEST_PRESET_PREFIX = "test-"  # forced-failure presets: every env except prod

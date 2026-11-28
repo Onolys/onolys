@@ -5,7 +5,7 @@ description = "Onolys public /v1 API and job worker (one image, SERVICE_MODE api
 requires-python = ">=3.12,<3.13"
 dependencies = [
     "onolys-engine-core",
-    "onolys-miti[stt-google,voice-gemini]",
+    "onolys-miti",
     "onolys-oneshot",
     "fastapi>=0.115",
     "uvicorn>=0.30",
@@ -17,6 +17,10 @@ dependencies = [
     "google-cloud-tasks>=2.16",
     "jsonschema>=4",
     "firebase-admin>=7.8.0",
+    "google-cloud-speech>=2.26",
+    "google-genai>=1.0",
+    "google-cloud-logging>=3.10",
+    "pyyaml>=6",
 ]
 
 [tool.uv.sources]
@@ -71,7 +75,7 @@ markers = [
 [tool.mutmut]
 # Mutation testing: see docs/testing/fuzz-and-mutation.md. Whole package is copied; mutants are selected by name glob on the CLI.
 source_paths = ["src/onolys_api/"]
-do_not_mutate = ["src/onolys_api/adapters/*", "src/onolys_api/voice/*", "src/onolys_api/routes/*", "src/onolys_api/static/*", "src/onolys_api/app.py", "src/onolys_api/audio.py", "src/onolys_api/config.py", "src/onolys_api/contracts.py", "src/onolys_api/docs.py", "src/onolys_api/errors.py", "src/onolys_api/factory.py", "src/onolys_api/logs.py", "src/onolys_api/openapi.py", "src/onolys_api/presets.py", "src/onolys_api/rating.py", "src/onolys_api/storage/*", "src/onolys_api/schemas/*", "src/onolys_api/repo/fake.py", "src/onolys_api/repo/large.py", "src/onolys_api/repo/models.py", "src/onolys_api/repo/base.py", "src/onolys_api/jobs/[!r]*.py", "src/onolys_api/jobs/r[!u]*.py"]
+do_not_mutate = ["src/onolys_api/adapters/*", "src/onolys_api/voice/*", "src/onolys_api/routes/*", "src/onolys_api/static/*", "src/onolys_api/app.py", "src/onolys_api/audio.py", "src/onolys_api/config.py", "src/onolys_api/contracts.py", "src/onolys_api/docs.py", "src/onolys_api/errors.py", "src/onolys_api/factory.py", "src/onolys_api/logs.py", "src/onolys_api/openapi.py", "src/onolys_api/presets.py", "src/onolys_api/rating/*", "src/onolys_api/transcription/*", "src/onolys_api/storage/*", "src/onolys_api/schemas/*", "src/onolys_api/repo/fake.py", "src/onolys_api/repo/large.py", "src/onolys_api/repo/models.py", "src/onolys_api/repo/base.py", "src/onolys_api/jobs/[!r]*.py", "src/onolys_api/jobs/r[!u]*.py"]
 pytest_add_cli_args = ["-m", "not live and not flaky", "-p", "no:cacheprovider"]
 pytest_add_cli_args_test_selection = ["tests/test_auth.py", "tests/test_limits.py", "tests/test_run.py", "tests/test_caps.py", "tests/test_first_run.py"]
 also_copy = ["../docs", "../config", "../engines", "openapi.json", "tests"]

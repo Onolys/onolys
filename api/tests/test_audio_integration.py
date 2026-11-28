@@ -8,12 +8,12 @@ import subprocess
 import httpx
 import pytest
 from audio_helpers import A
-from onolys_miti.stt import SttParams
 
 from onolys_api.adapters import FakeStt
 from onolys_api.app import create_app
 from onolys_api.audio import canonical_audio_ref
 from onolys_api.repo.fake import FakeRepo
+from onolys_api.transcription import SttParams
 
 pytestmark = [
     pytest.mark.integration,

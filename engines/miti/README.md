@@ -13,9 +13,9 @@ Shared infrastructure lives in the `onolys-engine-core` workspace package. Impor
 `RunContext` from `onolys_engine_core.context`, `Turn` from
 `onolys_engine_core.transcript`, `TranscriptV1` from
 `onolys_engine_core.transcript_v1`, and LLM clients/routes from
-`onolys_engine_core.llm`. Retry helpers, safe logging and transcript text parsing also
-live in core. MITI keeps its coding passes, schemas, prompts, fixture data, code-point
-spans, STT and voice adapters; it does not re-export moved core modules.
+`onolys_engine_core.llm`. Retry helpers and `log_event` also live in core. MITI keeps its coding passes, schemas,
+prompts, fixture data and code-point spans. STT, voice, scenarios, rating-card validation and
+upload parsers live in `api/` (`onolys_api.transcription`, `.voice`, `.rating`).
 
 ## Tests
 
@@ -50,7 +50,7 @@ uv run --package onolys-miti python -m onolys_miti.check --preset <p>
 
 `tests/test_live.py` calls into `onolys_miti/check.py` and runs the three synthetic fixtures against `fixtures/expected.yaml` and
 `fixtures/thresholds.yaml` (set `MITI_LIVE_PRESET` to pick a route preset), and checks that tips
-quote the transcript. `tests/test_voice_live.py` opens a real Gemini voice session.
+quote the transcript. `api/tests/test_voice_live.py` opens a real Gemini voice session.
 
 ## Coding rules and limits
 
@@ -120,10 +120,8 @@ for deliberate report/adapter baseline refresh and historical parity evidence.
 What the api imports from this package:
 
 - Report schema: `onolys_miti.report.schema_path()`.
-- Rating card: `onolys_miti.rating.validate_rating(obj, final)`, `onolys_miti.rating.is_no_rating`,
-  `onolys_miti.report.Issue`.
+- Rating card: `onolys_miti.report.Issue` (validation lives in `onolys_api.rating`).
 - Rating schema: `onolys_miti.miti.MITI.rating_schema`.
-- Scenarios directory: `MITI.data_dir / "scenarios"`.
 - Test fixtures: `miti.DATA_DIR / "fixtures" / "evaluation"`.
 - Engine entry: `MitiEngine().run(ctx, transcript, params, progress_cb)`;
   `params["speaker_map"]` supplies the speaker roles. Direct callers may still use

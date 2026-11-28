@@ -266,10 +266,9 @@ def test_adapters_wiring_stub_and_real():
 
 
 async def test_real_voice_registry_routes_by_provider_and_rejects_unknown():
-    from onolys_miti.voice import VoiceParams
-    from onolys_miti.voice.fixture import FixtureVoice
-
     from onolys_api.adapters.real import RealVoice
+    from onolys_api.voice import VoiceParams
+    from onolys_api.voice.fixture import FixtureVoice
 
     fx = FixtureVoice()
     rv = RealVoice({"fixture": lambda: fx})
@@ -280,7 +279,7 @@ async def test_real_voice_registry_routes_by_provider_and_rejects_unknown():
 
 
 async def test_fake_voice_records_open():
-    from onolys_miti.voice import VoiceParams
+    from onolys_api.voice import VoiceParams
 
     fv = FakeVoice()
     sess = await fv.open(VoiceParams(provider="anything", model="m", voice="Kore"))

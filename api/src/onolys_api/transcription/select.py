@@ -10,14 +10,14 @@ import yaml
 from onolys_engine_core.config import locate_config_file
 from onolys_engine_core.errors import InputError
 
-from onolys_miti.stt import SttParams
+from onolys_api.transcription import SttParams
 
 STT_FILE_NAME = "stt_providers.yaml"
 DEFAULT_RESOURCE = "stt_providers.default.yaml"
 
 
 def load_stt_config(path: Path | None = None) -> dict:
-    source = path or locate_config_file(STT_FILE_NAME, DEFAULT_RESOURCE, "onolys_miti.stt")
+    source = path or locate_config_file(STT_FILE_NAME, DEFAULT_RESOURCE, "onolys_api.transcription")
     data = yaml.safe_load(source.read_text(encoding="utf-8")) or {}
     if not isinstance(data.get("providers"), dict) or not data["providers"]:
         raise InputError("stt providers file has no `providers`")

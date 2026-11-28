@@ -1,13 +1,11 @@
 """Ids bound in the API, worker and voice entrypoints."""
 
-import json
 import logging
 
 import httpx
 import pytest
 from fastapi import Depends, FastAPI
-from onolys_engine_core import log_context
-from onolys_engine_core.json_logging import ContextFilter, JsonFormatter
+from log_helpers import Capture
 from test_worker import SID, UID, payload, repo, runner_with  # noqa: F401
 
 from onolys_api import logs
@@ -17,19 +15,6 @@ from onolys_api.jobs.queue import TaskPayload
 from onolys_api.jobs.worker import PermanentError
 from onolys_api.repo.fake import FakeRepo
 from onolys_api.storage.fake import FakeBlobStore
-
-
-class Capture(logging.Handler):
-    """Records formatted JSON lines the way the real handler would (ContextFilter + formatter)."""
-
-    def __init__(self) -> None:
-        super().__init__(logging.INFO)
-        self.addFilter(ContextFilter())
-        self.setFormatter(JsonFormatter())
-        self.out: list[dict] = []
-
-    def emit(self, record: logging.LogRecord) -> None:
-        self.out.append(json.loads(self.format(record)))
 
 
 @pytest.fixture
@@ -93,7 +78,7 @@ async def test_client_version_bound_from_header_and_sanitized(cap):
 
 async def test_context_is_clean_after_request(cap):
     await get(mini_app(), "/v1/things/" + "a" * 32, **{"X-Request-ID": "r1"})
-    assert log_context.snapshot() == {}
+    assert logs.snapshot() == {}
 
 
 async def test_sync_endpoint_on_id_route_logs_with_session_id(cap):
@@ -138,7 +123,7 @@ def test_handle_lines_carry_all_four_ids_and_context_is_clean_after(repo, cap): 
     runner.handle(payload(run_id="r1"))
     (line,) = by_event(cap, "inside_handler")
     assert {k: line[k] for k in IDS} == IDS
-    assert log_context.snapshot() == {}
+    assert logs.snapshot() == {}
 
 
 def test_error_path_lines_carry_ids_and_context_is_clean(repo, cap):  # noqa: F811
@@ -149,7 +134,7 @@ def test_error_path_lines_carry_ids_and_context_is_clean(repo, cap):  # noqa: F8
     runner.handle(payload(run_id="r1"))
     (line,) = by_event(cap, "step_failed")
     assert {k: line[k] for k in IDS} == IDS
-    assert log_context.snapshot() == {}
+    assert logs.snapshot() == {}
 
 
 def test_bookkeeping_failed_and_unhandled_lines_gain_ids_through_context(repo, cap, monkeypatch):  # noqa: F811
@@ -165,7 +150,7 @@ def test_bookkeeping_failed_and_unhandled_lines_gain_ids_through_context(repo, c
     assert (
         line["session_id"] == SID and line["request_id"] == "req-1" and line["step"] == "validate"
     )
-    assert log_context.snapshot() == {}
+    assert logs.snapshot() == {}
 
 
 def test_context_clean_even_if_handler_raises_base_exception(repo, cap):  # noqa: F811
@@ -175,7 +160,7 @@ def test_context_clean_even_if_handler_raises_base_exception(repo, cap):  # noqa
     runner = runner_with(repo, boom)
     with pytest.raises(KeyboardInterrupt):
         runner.handle(payload(run_id="r1"))
-    assert log_context.snapshot() == {}
+    assert logs.snapshot() == {}
 
 
 def test_no_handler_line_has_ids_and_context_is_clean(repo, cap):  # noqa: F811
@@ -183,7 +168,7 @@ def test_no_handler_line_has_ids_and_context_is_clean(repo, cap):  # noqa: F811
     runner.handle(TaskPayload(kind="delete", uid=UID, sid=SID, request_id="req-1"))
     (line,) = by_event(cap, "no_handler")
     assert line["session_id"] == SID and line["request_id"] == "req-1"
-    assert log_context.snapshot() == {}
+    assert logs.snapshot() == {}
 
 
 def test_interview_task_binds_interview_id_as_session_id(repo, cap):  # noqa: F811
@@ -196,21 +181,19 @@ def test_interview_task_binds_interview_id_as_session_id(repo, cap):  # noqa: F8
     runner.handle(TaskPayload(kind="interview-sweep", uid=UID, sid=iid, request_id="rq"))
     (line,) = by_event(cap, "in_sweep")
     assert line["session_id"] == iid and line["step"] == "interview-sweep"
-    assert log_context.snapshot() == {}
+    assert logs.snapshot() == {}
 
 
 # ---- voice ----
 
 
-def test_voice_entrypoint_configures_json_logging(blobs):
-    from onolys_engine_core.json_logging import has_json_handler  # noqa: PLC0415
-
+def test_voice_entrypoint_configures_structured_logging(blobs):
     root = logging.getLogger()
     for h in [h for h in root.handlers if getattr(h, "_onolys_json", False)]:
         root.removeHandler(h)
-    assert not has_json_handler(root)
+    assert not logs.has_handler(root)
     create_app(
         Settings(env="test", auth_mode="fake", service_mode="voice", cors_origins=()),
         repo=FakeRepo(FakeBlobStore(blobs.root if hasattr(blobs, "root") else None)),
     )
-    assert has_json_handler(root)
+    assert logs.has_handler(root)

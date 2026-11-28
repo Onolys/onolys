@@ -5,7 +5,7 @@ import logging
 
 import httpx
 import pytest
-from onolys_engine_core.json_logging import render
+from log_helpers import render
 from test_auth import KID, PROJECT, PUB, bearer, mint
 
 from onolys_api.adapters.base import AdapterError, AuthAccount

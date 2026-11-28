@@ -8,8 +8,6 @@ from datetime import UTC, datetime, timedelta
 import pytest
 import websockets
 from leak_helpers import find_leaks
-from onolys_miti.voice import AudioOut, Closed, GoAway, ResumptionHandle, TurnComplete
-from onolys_miti.voice.fixture import FixtureVoice, tone_pcm24k
 from starlette.websockets import WebSocketDisconnect, WebSocketState
 from voice_helpers import ManualClock, serve
 
@@ -20,6 +18,8 @@ from onolys_api.jobs.interviews import settle_interview
 from onolys_api.repo.fake import FakeRepo
 from onolys_api.repo.models import InterviewDoc
 from onolys_api.storage.fake import FakeBlobStore
+from onolys_api.voice import AudioOut, Closed, GoAway, ResumptionHandle, TurnComplete
+from onolys_api.voice.fixture import FixtureVoice, tone_pcm24k
 from onolys_api.voice.scenarios import load_scenarios
 
 pytestmark = pytest.mark.unit

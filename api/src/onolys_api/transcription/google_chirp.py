@@ -1,7 +1,7 @@
 """Google Speech-to-Text v2 (Chirp 3) adapter.
 
 `BatchRecognize` standard recognition, inline response, words only. The `google-cloud-speech`
-package (extra `stt-google`) is imported lazily so `onolys_miti.stt` works without it. Auth is
+package is imported lazily so `onolys_api.transcription` works without it. Auth is
 ADC; no keys in code. Real behaviour is proven by the live check (Task 13), not by unit tests.
 """
 
@@ -12,8 +12,8 @@ from typing import Any, Protocol
 
 from onolys_engine_core.errors import InputError, OnolysError
 
-from onolys_miti.stt import AudioRef, SttParams, SttRun, Word
-from onolys_miti.stt.base import BaseSttAdapter
+from onolys_api.transcription import AudioRef, SttParams, SttRun, Word
+from onolys_api.transcription.base import BaseSttAdapter
 
 ADAPTER_VERSION = "google-chirp3-1"
 DEFAULT_LOCATION = "us"
@@ -86,7 +86,7 @@ class _SdkBackend:
             from google.cloud.speech_v2 import SpeechClient
         except ImportError as e:  # pragma: no cover - depends on the extra
             raise OnolysError(
-                "google-cloud-speech is not installed; install the `stt-google` extra"
+                "google-cloud-speech is not installed"
             ) from e
         return SpeechClient(client_options=ClientOptions(api_endpoint=endpoint))
 

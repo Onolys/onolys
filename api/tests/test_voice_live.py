@@ -5,9 +5,9 @@ import os
 
 import pytest
 
-from onolys_miti.voice import AudioOut, Closed
-from onolys_miti.voice.gemini_live_vertex import GeminiLiveVertex
-from onolys_miti.voice.select import select_voice
+from onolys_api.voice import AudioOut, Closed
+from onolys_api.voice.gemini_live_vertex import GeminiLiveVertex
+from onolys_api.voice.select import select_voice
 
 pytestmark = pytest.mark.live
 

@@ -4,7 +4,7 @@ import json
 import logging
 
 import pytest
-from onolys_engine_core.json_logging import render
+from log_helpers import render
 
 from onolys_api.config import Settings
 from onolys_api.repo.limits import KIND_FIELD, LimitDefaults, effective_cap

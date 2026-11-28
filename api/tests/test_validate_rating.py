@@ -4,11 +4,11 @@ import copy
 import logging
 
 import pytest
-from onolys_engine_core.json_logging import render
-
+from log_helpers import render
 from onolys_miti import miti
-from onolys_miti.rating import is_no_rating, validate_rating
 from onolys_miti.report import Issue
+
+from onolys_api.rating.rating import is_no_rating, validate_rating
 
 pytestmark = pytest.mark.unit
 

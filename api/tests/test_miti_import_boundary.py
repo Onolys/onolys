@@ -28,9 +28,7 @@ def _imported(tree: ast.AST):
 
 
 def test_api_imports_miti_only_for_engine_specific_modules():
-    allowed = {
-        "engine", "miti", "prepare", "rating", "report", "result", "run", "span", "stt", "voice",
-    }
+    allowed = {"engine", "miti", "prepare", "report", "result", "run", "run_info", "span"}
     # The MITI-only API's legacy/fake adapter bridge uses the public engine schema.
     miti_engine_paths = {
         "src/onolys_api/engines.py", "src/onolys_api/adapters/validated.py",

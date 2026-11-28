@@ -4,8 +4,6 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from typing import Any
 
-from onolys_miti.stt.fixture import FixtureStt
-
 from onolys_api.adapters.base import (
     AdapterError,
     AuthLinks,
@@ -26,6 +24,7 @@ from onolys_api.adapters.fake import (
     FakeVoice,
 )
 from onolys_api.config import Settings
+from onolys_api.transcription.fixture import FixtureStt
 
 __all__ = [
     "AuthLinks", "FakeAuthLinks", "build_auth_links",

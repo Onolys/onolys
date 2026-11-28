@@ -11,13 +11,13 @@ from pathlib import Path
 import httpx
 import pytest
 from cards import valid_card
-from onolys_miti.rating import is_no_rating
-from onolys_miti.rating import validate_rating as engine_validate
 
 from onolys_api import rating as rating_mod
 from onolys_api.app import create_app
 from onolys_api.config import Settings
 from onolys_api.rating import validate_rating
+from onolys_api.rating.rating import is_no_rating
+from onolys_api.rating.rating import validate_rating as engine_validate
 from onolys_api.repo.fake import FakeRepo
 from onolys_api.repo.models import RatingDoc, utcnow
 from onolys_api.routes import rating as rating_routes

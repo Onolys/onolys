@@ -5,7 +5,6 @@ from pathlib import Path
 
 import pytest
 
-from onolys_engine_core.json_logging import render
 from onolys_engine_core.llm import (
     LiteLLMClient,
     LLMConfig,
@@ -18,6 +17,11 @@ from onolys_engine_core.llm import (
 from onolys_engine_core.llm.routes import Route
 
 pytestmark = pytest.mark.unit
+
+
+def render(record) -> str:
+    """The fields the engine put on a record, as the JSON the API handler would build from them."""
+    return json.dumps({"message": record.getMessage(), **record.fields})
 
 
 @pytest.fixture(autouse=True)

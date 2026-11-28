@@ -1,9 +1,13 @@
 """Synthetic upload input examples and limit boundaries."""
 
 import pytest
-from onolys_engine_core.transcript_input import TranscriptInputError, validate_transcript_input
-from onolys_engine_core.transcript_txt import parse_transcript_txt
 from onolys_engine_core.transcript_v1 import TranscriptV1
+
+from onolys_api.transcription.transcript_input import (
+    TranscriptInputError,
+    validate_transcript_input,
+)
+from onolys_api.transcription.transcript_txt import parse_transcript_txt
 
 pytestmark = pytest.mark.unit
 WORDS = " ".join(["example"] * 50)

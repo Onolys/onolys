@@ -1,5 +1,5 @@
 import asyncio
-import io
+import json
 import logging
 import pathlib
 import sys
@@ -9,11 +9,11 @@ from types import SimpleNamespace as NS
 
 import pytest
 import yaml
+from log_helpers import Capture
 from onolys_engine_core.errors import ConfigError, InputError
-from onolys_engine_core.json_logging import JsonFormatter
 from onolys_engine_core.safe_log import log
 
-from onolys_miti.voice import (
+from onolys_api.voice import (
     AudioOut,
     Closed,
     GoAway,
@@ -23,9 +23,9 @@ from onolys_miti.voice import (
     VoiceParams,
     VoiceProviderError,
 )
-from onolys_miti.voice.fixture import FixtureVoice, silence_pcm24k, tone_pcm24k
-from onolys_miti.voice.gemini_live_vertex import GeminiLiveVertex
-from onolys_miti.voice.select import (
+from onolys_api.voice.fixture import FixtureVoice, silence_pcm24k, tone_pcm24k
+from onolys_api.voice.gemini_live_vertex import GeminiLiveVertex
+from onolys_api.voice.select import (
     allowed_voices,
     load_voice_config,
     locate_config_file,
@@ -35,7 +35,7 @@ from onolys_miti.voice.select import (
 
 pytestmark = pytest.mark.unit
 
-REPO = pathlib.Path(__file__).resolve().parents[3]
+REPO = pathlib.Path(__file__).resolve().parents[2]
 SECRET = "SECRET-PROMPT-TEXT-xyz"
 
 
@@ -185,7 +185,7 @@ class _Cfg:
 
 @pytest.fixture(autouse=True)
 def fake_genai_types(monkeypatch):
-    """The `miti` CI job installs onolys-miti without the `voice-gemini` extra: fake the SDK."""
+    """Fake the Gemini SDK types so these tests need no live client."""
     names = (
         "SpeechConfig VoiceConfig PrebuiltVoiceConfig SessionResumptionConfig "
         "ContextWindowCompressionConfig SlidingWindow LiveConnectConfig Blob"
@@ -336,9 +336,7 @@ async def test_gemini_close_yields_closed_and_open_failure():
 
 
 async def test_system_prompt_never_logged():
-    buf = io.StringIO()
-    h = logging.StreamHandler(buf)
-    h.setFormatter(JsonFormatter())
+    h = Capture()
     log.addHandler(h)
     old = log.level
     log.setLevel(logging.DEBUG)
@@ -348,19 +346,19 @@ async def test_system_prompt_never_logged():
     finally:
         log.removeHandler(h)
         log.setLevel(old)
-    assert "voice_open" in buf.getvalue() and SECRET not in buf.getvalue()
+    out = json.dumps(h.out)
+    assert "voice_open" in out and SECRET not in out
 
 
 # ---- no provider leakage ------------------------------------------------------------------
 
 
 def test_provider_name_only_in_adapter_and_config():
-    root = REPO / "engines" / "miti" / "src" / "onolys_miti"
+    root = REPO / "api" / "src" / "onolys_api" / "voice"
     assert root.is_dir(), root
     allowed = {"gemini_live_vertex.py", "voice_providers.default.yaml"}
     for f in root.rglob("*"):
         if f.suffix not in (".py", ".yaml") or "__pycache__" in f.parts or f.name in allowed:
             continue
-        if f.parent.name == "voice" or "voice" in f.parts:
-            text = f.read_text().lower()
-            assert "gemini" not in text and "genai" not in text, f
+        text = f.read_text().lower()
+        assert "gemini" not in text and "genai" not in text, f

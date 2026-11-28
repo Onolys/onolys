@@ -5,15 +5,15 @@ import json
 
 import pytest
 from onolys_engine_core.errors import ConfigError
-from onolys_miti.stt import AudioRef, SttParams
-from onolys_miti.stt.fixture import FixtureStt, uri_hash
-from onolys_miti.stt.google_chirp import GoogleChirp3
 from test_transcribe import SID, UID, Env, words
 
 from onolys_api.adapters.error_map import INTERNAL, to_public
 from onolys_api.adapters.real import DEFAULT_REGISTRY, RealStt
 from onolys_api.audio import canonical_audio_ref, canonical_key
 from onolys_api.repo.models import RecordingDoc
+from onolys_api.transcription import AudioRef, SttParams
+from onolys_api.transcription.fixture import FixtureStt, uri_hash
+from onolys_api.transcription.google_chirp import GoogleChirp3
 
 pytestmark = pytest.mark.unit
 URI = "gs://b/u1/s1/audio/canonical.flac"

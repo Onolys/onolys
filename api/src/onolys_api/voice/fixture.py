@@ -5,7 +5,7 @@ import math
 import struct
 from collections.abc import AsyncIterator
 
-from onolys_miti.voice import (
+from onolys_api.voice import (
     OUTPUT_SAMPLE_RATE,
     AudioOut,
     Closed,

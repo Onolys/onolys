@@ -12,10 +12,6 @@ dependencies = [
   "jsonschema>=4.22",
 ]
 
-[project.optional-dependencies]
-stt-google = ["google-cloud-speech>=2.26"]
-voice-gemini = ["google-genai>=1.0"]
-
 [dependency-groups]
 dev = ["pytest>=8", "pytest-asyncio>=0.23", "pytest-cov>=5", "ruff>=0.6"]
 

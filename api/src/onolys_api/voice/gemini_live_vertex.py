@@ -1,7 +1,7 @@
 """Gemini Live on Vertex AI voice adapter.
 
-The only module that names this provider's SDK. `google-genai` (extra `voice-gemini`) is
-imported lazily so `onolys_miti.voice` works without it. Auth is Application Default
+The only module that names this provider's SDK. `google-genai` is
+imported lazily so `onolys_api.voice` works without it. Auth is Application Default
 Credentials. Options: `location` (default us-central1), `project` (default: ADC project),
 `context_window_compression` (default false). Session resumption is always on. The system
 prompt is passed to the SDK and never logged.
@@ -14,7 +14,7 @@ from typing import Any
 
 from onolys_engine_core.safe_log import log_event
 
-from onolys_miti.voice import (
+from onolys_api.voice import (
     AudioOut,
     Closed,
     GoAway,
@@ -34,7 +34,7 @@ def _default_client(options: dict) -> Any:
     try:
         from google import genai
     except ImportError as e:  # pragma: no cover - extra not installed
-        raise VoiceProviderError("google-genai is not installed (extra voice-gemini)") from e
+        raise VoiceProviderError("google-genai is not installed") from e
     return genai.Client(
         vertexai=True,
         project=options.get("project"),
