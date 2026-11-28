@@ -5,7 +5,7 @@ date: 2026-11-28
 ---
 # Tasks: 09 Infra per environment
 
-Source of truth: /root/projects/onolys/onolys/.worktrees/refactor/revamp/docs/agent_files/refactor-revamp-20261128-0102/09-infra-per-env/PRD.md. Runs last (01 → 03 → 04 → 06 → 09; 02 supplies the Auth emulator block, 08 is a consumer of `firebase/`: Task 1 repoints its `--config api/firebase.json` commands). One commit per task; after each batch run `terraform validate/test`, impacted pytest, `actionlint`, `check_config.sh`. CI applies nothing; only the agent applies (Tasks 10-11). Firebase: one `(default)` Firestore entry (owner D-B), `--config firebase/firebase.json` resolves rules/indexes beside the config, env chosen by `--project`. Full suite runs only in dev-ship.
+Source of truth: /root/projects/onolys/onolys/.worktrees/refactor/revamp/docs/agent_files/refactor-revamp-20261128-0102/09-infra-per-env/PRD.md. Runs last (01 → 03 → 04 → 06 → 07/08 → 09; 02 supplies the Auth emulator block in `api/firebase.json`; 06 and 08 are consumers of it, and Task 1 repoints all their `--config api/firebase.json` commands to `firebase/firebase.json`; the eval repo has its own `firebase.json` and is untouched). One commit per task; after each batch run `terraform validate/test`, impacted pytest, `actionlint`, `check_config.sh`. CI applies nothing; only the agent applies (Tasks 10-11). Firebase: one `(default)` Firestore entry (owner D-B), `--config firebase/firebase.json` resolves rules/indexes beside the config, env chosen by `--project`. Full suite runs only in dev-ship.
 
 | # | Task | Depends on | Status |
 |---|---|---|---|

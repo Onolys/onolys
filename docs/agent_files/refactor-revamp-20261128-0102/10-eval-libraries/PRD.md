@@ -102,10 +102,10 @@ onolys-api (tag): data, auth, tasks, transcription (leaf features)   onolys-engi
 ## Manual steps
 1. At P4 deploy: the agent applies (plan first) the Terraform change that points the worker service at the eval image (env var renames).
 2. Agent plans and applies the `(default)` database switch (item 3 above): the named `eval` database and all old run docs are deleted with it; no export or backup.
-3. [OPEN] One small eval run per evaluation id after deploy (live LLM/STT). Default: the agent triggers it through the eval API with its own cloud credentials; the owner does it only if sign-in or keys need a human.
+3. [RESOLVED 2026-11-28: owner rule] One small eval run per evaluation id after deploy (live LLM/STT): the agent triggers it through the eval API with its own cloud credentials (agents do cloud actions); the owner only if a human sign-in is required.
 
 ## Risks / Open Questions
-- [RESOLVED: no copies; 06 provides leaf modules] O1: 06 makes `data`, `auth`, `tasks`, `transcription` leaf (no import of routes/sessions/pipeline), accept explicit settings/clients, expose separately named ownerless functions, and ship an in-process queue stub (06 R2b). P4 starts by confirming 06 T10's ruff `banned-api` leaf rules exist at the `engine-v1` tag (no separate import-graph check here); if the leaf rule does not hold, fix the api, do not copy.
+- [RESOLVED: no copies; 06 provides leaf modules] O1: 06 makes `data`, `auth`, `tasks`, `transcription` leaf (no import of routes/sessions/pipeline), accept explicit settings/clients, expose separately named ownerless functions, and ship an in-process queue stub (06 R2b). P4 starts by confirming 06 T10's ruff `banned-api` leaf rules (extending 04's boundary config) exist at the `engine-v1` tag (no separate import-graph check here); if the leaf rule does not hold, fix the api, do not copy.
 - [RESOLVED: `engine-v0` then `engine-v1`] O2: eval starts on `engine-v0` (created by 03); `engine-v1` is created by 06 (T10) after it merges, for P4.
 - [RESOLVED: yes] O3: delete all old eval run data; no old-run rendering.
 - [RESOLVED: second service] O4: worker is a second Cloud Run service from the same eval image.

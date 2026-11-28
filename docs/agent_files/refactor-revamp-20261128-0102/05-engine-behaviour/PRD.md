@@ -68,7 +68,7 @@ Residual risk: a wrongly coded reflection adds a slot; bounded because only the 
 | oneshot-split | 2 parallel (all volleys; globals) | third call, same `llm.tips` |
 Both oneshot pipelines keep 04's `checks.portion_words` (6000) and `duration_max`. Model ids still come from constants/env only.
 
-**Validation plan.** (a) Code-level: split cases. (b) No prompt-source or render test (byte-identity, "sentence appears literally" or "unresolved placeholder raises" test the renderer/Jinja2, not behaviour; rule 11 is met by rendering from one file; [RESOLVED 2026-11-28: owner rule 17]). The lower-code rule is checked in the reviewed payload golden diff. (c) Golden re-recordings in separate commits, each with a diff summary:
+**Validation plan.** (a) Code-level: split cases. (b) No prompt-source or render test (byte-identity, "sentence appears literally" or "unresolved placeholder raises" test the renderer/Jinja2, not behaviour; rule 11 is met by rendering from one file; [RESOLVED 2026-11-28: owner rule 17]). The lower-code rule is checked in the reviewed payload golden diff. Payload goldens are the request lists `FixtureClient` received (04's seam; no `acompletion` patching, no hand-written fake client). (c) Golden re-recordings in separate commits, each with a diff summary:
 | Step | Changes | Must stay equal |
 |---|---|---|
 | T1 extract fragments | nothing | MITI payloads byte-equal to 04 output |

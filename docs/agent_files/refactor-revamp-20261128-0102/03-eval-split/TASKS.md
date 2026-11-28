@@ -43,7 +43,7 @@ Done when: `ci.yml` runs green on a PR in the new repo, each job within 5 minute
 
 ## Task 5 — Config, Firebase, rules and docs copies
 What it is / what it means: Eval keeps its own copies of shared files (PRD R6, R8, D11, D12; copies [ACCEPTED]).
-What changes at a high level: Copy `config/models.yaml` and `config/staging/{routes,stt_providers}.yaml` to `config/`. Add own `firebase.json` (Hosting `eval-staging`, Firestore named `eval` database as today, plus the Auth emulator block, port 9099, as 02 adds for web; 10 switches the database to `(default)`), `.firebaserc`, a snapshot `firestore.indexes.json`, and deny-all Firestore rules (O4). Copy `docs/rules/{coding-rules,design-rules}.md` (eval's `design-rules.md` first line reads "`web/`" only), eval docs, eval parts of `isolated-environments.md`, plus short `AGENTS.md` and `CLAUDE.md` (`@AGENTS.md`).
+What changes at a high level: Copy `config/models.yaml` and `config/staging/{routes,stt_providers}.yaml` to `config/`. Add own self-contained root `firebase.json` (Hosting `eval-staging`, Firestore named `eval` database copied verbatim, plus an Auth emulator block, port 9099, mirroring 02's; no reference to this repo's `api/firebase.json`; no `(default)` switch here, 10 does it), `.firebaserc`, a snapshot `firestore.indexes.json`, and deny-all Firestore rules (O4). Copy `docs/rules/{coding-rules,design-rules}.md` (eval's `design-rules.md` first line reads "`web/`" only), eval docs, eval parts of `isolated-environments.md`, plus short `AGENTS.md` and `CLAUDE.md` (`@AGENTS.md`).
 Done when: tests that read `config/` (e.g. catalog test) pass; Firestore rules file is deny-all (no test of it: config, rule 17); `firebase.json` has the Auth emulator block and its target names match the deploy workflow.
 
 ## Task 6 — Port deploy workflow and CI scripts
@@ -53,7 +53,7 @@ Done when: `actionlint` passes on all ported workflows; no ported tooling-test s
 
 ## Task 7 — Copy Terraform; plan = no changes
 What it is / what it means: Infra is copied verbatim against the same state so no resource moves (PRD R7, D8). Copies are [ACCEPTED].
-What changes at a high level: Copy `infra/isolated-environment/` (root, `tests/`, eval examples), `infra/modules/environment/`, and `infra/scripts/{create-test-user,seed-secrets,identity-config}.py` with their tests to `infra/`. `identity-config.py` is copied unedited. Keep backend bucket/prefix. Agent runs `terraform init` and `plan` with `github_repository` still the old value.
+What changes at a high level: Copy `infra/isolated-environment/` (root, `tests/`, eval examples), `infra/modules/environment/`, and `infra/scripts/{create-test-user,seed-secrets,identity-config}.py` with their tests to `infra/`. `identity-config.py` is copied unedited. Keep backend bucket/prefix; no `(default)` database switch (10 does it). Agent runs `terraform init` and `plan` with `github_repository` still the old value.
 Done when: copied infra tests and `terraform fmt -check` / `validate` pass; `identity-config.py` is byte-identical to the original; `terraform plan` against live state reports no changes (gate). If the agent lacks eval-project credentials, this step goes to the owner.
 
 ## Task 8 — Cut-over: identity apply, deploy, verify
