@@ -18,7 +18,8 @@ Tools: firebase-tools 15.37.0 (needs Node 22), openjdk 21, Node 22.23.4. Snapsho
 - 02: test helper must call `connectAuthEmulator(getAuth(initializeApp(cfg)), "http://127.0.0.1:9099")` before `createFirebaseAuthService`; `emailApi: null`; verification code from emulator REST oobCodes.
 - 09/rules tests: emulator needs single-db config form, separate from the 3-db deploy config.
 
-## Owner decisions needed
+## Owner decisions (RESOLVED 2026-11-28, binding; see ../README.md D-A..D-E)
+Superseded options below; kept for history.
 - S2 (gates 06, 08): (a) local/test-only verifier branch behind a setting (e.g. when FIREBASE_AUTH_EMULATOR_HOST set + env local/test → accept emulator tokens, check iss/aud); (b) shared RS256 signing stub via IdTokenVerifier's injectable fetch_certs (emulator not in token path).
 - S4 (gates 09): (a) keep firebase.json at repo root, firebase/ holds rules+indexes only; (b) per-path overrides. Plus: verify deploy/indexes against real staging project in 09.
 

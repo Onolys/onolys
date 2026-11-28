@@ -36,13 +36,13 @@ onolys-engine-core = { git = "...", subdirectory = "engines/core",    tag = "eng
 onolys-miti        = { git = "...", subdirectory = "engines/miti",    tag = "engine-v0" }   # extras stt-google, voice-gemini as today
 onolys-oneshot     = { git = "...", subdirectory = "engines/oneshot", tag = "engine-v0" }
 ```
-All four are explicit because `tool.uv.sources` of a git dependency is not honoured transitively [RESOLVED O3: spike 3 in `../spikes/PRD.md` (phase 0), reported to owner, owner decides; no automatic fallback]. New `uv.lock` committed. Web: `@onolys/common#v0.4.0` already (02).
+All four are explicit because `tool.uv.sources` of a git dependency is not honoured transitively [RESOLVED O3: spike 3 PASS 2026-11-28 (`../spikes/PRD.md`): uv lock/sync/import of the four git-subdirectory deps works at snapshot 78fc3371, lock has only git sources; re-check once `engine-v0` exists; no fallback needed]. New `uv.lock` committed. Web: `@onolys/common#v0.4.0` already (02).
 
 **R4 CI (new repo).** `ci.yml` = today's `eval-core`, `eval-backend`, `eval-web` jobs plus actionlint and a config guard; path routing via `paths-filter` or none (small repo, run all). No `changes.sh`. `test_eval_image.sh` builds `backend/Dockerfile` in the new layout (context = repo root, `config/` copied into the image).
 
 **R5 Deploy (new repo).** `deploy-eval.yml` ported: same jobs, same service names (`onolys-eval-backend-eval`, `onolys-worker-eval`), same Hosting site `onolys-eval-app` and target `eval-staging`, same smoke. Changes: (a) worker image: shallow-clone `engine-v0` into `snapshot/`, overlay the eval repo's `config/`, build `snapshot/api/Dockerfile`; (b) **both images get the eval repo's SHA** as `GIT_SHA` (the worker drift guard compares `RunDoc.code_version` with it); (c) drop "install prod web deps"; (d) `scripts/ci/{release_target.py (eval role only), check_config.sh (staging only), verify_staging_release.cjs + test, set_eval_origin.sh, test_hosting_targets.sh (eval/web dir only), test_workflow_run_guard.py}` copied; `_deploy-cloudrun.yml` copied and trimmed to eval. [ACCEPTED: owner accepts these copies into the eval repo.] GitHub environment `eval`. Vars keep names (`EVAL_GCP_PROJECT`, `EVAL_WIF_PROVIDER`, `EVAL_DEPLOYER_SA`, `EVAL_HOSTING_SITE`, `EVAL_VITE_FIREBASE_*`, `GCP_REGION`); no GitHub secrets exist [verified: no `secrets.` use besides `inherit`].
 
-**R6 Config and Firebase.** Copy `config/models.yaml`, `config/staging/{routes,stt_providers}.yaml` to `config/` (eval keeps its own copy, [ACCEPTED] by owner; 09 will move the originals). Own `firebase.json` (Hosting `eval-staging` + Firestore `eval` database), `.firebaserc`, a snapshot copy of `firestore.indexes.json` (the eval DB uses api's schema, same indexes) [ACCEPTED copy]. Eval Firestore rules = deny-all (eval backend uses the Admin SDK only; the browser never reads Firestore), so no copy of prod `firestore.rules`.
+**R6 Config and Firebase.** Copy `config/models.yaml`, `config/staging/{routes,stt_providers}.yaml` to `config/` (eval keeps its own copy, [ACCEPTED] by owner; 09 will move the originals). Own `firebase.json` (Hosting `eval-staging` + Firestore `eval` database as today; 10 later switches it to one `(default)` entry, owner D-B), `.firebaserc`, a snapshot copy of `firestore.indexes.json` (the eval DB uses api's schema, same indexes) [ACCEPTED copy]. Eval Firestore rules = deny-all (eval backend uses the Admin SDK only; the browser never reads Firestore), so no copy of prod `firestore.rules`.
 
 **R7 Terraform.** Copy `infra/isolated-environment/` (root, `tests/`, eval examples) and `infra/modules/environment/` verbatim to `infra/`, plus `infra/scripts/{create-test-user,seed-secrets,identity-config}.py` and their tests; same `backend "gcs"` bucket/prefix, same resource addresses, so no `state mv`. `identity-config.py` is copied **unedited** (01 does not touch it; its hash feeds a trigger in `infra/identity.tf:75`, so any edit would show as a plan change; 09 cleans it later). Gate: the agent runs `terraform plan` from the new repo: **no changes** (with `github_repository` still the old value). Only then set `github_repository = "Onolys/onolys-eval"` and the agent applies (moves the WIF trust). Module/infra copies are [ACCEPTED] by owner. Trimming staging/prod branches from the copy is deferred.
 
@@ -66,7 +66,7 @@ Onolys/onolys                                  Onolys/onolys-eval (new)
         ^  git deps (api, core, miti, oneshot)        core/ backend/ web/ datasets/ fixtures/ config/ infra/ .github/
         |  + worker image = snapshot/api/Dockerfile + eval config/ overlay
         +------------------------------------------- deploy-eval.yml --WIF--> GCP project onolys-eval (unchanged)
-                                                       backend, worker (same images' services), Hosting onolys-eval-app, Firestore db eval
+                                                       backend, worker (same images' services), Hosting onolys-eval-app, Firestore db eval (-> (default) in 10)
                                                      Terraform state: gs://onolys-eval-tfstate/environment (unchanged)
 ```
 Deploy trigger stays "CI green on main, then deploy" inside the new repo.
@@ -99,10 +99,12 @@ Agents run Terraform plan and apply and other cloud actions (owner granted this)
 ## Risks / Open Questions
 - [RESOLVED: yes] O1: "own sessions" (stop writing api `SessionDoc`s) moves to 10. Until then eval stays on `engine-v0`.
 - [RESOLVED: public] O2: new repo `Onolys/onolys-eval` is PUBLIC.
-- [RESOLVED: spike 3 in `../spikes/PRD.md`, report to owner, owner decides] O3: uv resolution of four git subdirectory deps whose own pyprojects use `workspace = true` (~75% confident; not run). First task is spike 3 (`../spikes/PRD.md`). Option to present if it fails (no automatic fallback): build wheels in CI from the tag and install from a path.
+- [RESOLVED: spike 3 PASS, owner D-D 2026-11-28] O3: uv resolves the four git subdirectory deps (`workspace = true` in their pyprojects); lock has only git sources. Re-run `uv lock` against `engine-v0` once it exists (first task); the wheels fallback is not needed.
 - [RESOLVED: deny-all] O4: eval Firestore rules deny-all (Admin SDK only); no copy of prod `firestore.rules`.
 - [RESOLVED: yes] O5: worker image = tag + eval's own `config/` overlay.
-- [RESOLVED: dropped] Old eval runs/data are dropped; no mapping or migration of old ids or runs.
+- [RESOLVED: dropped] Old eval runs/data are dropped; no mapping or migration of old ids or runs. Owner 2026-11-28: any existing staging/eval records may be deleted; no data migration, export or backup.
+- [RESOLVED: owner D-B 2026-11-28] Each env uses the `(default)` Firestore database in its own project. 03 moves eval verbatim (still the named `eval` database and `FIRESTORE_DATABASE` setting); the switch to `(default)` (Terraform create `(default)` in `onolys-eval`, delete named `eval`, drop `firestore_database` from eval config, single-entry `firebase.json`) is done in the eval repo by 10, not here.
+- [RESOLVED: owner D-A 2026-11-28] Eval backend's use of `onolys_api.auth.idtoken` (custom `IdTokenVerifier`) stays frozen at `engine-v0` here; 10 replaces it with Firebase Admin `verify_id_token` (06 deletes the custom verifier in this repo).
 - [DEFERRED] Trim staging/prod branches from the copied Terraform module; rename `EVAL_*` vars; rewrite stale eval docs here; `bootstrap` eval entry (09).
 - Risk: drift guard fails runs if backend and worker `GIT_SHA` differ, or a deploy lands mid-run. Mitigation: R5(b), idle window.
 - Risk: dataset content in history. Mitigation: blob strip, `test_repo_guard` ported (repo is public, so this matters).
