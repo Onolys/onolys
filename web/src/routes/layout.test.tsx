@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { registerJob, getJob } from "../features/upload/uploader";
 import type { UploadJob } from "../features/upload/uploader";
-import { here, renderApp, signInTestUser, testService } from "../test/renderApp";
+import { here, renderApp, signInTestUser, testEmail, testService } from "../test/renderApp";
 
 const crash = vi.hoisted(() => ({ on: false }));
 vi.mock("../features/dashboard/SessionsPage", () => ({
@@ -59,7 +59,7 @@ describe("header nav by auth phase", () => {
     const header = within(screen.getByRole("banner"));
     expect(header.getAllByRole("link").map((a) => a.textContent)).toEqual(["Onolys"]);
     expect(header.queryByRole("button")).not.toBeInTheDocument();
-    expect(header.queryByText("a@clinic.org")).not.toBeInTheDocument();
+    expect(header.queryByText(testEmail("a@clinic.org"))).not.toBeInTheDocument();
     expect(screen.getByRole("heading", { level: 1 }).closest("section")).toHaveAttribute("data-page", "verify-email");
   });
 
@@ -71,7 +71,7 @@ describe("header nav by auth phase", () => {
     expect(inNav().getByRole("link", { name: "Sessions" })).toHaveAttribute("href", "/sessions");
     expect(inNav().getByRole("link", { name: "New Session" })).toHaveAttribute("href", "/new");
     expect(inNav().queryByRole("link", { name: "Sample report" })).not.toBeInTheDocument();
-    expect(inNav().queryByText("a@clinic.org")).not.toBeInTheDocument();
+    expect(inNav().queryByText(testEmail("a@clinic.org"))).not.toBeInTheDocument();
     expect(inNav().queryByRole("button", { name: "Sign out" })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Account menu" })).toHaveTextContent("A");
   });
@@ -99,7 +99,7 @@ describe("header nav by auth phase", () => {
     await userEvent.click(btn);
     expect(btn).toHaveAttribute("aria-expanded", "true");
     const menu = within(screen.getByRole("menu"));
-    expect(menu.getByText("a@clinic.org")).toBeInTheDocument();
+    expect(menu.getByText(testEmail("a@clinic.org"))).toBeInTheDocument();
     expect(menu.getByRole("menuitem", { name: "Settings" })).toHaveAttribute("href", "/settings");
     expect(menu.getByRole("menuitem", { name: "Sign out" })).toBeInTheDocument();
     await userEvent.keyboard("{Escape}");

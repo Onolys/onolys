@@ -3,13 +3,13 @@ import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { mockBackend, server } from "../../mocks/server";
-import { here } from "../../test/renderApp";
+import { here, uidForEmail } from "../../test/renderApp";
 import { renderPage } from "../../test/renderPage";
 import { DASHBOARD_POLL_MS, sessionsRefetchInterval } from "./chips";
 import { SessionsPage } from "./SessionsPage";
 
 const render = (opts: Parameters<typeof renderPage>[2]) => renderPage(<SessionsPage />, "/sessions", opts);
-const UID = "u_rater_clinic_org";
+const UID = uidForEmail("rater@clinic.org");
 const USER = { email: "rater@clinic.org", verified: true };
 
 const create = (title?: string) => mockBackend.createSession(UID, { title }).session.id;

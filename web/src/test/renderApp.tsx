@@ -4,7 +4,7 @@ import { AuthProvider, type AuthService } from "@onolys/common/auth";
 import type { EmailApi } from "@onolys/common/auth/firebase";
 import { createTestAuthService, EMULATOR_URL, TEST_PASSWORD, TEST_PROJECT_ID } from "@onolys/common/auth/testing";
 import { createMemoryRouter, RouterProvider, type RouteObject } from "react-router";
-import { afterEach, vi } from "vitest";
+import { afterEach, expect, vi } from "vitest";
 import { clearJobs } from "../features/upload/uploader";
 import { uidFromToken } from "../mocks/handlers";
 import { makeQueryClient } from "../queryClient";
@@ -64,8 +64,27 @@ export async function uidOf(service: AuthService): Promise<string> {
   return uid;
 }
 
-/** `rater@clinic.org` -> `u_rater_clinic_org`: tests seed the mock backend under this id before the page renders. */
-export const uidForEmail = (email: string) => `u_${email.toLowerCase().replace(/[^a-z0-9]+/g, "_")}`;
+/**
+ * Vitest runs test files in parallel against ONE auth emulator, so two files must never share an account (one file's
+ * verified/name rewrite would race the other's sign-in). A short tag of the test file's path keeps each file's accounts apart.
+ */
+function fileTag(): string {
+  const path = expect.getState().testPath;
+  if (!path) throw new Error("test accounts need a test file (expect.getState().testPath is unset)");
+  let h = 2166136261; // FNV-1a
+  for (let i = 0; i < path.length; i++) h = Math.imul(h ^ path.charCodeAt(i), 16777619) >>> 0;
+  return h.toString(36).padStart(7, "0");
+}
+
+/** `rater@clinic.org` -> `rater@<file tag>.clinic.org`: the account this test file uses for that logical user. */
+export const testEmail = (email: string) => {
+  const at = email.lastIndexOf("@");
+  // Tag the domain, not the local part: the page greets the user by the local part ("Welcome rater").
+  return `${email.slice(0, at)}@${fileTag()}.${email.slice(at + 1)}`.toLowerCase();
+};
+
+/** `rater@clinic.org` -> `u_rater_<tag>_clinic_org`: tests seed the mock backend under this id before the page renders. */
+export const uidForEmail = (email: string) => `u_${testEmail(email).replace(/[^a-z0-9]+/g, "_")}`;
 
 const admin = (path: string, body: object) =>
   fetch(`${EMULATOR_URL}/identitytoolkit.googleapis.com/v1/${path}?key=fake-api-key`, {
@@ -80,14 +99,15 @@ const admin = (path: string, body: object) =>
  */
 export async function signInTestUser(service: AuthService, user: NonNullable<RenderOptions["user"]>) {
   const localId = uidForEmail(user.email);
-  await admin("accounts:signUp", { email: user.email, password: TEST_PASSWORD, localId }); // already there is fine
+  const email = testEmail(user.email);
+  await admin("accounts:signUp", { email, password: TEST_PASSWORD, localId }); // already there is fine
   const update = await admin(`projects/${TEST_PROJECT_ID}/accounts:update`, {
     localId,
     emailVerified: user.verified,
     ...(user.displayName ? { displayName: user.displayName } : { deleteAttribute: ["DISPLAY_NAME"] }),
   });
   if (!update.ok) throw new Error(`Auth emulator account update answered ${update.status}`);
-  await service.signIn(user.email, TEST_PASSWORD);
+  await service.signIn(email, TEST_PASSWORD);
 }
 
 export async function renderApp(path: string, opts: RenderOptions = {}) {

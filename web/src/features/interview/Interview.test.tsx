@@ -7,7 +7,7 @@ import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { mockBackend, server } from "../../mocks/server";
-import { here, renderApp } from "../../test/renderApp";
+import { here, renderApp, uidForEmail } from "../../test/renderApp";
 import { configureFakeRelay, lastFakeRelay, resetFakeRelay } from "./relay/fakeRelay";
 
 const engines: FakeEngine[] = [];
@@ -85,7 +85,7 @@ class FetchXhr {
   abort() {}
 }
 
-const UID = "u_rater_clinic_org";
+const UID = uidForEmail("rater@clinic.org");
 const USER = { email: "rater@clinic.org", verified: true };
 const main = () => within(screen.getByRole("main"));
 

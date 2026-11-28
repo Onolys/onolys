@@ -5,10 +5,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { getStatusListener, setStatusListener, type SessionStatusDoc } from "../../api/statusListener";
 import { mockBackend, mockEmitter, server } from "../../mocks/server";
 import { getJob } from "../upload/uploader";
-import { here, renderApp } from "../../test/renderApp";
+import { here, renderApp, uidForEmail } from "../../test/renderApp";
 
 const EMAIL = "rater@clinic.org";
-const UID = "u_rater_clinic_org";
+const UID = uidForEmail("rater@clinic.org");
 const USER = { email: EMAIL, verified: true };
 
 const create = (title?: string) => mockBackend.createSession(UID, { title }).session.id;

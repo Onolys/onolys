@@ -3,9 +3,10 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { SessionStatusDoc } from "../../api/statusListener";
 import { mockBackend } from "../../mocks/server";
 import { renderPage } from "../../test/renderPage";
+import { uidForEmail } from "../../test/renderApp";
 import { RatingCardSlot, SpeakerGateSlot } from "./slots";
 
-const UID = "u_rater_clinic_org";
+const UID = uidForEmail("rater@clinic.org");
 const USER = { email: "rater@clinic.org", verified: true };
 
 function awaiting() {

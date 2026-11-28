@@ -4,9 +4,9 @@ import { http, HttpResponse } from "msw";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { drinkingSampleReport, drinkingSampleTurns } from "../../mocks/fixtures/sample";
 import { mockBackend, server } from "../../mocks/server";
-import { here, renderApp } from "../../test/renderApp";
+import { here, renderApp, uidForEmail } from "../../test/renderApp";
 
-const UID = "u_rater_clinic_org";
+const UID = uidForEmail("rater@clinic.org");
 const USER = { email: "rater@clinic.org", verified: true };
 const SCORED = { change_goal: "Walk more in the evenings", globals: { cct: { score: 3 } } };
 

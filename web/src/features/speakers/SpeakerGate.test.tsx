@@ -3,9 +3,9 @@ import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import { describe, expect, it } from "vitest";
 import { mockBackend, server } from "../../mocks/server";
-import { renderApp } from "../../test/renderApp";
+import { renderApp, uidForEmail } from "../../test/renderApp";
 
-const UID = "u_rater_clinic_org";
+const UID = uidForEmail("rater@clinic.org");
 const USER = { email: "rater@clinic.org", verified: true };
 
 const create = (title?: string) => mockBackend.createSession(UID, { title }).session.id;

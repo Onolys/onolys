@@ -2,12 +2,12 @@ import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { mockBackend } from "../../mocks/server";
-import { renderApp } from "../../test/renderApp";
+import { renderApp, uidForEmail } from "../../test/renderApp";
 import { renderPage } from "../../test/renderPage";
 import { RatingCard } from "./RatingCard";
 
 const EMAIL = "rater@clinic.org";
-const UID = "u_rater_clinic_org";
+const UID = uidForEmail("rater@clinic.org");
 const USER = { email: EMAIL, verified: true };
 
 interface Put {

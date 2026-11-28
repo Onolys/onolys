@@ -4,7 +4,7 @@ import { act } from "@testing-library/react";
 import { http, HttpResponse } from "msw";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { mockBackend, server } from "../../mocks/server";
-import { here, renderApp } from "../../test/renderApp";
+import { here, renderApp, uidForEmail } from "../../test/renderApp";
 import { UPLOAD_LIMITS, uidFromToken } from "../../mocks/handlers";
 import { clearJobs, getJob } from "./uploader";
 
@@ -85,7 +85,7 @@ describe("New session form", () => {
     const id = here(router).split("/")[2]!;
     expect(getJob(id)).toBeDefined();
     // the same-origin mock PUT may already have completed (validating); either way the upload was registered
-    expect(mockBackend.getSession("u_rater_clinic_org", id).status).toMatch(/^(uploading|validating)$/);
+    expect(mockBackend.getSession(uidForEmail(USER.email), id).status).toMatch(/^(uploading|validating)$/);
   });
 
   it("W17: the latest pick wins when an earlier file's check finishes last; Start waits with 'Checking file…'", async () => {
@@ -149,7 +149,7 @@ describe("New session form", () => {
   });
 
   it("prefills the title from ?from=<id>", async () => {
-    const id = mockBackend.createSession("u_rater_clinic_org", { title: "Old visit" }).session.id;
+    const id = mockBackend.createSession(uidForEmail(USER.email), { title: "Old visit" }).session.id;
     await open(`/sessions/new?from=${id}`);
     await waitFor(() => expect(screen.getByLabelText(/title/i)).toHaveValue("Old visit"));
   });
@@ -333,7 +333,7 @@ describe("Transcript upload", () => {
     await goal();
     await userEvent.click(screen.getByRole("button", { name: "Start" }));
     await waitFor(() => expect(here(router)).toMatch(/^\/sessions\/(?!new$)[^/]+$/));
-    expect(received).toEqual([{ content, type: contentType, uid: "u_rater_clinic_org" }]);
+    expect(received).toEqual([{ content, type: contentType, uid: uidForEmail(USER.email) }]);
     expect(audio).not.toHaveBeenCalled();
   });
   it.each([
