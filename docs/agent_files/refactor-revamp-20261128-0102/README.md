@@ -5,12 +5,13 @@ date: 2026-11-28
 ---
 # refactor/revamp
 
-Design stage. PRDs reviewed, OPENs resolved; next dev-critique then dev-tasks. Nothing implemented. Base: main. Scope: English transcripts only.
+Design stage. PRDs reviewed, over-engineering audit applied (4 `[OPEN]` items with defaults, see audit file); next dev-critique then dev-tasks. Nothing implemented. Base: main. Scope: English transcripts only.
 
 ## Files
 
 | File | What |
 | --- | --- |
+| [audit-overengineering-2026-11-28.md](audit-overengineering-2026-11-28.md) | Rule 17 audit: 11 code findings + per-PRD findings, owners, `[OPEN]` list; applied to PRDs 02-10 |
 | [brainstorm.md](brainstorm.md) | Agreed rules (1-16) + changes; snapshot of the Claude doc, 2026-11-28 |
 | [owner-follow-ups.md](owner-follow-ups.md) | Things only the owner can do (committed copy; the original is untracked in the primary checkout) |
 | [00-rules-file/PRD.md](00-rules-file/PRD.md) | Rules 1-16 into `docs/rules/coding-rules.md` (copied per repo); `design-rules.md` moves beside it; `AGENTS.md` + one-line `CLAUDE.md` point at both; no new CI |
@@ -37,6 +38,7 @@ Design stage. PRDs reviewed, OPENs resolved; next dev-critique then dev-tasks. N
 - Spikes ran (2026-11-28; `spikes/spike-report-2026-11-28.md`); owner decisions D-A..D-E apply. Gates cleared; open re-checks: spike 3 at `engine-v0` (03) and `engine-v1` (06 T10).
 - Cross-PRD ordering from D-A/D-B: 02 adds the Auth emulator block; 06 CI (`api-emulator`) and 08 (`npm test`, e2e) need it; 06 replaces the custom verifiers (eval backend frozen at `engine-v0` until 10); 09 replaces staging's named DB by `(default)` after 06 drops `FIRESTORE_DATABASE`; eval's DB switch is in the eval repo (10).
 
+- Every PRD cites rule 17 where it lists rules; task specs say "follow `docs/rules/coding-rules.md`".
 - 03 must land before 04: 04 deletes the old engine packages; eval must already be out (04 O1).
 - 07 needs only 02 (no dependency on 06); 08 needs 06 (combined local mode) and 07.
 - 09 assumes order 01 → 03 → 04 → 06 → 09. 09 only moves `routes.yaml`; 04 owns its content.
@@ -79,6 +81,7 @@ Design stage. PRDs reviewed, OPENs resolved; next dev-critique then dev-tasks. N
 - [RESOLVED 2026-11-28] **D-D Spike 3 PASS:** uv git-subdirectory deps work; re-check once `engine-v0` exists (03) and `engine-v1` (06 T10); wheels fallback not needed (03, 10).
 - [RESOLVED 2026-11-28] **D-E Spike 1 PASS:** Auth emulator works under vitest+jsdom; fallback options (`signedInService` stub, keep fake) removed (02, 08).
 - Coding rule 17 "Use the library; don't rebuild it" (Block) is added to `docs/rules/coding-rules.md` in parallel; D-A is its first application.
+- [RESOLVED 2026-11-28: owner rule 17] **Over-engineering audit** ([audit file](audit-overengineering-2026-11-28.md)) applied: pydantic-settings for api and eval config (06, 10); vendor Firestore transaction retry, no custom rounds/locks (06); LiteLLM `mock_response` and one stub seam instead of ~6 fake LLM clients (04); Jinja2 prompt templating, no prompt-source test (04, 05); ruff `banned-api` instead of custom AST/import-graph boundary tests (04, 06, 10); one-off fuzz/mutation/schemathesis harnesses, docs-grep tests and tests of tooling deleted (02, 03, 06, 07, 08); `cachetools.TTLCache` (10); runner load checks cut to unknown step + bad `with` keys, equivalence fixtures cut to 3 (04); no pixel baseline for 07's pure move; `api-flaky` lane, `state_identity` resource and `charts.yaml` manifest dropped (06, 09, 10). `[OPEN]` with defaults: 04 LiteLLM retries, 04 structured logging, 06 client IP on Cloud Run, 10 scheduler breaker -> Router cooldowns. 06's emulator-share `[OPEN]` is RESOLVED (two jobs; T0 re-measures).
 - No cross-repo copies/random deps, except those listed under "Accepted cross-repo copies" below.
 - Agents run Terraform plan and apply and other cloud actions (owner granted this); only steps needing credentials the agent lacks stay with the owner.
 - Pin tag `engine-v0` (not `eval-base-v0`), created by 03 (snapshot still has api + engine packages + config). Second tag `engine-v1` after 04-06 merge, for 10 P4.
@@ -90,7 +93,7 @@ Design stage. PRDs reviewed, OPENs resolved; next dev-critique then dev-tasks. N
 - STT/voice/rating/scenarios move into api as-is in 04, consolidated in 06: accepted.
 
 **00 rules**: rule 2 (~300 lines) guidance only, not a CI gate. Rule 7 rewritten: class for major concepts even with one variant, plain/static functions otherwise, no over-engineering, max one inheritance level. Engine shared via git tag, no registry. Rules copied into each repo, synced by hand. TS `constants.ts` per app/package adopted.
-**01**: `dorny/paths-filter` approved. Delete eval pre-matrix readers. Edit the 2 README lines.
+**01** (done): leftovers handed on, see the audit file section C. `dorny/paths-filter` approved. Delete eval pre-matrix readers. Edit the 2 README lines.
 **02**: Auth-emulator spike 1 PASS (D-E); fakes deleted. `legacy.css` removed entirely, unconditionally (plus landing import if any). `lib/spans.ts` deleted. `theme-init.js` shipped by package, apps copy into `public/`. onolys-common keeps own rules copy; design-rules gains "UI pieces come from `@onolys/common`". 02 owns the rename.
 **03**: Own sessions moves to 10. Eval repo public. uv spike 3 PASS (D-D). Eval Firestore rules deny-all (Admin SDK only). Worker image = tag + eval's own `config/` overlay.
 **04**: 03 lands first, creates `engine-v0`. Engine passes unknown preset keys through. Fixtures ship in wheel. `oneshot:miti` renamed `oneshot-single`; old runs dropped. Provenance hash change accepted. `oneshot-raw` dropped. Pipeline deviation (no `verify.map_units`; rules/caps in `protocol.yaml`) approved.
@@ -114,4 +117,4 @@ See [owner-follow-ups.md](owner-follow-ups.md) (committed copy). Spike report re
 ## Next steps
 
 1. Run `dev-critique` (on request), then `dev-tasks` per PRD in build order.
-2. Phase-0 spikes done (2026-11-28); regenerate TASKS.md for 02, 03, 06, 08, 09, 10, spikes.
+2. Phase-0 spikes done (2026-11-28); regenerate TASKS.md for 02-10 (the audit changed all of them; 05 and 07 lightly).

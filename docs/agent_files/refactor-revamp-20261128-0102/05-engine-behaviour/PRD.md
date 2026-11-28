@@ -29,7 +29,7 @@ Root cause of 1-3 and +: one-shot's prose is a hand copy of MITI prompts ("adapt
 **R1 Context and batches.** `llm.code_batches` user message = `context` (last `context_turns` turns, default 6, before the batch's first turn, both speakers, selected span only, plain text, no ids to code) then the batch's turns in real order: clinician turns carry `volley_id`, client turns text only. Same renderer for every call that codes. Drop `context_before`, the 150/100-word limits, `_client_context`, `previous_clinician_volley`. Batch size 25, fixed; not measured.
 **R2 Evidence stays quotes.** Response shape and quote verification are as 04 left them (`{volleys:[{volley_id, utterances:[{quote, code, rationale}]}]}`, quote located by code, invalid dropped, drop rate and one retry as in 04). No unit ids, no `segment.units`, no `map_units`. Numbered units are a follow-up (see Follow-ups).
 **R3 Reflection split.** New step `segment.split_on_reflection` (after coding, before `rules.apply`): within a pre-split volley, at each client gap between two clinician turns, split when the final utterance (last 1) of the preceding clinician turn is coded in group `reflection`. Instances after the gap move to a new volley `v7.2`; `volleys` and `coverage` recompute. `protocol.yaml` gains `groups: {reflection: [sr, cr]}`, shared with the sr/cr `exclusive_group` rule. `segment.volleys` keeps `break_on: [question]`.
-**R4 One instruction source (rule 11).** Fragments in `protocols/miti-4.2.1/instructions/`: `coding_rules.md` (split-less, lower-code rules, not-coded list, reflection-vs-structuring), `globals_rules.md`, `tips_rules.md`; few-shot examples in `protocols/miti-4.2.1/fewshot/`. Evaluation prompts keep only framing and use placeholders `{{coding_rules}} {{globals_rules}} {{tips_rules}} {{codes}} {{globals}} {{counting_rules}} {{fewshot_*}} {{output_format}}`; `output_format` is generated from the response models. Deleted: one-shot prose, copied definitions, `instructions.md`, hand-written `schema.json`.
+**R4 One instruction source (rule 11).** Fragments in `protocols/miti-4.2.1/instructions/`: `coding_rules.md` (split-less, lower-code rules, not-coded list, reflection-vs-structuring), `globals_rules.md`, `tips_rules.md`; few-shot examples in `protocols/miti-4.2.1/fewshot/`. Evaluation prompts keep only framing and use placeholders `{{coding_rules}} {{globals_rules}} {{tips_rules}} {{codes}} {{globals}} {{counting_rules}} {{fewshot_*}} {{output_format}}`, rendered by Jinja2 with `StrictUndefined` (04 R6; an unresolved placeholder is a render error, so no separate loader check) [RESOLVED 2026-11-28: owner rule 17]; `output_format` is generated from the response models via pydantic `model_json_schema()`. Deleted: one-shot prose, copied definitions, `instructions.md`, hand-written `schema.json`.
 **R5 One-shot on shared steps.** Same prepare, volleys, renderer, response sub-shapes (`volleys`, `globals` incl. `poor_practice_cited`, `tips` incl. quote/turn) and post-steps (`segment.split_on_reflection`, `globals.cap`, `rules.apply`, `score.*`, `aggregate.runs`, `tips.validate`, `report.build`). `Engine.output_schema()` = the report schema for every evaluation. `tips.validate` is split out of `llm.tips` (pure; shared). Output property order is `volleys` then `globals` then `tips`. `n_runs` is honoured; tips come from the representative run.
 **R6 Variants.** See Architecture. Truncated or invalid single call fails (`on_bad_output: fail`), no halving; MITI keeps halving. `oneshot-raw` is dropped; `oneshot:miti` is renamed `oneshot-single`; old runs are dropped (no mapping).
 **R7 Validation.** Fixture goldens re-recorded per change (table below); `expected.yaml` hand counts stay the oracle. No gating, baseline or measurement of model quality in this PRD.
@@ -68,7 +68,7 @@ Residual risk: a wrongly coded reflection adds a slot; bounded because only the 
 | oneshot-split | 2 parallel (all volleys; globals) | third call, same `llm.tips` |
 Both oneshot pipelines keep 04's `checks.portion_words` (6000) and `duration_max`. Model ids still come from constants/env only.
 
-**Validation plan.** (a) Code-level: split cases; loader rejects unresolved placeholders. (b) Prompt-source test: every shared fragment appears byte-identically in each prompt that uses it, and no fragment sentence appears literally in an evaluation prompt. (c) Golden re-recordings in separate commits, each with a diff summary:
+**Validation plan.** (a) Code-level: split cases. (b) No prompt-source test (byte-identity / "sentence appears literally" is a test of the renderer, not behaviour; rule 11 is met by rendering from one file; deleted [RESOLVED 2026-11-28: owner rule 17]). (c) Golden re-recordings in separate commits, each with a diff summary:
 | Step | Changes | Must stay equal |
 |---|---|---|
 | T1 extract fragments | nothing | MITI payloads byte-equal to 04 output |
@@ -105,6 +105,7 @@ Both oneshot pipelines keep 04's `checks.portion_words` (6000) and `duration_max
 - [RESOLVED: 25, not measured] O4 Batch size.
 - [RESOLVED: dropped] O5 Comparison gate: no gating, baseline or measurement.
 - [RESOLVED: D5] `oneshot-raw` not kept (answers 04 O6).
+- Rules cited: 3, 4, 9, 11, 14, 17 (templating and schema generation use Jinja2 and pydantic, not custom code).
 - [DEFERRED] Coded-question break, unit ids for globals evidence, Jev, per-volley/per-global calls, non-English.
 
 ## Follow-ups
@@ -114,7 +115,7 @@ Numbered clinician units instead of quotes: `segment.units` writes `u1..uN` over
 - Each fix has a test: #1/#3 no one-shot prose or schema left (`git grep "any client turn"` and `instructions.md` absent); #2 lower-code rule appears in every coding prompt render; #4 `reflection_answer` yields 2 sr, statement+"yeah" stays one volley; #5 payload has context in order, no `context_before`, no 150/100 limits.
 - Instances keep turn/start/end/quote; report validates against the unchanged schema for all three evaluations.
 - All three pipelines load (`Engine.load`), share steps, and name no model; oneshot output validates against the report schema.
-- Prompt-source test green; T1 shows MITI payloads byte-equal before T2.
+- T1 shows MITI payloads byte-equal before T2.
 - Goldens re-recorded per R8 with one commit per change; `expected.yaml` counts unchanged except the new fixture and justified `batch_edge` edits.
 - When 05 re-records fixture goldens, the api stub-mode run (`FixtureClient`) and the web preview/stub tests stay green (05 and 06 may land in either order); checked in the same commit as each re-recording.
 - No LLM call made during build; ruff clean; dev-ship full gate.
