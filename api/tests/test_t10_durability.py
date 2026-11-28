@@ -1,6 +1,6 @@
-"""T10: async/durability fixes (M-5 durable reset email, LM-10 loop-safe transcript upload,
-LM-17 validate publishes the validated bytes + complete/request_upload race, A16 rejection logs,
-A19 voice relay first frame + lease-guarded checkpoint). Deterministic: fakes and events only."""
+"""Async/durability fixes (durable reset email, loop-safe transcript upload,
+validate publishes the validated bytes + complete/request_upload race, rejection logs,
+voice relay first frame + lease-guarded checkpoint). Deterministic: fakes and events only."""
 
 import asyncio
 import hashlib
@@ -41,7 +41,7 @@ class RecordingQueue:
         self.payloads.append(payload)
 
 
-# ---- M-5: the reset email is enqueued before the 202, then sent by a worker with a retry ----
+# ---- the reset email is enqueued before the 202, then sent by a worker with a retry ----
 
 
 async def test_reset_is_enqueued_durably_before_the_response(blobs):
@@ -164,7 +164,7 @@ def test_unknown_account_sends_nothing(blobs):
     assert runner.handle(p, 0).status_code == 200 and env.sender.messages == []
 
 
-# ---- LM-10: the transcript upload keeps the event loop free ----
+# ---- the transcript upload keeps the event loop free ----
 
 
 class GatedRepo(FakeRepo):
@@ -220,7 +220,7 @@ async def test_transcript_upload_does_not_block_the_event_loop(settings, blobs):
     assert r.status_code == 202, r.text
 
 
-# ---- LM-17: the published original is the validated bytes; complete vs request_upload ----
+# ---- the published original is the validated bytes; complete vs request_upload ----
 
 
 async def _staged_session(settings, repo, blobs, data):
@@ -323,7 +323,7 @@ async def test_request_upload_sets_state_and_upload_in_one_write(settings, blobs
     assert s.state == "uploading" and s.upload.upload_id == upload_id
 
 
-# ---- A16: a user-file rejection is not a `status=failed` alert line ----
+# ---- a user-file rejection is not a `status=failed` alert line ----
 
 
 def _lines(caplog):
@@ -375,7 +375,7 @@ def _make_session(repo):
     return sid
 
 
-# ---- A19: voice relay ----
+# ---- voice relay ----
 
 
 async def test_oversized_first_frame_is_refused_before_auth(tmp_path):

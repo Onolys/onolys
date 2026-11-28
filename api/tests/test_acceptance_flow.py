@@ -1,4 +1,4 @@
-"""AC2: the complete stub flow over HTTP (fake repo/blobs/adapters, in-memory queue).
+"""The complete stub flow over HTTP (fake repo/blobs/adapters, in-memory queue).
 
 Both rating orders (before and after transcription finishes), report v1 then v2, and
 `GET /sessions` listing a done, a failed and an in-flight session together.
@@ -119,7 +119,7 @@ async def test_complete_flow_over_http_both_rating_orders(flow):
     flow.drain()
     assert (await flow.get(f"/sessions/{s2}"))["status"] == "report_ready"
 
-    # FX45: a ready report makes the rating final: no re-run, no new final rating.
+    # a ready report makes the rating final: no re-run, no new final rating.
     r = await flow.c.post(f"/v1/sessions/{s1}/runs", json={}, headers=flow.h)
     assert (r.status_code, r.json()["details"][0]["code"]) == (409, "rating_final")
     r = await flow.c.put(

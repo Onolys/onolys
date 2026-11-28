@@ -1,4 +1,4 @@
-"""Staging-only forced-failure presets (SP09 R6, D4, AC7, AC8): config only, no code hooks."""
+"""Staging-only forced-failure presets: config only, no code hooks."""
 
 from pathlib import Path
 
@@ -98,7 +98,7 @@ def test_staging_yaml_has_no_secrets():
     assert "sk-" not in STAGING.read_text() and "presets" in data
 
 
-# ---- FX43 / A6, A8: public preset allowlist ---------------------------------------------------
+# ---- public preset allowlist ---------------------------------------------------
 
 
 def _resolver(env, **kw):

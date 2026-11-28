@@ -92,7 +92,7 @@ def known_bug(request, reason: str):
     request.applymarker(pytest.mark.xfail(strict=True, reason=reason))
 
 
-# ---- F1 / A3: unvalidated path ids and cursors must never 500 ------------------------------
+# ---- unvalidated path ids and cursors must never 500 ------------------------------
 
 ID_ROUTES = [
     ("get", "/v1/sessions/{x}"),
@@ -306,7 +306,7 @@ def test_concurrent_api_key_create_leaves_single_active_key(fs_api):
 
 
 def test_session_create_is_free_and_uncapped(fake_api):
-    """FX46 (A4, owner decision): creating a session costs nothing and has no cap; only POST /runs
+    """Creating a session costs nothing and has no cap; only POST /runs
     (and starting an AI interview) uses a unit."""
     api = fake_api
     h = _uid()

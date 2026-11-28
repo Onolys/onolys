@@ -1,4 +1,4 @@
-"""SP09 Task 5 / R1-R4 / D2 / AC1-AC2: the SP04 end-to-end flow with `ADAPTERS=real`.
+"""The end-to-end flow with `ADAPTERS=real`.
 
 No network: the STT provider is `FixtureStt` (via the real `RealStt` registry), and the engine's
 coding stage and tips generator return canned fixtures (see `miti_fixtures.patch_engine`).

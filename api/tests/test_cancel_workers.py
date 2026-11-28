@@ -1,4 +1,4 @@
-"""04-cancel Task 5: workers stop on cancel (R5, D4, D9).
+"""Workers stop on cancel.
 
 `alive.ensure_active` raises `Cancelled` on a `cancelled` session (purging nothing); the runner
 answers 200 `cancelled` and never writes `failed` over `cancelled`; data is kept.

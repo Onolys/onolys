@@ -1,8 +1,9 @@
-"""Limit accounting at run end (03-failure-policy R5, D5).
+"""Limit accounting at run end.
 
 Only a user/file fault after the model started is ever counted; interview-linked runs are never
 counted (they are created `counted=False`, so a release never gives anything back for them).
-`should_refund` and `release_once` are the public helpers SP04 reuses; both are run-end only.
+`should_refund` and `release_once` are the public helpers the eval run path reuses; both are
+run-end only.
 """
 
 from pydantic import ValidationError

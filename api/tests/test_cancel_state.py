@@ -1,4 +1,4 @@
-"""04-cancel Task 1: the terminal `cancelled` state and the fields that remember its result."""
+"""The terminal `cancelled` state and the fields that remember its result."""
 
 from datetime import UTC, datetime
 

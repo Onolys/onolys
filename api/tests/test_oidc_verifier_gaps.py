@@ -79,7 +79,7 @@ def test_unknown_kid_triggers_one_cert_refresh_then_succeeds():
         calls.append(1)
         return {"k1": PUB1} if len(calls) == 1 else {"k1": PUB1, "k2": PUB2}
 
-    v = OidcVerifier(AUD, SA, fetch_certs=fetch, min_refresh_s=0)  # refresh floor off (FX4)
+    v = OidcVerifier(AUD, SA, fetch_certs=fetch, min_refresh_s=0)  # refresh floor off
     assert v.verify(_mint(PRIV1, "k1")) == SA
     assert v.verify(_mint(PRIV2, "k2")) == SA  # rotated key: forced refetch
     assert len(calls) == 2
@@ -99,7 +99,7 @@ def test_unknown_kid_refresh_is_rate_limited_by_default():
     for _ in range(3):
         with pytest.raises(InvalidToken):
             v.verify(_mint(PRIV2, "k-unknown"))
-    assert fetch.call_count == 1  # FX4: forced refresh floored at MIN_REFRESH_S
+    assert fetch.call_count == 1  # forced refresh floored at MIN_REFRESH_S
 
 
 def test_cert_fetch_failure_is_503_not_invalid_token():
@@ -134,7 +134,7 @@ def test_fetch_oidc_certs_propagates_http_errors(monkeypatch):
         oidc.fetch_oidc_certs()
 
 
-# ---- claim checks (M8): each case must be refused, and only by the intended claim -------------
+# ---- claim checks: each case must be refused, and only by the intended claim -------------
 
 
 def _mint_claims(priv=PRIV1, kid="k1", header=None, **over):

@@ -1,4 +1,4 @@
-"""`/v1/sessions/{id}/rating`: the in-app rating card (R2, D15). Firestore only, no parsing.
+"""`/v1/sessions/{id}/rating`: the in-app rating card. Firestore only, no parsing.
 
 `final=false` overwrites the single draft doc (size limits only; never gates or starts a run).
 `final=true` is refused (409 `rating_final`) once a run started, a rating was submitted
@@ -104,7 +104,7 @@ def _open_session(request: Request, user: AuthUser, id: str):
         "reason/note/example or 3,000 for `notes` is 422 `rating_invalid`. Allowed in every state "
         "but `deleting` (404) and `cancelled` (409 `invalid_state`); a final card is refused "
         "with 409 `rating_final` once a rating was submitted (or a report exists): the "
-        "rating is final, only drafts stay open. A final card may start the first run (R4)."
+        "rating is final, only drafts stay open. A final card may start the first run."
     ),
 )
 def put_rating(id: ResourceId, body: RatingRequest, request: Request, user: User) -> RatingSaved:
@@ -112,7 +112,7 @@ def put_rating(id: ResourceId, body: RatingRequest, request: Request, user: User
     uid = user.uid
     session = _open_session(request, user, id)
     if session.state == "cancelled":
-        raise invalid_state()  # terminal (04-cancel R6); GET /rating still reads
+        raise invalid_state()  # terminal; GET /rating still reads
     now = datetime.now(UTC)
     if not body.final:
         if issues := validate_rating(body.card, final=False):
@@ -147,7 +147,7 @@ def put_rating(id: ResourceId, body: RatingRequest, request: Request, user: User
         ):
             raise rating_final()
 
-    # ONE transaction (LM-2): the final-check, the revision and the flags commit together.
+    # ONE transaction: the final-check, the revision and the flags commit together.
     repo.transition_session(
         uid, id,
         transition_plan(

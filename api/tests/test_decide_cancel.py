@@ -1,4 +1,4 @@
-"""04-cancel Task 2: `decide_cancel`, the pure charge rule for a cancel (PRD R4)."""
+"""`decide_cancel`, the pure charge rule for a cancel."""
 
 import pytest
 

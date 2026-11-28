@@ -1,4 +1,4 @@
-"""POST/GET /v1/sessions/{id}/audio and /audio/complete (R2 audio, R3, D5, AC5)."""
+"""POST/GET /v1/sessions/{id}/audio and /audio/complete."""
 
 import pytest
 from audio_helpers import MAGIC, A, B, StubTools
@@ -30,7 +30,7 @@ async def request_upload(client, sid, headers=A, **body):
     return await client.post(f"/v1/sessions/{sid}/audio", json=body, headers=headers)
 
 
-# ---- alias mapping (all four AC5 cases) ----
+# ---- alias mapping (all four cases) ----
 
 
 @pytest.mark.parametrize(
@@ -105,7 +105,7 @@ async def test_second_request_gets_fresh_url_and_drops_old_staged_object(client,
 
 
 async def test_reissue_sweeps_every_earlier_staged_object(client, blobs):
-    """A15: an object a stale signed URL wrote after an earlier reissue is swept too."""
+    """An object a stale signed URL wrote after an earlier reissue is swept too."""
     sid = await new_session(client)
     await request_upload(client, sid, content_type="audio/wav")
     blobs.put_bytes(f"uploads/alice/{sid}/stray-from-old-url", MAGIC["wav"])

@@ -1,4 +1,4 @@
-"""R5 / D3 / AC6 / AC12: queue, handler wrapper (retry, idempotency), worker route + OIDC."""
+"""Queue, handler wrapper (retry, idempotency), worker route + OIDC."""
 
 import time
 from dataclasses import replace
@@ -83,7 +83,7 @@ def test_task_names():
     assert task_name(payload("run", run_id="r1")) == "r1-run"
 
 
-# ---- retry semantics (AC6) ----
+# ---- retry semantics ----
 
 
 def test_transient_failure_succeeds_on_attempt_2(repo):
@@ -168,7 +168,7 @@ def test_concurrent_delivery_busy_then_lease_expiry_reclaims(repo):
     assert repo.claim_step(UID, SID, "validate", datetime.now(UTC), 540).outcome == "claimed"
     busy = runner.handle(payload(), retry_count=0)
     assert busy.status_code == 503 and busy.outcome == "busy" and calls == []
-    assert runner.handle(payload(), retry_count=1).status_code == 503  # last attempt: still not 2xx (A1)
+    assert runner.handle(payload(), retry_count=1).status_code == 503  # last attempt: still not 2xx
     later = datetime.now(UTC) + timedelta(seconds=541)
     runner2 = TaskRunner(repo, InMemoryQueue(), clock=lambda: later)
     runner2.register("validate", HandlerSpec(lambda ctx: calls.append(2), step="validate"))
@@ -176,7 +176,7 @@ def test_concurrent_delivery_busy_then_lease_expiry_reclaims(repo):
 
 
 def test_last_attempt_follows_the_claim_counter_after_a_lease_reclaim(repo):
-    # an earlier delivery crashed holding the lease: this claim is attempt 2 of 2 (A13)
+    # an earlier delivery crashed holding the lease: this claim is attempt 2 of 2
     long_ago = datetime.now(UTC) - timedelta(hours=1)
     assert repo.claim_step(UID, SID, "validate", long_ago, 540).outcome == "claimed"
     seen = []
@@ -327,7 +327,7 @@ def test_cloud_queue_no_delay_has_no_schedule_time():
     assert "schedule_time" not in client.create_task.call_args.kwargs["request"]["task"]
 
 
-# ---- OIDC + route (AC12) ----
+# ---- OIDC + route ----
 
 KID = "g1"
 

@@ -1,4 +1,4 @@
-"""Typed Firestore documents, one per collection in the PRD R7 table.
+"""Typed Firestore documents, one per collection.
 
 `id` is the document id: filled on read, never written. Datetimes are tz-aware UTC.
 """
@@ -26,7 +26,7 @@ SessionState = Literal[
     "upload_incomplete",
     "cancelled",
 ]
-# Only the status doc has this state (R11): the session doc of a discarded upload is gone.
+# Only the status doc has this state: the session doc of a discarded upload is gone.
 StatusState = Literal[SessionState, "upload_failed"]
 UPLOAD_FAILED_TTL = timedelta(days=7)
 InterviewState = Literal["created", "live", "ended", "abandoned", "uploaded"]
@@ -50,7 +50,7 @@ CLIENT_CAPS = {"web_version": 64, "user_agent": 200, "recorder_mime": 100, "audi
 
 
 class ClientInfo(BaseModel):
-    """What produced a session or interview (02-logging R13). Client-reported, so every field is
+    """What produced a session or interview. Client-reported, so every field is
     optional and sanitized, never rejected: non-strings become absent, control characters are
     stripped, and values are cut to a cap. Unknown keys are ignored."""
 
@@ -69,14 +69,14 @@ class ClientInfo(BaseModel):
 
 
 class RelayInfo(BaseModel):
-    """Which voice relay build served an interview; written by the relay at connect (R13)."""
+    """Which voice relay build served an interview; written by the relay at connect."""
 
     relay_version: str | None = None  # GIT_SHA
     relay_revision: str | None = None  # K_REVISION
 
 
 class BlobPointer(BaseModel):
-    """Firestore holds this instead of an object larger than 500 KB (D11)."""
+    """Firestore holds this instead of an object larger than 500 KB."""
 
     key: str
     uri: str
@@ -87,10 +87,10 @@ class UserDoc(Doc):
     created_at: datetime = Field(default_factory=utcnow)
     prefs: dict[str, Any] = Field(default_factory=dict)
     expiry_days: int | None = None
-    # Raw console values: any shape loads (never a 500, SP11 D6); `effective_cap` validates.
-    limits: Any = None  # {eval|interview: {day: int}} (SP11 R3)
-    max_active_runs: int | None = None  # per-user override of MAX_ACTIVE_RUNS (R8)
-    active_runs: int = 0  # runs reserved and not yet released (R8 concurrent limit)
+    # Raw console values: any shape loads (never a 500); `effective_cap` validates.
+    limits: Any = None  # {eval|interview: {day: int}}
+    max_active_runs: int | None = None  # per-user override of MAX_ACTIVE_RUNS
+    active_runs: int = 0  # runs reserved and not yet released (concurrent-run limit)
 
 
 class SttInfo(BaseModel):
@@ -138,7 +138,7 @@ def error_status_fields(error: "SessionError | None", retry_count: int) -> dict[
 
 
 def retry_allowed(sess: dict[str, Any], max_retries: int, step: str | None = None) -> bool:
-    """The one retry rule (R4) on a stored session dict, for the repo transactions: `failed`, a
+    """The one retry rule on a stored session dict, for the repo transactions: `failed`, a
     `transient` error, room under the cap, and the failed
     `step` when the caller names one."""
     if sess.get("state") != "failed" or not sess.get("error"):
@@ -157,7 +157,7 @@ class SessionError(BaseModel):
 
 
 class SessionCancel(BaseModel):
-    """The result of a user cancel (04-cancel R7): did it use a unit, how many, and when."""
+    """The result of a user cancel: did it use a unit, how many, and when."""
 
     counted: bool
     units: int
@@ -170,7 +170,7 @@ class EvalGold(BaseModel):
 
 
 class EvalSessionInfo(BaseModel):
-    """Eval provenance of a session (05 R3). Never part of a public view or the OpenAPI schema."""
+    """Eval provenance of a session. Never part of a public view or the OpenAPI schema."""
 
     dataset_id: str | None = None
     dataset_session_id: str
@@ -197,9 +197,9 @@ class SessionDoc(Doc):
     rating_submitted: bool = False
     has_rating: bool = False
     first_run_id: str | None = None
-    retry_count: int = 0  # user-visible retries used; capped at MAX_SESSION_RETRIES (D4)
+    retry_count: int = 0  # user-visible retries used; capped at MAX_SESSION_RETRIES
     client: ClientInfo = Field(default_factory=ClientInfo)  # web build / browser that created it
-    interview_id: str | None = None  # set by the AI interview (SP10): its first run is free (SP11)
+    interview_id: str | None = None  # set by the AI interview: its first run is free
     upload: UploadInfo | None = None
     steps: dict[str, StepRecord] = Field(default_factory=dict)
     warnings: list[str] = Field(default_factory=list)
@@ -233,7 +233,7 @@ class SessionStatusDoc(Doc):
     latest_report_version: int | None = None
     updated_at: datetime = Field(default_factory=utcnow)
     expire_at: datetime | None = None  # only an `upload_failed` stub: Firestore TTL deletes it
-    # 05-processing-screen R2: numbers and timestamps the processing screen interpolates
+    # numbers and timestamps the processing screen interpolates
     started_at: datetime | None = None  # first `uploading` (a re-run: its start)
     stage_started_at: datetime | None = None  # entered the current state
     waited_ms: int = 0  # total time spent in `awaiting_input`
@@ -247,7 +247,7 @@ class SessionStatusDoc(Doc):
 
 
 def upload_failed_stub(uid: str, code: str, now: datetime) -> SessionStatusDoc:
-    """The data-free status doc left by a discarded upload (R11): reason only, gone in 7 days."""
+    """The data-free status doc left by a discarded upload: reason only, gone in 7 days."""
     return SessionStatusDoc(
         uid=uid, state="upload_failed", error_code=code, updated_at=now,
         expire_at=now + UPLOAD_FAILED_TTL,
@@ -334,7 +334,7 @@ class OutputValidation(BaseModel):
 
 
 class EvalRunInfo(BaseModel):
-    """Eval provenance of a run (SP04 R1). Written once in the create txn, never updated, and
+    """Eval provenance of a run. Written once in the create txn, never updated, and
     never part of a public view."""
 
     eval_run_id: str
@@ -375,8 +375,8 @@ class RunDoc(Doc):
     run_info: dict[str, Any] | None = None
     validation: OutputValidation | None = None
     artifacts_prefix: str | None = None
-    cap_date: str | None = None  # UTC day the cap slot was reserved on (R8)
-    counted: bool = True  # False: run did not consume an eval slot (exempt first run, SP11 R5)
+    cap_date: str | None = None  # UTC day the cap slot was reserved on
+    counted: bool = True  # False: run did not consume an eval slot (exempt first run)
     units: int = 1  # usage units charged when `counted` (= n_runs); a refund gives all back
     released: bool = False  # the cap slot was handed back: guards double release
     llm_started: bool = False  # the evaluation was called on some attempt: a unit is spent
@@ -412,7 +412,7 @@ class UsageDoc(Doc):
     date: str = ""
     runs: int = 0  # eval count (the stored field name)
     interviews: int = 0  # absent until the first interview of the day (eval writes create the doc)
-    interview_refunds: int = 0  # short-interview refunds given this day (capped, A9)
+    interview_refunds: int = 0  # short-interview refunds given this day (capped)
     tokens: int = 0
 
 
@@ -423,9 +423,9 @@ class IdempotencyDoc(Doc):
 
 
 class InterviewDoc(Doc):
-    """`interviews/{id}` (SP10 R5). `state`: created -> live -> ended|abandoned -> uploaded.
+    """`interviews/{id}`. `state`: created -> live -> ended|abandoned -> uploaded.
     `duration_s` and `live` are written by the voice relay; `reservation_date` is the UTC day key
-    of the SP11 reservation, used for its one refund."""
+    of the usage reservation, used for its one refund."""
 
     uid: str
     scenario_id: str
@@ -449,7 +449,7 @@ class InterviewDoc(Doc):
 
 
 def interview_refundable(data: dict[str, Any], now: datetime, threshold_s: float) -> bool:
-    """Refund rule for a settling interview (SP10 R5): the best known elapsed time is under
+    """Refund rule for a settling interview: the best known elapsed time is under
     `threshold_s`. A still-connected relay's last checkpoint is aged by `now - seen_at`, so a stale
     `duration_s` cannot be used to dodge the charge. `created` (never live) is 0 s."""
     elapsed = float(data.get("duration_s") or 0.0)

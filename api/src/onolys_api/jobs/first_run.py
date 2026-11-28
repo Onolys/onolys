@@ -1,4 +1,4 @@
-"""First-run gate (PRD R4, D13): `maybe_start_first_run`.
+"""First-run gate: `maybe_start_first_run`.
 
 Called after each of the three inputs lands (transcribe completion, speaker confirm, final
 rating). Each caller sets its own flag first and then calls this, so the last caller always sees
@@ -33,7 +33,7 @@ def maybe_start_first_run(
     repo: Repo, queue: TaskQueue | None, uid: str, sid: str, settings: Settings,
     request_id: str | None = None,
 ) -> None:  # fmt: skip
-    if settings.eval_mode:  # eval sessions start runs only through `create_run` (SP04 R6)
+    if settings.eval_mode:  # eval sessions start runs only through `create_run`
         return
     if queue is None:  # nowhere to send the `run` task: leave the session as it is
         logs.emit("first_run_no_queue", logging.ERROR, session_id=sid, request_id=request_id)

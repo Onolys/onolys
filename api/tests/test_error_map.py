@@ -1,4 +1,4 @@
-"""SP09 Task 1 (R3, D2, D3, AC2): one table turns any engine exception into one public code."""
+"""One table turns any engine exception into one public code."""
 
 import json
 import logging
@@ -90,7 +90,7 @@ CASES = [
     ("stt_adapter_upstream", lambda: AdapterError(UPSTREAM), "stt", 1, UPSTREAM, True),
     ("stt_adapter_upstream_a2", lambda: AdapterError(UPSTREAM), "stt", 2, UPSTREAM, True),
     ("stt_unknown", lambda: ValueError(SECRET), "stt", 1, "internal_error", False),
-    # transcript outcomes carried by adapter codes (SP04 R4 checks)
+    # transcript outcomes carried by adapter codes (checked by the transcribe step)
     ("no_speech", lambda: AdapterError("no_speech"), "stt", 1, "no_speech", False),
     ("not_separated", lambda: AdapterError("speakers_not_separated"), "stt", 1,
      "speakers_not_separated", False),
@@ -160,7 +160,7 @@ def test_message_is_never_the_exception_message():
     assert SECRET not in PUBLIC_MESSAGES[code]
 
 
-# ---- through SP04's handler wrapper: one `status=failed` line, exc_class only, no text ----
+# ---- through the handler wrapper: one `status=failed` line, exc_class only, no text ----
 
 
 @pytest.mark.parametrize("make,stage,attempt,code,retryable", [c[1:] for c in CASES], ids=IDS)
@@ -175,7 +175,7 @@ def test_wrapper_records_code_and_one_failed_line(repo, caplog, make, stage, att
     kind = step if stage == "stt" else "validate"
     runner = runner_with(repo, fn, kind=kind)
 
-    # the app's attempt counter counts claims (A13): reach attempt N by N-1 earlier deliveries
+    # the app's attempt counter counts claims: reach attempt N by N-1 earlier deliveries
     # that each claimed, failed transiently and released the record
     def earlier(ctx):
         raise RetryableError(UPSTREAM)
@@ -252,7 +252,7 @@ def test_output_invalid_has_a_fixed_public_message_and_never_retries():
     )
 
 
-# ---- 03-failure-policy R1: kind per source, stages validate/stt/run ----
+# ---- kind per source, stages validate/stt/run ----
 
 T, P, U = "transient", "permanent_internal", "user_file"
 INT = "internal_error"

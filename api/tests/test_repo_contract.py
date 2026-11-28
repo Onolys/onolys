@@ -191,7 +191,7 @@ def test_list_sessions_newest_first_paged_and_uid_scoped(repo):
 
 
 def test_list_sessions_pages_stay_full_around_deleting_sessions(repo):
-    """A17: `deleting` sessions never shorten a page, and a cursor whose session was since
+    """`deleting` sessions never shorten a page, and a cursor whose session was since
     deleted still resumes (the cursor carries created_at + id, not a lookup)."""
     uid, _ = new_ids()
     base = datetime.now(UTC)
@@ -671,7 +671,7 @@ def test_idempotency_delete_is_scoped_and_repeatable(repo):
     assert repo.put_idempotency(uid, "k1", doc) is True
 
 
-# ---- step/run claim with lease (R5) ----
+# ---- step/run claim with lease ----
 
 LEASE = 540.0
 
@@ -881,7 +881,7 @@ def test_cap_txns_survive_contention(repo, monkeypatch, exc):
     assert len(calls) == 3
 
 
-# ---- SP11 reserve_usage / release_usage / get_usage_doc ----
+# ---- reserve_usage / release_usage / get_usage_doc ----
 
 
 def _reserve_in_parallel(repo, u, kinds, defaults, max_active=1000):
@@ -922,7 +922,7 @@ def test_reserve_usage_refusal_writes_nothing_and_release_floors_at_zero(repo):
     assert repo.get_user(u).active_runs == 0
 
 
-# ---- SP10 interviews ----
+# ---- interviews ----
 
 
 def _iv(uid="alice", state="created", **kw):
@@ -1093,7 +1093,7 @@ def test_interview_refund_cap_counts_on_the_reservation_day(repo):
     assert repo.get_usage_doc(alice, "2026-11-21").interview_refunds == 3
 
 
-# ---- FX26 (A11, A22, A24) ----
+# ---- repo hardening ----
 
 
 def test_rotate_api_key_leaves_one_active_even_under_concurrency(repo):
@@ -1151,7 +1151,7 @@ def test_confirm_speaker_terminal_states_precede_idempotency(repo, state, confir
 
 
 def test_txn_does_not_retry_unrelated_value_error(repo):
-    """A24: only contention is retried; a real ValueError from txn_fn surfaces at once."""
+    """Only contention is retried; a real ValueError from txn_fn surfaces at once."""
     if isinstance(repo, FakeRepo):
         pytest.skip("Firestore transaction retry only")
     calls = []
@@ -1165,7 +1165,7 @@ def test_txn_does_not_retry_unrelated_value_error(repo):
     assert len(calls) == 1
 
 
-# ---- discard_failed_upload (03-failure-policy R11) ----
+# ---- discard_failed_upload ----
 
 
 def test_discard_failed_upload_leaves_only_a_data_free_stub(repo):
@@ -1201,7 +1201,7 @@ def test_discard_failed_upload_leaves_only_a_data_free_stub(repo):
 
 
 def test_discard_failed_upload_refuses_a_cancelled_session(repo):
-    """04-cancel R5: cancel deletes nothing; a late file-check discard must not wipe it."""
+    """Cancel deletes nothing; a late file-check discard must not wipe it."""
     from onolys_api.jobs import caps
     from onolys_api.repo.base import ConflictError
     from onolys_api.repo.limits import LimitDefaults
@@ -1223,7 +1223,7 @@ def test_discard_failed_upload_refuses_a_foreign_session(repo):
     assert repo.get_session(uid, sid)
 
 
-# ---- 05 Task 1: eval hooks (additive; prod never calls them) ----
+# ---- eval hooks (additive; prod never calls them) ----
 
 
 def _mk_run(uid, sid, run_id):

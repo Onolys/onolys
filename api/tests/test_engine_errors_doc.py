@@ -1,5 +1,5 @@
-"""Doc consistency (SP09 T12): the public-api "Engine errors" section lists exactly the codes
-`to_public` can return, and the staging results record has a line for each of AC4-AC11."""
+"""Doc consistency of the engine errors: the public-api "Engine errors" section lists exactly the codes
+`to_public` can return, and the staging results record has a line for each acceptance check."""
 
 import re
 from pathlib import Path
@@ -40,7 +40,7 @@ def test_engine_errors_table_links_logging_and_back():
     assert "public-api.md#engine-errors" in (ROOT / "docs/reference/logging.md").read_text()
 
 
-def test_staging_record_has_a_result_for_each_of_ac4_to_ac11():
+def test_staging_record_has_a_result_for_each_acceptance_check():
     section = _section(STAGING.read_text(), "Acceptance sweep (SP09 AC4-AC11)")
     found = set(re.findall(r"^\| AC(\d+) \|", section, re.M))
     assert {str(n) for n in range(4, 12)} <= found

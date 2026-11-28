@@ -1,9 +1,9 @@
-"""Handler wrapper for queue tasks (PRD R5, D3). One retry rule, no app-level retry loop.
+"""Handler wrapper for queue tasks. One retry rule, no app-level retry loop.
 
 Per delivery: claim the step/run record (lease = deadline + 60 s), run the handler, then
 - success: record `done` (unless the handler finishes the step itself: `complete=False`);
 - PermanentError: record `failed` + error code, answer 2xx (no retry);
-- any other exception: `error_map.to_public` picks the public code and retry rule (SP09 R3);
+- any other exception: `error_map.to_public` picks the public code and retry rule;
 - RetryableError / TimeoutError: if another attempt is left (the claim counter < MAX_ATTEMPTS;
   X-CloudTasks-TaskRetryCount only for tasks without a claim) release the claim and answer 503 so
   Cloud Tasks retries; on the last attempt record `failed` and answer 2xx.
@@ -37,7 +37,7 @@ RETRYABLE_CODES = ("upstream_unavailable", "deadline_exceeded", "rate_limited")
 
 
 class Cancelled(RunAborted):
-    """The session was cancelled (04-cancel R5): stop quietly, answer 200 `cancelled`, write no
+    """The session was cancelled: stop quietly, answer 200 `cancelled`, write no
     failure. Not a TaskError: it is neither retried nor recorded."""
 
 
@@ -54,7 +54,7 @@ class PermanentError(TaskError):
 
 
 class UploadFailedError(PermanentError):
-    """The handler already discarded the upload (R11): log it, record no `failed` session."""
+    """The handler already discarded the upload: log it, record no `failed` session."""
 
 
 class RetryableError(TaskError):
@@ -173,9 +173,9 @@ class TaskRunner:
                 if claim.outcome in ("done", "failed"):
                     return TaskResult(200, "duplicate")
                 if claim.outcome == "busy":
-                    return TaskResult(503, "busy")  # never 2xx: the live holder may crash (A1)
+                    return TaskResult(503, "busy")  # never 2xx: the live holder may crash
                 # the app's budget counts CLAIMS: a lease-busy 503 is not an attempt (Cloud Tasks
-                # still counts it), and a reclaimed crashed attempt is (A13)
+                # still counts it), and a reclaimed crashed attempt is
                 attempt = claim.attempts
                 last = attempt >= MAX_ATTEMPTS  # one counter for `ctx.attempt` and `last`
             ctx = TaskContext(
@@ -198,7 +198,7 @@ class TaskRunner:
                 return self._cancelled(spec, payload)
             return self._on_error(spec, payload, e, last)
         except Exception as e:
-            if self._is_cancelled(payload):  # backstop (D4): e.g. `advance` -> invalid_state
+            if self._is_cancelled(payload):  # backstop: e.g. `advance` -> invalid_state
                 return self._cancelled(spec, payload)
             stage = "stt" if spec.step == "transcribe" else "run"
             code, retryable = to_public(e, attempt, stage)
@@ -259,8 +259,8 @@ class TaskRunner:
         self, spec: HandlerSpec, p: TaskPayload, code: str, exc_class: str, bookkeeping: bool = True
     ) -> None:
         if not bookkeeping:  # the session is gone (an upload failure): nothing to mark
-            # a routine user-file rejection (R11), not a system failure: its own WARNING line, so
-            # the prod `status=failed` alert only fires for failures we must act on (A16)
+            # a routine user-file rejection, not a system failure: its own WARNING line, so
+            # the prod `status=failed` alert only fires for failures we must act on
             logs.emit(
                 "upload_rejected", logging.WARNING, status="rejected", session_id=p.sid,
                 step=spec.step or "run", error_code=code, exc_class=exc_class,
@@ -272,13 +272,13 @@ class TaskRunner:
             run_id=p.run_id, step=spec.step or "run", error_code=code, exc_class=exc_class,
             request_id=p.request_id,
         )  # fmt: skip
-        if self._is_cancelled(p):  # never write `failed` over `cancelled` (R5)
+        if self._is_cancelled(p):  # never write `failed` over `cancelled`
             return
         self._safe(self._record, spec, p, status="failed", ended=self.clock(), error=code)
         label = spec.step or "run"
         counted = None
         if spec.scope == "run" and p.run_id:  # the refund already ran in `run.py`
-            # backstop (M-2): if that release failed, try again; a no-op when it already ran
+            # backstop: if that release failed, try again; a no-op when it already ran
             def release_and_count():
                 nonlocal counted
                 counted = release_failed_run(
@@ -286,7 +286,7 @@ class TaskRunner:
                 )
 
             self._safe(release_and_count)
-        elif spec.scope != "run":  # interview sessions are never counted (R5, R9)
+        elif spec.scope != "run":  # interview sessions are never counted
             try:
                 if self.repo.get_session(p.uid, p.sid).interview_id:
                     counted = False

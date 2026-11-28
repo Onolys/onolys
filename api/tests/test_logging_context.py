@@ -1,4 +1,4 @@
-"""02-logging Task 4: ids bound in the API, worker and voice entrypoints (R2, D6, D7)."""
+"""Ids bound in the API, worker and voice entrypoints."""
 
 import json
 import logging

@@ -1,15 +1,15 @@
-"""The `validate` step (PRD R3, D5): bytes in safely, one canonical format out.
+"""The `validate` step: bytes in safely, one canonical format out.
 
 Checks in order: object size, magic bytes, ffprobe (audio stream, no video, 1 s to the
 STT provider's `max_audio_s`, 20 min for Chirp 3).
 A passing upload moves to `{uid}/{sid}/audio/original.{ext}`, is transcoded to
 `canonical.flac` (16 kHz mono), the staged object is deleted, the recording doc is written,
-and `transcribe` is enqueued. A file-check failure (R11 of 03-failure-policy: `audio_unreadable`,
+and `transcribe` is enqueued. A file-check failure (`audio_unreadable`,
 `audio_too_large`, `unsupported_audio`, `audio_too_long`, `interview_too_long`) is an UPLOAD
 failure, the one case that deletes user data: `purge()` removes every object of the session's
 audio, `repo.discard_failed_upload` deletes the session doc and its subcollections and leaves a
 data-free status stub (state `upload_failed`, the public code, 7 days). Nothing was counted.
-Every other failure, here or in a later step, keeps the user's data (R8).
+Every other failure, here or in a later step, keeps the user's data.
 Idempotent: a redelivery after the move resumes from the original.
 Logs carry codes only, never file names or content.
 """
@@ -74,8 +74,8 @@ def log_interview_audio_check(
     session_client: ClientInfo | None,
     interview: InterviewDoc | None,
 ) -> None:
-    """Emit the ONE `interview_audio_check` line of an interview-linked validation (02-logging
-    R12/R13). The caller decides `result` (one of `AUDIO_CHECK_RESULTS`) and `threshold_s`; this
+    """Emit the ONE `interview_audio_check` line of an interview-linked validation.
+    The caller decides `result` (one of `AUDIO_CHECK_RESULTS`) and `threshold_s`; this
     only reports, so the mismatch rule can change without touching the line. INFO for `ok`,
     WARNING otherwise. Sources that are not there are omitted (absent), never an error.
     Numbers are rounded to 0.1 s. Carries ids, numbers and build/format names only."""
@@ -130,8 +130,8 @@ def make_validate_handler(
     cfg = settings or Settings()
 
     def purge(uid: str, sid: str) -> None:
-        """Delete the staged and stored audio. ONLY for a file-check failure (R11), the single
-        exception to "failures never delete user data" (R8)."""
+        """Delete the staged and stored audio. ONLY for a file-check failure, the single
+        exception to "failures never delete user data"."""
         blobs.delete_prefix(f"uploads/{uid}/{sid}/")
         blobs.delete_prefix(f"{uid}/{sid}/audio/")
 
@@ -142,7 +142,7 @@ def make_validate_handler(
         """A file-check failure: discard the upload (audio, session doc, subcollections)."""
         try:
             # The transactional discard refuses `cancelled`; purge only after it succeeds, so a
-            # cancel racing this failure keeps the audio (04-cancel R5).
+            # cancel racing this failure keeps the audio.
             ctx.repo.discard_failed_upload(ctx.uid, ctx.sid, code)
             purge(ctx.uid, ctx.sid)
         except ConflictError:  # cancelled: keep everything
@@ -174,7 +174,7 @@ def make_validate_handler(
     def _audio_matches_relay(
         ctx: TaskContext, session, seconds: float, fmt: str, probe: ProbeResult
     ) -> bool:
-        """03-failure-policy R9: False only when the relay duration is known and the upload is
+        """False only when the relay duration is known and the upload is
         further from it than `max(AI_MISMATCH_MIN_SECONDS, AI_MISMATCH_PCT % of relay)`. Logs the
         one `interview_audio_check` line; unknown relay duration or interview proceeds."""
         try:
@@ -266,7 +266,7 @@ def make_validate_handler(
                 blobs.upload_from(canonical_key(uid, sid), flac, "audio/flac")
                 # Publish the bytes we validated, hashed and transcoded, never a fresh copy of
                 # the remote object: an overlapping signed PUT could have replaced it since the
-                # download (LM-17). The staged object is removed below (`delete_prefix`).
+                # download. The staged object is removed below (`delete_prefix`).
                 if not moved or src_key != orig:  # else `local` IS the stored original already
                     blobs.upload_from(orig, local, CANONICAL_TYPES[fmt])
                     if moved:  # sniffed format differs from the earlier attempt's
@@ -278,7 +278,7 @@ def make_validate_handler(
             ensure_active(ctx)  # a DELETE during the writes above must not leave audio behind
 
         if session.interview_id:
-            # a mismatch is OUR error (03-failure-policy R9): no upload discard, data kept, no retry
+            # a mismatch is OUR error: no upload discard, data kept, no retry
             if not _audio_matches_relay(ctx, session, seconds, fmt, probe):
                 raise PermanentError("internal_error")
         ctx.repo.add_recording(

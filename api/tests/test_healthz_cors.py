@@ -49,7 +49,7 @@ H = {"Authorization": "Bearer test:u-hardening"}
 
 
 async def test_api_responses_are_no_store_except_public_ones(client):
-    """A12: PHI-bearing /v1 responses (and their errors) must never be cached."""
+    """PHI-bearing /v1 responses (and their errors) must never be cached."""
     for path, headers in (("/v1/sessions", H), ("/v1/sessions", {}), ("/v1/nope", H)):
         r = await client.get(path, headers=headers)
         assert "no-store" in r.headers["cache-control"], (path, r.status_code)
@@ -58,7 +58,7 @@ async def test_api_responses_are_no_store_except_public_ones(client):
 
 
 async def test_oversized_json_body_is_413(client):
-    """A13: JSON bodies are small (uploads use signed URLs); reject big ones before parsing."""
+    """JSON bodies are small (uploads use signed URLs); reject big ones before parsing."""
     big = b'{"title": "' + b"x" * (2 * 1024 * 1024) + b'"}'
     r = await client.post(
         "/v1/sessions", content=big, headers={**H, "Content-Type": "application/json"}
@@ -91,7 +91,7 @@ UPLOAD_PREFLIGHT = {
 
 
 async def test_local_cors_allows_the_fake_blob_upload_headers(client):
-    """E22: local Mode B PUTs the audio to the fake blob route with the signed upload headers."""
+    """Local Mode B PUTs the audio to the fake blob route with the signed upload headers."""
     r = await client.options("/v1/_fake_blob/k", headers=UPLOAD_PREFLIGHT)
     assert r.status_code == 200
 

@@ -1,4 +1,4 @@
-"""03-failure-policy Task 2 (R3, D2, D4): `kind` is persisted once, from `KIND_BY_CODE`, at every
+"""`kind` is persisted once, from `KIND_BY_CODE`, at every
 failure write site; the status doc exposes `error_kind`, `retries_left`, `counted`; old failed docs
 without a `kind` read as derived from the code; `BAD_FILE_CODES`/`is_system_failure` are gone.
 Runs on FakeRepo, and on the Firestore emulator when FIRESTORE_EMULATOR_HOST is set."""
@@ -111,7 +111,7 @@ def test_stale_write_site_persists_kind(repo):  # noqa: F811
     s = repo.get_session(uid, sid)
     done = settle_if_stale(repo, s, T_OLD + timedelta(days=1), mk_settings())
     st = repo.get_status(uid, sid)
-    assert done.state == "failed" and done.error.code == "deadline_exceeded"  # LM-1: lost task
+    assert done.state == "failed" and done.error.code == "deadline_exceeded"  # a lost task
     assert (done.error.kind, st.error_kind) == ("transient", "transient")
     assert st.retries_left == MAX_SESSION_RETRIES
     uid, sid = seed_state(repo, "validating", T_OLD, step="validate")

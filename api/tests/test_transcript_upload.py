@@ -260,7 +260,7 @@ async def test_deeply_nested_json_is_a_safe_input_error(client, queue):
 
 
 async def test_racing_transcript_put_cannot_overwrite_the_winner(client, app, queue):
-    """N1: a competing PUT commits between the `created` check and the write."""
+    """A competing PUT commits between the `created` check and the write."""
     from onolys_engine_core.transcript_input import validate_transcript_input
 
     from onolys_api.jobs.machine import advance

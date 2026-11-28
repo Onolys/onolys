@@ -1,4 +1,4 @@
-"""AC17: the quickstart's curl sequence (extracted from the OpenAPI description) runs against a
+"""The quickstart's curl sequence (extracted from the OpenAPI description) runs against a
 real `SERVICE_MODE=combined` server with stub adapters."""
 
 import json

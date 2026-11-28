@@ -1,5 +1,5 @@
 """Deterministic, sleep-free, schema-valid fake adapters (`ADAPTERS=stub`) and magic-title
-failure injection (PRD R6, AC15).
+failure injection.
 
 Magic session titles (the worker passes the session title to the fakes as
 `params.options["stub_title"]` for `Stt` and `params["stub_title"]` for `Evaluation`; real
@@ -217,7 +217,7 @@ def _code_result(
 
 
 def _global_diff() -> dict[str, Any]:
-    """score_diff `Diff` for an unrated item: the engine never sees a rating (D1)."""
+    """score_diff `Diff` for an unrated item: the engine never sees a rating."""
     return {"signed": None, "abs": None, "direction": None, "status": "not_rated"}
 
 

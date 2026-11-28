@@ -1,5 +1,5 @@
 """docs/reference/logging.md matches the code: every public error code is in its table,
-the runbook points at the session id, and relative links resolve (02-logging R10, AC5)."""
+the runbook points at the session id, and relative links resolve."""
 
 import json
 import re

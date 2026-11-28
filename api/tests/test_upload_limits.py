@@ -1,4 +1,4 @@
-"""GET /v1/upload-limits: server-published pre-check limits (SP03 R10, AC10)."""
+"""GET /v1/upload-limits: server-published pre-check limits."""
 
 import httpx
 import pytest

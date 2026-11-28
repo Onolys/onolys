@@ -58,7 +58,7 @@ async def test_manual_first_run_defaults_to_session_span(client, app, span):
 
 @pytest.mark.parametrize("prior_span", [SPANS[1], None], ids=["override", "whole-session"])
 async def test_failed_run_retry_preserves_span(client, app, prior_span):
-    """03-failure-policy R4: `POST /retry` re-runs the SAME submission (the failed run's span, even
+    """`POST /retry` re-runs the SAME submission (the failed run's span, even
     a null one); `POST /runs` on a failed session is 409 and no longer takes a span override."""
     sid = await create(client, coded_span=SPANS[0])
     assert (await upload(client, sid, json.dumps(timed_document()))).status_code == 202

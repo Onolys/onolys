@@ -1,4 +1,4 @@
-"""One DAILY limit per flow (eval, AI interview) and one active run per user (FX46).
+"""One DAILY limit per flow (eval, AI interview) and one active run per user.
 
 There are no monthly caps: spending across many days never blocks a user who is under today's cap.
 """

@@ -1,4 +1,4 @@
-"""Measure peak memory of the `validate` step on a synthetic recording (PRD risk: validate memory).
+"""Measure peak memory of the `validate` step on a synthetic recording.
 
     uv run --package onolys-api python api/scripts/measure_validate_memory.py [--minutes 25] \
         [--workdir DIR]

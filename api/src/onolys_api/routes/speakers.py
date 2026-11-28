@@ -1,4 +1,4 @@
-"""`/v1/sessions/{id}/speakers`, `.../speakers/confirm`, `.../transcript` (R2, R4, D13).
+"""`/v1/sessions/{id}/speakers`, `.../speakers/confirm`, `.../transcript`.
 
 The speaker gate is the last human input. `confirm` selects the clinician once in
 `awaiting_input` (every other speaker counts as client). Identical retries do not write and

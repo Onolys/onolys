@@ -58,7 +58,7 @@ class AuthEmailService:
             self._sender.send(to, email.subject, email.html, email.text)
 
     def require_configured(self) -> None:
-        if not self._settings.app_base_url:  # same path as a missing RESEND_API_KEY (AC7)
+        if not self._settings.app_base_url:  # same path as a missing RESEND_API_KEY
             raise AdapterError("email_unconfigured")
 
     def get_account(self, uid: str) -> AuthAccount:

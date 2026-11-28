@@ -1,4 +1,4 @@
-"""03-failure-policy Task 4 (R4, D3, D4): one capped retry path, `POST /sessions/{id}/retry`,
+"""One capped retry path, `POST /sessions/{id}/retry`,
 re-enters whichever step failed. One repo transaction counts the retry and moves the state.
 
 Runs on FakeRepo always and on the Firestore emulator when FIRESTORE_EMULATOR_HOST is set.

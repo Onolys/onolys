@@ -1,4 +1,4 @@
-"""`/v1/sessions`: create (idempotent), list, get. Mutations return 202 with ids (R2)."""
+"""`/v1/sessions`: create (idempotent), list, get. Mutations return 202 with ids."""
 
 import hashlib
 import logging
@@ -223,7 +223,7 @@ def _create_for_interview(
 ) -> SessionRef | None:
     """Write the session, its link and the prefilled rating draft in one repo transaction.
     Returns the caller's own session when the interview is already linked to one that is still
-    in the upload phase (a retry after a lost response, LM-15); None when this call linked it."""
+    in the upload phase (a retry after a lost response); None when this call linked it."""
     assert body.interview_id is not None
     repo = request.app.state.repo
     scenario = _interview_scenario(request, uid, body.interview_id)
@@ -519,7 +519,7 @@ def retry_session(id: ResourceId, request: Request, user: User) -> RetryStarted:
 
 def _upload_still_there(blobs, uid: str, sid: str, s: SessionDoc) -> bool:
     """`validate` reads the staged copy (or an original an earlier attempt already moved); the
-    bucket deletes staged objects after a day (R8)."""
+    bucket deletes staged objects after a day."""
     if any(blobs.exists(original_key(uid, sid, fmt)) for fmt in CANONICAL_TYPES):
         return True
     return s.upload is not None and blobs.exists(staging_key(uid, sid, s.upload.upload_id))
@@ -594,7 +594,7 @@ def delete_session(id: ResourceId, request: Request, user: User) -> Response:
         queue = getattr(request.app.state, "queue", None)
         try:
             if queue is not None:
-                # unique name per attempt: Cloud Tasks would drop a repeat of `{sid}-delete` (M-1)
+                # unique name per attempt: Cloud Tasks would drop a repeat of `{sid}-delete`
                 at = int(request.app.state.clock().timestamp())
                 queue.enqueue(
                     TaskPayload(kind="delete", uid=user.uid, sid=id, request_id=rid, n=at)

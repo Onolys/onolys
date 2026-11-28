@@ -1,4 +1,4 @@
-"""Speakers, transcript read and the first-run gate (R2, R4, D13, AC13, AC18).
+"""Speakers, transcript read and the first-run gate.
 
 Runs on FakeRepo always and on the Firestore emulator when FIRESTORE_EMULATOR_HOST is set.
 """
@@ -388,7 +388,7 @@ def test_no_queue_does_not_start(repo):
     assert repo.get_session(uid, sid).state == "awaiting_input" and repo.list_runs(uid, sid) == []
 
 
-# ---------------------------------------------------------------- AC13: the race
+# ---------------------------------------------------------------- the race
 
 INPUTS = ("transcript", "speaker", "rating")
 ORDERS = list(itertools.permutations(INPUTS))
@@ -535,7 +535,7 @@ async def test_confirm_unknown_speaker_422_and_wrong_state_409(env):
 
 
 async def test_confirm_in_report_ready_is_refused_and_changes_nothing(env):
-    """AC18, revised (LM-3): no rerun is possible in `report_ready`, so relabelling is refused."""
+    """No rerun is possible in `report_ready`, so relabelling is refused."""
     c, h, repo, uid, queue = env
     sid = new_session(repo, uid, state="report_ready", ready=True, clinician_speaker="S1",
                       speaker_confirmed=True, rating_submitted=True, first_run_id="run0",

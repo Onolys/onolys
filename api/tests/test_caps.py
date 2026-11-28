@@ -1,4 +1,4 @@
-"""Daily run cap + concurrent-run limit (R8, D14, AC7); GET /usage lives in test_usage_route.py.
+"""Daily run cap + concurrent-run limit; GET /usage lives in test_usage_route.py.
 
 Repo-level tests run against FakeRepo and the Firestore emulator (when FIRESTORE_EMULATOR_HOST is
 set); the API tests use FakeRepo.
@@ -182,7 +182,7 @@ def test_usage_view_and_reset_time(repo):
     assert (v.eval.day.used, v.eval.day.cap) == (1, 7)
 
 
-# ---- SP11: reserve/release/usage_view (kinds) ----
+# ---- reserve/release/usage_view (kinds) ----
 
 
 def fill(repo, s, u, kind, n, now=NOON):

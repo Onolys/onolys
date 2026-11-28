@@ -1,5 +1,5 @@
 #!/bin/sh
-# One image, three roles (PRD D6). SERVICE_MODE = api | worker | combined | voice (default api).
+# One image, three roles. SERVICE_MODE = api | worker | combined | voice (default api).
 # Cloud Run injects PORT; the app reads every other setting from the environment (api/.env.example).
 set -eu
 case "${SERVICE_MODE:-api}" in

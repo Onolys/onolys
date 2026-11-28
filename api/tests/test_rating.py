@@ -1,4 +1,4 @@
-"""Rating card (R2, D15, AC11, AC14): drafts, final revisions, limits, states, no GCS objects.
+"""Rating card: drafts, final revisions, limits, states, no GCS objects.
 
 Runs on FakeRepo always and on the Firestore emulator when FIRESTORE_EMULATOR_HOST is set.
 """
@@ -131,7 +131,7 @@ async def test_draft_checks_shape_and_limits_only(env):
 )
 @pytest.mark.parametrize("final", [False, True])
 async def test_engine_rules_reject_with_engine_issue_format(env, bad, path, code, final):
-    """Cards the interim jsonschema-only validator accepted; the engine rejects them (R2)."""
+    """Cards the interim jsonschema-only validator accepted; the engine rejects them."""
     c, h, repo, uid, sid = env
     r = await put(c, h, sid, {"final": final, "card": card(**bad)})
     assert r.status_code == 422, r.text
@@ -231,7 +231,7 @@ async def test_final_creates_revision_and_updates_session(env, hook_calls):
 
 @pytest.mark.firestore_smoke
 async def test_a_submitted_rating_is_final_a_second_final_is_refused(env):
-    c, h, repo, uid, sid = env  # FX45 owner decision: once submitted it is final
+    c, h, repo, uid, sid = env  # once submitted it is final
     r1 = (await put(c, h, sid, {"final": True, "card": card(change_goal="one")})).json()
     r = await put(c, h, sid, {"final": True, "card": card(change_goal="two")})
     assert r.status_code == 409 and r.json()["details"][0]["code"] == "rating_final"
@@ -320,7 +320,7 @@ async def test_empty_final_card_detected_as_no_rating(env):
     assert repo.get_rating(uid, sid, r.json()["rating_id"]).no_rating is True
     s = repo.get_session(uid, sid)
     assert s.rating_submitted is True and s.has_rating is False
-    # FX45: a submitted rating is final, even a "no rating" one
+    # a submitted rating is final, even a "no rating" one
     assert (await put(c, h, sid, {"final": True, "card": card()})).status_code == 409
     assert repo.get_session(uid, sid).has_rating is False
 
@@ -346,7 +346,7 @@ async def test_allowed_in_every_state_but_deleting(env, state):
 
 
 async def test_final_rating_is_refused_once_the_report_is_ready(env):
-    """FX45 (E24): a successful report makes the rating final; drafts are still just drafts."""
+    """A successful report makes the rating final; drafts are still just drafts."""
     c, h, repo, uid, sid = env
     first = await put(c, h, sid, {"final": True, "card": card()})
     assert first.status_code == 202
@@ -391,7 +391,7 @@ async def test_openapi_has_rating_and_no_upload_or_parse():
     assert set(p) == {"put", "get"} and p["put"]["operationId"] == "putRating"
     assert "202" in p["put"]["responses"]
     # No audio-upload or parse routes; the only allowed "upload" path is the read-only limits
-    # endpoint (GET /v1/upload-limits, 03-failure-policy).
+    # endpoint (GET /v1/upload-limits).
     for path, ops in spec["paths"].items():
         low = path.lower()
         assert "parse" not in low, path
@@ -474,7 +474,7 @@ def test_card_valid_for_web_schema_is_accepted_by_api_and_engine():
 
 
 async def test_two_racing_final_ratings_the_second_conflicts_and_adds_no_revision(env):
-    """LM-2: a competing submit commits between the route's check and its write."""
+    """A competing submit commits between the route's check and its write."""
     c, h, repo, uid, sid = env
     rid = "rev-winner"
     orig_list = repo.list_reports

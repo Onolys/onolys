@@ -1,7 +1,7 @@
 """Firestore-backed `Repo`. Honours FIRESTORE_DATABASE; uses the emulator when
 FIRESTORE_EMULATOR_HOST is set.
 
-uid discipline (D7): collection queries go through `_uid_query`; documents addressed by id go
+uid discipline: collection queries go through `_uid_query`; documents addressed by id go
 through `_owned`; both raise `NotFoundError` on a foreign or missing document. A test greps this
 file so no function queries without one of the helpers.
 """
@@ -630,7 +630,7 @@ class FirestoreRepo:
                     raise NotFoundError()  # the Delete path owns it
                 return  # our own tombstone from an earlier attempt: resume the cleanup
             if sess.get("state") == "cancelled":
-                raise ConflictError()  # cancel deletes nothing (04-cancel R5)
+                raise ConflictError()  # cancel deletes nothing
             iid = sess.get("interview_id")
             iref = self._top("interviews", iid) if iid else None
             iv = (iref.get(transaction=txn).to_dict() or {}) if iref is not None else {}
@@ -641,7 +641,7 @@ class FirestoreRepo:
             txn.update(sref, {"state": "deleting", "discard_code": code, "updated_at": now})
             if iref is not None and iv.get("uid") == uid and iv.get("session_id") == sid:
                 state = "ended" if iv.get("state") == "uploaded" else iv.get("state")
-                txn.update(iref, {"session_id": None, "state": state})  # M-4: the unit relinks
+                txn.update(iref, {"session_id": None, "state": state})  # the unit links again
 
         self._contended(txn_fn, uid)
         snap = sref.get()  # cleanup only while OUR tombstone is still there
@@ -1161,7 +1161,7 @@ class FirestoreRepo:
             usage = usage_ref.get(transaction=txn).to_dict() or {}
             latest = [s for s in newest.get(transaction=txn) if s.id != DRAFT_ID]
             now = utcnow()
-            exempt = bool(sess.get("interview_id"))  # never counted (03-failure-policy R5)
+            exempt = bool(sess.get("interview_id"))  # never counted
             units = sess.get("n_runs", 1)
             decided = decide_start(user, usage, defaults, max_active, exempt, units)
             if decided != "ok":
@@ -1211,7 +1211,7 @@ class FirestoreRepo:
         retry_max: int | None = None, eval: EvalRunInfo | None = None,  # noqa: A002
         eval_guard: str | None = None,
     ) -> StartOutcome:  # fmt: skip
-        if eval is not None:  # SP04 R3: an eval run may start on any ready session
+        if eval is not None:  # an eval run may start on any ready session
             allowed_states = (
                 *allowed_states,
                 *(x for x in ("report_ready", "failed") if x not in allowed_states),
@@ -1267,7 +1267,7 @@ class FirestoreRepo:
                 sess["eval"].get("input_sha256") != eval_session_input_sha256(sess, transcript)
             ):
                 return "not_ready"
-            # the free first run of an interview-linked session (SP11 R5), same as start_first_run
+            # the free first run of an interview-linked session, same as start_first_run
             first = (
                 (
                     sref.collection("runs")
@@ -1285,7 +1285,7 @@ class FirestoreRepo:
                 and (first or {}).get("transcript_sha256") != transcript["sha256"]
             ):
                 return "not_ready"
-            # Try again after a failed free run stays free (review R1): the free rating is owed
+            # Try again after a failed free run stays free: the free rating is owed
             exempt = (
                 bool(sess.get("interview_id"))
                 and (not sess.get("first_run_id")

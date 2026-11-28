@@ -1,4 +1,4 @@
-"""Task 7: `/v1/auth/email/*` routes (R1, R10, D5, D6; AC1-AC7)."""
+"""`/v1/auth/email/*` routes."""
 
 import json
 import logging
@@ -62,7 +62,7 @@ def env(blobs):
     return Env(blobs)
 
 
-async def test_verify_sends_to_account_address_with_configured_host(env):  # AC1, AC3
+async def test_verify_sends_to_account_address_with_configured_host(env):
     async with env.client() as c:
         r = await c.post(
             VERIFY,
@@ -77,7 +77,7 @@ async def test_verify_sends_to_account_address_with_configured_host(env):  # AC1
     assert "evil.test" not in m["text"] + m["html"]
 
 
-async def test_reset_sends_reset_mode(env):  # AC1
+async def test_reset_sends_reset_mode(env):
     async with env.client() as c:
         r = await c.post(RESET, json={"email": EMAIL})
     assert r.status_code == 202 and r.json() == {}
@@ -85,7 +85,7 @@ async def test_reset_sends_reset_mode(env):  # AC1
     assert m["to"] == EMAIL and f"{BASE}/auth/action?mode=resetPassword" in m["text"]
 
 
-async def test_reset_identical_for_known_unknown_disabled_limited_and_errors(blobs):  # AC2
+async def test_reset_identical_for_known_unknown_disabled_limited_and_errors(blobs):
     env = Env(blobs)
     async with env.client() as c:
         known = await c.post(RESET, json={"email": EMAIL})
@@ -123,7 +123,7 @@ async def test_reset_send_failure_after_202_is_only_logged(blobs, caplog):
     assert ev[0]["outcome"] == "send_failed" and ev[0]["provider_status"] == 500
 
 
-async def test_verify_auth_matrix_and_already_verified(env):  # AC4
+async def test_verify_auth_matrix_and_already_verified(env):
     async with env.client() as c:
         assert (await c.post(VERIFY, json={})).status_code == 401
         r = await c.post(VERIFY, json={}, headers={"X-API-Key": "onolys_x_y"})
@@ -136,7 +136,7 @@ async def test_verify_auth_matrix_and_already_verified(env):  # AC4
     assert len(env.sender.messages) == 1
 
 
-async def test_verify_second_within_minute_429_and_send_failure_503(blobs):  # AC5
+async def test_verify_second_within_minute_429_and_send_failure_503(blobs):
     env = Env(blobs)
     async with env.client() as c:
         h = bearer(mint(verified=False))
@@ -158,7 +158,7 @@ async def test_verify_second_within_minute_429_and_send_failure_503(blobs):  # A
     ]
 
 
-async def test_logs_never_contain_email_link_or_code(blobs, caplog):  # AC6
+async def test_logs_never_contain_email_link_or_code(blobs, caplog):
     env = Env(blobs)
     with caplog.at_level(logging.DEBUG):
         async with env.client() as c:
@@ -180,7 +180,7 @@ async def test_logs_never_contain_email_link_or_code(blobs, caplog):  # AC6
     assert reset_lines and all("uid_hash" not in d for d in reset_lines)
 
 
-async def test_app_serves_without_resend_key_and_verify_503(blobs):  # AC7
+async def test_app_serves_without_resend_key_and_verify_503(blobs):
     settings = Settings(
         env="staging", service_mode="api", auth_mode="idp", auth_project=PROJECT,
         app_base_url=BASE, uid_hmac_key="k", adapters="real", resend_api_key="",
@@ -204,7 +204,7 @@ async def test_app_serves_without_resend_key_and_verify_503(blobs):  # AC7
         assert (r.status_code, r.text) == (202, "{}")
 
 
-async def test_already_verified_consumes_no_rate_slot(env):  # AC4, R1
+async def test_already_verified_consumes_no_rate_slot(env):
     env.links.accounts["u1"] = AuthAccount(email=EMAIL, email_verified=True)
     async with env.client() as c:
         h = bearer(mint("u1", verified=True))

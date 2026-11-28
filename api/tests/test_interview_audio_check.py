@@ -1,4 +1,4 @@
-"""02-logging Task 7 (R12, R13, AC7): one `interview_audio_check` line per interview-linked
+"""One `interview_audio_check` line per interview-linked
 validation, match or not."""
 
 import dataclasses

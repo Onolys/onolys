@@ -1,4 +1,4 @@
-"""SP10 Task 7: session link + validate rules for AI interviews (R6, R7, D10, AC7, AC8)."""
+"""Session link + validate rules for AI interviews."""
 
 import dataclasses
 
@@ -191,7 +191,7 @@ async def test_plain_session_has_no_interview_and_no_draft(api, repo):
     assert (await api.get(f"/v1/sessions/{sid}/rating", headers=A)).json()["draft"] is None
 
 
-# ---- validate rules (R7, AC7, AC8) ----
+# ---- validate rules ----
 
 
 async def upload(settings, repo, blobs, seconds, iid=None):
@@ -220,7 +220,7 @@ async def upload(settings, repo, blobs, seconds, iid=None):
 async def test_640s_interview_fails_interview_too_long(settings, repo, blobs):
     iid = interview(repo)
     sid = await upload(settings, repo, blobs, 640.0, iid)
-    with pytest.raises(NotFoundError):  # an upload failure leaves no session (SP03 R11)
+    with pytest.raises(NotFoundError):  # an upload failure leaves no session
         repo.get_session("alice", sid)
     assert repo.get_status("alice", sid).error_code == "interview_too_long"
     assert blobs.list_keys(f"alice/{sid}/") == []
@@ -265,11 +265,11 @@ async def test_failed_validation_unlinks_the_interview_so_the_unit_can_relink(
 ):
     iid = interview(repo)
     await upload(settings, repo, blobs, 640.0, iid)
-    iv = repo.get_interview("alice", iid)  # M-4: back to `ended`, unlinked (not lost)
+    iv = repo.get_interview("alice", iid)  # back to `ended`, unlinked (not lost)
     assert (iv.state, iv.session_id) == ("ended", None)
 
 
-# ---- 03-failure-policy R9: a relay/upload mismatch beyond max(60 s, 15 %) is OUR error ----
+# ---- a relay/upload mismatch beyond max(60 s, 15 %) is OUR error ----
 
 
 @pytest.mark.parametrize(

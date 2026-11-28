@@ -1,4 +1,4 @@
-"""SP10 Task 5: voice relay (R4, D1, D4, D7, D8, AC2, AC4, AC5), fixture adapter + manual clock."""
+"""Voice relay, fixture adapter + manual clock."""
 
 import asyncio
 import json
@@ -639,7 +639,7 @@ async def test_voice_service_mode_is_accepted_and_serves_only_health(tmp_path):
     assert body["service_mode"] == "voice" and gone == [404, 404]
 
 
-# ---- A21: frame size / rate caps and a reconnect cap ----
+# ---- frame size / rate caps and a reconnect cap ----
 
 
 async def test_oversized_audio_frame_closes_1009_and_is_not_forwarded(tmp_path):

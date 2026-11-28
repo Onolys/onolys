@@ -1,4 +1,4 @@
-"""Rating-card validation: the one seam `PUT /sessions/{id}/rating` goes through (R2, D15).
+"""Rating-card validation: the one seam `PUT /sessions/{id}/rating` goes through.
 
 A thin wrapper over `onolys_miti.rating` (`validate_rating`, `is_no_rating`), so a card the API
 stores is one the engine accepts, with the engine's rules (item ids, score scales, counts and

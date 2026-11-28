@@ -120,7 +120,7 @@ async def test_default_llm_factory_builds_litellm_client_from_routes():
 def test_adapter_names_no_model_or_provider():
     src = Path(real.__file__).read_text().lower()
     code = "\n".join(line for line in src.splitlines() if not line.lstrip().startswith("#"))
-    # strip the STT section's registry keys (provider keys are data, SP09 T2); check Evaluation part
+    # strip the STT section's registry keys (provider keys are data); check Evaluation part
     part = code[code.index("class realevaluation") :]
     assert not re.search(
         r"claude|anthropic|gemini|gpt|openai|vertex|sonnet|haiku|opus|litellm_id", part

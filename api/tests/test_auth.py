@@ -1,4 +1,4 @@
-"""R1 / AC4: ID tokens, API keys, /v1/api-key, fake-auth guard. No network."""
+"""ID tokens, API keys, /v1/api-key, fake-auth guard. No network."""
 
 import time
 from datetime import UTC, datetime, timedelta
@@ -121,7 +121,7 @@ async def test_bad_tokens_are_401(idp_client, kwargs):
 
 
 async def test_unverified_email_is_403_email_unverified_not_401(idp_client):
-    """A14: a valid token whose email is unverified is told so (403), distinct from bad creds."""
+    """A valid token whose email is unverified is told so (403), distinct from bad creds."""
     r = await idp_client.get("/v1/api-key", headers=bearer(mint(verified=False)))
     assert r.status_code == 403
     assert r.json()["details"][0]["code"] == "email_unverified"
@@ -183,7 +183,7 @@ def test_sub_rejected(uid):
 )
 def test_clock_skew_window(kwargs, ok, monkeypatch):
     # Freeze the clock the JWT library reads, and mint against the same instant, so the
-    # +-9/+-11s boundary cannot straddle a real second tick (FX53).
+    # +-9/+-11s boundary cannot straddle a real second tick.
     frozen = datetime(2026, 1, 1, 12, 0, 0)
     monkeypatch.setattr(_helpers, "utcnow", lambda: frozen)
     now = _helpers.datetime_to_secs(frozen)
@@ -436,7 +436,7 @@ async def test_healthz_needs_no_auth(client):
     assert (await client.get("/v1/healthz")).status_code == 200
 
 
-# ---- Authenticator internals (mutation survivors M5-M7) ----
+# ---- Authenticator internals (mutation survivors) ----
 
 
 def _idp(auth_project="", gcp_project="", verifier=None):

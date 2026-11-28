@@ -1,4 +1,4 @@
-"""SP09 Task 6 / R5 / AC: local real mode, no GCP. Real LLM, fixture STT.
+"""Local real mode, no GCP. Real LLM, fixture STT.
 
 `ADAPTERS=real`, `SERVICE_MODE=combined`, a local `stt_providers.yaml` whose default is
 `provider: fixture`, the shipped Gemini routes. Real coding and tips run on the synthetic

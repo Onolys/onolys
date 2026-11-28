@@ -1,4 +1,4 @@
-"""Injectable time source for the voice relay (SP10 R4: the relay owns the clock).
+"""Injectable time source for the voice relay (the relay owns the clock).
 
 `monotonic()` measures connected seconds, `wall()` stamps documents, `sleep()` drives the warn and
 time-up timers. Tests inject a manual clock with the same three methods.

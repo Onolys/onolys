@@ -4,7 +4,7 @@ task keeps working on a cancelled session.
 `DELETE` marks the session `deleting` first and sweeps the blobs afterwards. A task calls
 `ensure_active` right after its writes: a write before the mark is swept by the delete, and one
 after it is removed here (the task then answers `gone`), so nothing survives either order.
-A `cancelled` session raises `Cancelled` and purges nothing: cancel keeps the data (04-cancel R5).
+A `cancelled` session raises `Cancelled` and purges nothing: cancel keeps the data.
 """
 
 from onolys_api.jobs.worker import Cancelled

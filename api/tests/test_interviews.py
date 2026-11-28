@@ -1,4 +1,4 @@
-"""SP10 Task 4: interview API, state table, SP11 seam (R5, D11-D14, D16, AC3, AC6)."""
+"""Interview API, state table, usage seam."""
 
 from datetime import UTC, datetime, timedelta
 
@@ -24,7 +24,7 @@ NOW = datetime(2026, 11, 21, 12, 0, tzinfo=UTC)
 
 
 class SpyRepo(FakeRepo):
-    """FakeRepo + a call log shared by the SP11 seam, to prove ordering and refunds."""
+    """FakeRepo + a call log shared by the usage seam, to prove ordering and refunds."""
 
     def __init__(self, blobs):
         super().__init__(blobs)
@@ -313,7 +313,7 @@ def test_settings_ai_and_voice_url():
 
 
 async def test_short_interview_refunds_are_capped_per_day(api, repo):
-    """A9: only the first 3 short (<30 s) interviews of a user per day get the unit back."""
+    """Only the first 3 short (<30 s) interviews of a user per day get the unit back."""
     for i in range(5):
         iid = (await create(api)).json()["interview_id"]
         assert (await api.post(f"/v1/interviews/{iid}/end", headers=A)).status_code == 200

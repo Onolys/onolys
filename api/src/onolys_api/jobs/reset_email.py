@@ -1,10 +1,10 @@
-"""`reset-email` task (M-5): the password-reset email is enqueued BEFORE the route answers 202, so
+"""`reset-email` task: the password-reset email is enqueued BEFORE the route answers 202, so
 a process or revision ending right after the response cannot lose it (the API service runs with
 request-based CPU). A worker sends it; one retry on a transient failure (the queue's max attempts).
 
 Privacy: the route's answer stays the generic `202 {}`. The address travels only in the task body;
 the task name uses a keyed hash and the window index, so a repeat request inside the window is
-deduplicated by the queue. No log line carries the address, the link or the action code (R10).
+deduplicated by the queue. No log line carries the address, the link or the action code.
 """
 
 import hashlib

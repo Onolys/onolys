@@ -1,4 +1,4 @@
-"""`GET /v1/usage`: eval + interview used/cap/resets_at for the UTC day (R8, D3)."""
+"""`GET /v1/usage`: eval + interview used/cap/resets_at for the UTC day."""
 
 from datetime import datetime
 from typing import Annotated

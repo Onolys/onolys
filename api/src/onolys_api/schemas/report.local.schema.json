@@ -175,5 +175,5 @@
    }
   }
  },
- "$comment": "LOCAL STAND-IN from the SP03 R7 / SP02 R3 PRD shapes; used only until engines/*/schemas exist (tests prefer the real file)."
+ "$comment": "LOCAL STAND-IN from the planned report shapes; used only until engines/*/schemas exist (tests prefer the real file)."
 }

@@ -1,4 +1,4 @@
-"""`/v1/sessions/{id}/audio`: signed upload, complete, signed read (R2 audio, R3, D5)."""
+"""`/v1/sessions/{id}/audio`: signed upload, complete, signed read."""
 
 from datetime import UTC, datetime, timedelta
 from typing import Annotated
@@ -80,7 +80,7 @@ def request_upload(
     _owned_open(request, user, id)
     upload_id = uuid4().hex
     canonical = CANONICAL_TYPES[fmt]
-    # ONE transaction (A14): the move to `uploading` and the new `upload` commit together, so a
+    # ONE transaction: the move to `uploading` and the new `upload` commit together, so a
     # concurrent `complete` either validated the old upload first (this is then a 409) or sees the
     # new one and refuses. 409 invalid_state unless created|uploading|upload_incomplete.
     repo.transition_session(
@@ -137,7 +137,7 @@ def complete_upload(id: ResourceId, request: Request, user: User) -> dict[str, S
 
         def still_that_upload(current) -> None:
             if current.upload is None or current.upload.upload_id != checked:
-                raise invalid_state()  # a new upload replaced the one we checked (A14)
+                raise invalid_state()  # a new upload replaced the one we checked
 
         repo.transition_session(
             user.uid, id,

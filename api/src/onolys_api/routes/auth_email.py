@@ -1,6 +1,6 @@
 """`/v1/auth/email/*`: verification and password-reset emails sent through our own sender.
 
-PHI/PII-safe logs (R10): `email_kind`, `outcome`, `provider_status` only; verify adds `uid_hash`,
+PHI/PII-safe logs: `email_kind`, `outcome`, `provider_status` only; verify adds `uid_hash`,
 reset logs no identifier. Never the address, the link or the action code.
 """
 
@@ -76,7 +76,7 @@ def send_verification(request: Request, body: VerificationRequest, user: Unverif
     try:
         service.require_configured()
         account = service.get_account(user.uid)
-        if account.email_verified:  # no send, no rate consumption (AC4)
+        if account.email_verified:  # no send, no rate consumption
             logs.emit("auth_email", email_kind="verify", uid_hash=uid_hash,
                       outcome="already_verified")  # fmt: skip
             return Empty()
@@ -131,7 +131,7 @@ def send_password_reset(request: Request, body: ResetRequest, background: Backgr
         state.settings, body.email, getattr(request.state, "request_id", None), state.clock()
     )
     queue = getattr(state, "queue", None)
-    if queue is not None:  # durable: enqueued before the 202, sent by the worker with a retry (M-5)
+    if queue is not None:  # durable: enqueued before the 202, sent by the worker with a retry
         try:
             queue.enqueue(payload)
             return Empty()

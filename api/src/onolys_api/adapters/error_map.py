@@ -1,5 +1,4 @@
-"""One place that turns any engine exception into one public error code and kind (SP09 R3,
-03-failure-policy R1).
+"""One place that turns any engine exception into one public error code and kind.
 
 `classify(exc, stage) -> Failure(code, kind)`; `to_public(exc, attempt=1, stage="run") ->
 (code, retryable)` is a thin wrapper (retryable == kind is transient). Kinds: `transient` (a blip),
@@ -10,7 +9,7 @@ text. Codes are existing public codes (`onolys_api.errors.ERROR_CODES`); the use
 (`AllRunsFailed`, `CodePassFailed`, `GlobalsPassFailed`) are matched by the `code` attribute they
 inherit from `OnolysError`.
 `stage="stt"` is the transcription path; a transient provider error stays `upstream_unavailable`
-on every attempt (D6: the file is not at fault).
+on every attempt (the file is not at fault).
 """
 
 from typing import Literal, NamedTuple
@@ -70,7 +69,7 @@ KIND_BY_CODE: dict[str, Kind] = {
 }
 
 
-# Validate file-check codes (03-failure-policy R11): an UPLOAD failure, never a session failure,
+# Validate file-check codes: an UPLOAD failure, never a session failure,
 # so they are not in KIND_BY_CODE. They are kept here for old `failed` docs that carry one.
 UPLOAD_FAILURE_CODES = frozenset(
     {"audio_unreadable", "audio_too_large", "unsupported_audio", "audio_too_long",
@@ -79,8 +78,8 @@ UPLOAD_FAILURE_CODES = frozenset(
 
 
 def kind_for_code(code: str | None) -> Kind:
-    """The kind of a stored error code; an unknown or missing code is `permanent_internal`
-    (03-failure-policy R6): never offer a retry that cannot help."""
+    """The kind of a stored error code; an unknown or missing code is `permanent_internal`:
+    never offer a retry that cannot help."""
     if code in UPLOAD_FAILURE_CODES:
         return USER_FILE  # an old failed doc: the file was at fault
     return KIND_BY_CODE.get(code or "", PERMANENT)
@@ -112,7 +111,7 @@ def _failure(code: str) -> Failure:
 
 def to_public(exc: BaseException, attempt: int = 1, stage: Stage = "run") -> tuple[str, bool]:
     """Public error code and whether another attempt may help (the caller applies the attempt
-    limit). `attempt` is kept for the callers and no longer changes the result (D6)."""
+    limit). `attempt` is kept for the callers and no longer changes the result."""
     f = classify(exc, stage)
     return f.code, f.kind == TRANSIENT
 

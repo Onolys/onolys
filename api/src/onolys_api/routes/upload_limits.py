@@ -1,4 +1,4 @@
-"""`GET /v1/upload-limits`: the limits the validator enforces, for web pre-checks (R10)."""
+"""`GET /v1/upload-limits`: the limits the validator enforces, for web pre-checks."""
 
 import logging
 from typing import Annotated

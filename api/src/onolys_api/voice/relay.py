@@ -1,7 +1,7 @@
-"""Voice relay (SP10 R4, D1, D4, D7, D8): `wss://<voice-host>/v1/voice/{interview_id}`.
+"""Voice relay: `wss://<voice-host>/v1/voice/{interview_id}`.
 
 The relay owns the persona prompt, the upstream session and the clock. Nothing from the scenario
-(prompt, hidden_info, rules) is ever sent to the client or logged. Protocol (PRD Architecture):
+(prompt, hidden_info, rules) is ever sent to the client or logged. Protocol:
 C->S `{type:auth, id_token}` first (else close 4401), binary PCM16 16 kHz, `{type:end}`;
 S->C `ready`, binary PCM16 24 kHz, `ai_speaking`, `interrupted`, `warn`, `time_up`, `error`.
 """
@@ -316,7 +316,7 @@ class Relay:
     # ---- state ----
 
     async def _checkpoint(self, timer: ConnectedTimer, *, disconnected: bool) -> bool:
-        """Persist progress. One lease-guarded write (A19): only the connection that holds the
+        """Persist progress. One lease-guarded write: only the connection that holds the
         interview's `conn_id` may write, so a stale or superseded connection (here or on another
         instance) can never overwrite the new owner's duration, handle or `disconnected_at`.
         False when the lease is gone (or the interview is) and nothing was written."""

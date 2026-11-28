@@ -1,4 +1,4 @@
-"""T08 server hardening (LM-3/4/5/15, M13, A15, A17, A18, A23). Fake repo, fake clocks."""
+"""Server hardening: language choice, cursors, stale uploads and more. Fake repo, fake clocks."""
 
 from datetime import UTC, datetime, timedelta
 
@@ -63,7 +63,7 @@ async def new_session(api, **body):
     return r.json()["session"]["id"]
 
 
-# ---- LM-3 (A6) ----
+# ---- speaker confirm refused once the report is ready ----
 
 
 async def test_confirm_speakers_refused_in_report_ready(api, repo):
@@ -78,7 +78,7 @@ async def test_confirm_speakers_refused_in_report_ready(api, repo):
     assert repo.get_session(UID, sid).clinician_speaker == "Therapist"
 
 
-# ---- LM-4 (A7) ----
+# ---- transcript keeps the session language ----
 
 
 async def test_transcript_without_language_keeps_the_session_language(api, repo):
@@ -93,7 +93,7 @@ async def test_transcript_without_language_and_auto_session_falls_back_to_en(api
     assert repo.get_session(UID, sid).language == "en"
 
 
-# ---- LM-5 (A8) ----
+# ---- transcript upload refused for interview sessions ----
 
 
 async def test_transcript_put_refused_for_interview_session(api, repo):
@@ -105,7 +105,7 @@ async def test_transcript_put_refused_for_interview_session(api, repo):
     assert s.state == "created" and not s.transcript_ready
 
 
-# ---- M13 ----
+# ---- transcript-only session start time ----
 
 
 async def test_transcript_only_session_gets_started_at_and_excludes_input_wait(api, repo):
@@ -117,7 +117,7 @@ async def test_transcript_only_session_gets_started_at_and_excludes_input_wait(a
     assert st.waited_ms == 0
 
 
-# ---- LM-15 server (M12) ----
+# ---- server ----
 
 
 async def test_relinking_an_interview_in_upload_phase_returns_the_same_session(api, repo):
@@ -150,7 +150,7 @@ async def test_second_end_returns_the_same_success(api, repo):
     assert a.json() == b.json() and b.json()["state"] == "ended"
 
 
-# ---- A15 ----
+# ---- idempotent replay ignores volatile client info ----
 
 
 async def test_idempotent_replay_ignores_volatile_client_info(api, repo):
@@ -163,7 +163,7 @@ async def test_idempotent_replay_ignores_volatile_client_info(api, repo):
     assert c.status_code == 409  # a real body change still conflicts
 
 
-# ---- A17 ----
+# ---- report version is bounded ----
 
 
 @pytest.mark.parametrize("version", ["99999999999999999999999", "9223372036854775808", "0", "-1"])
@@ -173,7 +173,7 @@ async def test_report_version_is_bounded(api, repo, version):
     assert r.status_code == 422, r.text
 
 
-# ---- A18 ----
+# ---- last-used write failure is tolerated ----
 
 
 async def test_last_used_write_failure_does_not_fail_the_request(api, repo, monkeypatch):
@@ -191,7 +191,7 @@ async def test_last_used_write_failure_does_not_fail_the_request(api, repo, monk
     assert r.status_code == 200, r.text
 
 
-# ---- A23 ----
+# ---- upload limits survive a bad default preset ----
 
 
 async def test_upload_limits_survives_a_bad_default_preset(api, monkeypatch):

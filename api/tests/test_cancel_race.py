@@ -1,4 +1,4 @@
-"""04-cancel Task 9: cancel vs `start_first_run` race (AC3).
+"""Cancel vs `start_first_run` race.
 
 One transaction wins. Run wins: cancel then reports the run's `counted` and releases the slot.
 Cancel wins: the run start returns `not_ready` and nothing is reserved. The poll-vs-cancel race

@@ -1,4 +1,4 @@
-"""Hard delete and its cleanup task (PRD R7 Delete, AC8).
+"""Hard delete and its cleanup task.
 
 `delete_session_data` is the one routine, run inline by `DELETE /sessions/{id}` and again by the
 `delete` task when the inline attempt failed. Every step is safe to repeat:

@@ -1,4 +1,4 @@
-"""04-cancel Task 3: `Repo.cancel_session`, the atomic cancel transaction (R3, R4, D1-D3, D5, D6).
+"""`Repo.cancel_session`, the atomic cancel transaction.
 
 Runs on FakeRepo always and on the Firestore emulator when FIRESTORE_EMULATOR_HOST is set.
 """

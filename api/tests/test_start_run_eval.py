@@ -1,4 +1,4 @@
-"""`Repo.start_run(eval=...)` (SP04 R3): an eval run starts on any ready session, outside the caps,
+"""`Repo.start_run(eval=...)`: an eval run starts on any ready session, outside the caps,
 counted=False, no usage, the block written once; the other bookkeeping is unchanged.
 
 Runs on FakeRepo always and on the Firestore emulator when FIRESTORE_EMULATOR_HOST is set.

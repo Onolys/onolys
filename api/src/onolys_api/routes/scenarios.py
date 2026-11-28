@@ -1,4 +1,4 @@
-"""`GET /v1/scenarios`: public fields of the curated AI-interview scenarios (R1)."""
+"""`GET /v1/scenarios`: public fields of the curated AI-interview scenarios."""
 
 from typing import Annotated
 
@@ -27,7 +27,7 @@ class ScenarioPublic(BaseModel):
 
 class ScenarioList(BaseModel):
     scenarios: list[ScenarioPublic]
-    voices: list[str] = Field(description="Every voice a practice interview may use (D16)")
+    voices: list[str] = Field(description="Every voice a practice interview may use")
 
 
 @router.get(

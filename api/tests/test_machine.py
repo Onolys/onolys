@@ -1,4 +1,4 @@
-"""Job state machine core (PRD R4): transitions, progress table, status mirror."""
+"""Job state machine core: transitions, progress table, status mirror."""
 
 import typing
 

@@ -121,7 +121,7 @@ def test_stt_cap_defaults_and_overrides():
 
 
 def test_env_is_required():
-    """A8: an unset ENV must not silently mean local (fake auth, no /tasks OIDC)."""
+    """An unset ENV must not silently mean local (fake auth, no /tasks OIDC)."""
     with pytest.raises(ConfigError, match="ENV is required"):
         _settings_from_env({})
 
@@ -148,7 +148,7 @@ def test_cloud_run_with_prod_env_is_fine():
 
 @pytest.mark.parametrize("env", ["staging", "prod"])
 def test_uid_hmac_key_required_outside_local(env):
-    """A19: an empty key makes `uid_hash` a public, unkeyed-looking hash."""
+    """An empty key makes `uid_hash` a public, unkeyed-looking hash."""
     with pytest.raises(ConfigError, match="UID_HMAC_KEY"):
         Settings.from_env({"APP_BASE_URL": "https://app.onolys.com", "ENV": env})
     assert (

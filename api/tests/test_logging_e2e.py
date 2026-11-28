@@ -1,4 +1,4 @@
-"""02-logging Task 9: end-to-end log guards (R11, AC1-AC4).
+"""End-to-end log guards.
 
 Everything goes through the real wiring: `configure_logging` installs the root handler, and the
 assertions read the JSON lines that actually reach stderr (not caplog.text).

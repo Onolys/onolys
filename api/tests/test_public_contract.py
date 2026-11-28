@@ -1,4 +1,4 @@
-"""SP04 T15: the public contract (AC11, AC17): docs endpoints, path rules, error models,
+"""The public contract: docs endpoints, path rules, error models,
 rating issue details, committed contract files."""
 
 import json

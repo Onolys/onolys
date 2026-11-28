@@ -1,9 +1,8 @@
-"""Task 13: hard delete + idempotent cleanup task (PRD R7 Delete, AC8). Stub flow over HTTP.
+"""Hard delete + idempotent cleanup task. Stub flow over HTTP.
 
 Enumerated proof: after a full flow (audio, transcript, big report to the blob store, two runs'
 artifacts, a draft + final rating) nothing under either bucket prefix and no document in any
-collection or subcollection of the session remains. The delete race / mid-run cancel is deferred
-(PRD), so the in-flight cases here only prove the cap slot is released exactly once.
+collection or subcollection of the session remains. The delete race / mid-run cancel is deferred, so the in-flight cases here only prove the cap slot is released exactly once.
 """
 
 import json
@@ -70,7 +69,7 @@ async def rich_session(env: Env, title: str = "SENTINEL-TITLE") -> str:
     swap_eval(env, BigEval())
     # the stub's `[fail:code]` is permanent (not retryable): make it the transient kind first
     env.repo.update_session(env.uid, sid, {"error": {"code": "upstream_unavailable", "step": "run", "kind": "transient"}})
-    r = await env.c.post(f"/v1/sessions/{sid}/retry", headers=env.h)  # 03 Task 4: the only retry path
+    r = await env.c.post(f"/v1/sessions/{sid}/retry", headers=env.h)  # the only retry path
     assert r.status_code == 202
     env.drain()
     # a second, >500 KB transcript so the transcript object path is populated too

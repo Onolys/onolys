@@ -1,4 +1,4 @@
-"""Audio rules and tools (PRD R3, D5): format aliases, magic-byte sniff, ffprobe, ffmpeg.
+"""Audio rules and tools: format aliases, magic-byte sniff, ffprobe, ffmpeg.
 
 Browsers send several MIME aliases for one format, so the API maps them to ONE canonical type
 per format (pinned in the signed PUT). `validate` trusts only the bytes: it sniffs the magic
@@ -36,7 +36,7 @@ CANONICAL_TYPES: dict[str, str] = {
     "webm": "audio/webm",
     "ogg": "audio/ogg",
 }
-# The one accepted-types table (R10): format key -> (accepted MIME types, accepted extensions).
+# The one accepted-types table: format key -> (accepted MIME types, accepted extensions).
 # `sniff` returns only these keys; `resolve_format` and `GET /v1/upload-limits` derive from it.
 ACCEPTED_FORMATS: dict[str, tuple[tuple[str, ...], tuple[str, ...]]] = {
     "mp3": (("audio/mpeg", "audio/mp3", "audio/x-mp3", "audio/mpeg3"), ("mp3",)),

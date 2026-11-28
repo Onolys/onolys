@@ -1,4 +1,4 @@
-"""Public request bodies reject unknown fields; eval fields are unreachable (SP04 R7)."""
+"""Public request bodies reject unknown fields; eval fields are unreachable."""
 
 import json
 

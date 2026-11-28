@@ -1,4 +1,4 @@
-"""SP10 Task 6: delayed `interview-sweep` task and the single refund routine (R5, D11, D12, AC6)."""
+"""Delayed `interview-sweep` task and the single refund routine."""
 
 from datetime import UTC, datetime, timedelta
 

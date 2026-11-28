@@ -1,13 +1,13 @@
-"""Interview settlement (SP10 R5, D11): the one place an interview leaves `created|live`.
+"""Interview settlement: the one place an interview leaves `created|live`.
 
 `settle_interview` is used by `POST /interviews/{id}/end`, the lazy abandon at the next create,
-and (Task 6) the delayed sweeper task. The state change is one repo transaction, so exactly one
-caller wins; only the winner touches the SP11 reservation: `refund=True` when the best known
+and the delayed sweeper task. The state change is one repo transaction, so exactly one
+caller wins; only the winner touches the usage reservation: `refund=True` when the best known
 elapsed time (relay-recorded `duration_s`, aged by `now - seen_at` while the relay is connected) is
 under `AI_ABANDON_COUNT_SECONDS`, else the unit stays counted. The verdict is stored as
 `refunded` in the same write as the transition; a refunded interview can never be linked to a
 session (no free evaluation on top of the refund). At most `AI_REFUNDS_PER_DAY` refunds are given
-per user per UTC day (A9); later short interviews stay counted. A caller that loses (already
+per user per UTC day; later short interviews stay counted. A caller that loses (already
 ended/abandoned/uploaded) changes nothing.
 """
 

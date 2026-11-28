@@ -1,5 +1,4 @@
-"""Task 12: the `run` task, progress, partial failure, versioned reports, `POST /runs`
-(PRD R4 Run, R5, R6, R7, D2, D12, D17, D18, AC2, AC15, AC16). Stub flow over HTTP, in-memory queue.
+"""The `run` task, progress, partial failure, versioned reports, `POST /runs`. Stub flow over HTTP, in-memory queue.
 """
 
 import json
@@ -280,7 +279,7 @@ async def test_a_release_failure_on_the_final_attempt_is_retried_by_the_worker(e
     env.drain()
     assert env.repo.get_session(env.uid, sid).state == "failed"
     (run,) = env.repo.list_runs(env.uid, sid)
-    assert run.released is True and env.counters()[0] == 0  # no leaked cap slot (M-2)
+    assert run.released is True and env.counters()[0] == 0  # no leaked cap slot
 
 
 async def test_try_again_after_a_failure_reuses_transcript_and_stored_rating(env):
@@ -362,7 +361,7 @@ async def test_retryable_failure_on_last_attempt_fails_and_releases_once(env):
 
 async def test_retry_within_the_task_refunds_once_never_twice(env):
     """Attempt 1 calls the evaluation and fails retryably; attempt 2 then dies before calling it.
-    Both are system failures: the unit is refunded exactly once (A20, owner decision)."""
+    Both are system failures: the unit is refunded exactly once (owner decision)."""
 
     class SpendThenBreak(FakeEvaluation):
         async def run(self, *a, **kw):
@@ -505,7 +504,7 @@ async def test_publish_failure_leaves_no_visible_report_and_the_retry_publishes(
     orig, boom = env.repo.publish_report, []
 
     def publish_report(uid, sid, *a, **kw):
-        if not boom:  # the worker dies before the publication commits (M-11)
+        if not boom:  # the worker dies before the publication commits
             boom.append(1)
             raise AdapterError("upstream_unavailable")
         assert env.repo.list_reports(uid, sid) == []  # nothing was visible in between
@@ -565,7 +564,7 @@ async def test_post_runs_state_and_input_checks(env):
     assert (
         await env.c.post(f"/v1/sessions/{fresh}/runs", json={}, headers=env.h)
     ).status_code == 409
-    done = await env.finished()  # FX45: a ready report is final
+    done = await env.finished()  # a ready report is final
     r = await env.c.post(f"/v1/sessions/{done}/runs", json={}, headers=env.h)
     assert r.status_code == 409 and r.json()["details"][0]["code"] == "rating_final"
     for bad in ({"n_runs": 0}, {"n_runs": 6}, {"preset": "nope"}):
@@ -625,7 +624,7 @@ async def test_no_report_text_in_session_status(env):
         assert st[k] is None or isinstance(st[k], (int, float)) or st[k][:2] == "20", k
 
 
-# ---- 03-failure-policy Task 3: `counted` on the failed session, interview never counted ----------
+# ---- `counted` on the failed session, interview never counted ----------
 
 
 class AlwaysDown(FakeEvaluation):
@@ -699,7 +698,7 @@ async def test_interview_first_run_failure_is_never_counted(env):
 
 
 async def test_cancel_after_the_last_active_check_publishes_no_report(env, monkeypatch):
-    """M-11: a cancel landing between the final `ensure_active` and the publication wins."""
+    """A cancel landing between the final `ensure_active` and the publication wins."""
     import inspect
 
     from onolys_api.jobs import run as run_mod

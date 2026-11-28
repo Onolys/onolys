@@ -1,7 +1,7 @@
-"""Structured, PHI-free API logs (PRD R10).
+"""Structured, PHI-free API logs.
 
 One JSON object per line on stderr: Cloud Logging reads `severity` and `message` and exposes
-the rest as `jsonPayload.*` (SP06's alert filters on `jsonPayload.status="failed"`, the runbook on
+the rest as `jsonPayload.*` (the prod alert filters on `jsonPayload.status="failed"`, the runbook on
 `jsonPayload.request_id`). Field names pass the `onolys_engine_core.safe_log` allowlist,
 so text-like or unknown names are dropped; string values are capped.
 Values are ids, codes and numbers only.
@@ -70,7 +70,7 @@ def emit(event: str, level: int = logging.INFO, **fields) -> None:
 def failed(
     event: str, *, session_id, step, error_code, exc_class, request_id=None, run_id=None
 ) -> None:
-    """The one `status=failed` line of a failed step or run (SP06 alert + runbook match it)."""
+    """The one `status=failed` line of a failed step or run (the alert and runbook match it)."""
     emit(
         event, logging.ERROR, status="failed", session_id=session_id, run_id=run_id, step=step,
         error_code=error_code, exc_class=exc_class, request_id=request_id,

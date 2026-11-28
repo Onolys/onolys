@@ -1,4 +1,4 @@
-"""R2/R3/D1/D2/D10: the engine seam. The run passes `seed` (the session id), the optional caller span,
+"""The engine seam. The run passes `seed` (the session id), the optional caller span,
 and never a rating: a run with or without a submitted card gives the same report."""
 
 import inspect

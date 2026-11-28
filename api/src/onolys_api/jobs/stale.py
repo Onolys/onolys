@@ -12,10 +12,10 @@ rating / speaker writes also bump. It is failed when read (or by the server swee
 `jobs/sweep.py`), in one repo transaction that re-checks the state, so a task that finished in the
 meantime wins. A failed `running` session also fails its unfinished runs and hands their cap slots
 back IN THAT SAME transaction (`release_runs`): a release that fails separately would leave the
-session `failed` (never re-checked) and the user's `active_runs` leaked (M-2).
+session `failed` (never re-checked) and the user's `active_runs` leaked.
 
 A stale failure is a lost task, not a bad file or a bug: it is `transient` with
-`deadline_exceeded` ("took too long, run again"), so `/retry` works (LM-1).
+`deadline_exceeded` ("took too long, run again"), so `/retry` works.
 """
 
 from datetime import datetime, timedelta

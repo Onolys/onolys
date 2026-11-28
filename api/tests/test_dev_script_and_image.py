@@ -1,5 +1,5 @@
-"""AC12 / D6: the one-command local run (`api/scripts/dev.sh`) and the single image's contract
-(Dockerfile + entrypoint) match what Cloud Run (SP06 services.tf) provides: PORT and
+"""The one-command local run (`api/scripts/dev.sh`) and the single image's contract
+(Dockerfile + entrypoint) match what Cloud Run (the Terraform services) provides: PORT and
 SERVICE_MODE api|worker|combined, ffmpeg, GIT_SHA build arg, vendored Redoc.
 The image build itself is a CI/CD step; here we check the files and run the entrypoint."""
 

@@ -1,4 +1,4 @@
-"""Real `Stt` adapter (SP09 R1, D5): a registry over the SP01 core STT adapters.
+"""Real `Stt` adapter: a registry over the core STT adapters.
 
 The provider is data: the worker passes the session's stored `stt.provider` in `SttParams`, and
 this module looks the core adapter up by that key. There is no `if provider == ...` in worker

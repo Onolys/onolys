@@ -1,4 +1,4 @@
-"""AC3: no collection query in the repo layer lacks a uid filter (source-level check)."""
+"""No collection query in the repo layer lacks a uid filter (source-level check)."""
 
 import ast
 from pathlib import Path

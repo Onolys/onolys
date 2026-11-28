@@ -1,4 +1,4 @@
-"""Large-object rule (D11): inline in Firestore up to 500 KB, else a GCS JSON object + pointer."""
+"""Large-object rule: inline in Firestore up to 500 KB, else a GCS JSON object + pointer."""
 
 import json
 from typing import Any

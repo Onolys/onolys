@@ -1,7 +1,7 @@
-"""Preset allowlist + STT resolution for `POST /sessions` (PRD R2, D8).
+"""Preset allowlist + STT resolution for `POST /sessions`.
 
 Users pick only a preset *name*. Its `stt` is a key into stt_providers.yaml, resolved once
-through SP01 `select_stt`; the result is stored on the session. Provider and model names are
+through the engine's `select_stt`; the result is stored on the session. Provider and model names are
 never written here.
 """
 

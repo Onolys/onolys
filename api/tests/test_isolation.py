@@ -1,4 +1,4 @@
-"""AC3: two-user isolation. User B gets 404 (never 403, never data) on every `{id}`-addressed
+"""Two-user isolation. User B gets 404 (never 403, never data) on every `{id}`-addressed
 route of user A, on both the token path and the API-key path. The route table is checked against
 the committed OpenAPI so a new id route cannot ship without isolation coverage.
 """

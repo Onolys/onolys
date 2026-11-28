@@ -1,4 +1,4 @@
-"""Cross-instance abuse limits for the email endpoints (R6, D4).
+"""Cross-instance abuse limits for the email endpoints.
 
 Fixed-window counters, one doc per (scope, subject, window, window index) in `email_rate/{id}`.
 The doc id is an HMAC (`UID_HMAC_KEY`), so no raw email, uid or IP is stored or logged. `expires_at`

@@ -1,6 +1,5 @@
-"""T06 recovery: stale settlement + slot release in ONE transaction (M-2), transient stale
-failures (LM-1), `active_runs` self-repair on a refused start (M-2), the server-side sweep
-(M-1, M-3) and unique delete-task names. Fake repo, fake clock, no sleeps."""
+"""Recovery: stale settlement + slot release in ONE transaction, transient stale
+failures, `active_runs` self-repair on a refused start, the server-side sweep and unique delete-task names. Fake repo, fake clock, no sleeps."""
 
 from datetime import UTC, datetime, timedelta
 
@@ -58,7 +57,7 @@ def active(repo) -> int:
     return repo.get_user(UID).active_runs
 
 
-# ---- M-2: the stale fail releases the slot in the same transaction ----
+# ---- the stale fail releases the slot in the same transaction ----
 
 
 def test_stale_fail_releases_the_slot_even_when_a_separate_release_would_raise(
@@ -77,7 +76,7 @@ def test_stale_fail_releases_the_slot_even_when_a_separate_release_would_raise(
     assert active(repo) == 0
 
 
-# ---- LM-1: a stale failure is a lost task: transient, retryable, honest copy ----
+# ---- a stale failure is a lost task: transient, retryable, honest copy ----
 
 
 @pytest.mark.parametrize("state,step", [("transcribing", "transcribe"), ("validating", "validate"),
@@ -91,7 +90,7 @@ def test_stale_failures_are_transient_and_retryable(repo, settings, state, step)
     assert (st.error_kind, st.retries_left) == ("transient", MAX_SESSION_RETRIES)
 
 
-# ---- M-2: refused start repairs a leaked slot ----
+# ---- refused start repairs a leaked slot ----
 
 
 def leak(repo, settings, n=1):
@@ -135,7 +134,7 @@ def test_a_refused_start_with_a_live_run_stays_refused(repo, settings):
     assert len(calls) == 1 and active(repo) == 1
 
 
-# ---- M-1 / M-3: the sweep ----
+# ---- the sweep ----
 
 
 def test_sweep_settles_stale_sessions_resumes_deletes_and_repairs_leaks(repo, settings, blobs):
@@ -199,7 +198,7 @@ async def client_for(settings, blobs, repo):
         yield app, c
 
 
-# ---- M-1: a repeated DELETE is not deduped by Cloud Tasks ----
+# ---- a repeated DELETE is not deduped by Cloud Tasks ----
 
 
 def test_delete_task_names_are_unique_per_enqueue():

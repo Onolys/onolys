@@ -1,4 +1,4 @@
-"""04-cancel Task 6: cancel logging (R8). Real stderr JSON lines, ids from the SP02 context."""
+"""Cancel logging. Real stderr JSON lines, ids from the engine context."""
 
 import pytest
 from starlette.testclient import TestClient

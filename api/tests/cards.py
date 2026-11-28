@@ -1,4 +1,4 @@
-"""A valid synthetic SP02 rating card (canonical `rating.schema.json` shape) for api tests."""
+"""A valid synthetic rating card (canonical `rating.schema.json` shape) for api tests."""
 
 import copy
 

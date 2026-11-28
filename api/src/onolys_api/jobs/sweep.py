@@ -1,4 +1,4 @@
-"""Server-side sweep (M-1, M-3, M-2): one idempotent, bounded pass that does what reads and
+"""Server-side sweep: one idempotent, bounded pass that does what reads and
 Cloud Tasks retries cannot when nobody is looking.
 
 Called by the internal worker route `POST /tasks/sweep` (OIDC like the other `/tasks/*` routes),

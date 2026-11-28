@@ -1,5 +1,5 @@
 """The one transcript write: pack + build + `transition_session`, shared by the public upload
-route and the eval session import (05 R3). Prod behaviour is unchanged; the route keeps
+route and the eval session import. Prod behaviour is unchanged; the route keeps
 `maybe_start_first_run`."""
 
 from uuid import uuid4
@@ -13,7 +13,7 @@ from onolys_api.repo.models import SessionDoc, TranscriptDoc
 
 
 def session_language(session_language: str, transcript_language: str | None) -> str:
-    """A language the user chose stays; only `auto` takes the transcript's, else `en` (LM-4)."""
+    """A language the user chose stays; only `auto` takes the transcript's, else `en`."""
     if session_language not in ("", "auto"):
         return session_language
     return transcript_language or "en"
@@ -24,7 +24,7 @@ def store_transcript(
     clinician: str | None,
 ) -> None:  # fmt: skip
     """Synchronous storage/Firestore sequence; call from a worker thread when on the event loop."""
-    # ONE transaction (N1): the `created` check, the transcript doc and the move to
+    # ONE transaction: the `created` check, the transcript doc and the move to
     # `awaiting_input` commit together, so two concurrent PUTs cannot both write.
     pointer = large.pack(
         blobs, f"{uid}/{sid}/transcripts/{uuid4().hex}.json",

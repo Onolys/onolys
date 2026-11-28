@@ -1,4 +1,4 @@
-"""05 Task 1: shared transcript write helper is byte-identical to the old `_persist`; `eval`
+"""Shared transcript write helper is byte-identical to the old `_persist`; `eval`
 never reaches a public session view or the OpenAPI document."""
 
 import json

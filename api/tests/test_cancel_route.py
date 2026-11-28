@@ -1,4 +1,4 @@
-"""04-cancel Task 4: `POST /sessions/{id}/cancel` (R2, R6, R7, D6) and 409 on `cancelled`.
+"""`POST /sessions/{id}/cancel` and 409 on `cancelled`.
 
 Runs on FakeRepo (test_first_run helpers).
 """

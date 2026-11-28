@@ -1,4 +1,4 @@
-"""Eval-only engine and route resolution (04-eval-run-path R5); offline, fake LLM factory."""
+"""Eval-only engine and route resolution; offline, fake LLM factory."""
 
 import time
 from pathlib import Path

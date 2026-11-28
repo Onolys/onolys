@@ -1,4 +1,4 @@
-"""SP09 R1/D5/AC1: the real `Stt` adapter is a registry over the SP01 core adapters, chosen by
+"""The real `Stt` adapter is a registry over the core adapters, chosen by
 the session's stored `stt.provider`. Unit tests use `FixtureStt`; no live STT."""
 
 import json

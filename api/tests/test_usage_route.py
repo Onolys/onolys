@@ -1,4 +1,4 @@
-"""GET /v1/usage: eval + interview x UTC day, used/cap/resets_at (SP11 R8, D3, AC7)."""
+"""GET /v1/usage: eval + interview x UTC day, used/cap/resets_at."""
 
 from datetime import UTC, datetime
 

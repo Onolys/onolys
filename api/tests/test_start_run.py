@@ -65,7 +65,7 @@ def test_two_concurrent_manual_starts_exactly_one_wins(repo, state):  # noqa: F8
     h = {"Authorization": f"Bearer test:{uid}"}
     sid = new_session(repo, uid, state=state, ready=True, **READY)
     path = "runs"
-    if state == "failed":  # a failed session is re-run through the one retry path (03-failure R4)
+    if state == "failed":  # a failed session is re-run through the one retry path
         _fail_run_step(repo, uid, sid)
         path = "retry"
     barrier = threading.Barrier(2)
@@ -140,7 +140,7 @@ def test_refused_start_reserves_nothing(repo):  # noqa: F811
     assert user_counters(repo, uid, caps.utc_date()) == (0, 0)
 
 
-# ---- the free first run of an interview-linked session also works through POST /runs (SP11 AC6)
+# ---- the free first run of an interview-linked session also works through POST /runs
 
 
 def _post_retry(app, uid, sid):
@@ -189,7 +189,7 @@ def test_linked_post_runs_still_obeys_the_active_limit(repo):  # noqa: F811
     assert user_counters(repo, uid, caps.utc_date()) == (0, 0)
 
 
-# ---- FX45 (E24): a rating is final once its report is ready; only a system failure may retry
+# ---- a rating is final once its report is ready; only a system failure may retry
 
 
 @pytest.mark.parametrize("fields", [{}, {"interview_id": "iv1"}], ids=["upload", "interview"])
@@ -266,7 +266,7 @@ def test_session_detail_exposes_interview_id(repo):  # noqa: F811
         assert c.get(f"/v1/sessions/{plain}", headers=h).json()["interview_id"] is None
 
 
-# ---- FX42 (A5): a run costs n_runs units ---------------------------------------------------
+# ---- a run costs n_runs units ---------------------------------------------------
 
 
 def test_n_runs_costs_n_units_and_refunds_all(repo):  # noqa: F811
@@ -312,7 +312,7 @@ def test_auto_first_run_costs_the_session_n_runs(repo):  # noqa: F811
     assert user_counters(repo, uid, caps.utc_date()) == (1, 2)
 
 
-# ---- review R1: Try again after a failed FREE interview run stays free -------------------------
+# ---- Try again after a failed FREE interview run stays free -------------------------
 
 
 def _fail_system(repo_, uid, sid, run_id):
@@ -357,7 +357,7 @@ def test_session_detail_exposes_free_run(repo):  # noqa: F811
     assert got == [True, False]
 
 
-# ---- review R2: an auto-start held by an active run says so, not "daily cap" -------------------
+# ---- an auto-start held by an active run says so, not "daily cap" -------------------
 
 
 def test_auto_start_held_by_active_run_records_concurrent_runs(repo):  # noqa: F811

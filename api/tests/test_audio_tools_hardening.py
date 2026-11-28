@@ -1,4 +1,4 @@
-"""A16: ffmpeg/ffprobe run with a local-file-only protocol whitelist, an explicit demuxer where
+"""ffmpeg/ffprobe run with a local-file-only protocol whitelist, an explicit demuxer where
 the format was sniffed, and resource limits on the subprocess."""
 
 import resource

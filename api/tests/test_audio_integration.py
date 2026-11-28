@@ -1,5 +1,5 @@
 """One integration test with real ffmpeg/ffprobe: the canonical FLAC is FLAC / 16 kHz / mono and
-the fake `Stt` receives an `AudioRef` to it (AC5)."""
+the fake `Stt` receives an `AudioRef` to it."""
 
 import json
 import shutil

@@ -1,16 +1,16 @@
-"""Progress numbers for the processing screen (05-processing-screen R2, R6, D1, D2, D6).
+"""Progress numbers for the processing screen.
 
 Pure tables and helpers, shared by `jobs.machine.advance`, the repo start/retry transactions and
 the run worker, so the web only interpolates what the server publishes. Numbers and timestamps
-only: no text reaches `session_status` (AC11). The expected durations are placeholders until real
-timings exist (R6); `STATE_PROGRESS` and `STAGE_WEIGHTS` keep their values (D6).
+only: no text reaches `session_status`. The expected durations are placeholders until real
+timings exist; `STATE_PROGRESS` and `STAGE_WEIGHTS` keep their values.
 """
 
 from collections.abc import Mapping
 from datetime import datetime
 from typing import Any
 
-# R4 progress table
+# progress table
 STATE_PROGRESS: dict[str, int] = {
     "created": 0,
     "uploading": 5,
@@ -31,7 +31,7 @@ _NEXT_STATE = {
     "transcribing": "awaiting_input", "awaiting_input": "running",
 }  # fmt: skip
 
-# R6: the one server table of typical stage durations (seconds). Placeholders, except
+# the one server table of typical stage durations (seconds). Placeholders, except
 # transcription, which scales with the recording (see `stage_expected_s`).
 STAGE_EXPECTED_S: dict[str, int] = {
     "uploading": 30, "validating": 15,

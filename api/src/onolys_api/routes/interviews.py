@@ -1,4 +1,4 @@
-"""`/v1/interviews`: create (reserves one SP11 unit), get, end/discard (SP10 R5, D11-D14, D16)."""
+"""`/v1/interviews`: create (reserves one usage unit), get, end/discard."""
 
 from typing import Annotated
 from uuid import uuid4

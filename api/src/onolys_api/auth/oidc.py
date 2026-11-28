@@ -1,4 +1,4 @@
-"""Google-signed OIDC tokens from Cloud Tasks to the worker (R5).
+"""Google-signed OIDC tokens from Cloud Tasks to the worker.
 
 Same cert cache and RS256 checks as `IdTokenVerifier`; the differences are the issuer, the
 audience (the worker URL) and the identity: the token's verified email must be the

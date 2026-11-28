@@ -1,4 +1,4 @@
-"""03-failure-policy R8/R11 (AC7, AC11): a file-check failure is an UPLOAD failure (nothing
+"""A file-check failure is an UPLOAD failure (nothing
 left but a data-free status stub); any later failure keeps the user's data."""
 
 import re

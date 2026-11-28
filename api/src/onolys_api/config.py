@@ -1,4 +1,4 @@
-"""Settings from the SP06 env-var interface (see ../.env.example)."""
+"""Settings from the env-var interface (see ../.env.example)."""
 
 import os
 from collections.abc import Mapping
@@ -80,7 +80,7 @@ def _strict_bool(e: Mapping[str, str], name: str, default: bool) -> bool:
     raise ConfigError(f"{name} must be true or false")
 
 
-# user-visible retries of a transient failure (03-failure-policy R4): the one source, no env
+# user-visible retries of a transient failure: the one source, no env
 MAX_SESSION_RETRIES = 3
 
 
@@ -106,8 +106,8 @@ class Settings:
     routes_file: str = ""
     default_preset: str = ""
     prod_engine: str = "miti"
-    eval_mode: bool = False  # EVAL_MODE: the one switch for everything eval (04-eval-run-path R6)
-    # Presets beyond the default that users may pick (FX43): empty in prod unless the owner opts in
+    eval_mode: bool = False  # EVAL_MODE: the one switch for everything eval
+    # Presets beyond the default that users may pick: empty in prod unless the owner opts in
     extra_presets: tuple[str, ...] = ()
     git_sha: str = "dev"
     revision: str = ""  # Cloud Run `K_REVISION`
@@ -123,10 +123,10 @@ class Settings:
     ai_mismatch_min_seconds: int = 60
     ai_mismatch_pct: int = 15
     ai_abandon_count_seconds: int = 30  # ended/abandoned under this: the usage unit is refunded
-    ai_refunds_per_day: int = 3  # at most this many such refunds per user per UTC day (A9)
+    ai_refunds_per_day: int = 3  # at most this many such refunds per user per UTC day
     ai_reconnect_seconds: int = 60  # relay waits this long for a dropped client
     ai_mic_gate: bool = False
-    # relay abuse caps (A21): one client audio frame, bytes per second of audio (PCM16 16 kHz is
+    # relay abuse caps: one client audio frame, bytes per second of audio (PCM16 16 kHz is
     # 32000 B/s, so the default tolerates 4x real time for buffered bursts), and how many times
     # one interview may (re)connect before it is ended.
     ai_max_frame_bytes: int = 65536
@@ -143,7 +143,7 @@ class Settings:
     def from_env(cls, environ: Mapping[str, str] | None = None) -> "Settings":
         e = os.environ if environ is None else environ
         env = e.get("ENV")
-        if not env:  # never default to local: that means fake auth and no /tasks OIDC (A8)
+        if not env:  # never default to local: that means fake auth and no /tasks OIDC
             raise ConfigError(f"ENV is required ({'|'.join(ENVS)})")
         local = env in LOCAL_ENVS
         if local and e.get("K_SERVICE"):  # Cloud Run sets K_SERVICE

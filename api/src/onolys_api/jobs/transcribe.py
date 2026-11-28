@@ -1,4 +1,4 @@
-"""The `transcribe` and `transcribe-poll` steps (PRD R4, D16, AC6).
+"""The `transcribe` and `transcribe-poll` steps.
 
 `transcribe` calls `Stt.start` once, stores the handle as `steps.transcribe.stt_operation` (with
 `stt_started`), releases its claim and enqueues the first delayed poll. A retry or redelivery

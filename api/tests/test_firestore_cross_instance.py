@@ -95,7 +95,7 @@ def _running_session(repo, uid, sid):
 
 
 def test_transition_session_cannot_overwrite_a_cancel_from_another_instance(repos):
-    """M-10: the plan runs on the state read inside the transaction."""
+    """The plan runs on the state read inside the transaction."""
     from onolys_api.jobs.machine import transition_plan
     from onolys_api.repo.limits import LimitDefaults
 
@@ -111,7 +111,7 @@ def test_transition_session_cannot_overwrite_a_cancel_from_another_instance(repo
 
 
 def test_publish_report_after_a_cancel_from_another_instance_stores_nothing(repos):
-    """M-11: the report is published only while the session is still `running`."""
+    """The report is published only while the session is still `running`."""
     from onolys_api.jobs.machine import transition_plan
     from onolys_api.repo.limits import LimitDefaults
     from onolys_api.repo.models import ReportDoc, RunDoc
@@ -141,7 +141,7 @@ def test_publish_report_after_a_cancel_from_another_instance_stores_nothing(repo
 
 
 def test_discard_failed_upload_unlinks_the_interview(repos):
-    """M-4: the tombstone and the interview reset commit in one transaction."""
+    """The tombstone and the interview reset commit in one transaction."""
     from onolys_api.repo.models import InterviewDoc
 
     uid, sid = f"u-{uuid.uuid4().hex[:10]}", f"s-{uuid.uuid4().hex[:10]}"
@@ -164,7 +164,7 @@ def test_discard_failed_upload_unlinks_the_interview(repos):
 
 
 def test_stale_fail_releases_runs_in_one_txn_and_reconcile_repairs_a_leak(repos):
-    """M-2: `fail_stale_session(release_runs=True)` writes the failure and the slot releases of
+    """`fail_stale_session(release_runs=True)` writes the failure and the slot releases of
     every unreleased run (two here: no two-writes-to-one-doc trouble) in ONE transaction;
     `reconcile_active_runs` lowers `active_runs` to the runs that really hold a slot."""
     from datetime import timedelta

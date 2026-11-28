@@ -1,4 +1,4 @@
-"""RunDoc.eval: optional write-once provenance block (SP04 R1)."""
+"""RunDoc.eval: optional write-once provenance block."""
 
 import pytest
 

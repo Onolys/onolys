@@ -1,8 +1,8 @@
-"""The only seam to the engines (PRD R6, D2, D20): `Stt`, `Evaluation`, and (SP10 R3) `Voice`.
+"""The only seam to the engines: `Stt`, `Evaluation`, and `Voice`.
 
-`Stt` is the provider-neutral SP01 `SttAdapter` (`start`/`poll`); `Evaluation` wraps
+`Stt` is the provider-neutral engine `SttAdapter` (`start`/`poll`); `Evaluation` wraps
 the configured engine (one call runs the whole `running` phase, asyncio inside). There are no
-per-stage adapters. Fake implementations live in `fake.py`; real ones are SP09.
+per-stage adapters. Fake implementations live in `fake.py`; real ones live in `real.py`.
 """
 
 from dataclasses import dataclass
@@ -33,7 +33,7 @@ __all__ = [
 
 class AdapterError(OnolysError):
     """An engine call failed. `code` is a stable machine code; the caller maps it to a public
-    error code (real mapping: SP09). Never carries transcript or rating text."""
+    error code (the real mapping is in `error_map.py`). Never carries transcript or rating text."""
 
     def __init__(self, code: str) -> None:
         super().__init__(code)
@@ -41,7 +41,8 @@ class AdapterError(OnolysError):
 
 
 class EvaluationOutput(BaseModel):
-    """SP03 `EvaluationOutput`: the report JSON (incl. its `run_info`) plus run artifacts."""
+    """The evaluation engine's `EvaluationOutput`: the report JSON (incl. its `run_info`) plus
+    run artifacts."""
 
     report: dict[str, Any]
     run_info: dict[str, Any] = Field(default_factory=dict)
@@ -79,7 +80,7 @@ class Evaluation(Protocol):
 
 
 class Voice(Protocol):
-    """Realtime voice seam (SP10 R3): the relay opens one provider session per connection.
+    """Realtime voice seam: the relay opens one provider session per connection.
     `params.provider` picks the core adapter; nothing else in the API names a provider."""
 
     async def open(self, params: VoiceParams) -> VoiceSession: ...

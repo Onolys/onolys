@@ -1,4 +1,4 @@
-"""Task queue (R5): Cloud Tasks in the cloud, an in-memory queue for SERVICE_MODE=combined.
+"""Task queue: Cloud Tasks in the cloud, an in-memory queue for SERVICE_MODE=combined.
 
 Task names make enqueue idempotent inside Cloud Tasks' dedup window: `{sid}-validate`,
 `{sid}-transcribe`, `{sid}-poll-{n}`, `{run_id}-run`, `{sid}-delete[-{epoch_s}]`,
@@ -34,7 +34,7 @@ KINDS: tuple[str, ...] = (
     "interview-sweep",
     "reset-email",
 )
-MAX_ATTEMPTS = 2  # the Cloud Tasks queue's max_attempts: the one automatic retry (D3)
+MAX_ATTEMPTS = 2  # the Cloud Tasks queue's max_attempts: the one automatic retry
 DISPATCH_DEADLINE_S = 600
 
 
@@ -45,7 +45,7 @@ class TaskPayload(BaseModel):
     run_id: str | None = None
     n: int | None = None  # poll sequence number; delete: the enqueue time (epoch s)
     request_id: str | None = None
-    retry: int = 0  # the session's `retry_count` when a user-visible retry enqueued it (R4)
+    retry: int = 0  # the session's `retry_count` when a user-visible retry enqueued it
     email: str | None = None  # `reset-email` only: the delivery address (never logged)
     key: str | None = None  # `reset-email` only: keyed hash of the address, for the task name
 
@@ -69,7 +69,7 @@ def task_name(p: TaskPayload) -> str:
     if p.kind == "interview-sweep" and p.n:
         return f"{p.sid}-interview-sweep-{p.n}"  # a re-check: the first sweep's name is spent
     if p.kind == "delete" and p.n:
-        return f"{p.sid}-delete-{p.n}"  # a repeated DELETE: the first task's name is spent (M-1)
+        return f"{p.sid}-delete-{p.n}"  # a repeated DELETE: the first task's name is spent
     return f"{p.sid}-{p.kind}{suffix}"
 
 

@@ -1,4 +1,4 @@
-"""04-eval-run-path Task 4 (R2): `create_run` is the one run-creation entry. `EvalDisabled` writes
+"""`create_run` is the one run-creation entry. `EvalDisabled` writes
 nothing; eval starts from report_ready/failed outside the caps; misuse raises; `run_id` is optional.
 """
 
@@ -97,7 +97,7 @@ def raw_run(repo, sid, run_id) -> dict:
     return repo._run_ref(UID, sid, run_id).get().to_dict()
 
 
-def test_prod_run_doc_has_no_eval_key(repo):  # review M1: no `eval: null` on prod runs
+def test_prod_run_doc_has_no_eval_key(repo):  # no `eval: null` on prod runs
     app, q, sid = setup(repo)
     out = create_run(app, UID, sid, RunRequest())
     assert "eval" not in raw_run(repo, sid, out.run_id)
@@ -126,7 +126,7 @@ def test_eval_run_doc_keeps_eval_key(repo):
     assert raw_run(repo, sid, out.run_id)["eval"]["eval_run_id"] == "e1"
 
 
-def test_eval_run_doc_forces_one_run(repo):  # review A2: provenance matches the worker's n_runs=1
+def test_eval_run_doc_forces_one_run(repo):  # provenance matches the worker's n_runs=1
     app, q, sid = setup(repo, "report_ready", eval_mode=True)
     out = create_run(app, UID, sid, RunRequest(n_runs=3), is_eval=True, eval_spec=INFO)
     run = repo.get_run(UID, sid, out.run_id)

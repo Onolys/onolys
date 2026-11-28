@@ -1,4 +1,4 @@
-"""The `run` task (PRD R4 Run, R5, R6, D2, D12, D17): the whole evaluation as one task.
+"""The `run` task: the whole evaluation as one task.
 
 The handler calls the `Evaluation` adapter in-process. `progress_cb(stage, status)` writes
 `session_status.step` (the stage last `started`) and adds a finished stage's weight to `progress`
@@ -119,7 +119,7 @@ def make_run_handler(
 def _release_or_log(repo, uid: str, sid: str, run_id: str, code: str, date) -> None:
     """Final-attempt release. A failure here must not replace the run's real error (it decides
     the session's error code); the worker's `_fail` tries the release again and the server sweep
-    repairs a slot that still leaks (M-2)."""
+    repairs a slot that still leaks."""
     try:
         release_failed_run(repo, uid, sid, run_id, kind_for_code(code), date)
     except Exception as e:  # noqa: BLE001
@@ -140,7 +140,7 @@ def _execute(ctx, blobs, evaluation, run_doc, settings=None) -> None:
     except NotFoundError:
         existing = None
     if existing is None:
-        _evaluate(ctx, blobs, evaluation, run_doc, session, settings)  # publishes atomically (M-11)
+        _evaluate(ctx, blobs, evaluation, run_doc, session, settings)  # publishes atomically
         return
 
     # a report stored by an older build without its bookkeeping: only finish that
@@ -153,7 +153,7 @@ def _execute(ctx, blobs, evaluation, run_doc, settings=None) -> None:
 
 
 def _eval_guards(settings, run_doc, sid: str) -> None:
-    """Fail safe on a misconfigured eval run; failed runs stay failed (no retry here, SP05)."""
+    """Fail safe on a misconfigured eval run; failed runs stay failed (no retry here)."""
     run_id, info = run_doc.run_id, run_doc.eval
     if settings is None or not settings.eval_mode:
         logs.emit("run_input_invalid", logging.ERROR, reason="eval_mode_off",

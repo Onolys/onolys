@@ -1,9 +1,9 @@
-"""Runs and reports (PRD R2, R4, D12, D18).
+"""Runs and reports.
 
 `POST /sessions/{id}/runs` starts a run by hand: the first run when auto-start was held back by
 the cap (same transcript, stored final rating, current speaker choice). A failed session is not
-re-run here: `POST /sessions/{id}/retry` is the one capped retry path (03-failure-policy R4), and
-re-enters the run through `begin_run` below. A rating is final once its report is ready (FX45):
+re-run here: `POST /sessions/{id}/retry` is the one capped retry path, and
+re-enters the run through `begin_run` below. A rating is final once its report is ready:
 409 `rating_final`. It reserves a cap slot (429 `daily_cap_reached`), creates the run, moves the
 session to `running` (clears the cap error) and enqueues the `run` task; the worker does the rest.
 `preset` changes LLM routes only: the transcript and its STT are reused.
@@ -52,7 +52,7 @@ ERRORS = {"default": {"model": ErrorResponse, "description": "Error"}}
 router = APIRouter(prefix="/sessions/{id}", tags=["runs"], responses=ERRORS)
 runs_router = APIRouter(tags=["runs"], responses=ERRORS)
 User = Annotated[AuthUser, Depends(current_user)]
-# FX45: no `report_ready` (the rating is final once its report is ready); a `failed` session is
+# no `report_ready` (the rating is final once its report is ready); a `failed` session is
 # re-run only through `POST /sessions/{id}/retry` (one path, one counter).
 RERUN_STATES = ("awaiting_input",)
 

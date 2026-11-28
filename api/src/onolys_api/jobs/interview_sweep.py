@@ -1,4 +1,4 @@
-"""`interview-sweep` task (SP10 R5, D11): every interview reaches a terminal state.
+"""`interview-sweep` task: every interview reaches a terminal state.
 
 Enqueued at create, due `AI_MAX_SECONDS + AI_RECONNECT_SECONDS + 60 s` later. The relay counts
 *connected* seconds only, so wall time since create is not proof the interview is stuck (picker,

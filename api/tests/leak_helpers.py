@@ -1,8 +1,8 @@
-"""Reusable leak scan for scenario secrets (ai-interview PRD AC2).
+"""Reusable leak scan for scenario secrets.
 
 `secret_strings(scenario)` lists what must never leave the server; `find_leaks(text, scenario)`
-returns the ones found in any text. Task 5 applies it to relay -> client frames (decode text
-frames, scan JSON/str of every frame); Task 2 applies it to /v1 responses and captured logs.
+returns the ones found in any text. The voice relay tests apply it to relay -> client frames (decode text
+frames, scan JSON/str of every frame); the scenario tests apply it to /v1 responses and captured logs.
 """
 
 import re

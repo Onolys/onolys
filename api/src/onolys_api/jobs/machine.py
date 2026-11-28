@@ -1,9 +1,9 @@
-"""Job state machine core (PRD R4, D13): states, allowed transitions, flags, progress table.
+"""Job state machine core: states, allowed transitions, flags, progress table.
 
 `advance` is the single status-mirror helper: every state/step/progress/flag/error change goes
 through it, and it writes `sessions/{sid}` and `session_status/{sid}` in ONE repo transaction
 (`Repo.transition_session`): the read, the allowed-source check and the write are atomic, so a
-concurrent cancel/delete mark cannot be overwritten. The status document carries no text (R7, AC11).
+concurrent cancel/delete mark cannot be overwritten. The status document carries no text.
 
 The first-run gate and `POST /runs` still use their own repo transactions (`start_first_run`,
 `start_run`) because they also reserve usage.
@@ -53,9 +53,9 @@ TRANSITIONS: dict[str, frozenset[str]] = {
     "awaiting_input": frozenset({"running", "deleting", "cancelled"}),
     "running": frozenset({"report_ready", "failed", "deleting", "cancelled"}),
     "report_ready": frozenset({"running", "deleting"}),  # re-run
-    # one retry path (R4): re-enter the step that failed (`POST /sessions/{id}/retry`)
+    # one retry path: re-enter the step that failed (`POST /sessions/{id}/retry`)
     "failed": frozenset({"running", "validating", "transcribing", "deleting"}),
-    "cancelled": frozenset({"deleting"}),  # terminal (04-cancel R1): only Delete leaves it
+    "cancelled": frozenset({"deleting"}),  # terminal: only Delete leaves it
     "deleting": frozenset(),
 }
 assert set(TRANSITIONS) == set(STATES) and all("deleting" in TRANSITIONS[s] for s in _NOT_DELETING)
@@ -87,7 +87,7 @@ def rating_final() -> ApiError:
 
 
 def has_final_report(repo, uid: str, sid: str, state: str) -> bool:
-    """FX45: a successful report (or a version from earlier data) makes the rating final."""
+    """A successful report (or a version from earlier data) makes the rating final."""
     return state == "report_ready" or bool(repo.list_reports(uid, sid))
 
 

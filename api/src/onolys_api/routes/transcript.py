@@ -84,7 +84,7 @@ async def upload_transcript(
     user: User,
 ) -> CreateSessionResponse:
     repo = request.app.state.repo
-    # the repo and blob store are synchronous clients: every call runs off the event loop (LM-10)
+    # the repo and blob store are synchronous clients: every call runs off the event loop
     session = await run_in_threadpool(repo.get_session, user.uid, id)
     if session.state == "deleting":
         raise NotFoundError()
@@ -92,7 +92,7 @@ async def upload_transcript(
         raise invalid_state()
     if session.interview_id:
         # an interview session's transcript is its recording's: a typed one would be a free,
-        # uncounted evaluation of arbitrary text (LM-5)
+        # uncounted evaluation of arbitrary text
         raise invalid_state()
     media = request.headers.get("content-type", "").split(";", 1)[0].strip().lower()
     if media not in ("application/json", "text/plain"):

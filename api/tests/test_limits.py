@@ -1,4 +1,4 @@
-"""effective_cap override resolution (SP11 R3, D5, D6) and the usage models."""
+"""effective_cap override resolution and the usage models."""
 
 import json
 import logging
@@ -68,7 +68,7 @@ def test_models():
     )
 
 
-# ---- FX42/M9/M10: unit-cost cap decisions and the per-user override branches ------------------
+# ---- unit-cost cap decisions and the per-user override branches ------------------
 
 
 def _d():
@@ -94,7 +94,7 @@ def test_decide_start_units_exempt_and_active_limit():
     assert decide_start(None, {"runs": 8}, d, 2, False, 3) == "day_cap"
     assert decide_start(None, {"runs": 8}, d, 2, False, 2) == "ok"
     assert decide_start(None, {"runs": 99}, d, 2, True, 5) == "ok"  # exempt
-    # user=None means no active runs; a real user at the limit is refused (M10)
+    # user=None means no active runs; a real user at the limit is refused
     assert decide_start(None, None, d, 1, True) == "ok"
     assert decide_start({"active_runs": 1}, None, d, 1, True) == "concurrent"
     assert decide_start({"active_runs": 1, "max_active_runs": 5}, None, d, 1, False) == "ok"
@@ -105,7 +105,7 @@ def test_effective_cap_override_branches():
     from onolys_api.repo.limits import effective_cap
 
     d = _d()
-    assert effective_cap(None, "eval", "day", d) == 10  # no user, no limits (M9)
+    assert effective_cap(None, "eval", "day", d) == 10  # no user, no limits
     assert effective_cap({}, "eval", "day", d) == 10
     assert effective_cap({"limits": {"eval": {"day": 25}}}, "eval", "day", d) == 25
     # partial override: the other kind falls back to the default

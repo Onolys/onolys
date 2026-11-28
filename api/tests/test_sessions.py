@@ -1,4 +1,4 @@
-"""POST/GET /v1/sessions: create (idempotent), list, get, status doc (R2, R7, AC11)."""
+"""POST/GET /v1/sessions: create (idempotent), list, get, status doc."""
 
 import json
 from datetime import UTC, datetime, timedelta
@@ -311,7 +311,7 @@ async def test_errors_validate_against_public_schema(client, schema):
         jsonschema.validate(r.json(), schema)
 
 
-# ---- client version capture (02-logging R13) ----
+# ---- client version capture ----
 
 
 async def test_client_version_header_and_user_agent_are_stored_on_the_session(client, repo):

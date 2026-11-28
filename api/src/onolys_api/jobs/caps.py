@@ -1,5 +1,5 @@
-"""Usage limits (SP11 R1, R4, R6; formerly the SP04 R8 spend guard): one DAILY cap per kind and
-the eval concurrent-run limit (FX46: no monthly caps).
+"""Usage limits (this replaced the old spend guard): one DAILY cap per kind and
+the eval concurrent-run limit. There are no monthly caps.
 
 `reserve(repo, settings, uid, kind)` atomically checks and counts one unit, or raises 429:
 eval day cap -> `daily_cap_reached` (period=day), eval concurrent limit -> `concurrent_runs`,
@@ -94,7 +94,7 @@ def reserve(
 def start_interview(
     repo: Repo, settings: Settings, uid: str, iid: str, doc: InterviewDoc
 ) -> Reservation:
-    """Reserve one interview unit and create `doc` in ONE repo transaction (A9): concurrent starts
+    """Reserve one interview unit and create `doc` in ONE repo transaction: concurrent starts
     cannot both reserve. 429 when capped; 409 `conflict` when the caller already has an open one."""
     outcome = repo.create_interview_reserved(
         uid, iid, doc, LimitDefaults.from_settings(settings), settings.max_active_runs
@@ -129,7 +129,7 @@ def release_run(repo: Repo, uid: str, date: str, refund: bool) -> None:
 
 def start_with_repair(repo: Repo, uid: str, start: Callable[[], str]) -> str:
     """Run a start transaction; when it is refused for the concurrent-run cap, first reconcile
-    the user's `active_runs` against the runs that really hold a slot (M-2: a leaked slot would
+    the user's `active_runs` against the runs that really hold a slot (a leaked slot would
     otherwise 429 the user forever) and try once more if that freed any."""
     outcome = start()
     if outcome == "concurrent" and repo.reconcile_active_runs(uid) > 0:

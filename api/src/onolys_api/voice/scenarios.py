@@ -1,4 +1,4 @@
-"""Scenario loader (ai-interview PRD R1): every file validated at API start, fail fast.
+"""Scenario loader: every file validated at API start, fail fast.
 
 Files live in the engine's packaged `scenarios/` (`scenario.schema.json` + `*.json`).
 Only `public_view` fields ever leave the server.

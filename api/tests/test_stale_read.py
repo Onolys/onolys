@@ -72,7 +72,7 @@ async def test_read_past_cap_plus_margin_fails_it(client, repo, clock):
     clock.now = T0 + timedelta(seconds=600 + STALE_MARGIN_S + 1)
     body = (await get(client)).json()
     assert body["status"] == "failed"
-    assert body["error"] == {"code": "deadline_exceeded"}  # LM-1: a lost task is retryable
+    assert body["error"] == {"code": "deadline_exceeded"}  # a lost task is retryable
     s, st = repo.get_session("alice", S1), repo.get_status("alice", S1)
     assert (s.state, s.steps["transcribe"].status) == ("failed", "failed")
     assert (st.state, st.error_code) == ("failed", "deadline_exceeded")  # the web listener
@@ -117,7 +117,7 @@ async def test_stuck_validating_is_failed(client, repo, clock):
 
 
 async def test_stuck_running_is_failed_and_releases_the_slot(client, repo, clock):
-    """A crashed worker leaves `running` + an unreleased run: fail it, hand the slot back (A1)."""
+    """A crashed worker leaves `running` + an unreleased run: fail it, hand the slot back."""
     seed(repo, state="running")
     repo.create_run("alice", S1, "r1", RunDoc(change_goal="", clinician_speaker="S1", language="en", transcript_sha256="test-hash", uid="alice", session_id=S1, run_id="r1",
                                                 status="running", cap_date="2026-01-01"))  # fmt: skip
@@ -193,7 +193,7 @@ async def test_list_fails_stale_items_too(client, repo, clock):
     assert repo.get_session("alice", "old").state == "failed"
 
 
-# ---- FX8 / AR3 / D4: abandoned uploads become `upload_incomplete` (non-terminal) ----
+# ---- abandoned uploads become `upload_incomplete` (non-terminal) ----
 
 UPLOAD_CUTOFF_S = UPLOAD_URL_TTL_S + STALE_MARGIN_S
 

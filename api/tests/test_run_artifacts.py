@@ -1,5 +1,5 @@
-"""SP09 Task 4 / R4 / AC3: a run through the REAL `Evaluation` adapter over fixtures leaves its
-evidence where SP04 says: run artifacts (`code.json`, `tips.json`) in the blob store, `run_info`
+"""A run through the REAL `Evaluation` adapter over fixtures leaves its
+evidence where the run flow says: run artifacts (`code.json`, `tips.json`) in the blob store, `run_info`
 on the run doc, `stt` / `preset` / `code_version` in the report header. The run has no rating
 input: a submitted card and none leave the same artifacts.
 

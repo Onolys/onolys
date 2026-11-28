@@ -1,4 +1,4 @@
-"""Per-user usage limits (SP11 R3, D5, D6): kinds, periods, defaults and the one override resolver.
+"""Per-user usage limits: kinds, periods, defaults and the one override resolver.
 
 Lives under `repo/` (imports only `config` and `logs`) so `FirestoreRepo`, `FakeRepo` and
 `jobs/caps.py` can all import it without a cycle.
@@ -99,7 +99,7 @@ def decide_start(
     units: int = 1,
 ) -> ReserveUsageOutcome:
     """Run-start rule (`start_first_run`/`start_run`, both repos): the eval reserve rule, except an
-    `exempt` run (first AI-linked evaluation, SP11 R5) skips the day check and still obeys
+    `exempt` run (first AI-linked evaluation) skips the day check and still obeys
     the concurrent-run limit. A counted run costs `units` (= its n_runs)."""
     if not exempt:
         return decide_reserve(user, day, "eval", d, max_active, units)
@@ -118,7 +118,7 @@ CANCELLABLE_STATES = _CANCEL_EARLY | {"transcribing", "awaiting_input", "running
 def decide_cancel(
     state: str, stt_operation_set: bool, run_counted: bool | None, interview_id: str | None
 ) -> CancelCharge:
-    """Charge for a user cancel (04-cancel R4, D2/D6): pure, so the rule is testable without a
+    """Charge for a user cancel: pure, so the rule is testable without a
     database. `run_counted` is the reserved run's `counted` (None: no run reserved).
     Interview-linked sessions (same exempt predicate as `start_first_run`) cost 0 everywhere.
     `running` adds 0 (the run's slot was charged at start) and reports the run's `counted`."""

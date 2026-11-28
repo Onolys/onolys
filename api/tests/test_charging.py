@@ -1,4 +1,4 @@
-"""03-failure-policy Task 3: the charging module (`should_refund`, `release_once`), `counted` on
+"""The charging module (`should_refund`, `release_once`), `counted` on
 the failed session, interview sessions never counted.
 
 Repo-level tests run on FakeRepo always and on the Firestore emulator when set.

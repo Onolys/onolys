@@ -1,4 +1,4 @@
-"""Engine adapters: the only seam to the engines (PRD R6). `ADAPTERS=stub|real`."""
+"""Engine adapters: the only seam to the engines. `ADAPTERS=stub|real`."""
 
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
@@ -50,7 +50,7 @@ def build_adapters(
     stt_registry: Mapping[str, Callable[[], Any]] | None = None,
     llm_factory: Callable[[dict], Any] | None = None,
 ) -> Adapters:
-    """`ADAPTERS=stub` -> fakes; `real` -> the SP09 adapters. The keyword hooks (a provider
+    """`ADAPTERS=stub` -> fakes; `real` -> the real engine adapters. The keyword hooks (a provider
     registry, an LLM client factory) let tests run the real wiring with fixture STT/LLM."""
     if settings.adapters == "stub":
         return Adapters(stt=FakeStt(), evaluation=FakeEvaluation(), voice=FakeVoice())

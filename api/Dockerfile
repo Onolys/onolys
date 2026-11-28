@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1
-# One image for api, worker and combined mode (PRD D6). Build from the REPO ROOT:
+# One image for api, worker and combined mode. Build from the REPO ROOT:
 #   docker build -f api/Dockerfile --build-arg GIT_SHA=$(git rev-parse HEAD) -t onolys-api .
 #   docker run --rm -p 8080:8080 -e ENV=local -e SERVICE_MODE=combined onolys-api
 # Cloud Run (infra/modules/environment/services.tf) sets PORT, SERVICE_MODE and the rest of the env.

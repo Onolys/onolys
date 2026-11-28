@@ -132,7 +132,7 @@ def current_user(
 
 
 def current_user_token_only(user: Annotated[AuthUser, Depends(current_user)]) -> AuthUser:
-    """API keys may not manage API keys or delete the account (R1)."""
+    """API keys may not manage API keys or delete the account."""
     if user.auth_kind != "token":
         raise ApiError.of(403, "forbidden", "Not allowed.")
     return user

@@ -1,4 +1,4 @@
-"""05-processing-screen Task 3: the progress fields on the status doc and the detail route."""
+"""The progress fields on the status doc and the detail route."""
 
 from datetime import UTC, datetime, timedelta
 

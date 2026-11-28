@@ -1,4 +1,4 @@
-"""Dashboard listing over a real repo: in-flight, failed and done sessions (AC2, AC11).
+"""Dashboard listing over a real repo: in-flight, failed and done sessions.
 
 Runs on FakeRepo always and on the Firestore emulator when FIRESTORE_EMULATOR_HOST is set.
 """

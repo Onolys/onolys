@@ -447,7 +447,7 @@ class FakeRepo:
             if doc.get("state") == "deleting":
                 raise NotFoundError()
             if doc.get("state") == "cancelled":
-                raise ConflictError()  # cancel deletes nothing (04-cancel R5)
+                raise ConflictError()  # cancel deletes nothing
             self._put(f"session_status/{sid}", upload_failed_stub(uid, code, utcnow()).to_store())
             self._record_status(uid, sid)
             self._unlink_interview(uid, sid, doc.get("interview_id"))
@@ -456,7 +456,7 @@ class FakeRepo:
             del self._docs[f"sessions/{sid}"]
 
     def _unlink_interview(self, uid: str, sid: str, iid: str | None) -> None:
-        """M-4: the discarded session's interview goes back to `ended`, unlinked, so its unit can
+        """The discarded session's interview goes back to `ended`, unlinked, so its unit can
         be linked to a new session."""
         iv = self._get(f"interviews/{iid}") if iid else None
         if iv is not None and iv.get("uid") == uid and iv.get("session_id") == sid:
@@ -859,7 +859,7 @@ class FakeRepo:
             user = self._get(f"users/{uid}") or {}
             usage = self._get(f"usage/{uid}_{date}") or {"uid": uid, "date": date, "runs": 0}
             now = utcnow()
-            exempt = bool(sess.get("interview_id"))  # never counted (03-failure-policy R5)
+            exempt = bool(sess.get("interview_id"))  # never counted
             units = sess.get("n_runs", 1)
             decided = decide_start(user, usage, defaults, max_active, exempt, units)
             if decided != "ok":
@@ -909,7 +909,7 @@ class FakeRepo:
         retry_max: int | None = None, eval: EvalRunInfo | None = None,  # noqa: A002
         eval_guard: str | None = None,
     ) -> StartOutcome:  # fmt: skip
-        if eval is not None:  # SP04 R3: an eval run may start on any ready session
+        if eval is not None:  # an eval run may start on any ready session
             allowed_states = (
                 *allowed_states,
                 *(x for x in ("report_ready", "failed") if x not in allowed_states),
@@ -949,7 +949,7 @@ class FakeRepo:
                 sess["eval"].get("input_sha256") != eval_session_input_sha256(sess, transcript)
             ):
                 return "not_ready"
-            # the free first run of an interview-linked session (SP11 R5), same as start_first_run
+            # the free first run of an interview-linked session, same as start_first_run
             first = (
                 self._get(f"sessions/{sid}/runs/{sess['first_run_id']}")
                 if sess.get("first_run_id")
@@ -961,7 +961,7 @@ class FakeRepo:
                 and (first or {}).get("transcript_sha256") != transcript["sha256"]
             ):
                 return "not_ready"
-            # Try again after a failed free run stays free (review R1): the free rating is owed
+            # Try again after a failed free run stays free: the free rating is owed
             exempt = (
                 bool(sess.get("interview_id"))
                 and (not sess.get("first_run_id")

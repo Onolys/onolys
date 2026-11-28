@@ -1,4 +1,4 @@
-"""T04: session state atomicity (M-10, M-11, M-4, N1, LM-2). Deterministic: events between the
+"""Session state atomicity. Deterministic: events between the
 read and the commit; `FakeRepo`'s lock stands in for the Firestore transaction."""
 
 import threading
@@ -41,7 +41,7 @@ def make(repo, state="running", sid=SID, **fields):
     return sid
 
 
-# ---- M-10: advance is one transaction ----
+# ---- advance is one transaction ----
 
 
 def test_advance_does_not_overwrite_a_cancel_that_lands_after_its_check(repo, monkeypatch):
@@ -98,7 +98,7 @@ def test_delete_mark_after_cancel_is_allowed(repo):
     assert repo.get_status(UID, SID).state == "deleting"
 
 
-# ---- M-11: publish_report ----
+# ---- publish_report ----
 
 
 def run_doc(repo, run_id="r1"):
@@ -168,7 +168,7 @@ def test_publish_twice_keeps_the_first_report(repo):
     assert [r.report for r in repo.list_reports(UID, SID)] == [{"k": 1}]
 
 
-# ---- M-4: discard unlinks the interview ----
+# ---- discard unlinks the interview ----
 
 
 def test_discard_unlinks_the_interview_so_it_can_link_again(repo):
@@ -190,7 +190,7 @@ def test_discard_unlinks_the_interview_so_it_can_link_again(repo):
     assert out == "linked"
 
 
-# ---- LM-2 / N1: check + write are one transaction ----
+# ---- check + write are one transaction ----
 
 
 def test_a_second_transcript_put_loses_the_created_check(repo):

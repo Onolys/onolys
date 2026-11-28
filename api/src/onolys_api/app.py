@@ -131,7 +131,7 @@ def _request_id(scope: Scope) -> str | None:
 
 
 class BodyLimitMiddleware:
-    """413 `body_too_large` for any API request body over `MAX_JSON_BODY_BYTES` (A13).
+    """413 `body_too_large` for any API request body over `MAX_JSON_BODY_BYTES`.
 
     Checked on Content-Length up front and on the bytes actually streamed (chunked bodies).
     The dev-only fake signed-upload route is exempt: real uploads go straight to the bucket.
@@ -194,7 +194,7 @@ async def _no_receive() -> Message:
 
 
 class NoStoreMiddleware:
-    """`Cache-Control: private, no-store` on every /v1 response but health and docs (A12).
+    """`Cache-Control: private, no-store` on every /v1 response but health and docs.
 
     A route's own Cache-Control wins. Errors get it too: harmless, and one rule is simpler.
     """
@@ -222,7 +222,7 @@ class NoStoreMiddleware:
 
 
 class RequestLogMiddleware:
-    """One content-free line per request: method, route template, status, latency (R10).
+    """One content-free line per request: method, route template, status, latency.
 
     Sits inside `RequestIdMiddleware` so the line carries the request id. The route is the
     template (`/v1/sessions/{id}`), never the concrete path or query string.
@@ -379,7 +379,7 @@ def create_app(
     app.state.settings = settings
     app.state.clock = lambda: datetime.now(UTC)  # tests replace it
     voice_cfg = load_voice_config()
-    app.state.voices = allowed_voices(voice_cfg)  # D16: what `POST /interviews {voice}` may name
+    app.state.voices = allowed_voices(voice_cfg)  # what `POST /interviews {voice}` may name
     app.state.scenarios = load_scenarios(voices=app.state.voices)  # fail at startup if invalid
     load_rating_schema()  # fail at startup, loudly, if the canonical rating schema is missing
     voice_mode = settings.service_mode == "voice"
@@ -446,7 +446,7 @@ def create_app(
             ),
         )
         app.state.runner.register(
-            "reset-email",  # the durable password-reset send (M-5); no session, so no claim
+            "reset-email",  # the durable password-reset send; no session, so no claim
             HandlerSpec(make_reset_email_handler(lambda: app.state.auth_email()), claim=False),
         )
         if settings.env not in LOCAL_ENVS:

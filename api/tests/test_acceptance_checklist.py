@@ -1,4 +1,4 @@
-"""Maps every PRD acceptance criterion (AC1-AC18) to the tests that prove it.
+"""Maps every numbered API acceptance criterion to the tests that prove it.
 
 This file only checks that each mapped test exists (as a function defined in the named file, not
 marked `live`) and that no AC is unmapped. The tests themselves run in the normal suite:
@@ -13,7 +13,7 @@ import pytest
 
 TESTS = Path(__file__).parent
 
-# AC -> [(test file, test function), ...]
+# criterion number -> [(test file, test function), ...]
 CHECKLIST: dict[int, list[tuple[str, str]]] = {
     1: [
         ("test_public_contract.py", "test_openapi_is_the_committed_file"),

@@ -1,4 +1,4 @@
-"""SP10 Task 2: scenario schema + loader + `GET /scenarios` + persona prompt + leak scan (R1, R2)."""
+"""Scenario schema + loader + `GET /scenarios` + persona prompt + leak scan."""
 
 import copy
 import json
@@ -118,7 +118,7 @@ def test_leak_scan_detects_leaks(sample):
 
 
 async def test_no_leak_in_responses_or_logs(app, client, sample, caplog):
-    """AC2 (responses + logs). Relay frames: Task 5 reuses `find_leaks` on every frame."""
+    """Responses and logs. Relay frames: the relay tests reuse `find_leaks` on every frame."""
     caplog.set_level(logging.DEBUG)
     prompt = build_system_prompt(sample)  # as a relay connection would hold it in memory
     assert prompt

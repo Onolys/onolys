@@ -1,4 +1,4 @@
-"""Task 14: PHI-free structured logs, request logging, one `status=failed` line (PRD R10, AC9)."""
+"""PHI-free structured logs, request logging, one `status=failed` line."""
 
 import hashlib
 import hmac
@@ -90,7 +90,7 @@ async def test_request_line_has_method_route_template_status_latency(env, caplog
     assert (req["method"], req["route"], req["status"]) == ("GET", "/v1/sessions/{id}", 200)
     assert isinstance(req["duration_ms"], int | float) and req["request_id"] == "req-1"
     assert req["auth_kind"] == "token"
-    assert req["session_id"] == sid  # bound by `bind_session` (02-logging R2)
+    assert req["session_id"] == sid  # bound by `bind_session`
     assert env.uid not in server_text(caplog)  # no uid; the path itself is never logged
     assert f"/v1/sessions/{sid}" not in server_text(caplog)
 
@@ -180,7 +180,7 @@ async def test_failed_run_writes_one_line_with_all_required_keys(env, caplog):
 
 
 async def test_run_enqueue_failure_is_one_failed_line(env, caplog):
-    sid = await env.start(rate=False)  # a first run held back: the only manual start left (FX45)
+    sid = await env.start(rate=False)  # a first run held back: the only manual start left
 
     class Down:
         def enqueue(self, payload, delay_s=0.0):
@@ -236,7 +236,7 @@ async def test_no_sentinel_in_logs_over_full_flow(env, caplog, capsys, monkeypat
 
 @pytest.mark.unit
 def test_uvicorn_error_log_has_no_traceback_or_input(capsys):
-    """S1/FX14: uvicorn logs `Exception in ASGI application` with exc_info; a ResponseValidationError
+    """uvicorn logs `Exception in ASGI application` with exc_info; a ResponseValidationError
     message embeds the offending `input` (PHI). Nothing but the exception class may reach the log."""
     import io
 

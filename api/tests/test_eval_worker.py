@@ -1,4 +1,4 @@
-"""04-eval-run-path Task 6 (R4, R6): worker eval params and guards; no first run in eval mode.
+"""Worker eval params and guards; no first run in eval mode.
 
 Offline: fake STT/evaluation; `RealEvaluation` only with a fake LLM factory.
 """

@@ -1,4 +1,4 @@
-"""Server-only persona system prompt (ai-interview PRD R2).
+"""Server-only persona system prompt.
 
 Held in memory for one relay connection. Never log it, send it to a client, or store it: it
 contains `hidden_info` and `response_rules`.
