@@ -65,7 +65,7 @@ Design stage. PRDs reviewed, over-engineering audit applied (the 4 former open i
 | Test stubs | Firestore emulator (not in-memory client) |
 | Constants | One `constants.py` per package (engine, api, eval) (default) |
 | Voice | `voice/` stays in `api` package, run as its `voice` mode (default) |
-| Docs changes | None except the rules files; ADR fold-in and other docs clean-up out of scope (06 R10 asks for a narrow exception to delete limiter text: see the 06 PRD [OPEN]) |
+| Docs changes | None except the rules files; ADR fold-in and other docs clean-up out of scope (one owner-approved exception, 2026-11-28: 06 R10 deletes only the outdated email-rate-limit / client-IP text in `docs/reference/infra.md` and `docs/reference/public-api.md`) |
 | `docs/agent_files/` | Keep as is |
 | Pipeline YAML | One file per evaluation; no base + overrides |
 | Eval sign-in | Uses `@onolys/common` sign-in pieces (moved from `web/src/auth`), not own copy |

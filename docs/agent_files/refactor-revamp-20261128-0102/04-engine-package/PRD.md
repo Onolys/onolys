@@ -34,7 +34,7 @@ engine/src/onolys_engine/
   models/+   result + report pydantic models (split past 300 lines)
   protocols/miti-4.2.1/{protocol.yaml, definitions/*.md}
   evaluations/{miti,oneshot-single}/{pipeline.yaml, prompts/, fewshot/, report.yaml+, schemas/+, fixtures/}
-engine/tools/   regen_goldens.py, live_check.py (was `onolys_miti/check.py`), gen_schemas.py (was `scripts/gen_miti_schema.py`)   # `audit_report.py` and `core/scripts/probe_llm.py`: see [OPEN] below
+engine/tools/   regen_goldens.py, live_check.py (was `onolys_miti/check.py`), gen_schemas.py (was `scripts/gen_miti_schema.py`)   # `audit_report.py` and `core/scripts/probe_llm.py` are deleted (owner, see Decisions/Open questions)
 engine/tests/   mirrors src; tests/golden/ (recorded replies + expected reports); tests/helpers/
 ```
 **R3 Runner and steps.** `@step("name", reads=..., writes=...)` on `fn(state, **with) -> state`. Load time checks (minimal; [RESOLVED 2026-11-28: owner rule 17, README "runner load checks cut to unknown step + bad `with` keys"], no static slot-graph analysis): unknown step; unknown/missing `with` keys (signature binding, `inspect.signature`/pydantic `validate_call`). Nothing else: a missing prompt/fewshot/protocol file fails on open, an unresolved placeholder fails in Jinja2 `StrictUndefined`, and no check for a `model` key (nothing sets one; no guard for settings nobody uses). `reads`/`writes` are only what `parallel` needs to merge branch results; no checker for read-before-write, disjointness or run scope (authoring errors show up in the toy-pipeline and golden tests). Control forms: `parallel:` and `repeat: n_runs` only. An entry may carry `stage: <name>`; the runner emits `started/done/failed` progress per stage (a step may mark its stage failed without raising, for degraded tips).
@@ -144,7 +144,7 @@ class Engine:
 | T5 | Port one-shot (`oneshot-single`); `gen_schemas.py` (one-shot schema only); delete `engines/oneshot` | one-shot goldens, schema regen diff clean |
 | T6 | `constants.py` sweep; env renames; README/AGENTS/web path; tests-mirror audit; boundary guard final | `git grep` criteria |
 | T7 | Full gate (dev-ship) | all suites, api coverage gate |
-Tests move with their code (70 test files: core 31, miti 34, oneshot 5); tests of deleted things (route names, hooks, registry, retry, JSON formatter) and the hand fakes (audit #2) are deleted; dev tools: see [OPEN] below; names describe behaviour (rule 14).
+Tests move with their code (70 test files: core 31, miti 34, oneshot 5); tests of deleted things (route names, hooks, registry, retry, JSON formatter) and the hand fakes (audit #2) are deleted; dev tools `audit_report.py` and `probe_llm.py` are deleted with their tests (`test_llm_diagnostics.py`, the audit_report parts of `test_offline_tools.py`; see the resolved item below); names describe behaviour (rule 14).
 
 ## Decisions
 | # | Decision | Choice | Alternatives considered | Why |
@@ -168,7 +168,7 @@ Tests move with their code (70 test files: core 31, miti 34, oneshot 5); tests o
 ## Risks / Open Questions
 - [RESOLVED 2026-11-28: owner] LiteLLM retries replace `retry.py` (audit #6): YES, use LiteLLM's built-in retries (`num_retries`/retry policy, honours `Retry-After`). Delete `retry.py`, `test_retry.py` and the custom 429/529 backoff/`retry-after` loop in `litellm_client.py`. Keep only product logic (deadline-awareness if genuinely product behaviour; output-schema retry). T3 keeps a short check that a 429 with `Retry-After` is retried by LiteLLM (owner accepted the default condition); if LiteLLM cannot, T3 reports it and no custom fallback is planned. Trade-off accepted: backoff timing may differ from today.
 - [RESOLVED 2026-11-28: owner] Structured logging via google-cloud-logging `StructuredLogHandler` (audit #7): YES. PHI allowlist (`safe_log.py`) kept as a `logging.Filter`; alert fields (`jsonPayload.status`, `request_id`) must stay identical, proven by a test against the filters in `infra/modules/environment/alerts.tf`.
-- [OPEN] Dev tools `engine/tools/audit_report.py` (miti README:95 documents it; tested by `test_offline_tools.py`, used by `test_manual_fixtures.py`) and `core/scripts/probe_llm.py` (tested by `test_llm_diagnostics.py`): one-off diagnostics, tests of tooling. Default (recommended): delete both tools and their tests (rules 16, 17); keep `regen_goldens.py`, `gen_schemas.py` and `live_check.py` (live quality check, `test_live.py`). Task 7 applies the owner's answer.
+- [RESOLVED 2026-11-28: owner] Dev tools `engine/tools/audit_report.py` (miti README:95 documents it; tested by `test_offline_tools.py`, used by `test_manual_fixtures.py`) and `core/scripts/probe_llm.py` (tested by `test_llm_diagnostics.py`) are DELETED in 04, with their tests (`test_llm_diagnostics.py` whole; the audit_report parts of `test_offline_tools.py`; fix `test_manual_fixtures.py` and the miti README:95 mention). Kept: `regen_goldens.py`, `gen_schemas.py` (until 05 deletes it) and `live_check.py` (live quality check, `test_live.py`). Task 7 applies it.
 - Rules cited for this SP: 1, 3, 5, 7, 9, 10, 11, 14, 16, 17.
 - Risk: payload equality fails on harmless ordering; mitigation: sort by call tag, compare messages not hashes.
 - Risk: `parallel` merge differs from today's gather (warning order); mitigation: branch order fixed, covered by `batch_edge` golden.
