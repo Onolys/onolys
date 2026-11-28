@@ -19,13 +19,16 @@ Never invent quotations, speaker identities, or timestamps.
 | `docs/testing/` | How to test, and what to verify before a release | Contributors |
 | `docs/specs/` | Normative behavior contracts with acceptance criteria | Contributors and coding agents |
 | `docs/contracts/` | Pointer to the generated public API schemas (`public/`) | Web, api, and coding agents |
+| `docs/rules/` | Coding rules for all code; design rules for UI | Contributors and coding agents |
 | `docs/agent_files/` | Branch-scoped agent artifacts, one folder per branch | Coding agents |
 
 The MITI engine documents itself in `engines/miti/README.md`.
 
-## Frontend work
+## Rules
 
-Any agent working on frontend code (`web/`, `eval/web`, admin, any UI) must read and follow `docs/rules/design-rules.md` every time, before making changes.
+All agents must read and follow `docs/rules/coding-rules.md` every time, before changing code.
+
+Agents working on UI (`web/`, `eval/web`, any UI) must also read and follow `docs/rules/design-rules.md`.
 
 ## Agent-generated files
 
