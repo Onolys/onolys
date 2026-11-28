@@ -81,3 +81,11 @@ Copied per repo: the eval repo and onolys-common keep their own copies, synced b
 16. **No legacy or compat code before launch.** (Block)
     - Do: delete old setups, shims, migration and guard tests, legacy CSS layers. Git history is the archive.
     - Don't: keep dead code "just in case".
+
+
+## Dependencies
+
+17. **Use the library; don't rebuild it.** (Block)
+    - Do: use the vendor or library's built-in feature and its documented test hooks. Before writing infrastructure code, look up the documented way and follow it. Examples: Firebase Admin `verify_id_token`, with `FIREBASE_AUTH_EMULATOR_HOST` set only in tests and local dev; Firebase emulators for Auth and Firestore; `google.oauth2.id_token` for Google OIDC tokens; `@firebase/rules-unit-testing` for rules.
+    - Don't: write custom versions of what a dependency already does (token verifiers, cert caches, retry/backoff wrappers, fake auth modes). Don't hand-roll mocks of a vendor SDK when the vendor ships an emulator. Don't add guards or branches for settings prod never sets, or keep setup that exists only for history.
+    - Tests: prefer the vendor emulator or the library's test utilities over custom fakes. A fake is allowed only when no official emulator or test utility exists, and then at the lowest layer (rule 9). Turn test settings on for tests only; never affect prod.
