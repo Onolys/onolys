@@ -42,10 +42,10 @@ web/tests/   (mirrors src: app/ api/ features/<x>/)  helpers/  e2e/  flows/ (tem
 | `mocks/fixtures/sample.ts` (+ its `Turn` type) | `features/report/sample.ts` (shipped product data, D3); mock files that import it get the new path |
 | `hosting/csp.ts` | `tests/helpers/csp.ts` (only tests + `vite.config` use it) |
 | `test/{setup,renderApp,renderPage}` | `tests/helpers/` (bodies unchanged) |
-| `hosting/{build,hosting,privacy}.test.ts`, `lint.test.ts`, `radixShims.test.tsx` | deleted (tests of tooling/shims; audit #8, [RESOLVED 2026-11-28: owner rule 17]) |
+| `hosting/{build,hosting,privacy}.test.ts`, `lint.test.ts`, `radixShims.test.tsx` | deleted (tests of tooling/shims; audit #8, [RESOLVED 2026-11-28: owner rule 17]); 02 R7/R9 already deletes `hosting/privacy.test.ts`, `lint.test.ts`, `radixShims.test.tsx`, so 07 deletes only what is still present |
 | `src/**/X.test.ts(x)` (84 more) | `tests/<same dir>/X.test.ts(x)`; names kept (already behaviour-named); `useSessionStatus.*.test` keep suffixes; mock-based bodies unchanged (they import `@/mocks/...` until 08) |
 | `flows/flows.test.tsx` | `tests/flows/flows.test.tsx` (temporary; 08 turns the journeys into e2e) |
-| `__fuzz_review__/` (`api-lib.property.test.ts`, 414 lines), `nightly/fast-check.ts`, `stryker.conf.json` + `@stryker-mutator/*` devDeps | deleted (one-off review harnesses; rules 16/17; audit #3, [RESOLVED 2026-11-28: owner rule 17]) |
+| `__fuzz_review__/` (`api-lib.property.test.ts`, 414 lines), `nightly/fast-check.ts`, `stryker.conf.json` + `@stryker-mutator/*` devDeps | deleted (one-off review harnesses; rules 16/17; audit #3, [RESOLVED 2026-11-28: owner rule 17]); 02 R9 already removes the auth `stryker`/`NIGHTLY_MUTATION` entries, 07 deletes the rest and whatever is still present |
 | `e2e_review/*` (specs, helpers, fixtures, 2 configs, README) | `tests/e2e/*` (still mock mode; D4) |
 **R3 Test config.** `vite.config.ts`: `test.include tests/**/*.test.{ts,tsx}`, exclude `tests/e2e/**`, `setupFiles tests/helpers/setup.ts`, alias `@` -> `src` (tests import `@/features/...`; `tsconfig` `paths` + `include` add `tests`; D1); FLAKY/NIGHTLY include globs and the nightly fuzz/mutation entries removed with the deleted harnesses; `eslint.config.js` e2e glob repointed (the `mockServiceWorker.js` ignore stays until 08); `stryker.conf.json` deleted. Playwright configs, `package.json` e2e scripts, `ci.yml` / `nightly.yml` artifact paths repointed (`tests/e2e/*`); mutation/fuzz campaigns removed. The finding-id grep in `playwright.smoke.config.cjs` is replaced by a `@smoke` title tag; finding/task ids are dropped from spec and test titles.
 **R4 Constants.** `src/constants.ts`: values with no env dependence - Firestore collection name `session_status`, trusted app hosts (from 02), retry/stale/poll numbers, all web URL paths (`ROUTES`; no path string anywhere else), default contact address. `config.ts` stays the only reader of `import.meta.env`. State names stay schema types (O1).
@@ -79,7 +79,7 @@ T1-T6 can start once 02's rewire commit landed. No dependency on 06.
 | D5 | Constants | `constants.ts` (fixed) + `config.ts` (env) | Per-feature constants; none | Mirrors rule 10's split with `config/` |
 | D6 | Auth remainder | `useApiClient` -> `api/`, `createAuthService` -> `app/`; no `features/auth` | One `features/auth` holding two unrelated files | Owner decision (O2) |
 | D7 | `dev:live` / stryker | Keep `dev:live`; delete stryker and fuzz (audit #3) | Repoint | Rule 17 |
-| D8 | Split from mock removal | Layout first (this SP), mocks second (08), mock-based test bodies moved as-is | One SP for both | Layout needs only 02; mock removal needs 06's real stack. Smaller reviewable steps, pixel-identical evidence after moves |
+| D8 | Split from mock removal | Layout first (this SP), mocks second (08), mock-based test bodies moved as-is | One SP for both | Layout needs only 02; mock removal needs 06's real stack. Smaller reviewable steps; moves are gated by typecheck, test count and e2e smoke (no pixel baseline, T0) |
 
 ## Manual steps
 None.
@@ -89,7 +89,7 @@ None.
 - Risk: import churn collides with 02's rewire commit series. Mitigation: T1 starts only after 02's rewire landed; one `git mv` batch per commit.
 - [RESOLVED: all paths] O1: `ROUTES` holds ALL web URL paths; state names stay schema types.
 - [RESOLVED: split] O2: `useApiClient` -> `api/`, `createAuthService` -> `app/`; no `features/auth`.
-- [DEFERRED] Legacy `app-staging -> onolys-app-staging` mapping in `web/.firebaserc` (needs `test_hosting_targets.sh` change; 09/owner after the old site is retired).
+- [DEFERRED to 09, agent step] The `app-staging -> onolys-app-staging` mapping in `web/.firebaserc`: not verified as legacy (`app-staging` is the live staging target name and `release_target.py` writes the real site at deploy); 09 R9 checks whether the committed site value is still read and drops it if not.
 
 ## Acceptance Criteria
 - `src/routes`, `src/auth`, `src/components`, `src/lib`, `src/hosting`, `src/test`, `src/flows`, `src/protocol`, `src/__fuzz_review__`, `web/nightly/fast-check.ts`, `stryker.conf.json` and `e2e_review` do not exist; `src/mocks` still exists (08 deletes it) and contains no `sample.ts`.

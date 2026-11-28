@@ -1,11 +1,11 @@
 ---
 status: draft
-summary: One Terraform root with per-env folders, Firebase config in firebase/, runtime YAML beside tfvars, infra tests 19 to 3; 13 tasks, every env on its own `(default)` Firestore DB, agent runs plan then apply, moved blocks removed after.
+summary: One Terraform root with per-env folders, Firebase config in firebase/, runtime YAML beside tfvars, infra tests 15 to 3; 13 tasks, every env on its own `(default)` Firestore DB, agent runs plan then apply, moved blocks removed after.
 date: 2026-11-28
 ---
 # Tasks: 09 Infra per environment
 
-Source of truth: /root/projects/onolys/onolys/.worktrees/refactor/revamp/docs/agent_files/refactor-revamp-20261128-0102/09-infra-per-env/PRD.md. Runs last (01 → 03 → 04 → 06 → 09; 02 supplies the Auth emulator block, 08 is a soft consumer of `firebase/`). One commit per task; after each batch run `terraform validate/test`, impacted pytest, `actionlint`, `check_config.sh`. CI applies nothing; only the agent applies (Tasks 10-11). Firebase: one `(default)` Firestore entry (owner D-B), `--config firebase/firebase.json` resolves rules/indexes beside the config, env chosen by `--project`. Full suite runs only in dev-ship.
+Source of truth: /root/projects/onolys/onolys/.worktrees/refactor/revamp/docs/agent_files/refactor-revamp-20261128-0102/09-infra-per-env/PRD.md. Runs last (01 → 03 → 04 → 06 → 09; 02 supplies the Auth emulator block, 08 is a consumer of `firebase/`: Task 1 repoints its `--config api/firebase.json` commands). One commit per task; after each batch run `terraform validate/test`, impacted pytest, `actionlint`, `check_config.sh`. CI applies nothing; only the agent applies (Tasks 10-11). Firebase: one `(default)` Firestore entry (owner D-B), `--config firebase/firebase.json` resolves rules/indexes beside the config, env chosen by `--project`. Full suite runs only in dev-ship.
 
 | # | Task | Depends on | Status |
 |---|---|---|---|
@@ -25,7 +25,7 @@ Source of truth: /root/projects/onolys/onolys/.worktrees/refactor/revamp/docs/ag
 
 ## Task 1 — Firebase config to `firebase/`
 What it is / what it means: Firebase config is in six places with two emulator ports; it becomes one folder and one config (PRD R6, D9-D11, owner D-B).
-What changes at a high level: `git mv` `firestore.rules`, `api/firestore.indexes.json`, `firestore-rules-test/` into `firebase/` (rules-test, default port 8080). Write one `firebase/firebase.json`: exactly ONE `firestore` entry in object form (`rules` + `indexes`, no `database` key), emulators Firestore 8080 + Auth 9099 (carrying 02's Auth block), ui off. Delete root `firebase.json`, `.firebaserc`, `api/firebase.json`. Repoint every `--config` in CI `api-emulator`, `api-rules` (rules test port 8081 to 8080), `api-flaky` if 06 kept it, `nightly.yml`, `deploy-prod`, `deploy-staging` (`--only firestore --project <env project>`, no database id), and 08's web/api emulator commands; update `.dockerignore` and path filters to `firebase/`.
+What changes at a high level: `git mv` `firestore.rules`, `api/firestore.indexes.json`, `firestore-rules-test/` into `firebase/` (rules-test, default port 8080). Write one `firebase/firebase.json`: exactly ONE `firestore` entry in object form (`rules` + `indexes`, no `database` key), emulators Firestore 8080 + Auth 9099 (carrying 02's Auth block), ui off. Delete root `firebase.json`, `.firebaserc`, `api/firebase.json`. Repoint every `--config` in CI `api-emulator`, `api-rules` (rules test port 8081 to 8080), `nightly.yml`, `deploy-prod`, `deploy-staging` (`--only firestore --project <env project>`, no database id), and every other consumer of `api/firebase.json` (08's `web`/`web-e2e` jobs, `web/package.json` `test`, 06's `dev.sh` `FIREBASE_CONFIG` default, 08's `setup-emulators` action); update `.dockerignore` and path filters to `firebase/`.
 Done when: `firebase emulators:exec --config firebase/firebase.json --only firestore,auth` runs the api emulator tests and `rules-test` green (rules auto-load, one firestore entry); `actionlint` clean; grep for `api/firebase.json|firestore-rules-test` outside `docs/` is 0.
 
 ## Task 2 — Runtime YAML into env folders
@@ -61,17 +61,17 @@ Done when: `terraform validate` passes with the blocks; `identity-config.py` tes
 ## Task 7 — `terraform test`
 What it is / what it means: Plan assertions test values and survive refactors, unlike `.tf` text greps (R7, D12).
 What changes at a high level: Write `infra/tests/environment.tftest.hcl` with mocked providers: merge `isolation.tftest.hcl` (drop eval runs, add prod); port voice SA holds only expected grants, deployer Firebase IAM (the real-403 regression), and prod deployer admitting only the `production` principal. Delete `isolation.tftest.hcl` and the ported `.py` tests.
-Done when: `terraform test` passes offline for both envs; each ported assertion fails when its target value is deliberately changed (check once, revert).
+Done when: `terraform test` passes offline for both envs and contains the three ported assertions.
 
 ## Task 8 — Script and test pruning
-What it is / what it means: Cut the infra test set 19 → 3 and remove dead scripts (R7, D13).
-What changes at a high level: Delete `bootstrap.sh`, `bootstrap/main.tf`, `install-tools.sh`, the 6 `*.example` files, the eight text-grep tests, `test_eval_backend_service.py`, `test_eval_module.py`. Keep `create-test-user.py`, `identity-config.py`, `seed-secrets.py` and their three tests; drop `seed-secrets.py`'s eval `--allowlist` path. Keep `.terraform-version`. Update `infra/README.md` only for paths it breaks; no other docs.
+What it is / what it means: Cut the infra test set 15 → 3 and remove dead scripts (R7, D13).
+What changes at a high level: Delete `infra/bootstrap.sh`, `infra/isolated-environment/bootstrap/`, `infra/scripts/install-tools.sh`, the `*.example` files (`infra/terraform.tfvars.example` and `isolated-environment/examples/*`), the eight text-grep tests, `test_eval_backend_service.py`, `test_eval_module.py`. Keep `create-test-user.py`, `identity-config.py`, `seed-secrets.py` and their three tests; drop `seed-secrets.py`'s eval `--allowlist` path. Keep `.terraform-version`. Move `infra/isolated-environment/README.md` to `infra/README.md` and fix only the paths it breaks; no other docs.
 Done when: `pytest infra/scripts` runs exactly 3 tests, green; no `.tf` text-grep test remains; `infra/` holds the R1 tree.
 
 ## Task 9 — Infra CI job and path filters
 What it is / what it means: CI proves the new root without applying anything (R8).
 What changes at a high level: `infra` job runs `fmt -check -recursive`, `init -backend=false`, `validate`, `terraform test`, then the 3 Python tests. Path filters per R8: `infra` = `infra/**/*.{tf,tfvars,hcl}` and `infra/{scripts,tests}/**`; `api` also `infra/models.yaml`, `infra/*/*.yaml`; rules job on `firebase/**`. `pr-preview.yml` drops `config/**`.
-Done when: `actionlint` clean; filter outputs match expectation on sample diffs (tf-only, yaml-only, firebase-only); no CI step applies Terraform.
+Done when: `actionlint` clean; filter outputs match expectation on sample diffs (tf-only, yaml-only, firebase-only); no CI step applies Terraform; `infra` job under 5 minutes.
 
 ## Task 10 — State checks and plan gate
 What it is / what it means: Proves every live-state step is a no-op before anything applies (Manual steps 1-3, AC5). Agent runs this; no owner step.
@@ -85,7 +85,7 @@ Done when: second plan is "No changes" for both envs; staging has only the `(def
 
 ## Task 12 — Follow-up cleanup and acceptance
 What it is / what it means: Temporary scaffolding goes; AC1-7 verified (R3, R9).
-What changes at a high level: Delete all `moved` blocks; delete 01's `removed {}` blocks, `retired_authorized_domains`, `app_staging_site_id` (state-checked, plan-gated, empty plan); keep `deployer_staging` prod-only. Confirm 03's hand-over items are gone. Run the AC greps, including `FIRESTORE_DATABASE|firestore_database|database_id` = 0 outside `docs/`.
+What changes at a high level: Delete all `moved` blocks; delete 01's `removed {}` blocks, `retired_authorized_domains`, `app_staging_site_id` (state-checked, plan-gated, empty plan); keep `deployer_staging` prod-only. Confirm 03's hand-over items are gone. Handle 07's hand-over (PRD R9: `web/.firebaserc` `app-staging` site value; check readers, drop only if unread). Delete the unused GitHub vars `STAGING_VITE_FIREBASE_{API_KEY,APP_ID,AUTH_DOMAIN,MESSAGING_SENDER_ID,STORAGE_BUCKET}` with `gh variable delete` (01 follow-up; agent step, keep `STAGING_VITE_CONTACT_EMAIL`). Run the AC greps, including `FIRESTORE_DATABASE|firestore_database|database_id` = 0 outside `docs/`.
 Done when: `terraform validate`/`test` pass; plans for both envs still "No changes"; AC1 grep is 0 outside `docs/`; `infra/scripts` has 3 tests; AC1-7 recorded.
 
-Owner-only: GitHub repo vars `GCP_PROJECT`, `GCP_REGION` and `PROD_LLM_*` are unset (01 follow-up; `deploy-prod.yml` keeps `vars.GCP_PROJECT || 'onolys'`; `PROD_LLM_*` have no fallback), set by the owner outside this PRD. Stale docs (`infra-staging-first-apply.md`) are docs-freeze, out of scope. Optional: delete leftover `email_rate` docs.
+Owner-only: none. `GCP_PROJECT`, `GCP_REGION` and `PROD_LLM_*` GitHub vars are optional by design (`deploy-prod.yml` falls back to `onolys`/`us-central1`; blank `PROD_LLM_*` means the image's defaults), so unset is not a gap and nothing is set here. Stale docs (`infra-staging-first-apply.md`) are docs-freeze, out of scope. Optional: delete leftover `email_rate` docs.
