@@ -24,9 +24,6 @@ jobs:
       core: ${{ steps.flags.outputs.core }}
       oneshot: ${{ steps.flags.outputs.oneshot }}
       miti: ${{ steps.flags.outputs.miti }}
-      eval: ${{ steps.flags.outputs.eval }}
-      eval-backend: ${{ steps.flags.outputs.eval-backend }}
-      eval-web: ${{ steps.flags.outputs.eval-web }}
       api: ${{ steps.flags.outputs.api }}
       web: ${{ steps.flags.outputs.web }}
       infra: ${{ steps.flags.outputs.infra }}
@@ -74,27 +71,6 @@ jobs:
               - 'firestore.rules'
               - 'firebase.json'
               - 'firestore-rules-test/**'
-            eval: &eval
-              - *core
-              - *miti
-              - 'eval/core/**'
-              - 'eval/datasets/**'
-              - 'eval/fixtures/**'
-            eval-backend:
-              - *api
-              - *eval
-              - 'eval/backend/**'
-              - 'config/**'
-              - 'protocols/**'
-              - '.dockerignore'
-            eval-web:
-              - *ci_shared
-              - 'eval/web/**'
-              - 'api/firebase.json'
-              - 'eval/backend/**'
-              - 'api/openapi.json'
-              - 'docs/contracts/public/**'
-              - 'engines/miti/src/onolys_miti/data/report.schema.json'
             web:
               - *ci_shared
               - 'web/**'
@@ -112,7 +88,7 @@ jobs:
           FORCE_ALL: ${{ github.event_name != 'pull_request' }}
           FILTER: ${{ toJSON(steps.filter.outputs) }}
         run: |
-          for flag in core oneshot miti eval eval-backend eval-web api web infra; do
+          for flag in core oneshot miti api web infra; do
             if [ "$FORCE_ALL" = "true" ]; then val=true; else val="$(jq -r --arg f "$flag" '.[$f]' <<<"$FILTER")"; fi
             echo "$flag=$val" >>"$GITHUB_OUTPUT"
           done
@@ -190,89 +166,6 @@ jobs:
             echo "### Coverage: onolys-miti"
             uv run --no-sync --package onolys-miti coverage report --format=markdown
           } >> "$GITHUB_STEP_SUMMARY"
-
-  eval-core:
-    needs: changes
-    if: needs.changes.outputs.eval == 'true'
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    env:
-      # Use LiteLLM's bundled pricing data; unit tests need no provider/network access.
-      LITELLM_LOCAL_MODEL_COST_MAP: "True"
-    steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v5
-        with:
-          enable-cache: true
-          cache-dependency-glob: uv.lock
-      # convert is needed for tests that generate and parse synthetic PDFs.
-      # Package dev dependencies (pytest) are included by default.
-      - run: uv sync --frozen --package onolys-eval --extra convert
-      - name: Offline unit tests (synthetic fixtures and public-repo guard)
-        run: uv run --no-sync --package onolys-eval pytest eval/core/tests -m "not live"
-
-  eval-backend:
-    needs: changes
-    if: needs.changes.outputs.eval-backend == 'true'
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    env:
-      # Offline fixtures and bundled pricing metadata; provider credentials are unnecessary.
-      LITELLM_LOCAL_MODEL_COST_MAP: "True"
-      MITI_LLM_RECORD: "0"
-    steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v5
-        with:
-          enable-cache: true
-          cache-dependency-glob: uv.lock
-      - run: uv sync --frozen --package onolys-eval-backend
-      - run: uv run --no-sync --package onolys-eval-backend ruff check eval/backend
-      - run: uv run --no-sync --package onolys-eval-backend pytest eval/backend -m "not live"
-      - name: Build eval image and verify offline runtime, auth and data isolation
-        if: github.event_name != 'pull_request'
-        run: bash scripts/ci/test_eval_image.sh onolys-eval-backend:ci
-
-  eval-web:
-    needs: changes
-    if: needs.changes.outputs.eval-web == 'true'
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    env:
-      FIREBASE_TOOLS_VERSION: 15.37.0
-    defaults:
-      run:
-        working-directory: eval/web
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-          cache-dependency-path: eval/web/package-lock.json
-      - uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: "21"
-      - name: Cache firebase-tools and emulator jars
-        id: fbcache
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.firebase-tools
-            ~/.cache/firebase/emulators
-          key: firebase-${{ runner.os }}-${{ env.FIREBASE_TOOLS_VERSION }}
-      - name: Install firebase-tools (skipped on cache hit)
-        if: steps.fbcache.outputs.cache-hit != 'true'
-        run: npm install --prefix ~/.firebase-tools firebase-tools@${{ env.FIREBASE_TOOLS_VERSION }}
-      - run: echo "$HOME/.firebase-tools/node_modules/.bin" >> "$GITHUB_PATH"
-      - run: npm ci
-      # Auth tests run against the Auth emulator (no prod web sources are installed or imported).
-      - name: vitest (Auth emulator)
-        run: firebase emulators:exec --only auth --config ../../api/firebase.json --project demo-onolys "npm test"
-      - run: npm run typecheck
-      - run: npm run lint
-      - run: npm run build
 
   # api is split so the critical path is max(api-unit, api-emulator) + api-coverage (~30s), not their sum.
   # Selection: conftest.py adds the `firestore` marker to every test that needs the emulator
@@ -511,17 +404,10 @@ jobs:
           docker rm -f onolys-api
       - name: Prod LLM validator runs in the image exactly as deploy-prod runs it
         run: bash scripts/ci/smoke_prod_llm_validator.sh onolys-api:ci
-      - name: Image ships core and MITI without eval packages or datasets
+      - name: Image ships core and MITI without protocols
         run: |
-          for m in onolys_eval; do
-            if docker run --rm --entrypoint python onolys-api:ci -c "import $m" 2>/dev/null; then
-              echo "unexpected import $m in image"; exit 1
-            fi
-          done
           docker run --rm --entrypoint python onolys-api:ci -c "import onolys_engine_core, onolys_miti"
           docker run --rm --entrypoint test onolys-api:ci ! -e /app/protocols
-          docker run --rm --entrypoint test onolys-api:ci ! -e /app/eval
-          docker run --rm --entrypoint test onolys-api:ci ! -e /src/eval/datasets
           docker image inspect onolys-api:ci --format 'image size bytes: {{.Size}}'
 
   web:
@@ -672,7 +558,7 @@ jobs:
 
   required:
     if: always()
-    needs: [changes, guards, engine-core, oneshot, miti, eval-core, eval-backend, eval-web, api-unit, api-emulator, api-coverage, api-flaky, api-rules, api-image, web, web-e2e, infra]
+    needs: [changes, guards, engine-core, oneshot, miti, api-unit, api-emulator, api-coverage, api-flaky, api-rules, api-image, web, web-e2e, infra]
     runs-on: ubuntu-latest
     timeout-minutes: 1
     permissions:

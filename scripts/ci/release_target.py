@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Validate explicit release target bundles and create local Hosting target mappings.
 
-Staging and eval always run isolated (STAGING_GCP_PROJECT / EVAL_GCP_PROJECT required).
+Staging always runs isolated (STAGING_GCP_PROJECT required).
 No cloud commands or credentials are used here.
 """
 import argparse
@@ -36,16 +36,6 @@ def validate(role: str, env: dict[str, str]) -> None:
             raise ValueError('Isolated staging must use its own Firebase auth domain')
         if not re.fullmatch(r'1:[0-9]+:web:[a-z0-9]+', env['STAGING_ISOLATED_VITE_FIREBASE_APP_ID']):
             raise ValueError('Isolated staging needs a Firebase web app ID')
-    if role == 'eval':
-        # Eval signs in through its own project's Firebase web app, never prod's.
-        for field in ('API_KEY', 'AUTH_DOMAIN', 'APP_ID'):
-            value = env.get(f'EVAL_VITE_FIREBASE_{field}', '')
-            if not value or any(char.isspace() for char in value):
-                raise ValueError(f'EVAL_VITE_FIREBASE_{field} is required for eval')
-        if env['EVAL_VITE_FIREBASE_AUTH_DOMAIN'] != 'onolys-eval.firebaseapp.com':
-            raise ValueError('Eval must use its own Firebase auth domain')
-        if not re.fullmatch(r'1:[0-9]+:web:[a-z0-9]+', env['EVAL_VITE_FIREBASE_APP_ID']):
-            raise ValueError('Eval needs its own Firebase web app ID')
     site = values['HOSTING_SITE']
     if role == 'staging' and site != 'onolys-staging-app':
         raise ValueError('STAGING_HOSTING_SITE must be onolys-staging-app (the supported callback origin)')
@@ -118,7 +108,6 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest='command', required=True)
     sub.add_parser('staging')
-    sub.add_parser('eval')
     sub.add_parser('preview')
     sub.add_parser('preview-cleanup')
     voice = sub.add_parser('voice')

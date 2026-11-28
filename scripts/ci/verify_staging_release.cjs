@@ -1,4 +1,4 @@
-// Runs before any cloud authentication in the serialized app or eval release.
+// Runs before any cloud authentication in the serialized app release.
 // Checking current main also rejects a stale workflow_run/manual run queued after a newer release.
 module.exports = async function verifyStagingRelease({ github, context, sha }) {
   if (!['workflow_run', 'workflow_dispatch'].includes(context.eventName) || context.ref !== 'refs/heads/main') {

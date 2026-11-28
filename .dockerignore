@@ -13,16 +13,6 @@
 docs
 web
 infra
-**/eval
-# uv resolves every workspace member; include only the eval manifests, never its data/source.
-!eval/
-eval/**
-!eval/core/
-eval/core/**
-!eval/core/pyproject.toml
-!eval/backend/
-eval/backend/**
-!eval/backend/pyproject.toml
 **/datasets
 firestore-rules-test
 .github

@@ -8,7 +8,7 @@ fail=0
 ok()  { echo "ok   $1"; }
 bad() { echo "FAIL $1"; fail=1; }
 
-for dir in web eval/web; do
+for dir in web; do
   fb="$ROOT/$dir/firebase.json"; rc="$ROOT/$dir/.firebaserc"
   [[ -f "$rc" ]] && ok "$dir/.firebaserc exists" || { bad "$dir/.firebaserc exists"; continue; }
   python3 - "$fb" "$rc" <<'PY' && ok "$dir: every hosting target in firebase.json maps to a site" || bad "$dir: every hosting target in firebase.json maps to a site"
