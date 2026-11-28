@@ -1,6 +1,6 @@
 name: pr-preview-cleanup
 
-# Delete the PR preview (SP00 R3): restore the onolys-api-staging service template to the serving revision (no-op normally),
+# Delete the PR preview: restore the onolys-api-staging service template to the serving revision (no-op normally),
 # remove tag pr-<N> from it, delete that PR's revisions, delete Hosting channel pr-<N>. Not-found is ignored,
 # so re-running on a clean PR succeeds. Same target and WIF identity as pr-preview.yml (isolated staging with the limited
 # pr-preview-staging identity in vars.STAGING_GCP_PROJECT); same-repo PRs only (fork PRs have none).

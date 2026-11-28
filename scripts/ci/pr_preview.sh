@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Helpers for pr-preview.yml / pr-preview-cleanup.yml (SP00 R3). Pure functions, no cloud calls except `cleanup`.
+# Helpers for pr-preview.yml / pr-preview-cleanup.yml. Pure functions, no cloud calls except `cleanup`.
 #   pr_preview.sh firebase-config <api origin> <src firebase.json> <out>   Hosting config: target app-staging only, no /v1/** rewrite
 #                                                                          (the web build calls the tag URL directly), API origin added to CSP connect-src
 #   pr_preview.sh env-overrides <adapters> <sha> <cors origin>     value for `gcloud run deploy --update-env-vars` (custom `^|^` delimiter)

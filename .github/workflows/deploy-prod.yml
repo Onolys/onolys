@@ -1,6 +1,6 @@
 name: deploy-prod
 
-# Gated promotion to prod (SP06 R13, D5, D6, AC6, AC9): ships the EXACT image digest that ran in staging. No rebuild.
+# Gated promotion to prod: ships the EXACT image digest that ran in staging. No rebuild.
 #   workflow_dispatch (input sha, or input version; both empty = the commit staging api runs now) or push of a tag v*.
 #   The prod deploy jobs run in the GitHub environment `production` (required reviewer = Tejit).
 #   Release = dispatch with sha empty (or a sha). Every successful deploy is tagged prod-<UTC date>.<n> by the final `tag` job
@@ -9,7 +9,7 @@ name: deploy-prod
 #   or the revisions' GIT_SHA).
 #   Rollback = dispatch with version=<prod-* tag> (or an earlier sha that was deployed to staging): api, worker, voice, rules, web all
 #   go back to that commit. List versions: git ls-remote --tags --refs --sort=-v:refname origin 'prod-*' | head
-#   Rollback to an image from before SP10 is BLOCKED by the voice digest guard: that image never ran on onolys-voice-staging
+#   Rollback to an image from before the voice service existed is BLOCKED by the voice digest guard: that image never ran on onolys-voice-staging
 #   and lacks SERVICE_MODE=voice. Roll back only to a prod-* version or sha that ran on all staging services including voice.
 #   Set sha OR version, not both. `v*` = optional human release trigger; `prod-*` = bot record of each successful deploy;
 #   roll back only by `prod-*` version or `sha`.

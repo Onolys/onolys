@@ -1,11 +1,11 @@
 name: _deploy-cloudrun
 
-# Reusable: deploy ONE Cloud Run service by image digest (SP06 R13, D5, D15).
+# Reusable: deploy ONE Cloud Run service by image digest.
 # Auth is Workload Identity Federation only (no JSON keys): the job impersonates deployer-<env>.
 # Repo variables used (owner sets them from Terraform outputs):
-#   vars.WIF_PROVIDER            <- output wif_provider
-#   vars.DEPLOYER_STAGING_SA     <- output deployer_staging_email  (env == staging)
-#   vars.DEPLOYER_PROD_SA        <- output deployer_prod_email     (env == prod; runs in GitHub environment `production`)
+#   vars.WIF_PROVIDER            <- output wif_provider (prod; staging and eval callers pass their own inputs)
+#   vars.DEPLOYER_STAGING_SA     <- output deployer_staging_email  (fallback when env is not prod; current callers pass service_account)
+#   vars.DEPLOYER_PROD_SA        <- output deployer_prod_email     (prod; runs in GitHub environment `production`)
 on:
   workflow_call:
     inputs:
@@ -25,7 +25,7 @@ on:
         required: true
         type: string
       git_sha:
-        description: Commit sha recorded as env GIT_SHA on the revision (D15)
+        description: Commit sha recorded as env GIT_SHA on the revision
         required: true
         type: string
       project:

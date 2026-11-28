@@ -1,6 +1,6 @@
 name: pr-preview
 
-# One preview per same-repo PR (SP00 R3, D4-D7): a NO-TRAFFIC TAGGED REVISION (tag pr-<N>) of the staging API service
+# One preview per same-repo PR: a NO-TRAFFIC TAGGED REVISION (tag pr-<N>) of the staging API service
 # onolys-api-staging (combined mode, fake adapters, staging DB) + Firebase Hosting channel pr-<N> on the staging site
 # (7 days) + ONE marker PR comment, edited in place. Owner decision 2026-11-21: separate onolys-pr-<N> services need Cloud
 # Run IAM that cannot be scoped (no resource.name conditions), so previews are tagged revisions of the one staging api service
@@ -61,7 +61,7 @@ env:
   REGION: ${{ vars.GCP_REGION || 'us-central1' }}
   STAGING_SITE: ${{ vars.STAGING_HOSTING_SITE }}
   FIREBASE_TOOLS_VERSION: 15.37.0
-  # `preview-real` label is wired but inert until SP09 ships the real adapters: flip to "true" then.
+  # `preview-real` label is wired but inert until the real adapters ship: flip to "true" then.
   PREVIEW_REAL_ENABLED: "false"
 
 jobs:
@@ -98,7 +98,7 @@ jobs:
           adapters=stub; mode=fake
           if [ "$HAS_REAL_LABEL" = "true" ]; then
             if [ "$PREVIEW_REAL_ENABLED" = "true" ]; then adapters=real; mode=real
-            else echo "::notice::preview-real label ignored: real adapters are not available on previews yet (SP09)"; fi
+            else echo "::notice::preview-real label ignored: real adapters are not available on previews yet"; fi
           fi
           {
             echo "adapters=$adapters"

@@ -5,8 +5,8 @@ const { FIX, signUp, spa, openUpload, accountMenu } = require("./helpers.cjs");
 const { watchCsp, axeGate, shotTo } = require("./csp-helpers.cjs");
 
 /**
- * Screens whose axe gate is waived in a scheme until the task that migrates them.
- * Key `<screen>@<scheme>` -> task. Anything not listed here must be axe-clean. Empty = fully gated.
+ * Screens whose axe gate is temporarily waived in a scheme.
+ * Key `<screen>@<scheme>` -> reason. Anything not listed here must be axe-clean. Empty = fully gated.
  */
 const TODO = {};
 

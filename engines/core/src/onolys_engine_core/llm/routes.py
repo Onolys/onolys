@@ -172,7 +172,7 @@ def _apply_env(
 
 
 def load_registry(path: Path | None = None, env: dict[str, str] | None = None) -> RouteRegistry:
-    """Parse and validate the routes file, applying back-compat env overrides."""
+    """Parse and validate the routes file, applying env overrides."""
     env = dict(os.environ) if env is None else env
     src = path or routes_path()
     data = yaml.safe_load(src.read_text(encoding="utf-8")) or {}

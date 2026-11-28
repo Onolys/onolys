@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Guard (SP06 R14): config/models.yaml and config/{staging,prod}/{routes,stt_providers}.yaml must exist and be non-empty.
+# Guard: config/models.yaml and config/{staging,prod}/{routes,stt_providers}.yaml must exist and be non-empty.
 #   check_config.sh                  # check the source tree (ROOT, default: repo root)
 #   check_config.sh --image <ref>    # also check inside a built image (/app/config/...)
 # Image mode runs `docker run --rm --entrypoint test <ref> -s /app/config/<env>/<file>`.
