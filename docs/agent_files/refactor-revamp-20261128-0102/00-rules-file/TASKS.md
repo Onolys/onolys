@@ -8,11 +8,11 @@ Source of truth: docs/agent_files/refactor-revamp-20261128-0102/00-rules-file/PR
 
 | # | Task | Depends on | Status |
 |---|---|---|---|
-| 1 | Move design-rules.md into docs/rules/ | - | todo |
-| 2 | Write coding-rules.md (rules 1-16) | 1 | todo |
-| 3 | Update AGENTS.md and docs/README.md | 1, 2 | todo |
-| 4 | Add root CLAUDE.md pointer | 3 | todo |
-| 5 | Final verification against acceptance criteria | 1-4 | todo |
+| 1 | Move design-rules.md into docs/rules/ | - | done |
+| 2 | Write coding-rules.md (rules 1-16) | 1 | done |
+| 3 | Update AGENTS.md and docs/README.md | 1, 2 | done |
+| 4 | Add root CLAUDE.md pointer | 3 | done |
+| 5 | Final verification against acceptance criteria | 1-4 | done |
 
 ## Task 1 — Move design-rules
 What it is / what it means: the frontend rules doc sits beside the new coding rules, with history kept (PRD R2, D4).
